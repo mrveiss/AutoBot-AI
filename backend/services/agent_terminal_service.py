@@ -618,10 +618,11 @@ class AgentTerminalService:
                 pre_approved=True,
             )
 
-            # Write output to PTY if available
-            if result.get("status") == "success" and result.get("stdout"):
-                # Output is already in PTY from command execution
-                pass
+            # Write output to PTY for terminal display
+            if result.get("stdout"):
+                self._write_to_pty(session, result["stdout"])
+            if result.get("stderr"):
+                self._write_to_pty(session, result["stderr"])
 
             # Add approval metadata to result for UI display
             result["approval_status"] = "pre_approved"
@@ -771,10 +772,11 @@ class AgentTerminalService:
                     comment=comment,
                 )
 
-                # Write output to PTY if available
-                if result.get("status") == "success" and result.get("stdout"):
-                    # Output is already in PTY from command execution
-                    pass
+                # Write output to PTY for terminal display
+                if result.get("stdout"):
+                    self._write_to_pty(session, result["stdout"])
+                if result.get("stderr"):
+                    self._write_to_pty(session, result["stderr"])
 
                 return {
                     "status": "approved",

@@ -770,8 +770,9 @@ async def get_session_messages(
         chat_history_manager = get_chat_history_manager(request)
 
         # Get session messages
+        # NOTE: get_session_messages doesn't support pagination yet - uses limit parameter
         messages = await chat_history_manager.get_session_messages(
-            session_id, page=page, per_page=per_page
+            session_id, limit=per_page
         )
 
         if messages is None:
@@ -1518,7 +1519,7 @@ async def delete_chat_by_id(
     chat_id: str,
     request: Request,
     ownership: Dict = Depends(
-        validate_session_ownership
+        validate_chat_ownership
     ),  # SECURITY: Validate ownership
 ):
     """Delete chat session by ID (frontend compatibility endpoint)"""

@@ -1330,11 +1330,17 @@ class ChatHistoryManager:
                 os.remove(chat_file_old)
                 deleted = True
 
-            # Delete companion files (terminal logs, etc.)
+            # Delete companion files (terminal logs, transcripts, etc.)
             terminal_log = f"{chats_directory}/{session_id}_terminal.log"
             if os.path.exists(terminal_log):
                 os.remove(terminal_log)
                 logger.debug(f"Deleted terminal log for session {session_id}")
+
+            # Delete terminal transcript file
+            terminal_transcript = f"{chats_directory}/{session_id}_terminal_transcript.txt"
+            if os.path.exists(terminal_transcript):
+                os.remove(terminal_transcript)
+                logger.debug(f"Deleted terminal transcript for session {session_id}")
 
             # Clear Redis cache
             if self.redis_client:
