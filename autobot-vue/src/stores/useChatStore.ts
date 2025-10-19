@@ -8,6 +8,7 @@ export interface ChatMessage {
   sender: 'user' | 'assistant' | 'system'
   timestamp: Date
   status?: 'sending' | 'sent' | 'error'
+  error?: string // Error message if status is 'error'
   type?: 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | 'message' // For filtering
   attachments?: Array<{
     id: string
@@ -33,6 +34,7 @@ export interface ChatSession {
   isActive: boolean
   // Desktop automation context
   desktopSession?: {
+    id?: string
     vncUrl?: string
     sessionId?: string
     lastActivity?: Date

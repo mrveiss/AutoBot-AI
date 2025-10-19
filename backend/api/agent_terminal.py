@@ -58,6 +58,8 @@ class ApproveCommandRequest(BaseModel):
 
     approved: bool = Field(..., description="Whether command is approved")
     user_id: Optional[str] = Field(None, description="User who made the decision")
+    comment: Optional[str] = Field(None, description="Optional comment or reason for the decision")
+    auto_approve_future: bool = Field(False, description="Auto-approve similar commands in the future")
 
 
 class InterruptRequest(BaseModel):
@@ -284,12 +286,14 @@ async def approve_agent_command(
     User approves HIGH/DANGEROUS commands that agents want to execute.
     """
     try:
-        logger.info(f"[API] Approval request received: session_id={session_id}, approved={request.approved}, user_id={request.user_id}")
+        logger.info(f"[API] Approval request received: session_id={session_id}, approved={request.approved}, user_id={request.user_id}, comment={request.comment}")
 
         result = await service.approve_command(
             session_id=session_id,
             approved=request.approved,
             user_id=request.user_id,
+            comment=request.comment,
+            auto_approve_future=request.auto_approve_future,
         )
 
         logger.info(f"[API] Approval result: {result.get('status')}, error={result.get('error')}")
