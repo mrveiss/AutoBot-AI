@@ -2,7 +2,7 @@
  * Type definitions for OptimizedHealthMonitor
  */
 
-export interface HealthStatus {
+export interface MonitorHealthStatus {
   overall: 'healthy' | 'degraded' | 'critical' | 'unknown';
   backend: 'healthy' | 'degraded' | 'critical' | 'unknown';
   frontend: 'healthy' | 'degraded' | 'critical' | 'unknown';
@@ -47,7 +47,7 @@ export interface ConsecutiveFailures {
 }
 
 export interface HealthData {
-  status: HealthStatus;
+  status: MonitorHealthStatus;
   metrics: PerformanceMetrics;
   timestamp: number;
   monitoring: {
@@ -66,7 +66,7 @@ export interface HealthCheckResult {
 declare class OptimizedHealthMonitor {
   isMonitoring: boolean;
   performanceBudget: PerformanceBudget;
-  healthStatus: HealthStatus;
+  healthStatus: MonitorHealthStatus;
   config: MonitorConfig;
   eventListeners: Map<string, EventListener>;
   consecutiveFailures: ConsecutiveFailures;
@@ -100,7 +100,7 @@ declare class OptimizedHealthMonitor {
   performManualHealthCheck(): Promise<void>;
   onHealthChange(callback: (data: HealthData) => void): void;
   notifyHealthChange(): void;
-  getHealthStatus(): HealthStatus & {
+  getHealthStatus(): MonitorHealthStatus & {
     isMonitoring: boolean;
     performanceMetrics: PerformanceMetrics;
     consecutiveFailures: ConsecutiveFailures;

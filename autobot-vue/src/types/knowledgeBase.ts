@@ -1,0 +1,170 @@
+/**
+ * Knowledge Base API Response Types
+ * Type definitions for knowledge base API responses
+ */
+
+// ============================================================================
+// Response Interfaces
+// ============================================================================
+
+export interface KnowledgeStatsResponse {
+  total_facts?: number
+  total_vectors?: number
+  categories?: Record<string, number> | string[]
+}
+
+export interface CategoryResponse {
+  status?: string
+  message?: string
+  successful?: number
+  processed?: number
+  current_man_page_files?: number
+  total_available_tools?: number
+  integration_date?: string
+  available_commands?: string[]
+  facts?: Array<{
+    id: string
+    fact: string
+    category?: string
+    confidence?: number
+    source?: string
+    created_at: string
+    updated_at: string
+  }>
+}
+
+export interface SearchResponse {
+  results?: Array<{
+    id: string
+    fact: string
+    category?: string
+    confidence?: number
+    source?: string
+    similarity_score?: number
+  }>
+  total_results?: number
+  query?: string
+  search_time?: number
+}
+
+export interface AddFactResponse {
+  success: boolean
+  message?: string
+  fact_id?: string
+  fact?: {
+    id: string
+    fact: string
+    category?: string
+    confidence?: number
+    source?: string
+    created_at: string
+    updated_at: string
+  }
+}
+
+export interface UploadResponse {
+  success: boolean
+  message?: string
+  file_path?: string
+  facts_added?: number
+  error?: string
+}
+
+export interface MachineProfileResponse {
+  machine_id?: string
+  os_type?: string
+  distro?: string
+  package_manager?: string
+  available_tools?: string[]
+  architecture?: string
+  hostname?: string
+  kernel_version?: string
+}
+
+export interface ManPagesSummaryResponse {
+  status?: string
+  message?: string
+  successful?: number
+  processed?: number
+  current_man_page_files?: number
+  total_available_tools?: number
+  integration_date?: string
+  available_commands?: string[]
+}
+
+export interface IntegrationResponse {
+  status: string
+  message: string
+  successful?: number
+  processed?: number
+  errors?: string[]
+  machine_id?: string
+}
+
+export interface VectorizationStatusResponse {
+  status: string
+  message?: string
+  total_facts?: number
+  vectorized_facts?: number
+  pending_vectorization?: number
+  vectorization_progress?: number
+  last_vectorization?: string
+}
+
+export interface VectorizationResponse {
+  status: string
+  message: string
+  total_processed?: number
+  successful?: number
+  failed?: number
+  skipped?: number
+  batch_size?: number
+  processing_time?: number
+  errors?: string[]
+}
+
+export interface MachineKnowledgeResponse {
+  status: string
+  message: string
+  machine_id?: string
+  facts_added?: number
+  categories?: string[]
+  initialization_time?: number
+  errors?: string[]
+}
+
+export interface SystemKnowledgeResponse {
+  status: string
+  message: string
+  total_machines?: number
+  successful_machines?: number
+  failed_machines?: number
+  total_facts_updated?: number
+  refresh_time?: number
+  errors?: string[]
+}
+
+export interface ManPagesPopulateResponse {
+  status: string
+  message: string
+  machine_id?: string
+  man_pages_added?: number
+  processing_time?: number
+  errors?: string[]
+}
+
+export interface AutoBotDocsResponse {
+  status: string
+  message: string
+  documents_processed?: number
+  facts_added?: number
+  processing_time?: number
+  errors?: string[]
+}
+
+export interface BasicStatsResponse {
+  total_facts?: number
+  total_categories?: number
+  total_vectors?: number
+  last_updated?: string
+}

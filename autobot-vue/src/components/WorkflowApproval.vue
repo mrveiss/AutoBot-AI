@@ -193,6 +193,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { apiService } from '../services/api.js'
+import type { WorkflowResponse } from '@/types/models'
 
 // Types
 interface Workflow {
@@ -253,9 +254,9 @@ const selectWorkflow = async (workflowId: string) => {
 
   try {
     // Get workflow details
-    const workflowResponse = await apiService.get(`/api/workflow/workflow/${workflowId}`)
-    selectedWorkflow.value = workflowResponse.workflow
-    workflowSteps.value = workflowResponse.workflow.steps || []
+    const workflowResponse = await apiService.get(`/api/workflow/workflow/${workflowId}`) as WorkflowResponse
+    selectedWorkflow.value = workflowResponse.workflow as unknown as Workflow
+    workflowSteps.value = (workflowResponse.workflow.steps || []) as unknown as WorkflowStep[]
   } catch (error) {
     console.error('Failed to load workflow details:', error)
   }

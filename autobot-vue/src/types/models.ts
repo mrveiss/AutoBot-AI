@@ -426,6 +426,37 @@ export interface AgentStatus {
 }
 
 // ============================================================================
+// Workflow Models
+// ============================================================================
+
+export interface WorkflowStep {
+  id: string
+  name: string
+  description?: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'requires_approval'
+  type?: string
+  data?: Record<string, any>
+  approval_status?: 'pending' | 'approved' | 'rejected'
+}
+
+export interface Workflow {
+  id: string
+  name: string
+  description?: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  steps: WorkflowStep[]
+  created_at: string
+  updated_at?: string
+  metadata?: Record<string, any>
+}
+
+export interface WorkflowResponse {
+  workflow: Workflow
+  message?: string
+  success?: boolean
+}
+
+// ============================================================================
 // Utility Types
 // ============================================================================
 
@@ -436,6 +467,10 @@ export type LogLevel = BackendSettings['log_level']
 export type TransportType = OrchestratorSettings['task_transport']
 export type SystemHealth = DiagnosticsReport['system_health']
 export type IssueSeverity = DiagnosticIssue['severity']
+
+// Centralized common types
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
 
 // ============================================================================
 // Type Guards and Validators
