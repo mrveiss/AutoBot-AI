@@ -155,6 +155,7 @@ async def create_agent_terminal_session(
             "host": session.host,
             "state": session.state.value,
             "created_at": session.created_at,
+            "pty_session_id": session.pty_session_id,  # CRITICAL: Frontend needs this for WebSocket connection
         }
 
     except HTTPException:
@@ -197,6 +198,7 @@ async def list_agent_terminal_sessions(
                     "created_at": s.created_at,
                     "last_activity": s.last_activity,
                     "command_count": len(s.command_history),
+                    "pty_session_id": s.pty_session_id,  # CRITICAL: Frontend needs this for WebSocket connection
                 }
                 for s in sessions
             ],

@@ -6,7 +6,7 @@
         <span>{{ connectionStatusText }}</span>
       </div>
       <div class="session-info">
-        <span>Session: {{ sessionId ? sessionId.slice(0, 8) + '...' : 'unknown' }}</span>
+        <span>Session: {{ sessionId || 'unknown' }}</span>
       </div>
       <div class="debug-info" v-if="!canInput">
         <span style="color: orange; font-size: 12px;">

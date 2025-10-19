@@ -230,13 +230,13 @@ const sessionInfo = computed(() => {
   const messageCount = session.messages.length
   const lastMessage = session.messages[session.messages.length - 1]
   const lastMessageTime = lastMessage ? new Date(lastMessage.timestamp).toLocaleTimeString() : null
-  const sessionIdShort = session.id.slice(0, 8)
+  const sessionId = session.id  // Display full UUID
 
   if (messageCount === 0) {
-    return `Session: ${sessionIdShort} • No messages yet`
+    return `Session: ${sessionId} • No messages yet`
   }
 
-  return `Session: ${sessionIdShort} • ${messageCount} message${messageCount > 1 ? 's' : ''} • Last: ${lastMessageTime}`
+  return `Session: ${sessionId} • ${messageCount} message${messageCount > 1 ? 's' : ''} • Last: ${lastMessageTime}`
 })
 
 

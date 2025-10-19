@@ -49,6 +49,45 @@ class TerminalLogger:
             f"redis_enabled: {redis_client is not None}"
         )
 
+    async def _ensure_chat_json_exists(self, session_id: str):
+        """
+        CRITICAL: Ensure chat.json exists before creating terminal.log.
+
+        Terminal logs cannot exist without corresponding chat.json files
+        because the frontend loads sessions by scanning for *_chat.json files.
+        Without chat.json, the session is invisible in the UI.
+
+        Args:
+            session_id: Chat session ID
+        """
+        import json
+
+        chat_file = self.data_dir / f"{session_id}_chat.json"
+
+        # Only create if it doesn't exist
+        if not chat_file.exists():
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            chat_data = {
+                "chatId": session_id,
+                "name": "",
+                "messages": [],
+                "created_time": current_time,
+                "last_modified": current_time,
+            }
+
+            try:
+                async with aiofiles.open(chat_file, "w") as f:
+                    await f.write(json.dumps(chat_data, indent=2))
+                logger.info(
+                    f"✅ Created chat.json for terminal session: {session_id}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"❌ Failed to create chat.json for session {session_id}: {e}"
+                )
+                raise
+
     async def log_command(
         self,
         session_id: str,
@@ -72,6 +111,10 @@ class TerminalLogger:
         Returns:
             Log entry dictionary
         """
+        # CRITICAL: Ensure chat.json exists BEFORE creating/appending to terminal.log
+        # This maintains the invariant: terminal.log cannot exist without chat.json
+        await self._ensure_chat_json_exists(session_id)
+
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
         # Create log entry

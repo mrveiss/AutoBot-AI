@@ -58,6 +58,7 @@ class CommandRequest(BaseModel):
 
 class TerminalSessionRequest(BaseModel):
     user_id: Optional[str] = "default"
+    conversation_id: Optional[str] = None  # Link to chat session for logging
     security_level: Optional[SecurityLevel] = SecurityLevel.STANDARD
     enable_logging: Optional[bool] = True
     enable_workflow_control: Optional[bool] = True
@@ -147,9 +148,12 @@ class ConsolidatedTerminalWebSocket:
         websocket: WebSocket,
         session_id: str,
         security_level: SecurityLevel = SecurityLevel.STANDARD,
+        conversation_id: Optional[str] = None,
+        redis_client=None,
     ):
         self.websocket = websocket
         self.session_id = session_id
+        self.conversation_id = conversation_id  # Link to chat session
         self.security_level = security_level
         self.enable_logging = security_level in [
             SecurityLevel.ELEVATED,
@@ -163,6 +167,16 @@ class ConsolidatedTerminalWebSocket:
         self.pty_process = None
         self.active = False
         self.terminal_adapter = None
+
+        # Initialize TerminalLogger for persistent command logging
+        if conversation_id:
+            from src.logging.terminal_logger import TerminalLogger
+
+            self.terminal_logger = TerminalLogger(
+                redis_client=redis_client, data_dir="data/chats"
+            )
+        else:
+            self.terminal_logger = None
 
         # Initialize PTY process if security level allows
         if security_level != SecurityLevel.RESTRICTED:
@@ -351,7 +365,7 @@ class ConsolidatedTerminalWebSocket:
         # Security assessment for commands
         risk_level = self._assess_command_risk(text)
 
-        # Log command for audit trail
+        # Log command for audit trail (internal logging)
         if self.enable_logging:
             self._log_command_activity(
                 "command_input",
@@ -362,6 +376,19 @@ class ConsolidatedTerminalWebSocket:
                     "timestamp": datetime.now().isoformat(),
                 },
             )
+
+        # Log to TerminalLogger for persistent storage (MANUAL commands)
+        if self.terminal_logger and self.conversation_id:
+            try:
+                await self.terminal_logger.log_command(
+                    session_id=self.conversation_id,
+                    command=text,
+                    run_type="manual",
+                    status="executing",
+                    user_id=None,
+                )
+            except Exception as e:
+                logger.error(f"Failed to log command to TerminalLogger: {e}")
 
         # Add to command history
         self.command_history.append(
@@ -601,6 +628,7 @@ async def create_terminal_session(request: TerminalSessionRequest):
         session_config = {
             "session_id": session_id,
             "user_id": request.user_id,
+            "conversation_id": request.conversation_id,  # For linking chat to terminal logging
             "security_level": request.security_level,
             "enable_logging": request.enable_logging,
             "enable_workflow_control": request.enable_workflow_control,
@@ -888,9 +916,21 @@ async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str)
         security_level = SecurityLevel(
             config.get("security_level", SecurityLevel.STANDARD.value)
         )
+        conversation_id = config.get("conversation_id")  # For chat/terminal linking
+
+        # Get Redis client for TerminalLogger
+        redis_client = None
+        try:
+            from backend.dependencies import get_redis_client
+
+            redis_client = get_redis_client()
+        except Exception as e:
+            logger.warning(f"Could not get Redis client for terminal logging: {e}")
 
         # Create consolidated terminal handler
-        terminal = ConsolidatedTerminalWebSocket(websocket, session_id, security_level)
+        terminal = ConsolidatedTerminalWebSocket(
+            websocket, session_id, security_level, conversation_id, redis_client
+        )
 
         # Register with session manager
         session_manager.add_connection(session_id, terminal)
