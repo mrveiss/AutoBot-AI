@@ -107,6 +107,7 @@ class AgentTerminalService:
                 "auto_approve_moderate": False,  # Requires user approval
                 "allow_high": False,
                 "allow_dangerous": False,
+                "supervised_mode": True,  # Allows FORBIDDEN commands with approval for guided dangerous actions
             },
             AgentRole.AUTOMATION_AGENT: {
                 "max_risk": CommandRisk.HIGH,
@@ -336,6 +337,9 @@ class AgentTerminalService:
         if not permissions:
             return False, f"Unknown agent role: {agent_role}"
 
+        # Check supervised mode - allows FORBIDDEN commands with approval
+        supervised_mode = permissions.get("supervised_mode", False)
+
         # Check max risk level
         max_risk = permissions["max_risk"]
 
@@ -348,20 +352,30 @@ class AgentTerminalService:
             CommandRisk.FORBIDDEN: 4,
         }
 
-        if risk_levels.get(command_risk, 999) > risk_levels.get(max_risk, 0):
-            return (
-                False,
-                f"Command risk {command_risk.value} exceeds agent max risk {max_risk.value}",
-            )
+        # In supervised mode, allow up to FORBIDDEN but require approval for all dangerous commands
+        effective_max_risk = CommandRisk.FORBIDDEN if supervised_mode else max_risk
 
-        # Check specific risk permissions
-        if command_risk == CommandRisk.HIGH and not permissions.get("allow_high"):
-            return False, "Agent not permitted to execute HIGH risk commands"
+        if risk_levels.get(command_risk, 999) > risk_levels.get(effective_max_risk, 0):
+            if supervised_mode:
+                return (
+                    False,
+                    f"Command risk {command_risk.value} exceeds supervised mode limit (try enabling supervised mode)",
+                )
+            else:
+                return (
+                    False,
+                    f"Command risk {command_risk.value} exceeds agent max risk {max_risk.value} (enable supervised mode for guided dangerous actions)",
+                )
 
-        if command_risk == CommandRisk.CRITICAL and not permissions.get(
-            "allow_dangerous"
-        ):
-            return False, "Agent not permitted to execute DANGEROUS commands"
+        # Check specific risk permissions (not needed in supervised mode - approval handles it)
+        if not supervised_mode:
+            if command_risk == CommandRisk.HIGH and not permissions.get("allow_high"):
+                return False, "Agent not permitted to execute HIGH risk commands"
+
+            if command_risk == CommandRisk.CRITICAL and not permissions.get(
+                "allow_dangerous"
+            ):
+                return False, "Agent not permitted to execute DANGEROUS commands"
 
         return True, "Permission granted"
 
@@ -373,6 +387,9 @@ class AgentTerminalService:
         """
         Check if command needs user approval.
 
+        In supervised mode: HIGH/CRITICAL/FORBIDDEN commands are allowed but ALWAYS require approval
+        In normal mode: Only commands up to max_risk are allowed, HIGH+ require approval
+
         Args:
             agent_role: Role of the agent
             command_risk: Risk level of the command
@@ -381,6 +398,15 @@ class AgentTerminalService:
             True if approval is required
         """
         permissions = self.agent_permissions.get(agent_role, {})
+        supervised_mode = permissions.get("supervised_mode", False)
+
+        # In supervised mode, HIGH/CRITICAL/FORBIDDEN always need approval (for guided dangerous actions)
+        if supervised_mode and command_risk in [
+            CommandRisk.HIGH,
+            CommandRisk.CRITICAL,
+            CommandRisk.FORBIDDEN,
+        ]:
+            return True
 
         # SAFE commands can be auto-approved if permitted
         if command_risk == CommandRisk.SAFE:
@@ -390,7 +416,7 @@ class AgentTerminalService:
         if command_risk == CommandRisk.MODERATE:
             return not permissions.get("auto_approve_moderate", False)
 
-        # HIGH and DANGEROUS always need approval
+        # HIGH/CRITICAL/FORBIDDEN always need approval
         return True
 
     def _write_to_pty(self, session: AgentTerminalSession, text: str) -> bool:
