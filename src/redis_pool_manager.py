@@ -52,6 +52,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ConnectionMetrics:
     """Connection pool metrics"""
+
     created_connections: int = 0
     active_connections: int = 0
     failed_connections: int = 0
@@ -63,6 +64,7 @@ class ConnectionMetrics:
 @dataclass
 class PoolConfig:
     """Redis pool configuration"""
+
     max_connections: int = 20
     min_connections: int = 2
     socket_timeout: float = 5.0
@@ -89,17 +91,29 @@ class RedisPoolManager:
             # Merge service discovery params with config params
             config_redis = config.get_redis_config()
             self._config = {
-                'host': service_discovery_params['host'],  # Direct IP from service discovery
-                'port': service_discovery_params['port'],
-                'password': config_redis.get('password'),
-                'connection': {
-                    'socket_connect_timeout': service_discovery_params.get('socket_connect_timeout', 0.5),
-                    'socket_timeout': service_discovery_params.get('socket_timeout', 1.0),
-                    'retry_on_timeout': service_discovery_params.get('retry_on_timeout', False),
-                    'max_connections': service_discovery_params.get('max_connections', 10),
-                }
+                "host": service_discovery_params[
+                    "host"
+                ],  # Direct IP from service discovery
+                "port": service_discovery_params["port"],
+                "password": config_redis.get("password"),
+                "connection": {
+                    "socket_connect_timeout": service_discovery_params.get(
+                        "socket_connect_timeout", 0.5
+                    ),
+                    "socket_timeout": service_discovery_params.get(
+                        "socket_timeout", 1.0
+                    ),
+                    "retry_on_timeout": service_discovery_params.get(
+                        "retry_on_timeout", False
+                    ),
+                    "max_connections": service_discovery_params.get(
+                        "max_connections", 10
+                    ),
+                },
             }
-            logger.info(f"Redis Pool Manager initialized with service discovery: {self._config['host']}:{self._config['port']}")
+            logger.info(
+                f"Redis Pool Manager initialized with service discovery: {self._config['host']}:{self._config['port']}"
+            )
         except Exception as e:
             logger.warning(f"Service discovery failed, falling back to config: {e}")
             self._config = config.get_redis_config()
@@ -110,22 +124,22 @@ class RedisPoolManager:
 
     def _load_pool_config(self) -> PoolConfig:
         """Load pool configuration from unified config"""
-        redis_config = self._config.get('connection', {})
+        redis_config = self._config.get("connection", {})
 
         return PoolConfig(
-            max_connections=redis_config.get('max_connections', 20),
-            min_connections=redis_config.get('min_connections', 2),
-            socket_timeout=redis_config.get('socket_timeout', 5.0),
-            socket_connect_timeout=redis_config.get('socket_connect_timeout', 5.0),
-            retry_on_timeout=redis_config.get('retry_on_timeout', True),
-            max_retries=config.get('retry.redis.attempts', 3),
-            backoff_factor=config.get('retry.backoff_factor', 2.0),
-            health_check_interval=config.get('health.interval', 30.0)
+            max_connections=redis_config.get("max_connections", 20),
+            min_connections=redis_config.get("min_connections", 2),
+            socket_timeout=redis_config.get("socket_timeout", 5.0),
+            socket_connect_timeout=redis_config.get("socket_connect_timeout", 5.0),
+            retry_on_timeout=redis_config.get("retry_on_timeout", True),
+            max_retries=config.get("retry.redis.attempts", 3),
+            backoff_factor=config.get("retry.backoff_factor", 2.0),
+            health_check_interval=config.get("health.interval", 30.0),
         )
 
     def _get_database_number(self, database_name: str) -> int:
         """Get database number for a given database name"""
-        databases = config.get('redis.databases', {})
+        databases = config.get("redis.databases", {})
         return databases.get(database_name, 0)
 
     def _create_sync_pool(self, database_name: str) -> ConnectionPool:
@@ -135,22 +149,22 @@ class RedisPoolManager:
         retry_policy = Retry(
             backoff=ExponentialBackoff(
                 base=0.008,  # Base backoff time in seconds
-                cap=10.0     # Maximum backoff time in seconds
+                cap=10.0,  # Maximum backoff time in seconds
             ),
-            retries=self._pool_config.max_retries
+            retries=self._pool_config.max_retries,
         )
 
         pool = ConnectionPool(
-            host=self._config['host'],
-            port=self._config['port'],
+            host=self._config["host"],
+            port=self._config["port"],
             db=db_number,
-            password=self._config.get('password'),
+            password=self._config.get("password"),
             max_connections=self._pool_config.max_connections,
             socket_timeout=self._pool_config.socket_timeout,
             socket_connect_timeout=self._pool_config.socket_connect_timeout,
             retry_on_timeout=self._pool_config.retry_on_timeout,
             retry=retry_policy,
-            decode_responses=True
+            decode_responses=True,
         )
 
         logger.info(
@@ -165,15 +179,15 @@ class RedisPoolManager:
         db_number = self._get_database_number(database_name)
 
         pool = aioredis.ConnectionPool(
-            host=self._config['host'],
-            port=self._config['port'],
+            host=self._config["host"],
+            port=self._config["port"],
             db=db_number,
-            password=self._config.get('password'),
+            password=self._config.get("password"),
             max_connections=self._pool_config.max_connections,
             socket_timeout=self._pool_config.socket_timeout,
             socket_connect_timeout=self._pool_config.socket_connect_timeout,
             retry_on_timeout=self._pool_config.retry_on_timeout,
-            decode_responses=True
+            decode_responses=True,
         )
 
         logger.info(
@@ -183,7 +197,7 @@ class RedisPoolManager:
 
         return pool
 
-    def get_sync_client(self, database_name: str = 'main') -> redis.Redis:
+    def get_sync_client(self, database_name: str = "main") -> redis.Redis:
         """Get synchronous Redis client for specified database"""
         with self._lock:
             client_key = f"sync_{database_name}"
@@ -191,7 +205,9 @@ class RedisPoolManager:
             if client_key not in self._clients:
                 # Create pool if it doesn't exist
                 if database_name not in self._sync_pools:
-                    self._sync_pools[database_name] = self._create_sync_pool(database_name)
+                    self._sync_pools[database_name] = self._create_sync_pool(
+                        database_name
+                    )
                     self._metrics[database_name] = ConnectionMetrics()
 
                 # Create client with pool
@@ -208,19 +224,23 @@ class RedisPoolManager:
                     self._metrics[database_name].failed_connections += 1
                     self._metrics[database_name].last_error = str(e)
                     self._metrics[database_name].last_error_time = time.time()
-                    logger.error(f"❌ Failed to connect sync Redis client for '{database_name}': {e}")
+                    logger.error(
+                        f"❌ Failed to connect sync Redis client for '{database_name}': {e}"
+                    )
                     raise
 
             return self._clients[client_key]
 
-    async def get_async_client(self, database_name: str = 'main') -> aioredis.Redis:
+    async def get_async_client(self, database_name: str = "main") -> aioredis.Redis:
         """Get asynchronous Redis client for specified database"""
         client_key = f"async_{database_name}"
 
         if client_key not in self._clients:
             # Create pool if it doesn't exist
             if database_name not in self._async_pools:
-                self._async_pools[database_name] = await self._create_async_pool(database_name)
+                self._async_pools[database_name] = await self._create_async_pool(
+                    database_name
+                )
                 if database_name not in self._metrics:
                     self._metrics[database_name] = ConnectionMetrics()
 
@@ -238,13 +258,17 @@ class RedisPoolManager:
                 self._metrics[database_name].failed_connections += 1
                 self._metrics[database_name].last_error = str(e)
                 self._metrics[database_name].last_error_time = time.time()
-                logger.error(f"❌ Failed to connect async Redis client for '{database_name}': {e}")
+                logger.error(
+                    f"❌ Failed to connect async Redis client for '{database_name}': {e}"
+                )
                 raise
 
         return self._clients[client_key]
 
     @asynccontextmanager
-    async def get_connection_context(self, database_name: str = 'main') -> AsyncGenerator[aioredis.Redis, None]:
+    async def get_connection_context(
+        self, database_name: str = "main"
+    ) -> AsyncGenerator[aioredis.Redis, None]:
         """Async context manager for Redis connections"""
         client = None
         try:
@@ -297,23 +321,27 @@ class RedisPoolManager:
     def get_pool_metrics(self) -> Dict[str, Any]:
         """Get connection pool metrics"""
         metrics = {
-            'pools': {
-                'sync': list(self._sync_pools.keys()),
-                'async': list(self._async_pools.keys())
+            "pools": {
+                "sync": list(self._sync_pools.keys()),
+                "async": list(self._async_pools.keys()),
             },
-            'clients': list(self._clients.keys()),
-            'database_metrics': {}
+            "clients": list(self._clients.keys()),
+            "database_metrics": {},
         }
 
         for db_name, db_metrics in self._metrics.items():
-            metrics['database_metrics'][db_name] = {
-                'created_connections': db_metrics.created_connections,
-                'active_connections': db_metrics.active_connections,
-                'failed_connections': db_metrics.failed_connections,
-                'reconnections': db_metrics.reconnections,
-                'last_error': db_metrics.last_error,
-                'last_error_time': db_metrics.last_error_time,
-                'error_age_seconds': time.time() - db_metrics.last_error_time if db_metrics.last_error_time else None
+            metrics["database_metrics"][db_name] = {
+                "created_connections": db_metrics.created_connections,
+                "active_connections": db_metrics.active_connections,
+                "failed_connections": db_metrics.failed_connections,
+                "reconnections": db_metrics.reconnections,
+                "last_error": db_metrics.last_error,
+                "last_error_time": db_metrics.last_error_time,
+                "error_age_seconds": (
+                    time.time() - db_metrics.last_error_time
+                    if db_metrics.last_error_time
+                    else None
+                ),
             }
 
         return metrics
@@ -373,18 +401,20 @@ def get_pool_manager() -> RedisPoolManager:
 
 
 # Convenience functions for easy access
-def get_redis_sync(database_name: str = 'main') -> redis.Redis:
+def get_redis_sync(database_name: str = "main") -> redis.Redis:
     """Get synchronous Redis client"""
     return get_pool_manager().get_sync_client(database_name)
 
 
-async def get_redis_async(database_name: str = 'main') -> aioredis.Redis:
+async def get_redis_async(database_name: str = "main") -> aioredis.Redis:
     """Get asynchronous Redis client"""
     return await get_pool_manager().get_async_client(database_name)
 
 
 @asynccontextmanager
-async def redis_context(database_name: str = 'main') -> AsyncGenerator[aioredis.Redis, None]:
+async def redis_context(
+    database_name: str = "main",
+) -> AsyncGenerator[aioredis.Redis, None]:
     """Async context manager for Redis connections"""
     async with get_pool_manager().get_connection_context(database_name) as redis_client:
         yield redis_client
@@ -397,14 +427,14 @@ async def health_check_redis() -> Dict[str, Any]:
     metrics = manager.get_pool_metrics()
 
     return {
-        'pool_health': pool_health,
-        'all_healthy': all(pool_health.values()),
-        'metrics': metrics,
-        'redis_config': {
-            'host': config.get_host('redis'),
-            'port': config.get_port('redis'),
-            'enabled': config.get('redis.enabled', True)
-        }
+        "pool_health": pool_health,
+        "all_healthy": all(pool_health.values()),
+        "metrics": metrics,
+        "redis_config": {
+            "host": config.get_host("redis"),
+            "port": config.get_port("redis"),
+            "enabled": config.get("redis.enabled", True),
+        },
     }
 
 
@@ -419,11 +449,11 @@ async def cleanup_redis_pools():
 
 # Export main functions
 __all__ = [
-    'RedisPoolManager',
-    'get_pool_manager',
-    'get_redis_sync',
-    'get_redis_async',
-    'redis_context',
-    'health_check_redis',
-    'cleanup_redis_pools'
+    "RedisPoolManager",
+    "get_pool_manager",
+    "get_redis_sync",
+    "get_redis_async",
+    "redis_context",
+    "health_check_redis",
+    "cleanup_redis_pools",
 ]

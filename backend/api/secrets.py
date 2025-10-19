@@ -116,6 +116,7 @@ class SecretsManager:
         """Ensure data directory exists - now handled by centralized paths"""
         # This method is kept for compatibility but functionality moved to centralized paths
         from backend.utils.paths_manager import ensure_data_directory
+
         ensure_data_directory()
 
     def _initialize_encryption(self):
@@ -511,14 +512,14 @@ async def get_secrets_status():
     """Get secrets service status"""
     try:
         secrets = secrets_manager._load_secrets()
-        
+
         return {
             "status": "healthy",
             "service": "secrets_manager",
             "total_secrets": len(secrets),
             "storage_backend": "file",
             "encryption_enabled": False,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
         logger.error(f"Failed to get secrets status: {e}")
@@ -526,7 +527,7 @@ async def get_secrets_status():
             "status": "error",
             "service": "secrets_manager",
             "error": str(e),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
 

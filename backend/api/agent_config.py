@@ -390,11 +390,13 @@ async def check_agent_health(agent_id: str):
                 )
 
         except Exception as e:
-            logger.warning(f"Provider availability check failed for agent {agent_id}: {str(e)}")
+            logger.warning(
+                f"Provider availability check failed for agent {agent_id}: {str(e)}"
+            )
             provider_available = False
 
         response_time = (datetime.now() - start_time).total_seconds()
-        
+
         # Health check: enabled + model configured + provider available
         is_healthy = enabled and bool(model) and provider_available
 

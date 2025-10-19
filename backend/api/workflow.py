@@ -376,6 +376,7 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
                 # Wait for approval with cancellation support
                 try:
                     from src.utils.async_cancellation import execute_with_cancellation
+
                     approval_result = await execute_with_cancellation(
                         approval_future, f"workflow_approval_{workflow['id']}"
                     )

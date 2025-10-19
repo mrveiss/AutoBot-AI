@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 class ToolCallType(Enum):
     """Classification of tool call types"""
+
     READ_OPERATION = "read_operation"  # File reads, directory lists
     WRITE_OPERATION = "write_operation"  # File writes, edits
     SEARCH_OPERATION = "search_operation"  # Grep, find, glob
@@ -43,6 +44,7 @@ class ToolCallType(Enum):
 
 class EfficiencyLevel(Enum):
     """Tool usage efficiency levels"""
+
     OPTIMAL = "optimal"  # Best possible efficiency
     GOOD = "good"  # Good efficiency, minor optimizations possible
     MODERATE = "moderate"  # Moderate efficiency, optimizations recommended
@@ -53,6 +55,7 @@ class EfficiencyLevel(Enum):
 @dataclass
 class ToolCall:
     """Individual tool call record"""
+
     tool_name: str
     call_time: datetime
     parameters: Dict[str, Any]
@@ -68,6 +71,7 @@ class ToolCall:
 @dataclass
 class ToolPattern:
     """Detected tool usage pattern"""
+
     pattern_name: str
     tools_involved: List[str]
     frequency: int
@@ -81,6 +85,7 @@ class ToolPattern:
 @dataclass
 class OptimizationOpportunity:
     """Specific optimization opportunity"""
+
     opportunity_type: str
     description: str
     tools_affected: List[str]
@@ -112,20 +117,24 @@ class ToolPatternAnalyzer:
         self.tool_calls: deque = deque(maxlen=self.max_call_history)
         self.detected_patterns: Dict[str, ToolPattern] = {}
         self.optimization_opportunities: List[OptimizationOpportunity] = []
-        self.tool_statistics: Dict[str, Dict[str, Any]] = defaultdict(lambda: {
-            "total_calls": 0,
-            "total_response_time": 0.0,
-            "success_rate": 1.0,
-            "avg_response_time": 0.0,
-            "last_used": None,
-            "call_frequency": 0.0,  # calls per minute
-            "efficiency_level": EfficiencyLevel.OPTIMAL
-        })
+        self.tool_statistics: Dict[str, Dict[str, Any]] = defaultdict(
+            lambda: {
+                "total_calls": 0,
+                "total_response_time": 0.0,
+                "success_rate": 1.0,
+                "avg_response_time": 0.0,
+                "last_used": None,
+                "call_frequency": 0.0,  # calls per minute
+                "efficiency_level": EfficiencyLevel.OPTIMAL,
+            }
+        )
 
         # Pattern detection
         self.sequence_patterns: Dict[str, int] = defaultdict(int)
         self.temporal_patterns: Dict[str, List[datetime]] = defaultdict(list)
-        self.parameter_patterns: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        self.parameter_patterns: Dict[str, Dict[str, int]] = defaultdict(
+            lambda: defaultdict(int)
+        )
 
         # Analysis results cache
         self.last_analysis_time: Optional[datetime] = None
@@ -134,13 +143,15 @@ class ToolPatternAnalyzer:
 
         logger.info("Tool pattern analyzer initialized")
 
-    def record_tool_call(self,
-                        tool_name: str,
-                        parameters: Dict[str, Any],
-                        response_time: float,
-                        success: bool,
-                        error_message: Optional[str] = None,
-                        session_id: str = "") -> None:
+    def record_tool_call(
+        self,
+        tool_name: str,
+        parameters: Dict[str, Any],
+        response_time: float,
+        success: bool,
+        error_message: Optional[str] = None,
+        session_id: str = "",
+    ) -> None:
         """
         Record a tool call for pattern analysis.
 
@@ -162,7 +173,7 @@ class ToolPatternAnalyzer:
                 success=success,
                 error_message=error_message,
                 session_id=session_id or "default",
-                sequence_position=len(self.tool_calls)
+                sequence_position=len(self.tool_calls),
             )
 
             # Classify tool call type
@@ -189,32 +200,41 @@ class ToolPatternAnalyzer:
         except Exception as e:
             logger.error(f"Error recording tool call: {e}")
 
-    def _classify_tool_call(self, tool_name: str, parameters: Dict[str, Any]) -> ToolCallType:
+    def _classify_tool_call(
+        self, tool_name: str, parameters: Dict[str, Any]
+    ) -> ToolCallType:
         """Classify tool call type based on tool name and parameters"""
         tool_name_lower = tool_name.lower()
 
         # Read operations
-        if any(keyword in tool_name_lower for keyword in ['read', 'list', 'glob', 'get']):
+        if any(
+            keyword in tool_name_lower for keyword in ["read", "list", "glob", "get"]
+        ):
             return ToolCallType.READ_OPERATION
 
         # Write operations
-        if any(keyword in tool_name_lower for keyword in ['write', 'edit', 'create', 'update']):
+        if any(
+            keyword in tool_name_lower
+            for keyword in ["write", "edit", "create", "update"]
+        ):
             return ToolCallType.WRITE_OPERATION
 
         # Search operations
-        if any(keyword in tool_name_lower for keyword in ['grep', 'search', 'find']):
+        if any(keyword in tool_name_lower for keyword in ["grep", "search", "find"]):
             return ToolCallType.SEARCH_OPERATION
 
         # Execution
-        if any(keyword in tool_name_lower for keyword in ['bash', 'execute', 'run']):
+        if any(keyword in tool_name_lower for keyword in ["bash", "execute", "run"]):
             return ToolCallType.EXECUTION
 
         # Communication tools
-        if any(keyword in tool_name_lower for keyword in ['todo', 'task', 'agent']):
+        if any(keyword in tool_name_lower for keyword in ["todo", "task", "agent"]):
             return ToolCallType.COMMUNICATION
 
         # Analysis tools
-        if any(keyword in tool_name_lower for keyword in ['analyze', 'diagnostic', 'lint']):
+        if any(
+            keyword in tool_name_lower for keyword in ["analyze", "diagnostic", "lint"]
+        ):
             return ToolCallType.ANALYSIS
 
         # Default to navigation
@@ -225,26 +245,33 @@ class ToolPatternAnalyzer:
         base_cost = 1
 
         # High cost tools
-        if any(keyword in tool_name.lower() for keyword in ['agent', 'task', 'todo']):
+        if any(keyword in tool_name.lower() for keyword in ["agent", "task", "todo"]):
             base_cost = 8
 
         # Medium-high cost tools
-        elif any(keyword in tool_name.lower() for keyword in ['write', 'edit', 'execute']):
+        elif any(
+            keyword in tool_name.lower() for keyword in ["write", "edit", "execute"]
+        ):
             base_cost = 6
 
         # Medium cost tools
-        elif any(keyword in tool_name.lower() for keyword in ['search', 'grep', 'analyze']):
+        elif any(
+            keyword in tool_name.lower() for keyword in ["search", "grep", "analyze"]
+        ):
             base_cost = 4
 
         # Low cost tools
-        elif any(keyword in tool_name.lower() for keyword in ['read', 'list', 'get']):
+        elif any(keyword in tool_name.lower() for keyword in ["read", "list", "get"]):
             base_cost = 2
 
         # Adjust based on parameters
         if isinstance(parameters, dict):
             # Large file operations cost more
-            if 'file_path' in parameters and isinstance(parameters['file_path'], str):
-                if any(path in parameters['file_path'] for path in ['/large/', '/data/', '/logs/']):
+            if "file_path" in parameters and isinstance(parameters["file_path"], str):
+                if any(
+                    path in parameters["file_path"]
+                    for path in ["/large/", "/data/", "/logs/"]
+                ):
                     base_cost += 1
 
             # Complex operations cost more
@@ -252,7 +279,7 @@ class ToolPatternAnalyzer:
                 base_cost += 1
 
             # Recursive or batch operations cost more
-            if any(key in parameters for key in ['recursive', 'batch', 'all']):
+            if any(key in parameters for key in ["recursive", "batch", "all"]):
                 base_cost += 2
 
         return min(10, base_cost)
@@ -271,14 +298,21 @@ class ToolPatternAnalyzer:
 
         # Update success rate
         if tool_call.success:
-            stats["success_rate"] = ((stats["success_rate"] * (stats["total_calls"] - 1)) + 1.0) / stats["total_calls"]
+            stats["success_rate"] = (
+                (stats["success_rate"] * (stats["total_calls"] - 1)) + 1.0
+            ) / stats["total_calls"]
         else:
-            stats["success_rate"] = (stats["success_rate"] * (stats["total_calls"] - 1)) / stats["total_calls"]
+            stats["success_rate"] = (
+                stats["success_rate"] * (stats["total_calls"] - 1)
+            ) / stats["total_calls"]
 
         # Calculate call frequency (calls per minute)
-        recent_calls = [call for call in self.tool_calls
-                       if call.tool_name == tool_call.tool_name and
-                       (tool_call.call_time - call.call_time).seconds < 300]  # Last 5 minutes
+        recent_calls = [
+            call
+            for call in self.tool_calls
+            if call.tool_name == tool_call.tool_name
+            and (tool_call.call_time - call.call_time).seconds < 300
+        ]  # Last 5 minutes
         stats["call_frequency"] = len(recent_calls) / 5.0
 
         # Determine efficiency level
@@ -287,14 +321,18 @@ class ToolPatternAnalyzer:
     def _calculate_efficiency_level(self, stats: Dict[str, Any]) -> EfficiencyLevel:
         """Calculate efficiency level based on tool statistics"""
         # Score components (0-1 scale)
-        response_time_score = max(0, 1 - (stats["avg_response_time"] / 5.0))  # 5s as poor threshold
+        response_time_score = max(
+            0, 1 - (stats["avg_response_time"] / 5.0)
+        )  # 5s as poor threshold
         success_rate_score = stats["success_rate"]
-        frequency_score = max(0, 1 - (stats["call_frequency"] / 10.0))  # 10 calls/min as excessive
+        frequency_score = max(
+            0, 1 - (stats["call_frequency"] / 10.0)
+        )  # 10 calls/min as excessive
 
         # Weighted combination
-        efficiency_score = (response_time_score * 0.4 +
-                          success_rate_score * 0.4 +
-                          frequency_score * 0.2)
+        efficiency_score = (
+            response_time_score * 0.4 + success_rate_score * 0.4 + frequency_score * 0.2
+        )
 
         # Map to efficiency levels
         if efficiency_score >= 0.9:
@@ -348,7 +386,9 @@ class ToolPatternAnalyzer:
             self.last_analysis_time = datetime.now()
             self.cached_analysis = self._build_analysis_summary()
 
-            logger.info(f"Pattern analysis complete. Found {len(self.detected_patterns)} patterns and {len(self.optimization_opportunities)} optimization opportunities")
+            logger.info(
+                f"Pattern analysis complete. Found {len(self.detected_patterns)} patterns and {len(self.optimization_opportunities)} optimization opportunities"
+            )
 
         except Exception as e:
             logger.error(f"Error during pattern analysis: {e}")
@@ -356,22 +396,31 @@ class ToolPatternAnalyzer:
     async def _detect_sequence_patterns(self) -> None:
         """Detect common tool call sequences"""
         # Find frequent sequences
-        frequent_sequences = {seq: count for seq, count in self.sequence_patterns.items()
-                            if count >= self.pattern_min_frequency}
+        frequent_sequences = {
+            seq: count
+            for seq, count in self.sequence_patterns.items()
+            if count >= self.pattern_min_frequency
+        }
 
         for sequence, frequency in frequent_sequences.items():
-            tools = sequence.split('->')
+            tools = sequence.split("->")
 
             # Calculate efficiency metrics
             sequence_calls = []
             for i in range(len(self.tool_calls) - 1):
-                if (self.tool_calls[i].tool_name == tools[0] and
-                    self.tool_calls[i+1].tool_name == tools[1]):
-                    sequence_calls.extend([self.tool_calls[i], self.tool_calls[i+1]])
+                if (
+                    self.tool_calls[i].tool_name == tools[0]
+                    and self.tool_calls[i + 1].tool_name == tools[1]
+                ):
+                    sequence_calls.extend([self.tool_calls[i], self.tool_calls[i + 1]])
 
             if sequence_calls:
-                avg_duration = statistics.mean(call.response_time for call in sequence_calls)
-                success_rate = sum(1 for call in sequence_calls if call.success) / len(sequence_calls)
+                avg_duration = statistics.mean(
+                    call.response_time for call in sequence_calls
+                )
+                success_rate = sum(1 for call in sequence_calls if call.success) / len(
+                    sequence_calls
+                )
                 efficiency_score = success_rate * (1 / max(1, avg_duration))
 
                 pattern = ToolPattern(
@@ -380,9 +429,14 @@ class ToolPatternAnalyzer:
                     frequency=frequency,
                     avg_duration=avg_duration,
                     efficiency_score=efficiency_score,
-                    optimization_potential=self._calculate_pattern_optimization_potential(sequence_calls),
+                    optimization_potential=self._calculate_pattern_optimization_potential(
+                        sequence_calls
+                    ),
                     last_seen=max(call.call_time for call in sequence_calls),
-                    examples=[f"{calls[0].tool_name} -> {calls[1].tool_name}" for calls in zip(sequence_calls[::2], sequence_calls[1::2])][:3]
+                    examples=[
+                        f"{calls[0].tool_name} -> {calls[1].tool_name}"
+                        for calls in zip(sequence_calls[::2], sequence_calls[1::2])
+                    ][:3],
                 )
 
                 self.detected_patterns[f"sequence_{sequence}"] = pattern
@@ -399,13 +453,19 @@ class ToolPatternAnalyzer:
                 # Check for rapid repetition
                 rapid_calls = []
                 for i in range(len(calls) - 1):
-                    time_diff = (calls[i+1].call_time - calls[i].call_time).total_seconds()
+                    time_diff = (
+                        calls[i + 1].call_time - calls[i].call_time
+                    ).total_seconds()
                     if time_diff < 5:  # Less than 5 seconds apart
-                        rapid_calls.extend([calls[i], calls[i+1]])
+                        rapid_calls.extend([calls[i], calls[i + 1]])
 
                 if len(rapid_calls) >= 4:  # At least 2 rapid sequences
-                    avg_duration = statistics.mean(call.response_time for call in rapid_calls)
-                    efficiency_score = 1 / max(1, len(rapid_calls) / 10)  # Penalty for excessive repetition
+                    avg_duration = statistics.mean(
+                        call.response_time for call in rapid_calls
+                    )
+                    efficiency_score = 1 / max(
+                        1, len(rapid_calls) / 10
+                    )  # Penalty for excessive repetition
 
                     pattern = ToolPattern(
                         pattern_name=f"Repetitive: {tool_name}",
@@ -415,7 +475,10 @@ class ToolPatternAnalyzer:
                         efficiency_score=efficiency_score,
                         optimization_potential=0.8,  # High potential due to repetition
                         last_seen=max(call.call_time for call in rapid_calls),
-                        examples=[f"Rapid {tool_name} calls" for _ in range(min(3, len(rapid_calls)//2))]
+                        examples=[
+                            f"Rapid {tool_name} calls"
+                            for _ in range(min(3, len(rapid_calls) // 2))
+                        ],
                     )
 
                     self.detected_patterns[f"repetitive_{tool_name}"] = pattern
@@ -423,28 +486,42 @@ class ToolPatternAnalyzer:
     async def _detect_inefficient_patterns(self) -> None:
         """Detect inefficient tool usage patterns"""
         # Analyze tool combinations that could be optimized
-        recent_calls = [call for call in self.tool_calls
-                       if (datetime.now() - call.call_time).seconds < self.analysis_window]
+        recent_calls = [
+            call
+            for call in self.tool_calls
+            if (datetime.now() - call.call_time).seconds < self.analysis_window
+        ]
 
         # Look for Read -> Write -> Read patterns (inefficient)
         for i in range(len(recent_calls) - 2):
-            if (recent_calls[i].call_type == ToolCallType.READ_OPERATION and
-                recent_calls[i+1].call_type == ToolCallType.WRITE_OPERATION and
-                recent_calls[i+2].call_type == ToolCallType.READ_OPERATION):
+            if (
+                recent_calls[i].call_type == ToolCallType.READ_OPERATION
+                and recent_calls[i + 1].call_type == ToolCallType.WRITE_OPERATION
+                and recent_calls[i + 2].call_type == ToolCallType.READ_OPERATION
+            ):
 
                 # Check if reading same file
-                if (recent_calls[i].parameters.get('file_path') ==
-                    recent_calls[i+2].parameters.get('file_path')):
+                if recent_calls[i].parameters.get("file_path") == recent_calls[
+                    i + 2
+                ].parameters.get("file_path"):
 
                     pattern = ToolPattern(
                         pattern_name="Inefficient Read-Write-Read",
-                        tools_involved=[recent_calls[i].tool_name, recent_calls[i+1].tool_name, recent_calls[i+2].tool_name],
+                        tools_involved=[
+                            recent_calls[i].tool_name,
+                            recent_calls[i + 1].tool_name,
+                            recent_calls[i + 2].tool_name,
+                        ],
                         frequency=1,
-                        avg_duration=sum(call.response_time for call in recent_calls[i:i+3]),
+                        avg_duration=sum(
+                            call.response_time for call in recent_calls[i : i + 3]
+                        ),
                         efficiency_score=0.3,  # Low efficiency
                         optimization_potential=0.9,  # High optimization potential
-                        last_seen=recent_calls[i+2].call_time,
-                        examples=[f"Read {recent_calls[i].parameters.get('file_path', 'file')} -> Write -> Read again"]
+                        last_seen=recent_calls[i + 2].call_time,
+                        examples=[
+                            f"Read {recent_calls[i].parameters.get('file_path', 'file')} -> Write -> Read again"
+                        ],
                     )
 
                     self.detected_patterns[f"inefficient_rwr_{i}"] = pattern
@@ -462,10 +539,10 @@ class ToolPatternAnalyzer:
 
         # Weighted combination
         optimization_potential = (
-            (avg_response_time / 5.0) * 0.3 +  # Response time impact
-            error_rate * 0.3 +  # Error rate impact
-            frequency_score * 0.2 +  # Frequency impact
-            cost_score * 0.2  # API cost impact
+            (avg_response_time / 5.0) * 0.3  # Response time impact
+            + error_rate * 0.3  # Error rate impact
+            + frequency_score * 0.2  # Frequency impact
+            + cost_score * 0.2  # API cost impact
         )
 
         return min(1.0, optimization_potential)
@@ -476,67 +553,82 @@ class ToolPatternAnalyzer:
         # Opportunity 1: Batch similar operations
         similar_operations = self._find_similar_operations()
         if similar_operations:
-            self.optimization_opportunities.append(OptimizationOpportunity(
-                opportunity_type="batching",
-                description="Batch similar operations to reduce API calls",
-                tools_affected=list(similar_operations.keys()),
-                potential_savings=sum(len(ops) - 1 for ops in similar_operations.values()),
-                implementation_effort="Medium",
-                priority_score=0.8,
-                specific_recommendations=[
-                    f"Batch {len(ops)} {tool} operations"
-                    for tool, ops in similar_operations.items()
-                ]
-            ))
+            self.optimization_opportunities.append(
+                OptimizationOpportunity(
+                    opportunity_type="batching",
+                    description="Batch similar operations to reduce API calls",
+                    tools_affected=list(similar_operations.keys()),
+                    potential_savings=sum(
+                        len(ops) - 1 for ops in similar_operations.values()
+                    ),
+                    implementation_effort="Medium",
+                    priority_score=0.8,
+                    specific_recommendations=[
+                        f"Batch {len(ops)} {tool} operations"
+                        for tool, ops in similar_operations.items()
+                    ],
+                )
+            )
 
         # Opportunity 2: Cache frequent reads
         frequent_reads = self._find_frequent_reads()
         if frequent_reads:
-            self.optimization_opportunities.append(OptimizationOpportunity(
-                opportunity_type="caching",
-                description="Cache frequently read files to reduce redundant operations",
-                tools_affected=["Read", "Glob", "List"],
-                potential_savings=len(frequent_reads),
-                implementation_effort="Low",
-                priority_score=0.6,
-                specific_recommendations=[
-                    f"Cache {file_path} (read {count} times)"
-                    for file_path, count in frequent_reads.items()
-                ]
-            ))
+            self.optimization_opportunities.append(
+                OptimizationOpportunity(
+                    opportunity_type="caching",
+                    description="Cache frequently read files to reduce redundant operations",
+                    tools_affected=["Read", "Glob", "List"],
+                    potential_savings=len(frequent_reads),
+                    implementation_effort="Low",
+                    priority_score=0.6,
+                    specific_recommendations=[
+                        f"Cache {file_path} (read {count} times)"
+                        for file_path, count in frequent_reads.items()
+                    ],
+                )
+            )
 
         # Opportunity 3: Optimize tool sequences
         inefficient_sequences = self._find_inefficient_sequences()
         if inefficient_sequences:
-            self.optimization_opportunities.append(OptimizationOpportunity(
-                opportunity_type="sequence_optimization",
-                description="Optimize inefficient tool call sequences",
-                tools_affected=[tool for seq in inefficient_sequences for tool in seq.split('->')],
-                potential_savings=len(inefficient_sequences) * 2,
-                implementation_effort="High",
-                priority_score=0.9,
-                specific_recommendations=[
-                    f"Optimize sequence: {seq}"
-                    for seq in inefficient_sequences
-                ]
-            ))
+            self.optimization_opportunities.append(
+                OptimizationOpportunity(
+                    opportunity_type="sequence_optimization",
+                    description="Optimize inefficient tool call sequences",
+                    tools_affected=[
+                        tool
+                        for seq in inefficient_sequences
+                        for tool in seq.split("->")
+                    ],
+                    potential_savings=len(inefficient_sequences) * 2,
+                    implementation_effort="High",
+                    priority_score=0.9,
+                    specific_recommendations=[
+                        f"Optimize sequence: {seq}" for seq in inefficient_sequences
+                    ],
+                )
+            )
 
         # Opportunity 4: Reduce TodoWrite frequency
-        todowrite_calls = [call for call in self.tool_calls if "todo" in call.tool_name.lower()]
+        todowrite_calls = [
+            call for call in self.tool_calls if "todo" in call.tool_name.lower()
+        ]
         if len(todowrite_calls) > 10:
-            self.optimization_opportunities.append(OptimizationOpportunity(
-                opportunity_type="todowrite_optimization",
-                description="Reduce TodoWrite call frequency through batching",
-                tools_affected=["TodoWrite"],
-                potential_savings=len(todowrite_calls) // 2,
-                implementation_effort="Low",
-                priority_score=0.95,
-                specific_recommendations=[
-                    "Enable TodoWrite batching and consolidation",
-                    "Use pending todo queue instead of immediate writes",
-                    "Implement similarity-based deduplication"
-                ]
-            ))
+            self.optimization_opportunities.append(
+                OptimizationOpportunity(
+                    opportunity_type="todowrite_optimization",
+                    description="Reduce TodoWrite call frequency through batching",
+                    tools_affected=["TodoWrite"],
+                    potential_savings=len(todowrite_calls) // 2,
+                    implementation_effort="Low",
+                    priority_score=0.95,
+                    specific_recommendations=[
+                        "Enable TodoWrite batching and consolidation",
+                        "Use pending todo queue instead of immediate writes",
+                        "Implement similarity-based deduplication",
+                    ],
+                )
+            )
 
     def _find_similar_operations(self) -> Dict[str, List[ToolCall]]:
         """Find operations that could be batched together"""
@@ -544,7 +636,10 @@ class ToolPatternAnalyzer:
 
         # Group by tool and similar parameters
         for call in self.tool_calls:
-            if call.call_type in [ToolCallType.READ_OPERATION, ToolCallType.WRITE_OPERATION]:
+            if call.call_type in [
+                ToolCallType.READ_OPERATION,
+                ToolCallType.WRITE_OPERATION,
+            ]:
                 # Group by tool name and operation type
                 key = f"{call.tool_name}_{call.call_type.value}"
                 similar_ops[key].append(call)
@@ -557,9 +652,11 @@ class ToolPatternAnalyzer:
         file_reads = defaultdict(int)
 
         for call in self.tool_calls:
-            if (call.call_type == ToolCallType.READ_OPERATION and
-                'file_path' in call.parameters):
-                file_path = call.parameters['file_path']
+            if (
+                call.call_type == ToolCallType.READ_OPERATION
+                and "file_path" in call.parameters
+            ):
+                file_path = call.parameters["file_path"]
                 file_reads[file_path] += 1
 
         # Return files read more than 2 times
@@ -571,12 +668,14 @@ class ToolPatternAnalyzer:
 
         for sequence, count in self.sequence_patterns.items():
             if count >= 3:  # Frequent sequence
-                tools = sequence.split('->')
+                tools = sequence.split("->")
 
                 # Check for inefficient patterns
-                if (len(tools) == 2 and
-                    tools[0] in ['Read', 'Glob'] and
-                    tools[1] in ['Read', 'Glob']):
+                if (
+                    len(tools) == 2
+                    and tools[0] in ["Read", "Glob"]
+                    and tools[1] in ["Read", "Glob"]
+                ):
                     inefficient.append(sequence)
 
         return inefficient
@@ -595,29 +694,41 @@ class ToolPatternAnalyzer:
                     "avg_response_time": stats["avg_response_time"],
                     "success_rate": stats["success_rate"],
                     "call_frequency": stats["call_frequency"],
-                    "efficiency_level": stats["efficiency_level"].value
+                    "efficiency_level": stats["efficiency_level"].value,
                 }
                 for name, stats in self.tool_statistics.items()
             },
             "top_patterns": sorted(
-                [{"name": pattern.pattern_name, "score": pattern.efficiency_score}
-                 for pattern in self.detected_patterns.values()],
-                key=lambda x: x["score"], reverse=True
+                [
+                    {"name": pattern.pattern_name, "score": pattern.efficiency_score}
+                    for pattern in self.detected_patterns.values()
+                ],
+                key=lambda x: x["score"],
+                reverse=True,
             )[:5],
             "priority_opportunities": sorted(
-                [{"type": opp.opportunity_type, "savings": opp.potential_savings, "priority": opp.priority_score}
-                 for opp in self.optimization_opportunities],
-                key=lambda x: x["priority"], reverse=True
-            )[:5]
+                [
+                    {
+                        "type": opp.opportunity_type,
+                        "savings": opp.potential_savings,
+                        "priority": opp.priority_score,
+                    }
+                    for opp in self.optimization_opportunities
+                ],
+                key=lambda x: x["priority"],
+                reverse=True,
+            )[:5],
         }
 
     def get_analysis_results(self, force_refresh: bool = False) -> Dict[str, Any]:
         """Get current analysis results"""
         # Check cache validity
-        if (not force_refresh and
-            self.cached_analysis and
-            self.last_analysis_time and
-            (datetime.now() - self.last_analysis_time).seconds < self.cache_ttl):
+        if (
+            not force_refresh
+            and self.cached_analysis
+            and self.last_analysis_time
+            and (datetime.now() - self.last_analysis_time).seconds < self.cache_ttl
+        ):
             return self.cached_analysis
 
         # Trigger new analysis
@@ -631,9 +742,18 @@ class ToolPatternAnalyzer:
         return {
             "total_tool_calls": len(self.tool_calls),
             "unique_tools": len(self.tool_statistics),
-            "avg_response_time": statistics.mean(call.response_time for call in self.tool_calls) if self.tool_calls else 0,
-            "success_rate": sum(1 for call in self.tool_calls if call.success) / len(self.tool_calls) if self.tool_calls else 1,
-            "analysis_pending": True
+            "avg_response_time": (
+                statistics.mean(call.response_time for call in self.tool_calls)
+                if self.tool_calls
+                else 0
+            ),
+            "success_rate": (
+                sum(1 for call in self.tool_calls if call.success)
+                / len(self.tool_calls)
+                if self.tool_calls
+                else 1
+            ),
+            "analysis_pending": True,
         }
 
     def get_optimization_recommendations(self) -> List[Dict[str, Any]]:
@@ -644,19 +764,21 @@ class ToolPatternAnalyzer:
         sorted_opportunities = sorted(
             self.optimization_opportunities,
             key=lambda opp: opp.priority_score,
-            reverse=True
+            reverse=True,
         )
 
         for opp in sorted_opportunities:
-            recommendations.append({
-                "type": opp.opportunity_type,
-                "description": opp.description,
-                "tools_affected": opp.tools_affected,
-                "potential_savings": opp.potential_savings,
-                "implementation_effort": opp.implementation_effort,
-                "priority_score": opp.priority_score,
-                "specific_recommendations": opp.specific_recommendations
-            })
+            recommendations.append(
+                {
+                    "type": opp.opportunity_type,
+                    "description": opp.description,
+                    "tools_affected": opp.tools_affected,
+                    "potential_savings": opp.potential_savings,
+                    "implementation_effort": opp.implementation_effort,
+                    "priority_score": opp.priority_score,
+                    "specific_recommendations": opp.specific_recommendations,
+                }
+            )
 
         return recommendations
 
@@ -671,27 +793,39 @@ class ToolPatternAnalyzer:
                 "avg_response_time": stats["avg_response_time"],
                 "success_rate": stats["success_rate"],
                 "call_frequency": stats["call_frequency"],
-                "last_used": stats["last_used"].isoformat() if stats["last_used"] else None,
-                "recommendations": self._get_tool_recommendations(tool_name, stats)
+                "last_used": (
+                    stats["last_used"].isoformat() if stats["last_used"] else None
+                ),
+                "recommendations": self._get_tool_recommendations(tool_name, stats),
             }
 
         return efficiency_report
 
-    def _get_tool_recommendations(self, tool_name: str, stats: Dict[str, Any]) -> List[str]:
+    def _get_tool_recommendations(
+        self, tool_name: str, stats: Dict[str, Any]
+    ) -> List[str]:
         """Get specific recommendations for a tool"""
         recommendations = []
 
         if stats["efficiency_level"] == EfficiencyLevel.CRITICAL:
-            recommendations.append("URGENT: Critical inefficiency detected - immediate optimization required")
+            recommendations.append(
+                "URGENT: Critical inefficiency detected - immediate optimization required"
+            )
 
         if stats["avg_response_time"] > 3.0:
-            recommendations.append("High response time - consider caching or alternative approaches")
+            recommendations.append(
+                "High response time - consider caching or alternative approaches"
+            )
 
         if stats["success_rate"] < 0.8:
-            recommendations.append("Low success rate - review parameters and error handling")
+            recommendations.append(
+                "Low success rate - review parameters and error handling"
+            )
 
         if stats["call_frequency"] > 5.0:
-            recommendations.append("Very high call frequency - consider batching operations")
+            recommendations.append(
+                "Very high call frequency - consider batching operations"
+            )
 
         if "todo" in tool_name.lower() and stats["call_frequency"] > 2.0:
             recommendations.append("Enable TodoWrite optimization to reduce API calls")
@@ -705,7 +839,7 @@ class ToolPatternAnalyzer:
                 "analysis_metadata": {
                     "generated_at": datetime.now().isoformat(),
                     "analysis_window_hours": self.analysis_window / 3600,
-                    "total_tool_calls_analyzed": len(self.tool_calls)
+                    "total_tool_calls_analyzed": len(self.tool_calls),
                 },
                 "tool_statistics": self.tool_statistics,
                 "detected_patterns": {
@@ -716,7 +850,7 @@ class ToolPatternAnalyzer:
                         "avg_duration": pattern.avg_duration,
                         "efficiency_score": pattern.efficiency_score,
                         "optimization_potential": pattern.optimization_potential,
-                        "examples": pattern.examples
+                        "examples": pattern.examples,
                     }
                     for name, pattern in self.detected_patterns.items()
                 },
@@ -728,15 +862,15 @@ class ToolPatternAnalyzer:
                         "potential_savings": opp.potential_savings,
                         "implementation_effort": opp.implementation_effort,
                         "priority_score": opp.priority_score,
-                        "recommendations": opp.specific_recommendations
+                        "recommendations": opp.specific_recommendations,
                     }
                     for opp in self.optimization_opportunities
                 ],
                 "efficiency_report": self.get_tool_efficiency_report(),
-                "recommendations": self.get_optimization_recommendations()
+                "recommendations": self.get_optimization_recommendations(),
             }
 
-            with open(file_path, 'w') as f:
+            with open(file_path, "w") as f:
                 json.dump(report, f, indent=2, default=str)
 
             logger.info(f"Analysis report exported to {file_path}")
@@ -765,7 +899,9 @@ class ToolPatternAnalyzer:
 _global_analyzer: Optional[ToolPatternAnalyzer] = None
 
 
-def get_tool_pattern_analyzer(config: Optional[Dict[str, Any]] = None) -> ToolPatternAnalyzer:
+def get_tool_pattern_analyzer(
+    config: Optional[Dict[str, Any]] = None,
+) -> ToolPatternAnalyzer:
     """Get global tool pattern analyzer instance"""
     global _global_analyzer
     if _global_analyzer is None:
@@ -774,14 +910,18 @@ def get_tool_pattern_analyzer(config: Optional[Dict[str, Any]] = None) -> ToolPa
 
 
 # Integration functions
-def record_tool_usage(tool_name: str,
-                     parameters: Dict[str, Any],
-                     response_time: float,
-                     success: bool,
-                     error_message: Optional[str] = None) -> None:
+def record_tool_usage(
+    tool_name: str,
+    parameters: Dict[str, Any],
+    response_time: float,
+    success: bool,
+    error_message: Optional[str] = None,
+) -> None:
     """Convenience function to record tool usage"""
     analyzer = get_tool_pattern_analyzer()
-    analyzer.record_tool_call(tool_name, parameters, response_time, success, error_message)
+    analyzer.record_tool_call(
+        tool_name, parameters, response_time, success, error_message
+    )
 
 
 async def get_optimization_insights() -> Dict[str, Any]:
@@ -799,29 +939,35 @@ async def get_optimization_insights() -> Dict[str, Any]:
         "summary": {
             "total_optimization_opportunities": len(optimization_recommendations),
             "critical_tools": [
-                tool for tool, stats in efficiency_report.items()
+                tool
+                for tool, stats in efficiency_report.items()
                 if stats["efficiency_level"] == "critical"
             ],
             "high_priority_opportunities": [
-                opp for opp in optimization_recommendations
+                opp
+                for opp in optimization_recommendations
                 if opp["priority_score"] > 0.8
-            ]
-        }
+            ],
+        },
     }
 
 
 # Example usage
 if __name__ == "__main__":
+
     async def example():
-        analyzer = get_tool_pattern_analyzer({
-            "analysis_window": 1800,  # 30 minutes
-            "pattern_min_frequency": 2
-        })
+        analyzer = get_tool_pattern_analyzer(
+            {"analysis_window": 1800, "pattern_min_frequency": 2}  # 30 minutes
+        )
 
         # Simulate tool calls
         analyzer.record_tool_call("Read", {"file_path": "/test/file.py"}, 0.5, True)
-        analyzer.record_tool_call("TodoWrite", {"todos": [{"content": "test"}]}, 1.2, True)
-        analyzer.record_tool_call("Read", {"file_path": "/test/file.py"}, 0.3, True)  # Repeated read
+        analyzer.record_tool_call(
+            "TodoWrite", {"todos": [{"content": "test"}]}, 1.2, True
+        )
+        analyzer.record_tool_call(
+            "Read", {"file_path": "/test/file.py"}, 0.3, True
+        )  # Repeated read
 
         # Get insights
         insights = await get_optimization_insights()

@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 class MachineProfile:
     """Profile of a specific machine's capabilities and configuration"""
-    
+
     def __init__(self):
         self.machine_id: str = ""
         self.hostname: str = ""
@@ -35,7 +35,7 @@ class MachineProfile:
         self.is_root: bool = False
         self.capabilities: Set[str] = set()
         self.last_updated: datetime = datetime.now()
-        
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert profile to dictionary for serialization"""
         return {
@@ -49,9 +49,9 @@ class MachineProfile:
             "is_wsl": self.is_wsl,
             "is_root": self.is_root,
             "capabilities": list(self.capabilities),
-            "last_updated": self.last_updated.isoformat()
+            "last_updated": self.last_updated.isoformat(),
         }
-        
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MachineProfile":
         """Create profile from dictionary"""
@@ -66,37 +66,37 @@ class MachineProfile:
         profile.is_wsl = data.get("is_wsl", False)
         profile.is_root = data.get("is_root", False)
         profile.capabilities = set(data.get("capabilities", []))
-        
+
         last_updated_str = data.get("last_updated")
         if last_updated_str:
             profile.last_updated = datetime.fromisoformat(last_updated_str)
-            
+
         return profile
 
 
 class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
     """Enhanced system knowledge manager with machine-specific adaptation"""
-    
+
     def __init__(self, knowledge_base: KnowledgeBase):
         super().__init__(knowledge_base)
-        
+
         # Machine-specific paths
         self.machine_profiles_dir = self.runtime_knowledge_dir / "machine_profiles"
         self.machine_profiles_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Current machine profile
         self.current_machine_profile: Optional[MachineProfile] = None
-        
+
     async def initialize_machine_aware_knowledge(self, force_reinstall: bool = False):
         """Initialize system knowledge with machine-specific adaptation"""
         logger.info("Initializing machine-aware system knowledge...")
-        
+
         # 1. Detect current machine profile
         await self._detect_current_machine()
-        
+
         # 2. Load or create machine-specific knowledge
         machine_knowledge_dir = self._get_machine_knowledge_dir()
-        
+
         if force_reinstall or not machine_knowledge_dir.exists():
             await self._create_machine_specific_knowledge()
         else:
@@ -104,19 +104,19 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             if await self._has_machine_changed():
                 logger.info("Machine profile changed, updating knowledge...")
                 await self._create_machine_specific_knowledge()
-        
+
         # 3. Import machine-specific knowledge
         await self._import_machine_specific_knowledge()
-        
+
         logger.info("Machine-aware system knowledge initialization completed")
-        
+
     async def _detect_current_machine(self):
         """Detect current machine capabilities and create profile"""
         logger.info("Detecting current machine profile...")
-        
+
         detector = await get_os_detector()
         os_info = await detector.detect_system()
-        
+
         self.current_machine_profile = MachineProfile()
         self.current_machine_profile.machine_id = self._generate_machine_id(os_info)
         self.current_machine_profile.hostname = os_info.user or "unknown"
@@ -128,14 +128,18 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         self.current_machine_profile.is_wsl = os_info.is_wsl
         self.current_machine_profile.is_root = os_info.is_root
         self.current_machine_profile.capabilities = os_info.capabilities
-        
+
         # Save machine profile
         await self._save_machine_profile()
-        
-        logger.info(f"Machine profile detected: {self.current_machine_profile.machine_id}")
-        logger.info(f"OS: {os_info.os_type.value} ({os_info.distro.value if os_info.distro else 'N/A'})")
+
+        logger.info(
+            f"Machine profile detected: {self.current_machine_profile.machine_id}"
+        )
+        logger.info(
+            f"OS: {os_info.os_type.value} ({os_info.distro.value if os_info.distro else 'N/A'})"
+        )
         logger.info(f"Available tools: {len(os_info.capabilities)}")
-        
+
     def _generate_machine_id(self, os_info) -> str:
         """Generate unique machine ID based on system characteristics"""
         # Use system-specific identifiers to create unique ID
@@ -144,34 +148,37 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             os_info.distro.value if os_info.distro else "unknown",
             os_info.architecture,
             os_info.user,
-            str(os_info.is_wsl)
+            str(os_info.is_wsl),
         ]
-        
+
         # Create hash of components
         machine_string = "|".join(components)
         machine_hash = hashlib.md5(machine_string.encode()).hexdigest()[:12]
-        
+
         return f"{os_info.os_type.value}_{machine_hash}"
-        
+
     async def _save_machine_profile(self):
         """Save current machine profile to disk"""
         if not self.current_machine_profile:
             return
-            
-        profile_file = self.machine_profiles_dir / f"{self.current_machine_profile.machine_id}.json"
-        
+
+        profile_file = (
+            self.machine_profiles_dir
+            / f"{self.current_machine_profile.machine_id}.json"
+        )
+
         with open(profile_file, "w") as f:
             json.dump(self.current_machine_profile.to_dict(), f, indent=2)
-            
+
         logger.info(f"Machine profile saved: {profile_file}")
-        
+
     async def _load_machine_profile(self, machine_id: str) -> Optional[MachineProfile]:
         """Load machine profile from disk"""
         profile_file = self.machine_profiles_dir / f"{machine_id}.json"
-        
+
         if not profile_file.exists():
             return None
-            
+
         try:
             with open(profile_file, "r") as f:
                 data = json.load(f)
@@ -179,88 +186,96 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         except Exception as e:
             logger.warning(f"Error loading machine profile {machine_id}: {e}")
             return None
-            
+
     def _get_machine_knowledge_dir(self) -> Path:
         """Get machine-specific knowledge directory"""
         if not self.current_machine_profile:
             return self.runtime_knowledge_dir
-            
-        return self.runtime_knowledge_dir / "machines" / self.current_machine_profile.machine_id
-        
+
+        return (
+            self.runtime_knowledge_dir
+            / "machines"
+            / self.current_machine_profile.machine_id
+        )
+
     async def _has_machine_changed(self) -> bool:
         """Check if current machine profile differs from saved profile"""
         if not self.current_machine_profile:
             return True
-            
-        saved_profile = await self._load_machine_profile(self.current_machine_profile.machine_id)
+
+        saved_profile = await self._load_machine_profile(
+            self.current_machine_profile.machine_id
+        )
         if not saved_profile:
             return True
-            
+
         # Compare key attributes
         return (
-            saved_profile.available_tools != self.current_machine_profile.available_tools or
-            saved_profile.package_manager != self.current_machine_profile.package_manager or
-            saved_profile.capabilities != self.current_machine_profile.capabilities
+            saved_profile.available_tools
+            != self.current_machine_profile.available_tools
+            or saved_profile.package_manager
+            != self.current_machine_profile.package_manager
+            or saved_profile.capabilities != self.current_machine_profile.capabilities
         )
-        
+
     async def _create_machine_specific_knowledge(self):
         """Create machine-specific knowledge from templates"""
         logger.info("Creating machine-specific knowledge...")
-        
+
         machine_dir = self._get_machine_knowledge_dir()
         machine_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Process each category
         await self._adapt_tools_knowledge()
-        await self._adapt_workflows_knowledge() 
+        await self._adapt_workflows_knowledge()
         await self._adapt_procedures_knowledge()
-        
+
         # Integrate man pages for available tools
         await self._integrate_man_pages()
-        
+
     async def _adapt_tools_knowledge(self):
         """Adapt tools knowledge for current machine"""
         tools_dir = self.system_knowledge_dir / "tools"
         if not tools_dir.exists():
             return
-            
+
         machine_tools_dir = self._get_machine_knowledge_dir() / "tools"
         machine_tools_dir.mkdir(parents=True, exist_ok=True)
-        
+
         for yaml_file in tools_dir.glob("*.yaml"):
             logger.info(f"Adapting tools from {yaml_file}")
-            
+
             with open(yaml_file, "r") as f:
                 tools_data = yaml.safe_load(f)
-                
+
             # Filter and adapt tools for this machine
             adapted_tools = self._filter_tools_for_machine(tools_data)
-            
+
             if adapted_tools["tools"]:  # Only save if there are applicable tools
                 machine_file = machine_tools_dir / yaml_file.name
                 with open(machine_file, "w") as f:
                     yaml.dump(adapted_tools, f, default_flow_style=False, indent=2)
-                    
+
     def _filter_tools_for_machine(self, tools_data: Dict[str, Any]) -> Dict[str, Any]:
         """Filter tools based on current machine capabilities"""
         if not self.current_machine_profile:
             return tools_data
-            
+
         filtered_tools = []
         available_tools = self.current_machine_profile.available_tools
         os_type = self.current_machine_profile.os_type
         package_manager = self.current_machine_profile.package_manager
-        
+
         for tool_data in tools_data.get("tools", []):
             tool_name = tool_data.get("name", "")
-            
+
             # Check if tool is available or can be installed
             if tool_name in available_tools or self._can_install_tool(tool_data):
                 # Adapt installation instructions for this machine
                 adapted_tool = self._adapt_tool_for_machine(tool_data)
                 if adapted_tool:
                     filtered_tools.append(adapted_tool)
-                    
+
         return {
             **tools_data,
             "tools": filtered_tools,
@@ -268,164 +283,176 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 "machine_id": self.current_machine_profile.machine_id,
                 "os_type": os_type.value,
                 "package_manager": package_manager,
-                "filtered_at": datetime.now().isoformat()
-            }
+                "filtered_at": datetime.now().isoformat(),
+            },
         }
-        
+
     def _can_install_tool(self, tool_data: Dict[str, Any]) -> bool:
         """Check if tool can be installed on current machine"""
         if not self.current_machine_profile:
             return False
-            
+
         installation = tool_data.get("installation", {})
         package_manager = self.current_machine_profile.package_manager
-        
+
         # Check if installation method exists for this package manager
         return package_manager in installation
-        
-    def _adapt_tool_for_machine(self, tool_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+
+    def _adapt_tool_for_machine(
+        self, tool_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Adapt tool configuration for current machine"""
         if not self.current_machine_profile:
             return tool_data
-            
+
         adapted_tool = tool_data.copy()
         package_manager = self.current_machine_profile.package_manager
-        
+
         # Adapt installation instructions
         if "installation" in adapted_tool:
             installation = adapted_tool["installation"]
-            
+
             if package_manager in installation:
                 # Keep only the relevant installation method
                 adapted_tool["installation"] = {
                     package_manager: installation[package_manager],
-                    "system": f"Optimized for {self.current_machine_profile.os_type.value}"
+                    "system": f"Optimized for {self.current_machine_profile.os_type.value}",
                 }
             else:
                 # No suitable installation method
                 return None
-                
+
         # Add machine-specific notes
         adapted_tool["machine_notes"] = [
             f"Available on {self.current_machine_profile.machine_id}",
             f"Install with: {package_manager}",
-            f"Architecture: {self.current_machine_profile.architecture}"
+            f"Architecture: {self.current_machine_profile.architecture}",
         ]
-        
+
         return adapted_tool
-        
+
     async def _adapt_workflows_knowledge(self):
         """Adapt workflows for current machine capabilities"""
-        workflows_dir = self.system_knowledge_dir / "workflows" 
+        workflows_dir = self.system_knowledge_dir / "workflows"
         if not workflows_dir.exists():
             return
-            
+
         machine_workflows_dir = self._get_machine_knowledge_dir() / "workflows"
         machine_workflows_dir.mkdir(parents=True, exist_ok=True)
-        
+
         for yaml_file in workflows_dir.glob("*.yaml"):
             logger.info(f"Adapting workflow from {yaml_file}")
-            
+
             with open(yaml_file, "r") as f:
                 workflow_data = yaml.safe_load(f)
-                
+
             # Adapt workflow for machine capabilities
             adapted_workflow = self._adapt_workflow_for_machine(workflow_data)
-            
+
             if adapted_workflow:  # Only save if workflow is applicable
                 machine_file = machine_workflows_dir / yaml_file.name
                 with open(machine_file, "w") as f:
                     yaml.dump(adapted_workflow, f, default_flow_style=False, indent=2)
-                    
-    def _adapt_workflow_for_machine(self, workflow_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+
+    def _adapt_workflow_for_machine(
+        self, workflow_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Adapt workflow based on machine capabilities"""
         if not self.current_machine_profile:
             return workflow_data
-            
+
         available_tools = self.current_machine_profile.available_tools
         required_tools = workflow_data.get("required_tools", [])
-        
+
         # Check if required tools are available
         missing_tools = []
         available_required_tools = []
-        
+
         for tool_req in required_tools:
-            tool_name = tool_req.get("name", "") if isinstance(tool_req, dict) else str(tool_req)
-            
+            tool_name = (
+                tool_req.get("name", "")
+                if isinstance(tool_req, dict)
+                else str(tool_req)
+            )
+
             if tool_name in available_tools:
                 available_required_tools.append(tool_req)
             elif not tool_req.get("optional", False):
                 missing_tools.append(tool_name)
-                
+
         # Skip workflow if critical tools are missing
         if missing_tools:
-            logger.info(f"Skipping workflow {workflow_data.get('metadata', {}).get('name', 'Unknown')} - missing tools: {missing_tools}")
+            logger.info(
+                f"Skipping workflow {workflow_data.get('metadata', {}).get('name', 'Unknown')} - missing tools: {missing_tools}"
+            )
             return None
-            
+
         # Adapt workflow
         adapted_workflow = workflow_data.copy()
         adapted_workflow["required_tools"] = available_required_tools
-        
+
         # Add machine-specific metadata
         adapted_workflow["machine_adaptation"] = {
             "machine_id": self.current_machine_profile.machine_id,
             "adapted_at": datetime.now().isoformat(),
             "available_tools": len(available_required_tools),
-            "skipped_tools": len(required_tools) - len(available_required_tools)
+            "skipped_tools": len(required_tools) - len(available_required_tools),
         }
-        
+
         return adapted_workflow
-        
+
     async def _adapt_procedures_knowledge(self):
         """Adapt procedures for current machine"""
         procedures_dir = self.system_knowledge_dir / "procedures"
         if not procedures_dir.exists():
             return
-            
-        machine_procedures_dir = self._get_machine_knowledge_dir() / "procedures" 
+
+        machine_procedures_dir = self._get_machine_knowledge_dir() / "procedures"
         machine_procedures_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Simply copy procedures for now - future enhancement could adapt commands
         for yaml_file in procedures_dir.glob("*.yaml"):
             machine_file = machine_procedures_dir / yaml_file.name
             shutil.copy2(yaml_file, machine_file)
-            
+
     async def _import_machine_specific_knowledge(self):
         """Import machine-specific knowledge into knowledge base"""
         machine_dir = self._get_machine_knowledge_dir()
-        
+
         if not machine_dir.exists():
-            logger.warning(f"Machine-specific knowledge directory not found: {machine_dir}")
+            logger.warning(
+                f"Machine-specific knowledge directory not found: {machine_dir}"
+            )
             return
-            
+
         # Import adapted knowledge using parent class methods
         original_runtime_dir = self.runtime_knowledge_dir
-        
+
         try:
             # Temporarily point to machine-specific directory
             self.runtime_knowledge_dir = machine_dir
-            
+
             # Import using existing methods
             await self._import_from_runtime_files()
-            
+
         finally:
             # Restore original path
             self.runtime_knowledge_dir = original_runtime_dir
-            
+
     async def get_machine_info(self) -> Dict[str, Any]:
         """Get current machine information"""
         if not self.current_machine_profile:
             await self._detect_current_machine()
-            
+
         if self.current_machine_profile:
             return self.current_machine_profile.to_dict()
         else:
             return {"error": "Machine profile not available"}
-            
+
     async def list_supported_machines(self) -> List[Dict[str, Any]]:
         """List all known machine profiles"""
         machines = []
-        
+
         if self.machine_profiles_dir.exists():
             for profile_file in self.machine_profiles_dir.glob("*.json"):
                 try:
@@ -434,233 +461,265 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                     machines.append(profile_data)
                 except Exception as e:
                     logger.warning(f"Error loading profile {profile_file}: {e}")
-                    
+
         return machines
-        
+
     async def sync_knowledge_across_machines(self, target_machine_ids: List[str]):
         """Synchronize knowledge across multiple machines (future feature)"""
         logger.info(f"Knowledge sync requested for machines: {target_machine_ids}")
         # This would implement knowledge sharing between connected AutoBot instances
         # For now, just log the request
         pass
-        
+
     async def _integrate_man_pages(self):
         """Integrate man pages for tools available on this machine"""
         if not self.current_machine_profile:
             logger.warning("No machine profile available for man page integration")
             return
-            
+
         # Only integrate man pages on Linux systems
         if self.current_machine_profile.os_type.value != "linux":
-            logger.info(f"Man page integration skipped for {self.current_machine_profile.os_type.value}")
+            logger.info(
+                f"Man page integration skipped for {self.current_machine_profile.os_type.value}"
+            )
             return
-            
+
         logger.info("Integrating man pages for available tools...")
-        
+
         try:
             from src.agents.man_page_knowledge_integrator import get_man_page_integrator
-            
+
             integrator = await get_man_page_integrator()
-            
+
             # Set the machine ID for proper knowledge organization
             machine_dir = self._get_machine_knowledge_dir()
-            integrator.knowledge_base_dir = machine_dir.parent.parent  # Point to data/system_knowledge
-            
+            integrator.knowledge_base_dir = (
+                machine_dir.parent.parent
+            )  # Point to data/system_knowledge
+
             # Get intersection of available tools and priority commands
             available_tools = self.current_machine_profile.available_tools
             priority_commands = integrator.priority_commands
-            
-            commands_to_integrate = [cmd for cmd in priority_commands if cmd in available_tools]
-            
-            logger.info(f"Integrating man pages for {len(commands_to_integrate)} commands")
-            
+
+            commands_to_integrate = [
+                cmd for cmd in priority_commands if cmd in available_tools
+            ]
+
+            logger.info(
+                f"Integrating man pages for {len(commands_to_integrate)} commands"
+            )
+
             # Integrate man pages for available commands
             integration_results = {
-                'processed': 0,
-                'successful': 0,
-                'failed': 0,
-                'cached': 0,
-                'commands': {}
+                "processed": 0,
+                "successful": 0,
+                "failed": 0,
+                "cached": 0,
+                "commands": {},
             }
-            
+
             for command in commands_to_integrate:
-                integration_results['processed'] += 1
-                
+                integration_results["processed"] += 1
+
                 try:
                     # Check if already cached (recent)
                     cached_info = await integrator.load_cached_man_page(command)
                     if cached_info and self._is_man_page_recent(cached_info):
-                        integration_results['cached'] += 1
-                        integration_results['commands'][command] = 'cached'
+                        integration_results["cached"] += 1
+                        integration_results["commands"][command] = "cached"
                         continue
-                        
+
                     # Check if man page exists
                     if not await integrator.check_man_page_exists(command):
-                        integration_results['failed'] += 1
-                        integration_results['commands'][command] = 'no_man_page'
+                        integration_results["failed"] += 1
+                        integration_results["commands"][command] = "no_man_page"
                         continue
-                        
+
                     # Extract man page
                     man_info = await integrator.extract_man_page(command)
                     if not man_info:
-                        integration_results['failed'] += 1
-                        integration_results['commands'][command] = 'extraction_failed'
+                        integration_results["failed"] += 1
+                        integration_results["commands"][command] = "extraction_failed"
                         continue
-                        
+
                     # Set machine ID for proper organization
                     man_info.machine_id = self.current_machine_profile.machine_id
-                    
+
                     # Cache the result
                     await integrator.cache_man_page(man_info)
-                    
+
                     # Save as machine-specific knowledge
                     await self._save_man_page_knowledge(man_info, integrator)
-                    
-                    integration_results['successful'] += 1
-                    integration_results['commands'][command] = 'success'
-                    
+
+                    integration_results["successful"] += 1
+                    integration_results["commands"][command] = "success"
+
                     logger.debug(f"Integrated man page for {command}")
-                    
+
                 except Exception as e:
-                    integration_results['failed'] += 1
-                    integration_results['commands'][command] = f'error: {str(e)}'
+                    integration_results["failed"] += 1
+                    integration_results["commands"][command] = f"error: {str(e)}"
                     logger.error(f"Failed to integrate man page for {command}: {e}")
-                    
-            logger.info(f"Man page integration complete: {integration_results['successful']} successful, "
-                       f"{integration_results['failed']} failed, {integration_results['cached']} cached")
-                       
+
+            logger.info(
+                f"Man page integration complete: {integration_results['successful']} successful, "
+                f"{integration_results['failed']} failed, {integration_results['cached']} cached"
+            )
+
             # Store integration summary
             await self._save_man_page_integration_summary(integration_results)
-            
+
         except ImportError:
             logger.warning("Man page integrator not available")
         except Exception as e:
             logger.error(f"Error during man page integration: {e}")
-            
+
     def _is_man_page_recent(self, man_info, max_age_hours: int = 24) -> bool:
         """Check if man page cache is recent enough"""
         if not man_info.last_updated:
             return False
-            
+
         try:
             from datetime import datetime, timedelta
-            
+
             last_updated = datetime.fromisoformat(man_info.last_updated)
             age_threshold = datetime.now() - timedelta(hours=max_age_hours)
-            
+
             return last_updated > age_threshold
         except Exception:
             return False
-            
+
     async def _save_man_page_knowledge(self, man_info, integrator):
         """Save man page as machine-specific knowledge YAML"""
         machine_dir = self._get_machine_knowledge_dir()
         man_knowledge_dir = machine_dir / "man_pages"
         man_knowledge_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Convert to AutoBot knowledge format
         knowledge_data = integrator.convert_to_knowledge_yaml(man_info)
-        
+
         # Add machine-specific metadata
-        knowledge_data['metadata'].update({
-            'machine_id': self.current_machine_profile.machine_id,
-            'os_type': self.current_machine_profile.os_type.value,
-            'package_manager': self.current_machine_profile.package_manager,
-            'integration_type': 'machine_aware_man_pages'
-        })
-        
+        knowledge_data["metadata"].update(
+            {
+                "machine_id": self.current_machine_profile.machine_id,
+                "os_type": self.current_machine_profile.os_type.value,
+                "package_manager": self.current_machine_profile.package_manager,
+                "integration_type": "machine_aware_man_pages",
+            }
+        )
+
         # Save as YAML
         yaml_file = man_knowledge_dir / f"{man_info.command}.yaml"
-        with open(yaml_file, 'w') as f:
+        with open(yaml_file, "w") as f:
             yaml.dump(knowledge_data, f, default_flow_style=False, indent=2)
-            
+
         logger.debug(f"Saved man page knowledge for {man_info.command} to {yaml_file}")
-        
+
     async def _save_man_page_integration_summary(self, results: Dict[str, Any]):
         """Save man page integration summary"""
         machine_dir = self._get_machine_knowledge_dir()
         summary_file = machine_dir / "man_page_integration_summary.json"
-        
+
         summary_data = {
             **results,
-            'integration_date': datetime.now().isoformat(),
-            'machine_id': self.current_machine_profile.machine_id if self.current_machine_profile else 'unknown',
-            'total_available_tools': len(self.current_machine_profile.available_tools) if self.current_machine_profile else 0
+            "integration_date": datetime.now().isoformat(),
+            "machine_id": (
+                self.current_machine_profile.machine_id
+                if self.current_machine_profile
+                else "unknown"
+            ),
+            "total_available_tools": (
+                len(self.current_machine_profile.available_tools)
+                if self.current_machine_profile
+                else 0
+            ),
         }
-        
-        with open(summary_file, 'w') as f:
+
+        with open(summary_file, "w") as f:
             json.dump(summary_data, f, indent=2)
-            
+
         logger.info(f"Saved man page integration summary to {summary_file}")
-        
+
     async def get_man_page_summary(self) -> Dict[str, Any]:
         """Get summary of integrated man pages for current machine"""
         machine_dir = self._get_machine_knowledge_dir()
         summary_file = machine_dir / "man_page_integration_summary.json"
 
         if not summary_file.exists():
-            return {"status": "not_integrated", "message": "Man pages not yet integrated"}
-            
+            return {
+                "status": "not_integrated",
+                "message": "Man pages not yet integrated",
+            }
+
         try:
-            with open(summary_file, 'r') as f:
+            with open(summary_file, "r") as f:
                 summary = json.load(f)
-                
+
             # Add current file counts
             man_pages_dir = machine_dir / "man_pages"
             if man_pages_dir.exists():
                 yaml_files = list(man_pages_dir.glob("*.yaml"))
-                summary['current_man_page_files'] = len(yaml_files)
-                summary['available_commands'] = [f.stem for f in yaml_files]
+                summary["current_man_page_files"] = len(yaml_files)
+                summary["available_commands"] = [f.stem for f in yaml_files]
             else:
-                summary['current_man_page_files'] = 0
-                summary['available_commands'] = []
-                
+                summary["current_man_page_files"] = 0
+                summary["available_commands"] = []
+
             return summary
-            
+
         except Exception as e:
-            return {"status": "error", "message": f"Error reading integration summary: {e}"}
-            
+            return {
+                "status": "error",
+                "message": f"Error reading integration summary: {e}",
+            }
+
     async def search_man_page_knowledge(self, query: str) -> List[Dict[str, Any]]:
         """Search through integrated man page knowledge"""
         machine_dir = self._get_machine_knowledge_dir()
         man_pages_dir = machine_dir / "man_pages"
-        
+
         if not man_pages_dir.exists():
             return []
-            
+
         results = []
-        
+
         for yaml_file in man_pages_dir.glob("*.yaml"):
             try:
-                with open(yaml_file, 'r') as f:
+                with open(yaml_file, "r") as f:
                     knowledge_data = yaml.safe_load(f)
-                    
+
                 # Search in tool data
-                for tool in knowledge_data.get('tools', []):
+                for tool in knowledge_data.get("tools", []):
                     searchable_text = f"{tool.get('name', '')} {tool.get('purpose', '')} {tool.get('usage', {}).get('basic', '')}".lower()
-                    
+
                     # Add options text
-                    for option in tool.get('options', []):
+                    for option in tool.get("options", []):
                         searchable_text += f" {option}".lower()
-                        
+
                     # Add examples
-                    for example in tool.get('common_examples', []):
+                    for example in tool.get("common_examples", []):
                         searchable_text += f" {example.get('description', '')} {example.get('command', '')}".lower()
-                        
+
                     if query.lower() in searchable_text:
-                        results.append({
-                            'command': tool.get('name'),
-                            'purpose': tool.get('purpose'),
-                            'source': 'man_page',
-                            'machine_id': knowledge_data.get('metadata', {}).get('machine_id'),
-                            'file_path': str(yaml_file),
-                            'relevance_score': searchable_text.count(query.lower())
-                        })
-                        
+                        results.append(
+                            {
+                                "command": tool.get("name"),
+                                "purpose": tool.get("purpose"),
+                                "source": "man_page",
+                                "machine_id": knowledge_data.get("metadata", {}).get(
+                                    "machine_id"
+                                ),
+                                "file_path": str(yaml_file),
+                                "relevance_score": searchable_text.count(query.lower()),
+                            }
+                        )
+
             except Exception as e:
-                logger.error(f"Error searching man page knowledge file {yaml_file}: {e}")
-                
+                logger.error(
+                    f"Error searching man page knowledge file {yaml_file}: {e}"
+                )
+
         # Sort by relevance score (descending)
-        results.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
-        
+        results.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
+
         return results

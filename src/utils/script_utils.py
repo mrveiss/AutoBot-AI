@@ -40,7 +40,7 @@ class ScriptFormatter:
             "success": "✅",
             "warning": "⚠️",
             "error": "❌",
-            "running": "🔄"
+            "running": "🔄",
         }
 
         symbol = status_symbols.get(status, "📋")
@@ -141,7 +141,10 @@ class ProgressIndicator:
         progress_bar = "█" * int(percentage // 4) + "░" * (25 - int(percentage // 4))
 
         step_info = f" - {message}" if message else ""
-        print(f"\r🔄 {self.description}: [{progress_bar}] {percentage:.1f}% ({self.current_step}/{self.total_steps}){step_info}", end="")
+        print(
+            f"\r🔄 {self.description}: [{progress_bar}] {percentage:.1f}% ({self.current_step}/{self.total_steps}){step_info}",
+            end="",
+        )
 
         if self.current_step >= self.total_steps:
             print()  # New line when complete
@@ -186,27 +189,32 @@ def confirm_action(message: str, default: bool = False) -> bool:
     if not response:
         return default
 
-    return response in ['y', 'yes', 'true', '1']
+    return response in ["y", "yes", "true", "1"]
 
 
 # Legacy compatibility - these functions maintain the original interface
 # for existing scripts that import them directly
 
+
 def print_header(title: str):
     """Legacy compatibility function"""
     ScriptFormatter.print_header(title)
+
 
 def print_step(step: str, status: str = "info"):
     """Legacy compatibility function"""
     ScriptFormatter.print_step(step, status)
 
+
 def print_error(message: str, exit_code: Optional[int] = None):
     """Legacy compatibility function"""
     ScriptFormatter.print_error(message, exit_code)
 
+
 def print_success(message: str):
     """Legacy compatibility function"""
     ScriptFormatter.print_success(message)
+
 
 def print_warning(message: str):
     """Legacy compatibility function"""

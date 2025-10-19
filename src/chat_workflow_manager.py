@@ -37,11 +37,26 @@ logger = logging.getLogger(__name__)
 
 # Exit intent detection keywords
 EXIT_KEYWORDS = {
-    "goodbye", "bye", "exit", "quit", "end chat", "stop",
-    "that's all", "thanks goodbye", "bye bye", "see you",
-    "farewell", "good bye", "later", "end conversation",
-    "no more", "i'm done", "im done", "close chat"
+    "goodbye",
+    "bye",
+    "exit",
+    "quit",
+    "end chat",
+    "stop",
+    "that's all",
+    "thanks goodbye",
+    "bye bye",
+    "see you",
+    "farewell",
+    "good bye",
+    "later",
+    "end conversation",
+    "no more",
+    "i'm done",
+    "im done",
+    "close chat",
 }
+
 
 def detect_exit_intent(message: str) -> bool:
     """
@@ -72,7 +87,9 @@ def detect_exit_intent(message: str) -> bool:
     return False
 
 
-def detect_user_intent(message: str, conversation_history: List[Dict[str, str]] = None) -> str:
+def detect_user_intent(
+    message: str, conversation_history: List[Dict[str, str]] = None
+) -> str:
     """
     Detect user's intent to select appropriate context prompt.
 
@@ -87,67 +104,116 @@ def detect_user_intent(message: str, conversation_history: List[Dict[str, str]] 
 
     # Installation intent keywords
     installation_keywords = {
-        "install", "setup", "configure", "deployment", "deploy",
-        "first time", "getting started", "how to start", "run autobot",
-        "start autobot", "vm setup", "distributed setup"
+        "install",
+        "setup",
+        "configure",
+        "deployment",
+        "deploy",
+        "first time",
+        "getting started",
+        "how to start",
+        "run autobot",
+        "start autobot",
+        "vm setup",
+        "distributed setup",
     }
 
     # Architecture intent keywords
     architecture_keywords = {
-        "architecture", "design", "why", "how does", "how is",
-        "vm", "virtual machine", "distributed", "infrastructure",
-        "service", "component", "system design", "how many"
+        "architecture",
+        "design",
+        "why",
+        "how does",
+        "how is",
+        "vm",
+        "virtual machine",
+        "distributed",
+        "infrastructure",
+        "service",
+        "component",
+        "system design",
+        "how many",
     }
 
     # Troubleshooting intent keywords
     troubleshooting_keywords = {
-        "error", "issue", "problem", "not working", "broken",
-        "failed", "fail", "crash", "timeout", "can't", "cannot",
-        "stuck", "help", "fix", "debug", "troubleshoot"
+        "error",
+        "issue",
+        "problem",
+        "not working",
+        "broken",
+        "failed",
+        "fail",
+        "crash",
+        "timeout",
+        "can't",
+        "cannot",
+        "stuck",
+        "help",
+        "fix",
+        "debug",
+        "troubleshoot",
     }
 
     # API intent keywords
     api_keywords = {
-        "api", "endpoint", "request", "response", "integration",
-        "curl", "http", "rest", "websocket", "stream",
-        "documentation", "docs", "how to call", "how to use"
+        "api",
+        "endpoint",
+        "request",
+        "response",
+        "integration",
+        "curl",
+        "http",
+        "rest",
+        "websocket",
+        "stream",
+        "documentation",
+        "docs",
+        "how to call",
+        "how to use",
     }
 
     # Count keyword matches for each intent
     intent_scores = {
-        'installation': sum(1 for kw in installation_keywords if kw in message_lower),
-        'architecture': sum(1 for kw in architecture_keywords if kw in message_lower),
-        'troubleshooting': sum(1 for kw in troubleshooting_keywords if kw in message_lower),
-        'api': sum(1 for kw in api_keywords if kw in message_lower)
+        "installation": sum(1 for kw in installation_keywords if kw in message_lower),
+        "architecture": sum(1 for kw in architecture_keywords if kw in message_lower),
+        "troubleshooting": sum(
+            1 for kw in troubleshooting_keywords if kw in message_lower
+        ),
+        "api": sum(1 for kw in api_keywords if kw in message_lower),
     }
 
     # Check conversation context for intent continuation
     if conversation_history and len(conversation_history) > 0:
         # Get last assistant response to maintain context
-        last_responses = [msg.get('assistant', '') for msg in conversation_history[-2:]]
-        context = ' '.join(last_responses).lower()
+        last_responses = [msg.get("assistant", "") for msg in conversation_history[-2:]]
+        context = " ".join(last_responses).lower()
 
         # Boost scores based on conversation context
         if any(kw in context for kw in installation_keywords):
-            intent_scores['installation'] += 0.5
+            intent_scores["installation"] += 0.5
         if any(kw in context for kw in architecture_keywords):
-            intent_scores['architecture'] += 0.5
+            intent_scores["architecture"] += 0.5
         if any(kw in context for kw in troubleshooting_keywords):
-            intent_scores['troubleshooting'] += 0.5
+            intent_scores["troubleshooting"] += 0.5
         if any(kw in context for kw in api_keywords):
-            intent_scores['api'] += 0.5
+            intent_scores["api"] += 0.5
 
     # Find highest scoring intent
     max_score = max(intent_scores.values())
 
     if max_score > 0:
         detected_intent = max(intent_scores, key=intent_scores.get)
-        logger.debug(f"Intent detected: {detected_intent} (score: {max_score}) for message: {message[:50]}...")
+        logger.debug(
+            f"Intent detected: {detected_intent} (score: {max_score}) for message: {message[:50]}..."
+        )
         return detected_intent
 
     # Default to general if no specific intent detected
-    logger.debug(f"No specific intent detected, using general context for: {message[:50]}...")
-    return 'general'
+    logger.debug(
+        f"No specific intent detected, using general context for: {message[:50]}..."
+    )
+    return "general"
 
 
 def select_context_prompt(intent: str, base_prompt: str) -> str:
@@ -162,14 +228,14 @@ def select_context_prompt(intent: str, base_prompt: str) -> str:
         Combined prompt with base + context-specific instructions
     """
     context_prompt_map = {
-        'installation': 'chat.installation_help',
-        'architecture': 'chat.architecture_explanation',
-        'troubleshooting': 'chat.troubleshooting',
-        'api': 'chat.api_documentation'
+        "installation": "chat.installation_help",
+        "architecture": "chat.architecture_explanation",
+        "troubleshooting": "chat.troubleshooting",
+        "api": "chat.api_documentation",
     }
 
     # If general intent, return base prompt only
-    if intent == 'general' or intent not in context_prompt_map:
+    if intent == "general" or intent not in context_prompt_map:
         logger.debug("Using base system prompt (general context)")
         return base_prompt
 
@@ -203,13 +269,16 @@ def select_context_prompt(intent: str, base_prompt: str) -> str:
 @dataclass
 class WorkflowSession:
     """Represents an active chat workflow session"""
+
     session_id: str
     workflow: AsyncChatWorkflow
     created_at: float = field(default_factory=time.time)
     last_activity: float = field(default_factory=time.time)
     message_count: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
-    conversation_history: List[Dict[str, str]] = field(default_factory=list)  # Track conversation context
+    conversation_history: List[Dict[str, str]] = field(
+        default_factory=list
+    )  # Track conversation context
 
 
 class ChatWorkflowManager:
@@ -247,7 +316,10 @@ class ChatWorkflowManager:
             # This ensures sessions created here are visible to the approval API
             if agent_terminal_api._agent_terminal_service_instance is None:
                 from backend.services.agent_terminal_service import AgentTerminalService
-                agent_terminal_api._agent_terminal_service_instance = AgentTerminalService()
+
+                agent_terminal_api._agent_terminal_service_instance = (
+                    AgentTerminalService()
+                )
                 logger.info("Initialized global AgentTerminalService singleton")
 
             agent_service = agent_terminal_api._agent_terminal_service_instance
@@ -269,11 +341,17 @@ class ChatWorkflowManager:
         """
         import re
 
-        logger.debug(f"[_parse_tool_calls] Searching for TOOL_CALL markers in text of length {len(text)}")
-        logger.debug(f"[_parse_tool_calls] Checking if '<TOOL_CALL' exists in text: {'<TOOL_CALL' in text}")
+        logger.debug(
+            f"[_parse_tool_calls] Searching for TOOL_CALL markers in text of length {len(text)}"
+        )
+        logger.debug(
+            f"[_parse_tool_calls] Checking if '<TOOL_CALL' exists in text: {'<TOOL_CALL' in text}"
+        )
 
         tool_calls = []
-        pattern = r'<TOOL_CALL\s+name="([^"]+)"\s+params=\'({[^}]+})\'>([^<]*)</TOOL_CALL>'
+        pattern = (
+            r'<TOOL_CALL\s+name="([^"]+)"\s+params=\'({[^}]+})\'>([^<]*)</TOOL_CALL>'
+        )
 
         logger.debug(f"[_parse_tool_calls] Using regex pattern: {pattern}")
 
@@ -287,26 +365,25 @@ class ChatWorkflowManager:
 
             try:
                 import json
+
                 params = json.loads(params_str)
-                tool_calls.append({
-                    "name": tool_name,
-                    "params": params,
-                    "description": description
-                })
-                logger.debug(f"[_parse_tool_calls] Found TOOL_CALL #{match_count}: name={tool_name}, params={params}")
+                tool_calls.append(
+                    {"name": tool_name, "params": params, "description": description}
+                )
+                logger.debug(
+                    f"[_parse_tool_calls] Found TOOL_CALL #{match_count}: name={tool_name}, params={params}"
+                )
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse tool call params: {e}")
                 continue
 
-        logger.info(f"[_parse_tool_calls] Total matches found: {match_count}, successfully parsed: {len(tool_calls)}")
+        logger.info(
+            f"[_parse_tool_calls] Total matches found: {match_count}, successfully parsed: {len(tool_calls)}"
+        )
         return tool_calls
 
     async def _execute_terminal_command(
-        self,
-        session_id: str,
-        command: str,
-        host: str = "main",
-        description: str = ""
+        self, session_id: str, command: str, host: str = "main", description: str = ""
     ) -> Dict[str, Any]:
         """
         Execute terminal command via terminal tool.
@@ -321,10 +398,7 @@ class ChatWorkflowManager:
             Execution result
         """
         if not self.terminal_tool:
-            return {
-                "status": "error",
-                "error": "Terminal tool not available"
-            }
+            return {"status": "error", "error": "Terminal tool not available"}
 
         # Ensure terminal session exists for this conversation
         if not self.terminal_tool.active_sessions.get(session_id):
@@ -333,7 +407,7 @@ class ChatWorkflowManager:
                 agent_id=f"chat_agent_{session_id}",
                 conversation_id=session_id,
                 agent_role="chat_agent",
-                host=host
+                host=host,
             )
 
             if session_result.get("status") != "success":
@@ -341,9 +415,7 @@ class ChatWorkflowManager:
 
         # Execute command
         result = await self.terminal_tool.execute_command(
-            conversation_id=session_id,
-            command=command,
-            description=description
+            conversation_id=session_id, command=command, description=description
         )
 
         return result
@@ -360,25 +432,32 @@ class ChatWorkflowManager:
                 key = self._get_conversation_key(session_id)
                 try:
                     history_json = await asyncio.wait_for(
-                        self.redis_client.get(key),
-                        timeout=2.0
+                        self.redis_client.get(key), timeout=2.0
                     )
 
                     if history_json:
-                        logger.debug(f"Loaded conversation history from Redis for session {session_id}")
+                        logger.debug(
+                            f"Loaded conversation history from Redis for session {session_id}"
+                        )
                         return json.loads(history_json)
 
                 except asyncio.TimeoutError:
-                    logger.warning(f"Redis get timeout after 2s for session {session_id}, falling back to file")
+                    logger.warning(
+                        f"Redis get timeout after 2s for session {session_id}, falling back to file"
+                    )
                     # Fall through to file-based fallback
 
             # Fall back to file-based transcript (long-term storage)
             history = await self._load_transcript(session_id)
             if history:
-                logger.debug(f"Loaded conversation history from file for session {session_id}")
+                logger.debug(
+                    f"Loaded conversation history from file for session {session_id}"
+                )
                 # Repopulate Redis cache (non-blocking, fire-and-forget)
                 if self.redis_client is not None:
-                    asyncio.create_task(self._save_conversation_history(session_id, history))
+                    asyncio.create_task(
+                        self._save_conversation_history(session_id, history)
+                    )
 
             return history
 
@@ -386,7 +465,9 @@ class ChatWorkflowManager:
             logger.error(f"Failed to load conversation history: {e}")
             return []
 
-    async def _save_conversation_history(self, session_id: str, history: List[Dict[str, str]]):
+    async def _save_conversation_history(
+        self, session_id: str, history: List[Dict[str, str]]
+    ):
         """Save conversation history to Redis with TTL."""
         try:
             if self.redis_client is None:
@@ -398,12 +479,18 @@ class ChatWorkflowManager:
             # Save with 24-hour expiration and 2s timeout
             try:
                 await asyncio.wait_for(
-                    self.redis_client.set(key, history_json, ex=self.conversation_history_ttl),
-                    timeout=2.0
+                    self.redis_client.set(
+                        key, history_json, ex=self.conversation_history_ttl
+                    ),
+                    timeout=2.0,
                 )
-                logger.debug(f"Saved conversation history for session {session_id} to Redis")
+                logger.debug(
+                    f"Saved conversation history for session {session_id} to Redis"
+                )
             except asyncio.TimeoutError:
-                logger.warning(f"Redis set timeout after 2s for session {session_id} - data may not be cached")
+                logger.warning(
+                    f"Redis set timeout after 2s for session {session_id} - data may not be cached"
+                )
 
         except Exception as e:
             logger.error(f"Failed to save conversation history to Redis: {e}")
@@ -412,7 +499,9 @@ class ChatWorkflowManager:
         """Get file path for conversation transcript."""
         return Path(self.transcript_dir) / f"{session_id}.json"
 
-    async def _append_to_transcript(self, session_id: str, user_message: str, assistant_message: str):
+    async def _append_to_transcript(
+        self, session_id: str, user_message: str, assistant_message: str
+    ):
         """Append message exchange to long-term transcript file (async with aiofiles)."""
         try:
             # Ensure transcript directory exists
@@ -425,47 +514,55 @@ class ChatWorkflowManager:
             if transcript_path.exists():
                 try:
                     # Open file first, then apply timeout to read operation
-                    async with aiofiles.open(transcript_path, 'r', encoding='utf-8') as f:
+                    async with aiofiles.open(
+                        transcript_path, "r", encoding="utf-8"
+                    ) as f:
                         content = await asyncio.wait_for(f.read(), timeout=5.0)
                         transcript = json.loads(content)
                 except asyncio.TimeoutError:
-                    logger.warning(f"File read timeout after 5s for {transcript_path}, creating new transcript")
+                    logger.warning(
+                        f"File read timeout after 5s for {transcript_path}, creating new transcript"
+                    )
                     transcript = {
                         "session_id": session_id,
                         "created_at": datetime.now().isoformat(),
-                        "messages": []
+                        "messages": [],
                     }
             else:
                 transcript = {
                     "session_id": session_id,
                     "created_at": datetime.now().isoformat(),
-                    "messages": []
+                    "messages": [],
                 }
 
             # Append new exchange
-            transcript["messages"].append({
-                "timestamp": datetime.now().isoformat(),
-                "user": user_message,
-                "assistant": assistant_message
-            })
+            transcript["messages"].append(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "user": user_message,
+                    "assistant": assistant_message,
+                }
+            )
 
             transcript["updated_at"] = datetime.now().isoformat()
             transcript["message_count"] = len(transcript["messages"])
 
             # Atomic write pattern: write to temp file then rename (with timeout)
-            temp_path = transcript_path.with_suffix('.tmp')
+            temp_path = transcript_path.with_suffix(".tmp")
             try:
                 # Open file first, then apply timeout to write operation
-                async with aiofiles.open(temp_path, 'w', encoding='utf-8') as f:
+                async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
                     await asyncio.wait_for(
                         f.write(json.dumps(transcript, indent=2, ensure_ascii=False)),
-                        timeout=5.0
+                        timeout=5.0,
                     )
 
                 # Atomic rename (sync operation, very fast)
                 await asyncio.to_thread(temp_path.rename, transcript_path)
 
-                logger.debug(f"Appended to transcript for session {session_id} ({transcript['message_count']} total messages)")
+                logger.debug(
+                    f"Appended to transcript for session {session_id} ({transcript['message_count']} total messages)"
+                )
 
             except asyncio.TimeoutError:
                 logger.warning(f"File write timeout after 5s for {transcript_path}")
@@ -487,16 +584,21 @@ class ChatWorkflowManager:
             # Async file read with timeout
             try:
                 # Open file first, then apply timeout to read operation
-                async with aiofiles.open(transcript_path, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(transcript_path, "r", encoding="utf-8") as f:
                     content = await asyncio.wait_for(f.read(), timeout=5.0)
                     transcript = json.loads(content)
 
                 # Convert to simple history format (last 10 messages)
                 messages = transcript.get("messages", [])[-10:]
-                return [{"user": msg["user"], "assistant": msg["assistant"]} for msg in messages]
+                return [
+                    {"user": msg["user"], "assistant": msg["assistant"]}
+                    for msg in messages
+                ]
 
             except asyncio.TimeoutError:
-                logger.warning(f"File read timeout after 5s for {transcript_path}, returning empty history")
+                logger.warning(
+                    f"File read timeout after 5s for {transcript_path}, returning empty history"
+                )
                 return []
 
         except Exception as e:
@@ -514,9 +616,13 @@ class ChatWorkflowManager:
                 try:
                     self.redis_manager = await get_redis_manager()
                     self.redis_client = await self.redis_manager.main()
-                    logger.info("✅ Async Redis manager initialized for conversation history")
+                    logger.info(
+                        "✅ Async Redis manager initialized for conversation history"
+                    )
                 except Exception as redis_error:
-                    logger.warning(f"⚠️ Redis initialization failed: {redis_error} - continuing without persistence")
+                    logger.warning(
+                        f"⚠️ Redis initialization failed: {redis_error} - continuing without persistence"
+                    )
                     self.redis_manager = None
                     self.redis_client = None
 
@@ -544,20 +650,19 @@ class ChatWorkflowManager:
                 self.sessions[session_id] = WorkflowSession(
                     session_id=session_id,
                     workflow=workflow,
-                    conversation_history=conversation_history
+                    conversation_history=conversation_history,
                 )
 
-                logger.info(f"Created new workflow session: {session_id} with {len(conversation_history)} messages from history")
+                logger.info(
+                    f"Created new workflow session: {session_id} with {len(conversation_history)} messages from history"
+                )
 
             # Update last activity
             self.sessions[session_id].last_activity = time.time()
             return self.sessions[session_id]
 
     async def process_message(
-        self,
-        session_id: str,
-        message: str,
-        context: Optional[Dict[str, Any]] = None
+        self, session_id: str, message: str, context: Optional[Dict[str, Any]] = None
     ) -> List[WorkflowMessage]:
         """Process a message through the workflow system and return all messages."""
         messages = []
@@ -566,33 +671,36 @@ class ChatWorkflowManager:
         return messages
 
     async def process_message_stream(
-        self,
-        session_id: str,
-        message: str,
-        context: Optional[Dict[str, Any]] = None
+        self, session_id: str, message: str, context: Optional[Dict[str, Any]] = None
     ):
         """Process a message through the workflow system as an async generator (for streaming)."""
         try:
-            logger.debug(f"[ChatWorkflowManager] Starting process_message_stream for session={session_id}")
+            logger.debug(
+                f"[ChatWorkflowManager] Starting process_message_stream for session={session_id}"
+            )
             logger.debug(f"[ChatWorkflowManager] Message: {message[:100]}...")
 
             session = await self.get_or_create_session(session_id)
             session.message_count += 1
-            logger.debug(f"[ChatWorkflowManager] Session message_count: {session.message_count}")
+            logger.debug(
+                f"[ChatWorkflowManager] Session message_count: {session.message_count}"
+            )
 
             # CRITICAL: Check for explicit exit intent before processing
             user_wants_exit = detect_exit_intent(message)
 
             if user_wants_exit:
-                logger.info(f"[ChatWorkflowManager] User explicitly requested to exit conversation: {session_id}")
+                logger.info(
+                    f"[ChatWorkflowManager] User explicitly requested to exit conversation: {session_id}"
+                )
                 # Provide polite goodbye message
                 yield WorkflowMessage(
                     type="response",
                     content="Goodbye! Feel free to return anytime if you need assistance. Take care!",
                     metadata={
                         "message_type": "exit_acknowledgment",
-                        "exit_detected": True
-                    }
+                        "exit_detected": True,
+                    },
                 )
                 return  # End conversation only when user explicitly wants to exit
 
@@ -606,40 +714,61 @@ class ChatWorkflowManager:
                         agent_id=f"chat_agent_{session_id}",
                         conversation_id=session_id,
                         agent_role="chat_agent",
-                        host="main"
+                        host="main",
                     )
                     if session_result.get("status") == "success":
-                        terminal_session_id = self.terminal_tool.active_sessions.get(session_id)
+                        terminal_session_id = self.terminal_tool.active_sessions.get(
+                            session_id
+                        )
                 else:
-                    terminal_session_id = self.terminal_tool.active_sessions.get(session_id)
+                    terminal_session_id = self.terminal_tool.active_sessions.get(
+                        session_id
+                    )
 
-                logger.info(f"Terminal session ID for conversation {session_id}: {terminal_session_id}")
+                logger.info(
+                    f"Terminal session ID for conversation {session_id}: {terminal_session_id}"
+                )
 
             # ENHANCED LLM CALL with system prompt and context
-            logger.debug(f"[ChatWorkflowManager] Using enhanced Ollama call with system prompt from prompt file")
+            logger.debug(
+                f"[ChatWorkflowManager] Using enhanced Ollama call with system prompt from prompt file"
+            )
 
             try:
                 import httpx
 
                 # Get Ollama endpoint from config
                 try:
-                    ollama_endpoint = global_config_manager.get_nested("backend.llm.ollama.endpoint", "http://localhost:11434/api/generate")
+                    ollama_endpoint = global_config_manager.get_nested(
+                        "backend.llm.ollama.endpoint",
+                        "http://localhost:11434/api/generate",
+                    )
 
                     # Validate endpoint format
-                    if not ollama_endpoint or not ollama_endpoint.startswith(("http://", "https://")):
-                        logger.error(f"Invalid endpoint URL: {ollama_endpoint}, using default")
+                    if not ollama_endpoint or not ollama_endpoint.startswith(
+                        ("http://", "https://")
+                    ):
+                        logger.error(
+                            f"Invalid endpoint URL: {ollama_endpoint}, using default"
+                        )
                         ollama_endpoint = "http://localhost:11434/api/generate"
 
                 except Exception as config_error:
-                    logger.error(f"Failed to load Ollama endpoint from config: {config_error}")
+                    logger.error(
+                        f"Failed to load Ollama endpoint from config: {config_error}"
+                    )
                     ollama_endpoint = "http://localhost:11434/api/generate"
 
                 # Load SIMPLIFIED AutoBot system prompt (executor-focused, no bloat)
                 try:
                     system_prompt = get_prompt("chat.system_prompt_simple")
-                    logger.debug("[ChatWorkflowManager] Loaded simplified system prompt from prompts/chat/system_prompt_simple.md")
+                    logger.debug(
+                        "[ChatWorkflowManager] Loaded simplified system prompt from prompts/chat/system_prompt_simple.md"
+                    )
                 except Exception as prompt_error:
-                    logger.error(f"Failed to load system prompt from file: {prompt_error}")
+                    logger.error(
+                        f"Failed to load system prompt from file: {prompt_error}"
+                    )
                     # Fallback to ultra-minimal executor prompt if file loading fails
                     system_prompt = """You are AutoBot. Execute commands using:
 <TOOL_CALL name="execute_command" params='{"command":"cmd"}'>desc</TOOL_CALL>
@@ -650,19 +779,31 @@ NEVER teach commands - ALWAYS execute them."""
                 conversation_context = ""
                 if session.conversation_history:
                     conversation_context = "\n**Recent Context:**\n"
-                    for msg in session.conversation_history[-2:]:  # Last 2 exchanges ONLY
-                        conversation_context += f"User: {msg['user']}\nYou: {msg['assistant']}\n\n"
+                    for msg in session.conversation_history[
+                        -2:
+                    ]:  # Last 2 exchanges ONLY
+                        conversation_context += (
+                            f"User: {msg['user']}\nYou: {msg['assistant']}\n\n"
+                        )
 
                 # Build complete prompt with system context and history
-                full_prompt = system_prompt + conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
+                full_prompt = (
+                    system_prompt
+                    + conversation_context
+                    + f"\n**Current user message:** {message}\n\nAssistant:"
+                )
 
                 # Get selected model from config
                 try:
-                    selected_model = global_config_manager.get_nested("backend.llm.ollama.selected_model", "mistral:7b-instruct")
+                    selected_model = global_config_manager.get_nested(
+                        "backend.llm.ollama.selected_model", "mistral:7b-instruct"
+                    )
 
                     # Validate model is non-empty string
                     if not selected_model or not isinstance(selected_model, str):
-                        logger.error(f"Invalid model selection: {selected_model}, using default")
+                        logger.error(
+                            f"Invalid model selection: {selected_model}, using default"
+                        )
                         selected_model = "mistral:7b-instruct"
 
                     logger.info(f"Using LLM model from config: {selected_model}")
@@ -672,21 +813,33 @@ NEVER teach commands - ALWAYS execute them."""
                     selected_model = "mistral:7b-instruct"
 
                 # DEBUG: Log exact request details
-                logger.info(f"[ChatWorkflowManager] Making Ollama request to: {ollama_endpoint}")
+                logger.info(
+                    f"[ChatWorkflowManager] Making Ollama request to: {ollama_endpoint}"
+                )
                 logger.info(f"[ChatWorkflowManager] Using model: {selected_model}")
-                logger.info(f"[ChatWorkflowManager] Prompt length: {len(full_prompt)} characters")
-                logger.info(f"[ChatWorkflowManager] First 500 chars of prompt: {full_prompt[:500]}")
-                logger.info(f"[ChatWorkflowManager] Last 500 chars of prompt: {full_prompt[-500:]}")
+                logger.info(
+                    f"[ChatWorkflowManager] Prompt length: {len(full_prompt)} characters"
+                )
+                logger.info(
+                    f"[ChatWorkflowManager] First 500 chars of prompt: {full_prompt[:500]}"
+                )
+                logger.info(
+                    f"[ChatWorkflowManager] Last 500 chars of prompt: {full_prompt[-500:]}"
+                )
 
                 # DEBUG: Print statements to bypass logging config
-                print("\n" + "="*80, flush=True)
+                print("\n" + "=" * 80, flush=True)
                 print("=== OLLAMA REQUEST DEBUG ===", flush=True)
                 print(f"Endpoint: {ollama_endpoint}", flush=True)
                 print(f"Model: {selected_model}", flush=True)
                 print(f"Prompt length: {len(full_prompt)} characters", flush=True)
-                print(f"\nFirst 1000 chars of prompt:\n{full_prompt[:1000]}", flush=True)
-                print(f"\nLast 1000 chars of prompt:\n{full_prompt[-1000:]}", flush=True)
-                print("="*80 + "\n", flush=True)
+                print(
+                    f"\nFirst 1000 chars of prompt:\n{full_prompt[:1000]}", flush=True
+                )
+                print(
+                    f"\nLast 1000 chars of prompt:\n{full_prompt[-1000:]}", flush=True
+                )
+                print("=" * 80 + "\n", flush=True)
 
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     # Stream the response from Ollama
@@ -700,11 +853,13 @@ NEVER teach commands - ALWAYS execute them."""
                             "options": {
                                 "temperature": 0.7,
                                 "top_p": 0.9,
-                                "num_ctx": 4096
-                            }
-                        }
+                                "num_ctx": 4096,
+                            },
+                        },
                     ) as response:
-                        logger.info(f"[ChatWorkflowManager] Ollama response status: {response.status_code}")
+                        logger.info(
+                            f"[ChatWorkflowManager] Ollama response status: {response.status_code}"
+                        )
                         if response.status_code == 200:
                             llm_response = ""
 
@@ -713,18 +868,30 @@ NEVER teach commands - ALWAYS execute them."""
                                 if line:
                                     try:
                                         import json
+
                                         chunk_data = json.loads(line)
                                         chunk_text = chunk_data.get("response", "")
 
                                         if chunk_text:
                                             # Normalize TOOL_CALL spacing (models may generate TOOL_ CALL with space)
-                                            chunk_text = re.sub(r'<TOOL_\s+CALL', '<TOOL_CALL', chunk_text)
-                                            chunk_text = re.sub(r'</TOOL_\s+CALL>', '</TOOL_CALL>', chunk_text)
+                                            chunk_text = re.sub(
+                                                r"<TOOL_\s+CALL",
+                                                "<TOOL_CALL",
+                                                chunk_text,
+                                            )
+                                            chunk_text = re.sub(
+                                                r"</TOOL_\s+CALL>",
+                                                "</TOOL_CALL>",
+                                                chunk_text,
+                                            )
 
                                             llm_response += chunk_text
 
                                             # Yield streaming chunks in real-time
-                                            from src.async_chat_workflow import WorkflowMessage
+                                            from src.async_chat_workflow import (
+                                                WorkflowMessage,
+                                            )
+
                                             yield WorkflowMessage(
                                                 type="response",
                                                 content=chunk_text,
@@ -732,8 +899,8 @@ NEVER teach commands - ALWAYS execute them."""
                                                     "message_type": "llm_response_chunk",
                                                     "model": selected_model,
                                                     "streaming": True,
-                                                    "terminal_session_id": terminal_session_id  # CRITICAL: Include for TOOL_CALL detection
-                                                }
+                                                    "terminal_session_id": terminal_session_id,  # CRITICAL: Include for TOOL_CALL detection
+                                                },
                                             )
 
                                         # Check if this is the final chunk
@@ -741,27 +908,45 @@ NEVER teach commands - ALWAYS execute them."""
                                             break
 
                                     except json.JSONDecodeError as e:
-                                        logger.error(f"Failed to parse stream chunk: {e}")
+                                        logger.error(
+                                            f"Failed to parse stream chunk: {e}"
+                                        )
                                         continue
 
-                            logger.debug(f"[ChatWorkflowManager] Completed streaming response: {llm_response[:100]}...")
-                            logger.info(f"[ChatWorkflowManager] Full LLM response length: {len(llm_response)} characters")
-                            logger.info(f"[ChatWorkflowManager] Complete LLM response: {llm_response}")
+                            logger.debug(
+                                f"[ChatWorkflowManager] Completed streaming response: {llm_response[:100]}..."
+                            )
+                            logger.info(
+                                f"[ChatWorkflowManager] Full LLM response length: {len(llm_response)} characters"
+                            )
+                            logger.info(
+                                f"[ChatWorkflowManager] Complete LLM response: {llm_response}"
+                            )
 
                             # DEBUG: Print statements to bypass logging config
-                            print("\n" + "="*80, flush=True)
+                            print("\n" + "=" * 80, flush=True)
                             print("=== LLM RESPONSE DEBUG ===", flush=True)
-                            print(f"Response length: {len(llm_response)} characters", flush=True)
-                            print(f"Contains '<TOOL_CALL': {'<TOOL_CALL' in llm_response}", flush=True)
+                            print(
+                                f"Response length: {len(llm_response)} characters",
+                                flush=True,
+                            )
+                            print(
+                                f"Contains '<TOOL_CALL': {'<TOOL_CALL' in llm_response}",
+                                flush=True,
+                            )
                             print(f"\nFull LLM response:\n{llm_response}", flush=True)
-                            print("="*80 + "\n", flush=True)
+                            print("=" * 80 + "\n", flush=True)
 
                             # Check for tool calls in response
                             tool_calls = self._parse_tool_calls(llm_response)
-                            logger.info(f"[ChatWorkflowManager] Parsed {len(tool_calls)} tool calls from response")
+                            logger.info(
+                                f"[ChatWorkflowManager] Parsed {len(tool_calls)} tool calls from response"
+                            )
 
                             if tool_calls:
-                                logger.info(f"[ChatWorkflowManager] Detected {len(tool_calls)} tool call(s) in LLM response")
+                                logger.info(
+                                    f"[ChatWorkflowManager] Detected {len(tool_calls)} tool call(s) in LLM response"
+                                )
 
                                 for tool_call in tool_calls:
                                     if tool_call["name"] == "execute_command":
@@ -770,43 +955,56 @@ NEVER teach commands - ALWAYS execute them."""
                                         host = tool_call["params"].get("host", "main")
                                         description = tool_call.get("description", "")
 
-                                        logger.info(f"[ChatWorkflowManager] Executing command: {command} on {host}")
+                                        logger.info(
+                                            f"[ChatWorkflowManager] Executing command: {command} on {host}"
+                                        )
 
                                         # Execute command
                                         result = await self._execute_terminal_command(
                                             session_id=session_id,
                                             command=command,
                                             host=host,
-                                            description=description
+                                            description=description,
                                         )
 
                                         # Handle result
                                         if result.get("status") == "pending_approval":
                                             # Get terminal session ID for approval API
-                                            terminal_session_id = self.terminal_tool.active_sessions.get(session_id)
+                                            terminal_session_id = (
+                                                self.terminal_tool.active_sessions.get(
+                                                    session_id
+                                                )
+                                            )
 
                                             if not terminal_session_id:
-                                                logger.error(f"No terminal session found for conversation {session_id}")
+                                                logger.error(
+                                                    f"No terminal session found for conversation {session_id}"
+                                                )
                                                 yield WorkflowMessage(
                                                     type="error",
                                                     content="Terminal session error - cannot request approval",
-                                                    metadata={"error": True}
+                                                    metadata={"error": True},
                                                 )
                                                 continue
 
                                             # Command needs approval - send to frontend WITH terminal_session_id
                                             yield WorkflowMessage(
                                                 type="command_approval_request",
-                                                content=result.get("approval_ui_message", "Command requires approval"),
+                                                content=result.get(
+                                                    "approval_ui_message",
+                                                    "Command requires approval",
+                                                ),
                                                 metadata={
                                                     "command": command,
                                                     "risk_level": result.get("risk"),
-                                                    "reasons": result.get("reasons", []),
+                                                    "reasons": result.get(
+                                                        "reasons", []
+                                                    ),
                                                     "description": description,
                                                     "requires_approval": True,
                                                     "terminal_session_id": terminal_session_id,  # CRITICAL: Frontend needs this to call approval API
-                                                    "conversation_id": session_id
-                                                }
+                                                    "conversation_id": session_id,
+                                                },
                                             )
 
                                             # Yield waiting message
@@ -815,12 +1013,14 @@ NEVER teach commands - ALWAYS execute them."""
                                                 content=f"\n\n⏳ Waiting for your approval to execute: `{command}`\nRisk level: {result.get('risk')}\nReasons: {', '.join(result.get('reasons', []))}\n",
                                                 metadata={
                                                     "message_type": "approval_waiting",
-                                                    "command": command
-                                                }
+                                                    "command": command,
+                                                },
                                             )
 
                                             # Wait for approval with timeout (poll terminal session)
-                                            logger.info(f"Waiting for approval of command: {command} (terminal_session: {terminal_session_id})")
+                                            logger.info(
+                                                f"Waiting for approval of command: {command} (terminal_session: {terminal_session_id})"
+                                            )
 
                                             max_wait_time = 60  # 60 seconds timeout
                                             poll_interval = 0.5  # Poll every 500ms
@@ -833,22 +1033,57 @@ NEVER teach commands - ALWAYS execute them."""
 
                                                 # Check if approval has been processed by calling get_session_info
                                                 try:
-                                                    session_info = await self.terminal_tool.agent_terminal_service.get_session_info(terminal_session_id)
+                                                    session_info = await self.terminal_tool.agent_terminal_service.get_session_info(
+                                                        terminal_session_id
+                                                    )
 
                                                     # If pending_approval is None, command was either approved or denied
-                                                    if session_info and session_info.get("pending_approval") is None:
+                                                    if (
+                                                        session_info
+                                                        and session_info.get(
+                                                            "pending_approval"
+                                                        )
+                                                        is None
+                                                    ):
                                                         # Check session history for execution result
-                                                        command_history = session_info.get("command_history", [])
+                                                        command_history = (
+                                                            session_info.get(
+                                                                "command_history", []
+                                                            )
+                                                        )
                                                         if command_history:
-                                                            last_command = command_history[-1]
-                                                            if last_command.get("command") == command:
+                                                            last_command = (
+                                                                command_history[-1]
+                                                            )
+                                                            if (
+                                                                last_command.get(
+                                                                    "command"
+                                                                )
+                                                                == command
+                                                            ):
                                                                 # Found the execution result
-                                                                approval_result = last_command.get("result", {})
-                                                                logger.info(f"Command approval completed: {approval_result.get('status')}")
+                                                                approval_result = (
+                                                                    last_command.get(
+                                                                        "result", {}
+                                                                    )
+                                                                )
+                                                                logger.info(
+                                                                    f"Command approval completed: {approval_result.get('status')}"
+                                                                )
 
                                                                 # Send approval status update to frontend
-                                                                approval_status = "approved" if last_command.get("approved_by") else "denied"
-                                                                comment = last_command.get("approval_comment") or last_command.get("denial_reason")
+                                                                approval_status = (
+                                                                    "approved"
+                                                                    if last_command.get(
+                                                                        "approved_by"
+                                                                    )
+                                                                    else "denied"
+                                                                )
+                                                                comment = last_command.get(
+                                                                    "approval_comment"
+                                                                ) or last_command.get(
+                                                                    "denial_reason"
+                                                                )
 
                                                                 yield WorkflowMessage(
                                                                     type="metadata_update",
@@ -858,20 +1093,31 @@ NEVER teach commands - ALWAYS execute them."""
                                                                         "terminal_session_id": terminal_session_id,
                                                                         "approval_status": approval_status,
                                                                         "approval_comment": comment,
-                                                                        "command": command
-                                                                    }
+                                                                        "command": command,
+                                                                    },
                                                                 )
                                                                 break
                                                 except Exception as check_error:
-                                                    logger.error(f"Error checking approval status: {check_error}")
+                                                    logger.error(
+                                                        f"Error checking approval status: {check_error}"
+                                                    )
 
                                             # Handle approval result
                                             if approval_result:
                                                 # Command was approved and executed
-                                                if approval_result.get("status") == "success":
-                                                    stdout = approval_result.get("stdout", "")
-                                                    stderr = approval_result.get("stderr", "")
-                                                    return_code = approval_result.get("return_code", 0)
+                                                if (
+                                                    approval_result.get("status")
+                                                    == "success"
+                                                ):
+                                                    stdout = approval_result.get(
+                                                        "stdout", ""
+                                                    )
+                                                    stderr = approval_result.get(
+                                                        "stderr", ""
+                                                    )
+                                                    return_code = approval_result.get(
+                                                        "return_code", 0
+                                                    )
 
                                                     # Feed result back to LLM for interpretation
                                                     interpretation_prompt = f"""The command `{command}` was approved and executed successfully.
@@ -886,7 +1132,9 @@ Return code: {return_code}
 Please interpret this output for the user in a clear, helpful way. Explain what it means and answer their original question."""
 
                                                     # Get LLM interpretation of results
-                                                    async with httpx.AsyncClient(timeout=30.0) as interp_client:
+                                                    async with httpx.AsyncClient(
+                                                        timeout=30.0
+                                                    ) as interp_client:
                                                         interp_response = await interp_client.post(
                                                             ollama_endpoint,
                                                             json={
@@ -896,14 +1144,23 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                                                 "options": {
                                                                     "temperature": 0.7,
                                                                     "top_p": 0.9,
-                                                                    "num_ctx": 4096
-                                                                }
-                                                            }
+                                                                    "num_ctx": 4096,
+                                                                },
+                                                            },
                                                         )
 
-                                                        if interp_response.status_code == 200:
-                                                            interp_data = interp_response.json()
-                                                            interpretation = interp_data.get("response", "")
+                                                        if (
+                                                            interp_response.status_code
+                                                            == 200
+                                                        ):
+                                                            interp_data = (
+                                                                interp_response.json()
+                                                            )
+                                                            interpretation = (
+                                                                interp_data.get(
+                                                                    "response", ""
+                                                                )
+                                                            )
 
                                                             # Yield interpretation as final response
                                                             yield WorkflowMessage(
@@ -913,29 +1170,40 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                                                     "message_type": "command_result_interpretation",
                                                                     "command": command,
                                                                     "executed": True,
-                                                                    "approved": True
-                                                                }
+                                                                    "approved": True,
+                                                                },
                                                             )
 
                                                             # Update llm_response with results
                                                             llm_response += f"\n\n✅ Command approved and executed!\n\n{interpretation}"
                                                 else:
                                                     # Command failed or was denied
-                                                    error = approval_result.get("error", "Command was denied or failed")
+                                                    error = approval_result.get(
+                                                        "error",
+                                                        "Command was denied or failed",
+                                                    )
                                                     llm_response += f"\n\n❌ {error}"
                                                     yield WorkflowMessage(
                                                         type="error",
                                                         content=f"Command execution failed: {error}",
-                                                        metadata={"command": command, "error": True}
+                                                        metadata={
+                                                            "command": command,
+                                                            "error": True,
+                                                        },
                                                     )
                                             else:
                                                 # Timeout - no approval received
-                                                logger.warning(f"Approval timeout for command: {command}")
+                                                logger.warning(
+                                                    f"Approval timeout for command: {command}"
+                                                )
                                                 llm_response += f"\n\n⏱️ Approval timeout - command `{command}` was not approved within {max_wait_time} seconds."
                                                 yield WorkflowMessage(
                                                     type="error",
                                                     content=f"Approval timeout for command: {command}",
-                                                    metadata={"command": command, "timeout": True}
+                                                    metadata={
+                                                        "command": command,
+                                                        "timeout": True,
+                                                    },
                                                 )
 
                                         elif result.get("status") == "success":
@@ -957,7 +1225,9 @@ Return code: {return_code}
 Please interpret this output for the user in a clear, helpful way. Explain what it means and answer their original question."""
 
                                             # Get LLM interpretation of results
-                                            async with httpx.AsyncClient(timeout=30.0) as interp_client:
+                                            async with httpx.AsyncClient(
+                                                timeout=30.0
+                                            ) as interp_client:
                                                 interp_response = await interp_client.post(
                                                     ollama_endpoint,
                                                     json={
@@ -967,14 +1237,16 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                                         "options": {
                                                             "temperature": 0.7,
                                                             "top_p": 0.9,
-                                                            "num_ctx": 4096
-                                                        }
-                                                    }
+                                                            "num_ctx": 4096,
+                                                        },
+                                                    },
                                                 )
 
                                                 if interp_response.status_code == 200:
                                                     interp_data = interp_response.json()
-                                                    interpretation = interp_data.get("response", "")
+                                                    interpretation = interp_data.get(
+                                                        "response", ""
+                                                    )
 
                                                     # Yield interpretation as final response
                                                     yield WorkflowMessage(
@@ -983,12 +1255,14 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                                         metadata={
                                                             "message_type": "command_result_interpretation",
                                                             "command": command,
-                                                            "executed": True
-                                                        }
+                                                            "executed": True,
+                                                        },
                                                     )
 
                                                     # Update llm_response with interpretation
-                                                    llm_response += f"\n\n{interpretation}"
+                                                    llm_response += (
+                                                        f"\n\n{interpretation}"
+                                                    )
 
                                         elif result.get("status") == "error":
                                             # Command failed
@@ -997,48 +1271,66 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                             yield WorkflowMessage(
                                                 type="error",
                                                 content=f"Command failed: {error}",
-                                                metadata={"command": command, "error": True}
+                                                metadata={
+                                                    "command": command,
+                                                    "error": True,
+                                                },
                                             )
 
                             # Store complete exchange in conversation history
-                            session.conversation_history.append({
-                                "user": message,
-                                "assistant": llm_response
-                            })
+                            session.conversation_history.append(
+                                {"user": message, "assistant": llm_response}
+                            )
 
                             # Keep history manageable (max 10 exchanges)
                             if len(session.conversation_history) > 10:
-                                session.conversation_history = session.conversation_history[-10:]
+                                session.conversation_history = (
+                                    session.conversation_history[-10:]
+                                )
 
                             # Persist to both Redis (short-term cache) and file (long-term storage)
-                            await self._save_conversation_history(session_id, session.conversation_history)
-                            await self._append_to_transcript(session_id, message, llm_response)
+                            await self._save_conversation_history(
+                                session_id, session.conversation_history
+                            )
+                            await self._append_to_transcript(
+                                session_id, message, llm_response
+                            )
                         else:
-                            logger.error(f"[ChatWorkflowManager] Ollama request failed: {response.status_code}")
+                            logger.error(
+                                f"[ChatWorkflowManager] Ollama request failed: {response.status_code}"
+                            )
                             from src.async_chat_workflow import WorkflowMessage
+
                             yield WorkflowMessage(
                                 type="error",
                                 content=f"LLM service error: {response.status_code}",
-                                metadata={"error": True}
+                                metadata={"error": True},
                             )
 
             except Exception as llm_error:
-                logger.error(f"[ChatWorkflowManager] Direct LLM call failed: {llm_error}")
+                logger.error(
+                    f"[ChatWorkflowManager] Direct LLM call failed: {llm_error}"
+                )
                 from src.async_chat_workflow import WorkflowMessage
+
                 yield WorkflowMessage(
                     type="error",
                     content=f"Failed to connect to LLM: {str(llm_error)}",
-                    metadata={"error": True}
+                    metadata={"error": True},
                 )
 
         except Exception as e:
-            logger.error(f"❌ Error processing message for session {session_id}: {e}", exc_info=True)
+            logger.error(
+                f"❌ Error processing message for session {session_id}: {e}",
+                exc_info=True,
+            )
             # Yield error message
             from src.async_chat_workflow import WorkflowMessage
+
             yield WorkflowMessage(
                 type="error",
                 content=f"Error processing message: {str(e)}",
-                metadata={"error": True, "session_id": session_id}
+                metadata={"error": True, "session_id": session_id},
             )
 
     async def get_session_info(self, session_id: str) -> Optional[Dict[str, Any]]:
@@ -1054,7 +1346,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                 "last_activity": session.last_activity,
                 "message_count": session.message_count,
                 "uptime": time.time() - session.created_at,
-                "metadata": session.metadata
+                "metadata": session.metadata,
             }
 
     async def cleanup_inactive_sessions(self, max_age_seconds: int = 3600) -> int:
@@ -1096,7 +1388,9 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                 self.default_workflow = None
                 self._initialized = False
 
-                logger.info(f"✅ ChatWorkflowManager shutdown complete, cleaned up {session_count} sessions")
+                logger.info(
+                    f"✅ ChatWorkflowManager shutdown complete, cleaned up {session_count} sessions"
+                )
 
         except Exception as e:
             logger.error(f"❌ Error during ChatWorkflowManager shutdown: {e}")
@@ -1125,5 +1419,5 @@ __all__ = [
     "ChatWorkflowManager",
     "WorkflowSession",
     "get_chat_workflow_manager",
-    "initialize_chat_workflow_manager"
+    "initialize_chat_workflow_manager",
 ]

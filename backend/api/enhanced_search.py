@@ -27,15 +27,23 @@ router = APIRouter(prefix="/api/search", tags=["Enhanced Search"])
 # Pydantic models for API
 class SearchRequest(BaseModel):
     """Enhanced search request model."""
+
     query: str = Field(..., description="Search query")
-    similarity_top_k: int = Field(10, description="Number of results to return", ge=1, le=100)
-    filters: Optional[Dict[str, Any]] = Field(None, description="Optional metadata filters")
+    similarity_top_k: int = Field(
+        10, description="Number of results to return", ge=1, le=100
+    )
+    filters: Optional[Dict[str, Any]] = Field(
+        None, description="Optional metadata filters"
+    )
     enable_npu_acceleration: bool = Field(True, description="Enable NPU acceleration")
-    force_device: Optional[str] = Field(None, description="Force specific device (npu/gpu/cpu)")
+    force_device: Optional[str] = Field(
+        None, description="Force specific device (npu/gpu/cpu)"
+    )
 
 
 class SearchResponse(BaseModel):
     """Enhanced search response model."""
+
     query: str
     results: List[Dict[str, Any]]
     metrics: Dict[str, Any]
@@ -47,13 +55,20 @@ class SearchResponse(BaseModel):
 
 class BenchmarkRequest(BaseModel):
     """Benchmark request model."""
+
     test_queries: List[str] = Field(..., description="List of test queries")
-    iterations: int = Field(3, description="Number of iterations per query", ge=1, le=10)
+    iterations: int = Field(
+        3, description="Number of iterations per query", ge=1, le=10
+    )
 
 
 class OptimizationRequest(BaseModel):
     """Optimization request model."""
-    workload_type: str = Field("balanced", description="Workload type: latency_optimized, throughput_optimized, quality_optimized, balanced")
+
+    workload_type: str = Field(
+        "balanced",
+        description="Workload type: latency_optimized, throughput_optimized, quality_optimized, balanced",
+    )
 
 
 @router.post("/semantic", response_model=SearchResponse)
@@ -81,7 +96,7 @@ async def enhanced_semantic_search(request: SearchRequest):
             except ValueError:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Invalid device '{request.force_device}'. Must be one of: npu, gpu, cpu"
+                    detail=f"Invalid device '{request.force_device}'. Must be one of: npu, gpu, cpu",
                 )
 
         # Perform enhanced search
@@ -90,21 +105,23 @@ async def enhanced_semantic_search(request: SearchRequest):
             similarity_top_k=request.similarity_top_k,
             filters=request.filters,
             enable_npu_acceleration=request.enable_npu_acceleration,
-            force_device=force_device
+            force_device=force_device,
         )
 
         # Convert search results to API format
         results_data = []
         for result in search_results:
-            results_data.append({
-                "content": result.content,
-                "metadata": result.metadata,
-                "score": result.score,
-                "doc_id": result.doc_id,
-                "device_used": result.device_used,
-                "processing_time_ms": result.processing_time_ms,
-                "embedding_model": result.embedding_model
-            })
+            results_data.append(
+                {
+                    "content": result.content,
+                    "metadata": result.metadata,
+                    "score": result.score,
+                    "doc_id": result.doc_id,
+                    "device_used": result.device_used,
+                    "processing_time_ms": result.processing_time_ms,
+                    "embedding_model": result.embedding_model,
+                }
+            )
 
         # Convert metrics to API format
         metrics_data = {
@@ -113,7 +130,7 @@ async def enhanced_semantic_search(request: SearchRequest):
             "similarity_computation_time_ms": metrics.similarity_computation_time_ms,
             "total_search_time_ms": metrics.total_search_time_ms,
             "device_used": metrics.device_used,
-            "hardware_utilization": metrics.hardware_utilization
+            "hardware_utilization": metrics.hardware_utilization,
         }
 
         total_time = (time.time() - start_time) * 1000
@@ -129,15 +146,12 @@ async def enhanced_semantic_search(request: SearchRequest):
             metrics=metrics_data,
             total_results=len(results_data),
             search_time_ms=total_time,
-            device_used=metrics.device_used
+            device_used=metrics.device_used,
         )
 
     except Exception as e:
         logger.error(f"Enhanced search failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Search failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
 @router.get("/hardware/status")
@@ -156,14 +170,13 @@ async def get_hardware_status():
             "knowledge_base_ready": statistics.get("knowledge_base_ready", False),
             "cache_stats": statistics.get("cache_stats", {}),
             "configuration": statistics.get("configuration", {}),
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
 
     except Exception as e:
         logger.error(f"Failed to get hardware status: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get hardware status: {str(e)}"
+            status_code=500, detail=f"Failed to get hardware status: {str(e)}"
         )
 
 
@@ -179,22 +192,18 @@ async def benchmark_search_performance(request: BenchmarkRequest):
 
         # Run benchmark
         benchmark_results = await search_engine.benchmark_search_performance(
-            test_queries=request.test_queries,
-            iterations=request.iterations
+            test_queries=request.test_queries, iterations=request.iterations
         )
 
         return {
             "benchmark_results": benchmark_results,
             "timestamp": time.time(),
-            "recommendations": _generate_performance_recommendations(benchmark_results)
+            "recommendations": _generate_performance_recommendations(benchmark_results),
         }
 
     except Exception as e:
         logger.error(f"Benchmark failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Benchmark failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Benchmark failed: {str(e)}")
 
 
 @router.post("/optimize")
@@ -216,15 +225,12 @@ async def optimize_search_engine(request: OptimizationRequest):
         return {
             "optimization_applied": request.workload_type,
             "configuration": optimizations,
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
 
     except Exception as e:
         logger.error(f"Optimization failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Optimization failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
 
 
 @router.get("/performance/analytics")
@@ -254,15 +260,16 @@ async def get_performance_analytics():
             "search_statistics": statistics,
             "hardware_status": hardware_status,
             "performance_analysis": performance_analysis,
-            "recommendations": _generate_system_recommendations(statistics, hardware_status),
-            "timestamp": time.time()
+            "recommendations": _generate_system_recommendations(
+                statistics, hardware_status
+            ),
+            "timestamp": time.time(),
         }
 
     except Exception as e:
         logger.error(f"Failed to get performance analytics: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get performance analytics: {str(e)}"
+            status_code=500, detail=f"Failed to get performance analytics: {str(e)}"
         )
 
 
@@ -281,9 +288,7 @@ async def test_npu_connectivity():
 
         # Test search functionality with a simple query
         test_results, test_metrics = await search_engine.enhanced_search(
-            query="test connectivity",
-            similarity_top_k=3,
-            enable_npu_acceleration=True
+            query="test connectivity", similarity_top_k=3, enable_npu_acceleration=True
         )
 
         return {
@@ -292,7 +297,7 @@ async def test_npu_connectivity():
             "test_search_results": len(test_results),
             "test_device_used": test_metrics.device_used,
             "test_time_ms": test_metrics.total_search_time_ms,
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
 
     except Exception as e:
@@ -301,11 +306,13 @@ async def test_npu_connectivity():
             "connectivity": "failed",
             "error": str(e),
             "fallback_available": True,
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
 
 
-def _generate_performance_recommendations(benchmark_results: Dict[str, Any]) -> List[str]:
+def _generate_performance_recommendations(
+    benchmark_results: Dict[str, Any],
+) -> List[str]:
     """Generate performance recommendations based on benchmark results."""
     recommendations = []
 
@@ -315,21 +322,33 @@ def _generate_performance_recommendations(benchmark_results: Dict[str, Any]) -> 
     npu_stats = summary.get("npu")
     if npu_stats:
         if npu_stats["success_rate"] < 80:
-            recommendations.append("NPU success rate is low - check NPU Worker stability and connectivity")
+            recommendations.append(
+                "NPU success rate is low - check NPU Worker stability and connectivity"
+            )
         elif npu_stats["average_total_time_ms"] < 1000:
-            recommendations.append("NPU performance is excellent - consider routing more lightweight tasks to NPU")
+            recommendations.append(
+                "NPU performance is excellent - consider routing more lightweight tasks to NPU"
+            )
         elif npu_stats["average_total_time_ms"] > 3000:
-            recommendations.append("NPU response times are high - consider model optimization or reduce batch sizes")
+            recommendations.append(
+                "NPU response times are high - consider model optimization or reduce batch sizes"
+            )
     else:
-        recommendations.append("NPU not available - verify NPU Worker setup and Intel NPU drivers")
+        recommendations.append(
+            "NPU not available - verify NPU Worker setup and Intel NPU drivers"
+        )
 
     # Analyze GPU performance
     gpu_stats = summary.get("gpu")
     if gpu_stats:
         if gpu_stats["average_total_time_ms"] < 500:
-            recommendations.append("GPU performance is excellent - consider routing more complex tasks to GPU")
+            recommendations.append(
+                "GPU performance is excellent - consider routing more complex tasks to GPU"
+            )
         elif gpu_stats["average_total_time_ms"] > 2000:
-            recommendations.append("GPU response times are high - check GPU utilization and memory usage")
+            recommendations.append(
+                "GPU response times are high - check GPU utilization and memory usage"
+            )
 
     # Compare devices
     if npu_stats and gpu_stats:
@@ -337,19 +356,24 @@ def _generate_performance_recommendations(benchmark_results: Dict[str, Any]) -> 
         gpu_time = gpu_stats["average_total_time_ms"]
 
         if npu_time < gpu_time * 0.7:
-            recommendations.append("NPU significantly outperforms GPU for these queries - increase NPU utilization")
+            recommendations.append(
+                "NPU significantly outperforms GPU for these queries - increase NPU utilization"
+            )
         elif gpu_time < npu_time * 0.7:
-            recommendations.append("GPU significantly outperforms NPU for these queries - prefer GPU for similar workloads")
+            recommendations.append(
+                "GPU significantly outperforms NPU for these queries - prefer GPU for similar workloads"
+            )
 
     if not recommendations:
-        recommendations.append("Performance looks good across all devices - system is well optimized")
+        recommendations.append(
+            "Performance looks good across all devices - system is well optimized"
+        )
 
     return recommendations
 
 
 def _generate_system_recommendations(
-    statistics: Dict[str, Any],
-    hardware_status: Dict[str, Any]
+    statistics: Dict[str, Any], hardware_status: Dict[str, Any]
 ) -> List[str]:
     """Generate system-wide recommendations."""
     recommendations = []
@@ -360,9 +384,13 @@ def _generate_system_recommendations(
     cache_max_size = cache_stats.get("cache_max_size", 100)
 
     if cache_size == 0:
-        recommendations.append("Search cache is empty - performance will improve as cache builds up")
+        recommendations.append(
+            "Search cache is empty - performance will improve as cache builds up"
+        )
     elif cache_size >= cache_max_size * 0.9:
-        recommendations.append("Search cache is near capacity - consider increasing cache_max_size for better hit rates")
+        recommendations.append(
+            "Search cache is near capacity - consider increasing cache_max_size for better hit rates"
+        )
 
     # Hardware availability
     devices = hardware_status.get("devices", {})
@@ -371,16 +399,24 @@ def _generate_system_recommendations(
     gpu_available = devices.get("gpu", {}).get("available", False)
 
     if not npu_available and not gpu_available:
-        recommendations.append("CRITICAL: No hardware acceleration available - check NPU Worker and GPU drivers")
+        recommendations.append(
+            "CRITICAL: No hardware acceleration available - check NPU Worker and GPU drivers"
+        )
     elif not npu_available:
-        recommendations.append("NPU not available - missing Intel NPU optimization opportunity")
+        recommendations.append(
+            "NPU not available - missing Intel NPU optimization opportunity"
+        )
     elif not gpu_available:
-        recommendations.append("GPU not available - missing RTX 4070 optimization opportunity")
+        recommendations.append(
+            "GPU not available - missing RTX 4070 optimization opportunity"
+        )
 
     # Knowledge base status
     kb_ready = statistics.get("knowledge_base_ready", False)
     if not kb_ready:
-        recommendations.append("Knowledge base vector store not ready - semantic search quality may be degraded")
+        recommendations.append(
+            "Knowledge base vector store not ready - semantic search quality may be degraded"
+        )
 
     return recommendations
 
@@ -399,7 +435,7 @@ async def health_check():
             "npu_search_engine_ready": True,
             "knowledge_base_ready": statistics.get("knowledge_base_ready", False),
             "cache_size": statistics.get("cache_stats", {}).get("cache_size", 0),
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
 
     except Exception as e:
@@ -408,5 +444,5 @@ async def health_check():
             "status": "unhealthy",
             "service": "enhanced_search",
             "error": str(e),
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }

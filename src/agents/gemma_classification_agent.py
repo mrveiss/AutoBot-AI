@@ -160,7 +160,9 @@ Respond with valid JSON:
                 prompt = self.classification_prompt.format(user_message=user_message)
 
                 # Call Ollama API with async HTTP
-                timeout = aiohttp.ClientTimeout(total=10)  # Fast timeout for lightweight models
+                timeout = aiohttp.ClientTimeout(
+                    total=10
+                )  # Fast timeout for lightweight models
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.post(
                         f"{self.ollama_host}/api/generate",
@@ -215,7 +217,9 @@ Respond with valid JSON:
                 async with session.get(f"{self.ollama_host}/api/tags") as response:
                     if response.status == 200:
                         models_data = await response.json()
-                        return [model["name"] for model in models_data.get("models", [])]
+                        return [
+                            model["name"] for model in models_data.get("models", [])
+                        ]
         except Exception as e:
             logger.warning(f"Failed to get available models: {e}")
         return []

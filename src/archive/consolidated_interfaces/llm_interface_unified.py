@@ -270,7 +270,7 @@ class OllamaProvider(LLMProvider):
         """Check Ollama availability."""
         try:
             # PERFORMANCE FIX: Convert blocking HTTP to async
-            timeout_val = cfg.get_timeout('http', 'quick')
+            timeout_val = cfg.get_timeout("http", "quick")
             timeout = aiohttp.ClientTimeout(total=timeout_val)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = f"{self.base_url}/api/tags"
@@ -283,7 +283,7 @@ class OllamaProvider(LLMProvider):
         """Get available Ollama models."""
         try:
             # PERFORMANCE FIX: Convert blocking HTTP to async
-            timeout_val = cfg.get_timeout('http', 'standard')
+            timeout_val = cfg.get_timeout("http", "standard")
             timeout = aiohttp.ClientTimeout(total=timeout_val)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = f"{self.base_url}/api/tags"

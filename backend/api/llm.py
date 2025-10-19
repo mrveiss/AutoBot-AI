@@ -109,9 +109,7 @@ async def update_llm_provider(provider_data: dict):
             logger.info(
                 f"UNIFIED CONFIG: Updating streaming setting to: {provider_data['streaming']}"
             )
-            config.set(
-                "backend.streaming", provider_data["streaming"]
-            )
+            config.set("backend.streaming", provider_data["streaming"])
 
         # Handle local provider updates (Ollama)
         if provider_data.get("provider_type") == "local" and provider_data.get(
@@ -134,9 +132,7 @@ async def update_llm_provider(provider_data: dict):
 
                 # Update provider type
                 config.set("backend.llm.provider_type", "cloud")
-                config.set(
-                    "backend.llm.cloud.provider", cloud_provider
-                )
+                config.set("backend.llm.cloud.provider", cloud_provider)
                 config.set(
                     f"backend.llm.cloud.providers.{cloud_provider}.selected_model",
                     cloud_model,
@@ -146,7 +142,7 @@ async def update_llm_provider(provider_data: dict):
         config.save()
 
         # Return current configuration
-        current_llm_config = config.get('llm', {})
+        current_llm_config = config.get("llm", {})
 
         return {
             "status": "success",
@@ -163,9 +159,7 @@ async def update_llm_provider(provider_data: dict):
                     .get("selected_model")
                     or current_llm_config.get("ollama", {}).get("model", "unknown")
                 ),
-                "streaming": config.get(
-                    "backend.streaming", False
-                ),
+                "streaming": config.get("backend.streaming", False),
             },
         }
 
@@ -241,9 +235,7 @@ async def update_embedding_model(embedding_data: dict):
 
         # Update embedding configuration in unified config
         config.set("backend.llm.embedding.provider", provider)
-        config.set(
-            f"backend.llm.embedding.providers.{provider}.selected_model", model
-        )
+        config.set(f"backend.llm.embedding.providers.{provider}.selected_model", model)
 
         if "endpoint" in embedding_data:
             config.set(
@@ -261,7 +253,7 @@ async def update_embedding_model(embedding_data: dict):
         config.update_embedding_model(model)
 
         # Get current configuration for response
-        current_config = config.get('llm', {})
+        current_config = config.get("llm", {})
         embedding_config = current_config.get("unified", {}).get("embedding", {})
 
         return {
@@ -289,7 +281,7 @@ async def get_comprehensive_llm_status():
     try:
         # Use unified configuration system for all values
 
-        llm_config = config.get('llm', {})
+        llm_config = config.get("llm", {})
         provider_type = llm_config.get("provider_type", "local")
 
         # Get provider-specific configurations
@@ -315,7 +307,7 @@ async def get_comprehensive_llm_status():
                         .get("ollama", {})
                         .get(
                             "host",
-                            config.get_service_url('ollama'),
+                            config.get_service_url("ollama"),
                         ),
                     },
                     "lmstudio": {
@@ -425,7 +417,7 @@ async def get_quick_llm_status():
     try:
         # Use unified configuration system
 
-        llm_config = config.get('llm', {})
+        llm_config = config.get("llm", {})
 
         # Get provider type from unified config structure
         unified_config = llm_config.get("unified", {})

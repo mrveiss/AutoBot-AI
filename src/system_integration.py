@@ -383,7 +383,7 @@ class SystemIntegration:
                 async with session.get(url) as response:
                     # Raise an exception for HTTP errors (4xx or 5xx)
                     response.raise_for_status()
-                    
+
                     content_type = response.headers.get("Content-Type", "").lower()
                     content = await response.text()
 
@@ -395,7 +395,10 @@ class SystemIntegration:
                             "content_type": "text/markdown",
                             "content": markdown_content,
                         }
-                    elif "text/plain" in content_type or "application/json" in content_type:
+                    elif (
+                        "text/plain" in content_type
+                        or "application/json" in content_type
+                    ):
                         return {
                             "status": "success",
                             "url": url,

@@ -22,7 +22,9 @@ class RedisKeyConstants:
 
     # Workflow management
     WORKFLOW_CLASSIFICATION_RULES: str = f"{NAMESPACE}:workflow:classification:rules"
-    WORKFLOW_CLASSIFICATION_KEYWORDS: str = f"{NAMESPACE}:workflow:classification:keywords"
+    WORKFLOW_CLASSIFICATION_KEYWORDS: str = (
+        f"{NAMESPACE}:workflow:classification:keywords"
+    )
 
     # Sandbox security
     SANDBOX_SECURITY_EVENTS: str = f"{NAMESPACE}:sandbox:security:events"

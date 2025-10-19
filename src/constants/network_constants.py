@@ -60,33 +60,59 @@ class ServiceURLs:
     """Pre-built service URLs for common AutoBot services"""
 
     # Backend API URLs
-    BACKEND_API: str = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-    BACKEND_LOCAL: str = f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
+    BACKEND_API: str = (
+        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    )
+    BACKEND_LOCAL: str = (
+        f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
+    )
 
     # Frontend URLs
-    FRONTEND_VM: str = f"http://{NetworkConstants.FRONTEND_VM_IP}:{NetworkConstants.FRONTEND_PORT}"
-    FRONTEND_LOCAL: str = f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.FRONTEND_PORT}"
+    FRONTEND_VM: str = (
+        f"http://{NetworkConstants.FRONTEND_VM_IP}:{NetworkConstants.FRONTEND_PORT}"
+    )
+    FRONTEND_LOCAL: str = (
+        f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.FRONTEND_PORT}"
+    )
 
     # Redis URLs
-    REDIS_VM: str = f"redis://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}"
-    REDIS_LOCAL: str = f"redis://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.REDIS_PORT}"
+    REDIS_VM: str = (
+        f"redis://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}"
+    )
+    REDIS_LOCAL: str = (
+        f"redis://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.REDIS_PORT}"
+    )
 
     # Ollama LLM URLs
-    OLLAMA_LOCAL: str = f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
-    OLLAMA_MAIN: str = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.OLLAMA_PORT}"
+    OLLAMA_LOCAL: str = (
+        f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
+    )
+    OLLAMA_MAIN: str = (
+        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.OLLAMA_PORT}"
+    )
 
     # VNC Desktop URLs
-    VNC_DESKTOP: str = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.VNC_PORT}/vnc.html"
-    VNC_LOCAL: str = f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}/vnc.html"
+    VNC_DESKTOP: str = (
+        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.VNC_PORT}/vnc.html"
+    )
+    VNC_LOCAL: str = (
+        f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}/vnc.html"
+    )
 
     # Browser automation service
-    BROWSER_SERVICE: str = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
+    BROWSER_SERVICE: str = (
+        f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
+    )
 
     # AI Stack service
-    AI_STACK_SERVICE: str = f"http://{NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT}"
+    AI_STACK_SERVICE: str = (
+        f"http://{NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT}"
+    )
 
     # NPU Worker service
-    NPU_WORKER_SERVICE: str = f"http://{NetworkConstants.NPU_WORKER_VM_IP}:{NetworkConstants.NPU_WORKER_PORT}"
+    NPU_WORKER_SERVICE: str = (
+        f"http://{NetworkConstants.NPU_WORKER_VM_IP}:{NetworkConstants.NPU_WORKER_PORT}"
+    )
 
 
 class NetworkConfig:
@@ -96,27 +122,27 @@ class NetworkConfig:
     """
 
     def __init__(self):
-        self._deployment_mode = os.getenv('AUTOBOT_DEPLOYMENT_MODE', 'distributed')
-        self._is_development = os.getenv('AUTOBOT_ENV', 'production') == 'development'
+        self._deployment_mode = os.getenv("AUTOBOT_DEPLOYMENT_MODE", "distributed")
+        self._is_development = os.getenv("AUTOBOT_ENV", "production") == "development"
 
     @property
     def backend_url(self) -> str:
         """Get backend URL based on deployment context"""
-        if self._deployment_mode == 'local':
+        if self._deployment_mode == "local":
             return ServiceURLs.BACKEND_LOCAL
         return ServiceURLs.BACKEND_API
 
     @property
     def frontend_url(self) -> str:
         """Get frontend URL based on deployment context"""
-        if self._deployment_mode == 'local':
+        if self._deployment_mode == "local":
             return ServiceURLs.FRONTEND_LOCAL
         return ServiceURLs.FRONTEND_VM
 
     @property
     def redis_url(self) -> str:
         """Get Redis URL based on deployment context"""
-        if self._deployment_mode == 'local':
+        if self._deployment_mode == "local":
             return ServiceURLs.REDIS_LOCAL
         return ServiceURLs.REDIS_VM
 
@@ -136,14 +162,14 @@ class NetworkConfig:
             Service URL or None if not found
         """
         service_map = {
-            'backend': self.backend_url,
-            'frontend': self.frontend_url,
-            'redis': self.redis_url,
-            'ollama': self.ollama_url,
-            'browser': ServiceURLs.BROWSER_SERVICE,
-            'ai_stack': ServiceURLs.AI_STACK_SERVICE,
-            'npu_worker': ServiceURLs.NPU_WORKER_SERVICE,
-            'vnc': ServiceURLs.VNC_DESKTOP
+            "backend": self.backend_url,
+            "frontend": self.frontend_url,
+            "redis": self.redis_url,
+            "ollama": self.ollama_url,
+            "browser": ServiceURLs.BROWSER_SERVICE,
+            "ai_stack": ServiceURLs.AI_STACK_SERVICE,
+            "npu_worker": ServiceURLs.NPU_WORKER_SERVICE,
+            "vnc": ServiceURLs.VNC_DESKTOP,
         }
         return service_map.get(service_name)
 
@@ -158,18 +184,19 @@ class NetworkConfig:
             IP address or None if not found
         """
         vm_map = {
-            'main': NetworkConstants.MAIN_MACHINE_IP,
-            'frontend': NetworkConstants.FRONTEND_VM_IP,
-            'npu_worker': NetworkConstants.NPU_WORKER_VM_IP,
-            'redis': NetworkConstants.REDIS_VM_IP,
-            'ai_stack': NetworkConstants.AI_STACK_VM_IP,
-            'browser': NetworkConstants.BROWSER_VM_IP
+            "main": NetworkConstants.MAIN_MACHINE_IP,
+            "frontend": NetworkConstants.FRONTEND_VM_IP,
+            "npu_worker": NetworkConstants.NPU_WORKER_VM_IP,
+            "redis": NetworkConstants.REDIS_VM_IP,
+            "ai_stack": NetworkConstants.AI_STACK_VM_IP,
+            "browser": NetworkConstants.BROWSER_VM_IP,
         }
         return vm_map.get(vm_name)
 
 
 # Global network configuration instance
 _network_config = NetworkConfig()
+
 
 def get_network_config() -> NetworkConfig:
     """Get the global network configuration instance"""
@@ -210,7 +237,7 @@ class DatabaseConstants:
             cls.VECTORS_DB: "Vector embeddings",
             cls.TEMP_DB: "Temporary data",
             cls.MONITORING_DB: "System monitoring",
-            cls.RATE_LIMITING_DB: "Rate limiting data"
+            cls.RATE_LIMITING_DB: "Rate limiting data",
         }
         return descriptions.get(db_number, f"Database {db_number}")
 

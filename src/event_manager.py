@@ -23,6 +23,7 @@ class EventManager:
     def _load_config(self):
         # Get absolute path to config file
         from pathlib import Path
+
         project_root = Path(__file__).parent.parent
         config_path = project_root / "config" / "config.yaml"
         if not config_path.exists():

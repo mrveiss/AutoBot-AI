@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 # Lazy initialization for NPU code search agent
 _npu_code_search_instance = None
 
+
 def _get_code_search_agent():
     """Get or create the NPU code search agent instance (lazy initialization)"""
     global _npu_code_search_instance

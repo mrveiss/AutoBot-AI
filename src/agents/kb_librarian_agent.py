@@ -29,23 +29,25 @@ class KBLibrarianAgent:
         if self.auto_learning_enabled:
             logger.info("AUTO-LEARNING: Knowledge Base auto-learning is enabled")
 
-    async def search_knowledge(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    async def search_knowledge(
+        self, query: str, limit: int = 5
+    ) -> List[Dict[str, Any]]:
         """Search the knowledge base for relevant information."""
         try:
             logger.debug(f"KB-LIBRARIAN: Searching for '{query}'")
             results = await self.knowledge_base.search(query, limit=limit)
 
             if results:
-                logger.info(
-                    f"KB-LIBRARIAN: Found {len(results)} results for '{query}'"
-                )
+                logger.info(f"KB-LIBRARIAN: Found {len(results)} results for '{query}'")
                 # Return formatted results with sources
                 formatted_results = []
                 for result in results:
                     formatted_results.append(
                         {
                             "content": result.get("content", ""),
-                            "source": result.get("metadata", {}).get("source", "Unknown"),
+                            "source": result.get("metadata", {}).get(
+                                "source", "Unknown"
+                            ),
                             "score": result.get("score", 0.0),
                             "metadata": result.get("metadata", {}),
                         }
@@ -152,9 +154,11 @@ class KBLibrarianAgent:
             # CRITICAL FIX: Use asyncio.to_thread to prevent blocking the event loop
             async def _read_file_async(path: str) -> str:
                 """Read file content asynchronously."""
+
                 def _sync_read():
                     with open(path, "r", encoding="utf-8") as f:
                         return f.read()
+
                 return await asyncio.to_thread(_sync_read)
 
             # Read file content asynchronously

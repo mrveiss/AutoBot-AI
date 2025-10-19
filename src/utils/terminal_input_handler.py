@@ -32,8 +32,11 @@ def _get_config_default(key: str, fallback: str) -> str:
     """Get configuration value with fallback."""
     if _config_available:
         try:
-            return str(unified_config_manager.get_config_section("terminal_input", {})\
-                      .get(key, fallback))
+            return str(
+                unified_config_manager.get_config_section("terminal_input", {}).get(
+                    key, fallback
+                )
+            )
         except:
             return fallback
     return fallback
@@ -162,23 +165,39 @@ class TerminalInputHandler:
         elif "choice" in prompt_lower and any(char.isdigit() for char in prompt):
             # Extract numbers from prompt and return the first one
             numbers = [char for char in prompt if char.isdigit()]
-            return numbers[0] if numbers else os.getenv("AUTOBOT_DEFAULT_CHOICE",
-                                                        _get_config_default("default_choice", "1"))
+            return (
+                numbers[0]
+                if numbers
+                else os.getenv(
+                    "AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")
+                )
+            )
         elif "enter" in prompt_lower and "command" in prompt_lower:
-            return os.getenv("AUTOBOT_DEFAULT_COMMAND",
-                           _get_config_default("default_command", "help"))
+            return os.getenv(
+                "AUTOBOT_DEFAULT_COMMAND",
+                _get_config_default("default_command", "help"),
+            )
         elif "file" in prompt_lower or "path" in prompt_lower:
-            return os.getenv("AUTOBOT_TEST_FILE_PATH",
-                           _get_config_default("test_file_path", "/tmp/test_file"))
+            return os.getenv(
+                "AUTOBOT_TEST_FILE_PATH",
+                _get_config_default("test_file_path", "/tmp/test_file"),
+            )
         elif "name" in prompt_lower:
-            return os.getenv("AUTOBOT_TEST_USER_NAME",
-                           _get_config_default("test_user_name", "test_user"))
+            return os.getenv(
+                "AUTOBOT_TEST_USER_NAME",
+                _get_config_default("test_user_name", "test_user"),
+            )
         elif "port" in prompt_lower:
-            return os.getenv("AUTOBOT_DEFAULT_PORT",
-                           _get_config_default("default_port", str(NetworkConstants.AI_STACK_PORT)))
+            return os.getenv(
+                "AUTOBOT_DEFAULT_PORT",
+                _get_config_default(
+                    "default_port", str(NetworkConstants.AI_STACK_PORT)
+                ),
+            )
         elif "host" in prompt_lower:
-            return os.getenv("AUTOBOT_DEFAULT_HOST",
-                           _get_config_default("default_host", "localhost"))
+            return os.getenv(
+                "AUTOBOT_DEFAULT_HOST", _get_config_default("default_host", "localhost")
+            )
         else:
             return ""  # Empty string for unknown prompts
 
@@ -235,8 +254,12 @@ class TerminalInputHandler:
         """
         # Use environment default for timeout if not specified
         if timeout is None:
-            timeout = float(os.getenv("AUTOBOT_INPUT_TIMEOUT",
-                                     _get_config_default("default_timeout", "30.0")))
+            timeout = float(
+                os.getenv(
+                    "AUTOBOT_INPUT_TIMEOUT",
+                    _get_config_default("default_timeout", "30.0"),
+                )
+            )
 
         if self.is_testing:
             return self._get_testing_response(prompt, default)
@@ -345,8 +368,11 @@ async def safe_input_async(
     """
     # Use environment default for timeout if not specified
     if timeout is None:
-        timeout = float(os.getenv("AUTOBOT_INPUT_TIMEOUT",
-                                 _get_config_default("default_timeout", "30.0")))
+        timeout = float(
+            os.getenv(
+                "AUTOBOT_INPUT_TIMEOUT", _get_config_default("default_timeout", "30.0")
+            )
+        )
 
     handler = get_terminal_input_handler()
     return await handler.get_input_async(prompt, timeout, default)
@@ -376,33 +402,48 @@ def configure_testing_defaults():
 
     # Common testing defaults - use configuration-driven fallbacks
     testing_defaults = {
-        "yes/no": os.getenv("AUTOBOT_DEFAULT_YES_NO",
-                          _get_config_default("default_yes_no", "y")),
-        "y/n": os.getenv("AUTOBOT_DEFAULT_YES_NO",
-                       _get_config_default("default_yes_no", "y")),
-        "continue": os.getenv("AUTOBOT_DEFAULT_CONTINUE",
-                            _get_config_default("default_continue", "y")),
-        "choice": os.getenv("AUTOBOT_DEFAULT_CHOICE",
-                          _get_config_default("default_choice", "1")),
-        "select": os.getenv("AUTOBOT_DEFAULT_CHOICE",
-                          _get_config_default("default_choice", "1")),
-        "enter your choice": os.getenv("AUTOBOT_DEFAULT_CHOICE",
-                                      _get_config_default("default_choice", "1")),
-        "command": os.getenv("AUTOBOT_DEFAULT_COMMAND",
-                           _get_config_default("default_command", "help")),
-        "filename": os.getenv("AUTOBOT_TEST_FILENAME",
-                            _get_config_default("test_filename", "test_file.txt")),
-        "path": os.getenv("AUTOBOT_TEST_PATH",
-                        _get_config_default("test_path", "/tmp/test")),
-        "name": os.getenv("AUTOBOT_TEST_USER_NAME",
-                        _get_config_default("test_user_name", "test_user")),
-        "port": os.getenv("AUTOBOT_AI_STACK_PORT",
-                        _get_config_default("default_port", str(NetworkConstants.AI_STACK_PORT))),
-        "host": os.getenv("AUTOBOT_AI_STACK_HOST",
-                        _get_config_default("default_host", "127.0.0.1")),
+        "yes/no": os.getenv(
+            "AUTOBOT_DEFAULT_YES_NO", _get_config_default("default_yes_no", "y")
+        ),
+        "y/n": os.getenv(
+            "AUTOBOT_DEFAULT_YES_NO", _get_config_default("default_yes_no", "y")
+        ),
+        "continue": os.getenv(
+            "AUTOBOT_DEFAULT_CONTINUE", _get_config_default("default_continue", "y")
+        ),
+        "choice": os.getenv(
+            "AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")
+        ),
+        "select": os.getenv(
+            "AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")
+        ),
+        "enter your choice": os.getenv(
+            "AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")
+        ),
+        "command": os.getenv(
+            "AUTOBOT_DEFAULT_COMMAND", _get_config_default("default_command", "help")
+        ),
+        "filename": os.getenv(
+            "AUTOBOT_TEST_FILENAME",
+            _get_config_default("test_filename", "test_file.txt"),
+        ),
+        "path": os.getenv(
+            "AUTOBOT_TEST_PATH", _get_config_default("test_path", "/tmp/test")
+        ),
+        "name": os.getenv(
+            "AUTOBOT_TEST_USER_NAME", _get_config_default("test_user_name", "test_user")
+        ),
+        "port": os.getenv(
+            "AUTOBOT_AI_STACK_PORT",
+            _get_config_default("default_port", str(NetworkConstants.AI_STACK_PORT)),
+        ),
+        "host": os.getenv(
+            "AUTOBOT_AI_STACK_HOST", _get_config_default("default_host", "127.0.0.1")
+        ),
         "url": get_service_url("ai-stack"),
-        "email": os.getenv("AUTOBOT_TEST_EMAIL",
-                         _get_config_default("test_email", "test@example.com")),
+        "email": os.getenv(
+            "AUTOBOT_TEST_EMAIL", _get_config_default("test_email", "test@example.com")
+        ),
     }
 
     handler.default_responses.update(testing_defaults)
@@ -421,8 +462,11 @@ def patch_builtin_input():
     original_input = builtins.input
 
     def patched_input(prompt=""):
-        timeout = float(os.getenv("AUTOBOT_INPUT_TIMEOUT",
-                                 _get_config_default("default_timeout", "30.0")))
+        timeout = float(
+            os.getenv(
+                "AUTOBOT_INPUT_TIMEOUT", _get_config_default("default_timeout", "30.0")
+            )
+        )
         return safe_input(prompt, timeout=timeout, default="")
 
     builtins.input = patched_input

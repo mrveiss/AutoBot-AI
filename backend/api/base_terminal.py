@@ -249,10 +249,12 @@ class BaseTerminalWebSocket(ABC):
         # SECURITY: Validate command before execution
         if not await self.validate_command(command):
             logger.warning(f"SECURITY: Command blocked by validation: {command}")
-            await self.send_message({
-                "type": "error", 
-                "message": f"Command blocked by security policy: {command}"
-            })
+            await self.send_message(
+                {
+                    "type": "error",
+                    "message": f"Command blocked by security policy: {command}",
+                }
+            )
             return False
 
         logger.info(f"{self.terminal_type} executing validated command: {command}")
@@ -273,38 +275,52 @@ class BaseTerminalWebSocket(ABC):
         """Validate command before execution with security policy"""
         if not command or not command.strip():
             return False
-            
+
         try:
             # Import here to avoid circular imports
             from src.secure_command_executor import SecureCommandExecutor, CommandRisk
-            
+
             # Lazy initialize secure executor
-            if not hasattr(self, '_secure_executor'):
+            if not hasattr(self, "_secure_executor"):
                 self._secure_executor = SecureCommandExecutor()
-            
+
             # Assess command risk
             risk, reasons = self._secure_executor.assess_command_risk(command)
-            
+
             if risk == CommandRisk.FORBIDDEN:
-                logger.warning(f"SECURITY: Blocked forbidden command in {self.terminal_type}: {command} - {reasons}")
+                logger.warning(
+                    f"SECURITY: Blocked forbidden command in {self.terminal_type}: {command} - {reasons}"
+                )
                 return False
             elif risk == CommandRisk.HIGH:
-                logger.warning(f"SECURITY: Blocked high-risk command in {self.terminal_type}: {command} - {reasons}")
+                logger.warning(
+                    f"SECURITY: Blocked high-risk command in {self.terminal_type}: {command} - {reasons}"
+                )
                 return False
             elif risk == CommandRisk.MODERATE:
-                logger.info(f"SECURITY: Moderate-risk command in {self.terminal_type}: {command} - {reasons}")
+                logger.info(
+                    f"SECURITY: Moderate-risk command in {self.terminal_type}: {command} - {reasons}"
+                )
                 # Could implement approval mechanism here if needed
                 # For now, allow moderate risk commands with logging
                 return True
             else:
-                logger.debug(f"SECURITY: Safe command in {self.terminal_type}: {command}")
+                logger.debug(
+                    f"SECURITY: Safe command in {self.terminal_type}: {command}"
+                )
                 return True
-                
+
         except ImportError:
-            logger.error("SECURITY WARNING: SecureCommandExecutor not available, allowing command without validation")
-            return True  # Fail open to prevent system lockout, but log the security issue
+            logger.error(
+                "SECURITY WARNING: SecureCommandExecutor not available, allowing command without validation"
+            )
+            return (
+                True  # Fail open to prevent system lockout, but log the security issue
+            )
         except Exception as e:
-            logger.error(f"SECURITY ERROR: Command validation failed for {command}: {e}")
+            logger.error(
+                f"SECURITY ERROR: Command validation failed for {command}: {e}"
+            )
             return False  # Fail closed on validation errors
 
     def get_terminal_stats(self) -> dict:
@@ -320,22 +336,19 @@ class BaseTerminalWebSocket(ABC):
 # FastAPI Router Endpoints for Terminal Management
 # ============================================================================
 
+
 @router.get("/status")
 async def get_terminal_system_status():
     """Get overall terminal system status"""
     return {
         "status": "operational",
-        "terminal_types": [
-            "standard_terminal",
-            "agent_terminal",
-            "remote_terminal"
-        ],
+        "terminal_types": ["standard_terminal", "agent_terminal", "remote_terminal"],
         "features": {
             "pty_support": True,
             "websocket_support": True,
             "command_validation": True,
-            "security_policies": True
-        }
+            "security_policies": True,
+        },
     }
 
 
@@ -348,8 +361,8 @@ async def terminal_health_check():
         "components": {
             "base_terminal": "operational",
             "websocket_manager": "operational",
-            "pty_system": "operational"
-        }
+            "pty_system": "operational",
+        },
     }
 
 
@@ -366,7 +379,7 @@ async def get_terminal_capabilities():
         "input_processing": True,
         "race_condition_handling": True,
         "async_output_delivery": True,
-        "queue_based_messaging": True
+        "queue_based_messaging": True,
     }
 
 
@@ -379,9 +392,9 @@ async def get_security_policies():
         "blocked_commands": {
             "forbidden": "Commands that could damage system",
             "high_risk": "Potentially dangerous operations",
-            "moderate": "Logged but allowed with caution"
+            "moderate": "Logged but allowed with caution",
         },
-        "security_executor": "SecureCommandExecutor"
+        "security_executor": "SecureCommandExecutor",
     }
 
 
@@ -393,16 +406,16 @@ async def get_terminal_features():
         "implementations": [
             {
                 "name": "standard_terminal",
-                "description": "Standard PTY terminal with WebSocket streaming"
+                "description": "Standard PTY terminal with WebSocket streaming",
             },
             {
                 "name": "agent_terminal",
-                "description": "AI agent terminal with enhanced features"
+                "description": "AI agent terminal with enhanced features",
             },
             {
                 "name": "remote_terminal",
-                "description": "Remote machine terminal access"
-            }
+                "description": "Remote machine terminal access",
+            },
         ],
         "features": {
             "pty_shell": "Full PTY shell support with proper terminal emulation",
@@ -411,6 +424,6 @@ async def get_terminal_features():
             "input_processing": "Customizable input processing hooks",
             "security_validation": "Command validation before execution",
             "session_cleanup": "Proper resource cleanup on disconnect",
-            "race_condition_fixes": "Improved terminal manager with queue-based messaging"
-        }
+            "race_condition_fixes": "Improved terminal manager with queue-based messaging",
+        },
     }

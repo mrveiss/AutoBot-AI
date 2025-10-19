@@ -40,18 +40,20 @@ async def health_check():
     try:
         # Check if browser manager is initialized
         status = "healthy" if research_browser_manager else "not_initialized"
-        
+
         # Get browser service URL from config
         try:
-            browser_service_url = cfg.get_service_url('browser_service')
+            browser_service_url = cfg.get_service_url("browser_service")
         except Exception:
-            browser_service_url = f"http://localhost:{NetworkConstants.BROWSER_SERVICE_PORT}"
+            browser_service_url = (
+                f"http://localhost:{NetworkConstants.BROWSER_SERVICE_PORT}"
+            )
 
         return {
             "status": status,
             "service": "research_browser",
             "browser_service_url": browser_service_url,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
         logger.error(f"Research browser health check failed: {e}")
@@ -59,7 +61,7 @@ async def health_check():
             "status": "error",
             "service": "research_browser",
             "error": str(e),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
 
@@ -272,10 +274,12 @@ async def get_browser_info(session_id: str):
     """Get browser information for frontend integration"""
     try:
         session = research_browser_manager.get_session(session_id)
-        
+
         # Special handling for chat-browser - create default session if needed
         if not session and session_id == "chat-browser":
-            logger.info("Creating default chat-browser session for frontend integration")
+            logger.info(
+                "Creating default chat-browser session for frontend integration"
+            )
             # Create a default research session for chat integration
             session = research_browser_manager.create_session(
                 conversation_id="default-chat",
@@ -283,10 +287,10 @@ async def get_browser_info(session_id: str):
                     "captcha": False,
                     "cloudflare": False,
                     "cookies": False,
-                    "js": False
-                }
+                    "js": False,
+                },
             )
-            
+
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
@@ -295,7 +299,10 @@ async def get_browser_info(session_id: str):
         try:
             # Try to detect Playwright container
             # Import centralized configuration with intelligent port detection
-            from src.unified_config_manager import PLAYWRIGHT_VNC_URL, get_vnc_direct_url
+            from src.unified_config_manager import (
+                PLAYWRIGHT_VNC_URL,
+                get_vnc_direct_url,
+            )
 
             # This would integrate with your existing browser setup
             docker_browser_info = {

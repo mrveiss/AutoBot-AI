@@ -23,17 +23,17 @@ import sys
 from src.constants.network_constants import NetworkConstants
 
 # Add AutoBot paths
-sys.path.append('/home/kali/Desktop/AutoBot')
+sys.path.append("/home/kali/Desktop/AutoBot")
 
 from .long_running_operations_framework import (
     LongRunningOperationManager,
     OperationType,
     OperationPriority,
-    OperationExecutionContext
+    OperationExecutionContext,
 )
 from .operation_timeout_integration import (
     operation_integration_manager,
-    long_running_operation
+    long_running_operation,
 )
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,9 @@ class ExistingOperationMigrator:
             # Check if resuming from checkpoint
             if context.should_resume():
                 checkpoint_data = context.get_resume_data()
-                processed_files = checkpoint_data.intermediate_results.get("processed_files", [])
+                processed_files = checkpoint_data.intermediate_results.get(
+                    "processed_files", []
+                )
                 start_index = len(processed_files)
                 logger.info(f"Resuming indexing from file {start_index}")
             else:
@@ -112,18 +114,23 @@ class ExistingOperationMigrator:
                             i + 1,
                             total_files,
                             {
-                                "files_per_second": len(indexed_files) / max(1,
-                                    (datetime.now() - context.operation.started_at).total_seconds()),
-                                "current_file": str(file_path)
+                                "files_per_second": len(indexed_files)
+                                / max(
+                                    1,
+                                    (
+                                        datetime.now() - context.operation.started_at
+                                    ).total_seconds(),
+                                ),
+                                "current_file": str(file_path),
                             },
-                            f"Processed {i + 1} of {total_files} files"
+                            f"Processed {i + 1} of {total_files} files",
                         )
 
                         # Checkpoint every 100 files
                         if (i + 1) % 100 == 0:
                             await context.save_checkpoint(
                                 {"processed_files": processed_files + indexed_files},
-                                f"file_{i + 1}"
+                                f"file_{i + 1}",
                             )
                             logger.info(f"Checkpoint saved at file {i + 1}")
 
@@ -135,14 +142,17 @@ class ExistingOperationMigrator:
                     "total_files_processed": len(indexed_files),
                     "files": indexed_files,
                     "completed_at": datetime.now().isoformat(),
-                    "resumed_from_checkpoint": context.should_resume()
+                    "resumed_from_checkpoint": context.should_resume(),
                 }
 
             except Exception as e:
                 # Save checkpoint before failing
                 await context.save_checkpoint(
-                    {"processed_files": processed_files + indexed_files, "error": str(e)},
-                    "error_recovery"
+                    {
+                        "processed_files": processed_files + indexed_files,
+                        "error": str(e),
+                    },
+                    "error_recovery",
                 )
                 raise
 
@@ -154,7 +164,7 @@ class ExistingOperationMigrator:
             operation_function=enhanced_indexing_operation,
             priority=OperationPriority.NORMAL,
             estimated_items=len(list(Path("/home/kali/Desktop/AutoBot").rglob("*.py"))),
-            execute_immediately=False
+            execute_immediately=False,
         )
 
         logger.info(f"Migrated knowledge base indexing operation: {operation_id}")
@@ -194,8 +204,12 @@ class ExistingOperationMigrator:
             # Check if resuming
             if context.should_resume():
                 checkpoint_data = context.get_resume_data()
-                completed_tests = checkpoint_data.intermediate_results.get("completed_tests", [])
-                failed_tests = checkpoint_data.intermediate_results.get("failed_tests", [])
+                completed_tests = checkpoint_data.intermediate_results.get(
+                    "completed_tests", []
+                )
+                failed_tests = checkpoint_data.intermediate_results.get(
+                    "failed_tests", []
+                )
                 start_index = len(completed_tests) + len(failed_tests)
                 logger.info(f"Resuming test suite from test {start_index}")
             else:
@@ -210,7 +224,9 @@ class ExistingOperationMigrator:
             # Limit concurrent test execution
             max_concurrent = min(4, len(test_files))
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_concurrent) as executor:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=max_concurrent
+            ) as executor:
                 for i, test_file in enumerate(test_files[start_index:], start_index):
                     try:
                         await context.update_progress(
@@ -220,9 +236,9 @@ class ExistingOperationMigrator:
                             {
                                 "passed": len(completed_tests),
                                 "failed": len(failed_tests),
-                                "current_test": str(test_file)
+                                "current_test": str(test_file),
                             },
-                            f"Test {i + 1} of {total_tests}: {test_file.name}"
+                            f"Test {i + 1} of {total_tests}: {test_file.name}",
                         )
 
                         # Run test with timeout
@@ -241,19 +257,21 @@ class ExistingOperationMigrator:
                             await context.save_checkpoint(
                                 {
                                     "completed_tests": completed_tests,
-                                    "failed_tests": failed_tests
+                                    "failed_tests": failed_tests,
                                 },
-                                f"test_{i + 1}"
+                                f"test_{i + 1}",
                             )
 
                     except Exception as e:
                         logger.warning(f"Test {test_file} failed with error: {e}")
-                        failed_tests.append({
-                            "file": str(test_file),
-                            "status": "ERROR",
-                            "error": str(e),
-                            "duration": 0
-                        })
+                        failed_tests.append(
+                            {
+                                "file": str(test_file),
+                                "status": "ERROR",
+                                "error": str(e),
+                                "duration": 0,
+                            }
+                        )
 
             # Calculate final results
             total_passed = len(completed_tests)
@@ -267,7 +285,7 @@ class ExistingOperationMigrator:
                 "success_rate": success_rate,
                 "completed_tests": completed_tests,
                 "failed_tests": failed_tests,
-                "resumed_from_checkpoint": context.should_resume()
+                "resumed_from_checkpoint": context.should_resume(),
             }
 
         operation_id = await self.manager.create_operation(
@@ -276,8 +294,10 @@ class ExistingOperationMigrator:
             description="Migrate from fixed timeout to dynamic checkpoint-based testing",
             operation_function=enhanced_test_suite_operation,
             priority=OperationPriority.HIGH,
-            estimated_items=len(list(Path("/home/kali/Desktop/AutoBot/tests").rglob("test_*.py"))),
-            execute_immediately=False
+            estimated_items=len(
+                list(Path("/home/kali/Desktop/AutoBot/tests").rglob("test_*.py"))
+            ),
+            execute_immediately=False,
         )
 
         logger.info(f"Migrated comprehensive test suite operation: {operation_id}")
@@ -311,17 +331,30 @@ class ExistingOperationMigrator:
             for scan_path in scan_paths:
                 if scan_path.exists():
                     # Include various file types for security scanning
-                    patterns = ["*.py", "*.js", "*.json", "*.yaml", "*.yml", "*.env", "*.conf", "*.config"]
+                    patterns = [
+                        "*.py",
+                        "*.js",
+                        "*.json",
+                        "*.yaml",
+                        "*.yml",
+                        "*.env",
+                        "*.conf",
+                        "*.config",
+                    ]
                     for pattern in patterns:
                         files_to_scan.extend(scan_path.rglob(pattern))
 
             total_files = len(files_to_scan)
-            await context.update_progress("File discovery for security scan", 0, total_files)
+            await context.update_progress(
+                "File discovery for security scan", 0, total_files
+            )
 
             # Check if resuming
             if context.should_resume():
                 checkpoint_data = context.get_resume_data()
-                scan_results = checkpoint_data.intermediate_results.get("scan_results", [])
+                scan_results = checkpoint_data.intermediate_results.get(
+                    "scan_results", []
+                )
                 start_index = len(scan_results)
                 logger.info(f"Resuming security scan from file {start_index}")
             else:
@@ -340,13 +373,15 @@ class ExistingOperationMigrator:
                         {
                             "vulnerabilities_found": vulnerability_count,
                             "current_file": str(file_path),
-                            "scan_types": scan_types
+                            "scan_types": scan_types,
                         },
-                        f"Scanned {i + 1} of {total_files} files"
+                        f"Scanned {i + 1} of {total_files} files",
                     )
 
                     # Simulate security scanning
-                    file_scan_result = await self._scan_file_for_security(file_path, scan_types)
+                    file_scan_result = await self._scan_file_for_security(
+                        file_path, scan_types
+                    )
                     scan_results.append(file_scan_result)
 
                     if file_scan_result.get("vulnerabilities"):
@@ -355,8 +390,7 @@ class ExistingOperationMigrator:
                     # Checkpoint every 50 files
                     if (i + 1) % 50 == 0:
                         await context.save_checkpoint(
-                            {"scan_results": scan_results},
-                            f"file_{i + 1}"
+                            {"scan_results": scan_results}, f"file_{i + 1}"
                         )
 
                 except Exception as e:
@@ -373,7 +407,7 @@ class ExistingOperationMigrator:
                 "scan_results": scan_results,
                 "scan_types": scan_types,
                 "completed_at": datetime.now().isoformat(),
-                "resumed_from_checkpoint": context.should_resume()
+                "resumed_from_checkpoint": context.should_resume(),
             }
 
         operation_id = await self.manager.create_operation(
@@ -383,7 +417,7 @@ class ExistingOperationMigrator:
             operation_function=enhanced_security_scan_operation,
             priority=OperationPriority.HIGH,
             estimated_items=1000,  # Estimate based on typical codebase
-            execute_immediately=False
+            execute_immediately=False,
         )
 
         logger.info(f"Migrated security scan operation: {operation_id}")
@@ -401,13 +435,13 @@ class ExistingOperationMigrator:
                 "lines": len(content.splitlines()),
                 "extension": file_path.suffix,
                 "indexed_at": datetime.now().isoformat(),
-                "content_hash": hash(content) % 1000000  # Simple hash for example
+                "content_hash": hash(content) % 1000000,  # Simple hash for example
             }
         except Exception as e:
             return {
                 "path": str(file_path),
                 "error": str(e),
-                "indexed_at": datetime.now().isoformat()
+                "indexed_at": datetime.now().isoformat(),
             }
 
     def _run_single_test(self, test_file: Path) -> Dict[str, Any]:
@@ -424,7 +458,7 @@ class ExistingOperationMigrator:
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5 minute timeout per test
-                cwd="/home/kali/Desktop/AutoBot"
+                cwd="/home/kali/Desktop/AutoBot",
             )
 
             duration = time.time() - start_time
@@ -436,7 +470,7 @@ class ExistingOperationMigrator:
                 "output": result.stdout,
                 "errors": result.stderr,
                 "exit_code": result.returncode,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
         except subprocess.TimeoutExpired:
@@ -445,7 +479,7 @@ class ExistingOperationMigrator:
                 "status": "TIMEOUT",
                 "duration": time.time() - start_time,
                 "error": "Test timed out after 5 minutes",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
         except Exception as e:
             return {
@@ -453,10 +487,12 @@ class ExistingOperationMigrator:
                 "status": "ERROR",
                 "duration": time.time() - start_time,
                 "error": str(e),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
-    async def _scan_file_for_security(self, file_path: Path, scan_types: List[str]) -> Dict[str, Any]:
+    async def _scan_file_for_security(
+        self, file_path: Path, scan_types: List[str]
+    ) -> Dict[str, Any]:
         """Scan a single file for security issues (placeholder implementation)"""
         await asyncio.sleep(0.02)  # Simulate scan time
 
@@ -469,41 +505,50 @@ class ExistingOperationMigrator:
             if "vulnerability" in scan_types:
                 # Check for common vulnerability patterns
                 if "password" in content.lower() and "=" in content:
-                    vulnerabilities.append({
-                        "type": "hardcoded_credential",
-                        "severity": "high",
-                        "description": "Potential hardcoded password detected"
-                    })
+                    vulnerabilities.append(
+                        {
+                            "type": "hardcoded_credential",
+                            "severity": "high",
+                            "description": "Potential hardcoded password detected",
+                        }
+                    )
 
                 if "api_key" in content.lower() and "=" in content:
-                    vulnerabilities.append({
-                        "type": "hardcoded_api_key",
-                        "severity": "high",
-                        "description": "Potential hardcoded API key detected"
-                    })
+                    vulnerabilities.append(
+                        {
+                            "type": "hardcoded_api_key",
+                            "severity": "high",
+                            "description": "Potential hardcoded API key detected",
+                        }
+                    )
 
             if "secrets" in scan_types:
                 # Check for secret patterns
                 import re
-                if re.search(r'[A-Za-z0-9]{20,}', content):  # Long strings that might be secrets
-                    vulnerabilities.append({
-                        "type": "potential_secret",
-                        "severity": "medium",
-                        "description": "Long string detected, might be a secret"
-                    })
+
+                if re.search(
+                    r"[A-Za-z0-9]{20,}", content
+                ):  # Long strings that might be secrets
+                    vulnerabilities.append(
+                        {
+                            "type": "potential_secret",
+                            "severity": "medium",
+                            "description": "Long string detected, might be a secret",
+                        }
+                    )
 
             return {
                 "file": str(file_path),
                 "vulnerabilities": vulnerabilities,
                 "scan_types": scan_types,
-                "scanned_at": datetime.now().isoformat()
+                "scanned_at": datetime.now().isoformat(),
             }
 
         except Exception as e:
             return {
                 "file": str(file_path),
                 "error": str(e),
-                "scanned_at": datetime.now().isoformat()
+                "scanned_at": datetime.now().isoformat(),
             }
 
 
@@ -511,26 +556,31 @@ class ExistingOperationMigrator:
 def migrate_timeout_operation(
     operation_type: OperationType,
     estimated_items: Optional[int] = None,
-    priority: OperationPriority = OperationPriority.NORMAL
+    priority: OperationPriority = OperationPriority.NORMAL,
 ):
     """
     Decorator to automatically migrate existing timeout-sensitive functions
     to the long-running operations framework
     """
+
     def decorator(func):
         async def wrapper(*args, **kwargs):
             # Extract progress callback if provided
-            progress_callback = kwargs.pop('progress_callback', None)
+            progress_callback = kwargs.pop("progress_callback", None)
 
             async def enhanced_operation(context: OperationExecutionContext):
                 """Enhanced operation with progress tracking"""
 
                 # If original function expects progress callback, provide it
-                if progress_callback or 'progress_callback' in func.__code__.co_varnames:
+                if (
+                    progress_callback
+                    or "progress_callback" in func.__code__.co_varnames
+                ):
+
                     async def progress_wrapper(step, processed, total=None, **metrics):
                         await context.update_progress(step, processed, total, metrics)
 
-                    kwargs['progress_callback'] = progress_wrapper
+                    kwargs["progress_callback"] = progress_wrapper
 
                 # Execute original function
                 if asyncio.iscoroutinefunction(func):
@@ -558,7 +608,10 @@ def migrate_timeout_operation(
                     items = 1
 
             # Create and execute operation
-            if operation_integration_manager and operation_integration_manager.operation_manager:
+            if (
+                operation_integration_manager
+                and operation_integration_manager.operation_manager
+            ):
                 operation_id = await operation_integration_manager.operation_manager.create_operation(
                     operation_type=operation_type,
                     name=f"Migrated: {func.__name__}",
@@ -566,13 +619,22 @@ def migrate_timeout_operation(
                     operation_function=enhanced_operation,
                     priority=priority,
                     estimated_items=items or 1,
-                    execute_immediately=True
+                    execute_immediately=True,
                 )
 
                 # Wait for completion and return result
                 while True:
-                    operation = operation_integration_manager.operation_manager.get_operation(operation_id)
-                    if operation.status.value in ["completed", "failed", "timeout", "cancelled"]:
+                    operation = (
+                        operation_integration_manager.operation_manager.get_operation(
+                            operation_id
+                        )
+                    )
+                    if operation.status.value in [
+                        "completed",
+                        "failed",
+                        "timeout",
+                        "cancelled",
+                    ]:
                         if operation.result is not None:
                             return operation.result
                         elif operation.error_info:
@@ -586,11 +648,13 @@ def migrate_timeout_operation(
                 return await enhanced_operation(None)
 
         return wrapper
+
     return decorator
 
 
 # Example usage
 if __name__ == "__main__":
+
     async def demonstration():
         """Demonstrate the migration capabilities"""
 
@@ -621,10 +685,7 @@ if __name__ == "__main__":
                 return {"analyzed_files": 100, "path": path, "patterns": patterns}
 
             # Call the migrated function
-            result = await analyze_codebase(
-                "/home/kali/Desktop/AutoBot/src",
-                ["*.py"]
-            )
+            result = await analyze_codebase("/home/kali/Desktop/AutoBot/src", ["*.py"])
             print(f"Analysis result: {result}")
 
             await operation_integration_manager.shutdown()

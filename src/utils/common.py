@@ -551,7 +551,9 @@ class PathUtils:
             return str(Path(path).resolve())
 
     @staticmethod
-    def is_safe_path(path: Union[str, Path], allowed_dirs: Optional[list] = None) -> bool:
+    def is_safe_path(
+        path: Union[str, Path], allowed_dirs: Optional[list] = None
+    ) -> bool:
         """
         Check if path is safe (within allowed directories)
 
@@ -566,7 +568,7 @@ class PathUtils:
             path_obj = Path(path).resolve()
 
             # Basic safety checks
-            if '..' in str(path_obj):
+            if ".." in str(path_obj):
                 return False
 
             if allowed_dirs:

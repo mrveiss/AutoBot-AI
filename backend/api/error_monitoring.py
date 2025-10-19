@@ -223,7 +223,7 @@ async def test_error_system(request: TestErrorRequest):
     """Test the error boundary system (development only)"""
     try:
         # Only allow in development mode
-        if cfg.get('environment.mode', 'development') != "development":
+        if cfg.get("environment.mode", "development") != "development":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Test endpoints only available in development mode",

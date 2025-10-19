@@ -27,7 +27,7 @@ from backend.models.npu_models import (
     NPUWorkerConfig,
     NPUWorkerDetails,
     NPUWorkerMetrics,
-    WorkerTestResult
+    WorkerTestResult,
 )
 from backend.services.npu_worker_manager import get_worker_manager
 
@@ -59,11 +59,13 @@ async def list_workers():
         logger.error(f"Failed to list workers: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve workers: {str(e)}"
+            detail=f"Failed to retrieve workers: {str(e)}",
         )
 
 
-@router.post("/npu/workers", response_model=NPUWorkerDetails, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/npu/workers", response_model=NPUWorkerDetails, status_code=status.HTTP_201_CREATED
+)
 async def add_worker(worker_config: NPUWorkerConfig):
     """
     Register a new NPU worker.
@@ -89,15 +91,12 @@ async def add_worker(worker_config: NPUWorkerConfig):
 
     except ValueError as e:
         logger.warning(f"Worker registration failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to add worker: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to register worker: {str(e)}"
+            detail=f"Failed to register worker: {str(e)}",
         )
 
 
@@ -123,7 +122,7 @@ async def get_worker(worker_id: str):
         if not worker:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Worker '{worker_id}' not found"
+                detail=f"Worker '{worker_id}' not found",
             )
 
         return worker
@@ -134,7 +133,7 @@ async def get_worker(worker_id: str):
         logger.error(f"Failed to get worker {worker_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve worker: {str(e)}"
+            detail=f"Failed to retrieve worker: {str(e)}",
         )
 
 
@@ -162,7 +161,7 @@ async def update_worker(worker_id: str, worker_config: NPUWorkerConfig):
         if worker_config.id != worker_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Worker ID in path must match ID in configuration"
+                detail="Worker ID in path must match ID in configuration",
             )
 
         manager = await get_worker_manager()
@@ -173,17 +172,14 @@ async def update_worker(worker_id: str, worker_config: NPUWorkerConfig):
 
     except ValueError as e:
         logger.warning(f"Worker update failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to update worker {worker_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update worker: {str(e)}"
+            detail=f"Failed to update worker: {str(e)}",
         )
 
 
@@ -204,22 +200,16 @@ async def remove_worker(worker_id: str):
         await manager.remove_worker(worker_id)
 
         logger.info(f"Successfully removed worker: {worker_id}")
-        return JSONResponse(
-            status_code=status.HTTP_204_NO_CONTENT,
-            content=None
-        )
+        return JSONResponse(status_code=status.HTTP_204_NO_CONTENT, content=None)
 
     except ValueError as e:
         logger.warning(f"Worker removal failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to remove worker {worker_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to remove worker: {str(e)}"
+            detail=f"Failed to remove worker: {str(e)}",
         )
 
 
@@ -245,13 +235,15 @@ async def test_worker(worker_id: str):
         if not worker:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Worker '{worker_id}' not found"
+                detail=f"Worker '{worker_id}' not found",
             )
 
         # Test connection using worker config
         test_result = await manager.test_worker_connection(worker.config)
 
-        logger.info(f"Worker {worker_id} test: {'SUCCESS' if test_result.success else 'FAILED'}")
+        logger.info(
+            f"Worker {worker_id} test: {'SUCCESS' if test_result.success else 'FAILED'}"
+        )
         return test_result
 
     except HTTPException:
@@ -260,11 +252,13 @@ async def test_worker(worker_id: str):
         logger.error(f"Failed to test worker {worker_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to test worker: {str(e)}"
+            detail=f"Failed to test worker: {str(e)}",
         )
 
 
-@router.get("/npu/workers/{worker_id}/metrics", response_model=Optional[NPUWorkerMetrics])
+@router.get(
+    "/npu/workers/{worker_id}/metrics", response_model=Optional[NPUWorkerMetrics]
+)
 async def get_worker_metrics(worker_id: str):
     """
     Get performance metrics for a specific worker.
@@ -286,7 +280,7 @@ async def get_worker_metrics(worker_id: str):
         if not worker:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Worker '{worker_id}' not found"
+                detail=f"Worker '{worker_id}' not found",
             )
 
         metrics = await manager.get_worker_metrics(worker_id)
@@ -298,7 +292,7 @@ async def get_worker_metrics(worker_id: str):
         logger.error(f"Failed to get metrics for worker {worker_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve metrics: {str(e)}"
+            detail=f"Failed to retrieve metrics: {str(e)}",
         )
 
 
@@ -324,7 +318,7 @@ async def get_load_balancing_config():
         logger.error(f"Failed to get load balancing config: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve load balancing configuration: {str(e)}"
+            detail=f"Failed to retrieve load balancing configuration: {str(e)}",
         )
 
 
@@ -352,15 +346,12 @@ async def update_load_balancing_config(config: LoadBalancingConfig):
 
     except ValueError as e:
         logger.warning(f"Load balancing config update failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to update load balancing config: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update load balancing configuration: {str(e)}"
+            detail=f"Failed to update load balancing configuration: {str(e)}",
         )
 
 
@@ -384,7 +375,9 @@ async def get_npu_status():
         # Aggregate statistics
         total_workers = len(workers)
         online_workers = sum(1 for w in workers if w.status.status == "online")
-        total_capacity = sum(w.config.max_concurrent_tasks for w in workers if w.config.enabled)
+        total_capacity = sum(
+            w.config.max_concurrent_tasks for w in workers if w.config.enabled
+        )
         current_load = sum(w.status.current_load for w in workers)
 
         return {
@@ -394,13 +387,15 @@ async def get_npu_status():
             "offline_workers": total_workers - online_workers,
             "total_capacity": total_capacity,
             "current_load": current_load,
-            "utilization_percent": round((current_load / total_capacity * 100) if total_capacity > 0 else 0, 2),
-            "load_balancing_strategy": manager.get_load_balancing_config().strategy
+            "utilization_percent": round(
+                (current_load / total_capacity * 100) if total_capacity > 0 else 0, 2
+            ),
+            "load_balancing_strategy": manager.get_load_balancing_config().strategy,
         }
 
     except Exception as e:
         logger.error(f"Failed to get NPU status: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve NPU status: {str(e)}"
+            detail=f"Failed to retrieve NPU status: {str(e)}",
         )

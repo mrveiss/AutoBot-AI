@@ -35,7 +35,9 @@ class AnsibleExecutor:
 
         self.private_data_dir = Path(private_data_dir)
         self.private_data_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"AnsibleExecutor initialized with private_data_dir: {self.private_data_dir}")
+        logger.info(
+            f"AnsibleExecutor initialized with private_data_dir: {self.private_data_dir}"
+        )
 
     async def run_playbook(
         self,
@@ -43,7 +45,7 @@ class AnsibleExecutor:
         inventory: Dict[str, Any],
         extra_vars: Optional[Dict[str, Any]] = None,
         event_callback: Optional[Callable[[Dict], None]] = None,
-        run_id: Optional[str] = None
+        run_id: Optional[str] = None,
     ) -> ansible_runner.Runner:
         """
         Execute Ansible playbook with event streaming
@@ -64,7 +66,9 @@ class AnsibleExecutor:
         if run_id is None:
             run_id = f"deploy_{id(asyncio.current_task())}"
 
-        logger.info(f"Starting Ansible playbook execution: {playbook_path} (run_id: {run_id})")
+        logger.info(
+            f"Starting Ansible playbook execution: {playbook_path} (run_id: {run_id})"
+        )
 
         # Execute in thread pool (ansible-runner is synchronous)
         loop = asyncio.get_event_loop()
@@ -75,7 +79,7 @@ class AnsibleExecutor:
             inventory,
             extra_vars,
             event_callback,
-            run_id
+            run_id,
         )
 
         return runner
@@ -86,7 +90,7 @@ class AnsibleExecutor:
         inventory: Dict[str, Any],
         extra_vars: Dict[str, Any],
         event_callback: Optional[Callable[[Dict], None]],
-        run_id: str
+        run_id: str,
     ) -> ansible_runner.Runner:
         """
         Synchronous runner execution (called from thread pool)
@@ -106,12 +110,14 @@ class AnsibleExecutor:
 
         try:
             # Create temporary directory for this run
-            temp_dir = tempfile.mkdtemp(prefix=f"ansible_{run_id}_", dir=self.private_data_dir)
+            temp_dir = tempfile.mkdtemp(
+                prefix=f"ansible_{run_id}_", dir=self.private_data_dir
+            )
             temp_path = Path(temp_dir)
 
             # Write inventory to temp file
             inventory_file = temp_path / "inventory.json"
-            with open(inventory_file, 'w') as f:
+            with open(inventory_file, "w") as f:
                 json.dump(inventory, f, indent=2)
 
             logger.info(f"Executing playbook: {playbook_path}")
@@ -126,15 +132,21 @@ class AnsibleExecutor:
                 extravars=extra_vars,
                 quiet=False,
                 json_mode=True,
-                event_handler=event_callback if event_callback else self._default_event_handler,
-                ident=run_id
+                event_handler=(
+                    event_callback if event_callback else self._default_event_handler
+                ),
+                ident=run_id,
             )
 
             # Log execution results
-            if runner.status == 'successful':
-                logger.info(f"Playbook execution successful: {playbook_path} (run_id: {run_id})")
+            if runner.status == "successful":
+                logger.info(
+                    f"Playbook execution successful: {playbook_path} (run_id: {run_id})"
+                )
             else:
-                logger.error(f"Playbook execution failed: {playbook_path} (run_id: {run_id})")
+                logger.error(
+                    f"Playbook execution failed: {playbook_path} (run_id: {run_id})"
+                )
                 logger.error(f"Status: {runner.status}")
                 logger.error(f"Return code: {runner.rc}")
 
@@ -155,8 +167,8 @@ class AnsibleExecutor:
 
     def _default_event_handler(self, event: Dict):
         """Default event handler for logging"""
-        event_type = event.get('event', 'unknown')
-        if event_type in ['runner_on_ok', 'runner_on_failed', 'runner_on_unreachable']:
+        event_type = event.get("event", "unknown")
+        if event_type in ["runner_on_ok", "runner_on_failed", "runner_on_unreachable"]:
             logger.info(f"Ansible event: {event_type} - {event.get('event_data', {})}")
         else:
             logger.debug(f"Ansible event: {event_type}")

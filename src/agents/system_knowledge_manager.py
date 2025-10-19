@@ -28,7 +28,9 @@ class SystemKnowledgeManager:
         self.librarian = EnhancedKBLibrarian(knowledge_base)
 
         # Paths - use absolute paths to avoid working directory issues
-        project_root = Path(__file__).parent.parent.parent  # Go up 3 levels: src/agents/system_knowledge_manager.py -> AutoBot/
+        project_root = Path(
+            __file__
+        ).parent.parent.parent  # Go up 3 levels: src/agents/system_knowledge_manager.py -> AutoBot/
         self.system_knowledge_dir = project_root / "system_knowledge"
         self.runtime_knowledge_dir = project_root / "data/system_knowledge"
         self.backup_dir = project_root / "data/system_knowledge_backups"
@@ -732,36 +734,29 @@ class SystemKnowledgeManager:
                     "subcategories": {
                         "setup": "Setup and installation guides",
                         "configuration": "Configuration files and options",
-                        "troubleshooting": "Problem resolution guides"
-                    }
+                        "troubleshooting": "Problem resolution guides",
+                    },
                 },
                 "system": {
                     "description": "System knowledge and procedures",
                     "subcategories": {
                         "commands": "System commands and utilities",
                         "workflows": "Automated workflows and procedures",
-                        "security": "Security tools and practices"
-                    }
+                        "security": "Security tools and practices",
+                    },
                 },
                 "configuration": {
                     "description": "Configuration templates and examples",
                     "subcategories": {
                         "templates": "Configuration templates",
                         "examples": "Example configurations",
-                        "best_practices": "Configuration best practices"
-                    }
-                }
+                        "best_practices": "Configuration best practices",
+                    },
+                },
             }
 
-            return {
-                "success": True,
-                "categories": categories
-            }
+            return {"success": True, "categories": categories}
 
         except Exception as e:
             logger.error(f"Failed to get knowledge categories: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "categories": {}
-            }
+            return {"success": False, "error": str(e), "categories": {}}

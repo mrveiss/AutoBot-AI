@@ -39,15 +39,15 @@ class ChatWorkflowConfigUpdater:
                     "Configuration files updated",
                     "Librarian agents enabled",
                     "MCP integration activated",
-                    "Research quality controls implemented"
-                ]
+                    "Research quality controls implemented",
+                ],
             }
 
         except Exception as e:
             logger.error(f"Failed to enable web research orchestration: {e}")
             return {
                 "status": "error",
-                "message": f"Failed to enable web research: {str(e)}"
+                "message": f"Failed to enable web research: {str(e)}",
             }
 
     async def _update_consolidated_workflow(self):
@@ -63,8 +63,8 @@ class ChatWorkflowConfigUpdater:
 
         # Update web_research_integration flag from False to True
         updated_content = content.replace(
-            'self.web_research_integration = False',
-            'self.web_research_integration = True'
+            "self.web_research_integration = False",
+            "self.web_research_integration = True",
         )
 
         # Update the _should_conduct_research method to be more permissive
@@ -126,13 +126,17 @@ class ChatWorkflowConfigUpdater:
         return False'''
 
         if research_method_old in updated_content:
-            updated_content = updated_content.replace(research_method_old, research_method_new)
-            logger.info("Updated research decision logic to be more enterprise-friendly")
+            updated_content = updated_content.replace(
+                research_method_old, research_method_new
+            )
+            logger.info(
+                "Updated research decision logic to be more enterprise-friendly"
+            )
 
         # Enable research by default in process_message
         updated_content = updated_content.replace(
-            'enable_research: bool = True',
-            'enable_research: bool = True  # Enterprise: Research enabled by default'
+            "enable_research: bool = True",
+            "enable_research: bool = True  # Enterprise: Research enabled by default",
         )
 
         # Write updated content back
@@ -177,7 +181,7 @@ enterprise_research:
         # Check if librarian agents exist
         librarian_files = [
             self.project_root / "src" / "agents" / "kb_librarian_agent.py",
-            self.project_root / "src" / "agents" / "__init__.py"
+            self.project_root / "src" / "agents" / "__init__.py",
         ]
 
         agents_dir = self.project_root / "src" / "agents"
@@ -192,7 +196,10 @@ enterprise_research:
                     logger.info("✅ Librarian agents already configured")
                 else:
                     # Add librarian export if not present
-                    if "from .kb_librarian_agent import get_kb_librarian" not in content:
+                    if (
+                        "from .kb_librarian_agent import get_kb_librarian"
+                        not in content
+                    ):
                         content += "\n# Enterprise librarian agents\ntry:\n    from .kb_librarian_agent import get_kb_librarian\nexcept ImportError:\n    pass\n"
                         init_file.write_text(content)
                         logger.info("✅ Added librarian agent imports")

@@ -44,7 +44,7 @@ from src.constants.network_constants import NetworkConstants
 from .performance_optimized_timeouts import (
     TimeoutCategory,
     OptimizedTimeoutConfig,
-    PerformanceOptimizedTimeout
+    PerformanceOptimizedTimeout,
 )
 
 logger = logging.getLogger(__name__)
@@ -161,7 +161,7 @@ class LongRunningOperation:
                 progress_percentage=0.0,
                 processed_items=0,
                 total_items=0,
-                estimated_completion=None
+                estimated_completion=None,
             )
 
 
@@ -214,31 +214,29 @@ class LongRunningTimeoutConfig:
 
     @classmethod
     def get_timeout_config(
-        cls,
-        operation_type: OperationType,
-        estimated_items: int = 1
+        cls, operation_type: OperationType, estimated_items: int = 1
     ) -> Dict[str, Any]:
         """Calculate dynamic timeout configuration"""
 
         base_config = cls.OPERATION_TIMEOUTS.get(
-            operation_type,
-            cls.OPERATION_TIMEOUTS[OperationType.CODE_ANALYSIS]
+            operation_type, cls.OPERATION_TIMEOUTS[OperationType.CODE_ANALYSIS]
         )
 
         # Calculate dynamic timeout based on estimated items
         base_timeout = base_config["base_timeout"]
-        per_item_timeout = base_config.get("per_file_timeout", base_config.get("per_test_timeout", 10))
+        per_item_timeout = base_config.get(
+            "per_file_timeout", base_config.get("per_test_timeout", 10)
+        )
         max_timeout = base_config["max_timeout"]
 
         calculated_timeout = min(
-            base_timeout + (estimated_items * per_item_timeout),
-            max_timeout
+            base_timeout + (estimated_items * per_item_timeout), max_timeout
         )
 
         return {
             **base_config,
             "calculated_timeout": calculated_timeout,
-            "estimated_items": estimated_items
+            "estimated_items": estimated_items,
         }
 
 
@@ -255,7 +253,7 @@ class OperationCheckpointManager:
         operation: LongRunningOperation,
         intermediate_results: Dict[str, Any],
         context_data: Dict[str, Any],
-        next_step: str
+        next_step: str,
     ) -> str:
         """Save operation checkpoint"""
 
@@ -272,8 +270,8 @@ class OperationCheckpointManager:
             next_step=next_step,
             metadata={
                 "operation_type": operation.operation_type.value,
-                "operation_name": operation.name
-            }
+                "operation_name": operation.name,
+            },
         )
 
         # Save to Redis if available
@@ -282,7 +280,7 @@ class OperationCheckpointManager:
                 await self.redis_client.setex(
                     f"checkpoint:{checkpoint_id}",
                     3600 * 24 * 7,  # 7 days TTL
-                    pickle.dumps(checkpoint)
+                    pickle.dumps(checkpoint),
                 )
                 logger.info(f"Checkpoint {checkpoint_id} saved to Redis")
             except Exception as e:
@@ -291,7 +289,7 @@ class OperationCheckpointManager:
         # Save to filesystem as backup
         checkpoint_file = self.checkpoint_dir / f"{checkpoint_id}.pkl"
         try:
-            with open(checkpoint_file, 'wb') as f:
+            with open(checkpoint_file, "wb") as f:
                 pickle.dump(checkpoint, f)
             logger.info(f"Checkpoint {checkpoint_id} saved to filesystem")
         except Exception as e:
@@ -303,7 +301,9 @@ class OperationCheckpointManager:
 
         return checkpoint_id
 
-    async def load_checkpoint(self, checkpoint_id: str) -> Optional[OperationCheckpoint]:
+    async def load_checkpoint(
+        self, checkpoint_id: str
+    ) -> Optional[OperationCheckpoint]:
         """Load operation checkpoint"""
 
         # Try Redis first
@@ -321,7 +321,7 @@ class OperationCheckpointManager:
         checkpoint_file = self.checkpoint_dir / f"{checkpoint_id}.pkl"
         if checkpoint_file.exists():
             try:
-                with open(checkpoint_file, 'rb') as f:
+                with open(checkpoint_file, "rb") as f:
                     checkpoint = pickle.load(f)
                 logger.info(f"Checkpoint {checkpoint_id} loaded from filesystem")
                 return checkpoint
@@ -338,7 +338,9 @@ class OperationCheckpointManager:
         # Search Redis
         if self.redis_client:
             try:
-                keys = await self.redis_client.keys(f"checkpoint:checkpoint_{operation_id}_*")
+                keys = await self.redis_client.keys(
+                    f"checkpoint:checkpoint_{operation_id}_*"
+                )
                 for key in keys:
                     data = await self.redis_client.get(key)
                     if data:
@@ -348,9 +350,11 @@ class OperationCheckpointManager:
                 logger.warning(f"Failed to list Redis checkpoints: {e}")
 
         # Search filesystem
-        for checkpoint_file in self.checkpoint_dir.glob(f"checkpoint_{operation_id}_*.pkl"):
+        for checkpoint_file in self.checkpoint_dir.glob(
+            f"checkpoint_{operation_id}_*.pkl"
+        ):
             try:
-                with open(checkpoint_file, 'rb') as f:
+                with open(checkpoint_file, "rb") as f:
                     checkpoint = pickle.load(f)
                     checkpoints.append(checkpoint)
             except Exception as e:
@@ -382,7 +386,7 @@ class OperationProgressTracker:
         processed_items: int,
         total_items: Optional[int] = None,
         performance_metrics: Optional[Dict] = None,
-        status_message: str = ""
+        status_message: str = "",
     ):
         """Update operation progress"""
 
@@ -396,8 +400,7 @@ class OperationProgressTracker:
         # Calculate progress percentage
         if operation.progress.total_items > 0:
             operation.progress.progress_percentage = min(
-                (processed_items / operation.progress.total_items) * 100,
-                100.0
+                (processed_items / operation.progress.total_items) * 100, 100.0
             )
 
         # Estimate completion time
@@ -422,7 +425,7 @@ class OperationProgressTracker:
             "operation_type": operation.operation_type.value,
             "status": operation.status.value,
             "progress": asdict(operation.progress),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         # Call registered callbacks
@@ -441,7 +444,7 @@ class OperationProgressTracker:
                 await self.redis_client.setex(
                     f"progress:{operation.operation_id}",
                     3600,  # 1 hour TTL
-                    json.dumps(progress_data, default=str)
+                    json.dumps(progress_data, default=str),
                 )
             except Exception as e:
                 logger.warning(f"Failed to store progress in Redis: {e}")
@@ -504,7 +507,9 @@ class LongRunningOperationManager:
 
                     # Clean up when done
                     task.add_done_callback(
-                        lambda t: setattr(self, 'active_operations', self.active_operations - 1)
+                        lambda t: setattr(
+                            self, "active_operations", self.active_operations - 1
+                        )
                     )
 
             except asyncio.CancelledError:
@@ -522,7 +527,7 @@ class LongRunningOperationManager:
         priority: OperationPriority = OperationPriority.NORMAL,
         estimated_items: int = 1,
         context: Optional[Dict[str, Any]] = None,
-        execute_immediately: bool = False
+        execute_immediately: bool = False,
     ) -> str:
         """Create a new long-running operation"""
 
@@ -540,11 +545,11 @@ class LongRunningOperationManager:
             status=OperationStatus.QUEUED,
             created_at=datetime.now(),
             timeout_config=timeout_config,
-            context=context or {}
+            context=context or {},
         )
 
         # Store operation function
-        operation.context['operation_function'] = operation_function
+        operation.context["operation_function"] = operation_function
 
         self.operations[operation_id] = operation
 
@@ -566,8 +571,7 @@ class LongRunningOperationManager:
         return await self._execute_operation_with_monitoring(operation)
 
     async def _execute_operation_with_monitoring(
-        self,
-        operation: LongRunningOperation
+        self, operation: LongRunningOperation
     ) -> Any:
         """Execute operation with full monitoring and checkpoint support"""
 
@@ -592,20 +596,20 @@ class LongRunningOperationManager:
             )
 
             # Execute the actual operation
-            operation_function = operation.context['operation_function']
+            operation_function = operation.context["operation_function"]
 
             # Create enhanced operation context
             enhanced_context = OperationExecutionContext(
                 operation=operation,
                 progress_tracker=self.progress_tracker,
                 checkpoint_manager=self.checkpoint_manager,
-                logger=logger
+                logger=logger,
             )
 
             # Execute with timeout
             result = await asyncio.wait_for(
                 self._execute_with_context(operation_function, enhanced_context),
-                timeout=timeout_seconds
+                timeout=timeout_seconds,
             )
 
             # Clean up monitoring tasks
@@ -622,7 +626,7 @@ class LongRunningOperationManager:
                 "Completed",
                 operation.progress.total_items,
                 operation.progress.total_items,
-                status_message="Operation completed successfully"
+                status_message="Operation completed successfully",
             )
 
             logger.info(f"Operation {operation.operation_id} completed successfully")
@@ -630,14 +634,16 @@ class LongRunningOperationManager:
 
         except asyncio.TimeoutError:
             operation.status = OperationStatus.TIMEOUT
-            operation.error_info = f"Operation timed out after {timeout_seconds} seconds"
+            operation.error_info = (
+                f"Operation timed out after {timeout_seconds} seconds"
+            )
 
             # Save final checkpoint before timeout
             await self.checkpoint_manager.save_checkpoint(
                 operation,
                 {"timeout_occurred": True},
                 operation.context,
-                "timeout_recovery"
+                "timeout_recovery",
             )
 
             logger.warning(f"Operation {operation.operation_id} timed out")
@@ -652,7 +658,7 @@ class LongRunningOperationManager:
                 operation,
                 {"error_occurred": True, "error_details": str(e)},
                 operation.context,
-                "error_recovery"
+                "error_recovery",
             )
 
             logger.error(f"Operation {operation.operation_id} failed: {e}")
@@ -664,9 +670,7 @@ class LongRunningOperationManager:
                 del self.operation_tasks[operation.operation_id]
 
     async def _execute_with_context(
-        self,
-        operation_function: Callable,
-        context: 'OperationExecutionContext'
+        self, operation_function: Callable, context: "OperationExecutionContext"
     ) -> Any:
         """Execute operation function with enhanced context"""
 
@@ -675,7 +679,9 @@ class LongRunningOperationManager:
         else:
             return await asyncio.to_thread(operation_function, context)
 
-    async def _periodic_checkpoint(self, operation: LongRunningOperation, interval: int):
+    async def _periodic_checkpoint(
+        self, operation: LongRunningOperation, interval: int
+    ):
         """Periodic checkpoint saving"""
         while True:
             try:
@@ -683,16 +689,18 @@ class LongRunningOperationManager:
                 if operation.status == OperationStatus.RUNNING:
                     await self.checkpoint_manager.save_checkpoint(
                         operation,
-                        operation.context.get('intermediate_results', {}),
+                        operation.context.get("intermediate_results", {}),
                         operation.context,
-                        operation.progress.current_step
+                        operation.progress.current_step,
                     )
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.warning(f"Checkpoint save failed: {e}")
 
-    async def _periodic_progress_report(self, operation: LongRunningOperation, interval: int):
+    async def _periodic_progress_report(
+        self, operation: LongRunningOperation, interval: int
+    ):
         """Periodic progress reporting"""
         while True:
             try:
@@ -737,9 +745,9 @@ class LongRunningOperationManager:
             context={
                 **original_operation.context,
                 **checkpoint.context_data,
-                'resume_checkpoint': checkpoint,
-                'resume_from': checkpoint.next_step
-            }
+                "resume_checkpoint": checkpoint,
+                "resume_from": checkpoint.next_step,
+            },
         )
 
         # Restore progress
@@ -749,7 +757,9 @@ class LongRunningOperationManager:
 
         self.operations[new_operation_id] = resumed_operation
 
-        logger.info(f"Resuming operation from checkpoint {checkpoint_id} as {new_operation_id}")
+        logger.info(
+            f"Resuming operation from checkpoint {checkpoint_id} as {new_operation_id}"
+        )
 
         # Execute resumed operation
         await self.background_queue.put(new_operation_id)
@@ -762,7 +772,7 @@ class LongRunningOperationManager:
     def list_operations(
         self,
         status_filter: Optional[OperationStatus] = None,
-        operation_type_filter: Optional[OperationType] = None
+        operation_type_filter: Optional[OperationType] = None,
     ) -> List[LongRunningOperation]:
         """List operations with optional filtering"""
 
@@ -772,7 +782,9 @@ class LongRunningOperationManager:
             operations = [op for op in operations if op.status == status_filter]
 
         if operation_type_filter:
-            operations = [op for op in operations if op.operation_type == operation_type_filter]
+            operations = [
+                op for op in operations if op.operation_type == operation_type_filter
+            ]
 
         # Sort by priority and creation time
         operations.sort(key=lambda x: (x.priority.value, x.created_at), reverse=True)
@@ -812,7 +824,7 @@ class OperationExecutionContext:
         processed: int,
         total: Optional[int] = None,
         metrics: Optional[Dict] = None,
-        message: str = ""
+        message: str = "",
     ):
         """Update operation progress"""
         await self.progress_tracker.update_progress(
@@ -823,30 +835,27 @@ class OperationExecutionContext:
         self,
         intermediate_results: Dict[str, Any],
         next_step: str,
-        context_data: Optional[Dict[str, Any]] = None
+        context_data: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Save operation checkpoint"""
         return await self.checkpoint_manager.save_checkpoint(
-            self.operation,
-            intermediate_results,
-            context_data or {},
-            next_step
+            self.operation, intermediate_results, context_data or {}, next_step
         )
 
     def should_resume(self) -> bool:
         """Check if this is a resumed operation"""
-        return 'resume_checkpoint' in self.operation.context
+        return "resume_checkpoint" in self.operation.context
 
     def get_resume_data(self) -> Optional[OperationCheckpoint]:
         """Get resume checkpoint data"""
-        return self.operation.context.get('resume_checkpoint')
+        return self.operation.context.get("resume_checkpoint")
 
 
 # Convenience functions for common operations
 async def execute_codebase_indexing(
     codebase_path: str,
     manager: LongRunningOperationManager,
-    file_patterns: Optional[List[str]] = None
+    file_patterns: Optional[List[str]] = None,
 ) -> str:
     """Execute codebase indexing operation"""
 
@@ -857,7 +866,7 @@ async def execute_codebase_indexing(
         import fnmatch
 
         path = Path(codebase_path)
-        patterns = file_patterns or ['*.py', '*.js', '*.vue', '*.ts', '*.jsx', '*.tsx']
+        patterns = file_patterns or ["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"]
 
         # Count total files first
         all_files = []
@@ -877,7 +886,7 @@ async def execute_codebase_indexing(
                 file_info = {
                     "path": str(file_path),
                     "size": file_path.stat().st_size,
-                    "indexed_at": datetime.now().isoformat()
+                    "indexed_at": datetime.now().isoformat(),
                 }
                 results.append(file_info)
 
@@ -886,15 +895,17 @@ async def execute_codebase_indexing(
                     f"Processing {file_path.name}",
                     i + 1,
                     total_files,
-                    {"files_per_second": (i + 1) / max(1, time.time() - context.operation.started_at.timestamp())},
-                    f"Indexed {i + 1} of {total_files} files"
+                    {
+                        "files_per_second": (i + 1)
+                        / max(1, time.time() - context.operation.started_at.timestamp())
+                    },
+                    f"Indexed {i + 1} of {total_files} files",
                 )
 
                 # Save checkpoint every 100 files
                 if (i + 1) % 100 == 0:
                     await context.save_checkpoint(
-                        {"processed_files": results},
-                        f"file_{i + 1}"
+                        {"processed_files": results}, f"file_{i + 1}"
                     )
 
             except Exception as e:
@@ -903,7 +914,7 @@ async def execute_codebase_indexing(
         return {
             "total_files_processed": len(results),
             "files": results,
-            "completed_at": datetime.now().isoformat()
+            "completed_at": datetime.now().isoformat(),
         }
 
     return await manager.create_operation(
@@ -913,14 +924,14 @@ async def execute_codebase_indexing(
         indexing_operation,
         OperationPriority.NORMAL,
         estimated_items=1000,  # Estimate
-        execute_immediately=False
+        execute_immediately=False,
     )
 
 
 async def execute_comprehensive_test_suite(
     test_suite_path: str,
     manager: LongRunningOperationManager,
-    test_patterns: Optional[List[str]] = None
+    test_patterns: Optional[List[str]] = None,
 ) -> str:
     """Execute comprehensive test suite operation"""
 
@@ -931,7 +942,7 @@ async def execute_comprehensive_test_suite(
         from pathlib import Path
 
         path = Path(test_suite_path)
-        patterns = test_patterns or ['test_*.py', '*_test.py']
+        patterns = test_patterns or ["test_*.py", "*_test.py"]
 
         # Find all test files
         test_files = []
@@ -952,7 +963,7 @@ async def execute_comprehensive_test_suite(
                     i,
                     total_tests,
                     {"passed": passed, "failed": failed},
-                    f"Test {i + 1} of {total_tests}: {test_file.name}"
+                    f"Test {i + 1} of {total_tests}: {test_file.name}",
                 )
 
                 # Run test (placeholder - would use actual test runner)
@@ -960,13 +971,14 @@ async def execute_comprehensive_test_suite(
 
                 # Simulate test result
                 import random
+
                 test_passed = random.random() > 0.1  # 90% pass rate
 
                 test_result = {
                     "file": str(test_file),
                     "status": "PASS" if test_passed else "FAIL",
                     "duration": 0.5,
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
                 }
                 results.append(test_result)
 
@@ -978,12 +990,8 @@ async def execute_comprehensive_test_suite(
                 # Save checkpoint every 10 tests
                 if (i + 1) % 10 == 0:
                     await context.save_checkpoint(
-                        {
-                            "test_results": results,
-                            "passed": passed,
-                            "failed": failed
-                        },
-                        f"test_{i + 1}"
+                        {"test_results": results, "passed": passed, "failed": failed},
+                        f"test_{i + 1}",
                     )
 
             except Exception as e:
@@ -995,7 +1003,7 @@ async def execute_comprehensive_test_suite(
             "passed": passed,
             "failed": failed,
             "results": results,
-            "success_rate": (passed / total_tests) * 100 if total_tests > 0 else 0
+            "success_rate": (passed / total_tests) * 100 if total_tests > 0 else 0,
         }
 
     return await manager.create_operation(
@@ -1005,12 +1013,13 @@ async def execute_comprehensive_test_suite(
         test_suite_operation,
         OperationPriority.HIGH,
         estimated_items=100,  # Estimate
-        execute_immediately=False
+        execute_immediately=False,
     )
 
 
 # Example usage and testing
 if __name__ == "__main__":
+
     async def example_usage():
         """Example usage of the long-running operations framework"""
 
@@ -1021,16 +1030,12 @@ if __name__ == "__main__":
         try:
             # Start codebase indexing
             indexing_op_id = await execute_codebase_indexing(
-                "/home/kali/Desktop/AutoBot/src",
-                manager,
-                ["*.py"]
+                "/home/kali/Desktop/AutoBot/src", manager, ["*.py"]
             )
 
             # Start test suite
             test_op_id = await execute_comprehensive_test_suite(
-                "/home/kali/Desktop/AutoBot/tests",
-                manager,
-                ["test_*.py"]
+                "/home/kali/Desktop/AutoBot/tests", manager, ["test_*.py"]
             )
 
             # Monitor operations
@@ -1038,11 +1043,20 @@ if __name__ == "__main__":
                 indexing_op = manager.get_operation(indexing_op_id)
                 test_op = manager.get_operation(test_op_id)
 
-                print(f"Indexing: {indexing_op.status.value} - {indexing_op.progress.progress_percentage:.1f}%")
-                print(f"Testing: {test_op.status.value} - {test_op.progress.progress_percentage:.1f}%")
+                print(
+                    f"Indexing: {indexing_op.status.value} - {indexing_op.progress.progress_percentage:.1f}%"
+                )
+                print(
+                    f"Testing: {test_op.status.value} - {test_op.progress.progress_percentage:.1f}%"
+                )
 
-                if (indexing_op.status in [OperationStatus.COMPLETED, OperationStatus.FAILED] and
-                    test_op.status in [OperationStatus.COMPLETED, OperationStatus.FAILED]):
+                if indexing_op.status in [
+                    OperationStatus.COMPLETED,
+                    OperationStatus.FAILED,
+                ] and test_op.status in [
+                    OperationStatus.COMPLETED,
+                    OperationStatus.FAILED,
+                ]:
                     break
 
                 await asyncio.sleep(5)

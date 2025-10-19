@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from backend.services.config_service import ConfigService
 from backend.utils.connection_utils import ModelManager
+
 # Add caching support for performance improvement
 from backend.utils.cache_manager import cache_response
 from src.unified_config import config
@@ -28,9 +29,9 @@ async def get_frontend_config():
     """
     try:
         # Get configuration from the config manager
-        ollama_url = config.get_service_url('ollama')
+        ollama_url = config.get_service_url("ollama")
         redis_config = config.get_redis_config()
-        backend_config = config.get('backend', {})
+        backend_config = config.get("backend", {})
 
         # Build frontend configuration
         frontend_config = {
@@ -47,18 +48,18 @@ async def get_frontend_config():
                     ),
                 },
                 "playwright": {
-                    "vnc_url": config.get_service_url('playwright-vnc'),
-                    "api_url": config.get_service_url('playwright'),
+                    "vnc_url": config.get_service_url("playwright-vnc"),
+                    "api_url": config.get_service_url("playwright"),
                 },
                 "redis": {
-                    "host": redis_config.get("host", config.get_host('redis')),
-                    "port": redis_config.get("port", config.get_port('redis')),
+                    "host": redis_config.get("host", config.get_host("redis")),
+                    "port": redis_config.get("port", config.get_port("redis")),
                     "enabled": redis_config.get("enabled", True),
                 },
                 "lmstudio": {
                     "url": config.get(
                         "backend.llm.local.providers.lmstudio.endpoint",
-                        config.get_service_url('lmstudio'),
+                        config.get_service_url("lmstudio"),
                     ),
                 },
             },
@@ -69,12 +70,8 @@ async def get_frontend_config():
                 "streaming": config.get("backend.streaming", False),
             },
             "features": {
-                "voice_enabled": config.get(
-                    "voice_interface.enabled", False
-                ),
-                "knowledge_base_enabled": config.get(
-                    "knowledge_base.enabled", True
-                ),
+                "voice_enabled": config.get("voice_interface.enabled", False),
+                "knowledge_base_enabled": config.get("knowledge_base.enabled", True),
                 "developer_mode": config.get("developer.enabled", True),
             },
             "ui": {
@@ -90,9 +87,7 @@ async def get_frontend_config():
                     "backend.llm.local.providers.ollama.selected_model",
                     "deepseek-r1:14b",
                 ),
-                "max_chat_messages": config.get(
-                    "chat.max_messages", 100
-                ),
+                "max_chat_messages": config.get("chat.max_messages", 100),
             },
         }
 
@@ -128,7 +123,7 @@ async def get_system_health(request: Request = None):
 
         # Test configuration access
         try:
-            config.get_service_url('ollama')
+            config.get_service_url("ollama")
             health_status["components"]["config"] = "healthy"
         except Exception as e:
             health_status["components"]["config"] = f"error: {str(e)}"
@@ -137,25 +132,39 @@ async def get_system_health(request: Request = None):
         # Check conversation files database if request is available
         if request:
             try:
-                if hasattr(request.app.state, 'conversation_file_manager'):
-                    conversation_file_manager = request.app.state.conversation_file_manager
+                if hasattr(request.app.state, "conversation_file_manager"):
+                    conversation_file_manager = (
+                        request.app.state.conversation_file_manager
+                    )
                     # Verify database connectivity and schema
                     try:
                         version = await conversation_file_manager.get_schema_version()
                         if version == "unknown":
-                            health_status["components"]["conversation_files_db"] = "not_initialized"
+                            health_status["components"][
+                                "conversation_files_db"
+                            ] = "not_initialized"
                             health_status["status"] = "degraded"
                         else:
-                            health_status["components"]["conversation_files_db"] = "healthy"
+                            health_status["components"][
+                                "conversation_files_db"
+                            ] = "healthy"
                     except Exception as db_e:
-                        logger.warning(f"Conversation files DB health check failed: {db_e}")
-                        health_status["components"]["conversation_files_db"] = "unhealthy"
+                        logger.warning(
+                            f"Conversation files DB health check failed: {db_e}"
+                        )
+                        health_status["components"][
+                            "conversation_files_db"
+                        ] = "unhealthy"
                         health_status["status"] = "degraded"
                 else:
-                    health_status["components"]["conversation_files_db"] = "not_configured"
+                    health_status["components"][
+                        "conversation_files_db"
+                    ] = "not_configured"
                     health_status["status"] = "degraded"
             except Exception as e:
-                health_status["components"]["conversation_files_db"] = f"error: {str(e)}"
+                health_status["components"][
+                    "conversation_files_db"
+                ] = f"error: {str(e)}"
                 health_status["status"] = "degraded"
 
         return health_status
@@ -336,6 +345,7 @@ async def get_detailed_health(request: Request):
         # Check Redis connection
         try:
             from backend.utils.cache_manager import cache_manager
+
             await cache_manager._ensure_redis_client()
             if cache_manager._redis_client:
                 detailed_components["redis"] = "healthy"
@@ -347,6 +357,7 @@ async def get_detailed_health(request: Request):
         # Check LLM interface
         try:
             from src.llm_interface import LLMInterface
+
             detailed_components["llm"] = "available"
         except Exception as e:
             detailed_components["llm"] = f"import_error: {str(e)}"
@@ -354,13 +365,14 @@ async def get_detailed_health(request: Request):
         # Check knowledge base
         try:
             from src.knowledge_base import KnowledgeBase
+
             detailed_components["knowledge_base"] = "available"
         except Exception as e:
             detailed_components["knowledge_base"] = f"import_error: {str(e)}"
 
         # Check Conversation Files Database
         try:
-            if hasattr(request.app.state, 'conversation_file_manager'):
+            if hasattr(request.app.state, "conversation_file_manager"):
                 conversation_file_manager = request.app.state.conversation_file_manager
                 # Verify database connectivity and schema
                 try:
@@ -384,6 +396,7 @@ async def get_detailed_health(request: Request):
         # Add system resource info
         try:
             import psutil
+
             detailed_components["cpu_usage"] = f"{psutil.cpu_percent(interval=0.1)}%"
             memory = psutil.virtual_memory()
             detailed_components["memory_usage"] = f"{memory.percent}%"
@@ -400,7 +413,11 @@ async def get_detailed_health(request: Request):
         health_status["detailed"] = True
 
         # Determine overall status
-        error_components = [comp for comp, status in health_status["components"].items() if "error" in str(status).lower()]
+        error_components = [
+            comp
+            for comp, status in health_status["components"].items()
+            if "error" in str(status).lower()
+        ]
         if error_components:
             health_status["status"] = "degraded"
             health_status["errors"] = error_components
@@ -434,7 +451,7 @@ async def get_cache_stats():
             "performance": {
                 "ttl_default": cache_manager.default_ttl,
                 "prefix": cache_manager.cache_prefix,
-            }
+            },
         }
 
         # Add Redis info if available
@@ -484,7 +501,7 @@ async def get_cache_activity():
                 "recent_keys": [],
                 "key_patterns": {},
                 "total_keys": 0,
-            }
+            },
         }
 
         if cache_manager._redis_client:
@@ -492,7 +509,9 @@ async def get_cache_activity():
                 await cache_manager._ensure_redis_client()
 
                 # Get all cache keys
-                cache_keys = await cache_manager._redis_client.keys(f"{cache_manager.cache_prefix}*")
+                cache_keys = await cache_manager._redis_client.keys(
+                    f"{cache_manager.cache_prefix}*"
+                )
                 activity_response["activity"]["total_keys"] = len(cache_keys)
 
                 # Get recent keys (limit to 20 for performance)
@@ -502,10 +521,12 @@ async def get_cache_activity():
                         # Remove prefix for cleaner display
                         clean_key = key.replace(cache_manager.cache_prefix, "")
                         ttl = await cache_manager._redis_client.ttl(key)
-                        recent_keys.append({
-                            "key": clean_key,
-                            "ttl": ttl if ttl > 0 else "no_expiry",
-                        })
+                        recent_keys.append(
+                            {
+                                "key": clean_key,
+                                "ttl": ttl if ttl > 0 else "no_expiry",
+                            }
+                        )
                     except Exception:
                         recent_keys.append({"key": clean_key, "ttl": "unknown"})
 

@@ -25,6 +25,7 @@ router = APIRouter(tags=["Services"])
 
 class ServiceStatus(BaseModel):
     """Service status model"""
+
     name: str
     status: str = Field(..., description="Service status: healthy, warning, error")
     message: str = Field(..., description="Status description")
@@ -34,6 +35,7 @@ class ServiceStatus(BaseModel):
 
 class SystemInfo(BaseModel):
     """System information model"""
+
     version: str
     build: str
     environment: str
@@ -43,6 +45,7 @@ class SystemInfo(BaseModel):
 
 class VMStatus(BaseModel):
     """VM status model"""
+
     name: str
     ip: str
     status: str = Field(..., description="VM status: online, offline, unknown")
@@ -52,6 +55,7 @@ class VMStatus(BaseModel):
 
 class ServicesResponse(BaseModel):
     """Services list response"""
+
     services: List[ServiceStatus]
     total_count: int
     healthy_count: int
@@ -74,12 +78,14 @@ async def get_services():
                 # Convert monitoring data to our format
                 if isinstance(monitoring_data, dict) and "services" in monitoring_data:
                     for service_data in monitoring_data["services"]:
-                        services.append(ServiceStatus(
-                            name=service_data.get("name", "Unknown"),
-                            status=service_data.get("status", "unknown"),
-                            message=service_data.get("statusText", "No message"),
-                            response_time_ms=service_data.get("response_time_ms")
-                        ))
+                        services.append(
+                            ServiceStatus(
+                                name=service_data.get("name", "Unknown"),
+                                status=service_data.get("status", "unknown"),
+                                message=service_data.get("statusText", "No message"),
+                                response_time_ms=service_data.get("response_time_ms"),
+                            )
+                        )
             except Exception as e:
                 logger.warning(f"Could not get monitoring services data: {e}")
 
@@ -87,6 +93,7 @@ async def get_services():
         redis_status_obj = None
         try:
             from backend.api.redis_service import get_service_manager
+
             manager = await get_service_manager()
             redis_status_obj = await manager.get_service_status()
         except Exception as e:
@@ -96,8 +103,13 @@ async def get_services():
         if not services:
             # Get configuration for default response time
             from src.unified_config_manager import unified_config_manager
-            monitoring_config = unified_config_manager.get_config_section("monitoring") or {}
-            default_response_time = monitoring_config.get("default_response_time_ms", 10.0)
+
+            monitoring_config = (
+                unified_config_manager.get_config_section("monitoring") or {}
+            )
+            default_response_time = monitoring_config.get(
+                "default_response_time_ms", 10.0
+            )
 
             # Determine Redis status based on actual service status
             if redis_status_obj:
@@ -122,33 +134,29 @@ async def get_services():
                     name="Backend API",
                     status="healthy",
                     message="API server running",
-                    response_time_ms=default_response_time
+                    response_time_ms=default_response_time,
                 ),
                 ServiceStatus(
                     name="Frontend",
                     status="healthy",
-                    message="Web interface accessible"
+                    message="Web interface accessible",
                 ),
-                ServiceStatus(
-                    name="Redis",
-                    status=redis_status,
-                    message=redis_message
-                ),
+                ServiceStatus(name="Redis", status=redis_status, message=redis_message),
                 ServiceStatus(
                     name="LLM Service",
                     status="warning",
-                    message="Connection status unknown"
+                    message="Connection status unknown",
                 ),
                 ServiceStatus(
                     name="NPU Worker",
                     status="healthy",
-                    message="Hardware acceleration ready"
+                    message="Hardware acceleration ready",
                 ),
                 ServiceStatus(
                     name="Browser Service",
                     status="healthy",
-                    message="Automation services running"
-                )
+                    message="Automation services running",
+                ),
             ]
             services = default_services
 
@@ -163,7 +171,7 @@ async def get_services():
             healthy_count=healthy_count,
             warning_count=warning_count,
             error_count=error_count,
-            last_updated=datetime.now()
+            last_updated=datetime.now(),
         )
 
     except Exception as e:
@@ -194,8 +202,11 @@ async def get_services_health():
         # Convert to monitoring-compatible format
         result = {
             "timestamp": time.time(),
-            "overall_status": "healthy" if services_data.error_count == 0 else
-                           "degraded" if services_data.error_count < 2 else "critical",
+            "overall_status": (
+                "healthy"
+                if services_data.error_count == 0
+                else "degraded" if services_data.error_count < 2 else "critical"
+            ),
             "total_services": services_data.total_count,
             "healthy_services": services_data.healthy_count,
             "degraded_services": services_data.warning_count,
@@ -205,17 +216,19 @@ async def get_services_health():
                     "name": service.name,
                     "status": service.status,
                     "message": service.message,
-                    "response_time_ms": service.response_time_ms or 0
+                    "response_time_ms": service.response_time_ms or 0,
                 }
                 for service in services_data.services
-            ]
+            ],
         }
 
         return result
 
     except Exception as e:
         logger.error(f"Failed to get services health: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get services health: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get services health: {str(e)}"
+        )
 
 
 @router.get("/vms/status")
@@ -234,57 +247,67 @@ async def get_vms_status():
         # Frontend VM
         frontend_config = services_config.get("frontend", {})
         if frontend_config and frontend_config.get("host"):
-            vms.append(VMStatus(
-                name="Frontend VM",
-                ip=frontend_config.get("host"),
-                status="online",
-                services=["frontend", "web-interface"],
-                last_check=datetime.now()
-            ))
+            vms.append(
+                VMStatus(
+                    name="Frontend VM",
+                    ip=frontend_config.get("host"),
+                    status="online",
+                    services=["frontend", "web-interface"],
+                    last_check=datetime.now(),
+                )
+            )
 
         # NPU Worker VM
         npu_config = services_config.get("npu_worker", {})
         if npu_config and npu_config.get("host"):
-            vms.append(VMStatus(
-                name="NPU Worker VM",
-                ip=npu_config.get("host"),
-                status="online",
-                services=["npu-worker", "hardware-acceleration"],
-                last_check=datetime.now()
-            ))
+            vms.append(
+                VMStatus(
+                    name="NPU Worker VM",
+                    ip=npu_config.get("host"),
+                    status="online",
+                    services=["npu-worker", "hardware-acceleration"],
+                    last_check=datetime.now(),
+                )
+            )
 
         # Redis VM
         redis_config = unified_config_manager.get_redis_config()
         if redis_config and redis_config.get("host"):
-            vms.append(VMStatus(
-                name="Redis VM",
-                ip=redis_config.get("host"),
-                status="online",
-                services=["redis", "database", "cache"],
-                last_check=datetime.now()
-            ))
+            vms.append(
+                VMStatus(
+                    name="Redis VM",
+                    ip=redis_config.get("host"),
+                    status="online",
+                    services=["redis", "database", "cache"],
+                    last_check=datetime.now(),
+                )
+            )
 
         # AI Stack VM
         ai_stack_config = services_config.get("ai_stack", {})
         if ai_stack_config and ai_stack_config.get("host"):
-            vms.append(VMStatus(
-                name="AI Stack VM",
-                ip=ai_stack_config.get("host"),
-                status="online",
-                services=["ai-processing", "llm", "inference"],
-                last_check=datetime.now()
-            ))
+            vms.append(
+                VMStatus(
+                    name="AI Stack VM",
+                    ip=ai_stack_config.get("host"),
+                    status="online",
+                    services=["ai-processing", "llm", "inference"],
+                    last_check=datetime.now(),
+                )
+            )
 
         # Browser VM
         browser_config = services_config.get("browser", {})
         if browser_config and browser_config.get("host"):
-            vms.append(VMStatus(
-                name="Browser VM",
-                ip=browser_config.get("host"),
-                status="online",
-                services=["browser-automation", "playwright"],
-                last_check=datetime.now()
-            ))
+            vms.append(
+                VMStatus(
+                    name="Browser VM",
+                    ip=browser_config.get("host"),
+                    status="online",
+                    services=["browser-automation", "playwright"],
+                    last_check=datetime.now(),
+                )
+            )
 
         # Count statuses
         online_count = sum(1 for vm in vms if vm.status == "online")
@@ -296,12 +319,14 @@ async def get_vms_status():
             "online_count": online_count,
             "offline_count": total_count - online_count,
             "overall_status": "healthy" if online_count == total_count else "degraded",
-            "last_updated": datetime.now()
+            "last_updated": datetime.now(),
         }
 
     except Exception as e:
         logger.error(f"Failed to get VM status: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get VM status: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get VM status: {str(e)}"
+        )
 
 
 @router.get("/version", response_model=SystemInfo)
@@ -310,6 +335,7 @@ async def get_version():
     try:
         # Get configuration
         from src.unified_config_manager import unified_config_manager
+
         backend_config = unified_config_manager.get_backend_config()
         system_config = unified_config_manager.get_config_section("system") or {}
 
@@ -329,12 +355,14 @@ async def get_version():
             build=system_config.get("build", "distributed-vm"),
             environment=backend_config.get("environment", "production"),
             uptime=uptime_seconds,
-            services_count=services_count
+            services_count=services_count,
         )
 
     except Exception as e:
         logger.error(f"Failed to get version info: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get version info: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get version info: {str(e)}"
+        )
 
 
 # Note: Monitoring endpoints are handled by the separate monitoring router

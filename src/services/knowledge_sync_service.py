@@ -28,6 +28,7 @@ from src.constants.network_constants import NetworkConstants
 
 logger = get_llm_logger("knowledge_sync_service")
 
+
 class KnowledgeSyncService:
     """
     Background service for managing knowledge base synchronization.
@@ -147,18 +148,20 @@ class KnowledgeSyncService:
                 "timestamp": self.last_sync_time.isoformat(),
                 "metrics": asdict(metrics),
                 "sync_type": "background",
-                "duration": time.time() - start_time
+                "duration": time.time() - start_time,
             }
 
             self.sync_history.append(sync_record)
 
             # Limit history size
             if len(self.sync_history) > self.max_history_entries:
-                self.sync_history = self.sync_history[-self.max_history_entries:]
+                self.sync_history = self.sync_history[-self.max_history_entries :]
 
             # Log results
             if metrics.files_changed + metrics.files_added + metrics.files_removed > 0:
-                logger.info(f"Background sync completed: {metrics.files_changed + metrics.files_added} files processed")
+                logger.info(
+                    f"Background sync completed: {metrics.files_changed + metrics.files_added} files processed"
+                )
             else:
                 logger.debug("Background sync: no changes detected")
 
@@ -187,20 +190,20 @@ class KnowledgeSyncService:
                 "timestamp": self.last_sync_time.isoformat(),
                 "metrics": asdict(metrics),
                 "sync_type": "manual_full" if force_full else "manual_incremental",
-                "duration": time.time() - start_time
+                "duration": time.time() - start_time,
             }
 
             self.sync_history.append(sync_record)
 
             # Limit history size
             if len(self.sync_history) > self.max_history_entries:
-                self.sync_history = self.sync_history[-self.max_history_entries:]
+                self.sync_history = self.sync_history[-self.max_history_entries :]
 
             return {
                 "status": "success",
                 "sync_time": self.last_sync_time.isoformat(),
                 "metrics": asdict(metrics),
-                "duration": sync_record["duration"]
+                "duration": sync_record["duration"],
             }
 
         except Exception as e:
@@ -208,23 +211,27 @@ class KnowledgeSyncService:
             return {
                 "status": "error",
                 "message": str(e),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
     def get_sync_status(self) -> Dict[str, Any]:
         """Get current sync status and statistics."""
         try:
             # Get basic status from incremental sync
-            basic_status = self.incremental_sync.get_sync_status() if self.incremental_sync else {}
+            basic_status = (
+                self.incremental_sync.get_sync_status() if self.incremental_sync else {}
+            )
 
             # Add service-specific information
             status = {
                 **basic_status,
                 "service_running": self.is_running,
                 "daemon_interval_minutes": self.sync_interval_minutes,
-                "last_sync_time": self.last_sync_time.isoformat() if self.last_sync_time else None,
+                "last_sync_time": (
+                    self.last_sync_time.isoformat() if self.last_sync_time else None
+                ),
                 "auto_sync_enabled": self.enable_auto_sync,
-                "sync_history_count": len(self.sync_history)
+                "sync_history_count": len(self.sync_history),
             }
 
             # Add last sync metrics if available
@@ -234,7 +241,9 @@ class KnowledgeSyncService:
             # Add performance summary
             if self.sync_history:
                 recent_syncs = self.sync_history[-10:]  # Last 10 syncs
-                avg_duration = sum(s["duration"] for s in recent_syncs) / len(recent_syncs)
+                avg_duration = sum(s["duration"] for s in recent_syncs) / len(
+                    recent_syncs
+                )
                 total_files_processed = sum(
                     s["metrics"]["files_changed"] + s["metrics"]["files_added"]
                     for s in recent_syncs
@@ -243,7 +252,7 @@ class KnowledgeSyncService:
                 status["performance_summary"] = {
                     "avg_sync_duration": avg_duration,
                     "recent_syncs_count": len(recent_syncs),
-                    "total_files_processed_recently": total_files_processed
+                    "total_files_processed_recently": total_files_processed,
                 }
 
             return status
@@ -253,7 +262,7 @@ class KnowledgeSyncService:
             return {
                 "status": "error",
                 "message": str(e),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
     def get_performance_metrics(self) -> Dict[str, Any]:
@@ -263,7 +272,9 @@ class KnowledgeSyncService:
                 return {"message": "No sync history available"}
 
             # Analyze performance trends
-            durations = [s["duration"] for s in self.sync_history[-20:]]  # Last 20 syncs
+            durations = [
+                s["duration"] for s in self.sync_history[-20:]
+            ]  # Last 20 syncs
             file_counts = [
                 s["metrics"]["files_changed"] + s["metrics"]["files_added"]
                 for s in self.sync_history[-20:]
@@ -281,13 +292,19 @@ class KnowledgeSyncService:
             recommendations = []
 
             if avg_duration > 5.0:
-                recommendations.append("Consider increasing sync interval to reduce overhead")
+                recommendations.append(
+                    "Consider increasing sync interval to reduce overhead"
+                )
 
             if avg_files_per_sync > 20:
-                recommendations.append("High file change rate detected - consider batch processing optimization")
+                recommendations.append(
+                    "High file change rate detected - consider batch processing optimization"
+                )
 
             if max_duration > avg_duration * 3:
-                recommendations.append("Inconsistent sync times - investigate performance bottlenecks")
+                recommendations.append(
+                    "Inconsistent sync times - investigate performance bottlenecks"
+                )
 
             # Estimate performance improvement
             estimated_full_sync_time = total_files * 0.5  # Conservative estimate
@@ -301,15 +318,15 @@ class KnowledgeSyncService:
                     "max_sync_duration": max_duration,
                     "total_syncs_analyzed": len(durations),
                     "avg_files_per_sync": avg_files_per_sync,
-                    "total_files_processed": total_files
+                    "total_files_processed": total_files,
                 },
                 "performance_improvement": {
                     "estimated_improvement_factor": improvement_factor,
                     "target_met": improvement_factor >= 10,
-                    "target_range": "10-50x improvement"
+                    "target_range": "10-50x improvement",
                 },
                 "recommendations": recommendations,
-                "analysis_timestamp": datetime.now().isoformat()
+                "analysis_timestamp": datetime.now().isoformat(),
             }
 
         except Exception as e:
@@ -317,12 +334,13 @@ class KnowledgeSyncService:
             return {
                 "status": "error",
                 "message": str(e),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
 
 # Global service instance
 _sync_service_instance = None
+
 
 async def get_sync_service() -> KnowledgeSyncService:
     """Get the global sync service instance."""
@@ -341,8 +359,7 @@ router = APIRouter(prefix="/api/knowledge/sync", tags=["knowledge-sync"])
 
 @router.post("/manual")
 async def trigger_manual_sync(
-    force_full: bool = False,
-    background_tasks: BackgroundTasks = None
+    force_full: bool = False, background_tasks: BackgroundTasks = None
 ):
     """Trigger manual knowledge base sync."""
     try:
@@ -351,12 +368,14 @@ async def trigger_manual_sync(
         if background_tasks:
             # Run in background to avoid blocking
             background_tasks.add_task(service.manual_sync, force_full)
-            return JSONResponse({
-                "status": "started",
-                "message": "Manual sync started in background",
-                "force_full": force_full,
-                "timestamp": datetime.now().isoformat()
-            })
+            return JSONResponse(
+                {
+                    "status": "started",
+                    "message": "Manual sync started in background",
+                    "force_full": force_full,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
         else:
             # Run synchronously
             result = await service.manual_sync(force_full)
@@ -400,21 +419,27 @@ async def start_sync_daemon(interval_minutes: int = 15):
         service = await get_sync_service()
 
         if service.is_running:
-            return JSONResponse({
-                "status": "already_running",
-                "message": "Sync daemon is already running",
-                "interval_minutes": service.sync_interval_minutes
-            })
+            return JSONResponse(
+                {
+                    "status": "already_running",
+                    "message": "Sync daemon is already running",
+                    "interval_minutes": service.sync_interval_minutes,
+                }
+            )
 
         # Start daemon in background task
-        service.daemon_task = asyncio.create_task(service.start_daemon(interval_minutes))
+        service.daemon_task = asyncio.create_task(
+            service.start_daemon(interval_minutes)
+        )
 
-        return JSONResponse({
-            "status": "started",
-            "message": "Sync daemon started successfully",
-            "interval_minutes": interval_minutes,
-            "timestamp": datetime.now().isoformat()
-        })
+        return JSONResponse(
+            {
+                "status": "started",
+                "message": "Sync daemon started successfully",
+                "interval_minutes": interval_minutes,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
     except Exception as e:
         logger.error(f"Start daemon API error: {e}")
@@ -428,18 +453,19 @@ async def stop_sync_daemon():
         service = await get_sync_service()
 
         if not service.is_running:
-            return JSONResponse({
-                "status": "not_running",
-                "message": "Sync daemon is not running"
-            })
+            return JSONResponse(
+                {"status": "not_running", "message": "Sync daemon is not running"}
+            )
 
         await service.stop_daemon()
 
-        return JSONResponse({
-            "status": "stopped",
-            "message": "Sync daemon stopped successfully",
-            "timestamp": datetime.now().isoformat()
-        })
+        return JSONResponse(
+            {
+                "status": "stopped",
+                "message": "Sync daemon stopped successfully",
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
     except Exception as e:
         logger.error(f"Stop daemon API error: {e}")
@@ -453,19 +479,18 @@ async def get_sync_history(limit: int = 20):
         service = await get_sync_service()
 
         if not service.sync_history:
-            return JSONResponse({
-                "history": [],
-                "message": "No sync history available"
-            })
+            return JSONResponse({"history": [], "message": "No sync history available"})
 
         # Return limited history
         history = service.sync_history[-limit:] if limit > 0 else service.sync_history
 
-        return JSONResponse({
-            "history": history,
-            "total_entries": len(service.sync_history),
-            "returned_entries": len(history)
-        })
+        return JSONResponse(
+            {
+                "history": history,
+                "total_entries": len(service.sync_history),
+                "returned_entries": len(history),
+            }
+        )
 
     except Exception as e:
         logger.error(f"Sync history API error: {e}")

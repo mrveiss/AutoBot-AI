@@ -147,7 +147,7 @@ class TerminalWebSocketManager:
                 except OSError as e:
                     # Log but don't fail - some environments don't support setsid
                     logger.warning(f"setsid failed in preexec_fn: {e}")
-            
+
             self.process = subprocess.Popen(
                 ["/bin/bash", "-i"],  # Interactive bash
                 stdin=slave_fd,

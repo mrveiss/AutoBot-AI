@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 class ResearchType(Enum):
     """Types of research methods available"""
+
     BASIC = "basic"
     ADVANCED = "advanced"
     API_BASED = "api_based"
@@ -27,50 +28,53 @@ class ResearchType(Enum):
 
 class CircuitBreakerState(Enum):
     """Circuit breaker states for research services"""
-    CLOSED = "closed"      # Normal operation
-    OPEN = "open"          # Failing, don't try
+
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing, don't try
     HALF_OPEN = "half_open"  # Testing if recovered
 
 
 class CircuitBreaker:
     """Circuit breaker for web research services"""
-    
+
     def __init__(self, failure_threshold: int = 5, recovery_timeout: int = 60):
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.failure_count = 0
         self.last_failure_time = None
         self.state = CircuitBreakerState.CLOSED
-        
+
     def call_succeeded(self):
         """Record successful call"""
         self.failure_count = 0
         self.state = CircuitBreakerState.CLOSED
-        
+
     def call_failed(self):
         """Record failed call"""
         self.failure_count += 1
         self.last_failure_time = time.time()
-        
+
         if self.failure_count >= self.failure_threshold:
             self.state = CircuitBreakerState.OPEN
-            logger.warning(f"Circuit breaker opened after {self.failure_count} failures")
-            
+            logger.warning(
+                f"Circuit breaker opened after {self.failure_count} failures"
+            )
+
     def can_execute(self) -> bool:
         """Check if we can execute a call"""
         if self.state == CircuitBreakerState.CLOSED:
             return True
-            
+
         if self.state == CircuitBreakerState.OPEN:
             if (time.time() - self.last_failure_time) > self.recovery_timeout:
                 self.state = CircuitBreakerState.HALF_OPEN
                 logger.info("Circuit breaker transitioning to half-open")
                 return True
             return False
-            
+
         # HALF_OPEN state
         return True
-        
+
     def reset(self):
         """Reset circuit breaker"""
         self.failure_count = 0
@@ -80,30 +84,33 @@ class CircuitBreaker:
 
 class RateLimiter:
     """Rate limiter for web research requests"""
-    
+
     def __init__(self, max_requests: int = 10, window_seconds: int = 60):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self.requests = []
-        
+
     async def acquire(self) -> bool:
         """Acquire permission for a request"""
         now = time.time()
-        
+
         # Remove old requests outside the window
-        self.requests = [req_time for req_time in self.requests 
-                        if now - req_time < self.window_seconds]
-        
+        self.requests = [
+            req_time
+            for req_time in self.requests
+            if now - req_time < self.window_seconds
+        ]
+
         if len(self.requests) >= self.max_requests:
             # Calculate wait time until next request can be made
             oldest_request = min(self.requests)
             wait_time = self.window_seconds - (now - oldest_request)
-            
+
             if wait_time > 0:
                 logger.info(f"Rate limit reached, waiting {wait_time:.2f}s")
                 await asyncio.sleep(wait_time)
                 return await self.acquire()  # Retry after waiting
-                
+
         self.requests.append(now)
         return True
 
@@ -113,52 +120,62 @@ class WebResearchIntegration:
     Unified web research integration with multiple backends,
     circuit breakers, rate limiting, and user preference management.
     """
-    
+
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
-        
+
         # Initialize circuit breakers for different research methods
         self.circuit_breakers = {
-            ResearchType.BASIC: CircuitBreaker(failure_threshold=3, recovery_timeout=30),
-            ResearchType.ADVANCED: CircuitBreaker(failure_threshold=5, recovery_timeout=60),
-            ResearchType.API_BASED: CircuitBreaker(failure_threshold=2, recovery_timeout=45)
+            ResearchType.BASIC: CircuitBreaker(
+                failure_threshold=3, recovery_timeout=30
+            ),
+            ResearchType.ADVANCED: CircuitBreaker(
+                failure_threshold=5, recovery_timeout=60
+            ),
+            ResearchType.API_BASED: CircuitBreaker(
+                failure_threshold=2, recovery_timeout=45
+            ),
         }
-        
+
         # Rate limiter to prevent API abuse
         self.rate_limiter = RateLimiter(
-            max_requests=self.config.get('rate_limit_requests', 5),
-            window_seconds=self.config.get('rate_limit_window', 60)
+            max_requests=self.config.get("rate_limit_requests", 5),
+            window_seconds=self.config.get("rate_limit_window", 60),
         )
-        
+
         # Cache for recent research results
         self.cache = {}
-        self.cache_ttl = self.config.get('cache_ttl', 3600)  # 1 hour
-        
+        self.cache_ttl = self.config.get("cache_ttl", 3600)  # 1 hour
+
         # Research preferences
-        self.enabled = self.config.get('enabled', False)
-        self.preferred_method = ResearchType(self.config.get('preferred_method', 'basic'))
-        self.timeout_seconds = self.config.get('timeout_seconds', 30)
-        self.max_results = self.config.get('max_results', 5)
-        
+        self.enabled = self.config.get("enabled", False)
+        self.preferred_method = ResearchType(
+            self.config.get("preferred_method", "basic")
+        )
+        self.timeout_seconds = self.config.get("timeout_seconds", 30)
+        self.max_results = self.config.get("max_results", 5)
+
         # Initialize research agents (lazy loading)
         self._basic_agent = None
         self._advanced_agent = None
         self._api_agent = None
-        
-        logger.info(f"WebResearchIntegration initialized - enabled: {self.enabled}, "
-                   f"preferred_method: {self.preferred_method.value}")
-    
+
+        logger.info(
+            f"WebResearchIntegration initialized - enabled: {self.enabled}, "
+            f"preferred_method: {self.preferred_method.value}"
+        )
+
     async def is_enabled(self) -> bool:
         """Check if web research is enabled"""
         return self.enabled
-    
+
     async def enable_research(self, user_confirmed: bool = False) -> bool:
         """
         Enable web research with optional user confirmation.
-        
+
         Args:
             user_confirmed: Whether the user has explicitly confirmed they want research
-            
+
         Returns:
             True if research was enabled
         """
@@ -167,29 +184,29 @@ class WebResearchIntegration:
             logger.info("Web research enabled by user confirmation")
             return True
         return False
-    
+
     async def disable_research(self) -> bool:
         """Disable web research"""
         self.enabled = False
         logger.info("Web research disabled")
         return True
-    
+
     async def conduct_research(
-        self, 
+        self,
         query: str,
         research_type: Optional[ResearchType] = None,
         max_results: Optional[int] = None,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Conduct web research using the best available method.
-        
+
         Args:
             query: Search query
             research_type: Preferred research method (optional)
             max_results: Maximum number of results (optional)
             timeout: Timeout in seconds (optional)
-            
+
         Returns:
             Research results dictionary
         """
@@ -199,9 +216,9 @@ class WebResearchIntegration:
                 "message": "Web research is disabled. Enable it in settings to use this feature.",
                 "query": query,
                 "results": [],
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
-        
+
         # Check cache first
         cache_key = self._generate_cache_key(query, research_type, max_results)
         cached_result = self._get_cached_result(cache_key)
@@ -209,7 +226,7 @@ class WebResearchIntegration:
             logger.info(f"Returning cached research result for query: {query[:50]}...")
             cached_result["from_cache"] = True
             return cached_result
-        
+
         # Apply rate limiting
         if not await self.rate_limiter.acquire():
             return {
@@ -217,68 +234,75 @@ class WebResearchIntegration:
                 "message": "Too many research requests. Please wait and try again.",
                 "query": query,
                 "results": [],
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
-        
+
         # Determine research method
         method = research_type or self.preferred_method
         max_res = max_results or self.max_results
         timeout_secs = timeout or self.timeout_seconds
-        
+
         # Try research with fallback methods
         methods_to_try = [method]
-        
+
         # Add fallback methods if primary fails
         if method != ResearchType.BASIC:
             methods_to_try.append(ResearchType.BASIC)
-        if method != ResearchType.ADVANCED and ResearchType.ADVANCED not in methods_to_try:
+        if (
+            method != ResearchType.ADVANCED
+            and ResearchType.ADVANCED not in methods_to_try
+        ):
             methods_to_try.insert(-1, ResearchType.ADVANCED)
-        
+
         last_error = None
-        
+
         for research_method in methods_to_try:
             circuit_breaker = self.circuit_breakers[research_method]
-            
+
             if not circuit_breaker.can_execute():
-                logger.warning(f"Circuit breaker open for {research_method.value}, skipping")
+                logger.warning(
+                    f"Circuit breaker open for {research_method.value}, skipping"
+                )
                 continue
-            
+
             try:
                 logger.info(f"Attempting research using {research_method.value} method")
-                
+
                 # Execute research with timeout
                 research_task = asyncio.create_task(
                     self._execute_research_method(research_method, query, max_res)
                 )
-                
+
                 result = await asyncio.wait_for(research_task, timeout=timeout_secs)
-                
+
                 # Success - record and cache result
                 circuit_breaker.call_succeeded()
                 result["method_used"] = research_method.value
                 result["timestamp"] = datetime.now().isoformat()
-                
+
                 # Cache successful results
                 if result.get("status") == "success":
                     self._cache_result(cache_key, result)
-                
-                logger.info(f"Research completed successfully using {research_method.value}")
+
+                logger.info(
+                    f"Research completed successfully using {research_method.value}"
+                )
                 return result
-                
+
             except asyncio.TimeoutError:
                 error_msg = f"Research timed out after {timeout_secs}s using {research_method.value}"
                 logger.warning(error_msg)
                 circuit_breaker.call_failed()
                 last_error = error_msg
                 continue
-                
+
             except Exception as e:
                 error_msg = f"Research failed using {research_method.value}: {str(e)}"
                 logger.error(error_msg)
                 circuit_breaker.call_failed()
                 last_error = error_msg
                 continue
-        
+
         # All methods failed
         return {
             "status": "failed",
@@ -286,17 +310,14 @@ class WebResearchIntegration:
             "query": query,
             "results": [],
             "methods_tried": [m.value for m in methods_to_try],
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-    
+
     async def _execute_research_method(
-        self, 
-        method: ResearchType, 
-        query: str, 
-        max_results: int
+        self, method: ResearchType, query: str, max_results: int
     ) -> Dict[str, Any]:
         """Execute research using specified method"""
-        
+
         if method == ResearchType.BASIC:
             return await self._basic_research(query, max_results)
         elif method == ResearchType.ADVANCED:
@@ -305,38 +326,40 @@ class WebResearchIntegration:
             return await self._api_based_research(query, max_results)
         else:
             raise ValueError(f"Unknown research method: {method}")
-    
+
     async def _basic_research(self, query: str, max_results: int) -> Dict[str, Any]:
         """Execute basic web research"""
         if self._basic_agent is None:
             try:
                 from src.agents.web_research_assistant import WebResearchAssistant
+
                 self._basic_agent = WebResearchAssistant(self.config)
                 logger.info("Basic research agent initialized")
             except ImportError as e:
                 raise RuntimeError(f"Failed to import basic research agent: {e}")
-        
+
         try:
             result = await self._basic_agent.research_query(query)
-            
+
             # Format result to match expected structure
             if result.get("status") == "success":
                 # Limit results
                 sources = result.get("sources", [])[:max_results]
                 result["sources"] = sources
                 result["results_count"] = len(sources)
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Basic research failed: {e}")
             raise
-    
+
     async def _advanced_research(self, query: str, max_results: int) -> Dict[str, Any]:
         """Execute advanced web research with Playwright"""
         if self._advanced_agent is None:
             try:
                 from src.agents.advanced_web_research import AdvancedWebResearcher
+
                 self._advanced_agent = AdvancedWebResearcher(self.config)
                 await self._advanced_agent.initialize()
                 logger.info("Advanced research agent initialized")
@@ -344,34 +367,33 @@ class WebResearchIntegration:
                 raise RuntimeError(f"Failed to import advanced research agent: {e}")
             except Exception as e:
                 raise RuntimeError(f"Failed to initialize advanced research agent: {e}")
-        
+
         try:
             result = await self._advanced_agent.search_web(query, max_results)
             return result
-            
+
         except Exception as e:
             logger.error(f"Advanced research failed: {e}")
             raise
-    
+
     async def _api_based_research(self, query: str, max_results: int) -> Dict[str, Any]:
         """Execute API-based web research"""
         if self._api_agent is None:
             try:
                 from src.agents.research_agent import ResearchAgent, ResearchRequest
+
                 self._api_agent = ResearchAgent()
                 logger.info("API research agent initialized")
             except ImportError as e:
                 raise RuntimeError(f"Failed to import API research agent: {e}")
-        
+
         try:
             request = ResearchRequest(
-                query=query,
-                max_results=max_results,
-                focus="general"
+                query=query, max_results=max_results, focus="general"
             )
-            
+
             result = await self._api_agent.perform_research(request)
-            
+
             # Convert API response to standard format
             return {
                 "status": "success" if result.success else "failed",
@@ -379,79 +401,77 @@ class WebResearchIntegration:
                 "results": [r.dict() for r in result.results],
                 "summary": result.summary,
                 "sources_count": result.sources_count,
-                "execution_time": result.execution_time
+                "execution_time": result.execution_time,
             }
-            
+
         except Exception as e:
             logger.error(f"API research failed: {e}")
             raise
-    
+
     def _generate_cache_key(
-        self, 
-        query: str, 
-        research_type: Optional[ResearchType], 
-        max_results: Optional[int]
+        self,
+        query: str,
+        research_type: Optional[ResearchType],
+        max_results: Optional[int],
     ) -> str:
         """Generate cache key for research result"""
         method = research_type.value if research_type else "default"
         results = max_results or self.max_results
         return f"research:{hash(query)}:{method}:{results}"
-    
+
     def _get_cached_result(self, cache_key: str) -> Optional[Dict[str, Any]]:
         """Get cached research result if valid"""
         if cache_key in self.cache:
             cached_data = self.cache[cache_key]
             cache_time = cached_data.get("cached_at", 0)
-            
+
             if time.time() - cache_time < self.cache_ttl:
                 return cached_data.get("result")
             else:
                 # Remove expired cache entry
                 del self.cache[cache_key]
-        
+
         return None
-    
+
     def _cache_result(self, cache_key: str, result: Dict[str, Any]):
         """Cache research result"""
-        self.cache[cache_key] = {
-            "result": result,
-            "cached_at": time.time()
-        }
-        
+        self.cache[cache_key] = {"result": result, "cached_at": time.time()}
+
         # Clean up old cache entries if cache gets too large
         if len(self.cache) > 100:
             self._cleanup_cache()
-    
+
     def _cleanup_cache(self):
         """Clean up expired cache entries"""
         current_time = time.time()
         expired_keys = [
-            key for key, data in self.cache.items()
+            key
+            for key, data in self.cache.items()
             if current_time - data.get("cached_at", 0) > self.cache_ttl
         ]
-        
+
         for key in expired_keys:
             del self.cache[key]
-        
+
         logger.debug(f"Cleaned up {len(expired_keys)} expired cache entries")
-    
+
     def get_circuit_breaker_status(self) -> Dict[str, Any]:
         """Get status of all circuit breakers"""
         return {
             method.value: {
                 "state": breaker.state.value,
                 "failure_count": breaker.failure_count,
-                "last_failure": breaker.last_failure_time
+                "last_failure": breaker.last_failure_time,
             }
             for method, breaker in self.circuit_breakers.items()
         }
-    
+
     def reset_circuit_breakers(self):
         """Reset all circuit breakers"""
         for breaker in self.circuit_breakers.values():
             breaker.reset()
         logger.info("All circuit breakers reset")
-    
+
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get cache statistics"""
         return {
@@ -460,10 +480,10 @@ class WebResearchIntegration:
             "rate_limiter": {
                 "max_requests": self.rate_limiter.max_requests,
                 "window_seconds": self.rate_limiter.window_seconds,
-                "current_requests": len(self.rate_limiter.requests)
-            }
+                "current_requests": len(self.rate_limiter.requests),
+            },
         }
-    
+
     async def health_check(self) -> Dict[str, Any]:
         """Perform health check on research integration"""
         health_status = {
@@ -471,9 +491,9 @@ class WebResearchIntegration:
             "preferred_method": self.preferred_method.value,
             "circuit_breakers": self.get_circuit_breaker_status(),
             "cache_stats": self.get_cache_stats(),
-            "agents_status": {}
+            "agents_status": {},
         }
-        
+
         # Check basic agent
         try:
             if self._basic_agent is not None:
@@ -482,7 +502,7 @@ class WebResearchIntegration:
                 health_status["agents_status"]["basic"] = "not_initialized"
         except Exception as e:
             health_status["agents_status"]["basic"] = f"error: {str(e)}"
-        
+
         # Check advanced agent
         try:
             if self._advanced_agent is not None:
@@ -491,7 +511,7 @@ class WebResearchIntegration:
                 health_status["agents_status"]["advanced"] = "not_initialized"
         except Exception as e:
             health_status["agents_status"]["advanced"] = f"error: {str(e)}"
-        
+
         # Check API agent
         try:
             if self._api_agent is not None:
@@ -500,7 +520,7 @@ class WebResearchIntegration:
                 health_status["agents_status"]["api"] = "not_initialized"
         except Exception as e:
             health_status["agents_status"]["api"] = f"error: {str(e)}"
-        
+
         return health_status
 
 
@@ -508,36 +528,36 @@ class WebResearchIntegration:
 _global_research_integration = None
 
 
-def get_web_research_integration(config: Optional[Dict[str, Any]] = None) -> WebResearchIntegration:
+def get_web_research_integration(
+    config: Optional[Dict[str, Any]] = None,
+) -> WebResearchIntegration:
     """Get or create global web research integration instance"""
     global _global_research_integration
-    
+
     if _global_research_integration is None:
         # Load config from config manager if not provided
         if config is None:
             try:
                 from src.unified_config_manager import config_manager
-                config = config_manager.get_nested('web_research', {})
+
+                config = config_manager.get_nested("web_research", {})
             except Exception as e:
                 logger.warning(f"Could not load web research config: {e}")
                 config = {}
-        
+
         _global_research_integration = WebResearchIntegration(config)
-    
+
     return _global_research_integration
 
 
-async def conduct_web_research(
-    query: str,
-    **kwargs
-) -> Dict[str, Any]:
+async def conduct_web_research(query: str, **kwargs) -> Dict[str, Any]:
     """
     Convenience function to conduct web research.
-    
+
     Args:
         query: Search query
         **kwargs: Additional arguments for research
-        
+
     Returns:
         Research results
     """

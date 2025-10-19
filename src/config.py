@@ -2,15 +2,15 @@
 Centralized Configuration Management Module - UNIFIED VERSION
 
 This module provides a unified configuration system using ConfigHelper:
-- All configuration values come from config/complete.yaml  
+- All configuration values come from config/complete.yaml
 - No more hardcoded values or os.getenv calls
 - Single source of truth for all configuration
 - Backward compatibility maintained through legacy variable exports
 
-USAGE: 
+USAGE:
   from src.config_helper import cfg
   ollama_host = cfg.get_host('ollama')
-  backend_url = cfg.get_service_url('backend') 
+  backend_url = cfg.get_service_url('backend')
 """
 
 import json
@@ -31,30 +31,30 @@ logger = logging.getLogger(__name__)
 # Legacy variables exported for backward compatibility
 
 # Service Host IP Addresses - FROM CONFIG
-OLLAMA_HOST_IP = cfg.get_host('ollama')
-LM_STUDIO_HOST_IP = cfg.get_host('ollama')  # LM Studio uses same host as Ollama  
-BACKEND_HOST_IP = cfg.get_host('backend')
-FRONTEND_HOST_IP = cfg.get_host('frontend')
-PLAYWRIGHT_HOST_IP = cfg.get_host('browser_service')
-NPU_WORKER_HOST_IP = cfg.get_host('npu_worker')
-AI_STACK_HOST_IP = cfg.get_host('ai_stack')
-REDIS_HOST_IP = cfg.get_host('redis')
-LOG_VIEWER_HOST_IP = cfg.get_host('redis')  # Seq logs run on same host as Redis
+OLLAMA_HOST_IP = cfg.get_host("ollama")
+LM_STUDIO_HOST_IP = cfg.get_host("ollama")  # LM Studio uses same host as Ollama
+BACKEND_HOST_IP = cfg.get_host("backend")
+FRONTEND_HOST_IP = cfg.get_host("frontend")
+PLAYWRIGHT_HOST_IP = cfg.get_host("browser_service")
+NPU_WORKER_HOST_IP = cfg.get_host("npu_worker")
+AI_STACK_HOST_IP = cfg.get_host("ai_stack")
+REDIS_HOST_IP = cfg.get_host("redis")
+LOG_VIEWER_HOST_IP = cfg.get_host("redis")  # Seq logs run on same host as Redis
 
 # Service Ports - FROM CONFIG
-BACKEND_PORT = cfg.get_port('backend')
-FRONTEND_PORT = cfg.get_port('frontend')
-OLLAMA_PORT = cfg.get_port('ollama')
+BACKEND_PORT = cfg.get_port("backend")
+FRONTEND_PORT = cfg.get_port("frontend")
+OLLAMA_PORT = cfg.get_port("ollama")
 LM_STUDIO_PORT = 1234  # LM Studio default port
-REDIS_PORT = cfg.get_port('redis')
-PLAYWRIGHT_API_PORT = cfg.get_port('browser_service')
-PLAYWRIGHT_VNC_PORT = cfg.get_port('vnc')
-NPU_WORKER_PORT = cfg.get_port('npu_worker')
-AI_STACK_PORT = cfg.get_port('ai_stack')
+REDIS_PORT = cfg.get_port("redis")
+PLAYWRIGHT_API_PORT = cfg.get_port("browser_service")
+PLAYWRIGHT_VNC_PORT = cfg.get_port("vnc")
+NPU_WORKER_PORT = cfg.get_port("npu_worker")
+AI_STACK_PORT = cfg.get_port("ai_stack")
 LOG_VIEWER_PORT = 5341  # Seq default port
 FLUENTD_PORT = 24224  # Fluentd default port
 CHROME_DEBUG_PORT = 9222  # Chrome debug default port
-VNC_DISPLAY_PORT = cfg.get_port('vnc')
+VNC_DISPLAY_PORT = cfg.get_port("vnc")
 VNC_CONTAINER_PORT = 5901  # Container VNC port
 
 # Protocols - FROM CONFIG
@@ -63,10 +63,10 @@ WS_PROTOCOL = "ws"
 REDIS_PROTOCOL = "redis"
 
 # Service URLs - FROM CONFIG
-API_BASE_URL = cfg.get_service_url('backend')
-REDIS_URL = cfg.get_service_url('redis')
-OLLAMA_URL = cfg.get_service_url('ollama')
-API_TIMEOUT = cfg.get_timeout('http', 'standard') * 1000  # Convert to milliseconds
+API_BASE_URL = cfg.get_service_url("backend")
+REDIS_URL = cfg.get_service_url("redis")
+OLLAMA_URL = cfg.get_service_url("ollama")
+API_TIMEOUT = cfg.get_timeout("http", "standard") * 1000  # Convert to milliseconds
 
 # AI Services
 LM_STUDIO_URL = f"http://{LM_STUDIO_HOST_IP}:{LM_STUDIO_PORT}"
@@ -75,10 +75,10 @@ LM_STUDIO_URL = f"http://{LM_STUDIO_HOST_IP}:{LM_STUDIO_PORT}"
 WS_BASE_URL = f"{WS_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}/ws"
 
 # Container Services
-PLAYWRIGHT_API_URL = cfg.get_service_url('browser_service')
+PLAYWRIGHT_API_URL = cfg.get_service_url("browser_service")
 PLAYWRIGHT_VNC_URL = f"http://{PLAYWRIGHT_HOST_IP}:{PLAYWRIGHT_VNC_PORT}/vnc.html"
-NPU_WORKER_URL = cfg.get_service_url('npu_worker')
-AI_STACK_URL = cfg.get_service_url('ai_stack')
+NPU_WORKER_URL = cfg.get_service_url("npu_worker")
+AI_STACK_URL = cfg.get_service_url("ai_stack")
 
 # Logging and Monitoring
 LOG_VIEWER_URL = f"http://{LOG_VIEWER_HOST_IP}:{LOG_VIEWER_PORT}"
@@ -88,7 +88,7 @@ FLUENTD_ADDRESS = f"{LOG_VIEWER_HOST_IP}:{FLUENTD_PORT}"
 CHROME_DEBUG_PORT = 9222
 
 # VNC Display Port - FROM CONFIG
-VNC_DISPLAY_PORT = cfg.get_port('vnc')
+VNC_DISPLAY_PORT = cfg.get_port("vnc")
 VNC_CONTAINER_PORT = 5901
 
 
@@ -589,7 +589,9 @@ class ConfigManager:
             ),
             "ollama": {
                 "host": unified_config["local"]["providers"]["ollama"]["host"],
-                "port": int(os.getenv("AUTOBOT_OLLAMA_PORT", str(NetworkConstants.OLLAMA_PORT))),
+                "port": int(
+                    os.getenv("AUTOBOT_OLLAMA_PORT", str(NetworkConstants.OLLAMA_PORT))
+                ),
                 "model": unified_config["local"]["providers"]["ollama"][
                     "selected_model"
                 ],
@@ -613,8 +615,12 @@ class ConfigManager:
             "llm.agent_models",
             {
                 # Core Orchestration - use available model for flexible reasoning
-                "orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "llama3.2:1b-instruct-q4_K_M"),
-                "default": os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", "llama3.2:1b-instruct-q4_K_M"),
+                "orchestrator": os.getenv(
+                    "AUTOBOT_ORCHESTRATOR_MODEL", "llama3.2:1b-instruct-q4_K_M"
+                ),
+                "default": os.getenv(
+                    "AUTOBOT_DEFAULT_AGENT_MODEL", "llama3.2:1b-instruct-q4_K_M"
+                ),
                 # Specialized Agents - optimized for task complexity
                 "chat": os.getenv("AUTOBOT_CHAT_MODEL", "llama3.2:1b"),
                 "system_commands": os.getenv("AUTOBOT_SYSTEM_CMD_MODEL", "llama3.2:1b"),
@@ -622,12 +628,18 @@ class ConfigManager:
                 "knowledge_retrieval": os.getenv(
                     "AUTOBOT_KNOWLEDGE_MODEL", "llama3.2:1b"
                 ),
-                "research": os.getenv("AUTOBOT_RESEARCH_MODEL", "llama3.2:1b-instruct-q4_K_M"),
+                "research": os.getenv(
+                    "AUTOBOT_RESEARCH_MODEL", "llama3.2:1b-instruct-q4_K_M"
+                ),
                 # Legacy compatibility - use available models
                 "search": os.getenv("AUTOBOT_SEARCH_MODEL", "llama3.2:1b"),
                 "code": os.getenv("AUTOBOT_CODE_MODEL", "llama3.2:1b"),
-                "analysis": os.getenv("AUTOBOT_ANALYSIS_MODEL", "llama3.2:1b-instruct-q4_K_M"),
-                "planning": os.getenv("AUTOBOT_PLANNING_MODEL", "llama3.2:1b-instruct-q4_K_M"),
+                "analysis": os.getenv(
+                    "AUTOBOT_ANALYSIS_MODEL", "llama3.2:1b-instruct-q4_K_M"
+                ),
+                "planning": os.getenv(
+                    "AUTOBOT_PLANNING_MODEL", "llama3.2:1b-instruct-q4_K_M"
+                ),
                 # Fallback models for when uncensored is not needed
                 "orchestrator_fallback": os.getenv(
                     "AUTOBOT_ORCHESTRATOR_FALLBACK_MODEL", "llama3.2:3b"
@@ -801,8 +813,8 @@ class ConfigManager:
 
         defaults = {
             "enabled": os.getenv("AUTOBOT_REDIS_ENABLED", "true").lower() == "true",
-            "host": os.getenv("AUTOBOT_REDIS_HOST", cfg.get_host('redis')),
-            "port": int(os.getenv("AUTOBOT_REDIS_PORT", str(cfg.get_port('redis')))),
+            "host": os.getenv("AUTOBOT_REDIS_HOST", cfg.get_host("redis")),
+            "port": int(os.getenv("AUTOBOT_REDIS_PORT", str(cfg.get_port("redis")))),
             "db": int(os.getenv("AUTOBOT_REDIS_DB", "1")),
             "channels": {
                 "command_approval_request": "command_approval_request",
@@ -819,7 +831,9 @@ class ConfigManager:
 
         defaults = {
             "server_host": os.getenv("AUTOBOT_BACKEND_HOST", "0.0.0.0"),
-            "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))),
+            "server_port": int(
+                os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))
+            ),
             "api_endpoint": os.getenv(
                 "AUTOBOT_BACKEND_API_ENDPOINT",
                 f"http://localhost:{os.getenv('AUTOBOT_BACKEND_PORT', str(NetworkConstants.BACKEND_PORT))}",
@@ -837,7 +851,9 @@ class ConfigManager:
 
         # Dynamic default CORS origins based on frontend configuration
         frontend_host = os.getenv("AUTOBOT_FRONTEND_HOST", "127.0.0.1")
-        frontend_port = os.getenv("AUTOBOT_FRONTEND_PORT", str(NetworkConstants.FRONTEND_PORT))
+        frontend_port = os.getenv(
+            "AUTOBOT_FRONTEND_PORT", str(NetworkConstants.FRONTEND_PORT)
+        )
 
         return [
             f"http://{frontend_host}:{frontend_port}",
@@ -973,10 +989,12 @@ class ConfigManager:
             return env_url
 
         # Then check configuration
-        redis_host = os.getenv('AUTOBOT_REDIS_HOST')
-        redis_port = os.getenv('AUTOBOT_REDIS_PORT')
+        redis_host = os.getenv("AUTOBOT_REDIS_HOST")
+        redis_port = os.getenv("AUTOBOT_REDIS_PORT")
         if not redis_host or not redis_port:
-            raise ValueError('Redis configuration missing: AUTOBOT_REDIS_HOST and AUTOBOT_REDIS_PORT environment variables must be set')
+            raise ValueError(
+                "Redis configuration missing: AUTOBOT_REDIS_HOST and AUTOBOT_REDIS_PORT environment variables must be set"
+            )
 
         host = self.get_nested("memory.redis.host", redis_host)
         port = self.get_nested("memory.redis.port", int(redis_port))
@@ -993,7 +1011,9 @@ from src.unified_config_manager import unified_config_manager
 config = unified_config_manager
 global_config_manager = unified_config_manager
 
-logger.warning("DEPRECATED: src.config is deprecated. Use src.unified_config_manager instead.")
+logger.warning(
+    "DEPRECATED: src.config is deprecated. Use src.unified_config_manager instead."
+)
 
 
 def log_service_configuration():
@@ -1003,7 +1023,9 @@ def log_service_configuration():
         logger.info(f"OLLAMA_HOST_IP: {OLLAMA_HOST_IP}")
         logger.info(f"BACKEND_HOST_IP: {BACKEND_HOST_IP}")
         logger.info(f"REDIS_HOST_IP: {REDIS_HOST_IP}")
-        logger.info(f"Service URLs loaded: {config._config.get('services', {}).keys() if hasattr(config, '_config') and config._config else 'None'}")
+        logger.info(
+            f"Service URLs loaded: {config._config.get('services', {}).keys() if hasattr(config, '_config') and config._config else 'None'}"
+        )
     except Exception as e:
         logger.warning(f"Error logging service configuration: {e}")
 

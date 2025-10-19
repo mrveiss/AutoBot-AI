@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class FeatureCategory(Enum):
     """Categories of enterprise features"""
+
     RESEARCH_ORCHESTRATION = "research_orchestration"
     LOAD_BALANCING = "load_balancing"
     RESOURCE_OPTIMIZATION = "resource_optimization"
@@ -31,6 +32,7 @@ class FeatureCategory(Enum):
 
 class FeatureStatus(Enum):
     """Status of enterprise features"""
+
     DISABLED = "disabled"
     ENABLING = "enabling"
     ENABLED = "enabled"
@@ -41,6 +43,7 @@ class FeatureStatus(Enum):
 @dataclass
 class EnterpriseFeature:
     """Enterprise feature definition"""
+
     name: str
     category: FeatureCategory
     description: str
@@ -57,8 +60,14 @@ class EnterpriseFeatureManager:
 
     def __init__(self, config_path: Optional[Path] = None):
         import os
-        base_dir = os.getenv('AUTOBOT_BASE_DIR', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        self.config_path = config_path or Path(base_dir) / "config" / "enterprise_features.json"
+
+        base_dir = os.getenv(
+            "AUTOBOT_BASE_DIR",
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        self.config_path = (
+            config_path or Path(base_dir) / "config" / "enterprise_features.json"
+        )
         self.features: Dict[str, EnterpriseFeature] = {}
         self.vm_topology = self._initialize_vm_topology()
         self.resource_pools = self._initialize_resource_pools()
@@ -73,24 +82,40 @@ class EnterpriseFeatureManager:
         """Initialize 6-VM distributed topology"""
         import os
 
-        backend_host = os.getenv('AUTOBOT_BACKEND_HOST')
-        backend_port = os.getenv('AUTOBOT_BACKEND_PORT')
-        vnc_port = os.getenv('AUTOBOT_VNC_PORT')
-        frontend_host = os.getenv('AUTOBOT_FRONTEND_HOST')
-        frontend_port = os.getenv('AUTOBOT_FRONTEND_PORT')
-        npu_worker_host = os.getenv('AUTOBOT_NPU_WORKER_HOST')
-        npu_worker_port = os.getenv('AUTOBOT_NPU_WORKER_PORT')
-        redis_host = os.getenv('AUTOBOT_REDIS_HOST')
-        redis_port = os.getenv('AUTOBOT_REDIS_PORT')
-        ai_stack_host = os.getenv('AUTOBOT_AI_STACK_HOST')
-        ai_stack_port = os.getenv('AUTOBOT_AI_STACK_PORT')
-        browser_service_host = os.getenv('AUTOBOT_BROWSER_SERVICE_HOST')
-        browser_service_port = os.getenv('AUTOBOT_BROWSER_SERVICE_PORT')
+        backend_host = os.getenv("AUTOBOT_BACKEND_HOST")
+        backend_port = os.getenv("AUTOBOT_BACKEND_PORT")
+        vnc_port = os.getenv("AUTOBOT_VNC_PORT")
+        frontend_host = os.getenv("AUTOBOT_FRONTEND_HOST")
+        frontend_port = os.getenv("AUTOBOT_FRONTEND_PORT")
+        npu_worker_host = os.getenv("AUTOBOT_NPU_WORKER_HOST")
+        npu_worker_port = os.getenv("AUTOBOT_NPU_WORKER_PORT")
+        redis_host = os.getenv("AUTOBOT_REDIS_HOST")
+        redis_port = os.getenv("AUTOBOT_REDIS_PORT")
+        ai_stack_host = os.getenv("AUTOBOT_AI_STACK_HOST")
+        ai_stack_port = os.getenv("AUTOBOT_AI_STACK_PORT")
+        browser_service_host = os.getenv("AUTOBOT_BROWSER_SERVICE_HOST")
+        browser_service_port = os.getenv("AUTOBOT_BROWSER_SERVICE_PORT")
 
-        if not all([backend_host, backend_port, vnc_port, frontend_host, frontend_port,
-                   npu_worker_host, npu_worker_port, redis_host, redis_port,
-                   ai_stack_host, ai_stack_port, browser_service_host, browser_service_port]):
-            raise ValueError('VM topology configuration missing: All AUTOBOT_*_HOST and AUTOBOT_*_PORT environment variables must be set')
+        if not all(
+            [
+                backend_host,
+                backend_port,
+                vnc_port,
+                frontend_host,
+                frontend_port,
+                npu_worker_host,
+                npu_worker_port,
+                redis_host,
+                redis_port,
+                ai_stack_host,
+                ai_stack_port,
+                browser_service_host,
+                browser_service_port,
+            ]
+        ):
+            raise ValueError(
+                "VM topology configuration missing: All AUTOBOT_*_HOST and AUTOBOT_*_PORT environment variables must be set"
+            )
 
         return {
             "main_machine": {
@@ -98,43 +123,55 @@ class EnterpriseFeatureManager:
                 "services": ["backend_api", "desktop_vnc", "terminal_vnc"],
                 "ports": [int(backend_port), int(vnc_port)],
                 "capabilities": ["coordination", "management", "user_interface"],
-                "resources": {"cpu_cores": 22, "memory_gb": 32, "gpu": "RTX_4070"}
+                "resources": {"cpu_cores": 22, "memory_gb": 32, "gpu": "RTX_4070"},
             },
             "frontend_vm": {
                 "ip": frontend_host,
                 "services": ["web_interface"],
                 "ports": [int(frontend_port)],
                 "capabilities": ["web_ui", "user_interaction"],
-                "resources": {"cpu_cores": 4, "memory_gb": 8}
+                "resources": {"cpu_cores": 4, "memory_gb": 8},
             },
             "npu_worker_vm": {
                 "ip": npu_worker_host,
                 "services": ["ai_acceleration", "npu_worker"],
                 "ports": [int(npu_worker_port)],
-                "capabilities": ["ai_acceleration", "npu_processing", "hardware_optimization"],
-                "resources": {"cpu_cores": 4, "memory_gb": 8, "npu": "Intel_NPU"}
+                "capabilities": [
+                    "ai_acceleration",
+                    "npu_processing",
+                    "hardware_optimization",
+                ],
+                "resources": {"cpu_cores": 4, "memory_gb": 8, "npu": "Intel_NPU"},
             },
             "redis_vm": {
                 "ip": redis_host,
                 "services": ["redis_server", "data_storage"],
                 "ports": [int(redis_port)],
                 "capabilities": ["data_persistence", "caching", "session_storage"],
-                "resources": {"cpu_cores": 2, "memory_gb": 16, "storage_gb": 100}
+                "resources": {"cpu_cores": 2, "memory_gb": 16, "storage_gb": 100},
             },
             "ai_stack_vm": {
                 "ip": ai_stack_host,
                 "services": ["ai_processing", "llm_inference"],
                 "ports": [int(ai_stack_port)],
-                "capabilities": ["ai_processing", "llm_inference", "knowledge_processing"],
-                "resources": {"cpu_cores": 8, "memory_gb": 16, "gpu_acceleration": True}
+                "capabilities": [
+                    "ai_processing",
+                    "llm_inference",
+                    "knowledge_processing",
+                ],
+                "resources": {
+                    "cpu_cores": 8,
+                    "memory_gb": 16,
+                    "gpu_acceleration": True,
+                },
             },
             "browser_vm": {
                 "ip": browser_service_host,
                 "services": ["web_automation", "playwright_server"],
                 "ports": [int(browser_service_port)],
                 "capabilities": ["web_automation", "browser_control", "scraping"],
-                "resources": {"cpu_cores": 4, "memory_gb": 8, "display": True}
-            }
+                "resources": {"cpu_cores": 4, "memory_gb": 8, "display": True},
+            },
         }
 
     def _initialize_resource_pools(self) -> Dict[str, Dict[str, Any]]:
@@ -144,32 +181,36 @@ class EnterpriseFeatureManager:
                 "primary": ["main_machine", "ai_stack_vm"],
                 "secondary": ["npu_worker_vm", "browser_vm"],
                 "routing_logic": "round_robin_weighted",
-                "weight_factors": {"cpu_cores": 0.6, "memory_gb": 0.3, "current_load": 0.1}
+                "weight_factors": {
+                    "cpu_cores": 0.6,
+                    "memory_gb": 0.3,
+                    "current_load": 0.1,
+                },
             },
             "gpu_acceleration": {
                 "primary": ["main_machine"],
                 "secondary": ["ai_stack_vm"],
                 "routing_logic": "capability_based",
-                "requirements": {"gpu": True}
+                "requirements": {"gpu": True},
             },
             "npu_acceleration": {
                 "primary": ["npu_worker_vm"],
                 "secondary": [],
                 "routing_logic": "dedicated",
-                "requirements": {"npu": True}
+                "requirements": {"npu": True},
             },
             "memory_intensive": {
                 "primary": ["redis_vm", "main_machine"],
                 "secondary": ["ai_stack_vm"],
                 "routing_logic": "memory_availability",
-                "threshold_gb": 4
+                "threshold_gb": 4,
             },
             "web_processing": {
                 "primary": ["browser_vm"],
                 "secondary": ["frontend_vm"],
                 "routing_logic": "service_locality",
-                "preferred_services": ["web_automation", "web_interface"]
-            }
+                "preferred_services": ["web_automation", "web_interface"],
+            },
         }
 
     def _initialize_enterprise_features(self):
@@ -186,9 +227,9 @@ class EnterpriseFeatureManager:
                 "research_timeout_seconds": 30,
                 "max_concurrent_research": 3,
                 "research_sources": ["web", "manuals", "knowledge_base"],
-                "quality_threshold": 0.7
+                "quality_threshold": 0.7,
             },
-            health_check_endpoint="/api/research/health"
+            health_check_endpoint="/api/research/health",
         )
 
         self.features["advanced_knowledge_search"] = EnterpriseFeature(
@@ -201,8 +242,8 @@ class EnterpriseFeatureManager:
                 "enable_cross_reference": True,
                 "search_timeout_seconds": 10,
                 "relevance_threshold": 0.1,
-                "max_results": 10
-            }
+                "max_results": 10,
+            },
         )
 
         # Load Balancing Features
@@ -216,9 +257,9 @@ class EnterpriseFeatureManager:
                 "health_check_interval": 30,
                 "failover_threshold": 0.8,
                 "resource_monitoring": True,
-                "auto_scaling": True
+                "auto_scaling": True,
             },
-            health_check_endpoint="/api/load_balancer/health"
+            health_check_endpoint="/api/load_balancer/health",
         )
 
         self.features["intelligent_task_routing"] = EnterpriseFeature(
@@ -233,11 +274,11 @@ class EnterpriseFeatureManager:
                     "ai_tasks": "npu_preferred",
                     "gpu_tasks": "gpu_required",
                     "cpu_tasks": "cpu_optimized",
-                    "memory_tasks": "memory_optimized"
+                    "memory_tasks": "memory_optimized",
                 },
                 "performance_history_days": 7,
-                "auto_optimization": True
-            }
+                "auto_optimization": True,
+            },
         )
 
         # Resource Optimization Features
@@ -253,9 +294,9 @@ class EnterpriseFeatureManager:
                 "resource_limits": {
                     "max_cpu_percent": 90,
                     "max_memory_percent": 85,
-                    "max_concurrent_tasks": 50
-                }
-            }
+                    "max_concurrent_tasks": 50,
+                },
+            },
         )
 
         # Health Monitoring Features
@@ -269,9 +310,9 @@ class EnterpriseFeatureManager:
                 "degraded_performance_threshold": 0.7,
                 "alert_channels": ["logs", "metrics", "notifications"],
                 "enable_predictive_health": True,
-                "health_history_days": 30
+                "health_history_days": 30,
             },
-            health_check_endpoint="/api/health/comprehensive"
+            health_check_endpoint="/api/health/comprehensive",
         )
 
         # Failover and Recovery Features
@@ -285,8 +326,8 @@ class EnterpriseFeatureManager:
                 "enable_fallback_services": True,
                 "degradation_levels": ["full", "limited", "basic", "emergency"],
                 "recovery_strategies": ["restart", "failover", "scale_out"],
-                "max_degradation_time_minutes": 30
-            }
+                "max_degradation_time_minutes": 30,
+            },
         )
 
         self.features["automated_backup_recovery"] = EnterpriseFeature(
@@ -298,8 +339,8 @@ class EnterpriseFeatureManager:
                 "backup_retention_days": 30,
                 "enable_incremental_backup": True,
                 "backup_targets": ["configurations", "knowledge_base", "chat_history"],
-                "recovery_testing_enabled": True
-            }
+                "recovery_testing_enabled": True,
+            },
         )
 
         # Configuration Management Features
@@ -313,8 +354,8 @@ class EnterpriseFeatureManager:
                 "enable_config_rollback": True,
                 "config_sync_interval_minutes": 15,
                 "enable_environment_isolation": True,
-                "config_audit_logging": True
-            }
+                "config_audit_logging": True,
+            },
         )
 
         # Performance Tuning Features
@@ -328,8 +369,8 @@ class EnterpriseFeatureManager:
                 "health_check_timeout": 60,
                 "rollback_on_failure": True,
                 "canary_deployment_percent": 10,
-                "enable_a_b_testing": True
-            }
+                "enable_a_b_testing": True,
+            },
         )
 
         logger.info(f"Initialized {len(self.features)} enterprise features")
@@ -344,14 +385,17 @@ class EnterpriseFeatureManager:
         # Check dependencies
         missing_deps = []
         for dep in feature.dependencies:
-            if dep not in self.features or self.features[dep].status != FeatureStatus.ENABLED:
+            if (
+                dep not in self.features
+                or self.features[dep].status != FeatureStatus.ENABLED
+            ):
                 missing_deps.append(dep)
 
         if missing_deps:
             return {
                 "status": "error",
                 "message": f"Missing dependencies: {missing_deps}",
-                "feature": feature_name
+                "feature": feature_name,
             }
 
         try:
@@ -375,7 +419,7 @@ class EnterpriseFeatureManager:
                     "message": f"Feature {feature_name} enabled successfully",
                     "feature": feature_name,
                     "capabilities_unlocked": result.get("capabilities", []),
-                    "configuration": feature.configuration
+                    "configuration": feature.configuration,
                 }
             else:
                 feature.status = FeatureStatus.ERROR
@@ -383,7 +427,7 @@ class EnterpriseFeatureManager:
                 return {
                     "status": "error",
                     "message": f"Failed to enable {feature_name}: {result.get('error', 'Unknown error')}",
-                    "feature": feature_name
+                    "feature": feature_name,
                 }
 
         except Exception as e:
@@ -392,10 +436,12 @@ class EnterpriseFeatureManager:
             return {
                 "status": "error",
                 "message": f"Exception enabling {feature_name}: {str(e)}",
-                "feature": feature_name
+                "feature": feature_name,
             }
 
-    async def _enable_feature_implementation(self, feature_name: str, feature: EnterpriseFeature) -> Dict[str, Any]:
+    async def _enable_feature_implementation(
+        self, feature_name: str, feature: EnterpriseFeature
+    ) -> Dict[str, Any]:
         """Implement specific feature enablement logic"""
 
         if feature_name == "web_research_orchestration":
@@ -412,7 +458,9 @@ class EnterpriseFeatureManager:
             # Generic feature enablement
             return {"success": True, "capabilities": [f"{feature_name}_enabled"]}
 
-    async def _enable_web_research_orchestration(self, feature: EnterpriseFeature) -> Dict[str, Any]:
+    async def _enable_web_research_orchestration(
+        self, feature: EnterpriseFeature
+    ) -> Dict[str, Any]:
         """Enable web research orchestration capabilities"""
         try:
             # Update chat workflow configuration to enable research
@@ -421,7 +469,9 @@ class EnterpriseFeatureManager:
                 "librarian_agents_enabled": True,
                 "mcp_integration_enabled": True,
                 "research_timeout": feature.configuration["research_timeout_seconds"],
-                "max_concurrent_research": feature.configuration["max_concurrent_research"]
+                "max_concurrent_research": feature.configuration[
+                    "max_concurrent_research"
+                ],
             }
 
             # Apply configuration to chat workflow
@@ -436,15 +486,17 @@ class EnterpriseFeatureManager:
                     "advanced_web_research",
                     "librarian_agent_coordination",
                     "mcp_manual_integration",
-                    "research_quality_control"
+                    "research_quality_control",
                 ],
-                "config_updates": config_updates
+                "config_updates": config_updates,
             }
 
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _enable_cross_vm_load_balancing(self, feature: EnterpriseFeature) -> Dict[str, Any]:
+    async def _enable_cross_vm_load_balancing(
+        self, feature: EnterpriseFeature
+    ) -> Dict[str, Any]:
         """Enable cross-VM load balancing"""
         try:
             # Initialize load balancer
@@ -452,7 +504,7 @@ class EnterpriseFeatureManager:
                 "vm_topology": self.vm_topology,
                 "resource_pools": self.resource_pools,
                 "algorithm": feature.configuration["load_balance_algorithm"],
-                "health_check_interval": feature.configuration["health_check_interval"]
+                "health_check_interval": feature.configuration["health_check_interval"],
             }
 
             # Create load balancer service
@@ -464,15 +516,17 @@ class EnterpriseFeatureManager:
                     "cross_vm_load_distribution",
                     "adaptive_resource_routing",
                     "health_based_failover",
-                    "performance_optimization"
+                    "performance_optimization",
                 ],
-                "load_balancer_config": load_balancer_config
+                "load_balancer_config": load_balancer_config,
             }
 
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _enable_intelligent_task_routing(self, feature: EnterpriseFeature) -> Dict[str, Any]:
+    async def _enable_intelligent_task_routing(
+        self, feature: EnterpriseFeature
+    ) -> Dict[str, Any]:
         """Enable intelligent task routing between NPU/GPU/CPU"""
         try:
             # Initialize hardware detection
@@ -482,7 +536,7 @@ class EnterpriseFeatureManager:
             routing_config = {
                 "hardware_capabilities": hardware_capabilities,
                 "routing_strategies": feature.configuration["routing_strategies"],
-                "performance_history_enabled": True
+                "performance_history_enabled": True,
             }
 
             await self._create_task_routing_engine(routing_config)
@@ -493,28 +547,32 @@ class EnterpriseFeatureManager:
                     "hardware_aware_routing",
                     "performance_based_optimization",
                     "npu_gpu_cpu_coordination",
-                    "adaptive_task_placement"
+                    "adaptive_task_placement",
                 ],
                 "hardware_detected": hardware_capabilities,
-                "routing_config": routing_config
+                "routing_config": routing_config,
             }
 
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _enable_comprehensive_health_monitoring(self, feature: EnterpriseFeature) -> Dict[str, Any]:
+    async def _enable_comprehensive_health_monitoring(
+        self, feature: EnterpriseFeature
+    ) -> Dict[str, Any]:
         """Enable comprehensive health monitoring"""
         try:
             # Initialize health monitoring system
             monitoring_config = {
-                "vm_endpoints": {vm: data["ip"] for vm, data in self.vm_topology.items()},
+                "vm_endpoints": {
+                    vm: data["ip"] for vm, data in self.vm_topology.items()
+                },
                 "service_endpoints": self._get_all_service_endpoints(),
                 "check_interval": feature.configuration["health_check_interval"],
                 "alert_thresholds": {
                     "response_time_ms": 5000,
                     "error_rate_percent": 10,
-                    "resource_usage_percent": 90
-                }
+                    "resource_usage_percent": 90,
+                },
             }
 
             await self._create_health_monitoring_system(monitoring_config)
@@ -525,32 +583,36 @@ class EnterpriseFeatureManager:
                     "end_to_end_health_monitoring",
                     "predictive_failure_detection",
                     "automated_alerting",
-                    "performance_trend_analysis"
+                    "performance_trend_analysis",
                 ],
-                "monitoring_config": monitoring_config
+                "monitoring_config": monitoring_config,
             }
 
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _enable_graceful_degradation(self, feature: EnterpriseFeature) -> Dict[str, Any]:
+    async def _enable_graceful_degradation(
+        self, feature: EnterpriseFeature
+    ) -> Dict[str, Any]:
         """Enable graceful degradation and failover"""
         try:
             # Initialize circuit breakers
             circuit_breaker_config = {
                 "failure_threshold": 5,
                 "recovery_timeout": 60,
-                "half_open_max_calls": 3
+                "half_open_max_calls": 3,
             }
 
             # Initialize fallback services
             fallback_config = {
                 "degradation_levels": feature.configuration["degradation_levels"],
                 "fallback_endpoints": self._get_fallback_endpoints(),
-                "recovery_strategies": feature.configuration["recovery_strategies"]
+                "recovery_strategies": feature.configuration["recovery_strategies"],
             }
 
-            await self._create_degradation_system(circuit_breaker_config, fallback_config)
+            await self._create_degradation_system(
+                circuit_breaker_config, fallback_config
+            )
 
             return {
                 "success": True,
@@ -558,10 +620,10 @@ class EnterpriseFeatureManager:
                     "circuit_breaker_protection",
                     "automatic_failover",
                     "graceful_service_degradation",
-                    "self_healing_recovery"
+                    "self_healing_recovery",
                 ],
                 "circuit_breaker_config": circuit_breaker_config,
-                "fallback_config": fallback_config
+                "fallback_config": fallback_config,
             }
 
         except Exception as e:
@@ -575,7 +637,7 @@ class EnterpriseFeatureManager:
             "enabled_features": [],
             "failed_features": [],
             "capabilities_unlocked": [],
-            "total_features": len(self.features)
+            "total_features": len(self.features),
         }
 
         # Sort features by dependencies
@@ -586,19 +648,21 @@ class EnterpriseFeatureManager:
                 result = await self.enable_feature(feature_name)
                 if result["status"] == "success":
                     results["enabled_features"].append(feature_name)
-                    results["capabilities_unlocked"].extend(result.get("capabilities_unlocked", []))
+                    results["capabilities_unlocked"].extend(
+                        result.get("capabilities_unlocked", [])
+                    )
                 else:
-                    results["failed_features"].append({
-                        "feature": feature_name,
-                        "error": result["message"]
-                    })
+                    results["failed_features"].append(
+                        {"feature": feature_name, "error": result["message"]}
+                    )
             except Exception as e:
-                results["failed_features"].append({
-                    "feature": feature_name,
-                    "error": str(e)
-                })
+                results["failed_features"].append(
+                    {"feature": feature_name, "error": str(e)}
+                )
 
-        logger.info(f"✅ Enterprise features enabled: {len(results['enabled_features'])}/{results['total_features']}")
+        logger.info(
+            f"✅ Enterprise features enabled: {len(results['enabled_features'])}/{results['total_features']}"
+        )
         return results
 
     def _sort_features_by_dependencies(self) -> List[str]:
@@ -631,9 +695,27 @@ class EnterpriseFeatureManager:
             "timestamp": datetime.now().isoformat(),
             "feature_summary": {
                 "total_features": len(self.features),
-                "enabled_features": len([f for f in self.features.values() if f.status == FeatureStatus.ENABLED]),
-                "degraded_features": len([f for f in self.features.values() if f.status == FeatureStatus.DEGRADED]),
-                "failed_features": len([f for f in self.features.values() if f.status == FeatureStatus.ERROR])
+                "enabled_features": len(
+                    [
+                        f
+                        for f in self.features.values()
+                        if f.status == FeatureStatus.ENABLED
+                    ]
+                ),
+                "degraded_features": len(
+                    [
+                        f
+                        for f in self.features.values()
+                        if f.status == FeatureStatus.DEGRADED
+                    ]
+                ),
+                "failed_features": len(
+                    [
+                        f
+                        for f in self.features.values()
+                        if f.status == FeatureStatus.ERROR
+                    ]
+                ),
             },
             "features": {},
             "capabilities": {
@@ -641,12 +723,12 @@ class EnterpriseFeatureManager:
                 "load_balancing": self._check_load_balancing_capabilities(),
                 "resource_optimization": self._check_resource_capabilities(),
                 "health_monitoring": self._check_health_capabilities(),
-                "failover_recovery": self._check_failover_capabilities()
+                "failover_recovery": self._check_failover_capabilities(),
             },
             "infrastructure": {
                 "vm_topology": self.vm_topology,
-                "resource_pools": self.resource_pools
-            }
+                "resource_pools": self.resource_pools,
+            },
         }
 
         # Add detailed feature status
@@ -654,9 +736,15 @@ class EnterpriseFeatureManager:
             status["features"][name] = {
                 "status": feature.status.value,
                 "category": feature.category.value,
-                "enabled_at": feature.enabled_at.isoformat() if feature.enabled_at else None,
+                "enabled_at": (
+                    feature.enabled_at.isoformat() if feature.enabled_at else None
+                ),
                 "description": feature.description,
-                "health_check": await self._check_feature_health(name) if feature.status == FeatureStatus.ENABLED else None
+                "health_check": (
+                    await self._check_feature_health(name)
+                    if feature.status == FeatureStatus.ENABLED
+                    else None
+                ),
             }
 
         return status
@@ -679,7 +767,7 @@ class EnterpriseFeatureManager:
         return {
             "gpu": {"type": "RTX_4070", "available": True},
             "npu": {"type": "Intel_NPU", "available": True},
-            "cpu": {"cores": 22, "architecture": "x86_64"}
+            "cpu": {"cores": 22, "architecture": "x86_64"},
         }
 
     async def _create_task_routing_engine(self, config: Dict[str, Any]):
@@ -690,11 +778,17 @@ class EnterpriseFeatureManager:
         """Create health monitoring system"""
         logger.info(f"Creating health monitoring system: {config}")
 
-    async def _create_degradation_system(self, circuit_config: Dict[str, Any], fallback_config: Dict[str, Any]):
+    async def _create_degradation_system(
+        self, circuit_config: Dict[str, Any], fallback_config: Dict[str, Any]
+    ):
         """Create graceful degradation system"""
-        logger.info(f"Creating degradation system: circuit={circuit_config}, fallback={fallback_config}")
+        logger.info(
+            f"Creating degradation system: circuit={circuit_config}, fallback={fallback_config}"
+        )
 
-    async def _start_health_monitoring(self, feature_name: str, feature: EnterpriseFeature):
+    async def _start_health_monitoring(
+        self, feature_name: str, feature: EnterpriseFeature
+    ):
         """Start health monitoring for a feature"""
         logger.info(f"Starting health monitoring for {feature_name}")
 
@@ -714,45 +808,87 @@ class EnterpriseFeatureManager:
         """Get fallback service endpoints"""
         import os
 
-        backend_host = os.getenv('AUTOBOT_BACKEND_HOST')
-        backend_port = os.getenv('AUTOBOT_BACKEND_PORT')
-        frontend_host = os.getenv('AUTOBOT_FRONTEND_HOST')
-        frontend_port = os.getenv('AUTOBOT_FRONTEND_PORT')
-        ai_stack_host = os.getenv('AUTOBOT_AI_STACK_HOST')
-        ai_stack_port = os.getenv('AUTOBOT_AI_STACK_PORT')
+        backend_host = os.getenv("AUTOBOT_BACKEND_HOST")
+        backend_port = os.getenv("AUTOBOT_BACKEND_PORT")
+        frontend_host = os.getenv("AUTOBOT_FRONTEND_HOST")
+        frontend_port = os.getenv("AUTOBOT_FRONTEND_PORT")
+        ai_stack_host = os.getenv("AUTOBOT_AI_STACK_HOST")
+        ai_stack_port = os.getenv("AUTOBOT_AI_STACK_PORT")
 
-        if not all([backend_host, backend_port, frontend_host, frontend_port, ai_stack_host, ai_stack_port]):
-            raise ValueError('Fallback endpoint configuration missing: All AUTOBOT_*_HOST and AUTOBOT_*_PORT environment variables must be set')
+        if not all(
+            [
+                backend_host,
+                backend_port,
+                frontend_host,
+                frontend_port,
+                ai_stack_host,
+                ai_stack_port,
+            ]
+        ):
+            raise ValueError(
+                "Fallback endpoint configuration missing: All AUTOBOT_*_HOST and AUTOBOT_*_PORT environment variables must be set"
+            )
 
         return {
             "backend_api": f"http://{backend_host}:{backend_port}/health",
             "web_interface": f"http://{frontend_host}:{frontend_port}/health",
-            "ai_processing": f"http://{ai_stack_host}:{ai_stack_port}/health"
+            "ai_processing": f"http://{ai_stack_host}:{ai_stack_port}/health",
         }
 
     def _check_research_capabilities(self) -> bool:
         """Check if research capabilities are enabled"""
-        return self.features.get("web_research_orchestration", EnterpriseFeature("", FeatureCategory.RESEARCH_ORCHESTRATION, "")).status == FeatureStatus.ENABLED
+        return (
+            self.features.get(
+                "web_research_orchestration",
+                EnterpriseFeature("", FeatureCategory.RESEARCH_ORCHESTRATION, ""),
+            ).status
+            == FeatureStatus.ENABLED
+        )
 
     def _check_load_balancing_capabilities(self) -> bool:
         """Check if load balancing is enabled"""
-        return self.features.get("cross_vm_load_balancing", EnterpriseFeature("", FeatureCategory.LOAD_BALANCING, "")).status == FeatureStatus.ENABLED
+        return (
+            self.features.get(
+                "cross_vm_load_balancing",
+                EnterpriseFeature("", FeatureCategory.LOAD_BALANCING, ""),
+            ).status
+            == FeatureStatus.ENABLED
+        )
 
     def _check_resource_capabilities(self) -> bool:
         """Check if resource optimization is enabled"""
-        return self.features.get("intelligent_task_routing", EnterpriseFeature("", FeatureCategory.RESOURCE_OPTIMIZATION, "")).status == FeatureStatus.ENABLED
+        return (
+            self.features.get(
+                "intelligent_task_routing",
+                EnterpriseFeature("", FeatureCategory.RESOURCE_OPTIMIZATION, ""),
+            ).status
+            == FeatureStatus.ENABLED
+        )
 
     def _check_health_capabilities(self) -> bool:
         """Check if health monitoring is enabled"""
-        return self.features.get("comprehensive_health_monitoring", EnterpriseFeature("", FeatureCategory.HEALTH_MONITORING, "")).status == FeatureStatus.ENABLED
+        return (
+            self.features.get(
+                "comprehensive_health_monitoring",
+                EnterpriseFeature("", FeatureCategory.HEALTH_MONITORING, ""),
+            ).status
+            == FeatureStatus.ENABLED
+        )
 
     def _check_failover_capabilities(self) -> bool:
         """Check if failover capabilities are enabled"""
-        return self.features.get("graceful_degradation", EnterpriseFeature("", FeatureCategory.FAILOVER_RECOVERY, "")).status == FeatureStatus.ENABLED
+        return (
+            self.features.get(
+                "graceful_degradation",
+                EnterpriseFeature("", FeatureCategory.FAILOVER_RECOVERY, ""),
+            ).status
+            == FeatureStatus.ENABLED
+        )
 
 
 # Singleton instance
 _enterprise_manager: Optional[EnterpriseFeatureManager] = None
+
 
 def get_enterprise_manager() -> EnterpriseFeatureManager:
     """Get singleton enterprise feature manager"""

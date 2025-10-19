@@ -31,6 +31,7 @@ class ServiceStatus(Enum):
 @dataclass
 class ServiceEndpoint:
     """Represents a service endpoint with discovery and health information"""
+
     name: str
     host: str
     port: int
@@ -39,7 +40,7 @@ class ServiceEndpoint:
     required: bool = True
     timeout: float = 5.0
     retry_count: int = 3
-    
+
     # Health status tracking
     status: ServiceStatus = ServiceStatus.UNKNOWN
     last_check: Optional[datetime] = None
@@ -47,21 +48,21 @@ class ServiceEndpoint:
     consecutive_failures: int = 0
     response_time: Optional[float] = None
     error_message: Optional[str] = None
-    
+
     # Service metadata
     version: Optional[str] = None
     capabilities: List[str] = field(default_factory=list)
-    
+
     @property
     def url(self) -> str:
         """Get the complete service URL"""
         return f"{self.protocol}://{self.host}:{self.port}"
-    
+
     @property
     def health_url(self) -> str:
         """Get the complete health check URL"""
         return f"{self.url}{self.health_endpoint}"
-    
+
     @property
     def is_available(self) -> bool:
         """Check if service is currently available"""
@@ -73,11 +74,13 @@ class ServiceDiscovery:
     Centralized service discovery and health monitoring system
     Eliminates hardcoded IP addresses and provides dynamic service resolution
     """
-    
+
     def __init__(self, config_file: Optional[str] = None):
         self.services: Dict[str, ServiceEndpoint] = {}
         # Use project-relative path for config file (this file is in src/utils/)
-        default_config = Path(__file__).parent.parent.parent / "config" / "services.json"
+        default_config = (
+            Path(__file__).parent.parent.parent / "config" / "services.json"
+        )
         self.config_file = config_file or str(default_config)
         self.health_check_interval = 30  # seconds
         self.circuit_breaker_threshold = 5  # consecutive failures
@@ -86,7 +89,7 @@ class ServiceDiscovery:
 
         # Service definitions for AutoBot's 6-VM architecture
         self._init_default_services()
-    
+
     def _init_default_services(self):
         """Initialize default service definitions from unified configuration"""
 
@@ -99,7 +102,10 @@ class ServiceDiscovery:
         redis_config = unified_config_manager.get_redis_config()
 
         # Get system defaults section for ultimate fallbacks
-        system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
+        system_defaults = (
+            unified_config_manager.get_config_section("service_discovery_defaults")
+            or {}
+        )
 
         # Helper to get service config from unified configuration
         def get_service_config(service_name, config_dict=None):
@@ -113,7 +119,9 @@ class ServiceDiscovery:
             port = config_dict.get("port")
 
             if not host or not port:
-                logger.error(f"Service {service_name} missing required 'host' or 'port' in configuration")
+                logger.error(
+                    f"Service {service_name} missing required 'host' or 'port' in configuration"
+                )
                 # Use system defaults as absolute last resort
                 host = host or system_defaults.get(f"{service_name}_host", "localhost")
                 port = port or system_defaults.get(f"{service_name}_port", 8000)
@@ -129,7 +137,7 @@ class ServiceDiscovery:
             protocol="http",
             health_endpoint="/",  # Vue.js app health check
             timeout=10.0,
-            required=True
+            required=True,
         )
 
         # VM2: NPU Worker (AI Hardware Acceleration)
@@ -141,7 +149,7 @@ class ServiceDiscovery:
             protocol="http",
             health_endpoint="/health",
             timeout=15.0,
-            required=False  # Optional AI acceleration
+            required=False,  # Optional AI acceleration
         )
 
         # VM3: Redis (Data Layer)
@@ -159,7 +167,7 @@ class ServiceDiscovery:
             protocol="tcp",  # Redis uses TCP, not HTTP
             health_endpoint="",  # Redis PING command
             timeout=5.0,
-            required=True
+            required=True,
         )
 
         # VM4: AI Stack (AI Processing)
@@ -171,7 +179,7 @@ class ServiceDiscovery:
             protocol="http",
             health_endpoint="/health",
             timeout=20.0,
-            required=False  # Optional AI processing
+            required=False,  # Optional AI processing
         )
 
         # VM5: Browser Service (Playwright Automation)
@@ -183,7 +191,7 @@ class ServiceDiscovery:
             protocol="http",
             health_endpoint="/health",
             timeout=10.0,
-            required=False  # Optional browser automation
+            required=False,  # Optional browser automation
         )
 
         # Main Machine (WSL): Backend API
@@ -191,7 +199,9 @@ class ServiceDiscovery:
         backend_port = backend_config.get("port")
         if not backend_host or not backend_port:
             logger.error("Backend configuration missing required 'host' or 'port'")
-            backend_host = backend_host or system_defaults.get("backend_host", "localhost")
+            backend_host = backend_host or system_defaults.get(
+                "backend_host", "localhost"
+            )
             backend_port = backend_port or system_defaults.get("backend_port", 8001)
 
         self.services["backend"] = ServiceEndpoint(
@@ -201,7 +211,7 @@ class ServiceDiscovery:
             protocol="http",
             health_endpoint="/api/health",
             timeout=5.0,
-            required=True
+            required=True,
         )
 
         # Main Machine (WSL): Ollama LLM
@@ -220,25 +230,22 @@ class ServiceDiscovery:
             protocol="http",
             health_endpoint="/api/tags",  # Ollama health check
             timeout=10.0,
-            required=True
+            required=True,
         )
-    
+
     async def start_health_monitoring(self):
         """Start continuous health monitoring of all services"""
         if self._health_check_task and not self._health_check_task.done():
             return  # Already running
-        
+
         # Create persistent HTTP session
         timeout = aiohttp.ClientTimeout(total=30)
         connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
-        self._session = aiohttp.ClientSession(
-            timeout=timeout,
-            connector=connector
-        )
-        
+        self._session = aiohttp.ClientSession(timeout=timeout, connector=connector)
+
         self._health_check_task = asyncio.create_task(self._health_monitor_loop())
         logger.info("Started continuous health monitoring for all services")
-    
+
     async def stop_health_monitoring(self):
         """Stop health monitoring and clean up resources"""
         if self._health_check_task:
@@ -247,13 +254,13 @@ class ServiceDiscovery:
                 await self._health_check_task
             except asyncio.CancelledError:
                 pass
-        
+
         if self._session:
             await self._session.close()
             self._session = None
-        
+
         logger.info("Stopped health monitoring")
-    
+
     async def _health_monitor_loop(self):
         """Continuous health monitoring loop"""
         while True:
@@ -265,21 +272,23 @@ class ServiceDiscovery:
             except Exception as e:
                 logger.error(f"Error in health monitor loop: {e}")
                 await asyncio.sleep(5)  # Brief pause on error
-    
+
     async def check_all_services(self) -> Dict[str, ServiceStatus]:
         """Check health of all registered services concurrently"""
         tasks = []
-        
+
         for service_name in self.services:
             task = asyncio.create_task(
                 self.check_service_health(service_name),
-                name=f"health_check_{service_name}"
+                name=f"health_check_{service_name}",
             )
             tasks.append((service_name, task))
-        
+
         results = {}
-        completed_tasks = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
-        
+        completed_tasks = await asyncio.gather(
+            *[task for _, task in tasks], return_exceptions=True
+        )
+
         for i, (service_name, _) in enumerate(tasks):
             result = completed_tasks[i]
             if isinstance(result, Exception):
@@ -289,18 +298,18 @@ class ServiceDiscovery:
                 results[service_name] = ServiceStatus.UNHEALTHY
             else:
                 results[service_name] = result
-        
+
         return results
-    
+
     async def check_service_health(self, service_name: str) -> ServiceStatus:
         """Check health of a specific service with circuit breaker logic"""
         if service_name not in self.services:
             logger.warning(f"Unknown service: {service_name}")
             return ServiceStatus.UNKNOWN
-        
+
         service = self.services[service_name]
         start_time = time.time()
-        
+
         try:
             # Circuit breaker logic
             if service.consecutive_failures >= self.circuit_breaker_threshold:
@@ -309,48 +318,47 @@ class ServiceDiscovery:
                     time_since_check = (datetime.now() - service.last_check).seconds
                     if time_since_check < (self.health_check_interval * 2):
                         return service.status  # Skip check, too recent
-            
+
             # Perform health check based on service type
             if service.protocol == "tcp":
                 status = await self._check_tcp_service(service)
             else:
                 status = await self._check_http_service(service)
-            
+
             # Update service status
             service.status = status
             service.last_check = datetime.now()
             service.response_time = time.time() - start_time
-            
+
             if status == ServiceStatus.HEALTHY:
                 service.consecutive_failures = 0
                 service.last_healthy = datetime.now()
                 service.error_message = None
             else:
                 service.consecutive_failures += 1
-            
+
             return status
-            
+
         except Exception as e:
             service.status = ServiceStatus.UNHEALTHY
             service.last_check = datetime.now()
             service.consecutive_failures += 1
             service.error_message = str(e)
             service.response_time = time.time() - start_time
-            
+
             logger.error(f"Health check error for {service_name}: {e}")
             return ServiceStatus.UNHEALTHY
-    
+
     async def _check_http_service(self, service: ServiceEndpoint) -> ServiceStatus:
         """Check HTTP-based service health"""
         if not self._session:
             raise Exception("HTTP session not initialized")
-        
+
         try:
             async with self._session.get(
-                service.health_url,
-                timeout=aiohttp.ClientTimeout(total=service.timeout)
+                service.health_url, timeout=aiohttp.ClientTimeout(total=service.timeout)
             ) as response:
-                
+
                 # Check response status
                 if response.status == 200:
                     # Try to parse response for additional health info
@@ -360,78 +368,80 @@ class ServiceDiscovery:
                             # Extract service metadata if available
                             service.version = data.get("version")
                             service.capabilities = data.get("capabilities", [])
-                            
+
                             # Check if response indicates degraded state
                             status_field = data.get("status", "healthy").lower()
                             if status_field in ["degraded", "warning"]:
                                 return ServiceStatus.DEGRADED
                     except:
                         pass  # Ignore JSON parsing errors for simple endpoints
-                    
+
                     return ServiceStatus.HEALTHY
-                
+
                 elif response.status in [503, 502, 504]:
                     return ServiceStatus.DEGRADED  # Temporary issues
                 else:
                     return ServiceStatus.UNHEALTHY
-                    
+
         except asyncio.TimeoutError:
             return ServiceStatus.UNHEALTHY
         except aiohttp.ClientError:
             return ServiceStatus.UNHEALTHY
-    
+
     async def _check_tcp_service(self, service: ServiceEndpoint) -> ServiceStatus:
         """Check TCP-based service health (e.g., Redis)"""
         try:
             # For Redis specifically
             if service.name == "redis":
                 import redis.asyncio as redis
+
                 client = redis.Redis(
                     host=service.host,
                     port=service.port,
                     socket_timeout=service.timeout,
-                    socket_connect_timeout=service.timeout
+                    socket_connect_timeout=service.timeout,
                 )
-                
+
                 # Send PING command
                 pong = await client.ping()
                 await client.close()
-                
+
                 return ServiceStatus.HEALTHY if pong else ServiceStatus.UNHEALTHY
-            
+
             else:
                 # Generic TCP connection test
                 reader, writer = await asyncio.wait_for(
                     asyncio.open_connection(service.host, service.port),
-                    timeout=service.timeout
+                    timeout=service.timeout,
                 )
                 writer.close()
                 await writer.wait_closed()
                 return ServiceStatus.HEALTHY
-                
+
         except Exception:
             return ServiceStatus.UNHEALTHY
-    
+
     def get_service_url(self, service_name: str) -> Optional[str]:
         """Get service URL with automatic failover"""
         if service_name not in self.services:
             return None
-        
+
         service = self.services[service_name]
-        
+
         # Check if service is available
         if not service.is_available and service.required:
             logger.warning(f"Required service {service_name} is not available")
-        
+
         return service.url
-    
+
     def get_healthy_services(self) -> List[str]:
         """Get list of currently healthy services"""
         return [
-            name for name, service in self.services.items()
+            name
+            for name, service in self.services.items()
             if service.status == ServiceStatus.HEALTHY
         ]
-    
+
     def get_service_status_summary(self) -> Dict:
         """Get comprehensive status summary of all services"""
         summary = {
@@ -441,21 +451,23 @@ class ServiceDiscovery:
             "degraded": 0,
             "unhealthy": 0,
             "unknown": 0,
-            "services": {}
+            "services": {},
         }
-        
+
         for name, service in self.services.items():
             status_str = service.status.value
             summary["services"][name] = {
                 "status": status_str,
                 "url": service.url,
                 "required": service.required,
-                "last_check": service.last_check.isoformat() if service.last_check else None,
+                "last_check": (
+                    service.last_check.isoformat() if service.last_check else None
+                ),
                 "response_time": service.response_time,
                 "consecutive_failures": service.consecutive_failures,
-                "error": service.error_message
+                "error": service.error_message,
             }
-            
+
             # Update counters
             if service.status == ServiceStatus.HEALTHY:
                 summary["healthy"] += 1
@@ -465,51 +477,53 @@ class ServiceDiscovery:
                 summary["unhealthy"] += 1
             else:
                 summary["unknown"] += 1
-        
+
         return summary
-    
+
     async def wait_for_service(self, service_name: str, timeout: float = 60.0) -> bool:
         """Wait for a service to become healthy with timeout"""
         if service_name not in self.services:
             return False
-        
+
         start_time = time.time()
-        
+
         while time.time() - start_time < timeout:
             status = await self.check_service_health(service_name)
             if status == ServiceStatus.HEALTHY:
                 return True
-            
+
             await asyncio.sleep(2)  # Check every 2 seconds
-        
+
         return False
-    
-    async def wait_for_core_services(self, timeout: float = 120.0) -> Tuple[bool, List[str]]:
+
+    async def wait_for_core_services(
+        self, timeout: float = 120.0
+    ) -> Tuple[bool, List[str]]:
         """Wait for all required services to become healthy"""
         required_services = [
-            name for name, service in self.services.items()
-            if service.required
+            name for name, service in self.services.items() if service.required
         ]
-        
+
         start_time = time.time()
         ready_services = []
-        
+
         while time.time() - start_time < timeout:
             await self.check_all_services()
-            
+
             ready_services = [
-                name for name in required_services
+                name
+                for name in required_services
                 if self.services[name].status == ServiceStatus.HEALTHY
             ]
-            
+
             if len(ready_services) == len(required_services):
                 return True, ready_services
-            
+
             missing = set(required_services) - set(ready_services)
             logger.info(f"Waiting for services: {list(missing)}")
-            
+
             await asyncio.sleep(5)  # Check every 5 seconds
-        
+
         return False, ready_services
 
 

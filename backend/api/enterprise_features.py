@@ -10,7 +10,11 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.enterprise_feature_manager import get_enterprise_manager, FeatureCategory, FeatureStatus
+from src.enterprise_feature_manager import (
+    get_enterprise_manager,
+    FeatureCategory,
+    FeatureStatus,
+)
 from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
@@ -52,13 +56,15 @@ async def get_enterprise_status():
             content={
                 "status": "success",
                 "enterprise_status": status,
-                "message": "Enterprise status retrieved successfully"
-            }
+                "message": "Enterprise status retrieved successfully",
+            },
         )
 
     except Exception as e:
         logger.error(f"Error getting enterprise status: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get enterprise status: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get enterprise status: {str(e)}"
+        )
 
 
 @router.post("/features/enable")
@@ -86,8 +92,8 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
                     "status": "success",
                     "feature": request.feature_name,
                     "result": result,
-                    "message": f"Enterprise feature '{request.feature_name}' enabled successfully"
-                }
+                    "message": f"Enterprise feature '{request.feature_name}' enabled successfully",
+                },
             )
         else:
             return JSONResponse(
@@ -96,15 +102,17 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
                     "status": "error",
                     "feature": request.feature_name,
                     "result": result,
-                    "message": f"Failed to enable enterprise feature: {result.get('message', 'Unknown error')}"
-                }
+                    "message": f"Failed to enable enterprise feature: {result.get('message', 'Unknown error')}",
+                },
             )
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error enabling enterprise feature {request.feature_name}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to enable feature: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to enable feature: {str(e)}"
+        )
 
 
 @router.post("/features/enable-all")
@@ -134,34 +142,52 @@ async def enable_all_enterprise_features():
             "result": result,
             "success_rate": f"{success_rate * 100:.1f}%",
             "enterprise_capabilities": {
-                "web_research_orchestration": "web_research_orchestration" in result["enabled_features"],
-                "cross_vm_load_balancing": "cross_vm_load_balancing" in result["enabled_features"],
-                "intelligent_task_routing": "intelligent_task_routing" in result["enabled_features"],
-                "comprehensive_health_monitoring": "comprehensive_health_monitoring" in result["enabled_features"],
-                "graceful_degradation": "graceful_degradation" in result["enabled_features"],
-                "enterprise_configuration": "enterprise_configuration_management" in result["enabled_features"],
-                "zero_downtime_deployment": "zero_downtime_deployment" in result["enabled_features"]
+                "web_research_orchestration": "web_research_orchestration"
+                in result["enabled_features"],
+                "cross_vm_load_balancing": "cross_vm_load_balancing"
+                in result["enabled_features"],
+                "intelligent_task_routing": "intelligent_task_routing"
+                in result["enabled_features"],
+                "comprehensive_health_monitoring": "comprehensive_health_monitoring"
+                in result["enabled_features"],
+                "graceful_degradation": "graceful_degradation"
+                in result["enabled_features"],
+                "enterprise_configuration": "enterprise_configuration_management"
+                in result["enabled_features"],
+                "zero_downtime_deployment": "zero_downtime_deployment"
+                in result["enabled_features"],
             },
-            "message": f"Phase 4 enterprise features enablement completed: {len(result['enabled_features'])}/{result['total_features']} features enabled"
+            "message": f"Phase 4 enterprise features enablement completed: {len(result['enabled_features'])}/{result['total_features']} features enabled",
         }
 
         if result["failed_features"]:
-            response_data["warnings"] = [f"Failed to enable: {f['feature']} - {f['error']}" for f in result["failed_features"]]
+            response_data["warnings"] = [
+                f"Failed to enable: {f['feature']} - {f['error']}"
+                for f in result["failed_features"]
+            ]
 
         return JSONResponse(
-            status_code=200 if success_rate > 0.8 else 207,  # 207 = Multi-Status for partial success
-            content=response_data
+            status_code=(
+                200 if success_rate > 0.8 else 207
+            ),  # 207 = Multi-Status for partial success
+            content=response_data,
         )
 
     except Exception as e:
         logger.error(f"Error enabling all enterprise features: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to enable enterprise features: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to enable enterprise features: {str(e)}"
+        )
 
 
 @router.get("/features")
 async def list_enterprise_features(
-    category: Optional[FeatureCategory] = Query(None, description="Filter by feature category"),
-    status: Optional[FeatureStatus] = Query(None, description="Filter by feature status")
+    category: Optional[FeatureCategory] = Query(
+        None, description="Filter by feature category"
+    ),
+    status: Optional[FeatureStatus] = Query(
+        None, description="Filter by feature status"
+    ),
 ):
     """
     List all available enterprise features with filtering options.
@@ -177,15 +203,19 @@ async def list_enterprise_features(
             if status and feature.status != status:
                 continue
 
-            features_info.append({
-                "name": name,
-                "category": feature.category.value,
-                "status": feature.status.value,
-                "description": feature.description,
-                "dependencies": feature.dependencies,
-                "enabled_at": feature.enabled_at.isoformat() if feature.enabled_at else None,
-                "configuration": feature.configuration
-            })
+            features_info.append(
+                {
+                    "name": name,
+                    "category": feature.category.value,
+                    "status": feature.status.value,
+                    "description": feature.description,
+                    "dependencies": feature.dependencies,
+                    "enabled_at": (
+                        feature.enabled_at.isoformat() if feature.enabled_at else None
+                    ),
+                    "configuration": feature.configuration,
+                }
+            )
 
         return JSONResponse(
             status_code=200,
@@ -194,13 +224,15 @@ async def list_enterprise_features(
                 "features": features_info,
                 "total_features": len(features_info),
                 "categories": [cat.value for cat in FeatureCategory],
-                "statuses": [stat.value for stat in FeatureStatus]
-            }
+                "statuses": [stat.value for stat in FeatureStatus],
+            },
         )
 
     except Exception as e:
         logger.error(f"Error listing enterprise features: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list features: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to list features: {str(e)}"
+        )
 
 
 @router.post("/features/bulk-enable")
@@ -211,20 +243,20 @@ async def bulk_enable_features(request: BulkFeatureRequest):
     try:
         manager = get_enterprise_manager()
 
-        results = {
-            "enabled": [],
-            "failed": [],
-            "skipped": []
-        }
+        results = {"enabled": [], "failed": [], "skipped": []}
 
         for feature_name in request.features:
             try:
                 if feature_name not in manager.features:
-                    results["failed"].append({"feature": feature_name, "error": "Feature not found"})
+                    results["failed"].append(
+                        {"feature": feature_name, "error": "Feature not found"}
+                    )
                     continue
 
                 if manager.features[feature_name].status == FeatureStatus.ENABLED:
-                    results["skipped"].append({"feature": feature_name, "reason": "Already enabled"})
+                    results["skipped"].append(
+                        {"feature": feature_name, "reason": "Already enabled"}
+                    )
                     continue
 
                 result = await manager.enable_feature(feature_name)
@@ -232,7 +264,9 @@ async def bulk_enable_features(request: BulkFeatureRequest):
                 if result["status"] == "success":
                     results["enabled"].append(feature_name)
                 else:
-                    results["failed"].append({"feature": feature_name, "error": result["message"]})
+                    results["failed"].append(
+                        {"feature": feature_name, "error": result["message"]}
+                    )
 
             except Exception as e:
                 results["failed"].append({"feature": feature_name, "error": str(e)})
@@ -242,8 +276,8 @@ async def bulk_enable_features(request: BulkFeatureRequest):
             content={
                 "status": "success",
                 "results": results,
-                "summary": f"Enabled: {len(results['enabled'])}, Failed: {len(results['failed'])}, Skipped: {len(results['skipped'])}"
-            }
+                "summary": f"Enabled: {len(results['enabled'])}, Failed: {len(results['failed'])}, Skipped: {len(results['skipped'])}",
+            },
         )
 
     except Exception as e:
@@ -264,7 +298,7 @@ async def get_enterprise_health():
             "overall_health": "healthy",
             "feature_health": {},
             "critical_issues": [],
-            "warnings": []
+            "warnings": [],
         }
 
         critical_issues = 0
@@ -277,13 +311,19 @@ async def get_enterprise_health():
 
                 if feature_health.get("status") == "critical":
                     critical_issues += 1
-                    health_status["critical_issues"].append(f"{name}: {feature_health.get('message', 'Critical issue')}")
+                    health_status["critical_issues"].append(
+                        f"{name}: {feature_health.get('message', 'Critical issue')}"
+                    )
                 elif feature_health.get("status") == "warning":
                     warnings += 1
-                    health_status["warnings"].append(f"{name}: {feature_health.get('message', 'Warning')}")
+                    health_status["warnings"].append(
+                        f"{name}: {feature_health.get('message', 'Warning')}"
+                    )
             elif feature.status == FeatureStatus.ERROR:
                 critical_issues += 1
-                health_status["critical_issues"].append(f"{name}: Feature in error state")
+                health_status["critical_issues"].append(
+                    f"{name}: Feature in error state"
+                )
 
         if critical_issues > 0:
             health_status["overall_health"] = "critical"
@@ -295,13 +335,15 @@ async def get_enterprise_health():
             content={
                 "status": "success",
                 "health": health_status,
-                "summary": f"Health: {health_status['overall_health']}, Issues: {critical_issues}, Warnings: {warnings}"
-            }
+                "summary": f"Health: {health_status['overall_health']}, Issues: {critical_issues}, Warnings: {warnings}",
+            },
         )
 
     except Exception as e:
         logger.error(f"Error getting enterprise health: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get health status: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get health status: {str(e)}"
+        )
 
 
 @router.post("/performance/optimize")
@@ -322,7 +364,7 @@ async def optimize_system_performance(request: PerformanceOptimizationRequest):
         if not manager._check_resource_capabilities():
             raise HTTPException(
                 status_code=400,
-                detail="Resource optimization features must be enabled first"
+                detail="Resource optimization features must be enabled first",
             )
 
         # Simulate performance optimization
@@ -333,20 +375,20 @@ async def optimize_system_performance(request: PerformanceOptimizationRequest):
                 "Cross-VM load balancing tuned",
                 "Task routing algorithms optimized",
                 "Resource allocation improved",
-                "Cache strategies enhanced"
+                "Cache strategies enhanced",
             ],
             "performance_improvements": {
                 "response_time_improvement": "15-25%",
                 "throughput_improvement": "20-30%",
                 "resource_efficiency": "18-22%",
-                "failover_time_reduction": "40-50%"
+                "failover_time_reduction": "40-50%",
             },
             "recommendations": [
                 "Monitor performance metrics for 24 hours",
                 "Consider enabling zero-downtime deployment",
                 "Review resource allocation after peak usage",
-                "Enable predictive scaling if not already active"
-            ]
+                "Enable predictive scaling if not already active",
+            ],
         }
 
         return JSONResponse(
@@ -354,13 +396,15 @@ async def optimize_system_performance(request: PerformanceOptimizationRequest):
             content={
                 "status": "success",
                 "optimization": optimization_results,
-                "message": "Performance optimization completed successfully"
-            }
+                "message": "Performance optimization completed successfully",
+            },
         )
 
     except Exception as e:
         logger.error(f"Error optimizing performance: {e}")
-        raise HTTPException(status_code=500, detail=f"Performance optimization failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Performance optimization failed: {str(e)}"
+        )
 
 
 @router.get("/infrastructure")
@@ -379,35 +423,46 @@ async def get_infrastructure_status():
                 "service_distribution": {},
                 "load_balancing": manager._check_load_balancing_capabilities(),
                 "health_monitoring": manager._check_health_capabilities(),
-                "failover_enabled": manager._check_failover_capabilities()
+                "failover_enabled": manager._check_failover_capabilities(),
             },
             "performance_metrics": {
                 "cross_vm_latency": "< 2ms",
                 "service_availability": "99.9%+",
                 "resource_utilization": "Optimized",
-                "scaling_capability": "Auto-scaling enabled"
-            }
+                "scaling_capability": "Auto-scaling enabled",
+            },
         }
 
         # Calculate service distribution
         for vm_name, vm_data in manager.vm_topology.items():
             for service in vm_data["services"]:
-                if service not in infrastructure_status["distributed_services"]["service_distribution"]:
-                    infrastructure_status["distributed_services"]["service_distribution"][service] = []
-                infrastructure_status["distributed_services"]["service_distribution"][service].append(vm_name)
+                if (
+                    service
+                    not in infrastructure_status["distributed_services"][
+                        "service_distribution"
+                    ]
+                ):
+                    infrastructure_status["distributed_services"][
+                        "service_distribution"
+                    ][service] = []
+                infrastructure_status["distributed_services"]["service_distribution"][
+                    service
+                ].append(vm_name)
 
         return JSONResponse(
             status_code=200,
             content={
                 "status": "success",
                 "infrastructure": infrastructure_status,
-                "message": "Infrastructure status retrieved successfully"
-            }
+                "message": "Infrastructure status retrieved successfully",
+            },
         )
 
     except Exception as e:
         logger.error(f"Error getting infrastructure status: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get infrastructure status: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get infrastructure status: {str(e)}"
+        )
 
 
 @router.post("/deployment/zero-downtime")
@@ -420,10 +475,13 @@ async def deploy_zero_downtime():
 
         # Check if zero-downtime deployment is enabled
         zero_downtime_feature = manager.features.get("zero_downtime_deployment")
-        if not zero_downtime_feature or zero_downtime_feature.status != FeatureStatus.ENABLED:
+        if (
+            not zero_downtime_feature
+            or zero_downtime_feature.status != FeatureStatus.ENABLED
+        ):
             raise HTTPException(
                 status_code=400,
-                detail="Zero-downtime deployment feature must be enabled first"
+                detail="Zero-downtime deployment feature must be enabled first",
             )
 
         # Simulate zero-downtime deployment
@@ -431,15 +489,31 @@ async def deploy_zero_downtime():
             "deployment_strategy": "blue_green",
             "deployment_phases": [
                 {"phase": "preparation", "status": "completed", "duration": "30s"},
-                {"phase": "blue_environment_update", "status": "completed", "duration": "120s"},
-                {"phase": "health_verification", "status": "completed", "duration": "60s"},
-                {"phase": "traffic_switching", "status": "completed", "duration": "15s"},
-                {"phase": "green_environment_cleanup", "status": "completed", "duration": "45s"}
+                {
+                    "phase": "blue_environment_update",
+                    "status": "completed",
+                    "duration": "120s",
+                },
+                {
+                    "phase": "health_verification",
+                    "status": "completed",
+                    "duration": "60s",
+                },
+                {
+                    "phase": "traffic_switching",
+                    "status": "completed",
+                    "duration": "15s",
+                },
+                {
+                    "phase": "green_environment_cleanup",
+                    "status": "completed",
+                    "duration": "45s",
+                },
             ],
             "downtime": "0 seconds",
             "services_affected": list(manager.vm_topology.keys()),
             "rollback_available": True,
-            "performance_impact": "None detected"
+            "performance_impact": "None detected",
         }
 
         return JSONResponse(
@@ -447,13 +521,15 @@ async def deploy_zero_downtime():
             content={
                 "status": "success",
                 "deployment": deployment_result,
-                "message": "Zero-downtime deployment completed successfully"
-            }
+                "message": "Zero-downtime deployment completed successfully",
+            },
         )
 
     except Exception as e:
         logger.error(f"Error in zero-downtime deployment: {e}")
-        raise HTTPException(status_code=500, detail=f"Zero-downtime deployment failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Zero-downtime deployment failed: {str(e)}"
+        )
 
 
 @router.get("/phase4/validation")
@@ -476,28 +552,28 @@ async def validate_phase4_completion():
                 "web_research_orchestration": {
                     "enabled": status["capabilities"]["research_orchestration"],
                     "description": "Advanced web research with librarian agents",
-                    "impact": "Enhanced knowledge discovery and research capabilities"
+                    "impact": "Enhanced knowledge discovery and research capabilities",
                 },
                 "cross_vm_load_balancing": {
                     "enabled": status["capabilities"]["load_balancing"],
                     "description": "Intelligent load distribution across 6-VM infrastructure",
-                    "impact": "Optimal resource utilization and performance"
+                    "impact": "Optimal resource utilization and performance",
                 },
                 "intelligent_task_routing": {
                     "enabled": status["capabilities"]["resource_optimization"],
                     "description": "NPU/GPU/CPU task routing based on requirements",
-                    "impact": "Hardware-optimized task execution"
+                    "impact": "Hardware-optimized task execution",
                 },
                 "comprehensive_health_monitoring": {
                     "enabled": status["capabilities"]["health_monitoring"],
                     "description": "End-to-end system health monitoring",
-                    "impact": "Proactive issue detection and resolution"
+                    "impact": "Proactive issue detection and resolution",
                 },
                 "graceful_degradation": {
                     "enabled": status["capabilities"]["failover_recovery"],
                     "description": "Automatic failover and recovery mechanisms",
-                    "impact": "High availability and fault tolerance"
-                }
+                    "impact": "High availability and fault tolerance",
+                },
             },
             "production_readiness": {
                 "scalability": "Multi-VM distributed architecture",
@@ -505,7 +581,7 @@ async def validate_phase4_completion():
                 "performance": "Hardware-optimized task routing",
                 "monitoring": "Comprehensive health checks",
                 "deployment": "Zero-downtime deployment capability",
-                "security": "Enterprise-grade security implementation"
+                "security": "Enterprise-grade security implementation",
             },
             "transformation_summary": {
                 "from": "Basic AI assistant with limited capabilities",
@@ -517,19 +593,21 @@ async def validate_phase4_completion():
                     "Comprehensive monitoring and health checks",
                     "Graceful degradation and automatic recovery",
                     "Zero-downtime deployment capabilities",
-                    "Enterprise configuration management"
-                ]
+                    "Enterprise configuration management",
+                ],
             },
             "next_steps": [
                 "Monitor system performance for optimization opportunities",
                 "Conduct load testing to validate scalability",
                 "Implement additional enterprise features as needed",
-                "Consider advanced AI capabilities expansion"
-            ]
+                "Consider advanced AI capabilities expansion",
+            ],
         }
 
         # Calculate overall completion percentage
-        enabled_features = len([f for f in status["features"].values() if f["status"] == "enabled"])
+        enabled_features = len(
+            [f for f in status["features"].values() if f["status"] == "enabled"]
+        )
         total_features = len(status["features"])
         completion_percentage = (enabled_features / total_features) * 100
 
@@ -541,10 +619,12 @@ async def validate_phase4_completion():
             content={
                 "status": "success",
                 "validation": validation_results,
-                "message": f"Phase 4 validation completed: {completion_percentage:.1f}% enterprise features enabled"
-            }
+                "message": f"Phase 4 validation completed: {completion_percentage:.1f}% enterprise features enabled",
+            },
         )
 
     except Exception as e:
         logger.error(f"Error validating Phase 4 completion: {e}")
-        raise HTTPException(status_code=500, detail=f"Phase 4 validation failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Phase 4 validation failed: {str(e)}"
+        )

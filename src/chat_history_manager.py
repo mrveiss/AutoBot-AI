@@ -63,7 +63,8 @@ class ChatHistoryManager:
             "host", os.getenv("REDIS_HOST", "172.16.168.23")
         )
         self.redis_port = redis_port or redis_config.get(
-            "port", int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)))
+            "port",
+            int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))),
         )
 
         self.history: List[Dict[str, Any]] = []
@@ -124,7 +125,9 @@ class ChatHistoryManager:
 
         # MEMORY GRAPH: Try to initialize asynchronously (non-blocking)
         # Actual initialization happens in async context
-        logger.info("ChatHistoryManager ready (Memory Graph will initialize on first async operation)")
+        logger.info(
+            "ChatHistoryManager ready (Memory Graph will initialize on first async operation)"
+        )
 
     async def _init_memory_graph(self):
         """
@@ -146,13 +149,19 @@ class ChatHistoryManager:
 
             if initialized:
                 self.memory_graph_enabled = True
-                logger.info("✅ Memory Graph initialized successfully for conversation tracking")
+                logger.info(
+                    "✅ Memory Graph initialized successfully for conversation tracking"
+                )
             else:
-                logger.warning("⚠️ Memory Graph initialization returned False - conversation entity tracking disabled")
+                logger.warning(
+                    "⚠️ Memory Graph initialization returned False - conversation entity tracking disabled"
+                )
                 self.memory_graph = None
 
         except Exception as e:
-            logger.warning(f"⚠️ Failed to initialize Memory Graph (continuing without entity tracking): {e}")
+            logger.warning(
+                f"⚠️ Failed to initialize Memory Graph (continuing without entity tracking): {e}"
+            )
             self.memory_graph = None
             self.memory_graph_enabled = False
 
@@ -162,7 +171,9 @@ class ChatHistoryManager:
         if data_dir and not os.path.exists(data_dir):
             os.makedirs(data_dir, exist_ok=True)
 
-    def _extract_conversation_metadata(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _extract_conversation_metadata(
+        self, messages: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Extract metadata from conversation messages for Memory Graph entity.
 
@@ -174,7 +185,11 @@ class ChatHistoryManager:
         """
         try:
             if not messages:
-                return {"topics": [], "entity_mentions": [], "summary": "Empty conversation"}
+                return {
+                    "topics": [],
+                    "entity_mentions": [],
+                    "summary": "Empty conversation",
+                }
 
             # Extract text from all messages
             all_text = []
@@ -207,12 +222,16 @@ class ChatHistoryManager:
                 "summary": summary,
                 "message_count": len(messages),
                 "user_message_count": len(user_messages),
-                "bot_message_count": len(bot_messages)
+                "bot_message_count": len(bot_messages),
             }
 
         except Exception as e:
             logger.warning(f"Failed to extract conversation metadata: {e}")
-            return {"topics": [], "entity_mentions": [], "summary": "Metadata extraction failed"}
+            return {
+                "topics": [],
+                "entity_mentions": [],
+                "summary": "Metadata extraction failed",
+            }
 
     def _extract_topics(self, text_list: List[str]) -> List[str]:
         """Extract topics from conversation text using keyword detection."""
@@ -232,7 +251,7 @@ class ChatHistoryManager:
             "redis": ["redis", "cache", "database"],
             "frontend": ["frontend", "vue", "ui", "interface"],
             "backend": ["backend", "fastapi", "python"],
-            "security": ["security", "authentication", "encryption"]
+            "security": ["security", "authentication", "encryption"],
         }
 
         for topic, keywords in topic_patterns.items():
@@ -248,24 +267,26 @@ class ChatHistoryManager:
         combined_text = " ".join(text_list).lower()
 
         # Bug mention patterns
-        if re.search(r'bug|issue|error|problem|fix', combined_text):
+        if re.search(r"bug|issue|error|problem|fix", combined_text):
             mentions.add("bug_mention")
 
         # Feature mention patterns
-        if re.search(r'feature|implement|add|new|enhancement', combined_text):
+        if re.search(r"feature|implement|add|new|enhancement", combined_text):
             mentions.add("feature_mention")
 
         # Task mention patterns
-        if re.search(r'task|todo|need to|should|must', combined_text):
+        if re.search(r"task|todo|need to|should|must", combined_text):
             mentions.add("task_mention")
 
         # Decision mention patterns
-        if re.search(r'decide|decision|choose|select|prefer', combined_text):
+        if re.search(r"decide|decision|choose|select|prefer", combined_text):
             mentions.add("decision_mention")
 
         return list(mentions)
 
-    def _generate_conversation_summary(self, user_messages: List[str], bot_messages: List[str]) -> str:
+    def _generate_conversation_summary(
+        self, user_messages: List[str], bot_messages: List[str]
+    ) -> str:
         """Generate brief summary of conversation."""
         if not user_messages:
             return "No user messages"
@@ -284,11 +305,11 @@ class ChatHistoryManager:
         if len(self.history) > self.cleanup_threshold:
             # Keep most recent messages within the limit
             old_count = len(self.history)
-            self.history = self.history[-self.max_messages:]
-            
+            self.history = self.history[-self.max_messages :]
+
             # Force garbage collection to free memory immediately
             collected_objects = gc.collect()
-            
+
             logger.info(
                 f"CHAT CLEANUP: Trimmed messages from {old_count} to {len(self.history)} "
                 f"(limit: {self.max_messages}), collected {collected_objects} objects"
@@ -299,7 +320,7 @@ class ChatHistoryManager:
         self.memory_check_counter += 1
         if self.memory_check_counter >= self.memory_check_interval:
             self.memory_check_counter = 0
-            
+
             # Check memory usage
             message_count = len(self.history)
             if message_count > self.max_messages * 0.8:  # 80% threshold warning
@@ -308,7 +329,7 @@ class ChatHistoryManager:
                     f"{message_count}/{self.max_messages} messages "
                     f"({(message_count/self.max_messages)*100:.1f}%)"
                 )
-            
+
             # Cleanup if needed
             self._cleanup_messages_if_needed()
 
@@ -318,7 +339,7 @@ class ChatHistoryManager:
             chats_directory = self._get_chats_directory()
             if not os.path.exists(chats_directory):
                 return
-                
+
             # Get all chat files sorted by modification time
             chat_files = []
             for filename in os.listdir(chats_directory):
@@ -326,25 +347,25 @@ class ChatHistoryManager:
                     file_path = os.path.join(chats_directory, filename)
                     mtime = os.path.getmtime(file_path)
                     chat_files.append((file_path, mtime, filename))
-            
+
             # Sort by modification time (newest first)
             chat_files.sort(key=lambda x: x[1], reverse=True)
-            
+
             # Remove old files if exceeding limit
             if len(chat_files) > self.max_session_files:
-                files_to_remove = chat_files[self.max_session_files:]
+                files_to_remove = chat_files[self.max_session_files :]
                 for file_path, _, filename in files_to_remove:
                     try:
                         os.remove(file_path)
                         logger.info(f"CLEANUP: Removed old session file: {filename}")
                     except Exception as e:
                         logger.error(f"Failed to remove session file {filename}: {e}")
-                
+
                 logger.info(
                     f"SESSION CLEANUP: Removed {len(files_to_remove)} old session files, "
                     f"kept {self.max_session_files} most recent"
                 )
-                        
+
         except Exception as e:
             logger.error(f"Error cleaning up session files: {e}")
 
@@ -407,19 +428,13 @@ class ChatHistoryManager:
         try:
             # Redis sync client expects sync operations
             self.redis_client.setex(
-                cache_key,
-                3600,  # 1 hour TTL
-                json.dumps(chat_data)
+                cache_key, 3600, json.dumps(chat_data)  # 1 hour TTL
             )
         except Exception as e:
             logger.error(f"Failed to cache session data: {e}")
 
     async def add_tool_marker_to_last_message(
-        self,
-        session_id: str,
-        tool_type: str,
-        tool_action: str,
-        **marker_data: Any
+        self, session_id: str, tool_type: str, tool_action: str, **marker_data: Any
     ) -> bool:
         """
         Add a tool usage marker to the most recent message in a session.
@@ -487,7 +502,7 @@ class ChatHistoryManager:
                 if isinstance(history_data, str):
                     self.history = json.loads(history_data)
                     logging.info("Loaded chat history from Redis.")
-                    
+
                     # Apply memory limits to loaded data
                     self._cleanup_messages_if_needed()
                     return
@@ -507,10 +522,10 @@ class ChatHistoryManager:
             try:
                 with open(self.history_file, "r") as f:
                     self.history = json.load(f)
-                    
+
                 # Apply memory limits to loaded data
                 self._cleanup_messages_if_needed()
-                
+
             except json.JSONDecodeError as e:
                 self.history = []
                 logging.warning(
@@ -539,7 +554,7 @@ class ChatHistoryManager:
         """
         # PERFORMANCE: Check and cleanup memory before saving
         self._periodic_memory_check()
-        
+
         # Save to file for persistence
         try:
             async with aiofiles.open(self.history_file, "w") as f:
@@ -562,7 +577,7 @@ class ChatHistoryManager:
         session_id: Optional[str] = None,
         title: Optional[str] = None,
         session_name: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Creates a new chat session.
@@ -602,15 +617,11 @@ class ChatHistoryManager:
             "updatedAt": current_time,
             "lastModified": current_time,  # Backward compatibility
             "isActive": True,
-            "metadata": metadata or {}
+            "metadata": metadata or {},
         }
 
         # Create session with initial metadata
-        await self.save_session(
-            session_id=session_id,
-            messages=[],
-            name=session_title
-        )
+        await self.save_session(session_id=session_id, messages=[], name=session_title)
 
         # MEMORY GRAPH: Create conversation entity (non-blocking)
         if self.memory_graph_enabled and self.memory_graph:
@@ -620,7 +631,7 @@ class ChatHistoryManager:
                     "title": session_title,
                     "created_at": current_time,
                     "status": "active",
-                    "priority": "medium"
+                    "priority": "medium",
                 }
 
                 # Merge user-provided metadata
@@ -629,19 +640,25 @@ class ChatHistoryManager:
 
                 # Create conversation entity
                 await self.memory_graph.create_conversation_entity(
-                    session_id=session_id,
-                    metadata=entity_metadata
+                    session_id=session_id, metadata=entity_metadata
                 )
 
                 logger.info(f"✅ Created Memory Graph entity for session: {session_id}")
 
             except Exception as e:
-                logger.warning(f"⚠️ Failed to create Memory Graph entity (continuing): {e}")
+                logger.warning(
+                    f"⚠️ Failed to create Memory Graph entity (continuing): {e}"
+                )
 
         logging.info(f"Created new chat session: {session_id}")
         return session_data
 
-    async def get_session_messages(self, session_id: str, limit: Optional[int] = None, model_name: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_session_messages(
+        self,
+        session_id: str,
+        limit: Optional[int] = None,
+        model_name: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Gets messages for a specific session with model-aware limits.
 
@@ -654,12 +671,14 @@ class ChatHistoryManager:
             List[Dict[str, Any]]: List of messages in the session.
         """
         messages = await self.load_session(session_id)
-        
+
         # Use model-aware limit if not explicitly provided
         if limit is None:
             limit = self.context_manager.calculate_retrieval_limit(model_name)
-            logger.debug(f"Using model-aware limit: {limit} messages for model {model_name or 'default'}")
-        
+            logger.debug(
+                f"Using model-aware limit: {limit} messages for model {model_name or 'default'}"
+            )
+
         if limit > 0:
             return messages[-limit:]  # Return last N messages
         return messages
@@ -730,7 +749,9 @@ class ChatHistoryManager:
             logging.error(f"Error updating session {session_id}: {e}")
             return False
 
-    async def export_session(self, session_id: str, format: str = "json") -> Optional[str]:
+    async def export_session(
+        self, session_id: str, format: str = "json"
+    ) -> Optional[str]:
         """
         Exports a session in the specified format.
 
@@ -832,15 +853,15 @@ class ChatHistoryManager:
     async def clear_history(self):
         """
         Clears the entire chat history and saves the empty history to file.
-        
+
         PERFORMANCE OPTIMIZATION: Forces garbage collection after clear.
         """
         old_count = len(self.history)
         self.history = []
-        
+
         # Force garbage collection to free memory
         collected_objects = gc.collect()
-        
+
         await self._save_history()
         logging.info(
             f"Chat history cleared: removed {old_count} messages, "
@@ -940,22 +961,24 @@ class ChatHistoryManager:
                     # Get file stats for metadata
                     stat = os.stat(chat_path)
                     created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
-                    last_modified = datetime.fromtimestamp(
-                        stat.st_mtime
-                    ).isoformat()
+                    last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
                     file_size = stat.st_size
 
                     # Read chat name and message count from file (lightweight, no full decryption)
                     chat_name = None
                     message_count = 0
                     try:
-                        with open(chat_path, 'r', encoding='utf-8') as f:
+                        with open(chat_path, "r", encoding="utf-8") as f:
                             chat_data = json.load(f)
-                            chat_name = chat_data.get('name', '').strip()
-                            messages = chat_data.get('messages', [])
-                            message_count = len(messages) if isinstance(messages, list) else 0
+                            chat_name = chat_data.get("name", "").strip()
+                            messages = chat_data.get("messages", [])
+                            message_count = (
+                                len(messages) if isinstance(messages, list) else 0
+                            )
                     except Exception as read_err:
-                        logging.debug(f"Could not read chat file content for {filename}: {read_err}")
+                        logging.debug(
+                            f"Could not read chat file content for {filename}: {read_err}"
+                        )
 
                     # Create unique chat names using timestamp or full UUID
                     if not chat_name:  # Only generate default if no name in file
@@ -989,9 +1012,7 @@ class ChatHistoryManager:
                         }
                     )
                 except Exception as e:
-                    logging.error(
-                        f"Error reading file stats for {filename}: {str(e)}"
-                    )
+                    logging.error(f"Error reading file stats for {filename}: {str(e)}")
                     continue
 
             # Sort by last modified time (most recent first)
@@ -1013,7 +1034,7 @@ class ChatHistoryManager:
 
                     if cached_data:
                         if isinstance(cached_data, bytes):
-                            cached_data = cached_data.decode('utf-8')
+                            cached_data = cached_data.decode("utf-8")
                         chat_data = json.loads(cached_data)
                         logger.debug(f"Cache HIT for session {session_id}")
                         return chat_data.get("messages", [])
@@ -1067,7 +1088,7 @@ class ChatHistoryManager:
     ):
         """
         Saves a chat session with messages and metadata.
-        
+
         PERFORMANCE OPTIMIZATION: Includes session file cleanup.
 
         Args:
@@ -1095,7 +1116,7 @@ class ChatHistoryManager:
                     f"Session {session_id} has {len(session_messages)} messages, "
                     f"truncating to {self.max_messages} most recent"
                 )
-                session_messages = session_messages[-self.max_messages:]
+                session_messages = session_messages[-self.max_messages :]
 
             # Load existing chat data if it exists to preserve metadata
             chat_data = {}
@@ -1168,52 +1189,59 @@ class ChatHistoryManager:
                         f"Summary: {metadata['summary']}",
                         f"Topics: {', '.join(metadata['topics'])}",
                         f"Message count: {metadata['message_count']}",
-                        f"Last updated: {current_time}"
+                        f"Last updated: {current_time}",
                     ]
 
                     # Add entity mentions if any
-                    if metadata['entity_mentions']:
-                        observations.append(f"Mentions: {', '.join(metadata['entity_mentions'])}")
+                    if metadata["entity_mentions"]:
+                        observations.append(
+                            f"Mentions: {', '.join(metadata['entity_mentions'])}"
+                        )
 
                     # Update entity with new observations
                     try:
                         await self.memory_graph.add_observations(
-                            entity_name=entity_name,
-                            observations=observations
+                            entity_name=entity_name, observations=observations
                         )
-                        logger.debug(f"✅ Updated Memory Graph entity for session: {session_id}")
+                        logger.debug(
+                            f"✅ Updated Memory Graph entity for session: {session_id}"
+                        )
 
                     except ValueError:
                         # Entity doesn't exist yet - create it
-                        logger.debug(f"Entity not found, creating new entity for session: {session_id}")
+                        logger.debug(
+                            f"Entity not found, creating new entity for session: {session_id}"
+                        )
 
                         entity_metadata = {
                             "session_id": session_id,
                             "title": name or session_id,
                             "status": "active",
                             "priority": "medium",
-                            "topics": metadata['topics'],
-                            "entity_mentions": metadata['entity_mentions']
+                            "topics": metadata["topics"],
+                            "entity_mentions": metadata["entity_mentions"],
                         }
 
                         await self.memory_graph.create_conversation_entity(
-                            session_id=session_id,
-                            metadata=entity_metadata
+                            session_id=session_id, metadata=entity_metadata
                         )
 
                         # Add observations to newly created entity
                         await self.memory_graph.add_observations(
-                            entity_name=entity_name,
-                            observations=observations
+                            entity_name=entity_name, observations=observations
                         )
 
-                        logger.info(f"✅ Created and updated Memory Graph entity for session: {session_id}")
+                        logger.info(
+                            f"✅ Created and updated Memory Graph entity for session: {session_id}"
+                        )
 
                 except Exception as mg_error:
-                    logger.warning(f"⚠️ Failed to update Memory Graph entity (continuing): {mg_error}")
+                    logger.warning(
+                        f"⚠️ Failed to update Memory Graph entity (continuing): {mg_error}"
+                    )
 
             # PERFORMANCE: Periodic cleanup of old session files
-            if hasattr(self, '_session_save_counter'):
+            if hasattr(self, "_session_save_counter"):
                 self._session_save_counter += 1
             else:
                 self._session_save_counter = 1
@@ -1297,7 +1325,9 @@ class ChatHistoryManager:
                 # Try old format
                 chat_file = f"{chats_directory}/chat_{session_id}.json"
                 if not os.path.exists(chat_file):
-                    logging.warning(f"Chat session {session_id} not found for name update")
+                    logging.warning(
+                        f"Chat session {session_id} not found for name update"
+                    )
                     return False
 
             # Load existing chat data
@@ -1346,13 +1376,13 @@ class ChatHistoryManager:
         old_count = len(self.history)
         self._cleanup_messages_if_needed()
         collected_objects = gc.collect()
-        
+
         return {
             "messages_before": old_count,
             "messages_after": len(self.history),
             "messages_removed": old_count - len(self.history),
             "objects_collected": collected_objects,
-            "cleanup_performed": old_count > len(self.history)
+            "cleanup_performed": old_count > len(self.history),
         }
 
 
@@ -1374,14 +1404,14 @@ if __name__ == "__main__":
         for i in range(100):
             await manager.add_message("user", f"Test message {i}")
             await manager.add_message("bot", f"Response {i}")
-        
+
         print(f"After adding 200 messages: {len(manager.get_all_messages())}")
         print("Memory stats:", manager.get_memory_stats())
-        
+
         # Test cleanup
         cleanup_stats = manager.force_cleanup()
         print("Cleanup stats:", cleanup_stats)
-        
+
         # Clear history
         await manager.clear_history()
         print("History after clearing:", len(manager.get_all_messages()))

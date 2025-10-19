@@ -32,19 +32,11 @@ async def get_fresh_kb_stats():
 
         logger.info(f"Fresh KB stats: {stats}")
 
-        return {
-            "source": "fresh_instance",
-            "stats": stats,
-            "success": True
-        }
+        return {"source": "fresh_instance", "stats": stats, "success": True}
 
     except Exception as e:
         logger.error(f"Error getting fresh KB stats: {e}")
-        return {
-            "source": "fresh_instance",
-            "error": str(e),
-            "success": False
-        }
+        return {"source": "fresh_instance", "error": str(e), "success": False}
 
 
 @router.post("/test/rebuild_index")
@@ -69,13 +61,9 @@ async def test_rebuild_search_index():
         return {
             "operation": "rebuild_search_index",
             "result": result,
-            "success": result.get("status") == "success"
+            "success": result.get("status") == "success",
         }
 
     except Exception as e:
         logger.error(f"Error rebuilding search index: {e}")
-        return {
-            "operation": "rebuild_search_index",
-            "error": str(e),
-            "success": False
-        }
+        return {"operation": "rebuild_search_index", "error": str(e), "success": False}

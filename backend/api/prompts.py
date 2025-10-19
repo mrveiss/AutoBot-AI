@@ -50,6 +50,7 @@ async def get_prompts():
                 try:
                     # Use async file operations without timeout
                     from src.utils.async_file_operations import read_file_async
+
                     content = await read_file_async(full_path)
 
                     prompt_id = (
@@ -134,6 +135,7 @@ async def get_prompts():
 
                 # Load prompts with smart cancellation instead of timeout
                 from src.utils.async_cancellation import execute_with_cancellation
+
                 await execute_with_cancellation(load_all_prompts(), "prompts_loading")
 
             except Exception as e:

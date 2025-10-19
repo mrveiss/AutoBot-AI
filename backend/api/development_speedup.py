@@ -60,9 +60,13 @@ async def analyze_codebase_endpoint(request: AnalysisRequest):
         if request.analysis_type == "comprehensive":
             result = await analyze_codebase(request.root_path)
         elif request.analysis_type == "duplicates":
-            result = await _get_dev_speedup_agent().find_duplicate_code(request.root_path)
+            result = await _get_dev_speedup_agent().find_duplicate_code(
+                request.root_path
+            )
         elif request.analysis_type == "patterns":
-            result = await _get_dev_speedup_agent().identify_code_patterns(request.root_path)
+            result = await _get_dev_speedup_agent().identify_code_patterns(
+                request.root_path
+            )
         elif request.analysis_type == "imports":
             result = await _get_dev_speedup_agent().analyze_imports_and_dependencies(
                 request.root_path

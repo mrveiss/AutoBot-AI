@@ -175,12 +175,13 @@ class ConsolidatedTerminalWebSocket:
 
             # Create PTY session with SimplePTY manager
             self.pty_process = simple_pty_manager.create_session(
-                self.session_id,
-                initial_cwd="/home/kali/Desktop/AutoBot"
+                self.session_id, initial_cwd="/home/kali/Desktop/AutoBot"
             )
 
             if self.pty_process:
-                logger.info(f"PTY initialized successfully for session {self.session_id}")
+                logger.info(
+                    f"PTY initialized successfully for session {self.session_id}"
+                )
                 # Output reader will be started when WebSocket is ready
                 self.pty_output_task = None
             else:
@@ -203,16 +204,18 @@ class ConsolidatedTerminalWebSocket:
                 if output:
                     event_type, content = output
 
-                    if event_type == 'output':
+                    if event_type == "output":
                         # Send output to WebSocket
                         await self.send_output(content)
-                    elif event_type in ('eof', 'close'):
+                    elif event_type in ("eof", "close"):
                         # PTY closed
                         logger.info(f"PTY closed for session {self.session_id}")
-                        await self.send_message({
-                            "type": "terminal_closed",
-                            "content": "Terminal session ended"
-                        })
+                        await self.send_message(
+                            {
+                                "type": "terminal_closed",
+                                "content": "Terminal session ended",
+                            }
+                        )
                         break
                 else:
                     # No output available, small delay to prevent CPU spinning
@@ -238,23 +241,20 @@ class ConsolidatedTerminalWebSocket:
             try:
                 success = self.pty_process.write_input(text)
                 if not success:
-                    await self.send_message({
-                        "type": "error",
-                        "content": "Failed to write to terminal"
-                    })
+                    await self.send_message(
+                        {"type": "error", "content": "Failed to write to terminal"}
+                    )
                 return
             except Exception as e:
                 logger.error(f"Error writing to PTY: {e}")
-                await self.send_message({
-                    "type": "error",
-                    "content": f"Terminal error: {str(e)}"
-                })
+                await self.send_message(
+                    {"type": "error", "content": f"Terminal error: {str(e)}"}
+                )
         else:
             # PTY not available
-            await self.send_message({
-                "type": "error",
-                "content": "Terminal not available"
-            })
+            await self.send_message(
+                {"type": "error", "content": "Terminal not available"}
+            )
 
     async def start(self):
         """Start the terminal session"""
@@ -266,23 +266,24 @@ class ConsolidatedTerminalWebSocket:
             logger.info(f"PTY output reader started for session {self.session_id}")
 
             # Send initial shell prompt/output with newline for proper formatting
-            await self.send_message({
-                "type": "connected",
-                "content": f"Connected to terminal session {self.session_id}\r\n"
-            })
+            await self.send_message(
+                {
+                    "type": "connected",
+                    "content": f"Connected to terminal session {self.session_id}\r\n",
+                }
+            )
         else:
             logger.warning(f"PTY not available for session {self.session_id}")
-            await self.send_message({
-                "type": "error",
-                "content": "Terminal initialization failed"
-            })
+            await self.send_message(
+                {"type": "error", "content": "Terminal initialization failed"}
+            )
 
     async def cleanup(self):
         """Clean up terminal resources"""
         self.active = False
 
         # Cancel output reader task if running
-        if hasattr(self, 'pty_output_task') and self.pty_output_task:
+        if hasattr(self, "pty_output_task") and self.pty_output_task:
             try:
                 self.pty_output_task.cancel()
                 await asyncio.wait_for(self.pty_output_task, timeout=1.0)
@@ -295,6 +296,7 @@ class ConsolidatedTerminalWebSocket:
         if self.pty_process:
             try:
                 from backend.services.simple_pty import simple_pty_manager
+
                 simple_pty_manager.close_session(self.session_id)
                 self.pty_process = None
                 logger.info(f"PTY session {self.session_id} closed")
@@ -576,7 +578,7 @@ class ConsolidatedTerminalManager:
                 {
                     "command": entry["command"],
                     "timestamp": entry["timestamp"].isoformat(),
-                    "risk_level": entry["risk_level"]
+                    "risk_level": entry["risk_level"],
                 }
                 for entry in terminal.command_history
             ]
@@ -824,7 +826,7 @@ async def get_terminal_command_history(session_id: str):
                 "session_id": session_id,
                 "is_active": False,
                 "history": [],
-                "message": "Session is not active, no command history available"
+                "message": "Session is not active, no command history available",
             }
 
         # Get command history from active terminal
@@ -834,7 +836,7 @@ async def get_terminal_command_history(session_id: str):
             "session_id": session_id,
             "is_active": True,
             "history": history,
-            "total_commands": len(history)
+            "total_commands": len(history),
         }
 
     except HTTPException:

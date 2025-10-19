@@ -31,11 +31,14 @@ try:
         Blip2ForConditionalGeneration,
         Blip2Processor,
     )
+
     VISION_MODELS_AVAILABLE = True
 except ImportError:
     VISION_MODELS_AVAILABLE = False
     logger = logging.getLogger(__name__)
-    logger.warning("Vision models not available. Install transformers with: pip install transformers")
+    logger.warning(
+        "Vision models not available. Install transformers with: pip install transformers"
+    )
 
 # Import models for audio processing
 try:
@@ -44,19 +47,23 @@ try:
         Wav2Vec2Processor,
         Wav2Vec2ForCTC,
         WhisperProcessor,
-        WhisperForConditionalGeneration
+        WhisperForConditionalGeneration,
     )
     import librosa
+
     AUDIO_MODELS_AVAILABLE = True
 except ImportError:
     AUDIO_MODELS_AVAILABLE = False
     logger = logging.getLogger(__name__)
-    logger.warning("Audio models not available. Install with: pip install transformers librosa")
+    logger.warning(
+        "Audio models not available. Install with: pip install transformers librosa"
+    )
 
 # Import torch modules for attention fusion
 try:
     import torch.nn as nn
     import torch.nn.functional as F
+
     TORCH_NN_AVAILABLE = True
 except ImportError:
     TORCH_NN_AVAILABLE = False
@@ -152,7 +159,7 @@ class VisionProcessor(BaseModalProcessor):
         self.enabled = self.config.get("enabled", True)
 
         # Initialize GPU device
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.logger.info(f"VisionProcessor initialized with device: {self.device}")
 
         # Initialize vision models if available
@@ -165,33 +172,46 @@ class VisionProcessor(BaseModalProcessor):
             try:
                 # Load CLIP model for image embeddings and classification
                 self.logger.info("Loading CLIP model...")
-                self.clip_model = CLIPModel.from_pretrained('openai/clip-vit-base-patch32').to(self.device)
-                self.clip_processor = CLIPProcessor.from_pretrained('openai/clip-vit-base-patch32')
+                self.clip_model = CLIPModel.from_pretrained(
+                    "openai/clip-vit-base-patch32"
+                ).to(self.device)
+                self.clip_processor = CLIPProcessor.from_pretrained(
+                    "openai/clip-vit-base-patch32"
+                )
 
                 # Load BLIP-2 model for image captioning and VQA
                 # Using smaller model for memory efficiency
                 self.logger.info("Loading BLIP-2 model...")
-                self.blip_processor = Blip2Processor.from_pretrained('Salesforce/blip2-opt-2.7b')
+                self.blip_processor = Blip2Processor.from_pretrained(
+                    "Salesforce/blip2-opt-2.7b"
+                )
 
                 # Check if accelerate is available for device_map
                 try:
                     import accelerate
+
                     accelerate_available = True
                 except ImportError:
                     accelerate_available = False
-                    self.logger.warning("accelerate package not available, loading BLIP-2 without device_map")
+                    self.logger.warning(
+                        "accelerate package not available, loading BLIP-2 without device_map"
+                    )
 
                 # Load BLIP-2 model with device_map only if accelerate is available
                 if accelerate_available and torch.cuda.is_available():
                     self.blip_model = Blip2ForConditionalGeneration.from_pretrained(
-                        'Salesforce/blip2-opt-2.7b',
+                        "Salesforce/blip2-opt-2.7b",
                         torch_dtype=torch.float16,
-                        device_map="auto"
+                        device_map="auto",
                     )
                 else:
                     self.blip_model = Blip2ForConditionalGeneration.from_pretrained(
-                        'Salesforce/blip2-opt-2.7b',
-                        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+                        "Salesforce/blip2-opt-2.7b",
+                        torch_dtype=(
+                            torch.float16
+                            if torch.cuda.is_available()
+                            else torch.float32
+                        ),
                     ).to(self.device)
 
                 # Set models to evaluation mode
@@ -258,77 +278,96 @@ class VisionProcessor(BaseModalProcessor):
         """Process single image with GPU-accelerated CLIP and BLIP-2 models"""
 
         # Check if models are available
-        if not VISION_MODELS_AVAILABLE or self.clip_model is None or self.blip_model is None:
+        if (
+            not VISION_MODELS_AVAILABLE
+            or self.clip_model is None
+            or self.blip_model is None
+        ):
             # Fallback to placeholder implementation
-            self.logger.warning("Vision models not available, using placeholder implementation")
+            self.logger.warning(
+                "Vision models not available, using placeholder implementation"
+            )
             return {
                 "type": "image_analysis",
                 "elements_detected": [],
                 "text_detected": "",
                 "caption": "Vision models not loaded",
                 "confidence": 0.0,
-                "processing_device": "cpu"
+                "processing_device": "cpu",
             }
 
         try:
             # Prepare image
             if isinstance(input_data.data, bytes):
-                image = Image.open(io.BytesIO(input_data.data)).convert('RGB')
+                image = Image.open(io.BytesIO(input_data.data)).convert("RGB")
             elif isinstance(input_data.data, Image.Image):
-                image = input_data.data.convert('RGB')
+                image = input_data.data.convert("RGB")
             elif isinstance(input_data.data, str):
                 # Assume it's a file path
-                image = Image.open(input_data.data).convert('RGB')
+                image = Image.open(input_data.data).convert("RGB")
             else:
-                raise ValueError(f"Unsupported image data type: {type(input_data.data)}")
+                raise ValueError(
+                    f"Unsupported image data type: {type(input_data.data)}"
+                )
 
             # Process with CLIP for embeddings
             clip_features = None
             if self.clip_model and self.clip_processor:
                 with torch.no_grad():
                     if torch.cuda.is_available():
-                        with torch.autocast(device_type='cuda', dtype=torch.float16):
-                            clip_inputs = self.clip_processor(images=image, return_tensors='pt')
+                        with torch.autocast(device_type="cuda", dtype=torch.float16):
+                            clip_inputs = self.clip_processor(
+                                images=image, return_tensors="pt"
+                            )
                             # Move inputs to device
-                            clip_inputs = {k: v.to(self.device) for k, v in clip_inputs.items()}
-                            clip_features = self.clip_model.get_image_features(**clip_inputs)
+                            clip_inputs = {
+                                k: v.to(self.device) for k, v in clip_inputs.items()
+                            }
+                            clip_features = self.clip_model.get_image_features(
+                                **clip_inputs
+                            )
                     else:
-                        clip_inputs = self.clip_processor(images=image, return_tensors='pt')
-                        clip_features = self.clip_model.get_image_features(**clip_inputs)
+                        clip_inputs = self.clip_processor(
+                            images=image, return_tensors="pt"
+                        )
+                        clip_features = self.clip_model.get_image_features(
+                            **clip_inputs
+                        )
 
             # Process with BLIP-2 for captioning
             caption = ""
             if self.blip_model and self.blip_processor:
                 with torch.no_grad():
                     if torch.cuda.is_available():
-                        with torch.autocast(device_type='cuda', dtype=torch.float16):
-                            blip_inputs = self.blip_processor(images=image, return_tensors='pt')
+                        with torch.autocast(device_type="cuda", dtype=torch.float16):
+                            blip_inputs = self.blip_processor(
+                                images=image, return_tensors="pt"
+                            )
                             # Move inputs to device
-                            blip_inputs = {k: v.to(self.device) if torch.is_tensor(v) else v
-                                         for k, v in blip_inputs.items()}
+                            blip_inputs = {
+                                k: v.to(self.device) if torch.is_tensor(v) else v
+                                for k, v in blip_inputs.items()
+                            }
 
                             # Generate caption
                             generated_ids = self.blip_model.generate(
                                 **blip_inputs,
                                 max_length=50,
                                 num_beams=3,
-                                temperature=0.8
+                                temperature=0.8,
                             )
                             caption = self.blip_processor.batch_decode(
-                                generated_ids,
-                                skip_special_tokens=True
+                                generated_ids, skip_special_tokens=True
                             )[0].strip()
                     else:
-                        blip_inputs = self.blip_processor(images=image, return_tensors='pt')
+                        blip_inputs = self.blip_processor(
+                            images=image, return_tensors="pt"
+                        )
                         generated_ids = self.blip_model.generate(
-                            **blip_inputs,
-                            max_length=50,
-                            num_beams=3,
-                            temperature=0.8
+                            **blip_inputs, max_length=50, num_beams=3, temperature=0.8
                         )
                         caption = self.blip_processor.batch_decode(
-                            generated_ids,
-                            skip_special_tokens=True
+                            generated_ids, skip_special_tokens=True
                         )[0].strip()
 
             # Visual Question Answering if a question is provided
@@ -337,29 +376,29 @@ class VisionProcessor(BaseModalProcessor):
                 question = input_data.metadata["question"]
                 with torch.no_grad():
                     if torch.cuda.is_available():
-                        with torch.autocast(device_type='cuda', dtype=torch.float16):
+                        with torch.autocast(device_type="cuda", dtype=torch.float16):
                             vqa_inputs = self.blip_processor(
-                                images=image,
-                                text=question,
-                                return_tensors='pt'
+                                images=image, text=question, return_tensors="pt"
                             )
-                            vqa_inputs = {k: v.to(self.device) if torch.is_tensor(v) else v
-                                        for k, v in vqa_inputs.items()}
-                            generated_ids = self.blip_model.generate(**vqa_inputs, max_length=30)
+                            vqa_inputs = {
+                                k: v.to(self.device) if torch.is_tensor(v) else v
+                                for k, v in vqa_inputs.items()
+                            }
+                            generated_ids = self.blip_model.generate(
+                                **vqa_inputs, max_length=30
+                            )
                             vqa_answer = self.blip_processor.batch_decode(
-                                generated_ids,
-                                skip_special_tokens=True
+                                generated_ids, skip_special_tokens=True
                             )[0].strip()
                     else:
                         vqa_inputs = self.blip_processor(
-                            images=image,
-                            text=question,
-                            return_tensors='pt'
+                            images=image, text=question, return_tensors="pt"
                         )
-                        generated_ids = self.blip_model.generate(**vqa_inputs, max_length=30)
+                        generated_ids = self.blip_model.generate(
+                            **vqa_inputs, max_length=30
+                        )
                         vqa_answer = self.blip_processor.batch_decode(
-                            generated_ids,
-                            skip_special_tokens=True
+                            generated_ids, skip_special_tokens=True
                         )[0].strip()
 
             # Clear GPU cache if using CUDA
@@ -368,27 +407,31 @@ class VisionProcessor(BaseModalProcessor):
 
             # Prepare result
             result = {
-                'type': 'image_analysis',
-                'caption': caption,
-                'confidence': 0.95 if caption else 0.0,
-                'processing_device': str(self.device),
-                'image_size': image.size
+                "type": "image_analysis",
+                "caption": caption,
+                "confidence": 0.95 if caption else 0.0,
+                "processing_device": str(self.device),
+                "image_size": image.size,
             }
 
             # Add CLIP features if available
             if clip_features is not None:
-                result['clip_features'] = clip_features.cpu().numpy().tolist()
-                result['clip_features_shape'] = list(clip_features.shape)
+                result["clip_features"] = clip_features.cpu().numpy().tolist()
+                result["clip_features_shape"] = list(clip_features.shape)
 
             # Add VQA answer if available
             if vqa_answer:
-                result['vqa_answer'] = vqa_answer
-                result['vqa_question'] = question
+                result["vqa_answer"] = vqa_answer
+                result["vqa_question"] = question
 
             # Add GPU memory usage if CUDA is available
             if torch.cuda.is_available():
-                result['gpu_memory_used_mb'] = torch.cuda.memory_allocated() / 1024 / 1024
-                result['gpu_memory_cached_mb'] = torch.cuda.memory_reserved() / 1024 / 1024
+                result["gpu_memory_used_mb"] = (
+                    torch.cuda.memory_allocated() / 1024 / 1024
+                )
+                result["gpu_memory_cached_mb"] = (
+                    torch.cuda.memory_reserved() / 1024 / 1024
+                )
 
             return result
 
@@ -404,7 +447,7 @@ class VisionProcessor(BaseModalProcessor):
                 "error": str(e),
                 "caption": f"Processing failed: {str(e)}",
                 "confidence": 0.0,
-                "processing_device": str(self.device)
+                "processing_device": str(self.device),
             }
 
     async def _process_video(self, input_data: MultiModalInput) -> Dict[str, Any]:
@@ -424,7 +467,7 @@ class VoiceProcessor(BaseModalProcessor):
         self.enabled = self.config.get("enabled", True)
 
         # Initialize GPU device
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.logger.info(f"VoiceProcessor initialized with device: {self.device}")
 
         # Initialize audio models if available
@@ -437,18 +480,26 @@ class VoiceProcessor(BaseModalProcessor):
             try:
                 # Load Whisper model for speech recognition
                 self.logger.info("Loading Whisper model...")
-                self.whisper_processor = WhisperProcessor.from_pretrained("openai/whisper-base")
+                self.whisper_processor = WhisperProcessor.from_pretrained(
+                    "openai/whisper-base"
+                )
                 self.whisper_model = WhisperForConditionalGeneration.from_pretrained(
                     "openai/whisper-base",
-                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+                    torch_dtype=(
+                        torch.float16 if torch.cuda.is_available() else torch.float32
+                    ),
                 ).to(self.device)
 
                 # Load Wav2Vec2 model for audio embeddings and feature extraction
                 self.logger.info("Loading Wav2Vec2 model...")
-                self.wav2vec_processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base-960h")
+                self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(
+                    "facebook/wav2vec2-base-960h"
+                )
                 self.wav2vec_model = Wav2Vec2ForCTC.from_pretrained(
                     "facebook/wav2vec2-base-960h",
-                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+                    torch_dtype=(
+                        torch.float16 if torch.cuda.is_available() else torch.float32
+                    ),
                 ).to(self.device)
 
                 # Set models to evaluation mode
@@ -513,15 +564,21 @@ class VoiceProcessor(BaseModalProcessor):
         """Process audio input with GPU-accelerated Whisper and Wav2Vec2 models"""
 
         # Check if models are available
-        if not AUDIO_MODELS_AVAILABLE or self.whisper_model is None or self.wav2vec_model is None:
+        if (
+            not AUDIO_MODELS_AVAILABLE
+            or self.whisper_model is None
+            or self.wav2vec_model is None
+        ):
             # Fallback to placeholder implementation
-            self.logger.warning("Audio models not available, using placeholder implementation")
+            self.logger.warning(
+                "Audio models not available, using placeholder implementation"
+            )
             return {
                 "type": "voice_command",
                 "transcribed_text": "",
                 "command_type": "unknown",
                 "confidence": 0.0,
-                "processing_device": "cpu"
+                "processing_device": "cpu",
             }
 
         try:
@@ -538,7 +595,9 @@ class VoiceProcessor(BaseModalProcessor):
             elif isinstance(input_data.data, np.ndarray):
                 audio_array = input_data.data
             else:
-                raise ValueError(f"Unsupported audio data type: {type(input_data.data)}")
+                raise ValueError(
+                    f"Unsupported audio data type: {type(input_data.data)}"
+                )
 
             # Ensure audio is mono and normalized
             if len(audio_array.shape) > 1:
@@ -551,36 +610,29 @@ class VoiceProcessor(BaseModalProcessor):
                 with torch.no_grad():
                     # Prepare inputs for Whisper
                     input_features = self.whisper_processor(
-                        audio_array,
-                        sampling_rate=sampling_rate,
-                        return_tensors="pt"
+                        audio_array, sampling_rate=sampling_rate, return_tensors="pt"
                     ).input_features
 
                     if torch.cuda.is_available():
-                        with torch.autocast(device_type='cuda', dtype=torch.float16):
+                        with torch.autocast(device_type="cuda", dtype=torch.float16):
                             input_features = input_features.to(self.device)
                             # Generate token ids
                             predicted_ids = self.whisper_model.generate(
                                 input_features,
                                 max_length=448,
                                 num_beams=5,
-                                temperature=0.8
+                                temperature=0.8,
                             )
                             # Decode to text
                             transcribed_text = self.whisper_processor.batch_decode(
-                                predicted_ids,
-                                skip_special_tokens=True
+                                predicted_ids, skip_special_tokens=True
                             )[0].strip()
                     else:
                         predicted_ids = self.whisper_model.generate(
-                            input_features,
-                            max_length=448,
-                            num_beams=5,
-                            temperature=0.8
+                            input_features, max_length=448, num_beams=5, temperature=0.8
                         )
                         transcribed_text = self.whisper_processor.batch_decode(
-                            predicted_ids,
-                            skip_special_tokens=True
+                            predicted_ids, skip_special_tokens=True
                         )[0].strip()
 
             # Process with Wav2Vec2 for embeddings
@@ -593,27 +645,39 @@ class VoiceProcessor(BaseModalProcessor):
                         audio_array,
                         sampling_rate=sampling_rate,
                         return_tensors="pt",
-                        padding=True
+                        padding=True,
                     )
 
                     if torch.cuda.is_available():
-                        with torch.autocast(device_type='cuda', dtype=torch.float16):
-                            wav2vec_inputs = {k: v.to(self.device) for k, v in wav2vec_inputs.items()}
+                        with torch.autocast(device_type="cuda", dtype=torch.float16):
+                            wav2vec_inputs = {
+                                k: v.to(self.device) for k, v in wav2vec_inputs.items()
+                            }
                             # Get logits
                             logits = self.wav2vec_model(**wav2vec_inputs).logits
                             # Get embeddings from hidden states
-                            hidden_states = self.wav2vec_model.wav2vec2(**wav2vec_inputs).last_hidden_state
-                            audio_embedding = torch.mean(hidden_states, dim=1).cpu().numpy()
+                            hidden_states = self.wav2vec_model.wav2vec2(
+                                **wav2vec_inputs
+                            ).last_hidden_state
+                            audio_embedding = (
+                                torch.mean(hidden_states, dim=1).cpu().numpy()
+                            )
 
                             # Get predicted ids for additional transcription
                             predicted_ids = torch.argmax(logits, dim=-1)
-                            wav2vec_transcription = self.wav2vec_processor.batch_decode(predicted_ids)[0]
+                            wav2vec_transcription = self.wav2vec_processor.batch_decode(
+                                predicted_ids
+                            )[0]
                     else:
                         logits = self.wav2vec_model(**wav2vec_inputs).logits
-                        hidden_states = self.wav2vec_model.wav2vec2(**wav2vec_inputs).last_hidden_state
+                        hidden_states = self.wav2vec_model.wav2vec2(
+                            **wav2vec_inputs
+                        ).last_hidden_state
                         audio_embedding = torch.mean(hidden_states, dim=1).cpu().numpy()
                         predicted_ids = torch.argmax(logits, dim=-1)
-                        wav2vec_transcription = self.wav2vec_processor.batch_decode(predicted_ids)[0]
+                        wav2vec_transcription = self.wav2vec_processor.batch_decode(
+                            predicted_ids
+                        )[0]
 
             # Determine command type from transcription
             command_type = self._classify_command(transcribed_text)
@@ -624,24 +688,28 @@ class VoiceProcessor(BaseModalProcessor):
 
             # Prepare result
             result = {
-                'type': 'voice_command',
-                'transcribed_text': transcribed_text,
-                'wav2vec_transcription': wav2vec_transcription,
-                'command_type': command_type,
-                'confidence': 0.9 if transcribed_text else 0.0,
-                'processing_device': str(self.device),
-                'audio_duration_seconds': len(audio_array) / sampling_rate
+                "type": "voice_command",
+                "transcribed_text": transcribed_text,
+                "wav2vec_transcription": wav2vec_transcription,
+                "command_type": command_type,
+                "confidence": 0.9 if transcribed_text else 0.0,
+                "processing_device": str(self.device),
+                "audio_duration_seconds": len(audio_array) / sampling_rate,
             }
 
             # Add audio embeddings if available
             if audio_embedding is not None:
-                result['audio_embedding'] = audio_embedding.tolist()
-                result['audio_embedding_shape'] = list(audio_embedding.shape)
+                result["audio_embedding"] = audio_embedding.tolist()
+                result["audio_embedding_shape"] = list(audio_embedding.shape)
 
             # Add GPU memory usage if CUDA is available
             if torch.cuda.is_available():
-                result['gpu_memory_used_mb'] = torch.cuda.memory_allocated() / 1024 / 1024
-                result['gpu_memory_cached_mb'] = torch.cuda.memory_reserved() / 1024 / 1024
+                result["gpu_memory_used_mb"] = (
+                    torch.cuda.memory_allocated() / 1024 / 1024
+                )
+                result["gpu_memory_cached_mb"] = (
+                    torch.cuda.memory_reserved() / 1024 / 1024
+                )
 
             return result
 
@@ -658,7 +726,7 @@ class VoiceProcessor(BaseModalProcessor):
                 "transcribed_text": f"Processing failed: {str(e)}",
                 "command_type": "error",
                 "confidence": 0.0,
-                "processing_device": str(self.device)
+                "processing_device": str(self.device),
             }
 
     def _classify_command(self, text: str) -> str:
@@ -774,11 +842,15 @@ class UnifiedMultiModalProcessor:
         }
 
         # Initialize GPU device for fusion
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.logger.info(f"UnifiedMultiModalProcessor initialized with device: {self.device}")
+        self.logger.info(
+            f"UnifiedMultiModalProcessor initialized with device: {self.device}"
+        )
         if torch.cuda.is_available():
-            self.logger.info(f"GPU: {torch.cuda.get_device_name(0)}, Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f}GB")
+            self.logger.info(
+                f"GPU: {torch.cuda.get_device_name(0)}, Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f}GB"
+            )
 
         # Initialize cross-modal fusion components
         self.fusion_network = None
@@ -815,7 +887,7 @@ class UnifiedMultiModalProcessor:
             self.performance_monitor.record_processing(
                 modality=input_data.modality_type.value,
                 processing_time=processing_time,
-                items_processed=1
+                items_processed=1,
             )
 
             # Update statistics
@@ -834,7 +906,7 @@ class UnifiedMultiModalProcessor:
             self.performance_monitor.record_processing(
                 modality=input_data.modality_type.value,
                 processing_time=processing_time,
-                items_processed=0
+                items_processed=0,
             )
 
             return ProcessingResult(
@@ -925,21 +997,20 @@ class UnifiedMultiModalProcessor:
                 nn.Linear(768, 512),
                 nn.ReLU(),
                 nn.Dropout(0.1),
-                nn.Linear(512, 512)    # Final fused embedding
+                nn.Linear(512, 512),  # Final fused embedding
             ).to(self.device)
 
             # Multi-head attention for modality weighting
             self.attention_layer = nn.MultiheadAttention(
-                embed_dim=512,
-                num_heads=8,
-                dropout=0.1,
-                batch_first=True
+                embed_dim=512, num_heads=8, dropout=0.1, batch_first=True
             ).to(self.device)
 
             # Set to evaluation mode
             self.fusion_network.eval()
 
-            self.logger.info(f"✅ Cross-modal fusion components initialized on {self.device}")
+            self.logger.info(
+                f"✅ Cross-modal fusion components initialized on {self.device}"
+            )
         except Exception as e:
             self.logger.error(f"Failed to initialize fusion components: {e}")
 
@@ -960,15 +1031,15 @@ class UnifiedMultiModalProcessor:
                 # Try to extract embeddings from different result formats
                 embedding = None
                 if result.result_data:
-                    if 'clip_features' in result.result_data:
+                    if "clip_features" in result.result_data:
                         # Vision embeddings
-                        embedding = result.result_data.get('clip_features')
-                    elif 'audio_embedding' in result.result_data:
+                        embedding = result.result_data.get("clip_features")
+                    elif "audio_embedding" in result.result_data:
                         # Audio embeddings
-                        embedding = result.result_data.get('audio_embedding')
-                    elif 'embeddings' in result.result_data:
+                        embedding = result.result_data.get("audio_embedding")
+                    elif "embeddings" in result.result_data:
                         # Generic embeddings
-                        embedding = result.result_data.get('embeddings')
+                        embedding = result.result_data.get("embeddings")
 
                 if embedding is not None:
                     # Convert to tensor
@@ -996,43 +1067,45 @@ class UnifiedMultiModalProcessor:
                     if emb_flat.shape[0] < target_dim:
                         # Pad with zeros
                         padded = torch.zeros(target_dim, device=self.device)
-                        padded[:emb_flat.shape[0]] = emb_flat
+                        padded[: emb_flat.shape[0]] = emb_flat
                         normalized_embeddings.append(padded)
                     else:
                         # Truncate or use as is
                         normalized_embeddings.append(emb_flat[:target_dim])
 
                 # Stack embeddings for attention [num_modalities, 512]
-                stacked_embeddings = torch.stack(normalized_embeddings).unsqueeze(0)  # [1, num_modalities, 512]
+                stacked_embeddings = torch.stack(normalized_embeddings).unsqueeze(
+                    0
+                )  # [1, num_modalities, 512]
 
                 # Apply multi-head attention
                 if torch.cuda.is_available():
-                    with torch.autocast(device_type='cuda', dtype=torch.float16):
+                    with torch.autocast(device_type="cuda", dtype=torch.float16):
                         attended_output, attention_weights = self.attention_layer(
-                            stacked_embeddings,
-                            stacked_embeddings,
-                            stacked_embeddings
+                            stacked_embeddings, stacked_embeddings, stacked_embeddings
                         )
                 else:
                     attended_output, attention_weights = self.attention_layer(
-                        stacked_embeddings,
-                        stacked_embeddings,
-                        stacked_embeddings
+                        stacked_embeddings, stacked_embeddings, stacked_embeddings
                     )
 
                 # Confidence-weighted fusion
-                confidence_weights = torch.tensor(confidences, device=self.device).unsqueeze(-1)
-                weighted_embeddings = attended_output.squeeze(0) * confidence_weights  # [num_modalities, 512]
+                confidence_weights = torch.tensor(
+                    confidences, device=self.device
+                ).unsqueeze(-1)
+                weighted_embeddings = (
+                    attended_output.squeeze(0) * confidence_weights
+                )  # [num_modalities, 512]
 
                 # Prepare input for fusion network
                 # Pad to fixed size (3 modalities * 512 = 1536)
                 fusion_input = torch.zeros(1536, device=self.device)
                 flat_weighted = weighted_embeddings.flatten()
-                fusion_input[:min(flat_weighted.shape[0], 1536)] = flat_weighted[:1536]
+                fusion_input[: min(flat_weighted.shape[0], 1536)] = flat_weighted[:1536]
 
                 # Final fusion through neural network
                 if torch.cuda.is_available():
-                    with torch.autocast(device_type='cuda', dtype=torch.float16):
+                    with torch.autocast(device_type="cuda", dtype=torch.float16):
                         fused_embedding = self.fusion_network(fusion_input)
                 else:
                     fused_embedding = self.fusion_network(fusion_input)
@@ -1043,23 +1116,27 @@ class UnifiedMultiModalProcessor:
                 # Extract attention weights for each modality
                 if attention_weights is not None:
                     attn_scores = attention_weights.mean(dim=1).squeeze().cpu().numpy()
-                    modality_contributions = dict(zip(modalities, attn_scores[:len(modalities)]))
+                    modality_contributions = dict(
+                        zip(modalities, attn_scores[: len(modalities)])
+                    )
                 else:
-                    modality_contributions = {m: 1.0/len(modalities) for m in modalities}
+                    modality_contributions = {
+                        m: 1.0 / len(modalities) for m in modalities
+                    }
 
             # Clear GPU cache
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
             return {
-                'fusion_type': 'attention_based',
-                'fused_embedding': fused_embedding.cpu().numpy().tolist(),
-                'fusion_confidence': fusion_confidence,
-                'modality_contributions': modality_contributions,
-                'modalities_fused': modalities,
-                'success_count': len(embeddings),
-                'total_count': len(results),
-                'individual_results': result_data
+                "fusion_type": "attention_based",
+                "fused_embedding": fused_embedding.cpu().numpy().tolist(),
+                "fusion_confidence": fusion_confidence,
+                "modality_contributions": modality_contributions,
+                "modalities_fused": modalities,
+                "success_count": len(embeddings),
+                "total_count": len(results),
+                "individual_results": result_data,
             }
 
         except Exception as e:
@@ -1142,7 +1219,9 @@ class UnifiedMultiModalProcessor:
         except Exception as e:
             self.logger.warning(f"Failed to store processing result: {e}")
 
-    async def process_batch(self, inputs: List[MultiModalInput]) -> List[ProcessingResult]:
+    async def process_batch(
+        self, inputs: List[MultiModalInput]
+    ) -> List[ProcessingResult]:
         """
         Process multiple inputs efficiently using optimized batching
         """
@@ -1172,9 +1251,11 @@ class UnifiedMultiModalProcessor:
 
                 # Process in chunks of optimal batch size
                 for i in range(0, len(group_inputs), batch_size):
-                    batch = group_inputs[i:i + batch_size]
+                    batch = group_inputs[i : i + batch_size]
 
-                    self.logger.debug(f"Processing batch of {len(batch)} {modality} inputs")
+                    self.logger.debug(
+                        f"Processing batch of {len(batch)} {modality} inputs"
+                    )
 
                     # Memory optimization before processing each batch
                     if self.performance_monitor.should_optimize():
@@ -1201,10 +1282,12 @@ class UnifiedMultiModalProcessor:
             self.performance_monitor.record_processing(
                 modality="batch",
                 processing_time=total_processing_time,
-                items_processed=len(inputs)
+                items_processed=len(inputs),
             )
 
-            self.logger.info(f"Batch processing completed: {len(results)} results in {total_processing_time:.2f}s")
+            self.logger.info(
+                f"Batch processing completed: {len(results)} results in {total_processing_time:.2f}s"
+            )
             return results
 
         except Exception as e:
@@ -1216,7 +1299,9 @@ class UnifiedMultiModalProcessor:
                     result = await self.process(inp)
                     results.append(result)
                 except Exception as individual_error:
-                    self.logger.error(f"Individual processing failed for {inp.input_id}: {individual_error}")
+                    self.logger.error(
+                        f"Individual processing failed for {inp.input_id}: {individual_error}"
+                    )
                     # Create error result
                     error_result = ProcessingResult(
                         result_id=f"batch_error_{inp.input_id}",
@@ -1233,7 +1318,9 @@ class UnifiedMultiModalProcessor:
 
             return results
 
-    async def _process_image_batch(self, batch: List[MultiModalInput]) -> List[ProcessingResult]:
+    async def _process_image_batch(
+        self, batch: List[MultiModalInput]
+    ) -> List[ProcessingResult]:
         """Process a batch of images efficiently"""
         results = []
 
@@ -1272,7 +1359,9 @@ class UnifiedMultiModalProcessor:
 
         return results
 
-    async def _process_audio_batch(self, batch: List[MultiModalInput]) -> List[ProcessingResult]:
+    async def _process_audio_batch(
+        self, batch: List[MultiModalInput]
+    ) -> List[ProcessingResult]:
         """Process a batch of audio inputs efficiently"""
         results = []
 

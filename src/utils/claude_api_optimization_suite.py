@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 class OptimizationMode(Enum):
     """Optimization modes for different scenarios"""
+
     CONSERVATIVE = "conservative"  # Light optimization, minimal interference
     BALANCED = "balanced"  # Balanced optimization for normal development
     AGGRESSIVE = "aggressive"  # Maximum optimization for high-frequency usage
@@ -43,6 +44,7 @@ class OptimizationMode(Enum):
 @dataclass
 class OptimizationConfig:
     """Configuration for the optimization suite"""
+
     mode: OptimizationMode = OptimizationMode.BALANCED
     enable_rate_limiting: bool = True
     enable_payload_optimization: bool = True
@@ -78,6 +80,7 @@ class OptimizationConfig:
 @dataclass
 class OptimizationMetrics:
     """Metrics for optimization performance"""
+
     total_requests_processed: int = 0
     requests_rate_limited: int = 0
     requests_optimized: int = 0
@@ -115,7 +118,9 @@ class ClaudeAPIOptimizationSuite:
         # Async task management
         self._background_tasks: List[asyncio.Task] = []
 
-        logger.info(f"Claude API Optimization Suite initialized in {self.config.mode.value} mode")
+        logger.info(
+            f"Claude API Optimization Suite initialized in {self.config.mode.value} mode"
+        )
 
     def _initialize_components(self):
         """Initialize all optimization components based on configuration"""
@@ -124,7 +129,7 @@ class ClaudeAPIOptimizationSuite:
         if self.config.enable_rate_limiting:
             self.rate_limiter = ConversationRateLimiter(
                 max_requests_per_minute=self.config.max_requests_per_minute,
-                max_requests_per_hour=self.config.max_requests_per_hour
+                max_requests_per_hour=self.config.max_requests_per_hour,
             )
         else:
             self.rate_limiter = None
@@ -133,7 +138,7 @@ class ClaudeAPIOptimizationSuite:
         if self.config.enable_payload_optimization:
             self.payload_optimizer = PayloadOptimizer(
                 max_size=self.config.max_payload_size,
-                enable_compression=self.config.enable_compression
+                enable_compression=self.config.enable_compression,
             )
         else:
             self.payload_optimizer = None
@@ -142,34 +147,38 @@ class ClaudeAPIOptimizationSuite:
         if self.config.enable_request_batching:
             self.request_batcher = IntelligentRequestBatcher(
                 max_batch_size=self.config.max_batch_size,
-                time_window=self.config.batch_time_window
+                time_window=self.config.batch_time_window,
             )
         else:
             self.request_batcher = None
 
         # Graceful degradation manager
         if self.config.enable_graceful_degradation:
-            self.degradation_manager = GracefulDegradationManager({
-                "enable_caching": self.config.enable_caching,
-                "cache_ttl": self.config.cache_ttl
-            })
+            self.degradation_manager = GracefulDegradationManager(
+                {
+                    "enable_caching": self.config.enable_caching,
+                    "cache_ttl": self.config.cache_ttl,
+                }
+            )
         else:
             self.degradation_manager = None
 
         # TodoWrite optimizer
         if self.config.enable_todowrite_optimization:
-            self.todowrite_optimizer = get_todowrite_optimizer({
-                "consolidation_window": self.config.todowrite_consolidation_window,
-                "similarity_threshold": self.config.todowrite_similarity_threshold
-            })
+            self.todowrite_optimizer = get_todowrite_optimizer(
+                {
+                    "consolidation_window": self.config.todowrite_consolidation_window,
+                    "similarity_threshold": self.config.todowrite_similarity_threshold,
+                }
+            )
         else:
             self.todowrite_optimizer = None
 
         # Tool pattern analyzer
         if self.config.enable_pattern_analysis:
-            self.pattern_analyzer = get_tool_pattern_analyzer({
-                "analysis_window": self.config.pattern_analysis_interval
-            })
+            self.pattern_analyzer = get_tool_pattern_analyzer(
+                {"analysis_window": self.config.pattern_analysis_interval}
+            )
         else:
             self.pattern_analyzer = None
 
@@ -196,7 +205,9 @@ class ClaudeAPIOptimizationSuite:
 
             # Start degradation monitoring
             if self.degradation_manager:
-                degradation_task = asyncio.create_task(self._background_degradation_monitoring())
+                degradation_task = asyncio.create_task(
+                    self._background_degradation_monitoring()
+                )
                 self._background_tasks.append(degradation_task)
 
             logger.info("Claude API Optimization Suite started successfully")
@@ -234,9 +245,9 @@ class ClaudeAPIOptimizationSuite:
             logger.error(f"Error stopping optimization suite: {e}")
             return False
 
-    async def optimize_request(self,
-                             request_data: Dict[str, Any],
-                             request_type: str = "general") -> Dict[str, Any]:
+    async def optimize_request(
+        self, request_data: Dict[str, Any], request_type: str = "general"
+    ) -> Dict[str, Any]:
         """
         Optimize a Claude API request through the complete optimization pipeline.
 
@@ -265,7 +276,11 @@ class ClaudeAPIOptimizationSuite:
                     )
                     if fallback.success:
                         self.metrics.requests_cached += 1
-                        return {"status": "fallback", "data": fallback.response, "source": fallback.source}
+                        return {
+                            "status": "fallback",
+                            "data": fallback.response,
+                            "source": fallback.source,
+                        }
 
                 return {"status": "rate_limited", "retry_after": 60}
 
@@ -279,15 +294,21 @@ class ClaudeAPIOptimizationSuite:
 
             # Step 3: Payload optimization
             if self.payload_optimizer:
-                optimization_result = await self.payload_optimizer.optimize_payload(request_data)
+                optimization_result = await self.payload_optimizer.optimize_payload(
+                    request_data
+                )
                 if optimization_result.optimized:
                     request_data = optimization_result.optimized_payload
                     optimization_applied.append("payload_optimization")
-                    self.metrics.total_response_time_saved += optimization_result.size_reduction / 1000  # Estimate time saved
+                    self.metrics.total_response_time_saved += (
+                        optimization_result.size_reduction / 1000
+                    )  # Estimate time saved
 
             # Step 4: Request batching
             if self.request_batcher and self._should_batch_request(request_type):
-                batched = await self._attempt_request_batching(request_data, request_type)
+                batched = await self._attempt_request_batching(
+                    request_data, request_type
+                )
                 if batched:
                     optimization_applied.append("request_batching")
                     self.metrics.requests_batched += 1
@@ -300,7 +321,7 @@ class ClaudeAPIOptimizationSuite:
                     tool_name=request_type,
                     parameters=request_data,
                     response_time=time.time() - start_time,
-                    success=True
+                    success=True,
                 )
 
             # Step 6: Execute request (simulated - in real implementation this would call Claude API)
@@ -308,26 +329,30 @@ class ClaudeAPIOptimizationSuite:
 
             # Step 7: Cache successful response for degradation
             if self.degradation_manager and response.get("status") == "success":
-                await self.degradation_manager._cache_response(str(request_data), response["data"])
+                await self.degradation_manager._cache_response(
+                    str(request_data), response["data"]
+                )
 
             # Update metrics
             if optimization_applied:
                 self.metrics.requests_optimized += 1
 
             # Record optimization history
-            self.optimization_history.append({
-                "timestamp": datetime.now().isoformat(),
-                "request_type": request_type,
-                "optimizations_applied": optimization_applied,
-                "response_time": time.time() - start_time,
-                "success": True
-            })
+            self.optimization_history.append(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "request_type": request_type,
+                    "optimizations_applied": optimization_applied,
+                    "response_time": time.time() - start_time,
+                    "success": True,
+                }
+            )
 
             return {
                 "status": "success",
                 "data": response.get("data"),
                 "optimizations_applied": optimization_applied,
-                "response_time": time.time() - start_time
+                "response_time": time.time() - start_time,
             }
 
         except Exception as e:
@@ -340,7 +365,7 @@ class ClaudeAPIOptimizationSuite:
                     parameters=request_data,
                     response_time=time.time() - start_time,
                     success=False,
-                    error_message=str(e)
+                    error_message=str(e),
                 )
 
             # Try graceful degradation for errors
@@ -349,7 +374,11 @@ class ClaudeAPIOptimizationSuite:
                     str(request_data), {"type": request_type, "error": str(e)}
                 )
                 if fallback.success:
-                    return {"status": "fallback", "data": fallback.response, "source": fallback.source}
+                    return {
+                        "status": "fallback",
+                        "data": fallback.response,
+                        "source": fallback.source,
+                    }
 
             return {"status": "error", "error": str(e)}
 
@@ -363,7 +392,9 @@ class ClaudeAPIOptimizationSuite:
         except RateLimitExceededError:
             return False
 
-    async def _optimize_todowrite_request(self, request_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def _optimize_todowrite_request(
+        self, request_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Handle TodoWrite optimization specifically"""
         try:
             todos = request_data.get("todos", [])
@@ -377,17 +408,19 @@ class ClaudeAPIOptimizationSuite:
                     content=todo.get("content", ""),
                     status=todo.get("status", "pending"),
                     active_form=todo.get("activeForm", ""),
-                    priority=todo.get("priority", 5)
+                    priority=todo.get("priority", 5),
                 )
                 if success:
                     optimized_count += 1
 
             if optimized_count > 0:
-                self.metrics.api_calls_saved += len(todos) - 1  # N todos -> 1 optimized call
+                self.metrics.api_calls_saved += (
+                    len(todos) - 1
+                )  # N todos -> 1 optimized call
                 return {
                     "status": "optimized",
                     "message": f"{optimized_count} todos added for optimization",
-                    "optimization_type": "todowrite_batching"
+                    "optimization_type": "todowrite_batching",
                 }
 
             return None
@@ -401,7 +434,9 @@ class ClaudeAPIOptimizationSuite:
         batchable_types = ["read", "search", "analyze", "tool_call"]
         return any(btype in request_type.lower() for btype in batchable_types)
 
-    async def _attempt_request_batching(self, request_data: Dict[str, Any], request_type: str) -> Optional[Dict[str, Any]]:
+    async def _attempt_request_batching(
+        self, request_data: Dict[str, Any], request_type: str
+    ) -> Optional[Dict[str, Any]]:
         """Attempt to batch the request with similar pending requests"""
         try:
             batchable_request = BatchableRequest(
@@ -409,7 +444,7 @@ class ClaudeAPIOptimizationSuite:
                 request_type=request_type,
                 content=str(request_data),
                 parameters=request_data,
-                priority=5
+                priority=5,
             )
 
             batch_result = await self.request_batcher.add_request(batchable_request)
@@ -418,7 +453,7 @@ class ClaudeAPIOptimizationSuite:
                 return {
                     "status": "batched",
                     "batch_id": batch_result.get("batch_id"),
-                    "optimization_type": "request_batching"
+                    "optimization_type": "request_batching",
                 }
 
             return None
@@ -427,7 +462,9 @@ class ClaudeAPIOptimizationSuite:
             logger.error(f"Error attempting request batching: {e}")
             return None
 
-    async def _execute_optimized_request(self, request_data: Dict[str, Any], request_type: str) -> Dict[str, Any]:
+    async def _execute_optimized_request(
+        self, request_data: Dict[str, Any], request_type: str
+    ) -> Dict[str, Any]:
         """Execute the optimized request (simulation for this implementation)"""
         # In a real implementation, this would make the actual Claude API call
         # For now, we simulate a successful response
@@ -436,7 +473,7 @@ class ClaudeAPIOptimizationSuite:
         return {
             "status": "success",
             "data": {"message": "Request processed successfully", "type": request_type},
-            "response_time": 0.1
+            "response_time": 0.1,
         }
 
     async def _background_pattern_analysis(self):
@@ -447,21 +484,30 @@ class ClaudeAPIOptimizationSuite:
 
                 if self.pattern_analyzer:
                     # Trigger pattern analysis
-                    analysis_results = self.pattern_analyzer.get_analysis_results(force_refresh=True)
+                    analysis_results = self.pattern_analyzer.get_analysis_results(
+                        force_refresh=True
+                    )
 
                     # Check for critical inefficiencies
-                    recommendations = self.pattern_analyzer.get_optimization_recommendations()
+                    recommendations = (
+                        self.pattern_analyzer.get_optimization_recommendations()
+                    )
                     critical_recommendations = [
-                        rec for rec in recommendations
+                        rec
+                        for rec in recommendations
                         if rec.get("priority_score", 0) > 0.8
                     ]
 
                     if critical_recommendations:
-                        logger.warning(f"Found {len(critical_recommendations)} critical optimization opportunities")
+                        logger.warning(
+                            f"Found {len(critical_recommendations)} critical optimization opportunities"
+                        )
 
                         # Auto-adjust mode if needed
                         if len(critical_recommendations) > 3:
-                            await self._adjust_optimization_mode(OptimizationMode.AGGRESSIVE)
+                            await self._adjust_optimization_mode(
+                                OptimizationMode.AGGRESSIVE
+                            )
 
             except Exception as e:
                 logger.error(f"Error in background pattern analysis: {e}")
@@ -480,7 +526,9 @@ class ClaudeAPIOptimizationSuite:
                 rate_limit_risk = self.api_monitor.predict_rate_limit_risk()
 
                 if rate_limit_risk > 0.8:  # High risk
-                    logger.warning(f"High rate limit risk detected: {rate_limit_risk:.2f}")
+                    logger.warning(
+                        f"High rate limit risk detected: {rate_limit_risk:.2f}"
+                    )
                     await self._adjust_optimization_mode(OptimizationMode.AGGRESSIVE)
 
                 elif rate_limit_risk > 0.6:  # Moderate risk
@@ -504,7 +552,9 @@ class ClaudeAPIOptimizationSuite:
                     if status["degradation_level"] == "EMERGENCY":
                         await self._adjust_optimization_mode(OptimizationMode.EMERGENCY)
                     elif status["degradation_level"] == "MINIMAL":
-                        await self._adjust_optimization_mode(OptimizationMode.AGGRESSIVE)
+                        await self._adjust_optimization_mode(
+                            OptimizationMode.AGGRESSIVE
+                        )
 
             except Exception as e:
                 logger.error(f"Error in degradation monitoring: {e}")
@@ -513,7 +563,9 @@ class ClaudeAPIOptimizationSuite:
     async def _adjust_optimization_mode(self, new_mode: OptimizationMode):
         """Dynamically adjust optimization mode based on conditions"""
         if new_mode != self.current_mode:
-            logger.info(f"Adjusting optimization mode from {self.current_mode.value} to {new_mode.value}")
+            logger.info(
+                f"Adjusting optimization mode from {self.current_mode.value} to {new_mode.value}"
+            )
 
             old_mode = self.current_mode
             self.current_mode = new_mode
@@ -522,13 +574,15 @@ class ClaudeAPIOptimizationSuite:
             await self._reconfigure_components_for_mode(new_mode)
 
             # Record mode change in history
-            self.optimization_history.append({
-                "timestamp": datetime.now().isoformat(),
-                "event": "mode_change",
-                "old_mode": old_mode.value,
-                "new_mode": new_mode.value,
-                "reason": "automatic_adjustment"
-            })
+            self.optimization_history.append(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "event": "mode_change",
+                    "old_mode": old_mode.value,
+                    "new_mode": new_mode.value,
+                    "reason": "automatic_adjustment",
+                }
+            )
 
     async def _reconfigure_components_for_mode(self, mode: OptimizationMode):
         """Reconfigure components for the new optimization mode"""
@@ -567,7 +621,7 @@ class ClaudeAPIOptimizationSuite:
                 "request_batching_enabled": self.config.enable_request_batching,
                 "graceful_degradation_enabled": self.config.enable_graceful_degradation,
                 "todowrite_optimization_enabled": self.config.enable_todowrite_optimization,
-                "pattern_analysis_enabled": self.config.enable_pattern_analysis
+                "pattern_analysis_enabled": self.config.enable_pattern_analysis,
             },
             "metrics": {
                 "total_requests_processed": self.metrics.total_requests_processed,
@@ -579,10 +633,14 @@ class ClaudeAPIOptimizationSuite:
                 "total_response_time_saved": self.metrics.total_response_time_saved,
                 "conversation_crashes_prevented": self.metrics.conversation_crashes_prevented,
                 "optimization_efficiency": (
-                    (self.metrics.api_calls_saved / max(1, self.metrics.total_requests_processed)) * 100
-                )
+                    (
+                        self.metrics.api_calls_saved
+                        / max(1, self.metrics.total_requests_processed)
+                    )
+                    * 100
+                ),
             },
-            "component_status": self._get_component_status()
+            "component_status": self._get_component_status(),
         }
 
     def _get_component_status(self) -> Dict[str, Any]:
@@ -594,7 +652,7 @@ class ClaudeAPIOptimizationSuite:
             status["rate_limiter"] = {
                 "active": True,
                 "current_usage": rate_stats["current_minute_count"],
-                "hourly_usage": rate_stats["current_hour_count"]
+                "hourly_usage": rate_stats["current_hour_count"],
             }
 
         if self.todowrite_optimizer:
@@ -602,7 +660,9 @@ class ClaudeAPIOptimizationSuite:
             status["todowrite_optimizer"] = {
                 "active": True,
                 "pending_todos": todowrite_stats["pending_todos_count"],
-                "total_optimizations": todowrite_stats["optimization_stats"]["total_optimizations"]
+                "total_optimizations": todowrite_stats["optimization_stats"][
+                    "total_optimizations"
+                ],
             }
 
         if self.pattern_analyzer:
@@ -610,7 +670,9 @@ class ClaudeAPIOptimizationSuite:
             status["pattern_analyzer"] = {
                 "active": True,
                 "total_patterns": pattern_stats.get("patterns_detected", 0),
-                "optimization_opportunities": pattern_stats.get("optimization_opportunities", 0)
+                "optimization_opportunities": pattern_stats.get(
+                    "optimization_opportunities", 0
+                ),
             }
 
         if self.degradation_manager:
@@ -618,7 +680,7 @@ class ClaudeAPIOptimizationSuite:
             status["degradation_manager"] = {
                 "active": True,
                 "degradation_level": degradation_status["degradation_level"],
-                "service_health": degradation_status["health_score"]
+                "service_health": degradation_status["health_score"],
             }
 
         return status
@@ -630,24 +692,24 @@ class ClaudeAPIOptimizationSuite:
             "optimization_suite_status": self.get_optimization_status(),
             "detailed_metrics": self.metrics.__dict__,
             "optimization_history": self.optimization_history[-20:],  # Last 20 events
-            "component_reports": {}
+            "component_reports": {},
         }
 
         # Add component-specific reports
         if self.todowrite_optimizer:
-            report["component_reports"]["todowrite_optimizer"] = (
-                self.todowrite_optimizer.get_optimization_recommendations()
-            )
+            report["component_reports"][
+                "todowrite_optimizer"
+            ] = self.todowrite_optimizer.get_optimization_recommendations()
 
         if self.pattern_analyzer:
-            report["component_reports"]["pattern_analyzer"] = (
-                self.pattern_analyzer.get_optimization_recommendations()
-            )
+            report["component_reports"][
+                "pattern_analyzer"
+            ] = self.pattern_analyzer.get_optimization_recommendations()
 
         if self.api_monitor:
-            report["component_reports"]["api_monitor"] = (
-                self.api_monitor.get_optimization_recommendations()
-            )
+            report["component_reports"][
+                "api_monitor"
+            ] = self.api_monitor.get_optimization_recommendations()
 
         return report
 
@@ -661,12 +723,16 @@ class ClaudeAPIOptimizationSuite:
                 batch_result = await self.todowrite_optimizer.force_optimization()
                 analysis_results["todowrite_optimization"] = {
                     "batch_processed": batch_result is not None,
-                    "batch_score": batch_result.optimization_score if batch_result else 0
+                    "batch_score": (
+                        batch_result.optimization_score if batch_result else 0
+                    ),
                 }
 
             # Force pattern analysis
             if self.pattern_analyzer:
-                pattern_results = self.pattern_analyzer.get_analysis_results(force_refresh=True)
+                pattern_results = self.pattern_analyzer.get_analysis_results(
+                    force_refresh=True
+                )
                 analysis_results["pattern_analysis"] = pattern_results
 
             # Get fresh API monitoring insights
@@ -680,7 +746,7 @@ class ClaudeAPIOptimizationSuite:
             return {
                 "status": "success",
                 "analysis_results": analysis_results,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
         except Exception as e:
@@ -688,7 +754,7 @@ class ClaudeAPIOptimizationSuite:
             return {
                 "status": "error",
                 "error": str(e),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
     def reset_metrics(self):
@@ -702,7 +768,7 @@ class ClaudeAPIOptimizationSuite:
         try:
             report = self.get_comprehensive_report()
 
-            with open(file_path, 'w') as f:
+            with open(file_path, "w") as f:
                 json.dump(report, f, indent=2, default=str)
 
             logger.info(f"Optimization report exported to {file_path}")
@@ -717,7 +783,9 @@ class ClaudeAPIOptimizationSuite:
 _global_optimization_suite: Optional[ClaudeAPIOptimizationSuite] = None
 
 
-def get_optimization_suite(config: Optional[OptimizationConfig] = None) -> ClaudeAPIOptimizationSuite:
+def get_optimization_suite(
+    config: Optional[OptimizationConfig] = None,
+) -> ClaudeAPIOptimizationSuite:
     """Get global optimization suite instance"""
     global _global_optimization_suite
     if _global_optimization_suite is None:
@@ -725,7 +793,9 @@ def get_optimization_suite(config: Optional[OptimizationConfig] = None) -> Claud
     return _global_optimization_suite
 
 
-async def initialize_claude_api_optimization(config: Optional[OptimizationConfig] = None) -> bool:
+async def initialize_claude_api_optimization(
+    config: Optional[OptimizationConfig] = None,
+) -> bool:
     """Initialize and start the Claude API optimization suite"""
     suite = get_optimization_suite(config)
     return await suite.start_optimization()
@@ -742,7 +812,9 @@ async def shutdown_claude_api_optimization() -> bool:
 
 
 # Convenience functions for common operations
-async def optimize_claude_request(request_data: Dict[str, Any], request_type: str = "general") -> Dict[str, Any]:
+async def optimize_claude_request(
+    request_data: Dict[str, Any], request_type: str = "general"
+) -> Dict[str, Any]:
     """Optimize a Claude API request using the global optimization suite"""
     suite = get_optimization_suite()
     return await suite.optimize_request(request_data, request_type)
@@ -768,7 +840,7 @@ async def example_usage():
         mode=OptimizationMode.BALANCED,
         enable_todowrite_optimization=True,
         enable_pattern_analysis=True,
-        todowrite_consolidation_window=45
+        todowrite_consolidation_window=45,
     )
 
     # Start optimization
@@ -781,17 +853,30 @@ async def example_usage():
     suite = get_optimization_suite()
 
     # Example: Optimize TodoWrite operation
-    todowrite_result = await optimize_todowrite([
-        {"content": "Implement authentication system", "status": "pending", "activeForm": "Implementing authentication system"},
-        {"content": "Create login endpoint", "status": "pending", "activeForm": "Creating login endpoint"},
-        {"content": "Add auth middleware", "status": "pending", "activeForm": "Adding auth middleware"}
-    ])
+    todowrite_result = await optimize_todowrite(
+        [
+            {
+                "content": "Implement authentication system",
+                "status": "pending",
+                "activeForm": "Implementing authentication system",
+            },
+            {
+                "content": "Create login endpoint",
+                "status": "pending",
+                "activeForm": "Creating login endpoint",
+            },
+            {
+                "content": "Add auth middleware",
+                "status": "pending",
+                "activeForm": "Adding auth middleware",
+            },
+        ]
+    )
     print("TodoWrite optimization result:", json.dumps(todowrite_result, indent=2))
 
     # Example: Optimize general request
     general_result = await optimize_claude_request(
-        {"action": "read_file", "path": "/test/file.py"},
-        "read_operation"
+        {"action": "read_file", "path": "/test/file.py"}, "read_operation"
     )
     print("General request optimization result:", json.dumps(general_result, indent=2))
 

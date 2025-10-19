@@ -21,7 +21,13 @@ logger = logging.getLogger(__name__)
 
 class AIStackError(Exception):
     """Base exception for AI Stack communication errors."""
-    def __init__(self, message: str, status_code: Optional[int] = None, details: Optional[Dict] = None):
+
+    def __init__(
+        self,
+        message: str,
+        status_code: Optional[int] = None,
+        details: Optional[Dict] = None,
+    ):
         self.message = message
         self.status_code = status_code
         self.details = details or {}
@@ -39,6 +45,7 @@ class AIStackClient:
     def __init__(self, base_url: Optional[str] = None):
         # Get configuration
         from src.unified_config_manager import unified_config_manager
+
         services_config = unified_config_manager.get_distributed_services_config()
         ai_stack_config = services_config.get("ai_stack", {})
 
@@ -47,9 +54,11 @@ class AIStackClient:
             host = ai_stack_config.get("host")
             port = ai_stack_config.get("port")
             if not host or not port:
-                raise ValueError("AI Stack configuration missing 'host' or 'port' in unified_config_manager")
+                raise ValueError(
+                    "AI Stack configuration missing 'host' or 'port' in unified_config_manager"
+                )
             base_url = f"http://{host}:{port}"
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.session: Optional[aiohttp.ClientSession] = None
 
         # Get timeout, retry, and connection configuration from config
@@ -71,7 +80,7 @@ class AIStackClient:
             "web_research_assistant": "/api/agents/web_research_assistant",
             "npu_code_search": "/api/agents/npu_code_search",
             "development_speedup": "/api/agents/development_speedup",
-            "classification": "/api/agents/classification"
+            "classification": "/api/agents/classification",
         }
 
     async def __aenter__(self):
@@ -88,13 +97,16 @@ class AIStackClient:
         if self.session is None or self.session.closed:
             # Get connector configuration
             from src.unified_config_manager import unified_config_manager
+
             services_config = unified_config_manager.get_distributed_services_config()
             ai_stack_config = services_config.get("ai_stack", {})
             system_config = unified_config_manager.get_config_section("system") or {}
 
             # Get connection pool limits from config
             connection_limit = ai_stack_config.get("connection_limit", 100)
-            connection_limit_per_host = ai_stack_config.get("connection_limit_per_host", 20)
+            connection_limit_per_host = ai_stack_config.get(
+                "connection_limit_per_host", 20
+            )
 
             # Get User-Agent from config
             version = system_config.get("version", "1.0")
@@ -103,15 +115,12 @@ class AIStackClient:
             connector = aiohttp.TCPConnector(
                 limit=connection_limit,
                 limit_per_host=connection_limit_per_host,
-                enable_cleanup_closed=True
+                enable_cleanup_closed=True,
             )
             self.session = aiohttp.ClientSession(
                 connector=connector,
                 timeout=self.timeout,
-                headers={
-                    "Content-Type": "application/json",
-                    "User-Agent": user_agent
-                }
+                headers={"Content-Type": "application/json", "User-Agent": user_agent},
             )
             logger.info(f"AI Stack client connected to {self.base_url}")
 
@@ -127,7 +136,7 @@ class AIStackClient:
         endpoint: str,
         data: Optional[Dict[str, Any]] = None,
         params: Optional[Dict[str, Any]] = None,
-        headers: Optional[Dict[str, str]] = None
+        headers: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """
         Make HTTP request to AI Stack with retry logic.
@@ -153,19 +162,23 @@ class AIStackClient:
 
         for attempt in range(self.retry_attempts):
             try:
-                logger.debug(f"AI Stack request: {method} {url} (attempt {attempt + 1})")
+                logger.debug(
+                    f"AI Stack request: {method} {url} (attempt {attempt + 1})"
+                )
 
                 async with self.session.request(
                     method=method,
                     url=url,
                     json=data,
                     params=params,
-                    headers=request_headers
+                    headers=request_headers,
                 ) as response:
                     response_text = await response.text()
 
                     if response.status >= 400:
-                        logger.error(f"AI Stack error {response.status}: {response_text}")
+                        logger.error(
+                            f"AI Stack error {response.status}: {response_text}"
+                        )
 
                         if response.status >= 500 and attempt < self.retry_attempts - 1:
                             # Retry on server errors
@@ -175,7 +188,7 @@ class AIStackClient:
                         raise AIStackError(
                             f"AI Stack request failed: {response.status}",
                             status_code=response.status,
-                            details={"response": response_text, "url": url}
+                            details={"response": response_text, "url": url},
                         )
 
                     try:
@@ -192,13 +205,12 @@ class AIStackClient:
 
                 raise AIStackError(
                     f"Failed to connect to AI Stack: {str(e)}",
-                    details={"error": str(e), "url": url}
+                    details={"error": str(e), "url": url},
                 )
             except Exception as e:
                 logger.error(f"Unexpected error in AI Stack request: {e}")
                 raise AIStackError(
-                    f"Unexpected error: {str(e)}",
-                    details={"error": str(e), "url": url}
+                    f"Unexpected error: {str(e)}", details={"error": str(e), "url": url}
                 )
 
         raise AIStackError("All retry attempts failed")
@@ -210,13 +222,13 @@ class AIStackClient:
             return {
                 "status": "healthy",
                 "ai_stack_response": response,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
         except AIStackError as e:
             return {
                 "status": "unhealthy",
                 "error": e.message,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
 
     async def list_available_agents(self) -> Dict[str, Any]:
@@ -229,7 +241,7 @@ class AIStackClient:
             return {
                 "agents": list(self.agent_endpoints.keys()),
                 "total": len(self.agent_endpoints),
-                "source": "fallback_config"
+                "source": "fallback_config",
             }
 
     # ====================================================================
@@ -241,7 +253,7 @@ class AIStackClient:
         query: str,
         documents: Optional[List[Dict]] = None,
         context: Optional[str] = None,
-        max_results: int = 10
+        max_results: int = 10,
     ) -> Dict[str, Any]:
         """
         Perform RAG query using advanced document synthesis.
@@ -258,7 +270,7 @@ class AIStackClient:
         payload = {
             "action": "document_query",
             "query": query,
-            "max_results": max_results
+            "max_results": max_results,
         }
 
         if documents:
@@ -266,9 +278,13 @@ class AIStackClient:
         if context:
             payload["context"] = context
 
-        return await self._make_request("POST", self.agent_endpoints["rag"], data=payload)
+        return await self._make_request(
+            "POST", self.agent_endpoints["rag"], data=payload
+        )
 
-    async def reformulate_query(self, query: str, context: Optional[str] = None) -> Dict[str, Any]:
+    async def reformulate_query(
+        self, query: str, context: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Reformulate query for better retrieval results.
 
@@ -279,15 +295,14 @@ class AIStackClient:
         Returns:
             Reformulated query suggestions
         """
-        payload = {
-            "action": "reformulate_query",
-            "query": query
-        }
+        payload = {"action": "reformulate_query", "query": query}
 
         if context:
             payload["context"] = context
 
-        return await self._make_request("POST", self.agent_endpoints["rag"], data=payload)
+        return await self._make_request(
+            "POST", self.agent_endpoints["rag"], data=payload
+        )
 
     async def analyze_documents(self, documents: List[Dict]) -> Dict[str, Any]:
         """
@@ -299,12 +314,11 @@ class AIStackClient:
         Returns:
             Document analysis and synthesis results
         """
-        payload = {
-            "action": "analyze_documents",
-            "documents": documents
-        }
+        payload = {"action": "analyze_documents", "documents": documents}
 
-        return await self._make_request("POST", self.agent_endpoints["rag"], data=payload)
+        return await self._make_request(
+            "POST", self.agent_endpoints["rag"], data=payload
+        )
 
     # ====================================================================
     # Chat Agent Integration
@@ -314,7 +328,7 @@ class AIStackClient:
         self,
         message: str,
         context: Optional[str] = None,
-        chat_history: Optional[List[Dict]] = None
+        chat_history: Optional[List[Dict]] = None,
     ) -> Dict[str, Any]:
         """
         Process chat message with intelligent conversation handling.
@@ -327,27 +341,23 @@ class AIStackClient:
         Returns:
             Chat response
         """
-        payload = {
-            "action": "chat",
-            "message": message
-        }
+        payload = {"action": "chat", "message": message}
 
         if context:
             payload["context"] = context
         if chat_history:
             payload["chat_history"] = chat_history
 
-        return await self._make_request("POST", self.agent_endpoints["chat"], data=payload)
+        return await self._make_request(
+            "POST", self.agent_endpoints["chat"], data=payload
+        )
 
     # ====================================================================
     # Knowledge Base Librarian Integration
     # ====================================================================
 
     async def search_knowledge_enhanced(
-        self,
-        query: str,
-        search_type: str = "comprehensive",
-        max_results: int = 10
+        self, query: str, search_type: str = "comprehensive", max_results: int = 10
     ) -> Dict[str, Any]:
         """
         Enhanced knowledge base search using KB Librarian.
@@ -364,16 +374,18 @@ class AIStackClient:
             "action": "enhanced_search",
             "query": query,
             "search_type": search_type,
-            "max_results": max_results
+            "max_results": max_results,
         }
 
-        return await self._make_request("POST", self.agent_endpoints["enhanced_kb_librarian"], data=payload)
+        return await self._make_request(
+            "POST", self.agent_endpoints["enhanced_kb_librarian"], data=payload
+        )
 
     async def extract_knowledge(
         self,
         content: str,
         content_type: str = "text",
-        extraction_mode: str = "comprehensive"
+        extraction_mode: str = "comprehensive",
     ) -> Dict[str, Any]:
         """
         Extract structured knowledge from content.
@@ -390,16 +402,18 @@ class AIStackClient:
             "action": "extract_knowledge",
             "content": content,
             "content_type": content_type,
-            "extraction_mode": extraction_mode
+            "extraction_mode": extraction_mode,
         }
 
-        return await self._make_request("POST", self.agent_endpoints["knowledge_extraction"], data=payload)
+        return await self._make_request(
+            "POST", self.agent_endpoints["knowledge_extraction"], data=payload
+        )
 
     async def retrieve_knowledge(
         self,
         query: str,
         knowledge_types: Optional[List[str]] = None,
-        confidence_threshold: float = 0.7
+        confidence_threshold: float = 0.7,
     ) -> Dict[str, Any]:
         """
         Retrieve knowledge with advanced filtering.
@@ -415,13 +429,15 @@ class AIStackClient:
         payload = {
             "action": "retrieve_knowledge",
             "query": query,
-            "confidence_threshold": confidence_threshold
+            "confidence_threshold": confidence_threshold,
         }
 
         if knowledge_types:
             payload["knowledge_types"] = knowledge_types
 
-        return await self._make_request("POST", self.agent_endpoints["knowledge_retrieval"], data=payload)
+        return await self._make_request(
+            "POST", self.agent_endpoints["knowledge_retrieval"], data=payload
+        )
 
     # ====================================================================
     # Research Agents Integration
@@ -431,7 +447,7 @@ class AIStackClient:
         self,
         query: str,
         research_depth: str = "comprehensive",
-        sources: Optional[List[str]] = None
+        sources: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Perform comprehensive research query.
@@ -447,19 +463,18 @@ class AIStackClient:
         payload = {
             "action": "research",
             "query": query,
-            "research_depth": research_depth
+            "research_depth": research_depth,
         }
 
         if sources:
             payload["sources"] = sources
 
-        return await self._make_request("POST", self.agent_endpoints["research"], data=payload)
+        return await self._make_request(
+            "POST", self.agent_endpoints["research"], data=payload
+        )
 
     async def web_research(
-        self,
-        query: str,
-        max_pages: int = 10,
-        include_analysis: bool = True
+        self, query: str, max_pages: int = 10, include_analysis: bool = True
     ) -> Dict[str, Any]:
         """
         Perform web research with analysis.
@@ -476,20 +491,19 @@ class AIStackClient:
             "action": "web_research",
             "query": query,
             "max_pages": max_pages,
-            "include_analysis": include_analysis
+            "include_analysis": include_analysis,
         }
 
-        return await self._make_request("POST", self.agent_endpoints["web_research_assistant"], data=payload)
+        return await self._make_request(
+            "POST", self.agent_endpoints["web_research_assistant"], data=payload
+        )
 
     # ====================================================================
     # Development & Code Analysis Integration
     # ====================================================================
 
     async def search_code(
-        self,
-        query: str,
-        search_scope: str = "codebase",
-        include_npu: bool = True
+        self, query: str, search_scope: str = "codebase", include_npu: bool = True
     ) -> Dict[str, Any]:
         """
         Search codebase using NPU acceleration.
@@ -506,15 +520,15 @@ class AIStackClient:
             "action": "search_code",
             "query": query,
             "search_scope": search_scope,
-            "include_npu": include_npu
+            "include_npu": include_npu,
         }
 
-        return await self._make_request("POST", self.agent_endpoints["npu_code_search"], data=payload)
+        return await self._make_request(
+            "POST", self.agent_endpoints["npu_code_search"], data=payload
+        )
 
     async def analyze_development_speedup(
-        self,
-        code_path: Optional[str] = None,
-        analysis_type: str = "comprehensive"
+        self, code_path: Optional[str] = None, analysis_type: str = "comprehensive"
     ) -> Dict[str, Any]:
         """
         Analyze codebase for development speedup opportunities.
@@ -526,24 +540,21 @@ class AIStackClient:
         Returns:
             Development speedup analysis with recommendations
         """
-        payload = {
-            "action": "analyze_speedup",
-            "analysis_type": analysis_type
-        }
+        payload = {"action": "analyze_speedup", "analysis_type": analysis_type}
 
         if code_path:
             payload["code_path"] = code_path
 
-        return await self._make_request("POST", self.agent_endpoints["development_speedup"], data=payload)
+        return await self._make_request(
+            "POST", self.agent_endpoints["development_speedup"], data=payload
+        )
 
     # ====================================================================
     # Content Classification Integration
     # ====================================================================
 
     async def classify_content(
-        self,
-        content: str,
-        classification_types: Optional[List[str]] = None
+        self, content: str, classification_types: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
         Classify content using AI classification agent.
@@ -555,23 +566,21 @@ class AIStackClient:
         Returns:
             Classification results with confidence scores
         """
-        payload = {
-            "action": "classify",
-            "content": content
-        }
+        payload = {"action": "classify", "content": content}
 
         if classification_types:
             payload["classification_types"] = classification_types
 
-        return await self._make_request("POST", self.agent_endpoints["classification"], data=payload)
+        return await self._make_request(
+            "POST", self.agent_endpoints["classification"], data=payload
+        )
 
     # ====================================================================
     # System Knowledge Management
     # ====================================================================
 
     async def get_system_knowledge(
-        self,
-        knowledge_category: Optional[str] = None
+        self, knowledge_category: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Get system-wide knowledge insights.
@@ -582,18 +591,17 @@ class AIStackClient:
         Returns:
             System knowledge insights
         """
-        payload = {
-            "action": "get_system_knowledge"
-        }
+        payload = {"action": "get_system_knowledge"}
 
         if knowledge_category:
             payload["knowledge_category"] = knowledge_category
 
-        return await self._make_request("POST", self.agent_endpoints["system_knowledge_manager"], data=payload)
+        return await self._make_request(
+            "POST", self.agent_endpoints["system_knowledge_manager"], data=payload
+        )
 
     async def update_system_knowledge(
-        self,
-        knowledge_update: Dict[str, Any]
+        self, knowledge_update: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Update system-wide knowledge.
@@ -606,10 +614,12 @@ class AIStackClient:
         """
         payload = {
             "action": "update_system_knowledge",
-            "knowledge_update": knowledge_update
+            "knowledge_update": knowledge_update,
         }
 
-        return await self._make_request("POST", self.agent_endpoints["system_knowledge_manager"], data=payload)
+        return await self._make_request(
+            "POST", self.agent_endpoints["system_knowledge_manager"], data=payload
+        )
 
 
 # Global AI Stack client instance

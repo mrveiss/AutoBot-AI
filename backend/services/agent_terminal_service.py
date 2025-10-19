@@ -18,7 +18,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from src.secure_command_executor import CommandRisk, SecureCommandExecutor, SecurityPolicy
+from src.secure_command_executor import (
+    CommandRisk,
+    SecureCommandExecutor,
+    SecurityPolicy,
+)
 from src.constants.network_constants import NetworkConstants
 from src.logging.terminal_logger import TerminalLogger
 
@@ -27,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 class AgentSessionState(Enum):
     """State machine for agent terminal sessions"""
+
     AGENT_CONTROL = "agent_control"  # Agent executing commands
     USER_INTERRUPT = "user_interrupt"  # User requesting control
     USER_CONTROL = "user_control"  # User has control
@@ -35,6 +40,7 @@ class AgentSessionState(Enum):
 
 class AgentRole(Enum):
     """Agent roles with different privilege levels"""
+
     CHAT_AGENT = "chat_agent"  # Chat agents (lowest privilege)
     AUTOMATION_AGENT = "automation_agent"  # Workflow automation agents
     SYSTEM_AGENT = "system_agent"  # System monitoring agents
@@ -44,6 +50,7 @@ class AgentRole(Enum):
 @dataclass
 class AgentTerminalSession:
     """Represents an agent terminal session"""
+
     session_id: str
     agent_id: str
     agent_role: AgentRole
@@ -85,8 +92,7 @@ class AgentTerminalService:
 
         # Terminal command logger
         self.terminal_logger = TerminalLogger(
-            redis_client=redis_client,
-            data_dir="data/chats"
+            redis_client=redis_client, data_dir="data/chats"
         )
 
         # Auto-approve rules storage
@@ -163,16 +169,21 @@ class AgentTerminalService:
             if not existing_pty:
                 # Create new PTY session
                 pty = simple_pty_manager.create_session(
-                    pty_session_id,
-                    initial_cwd="/home/kali/Desktop/AutoBot"
+                    pty_session_id, initial_cwd="/home/kali/Desktop/AutoBot"
                 )
                 if pty:
-                    logger.info(f"Created PTY session {pty_session_id} for agent terminal {session_id}")
+                    logger.info(
+                        f"Created PTY session {pty_session_id} for agent terminal {session_id}"
+                    )
                 else:
-                    logger.warning(f"Failed to create PTY session for agent terminal {session_id}")
+                    logger.warning(
+                        f"Failed to create PTY session for agent terminal {session_id}"
+                    )
                     pty_session_id = None
             else:
-                logger.info(f"Reusing existing PTY session {pty_session_id} for agent terminal {session_id}")
+                logger.info(
+                    f"Reusing existing PTY session {pty_session_id} for agent terminal {session_id}"
+                )
         except Exception as e:
             logger.error(f"Error creating PTY session: {e}")
             pty_session_id = None
@@ -218,11 +229,8 @@ class AgentTerminalService:
             }
 
             import json
-            self.redis_client.setex(
-                key,
-                3600,  # 1 hour TTL
-                json.dumps(session_data)
-            )
+
+            self.redis_client.setex(key, 3600, json.dumps(session_data))  # 1 hour TTL
         except Exception as e:
             logger.error(f"Failed to persist session to Redis: {e}")
 
@@ -323,13 +331,18 @@ class AgentTerminalService:
         }
 
         if risk_levels.get(command_risk, 999) > risk_levels.get(max_risk, 0):
-            return False, f"Command risk {command_risk.value} exceeds agent max risk {max_risk.value}"
+            return (
+                False,
+                f"Command risk {command_risk.value} exceeds agent max risk {max_risk.value}",
+            )
 
         # Check specific risk permissions
         if command_risk == CommandRisk.HIGH and not permissions.get("allow_high"):
             return False, "Agent not permitted to execute HIGH risk commands"
 
-        if command_risk == CommandRisk.CRITICAL and not permissions.get("allow_dangerous"):
+        if command_risk == CommandRisk.CRITICAL and not permissions.get(
+            "allow_dangerous"
+        ):
             return False, "Agent not permitted to execute DANGEROUS commands"
 
         return True, "Permission granted"
@@ -384,7 +397,9 @@ class AgentTerminalService:
             if pty and pty.is_alive():
                 success = pty.write_input(text)
                 if success:
-                    logger.debug(f"Wrote to PTY {session.pty_session_id}: {text[:50]}...")
+                    logger.debug(
+                        f"Wrote to PTY {session.pty_session_id}: {text[:50]}..."
+                    )
                 return success
             else:
                 logger.warning(f"PTY session {session.pty_session_id} not alive")
@@ -463,7 +478,9 @@ class AgentTerminalService:
         risk, reasons = executor.assess_command_risk(command)
 
         # Check agent permissions
-        allowed, permission_reason = self._check_agent_permission(session.agent_role, risk)
+        allowed, permission_reason = self._check_agent_permission(
+            session.agent_role, risk
+        )
         if not allowed:
             logger.warning(
                 f"Agent {session.agent_id} denied command execution: {permission_reason}"
@@ -477,7 +494,9 @@ class AgentTerminalService:
             }
 
         # Check if approval is needed
-        needs_approval = self._needs_approval(session.agent_role, risk) or force_approval
+        needs_approval = (
+            self._needs_approval(session.agent_role, risk) or force_approval
+        )
 
         if needs_approval:
             # Check auto-approve rules (use conversation_id as user_id proxy)
@@ -560,13 +579,15 @@ class AgentTerminalService:
                 )
 
             # Add to command history
-            session.command_history.append({
-                "command": command,
-                "risk": risk.value,
-                "timestamp": time.time(),
-                "auto_approved": True,
-                "result": result,
-            })
+            session.command_history.append(
+                {
+                    "command": command,
+                    "risk": risk.value,
+                    "timestamp": time.time(),
+                    "auto_approved": True,
+                    "result": result,
+                }
+            )
 
             session.last_activity = time.time()
 
@@ -623,18 +644,28 @@ class AgentTerminalService:
         session = await self.get_session(session_id)
         if not session:
             logger.error(f"approve_command: Session {session_id} not found")
-            logger.error(f"approve_command: Available sessions: {list(self.sessions.keys())}")
+            logger.error(
+                f"approve_command: Available sessions: {list(self.sessions.keys())}"
+            )
             return {
                 "status": "error",
                 "error": "Session not found",
             }
 
-        logger.warning(f"approve_command: session_id={session_id}, pending_approval={session.pending_approval is not None}, approved={approved}, comment={comment}")
-        logger.warning(f"approve_command: Session state={session.state.value}, agent_id={session.agent_id}")
-        logger.warning(f"approve_command: pending_approval content={session.pending_approval}")
+        logger.warning(
+            f"approve_command: session_id={session_id}, pending_approval={session.pending_approval is not None}, approved={approved}, comment={comment}"
+        )
+        logger.warning(
+            f"approve_command: Session state={session.state.value}, agent_id={session.agent_id}"
+        )
+        logger.warning(
+            f"approve_command: pending_approval content={session.pending_approval}"
+        )
 
         if not session.pending_approval:
-            logger.warning(f"approve_command: No pending approval for session {session_id}. State: {session.state.value}, command_history: {len(session.command_history)} commands")
+            logger.warning(
+                f"approve_command: No pending approval for session {session_id}. State: {session.state.value}, command_history: {len(session.command_history)} commands"
+            )
             return {
                 "status": "error",
                 "error": "No pending approval",
@@ -678,26 +709,33 @@ class AgentTerminalService:
                         session_id=session.conversation_id,
                         command=command,
                         run_type="manual",
-                        status="success" if result.get("status") == "success" else "error",
+                        status=(
+                            "success" if result.get("status") == "success" else "error"
+                        ),
                         result=result,
                         user_id=user_id,
                     )
 
                 # Add to command history
-                session.command_history.append({
-                    "command": command,
-                    "risk": risk_level,
-                    "timestamp": time.time(),
-                    "approved_by": user_id,
-                    "approval_comment": comment,
-                    "result": result,
-                })
+                session.command_history.append(
+                    {
+                        "command": command,
+                        "risk": risk_level,
+                        "timestamp": time.time(),
+                        "approved_by": user_id,
+                        "approval_comment": comment,
+                        "result": result,
+                    }
+                )
 
                 session.pending_approval = None
                 session.state = AgentSessionState.AGENT_CONTROL
                 session.last_activity = time.time()
 
-                logger.info(f"Command approved and executed: {command}" + (f" with comment: {comment}" if comment else ""))
+                logger.info(
+                    f"Command approved and executed: {command}"
+                    + (f" with comment: {comment}" if comment else "")
+                )
 
                 # Store auto-approve rule if requested
                 if auto_approve_future and user_id:
@@ -737,7 +775,10 @@ class AgentTerminalService:
                 }
         else:
             # Command denied
-            logger.info(f"Command denied by user: {command}" + (f" with reason: {comment}" if comment else ""))
+            logger.info(
+                f"Command denied by user: {command}"
+                + (f" with reason: {comment}" if comment else "")
+            )
 
             # Log denial
             if session.conversation_id:
@@ -750,14 +791,16 @@ class AgentTerminalService:
                 )
 
             # Add to command history (for audit trail)
-            session.command_history.append({
-                "command": command,
-                "risk": session.pending_approval.get("risk"),
-                "timestamp": time.time(),
-                "denied_by": user_id,
-                "denial_reason": comment,
-                "result": {"status": "denied_by_user"},
-            })
+            session.command_history.append(
+                {
+                    "command": command,
+                    "risk": session.pending_approval.get("risk"),
+                    "timestamp": time.time(),
+                    "denied_by": user_id,
+                    "denial_reason": comment,
+                    "result": {"status": "denied_by_user"},
+                }
+            )
 
             session.pending_approval = None
             session.state = AgentSessionState.AGENT_CONTROL
@@ -946,7 +989,7 @@ class AgentTerminalService:
         # If there are arguments, use wildcard pattern
         if len(parts) > 1:
             # For commands with subcommands (like git status), preserve them
-            if base_cmd in ['git', 'docker', 'kubectl', 'npm', 'yarn']:
+            if base_cmd in ["git", "docker", "kubectl", "npm", "yarn"]:
                 if len(parts) >= 2:
                     return f"{base_cmd} {parts[1]} *"
             # For simple commands, use wildcard

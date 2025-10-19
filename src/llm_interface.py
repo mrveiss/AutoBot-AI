@@ -30,7 +30,12 @@ import xxhash
 from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
 # Import unified configuration and dependencies
 from src.circuit_breaker import circuit_breaker_async
@@ -47,14 +52,17 @@ except ImportError:
 
 try:
     from src.utils.logging_manager import get_llm_logger
+
     logger = get_llm_logger(__name__)
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 # Conditional imports for optional dependencies
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     print("Warning: PyTorch not available or CUDA libraries missing")
@@ -63,6 +71,7 @@ except ImportError:
 
 try:
     import openai
+
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -74,6 +83,7 @@ logger = get_llm_logger("llm_consolidated")
 
 class ProviderType(Enum):
     """Supported LLM providers."""
+
     OLLAMA = "ollama"
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
@@ -86,6 +96,7 @@ class ProviderType(Enum):
 
 class LLMType(Enum):
     """Types of LLM usage contexts."""
+
     ORCHESTRATOR = "orchestrator"
     TASK = "task"
     CHAT = "chat"
@@ -98,31 +109,33 @@ class LLMType(Enum):
 
 class LLMSettings(BaseSettings):
     """LLM configuration using pydantic-settings for async config management"""
-    
+
     # Ollama settings
     ollama_host: str = Field(default="127.0.0.1", env="OLLAMA_HOST")
-    ollama_port: int = Field(default = NetworkConstants.OLLAMA_PORT, env="OLLAMA_PORT")
+    ollama_port: int = Field(default=NetworkConstants.OLLAMA_PORT, env="OLLAMA_PORT")
     # Removed timeout - using circuit breaker pattern instead
-    
+
     # Model settings
-    default_model: str = Field(default="llama3.2:1b-instruct-q4_K_M", env="DEFAULT_LLM_MODEL")
+    default_model: str = Field(
+        default="llama3.2:1b-instruct-q4_K_M", env="DEFAULT_LLM_MODEL"
+    )
     temperature: float = Field(default=0.7, env="LLM_TEMPERATURE")
     top_k: int = Field(default=40, env="LLM_TOP_K")
     top_p: float = Field(default=0.9, env="LLM_TOP_P")
     repeat_penalty: float = Field(default=1.1, env="LLM_REPEAT_PENALTY")
     num_ctx: int = Field(default=4096, env="LLM_CONTEXT_SIZE")
-    
+
     # Performance settings - optimized for high-end hardware
     max_retries: int = Field(default=3, env="LLM_MAX_RETRIES")
     connection_pool_size: int = Field(default=20, env="LLM_POOL_SIZE")
     max_concurrent_requests: int = Field(default=8, env="LLM_MAX_CONCURRENT")
     connection_timeout: float = Field(default=30.0, env="LLM_CONNECTION_TIMEOUT")
     cache_ttl: int = Field(default=300, env="LLM_CACHE_TTL")
-    
+
     # Streaming settings - using completion signal detection
     # Removed chunk_timeout - using natural stream termination
     max_chunks: int = Field(default=1000, env="LLM_MAX_CHUNKS")
-    
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
@@ -132,6 +145,7 @@ class LLMSettings(BaseSettings):
 @dataclass
 class LLMResponse:
     """Structured LLM response"""
+
     content: str
     model: str = ""
     provider: str = ""
@@ -149,6 +163,7 @@ class LLMResponse:
 @dataclass
 class ChatMessage:
     """Chat message structure"""
+
     role: str  # "user", "assistant", "system"
     content: str
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -157,6 +172,7 @@ class ChatMessage:
 @dataclass
 class LLMRequest:
     """Standardized LLM request structure."""
+
     messages: List[Dict[str, str]]
     llm_type: Union[LLMType, str] = LLMType.GENERAL
     provider: Optional[ProviderType] = None
@@ -178,6 +194,7 @@ class LLMRequest:
 
 class LocalLLM:
     """Local TinyLLaMA fallback"""
+
     async def generate(self, prompt):
         logger.info("Using local TinyLLaMA fallback.")
         await asyncio.sleep(0.1)
@@ -190,15 +207,18 @@ class LocalLLM:
 
 class MockPalm:
     """Mock Palm API for testing"""
+
     class QuotaExceededError(Exception):
         pass
 
     async def get_quota_status(self):
         await asyncio.sleep(0.05)
         import random
+
         class MockQuotaStatus:
             def __init__(self, remaining_tokens):
                 self.remaining_tokens = remaining_tokens
+
         mock_status = MockQuotaStatus(50000)
         if random.random() < 0.2:
             mock_status.remaining_tokens = 500
@@ -207,6 +227,7 @@ class MockPalm:
     async def generate_text(self, **kwargs):
         await asyncio.sleep(0.1)
         import random
+
         if random.random() < 0.1:
             raise self.QuotaExceededError("Mock Quota Exceeded")
         return {
@@ -238,17 +259,19 @@ class LLMInterface:
     def __init__(self, settings: Optional[LLMSettings] = None):
         # Initialize settings
         self.settings = settings or LLMSettings()
-        
+
         # Use unified configuration - NO HARDCODED VALUES
-        self.ollama_host = config.get_service_url('ollama')
+        self.ollama_host = config.get_service_url("ollama")
 
         # Configuration setup using unified config
-        self.openai_api_key = config.get("openai.api_key", os.getenv("OPENAI_API_KEY", ""))
+        self.openai_api_key = config.get(
+            "openai.api_key", os.getenv("OPENAI_API_KEY", "")
+        )
 
         self.ollama_models = config.get("llm.fallback_models", ["llama3.2:3b"])
 
         # Use unified configuration for LLM models
-        selected_model = config.get('llm.fallback_models.0', 'llama3.2:3b')
+        selected_model = config.get("llm.fallback_models.0", "llama3.2:3b")
         self.orchestrator_llm_alias = f"ollama_{selected_model}"
         self.task_llm_alias = f"ollama_{selected_model}"
 
@@ -257,18 +280,18 @@ class LLMInterface:
 
         self.hardware_priority = config.get(
             "hardware.acceleration.priority",
-            ["openvino_npu", "openvino", "cuda", "cpu"]
+            ["openvino_npu", "openvino", "cuda", "cpu"],
         )
 
         # Initialize prompts
         self._initialize_prompts()
-        
+
         # Initialize async components
         self._session: Optional[aiohttp.ClientSession] = None
         self._models_cache: Optional[List[str]] = None
         self._models_cache_time: float = 0
         self._lock = asyncio.Lock()
-        
+
         # Setup session configuration - optimized for performance
         self._connector = aiohttp.TCPConnector(
             limit=self.settings.connection_pool_size,
@@ -276,20 +299,20 @@ class LLMInterface:
             ttl_dns_cache=1800,  # 30 minutes for better caching
             use_dns_cache=True,
             keepalive_timeout=60,
-            enable_cleanup_closed=True
+            enable_cleanup_closed=True,
         )
-        
+
         self._timeout = aiohttp.ClientTimeout(
             total=self.settings.connection_timeout,
             connect=5.0,
-            sock_read=None  # FIXED: No socket read timeout for streaming
+            sock_read=None,  # FIXED: No socket read timeout for streaming
         )
-        
+
         # Performance optimization - L1 in-memory cache
         self._memory_cache = {}
         self._memory_cache_access = []  # LRU tracking
         self._memory_cache_max_size = 100
-        
+
         # Performance metrics tracking
         self._metrics = {
             "total_requests": 0,
@@ -299,14 +322,14 @@ class LLMInterface:
             "avg_response_time": 0.0,
             "total_response_time": 0.0,
             "provider_usage": {},
-            "streaming_failures": {}
+            "streaming_failures": {},
         }
-        
+
         # Streaming failure tracking for intelligent fallback
         self.streaming_failures = {}
         self.streaming_failure_threshold = 3
         self.streaming_reset_time = 300  # 5 minutes
-        
+
         # Provider routing map for extensibility
         self.provider_routing = {
             "ollama": self._ollama_chat_completion,
@@ -314,21 +337,23 @@ class LLMInterface:
             "transformers": self._transformers_chat_completion,
             "vllm": self._handle_vllm_request,
             "mock": self._handle_mock_request,
-            "local": self._handle_local_request
+            "local": self._handle_local_request,
         }
-        
+
         # Request queue for proper async handling
         self.request_queue = asyncio.Queue(maxsize=50)
         self.active_requests = set()
-        
+
         logger.info("Consolidated LLM Interface initialized with all provider support")
 
     def reload_ollama_configuration(self):
         """Runtime reload of Ollama configuration"""
         old_host = self.ollama_host
-        self.ollama_host = config.get_service_url('ollama')
+        self.ollama_host = config.get_service_url("ollama")
 
-        logger.info(f"LLMInterface: Runtime config reload - Ollama URL: {self.ollama_host}")
+        logger.info(
+            f"LLMInterface: Runtime config reload - Ollama URL: {self.ollama_host}"
+        )
         return self.ollama_host
 
     def _initialize_prompts(self):
@@ -338,12 +363,18 @@ class LLMInterface:
                 "prompts.orchestrator_key", "default.agent.system.main"
             )
             if prompt_manager:
-                self.orchestrator_system_prompt = prompt_manager.get(orchestrator_prompt_key)
+                self.orchestrator_system_prompt = prompt_manager.get(
+                    orchestrator_prompt_key
+                )
             else:
-                self.orchestrator_system_prompt = "You are AutoBot, an autonomous Linux administration assistant."
+                self.orchestrator_system_prompt = (
+                    "You are AutoBot, an autonomous Linux administration assistant."
+                )
         except (KeyError, AttributeError):
             logger.warning("Orchestrator prompt not found, using default")
-            self.orchestrator_system_prompt = "You are AutoBot, an autonomous Linux administration assistant."
+            self.orchestrator_system_prompt = (
+                "You are AutoBot, an autonomous Linux administration assistant."
+            )
 
         try:
             task_prompt_key = config.get(
@@ -352,19 +383,27 @@ class LLMInterface:
             if prompt_manager:
                 self.task_system_prompt = prompt_manager.get(task_prompt_key)
             else:
-                self.task_system_prompt = "You are AutoBot, completing specific tasks efficiently."
+                self.task_system_prompt = (
+                    "You are AutoBot, completing specific tasks efficiently."
+                )
         except (KeyError, AttributeError):
             logger.warning("Task prompt not found, using default")
-            self.task_system_prompt = "You are AutoBot, completing specific tasks efficiently."
+            self.task_system_prompt = (
+                "You are AutoBot, completing specific tasks efficiently."
+            )
 
         try:
             tool_interpreter_prompt_key = config.get(
                 "prompts.tool_interpreter_key", "tool_interpreter_system_prompt"
             )
             if prompt_manager:
-                self.tool_interpreter_system_prompt = prompt_manager.get(tool_interpreter_prompt_key)
+                self.tool_interpreter_system_prompt = prompt_manager.get(
+                    tool_interpreter_prompt_key
+                )
             else:
-                self.tool_interpreter_system_prompt = "You are AutoBot's tool interpreter."
+                self.tool_interpreter_system_prompt = (
+                    "You are AutoBot's tool interpreter."
+                )
         except (KeyError, AttributeError):
             logger.warning("Tool interpreter prompt not found, using default")
             self.tool_interpreter_system_prompt = "You are AutoBot's tool interpreter."
@@ -373,7 +412,7 @@ class LLMInterface:
     def base_url(self) -> str:
         """Get Ollama base URL"""
         return f"http://{self.settings.ollama_host}:{self.settings.ollama_port}"
-    
+
     @asynccontextmanager
     async def _get_session(self) -> AsyncGenerator[aiohttp.ClientSession, None]:
         """Get HTTP session with proper lifecycle management"""
@@ -385,8 +424,8 @@ class LLMInterface:
                         timeout=self._timeout,
                         headers={
                             "Content-Type": "application/json",
-                            "User-Agent": "AutoBot-Consolidated-LLM/1.0"
-                        }
+                            "User-Agent": "AutoBot-Consolidated-LLM/1.0",
+                        },
                     )
         yield self._session
 
@@ -397,7 +436,7 @@ class LLMInterface:
             params.get("model", self.settings.default_model),
             params.get("temperature", self.settings.temperature),
             params.get("top_k", self.settings.top_k),
-            params.get("top_p", self.settings.top_p)
+            params.get("top_p", self.settings.top_p),
         )
         return f"llm_cache_{xxhash.xxh64(str(key_data)).hexdigest()}"
 
@@ -406,13 +445,18 @@ class LLMInterface:
         # Log streaming failures for monitoring but never disable streaming
         if model in self.streaming_failures:
             failure_data = self.streaming_failures[model]
-            if time.time() - failure_data.get("last_reset", 0) > self.streaming_reset_time:
+            if (
+                time.time() - failure_data.get("last_reset", 0)
+                > self.streaming_reset_time
+            ):
                 # Reset failures after timeout
                 self.streaming_failures[model]["count"] = 0
                 self.streaming_failures[model]["last_reset"] = time.time()
 
             if failure_data.get("count", 0) >= self.streaming_failure_threshold:
-                logger.warning(f"Model {model} has {failure_data.get('count', 0)} streaming failures but streaming is REQUIRED")
+                logger.warning(
+                    f"Model {model} has {failure_data.get('count', 0)} streaming failures but streaming is REQUIRED"
+                )
         return True
 
     def _record_streaming_failure(self, model: str):
@@ -425,14 +469,16 @@ class LLMInterface:
         """Record streaming success to potentially recover from failures"""
         if model in self.streaming_failures:
             # Reduce failure count on success
-            self.streaming_failures[model]["count"] = max(0, 
-                self.streaming_failures[model]["count"] - 1)
+            self.streaming_failures[model]["count"] = max(
+                0, self.streaming_failures[model]["count"] - 1
+            )
 
     # Legacy method loading methods (preserved for backward compatibility)
     async def _load_prompt_from_file(self, file_path: str) -> str:
         try:
             # ROOT CAUSE FIX: Use async file operations instead of blocking sync I/O
             from src.utils.async_file_operations import read_file_async
+
             content = await read_file_async(file_path)
             return content.strip()
         except FileNotFoundError:
@@ -455,8 +501,8 @@ class LLMInterface:
             else:
                 logger.warning(f"Included file not found: {included_path}")
                 return f"<!-- MISSING: {included_file} -->"
-        
-        return re.sub(r'@include\s*\(([^)]+)\)', replace_include, content)
+
+        return re.sub(r"@include\s*\(([^)]+)\)", replace_include, content)
 
     def _load_composite_prompt(self, base_file_path: str) -> str:
         try:
@@ -475,22 +521,28 @@ class LLMInterface:
         """Check if Ollama service is available"""
         # CRITICAL FIX: Ensure Ollama host from environment variables
         import os
-        ollama_host = os.getenv('AUTOBOT_OLLAMA_HOST')
-        ollama_port = os.getenv('AUTOBOT_OLLAMA_PORT')
+
+        ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST")
+        ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT")
         if not ollama_host or not ollama_port:
-            raise ValueError('Ollama configuration missing: AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT environment variables must be set')
+            raise ValueError(
+                "Ollama configuration missing: AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT environment variables must be set"
+            )
         self.ollama_host = f"http://{ollama_host}:{ollama_port}"
-        logger.debug(f"[CONNECTION_CHECK] Using Ollama URL from environment: {self.ollama_host}")
-        
+        logger.debug(
+            f"[CONNECTION_CHECK] Using Ollama URL from environment: {self.ollama_host}"
+        )
+
         try:
+
             async def make_request():
-                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+                async with aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as session:
                     async with session.get(f"{self.ollama_host}/api/tags") as response:
                         return response.status == 200
-            
-            return await retry_network_operation(
-                make_request
-            )
+
+            return await retry_network_operation(make_request)
         except Exception as e:
             logger.error(f"Ollama connection check failed: {e}")
             return False
@@ -499,14 +551,14 @@ class LLMInterface:
     def _detect_hardware(self):
         """Detect available hardware acceleration"""
         detected = set()
-        
+
         # Check CUDA
         if TORCH_AVAILABLE and torch.cuda.is_available():
             detected.add("cuda")
-            
+
         # Check CPU
         detected.add("cpu")
-        
+
         # Check Intel Arc/NPU (placeholder for future OpenVINO integration)
         try:
             # This would check for Intel Arc graphics and NPU
@@ -514,30 +566,32 @@ class LLMInterface:
             detected.add("openvino")
         except Exception:
             pass
-            
+
         return detected
 
     def _select_backend(self):
         """Select optimal backend based on hardware"""
         detected_hardware = self._detect_hardware()
-        
+
         for priority in self.hardware_priority:
             selected = self._try_backend_selection(priority, detected_hardware)
             if selected:
                 return selected
-                
+
         return "cpu"
 
-    def _try_backend_selection(self, priority: str, detected_hardware: set) -> Optional[str]:
+    def _try_backend_selection(
+        self, priority: str, detected_hardware: set
+    ) -> Optional[str]:
         """Try to select a specific backend"""
         selectors = {
             "openvino_npu": lambda: self._select_openvino_npu(detected_hardware),
             "openvino": lambda: self._select_openvino_variant(detected_hardware),
             "cuda": lambda: self._select_cuda(detected_hardware),
             "onnxruntime": lambda: self._select_onnxruntime(detected_hardware),
-            "cpu": lambda: self._select_cpu(detected_hardware)
+            "cpu": lambda: self._select_cpu(detected_hardware),
         }
-        
+
         selector = selectors.get(priority)
         if selector:
             return selector()
@@ -575,28 +629,30 @@ class LLMInterface:
     ) -> LLMResponse:
         """
         Enhanced chat completion with multi-provider support and intelligent routing.
-        
+
         Args:
             messages: List of message dicts
             llm_type: Type of LLM ("orchestrator", "task", "chat", etc.)
             **kwargs: Additional parameters (provider, model_name, etc.)
-        
+
         Returns:
             LLMResponse object with standardized response structure
         """
         start_time = time.time()
-        request_id = kwargs.get('request_id', str(uuid.uuid4()))
-        
+        request_id = kwargs.get("request_id", str(uuid.uuid4()))
+
         try:
             # Update metrics
             self._metrics["total_requests"] += 1
-            
+
             # Determine provider and model
-            provider, model_name = self._determine_provider_and_model(llm_type, **kwargs)
-            
+            provider, model_name = self._determine_provider_and_model(
+                llm_type, **kwargs
+            )
+
             # Setup system prompt
             messages = self._setup_system_prompt(messages, llm_type)
-            
+
             # Create standardized request
             request = LLMRequest(
                 messages=messages,
@@ -604,9 +660,9 @@ class LLMInterface:
                 provider=provider,
                 model_name=model_name,
                 request_id=request_id,
-                **kwargs
+                **kwargs,
             )
-            
+
             # Route to appropriate provider
             if provider in self.provider_routing:
                 response = await self.provider_routing[provider](request)
@@ -614,18 +670,18 @@ class LLMInterface:
                 # Fallback to Ollama
                 logger.warning(f"Unknown provider {provider}, falling back to Ollama")
                 response = await self._ollama_chat_completion(request)
-            
+
             # Update metrics
             processing_time = time.time() - start_time
             self._update_metrics(provider, processing_time, success=True)
-            
+
             return response
-            
+
         except Exception as e:
             processing_time = time.time() - start_time
             self._update_metrics("unknown", processing_time, success=False)
             logger.error(f"Chat completion error: {e}")
-            
+
             # Return error response
             return LLMResponse(
                 content=f"Error: {str(e)}",
@@ -633,7 +689,7 @@ class LLMInterface:
                 provider="error",
                 processing_time=processing_time,
                 request_id=request_id,
-                error=str(e)
+                error=str(e),
             )
 
     def _determine_provider_and_model(self, llm_type: str, **kwargs) -> tuple[str, str]:
@@ -643,7 +699,7 @@ class LLMInterface:
             provider = kwargs["provider"]
             model_name = kwargs.get("model_name", "")
             return provider, model_name
-        
+
         # Legacy compatibility - check for model alias patterns
         if llm_type == "orchestrator":
             model_alias = self.orchestrator_llm_alias
@@ -651,7 +707,7 @@ class LLMInterface:
             model_alias = self.task_llm_alias
         else:
             model_alias = kwargs.get("model_name", self.settings.default_model)
-        
+
         # Determine provider from model alias
         if model_alias.startswith("ollama_"):
             provider = "ollama"
@@ -671,7 +727,7 @@ class LLMInterface:
             # Default to Ollama
             provider = "ollama"
             model_name = model_alias
-            
+
         return provider, model_name
 
     def _setup_system_prompt(self, messages: list, llm_type: str) -> list:
@@ -683,33 +739,38 @@ class LLMInterface:
             system_prompt = self.task_system_prompt
         else:
             system_prompt = None
-        
+
         # Add system prompt if not already present
         if system_prompt and not any(m.get("role") == "system" for m in messages):
             messages.insert(0, {"role": "system", "content": system_prompt})
-        
+
         return messages
 
     def _update_metrics(self, provider: str, processing_time: float, success: bool):
         """Update performance metrics"""
         if provider not in self._metrics["provider_usage"]:
             self._metrics["provider_usage"][provider] = {
-                "requests": 0, "successes": 0, "failures": 0, "avg_time": 0.0
+                "requests": 0,
+                "successes": 0,
+                "failures": 0,
+                "avg_time": 0.0,
             }
-        
+
         provider_metrics = self._metrics["provider_usage"][provider]
         provider_metrics["requests"] += 1
-        
+
         if success:
             provider_metrics["successes"] += 1
         else:
             provider_metrics["failures"] += 1
-        
+
         # Update average processing time
         old_avg = provider_metrics["avg_time"]
-        new_avg = (old_avg * (provider_metrics["requests"] - 1) + processing_time) / provider_metrics["requests"]
+        new_avg = (
+            old_avg * (provider_metrics["requests"] - 1) + processing_time
+        ) / provider_metrics["requests"]
         provider_metrics["avg_time"] = new_avg
-        
+
         # Update global averages
         self._metrics["total_response_time"] += processing_time
         self._metrics["avg_response_time"] = (
@@ -717,10 +778,10 @@ class LLMInterface:
         )
 
     @circuit_breaker_async(
-        "ollama_service", 
-        failure_threshold=config.get('circuit_breaker.ollama.failure_threshold', 3),
-        recovery_timeout=config.get_timeout('circuit_breaker', 'recovery'),
-        timeout=config.get_timeout('llm', 'default')
+        "ollama_service",
+        failure_threshold=config.get("circuit_breaker.ollama.failure_threshold", 3),
+        recovery_timeout=config.get_timeout("circuit_breaker", "recovery"),
+        timeout=config.get_timeout("llm", "default"),
     )
     async def _ollama_chat_completion(self, request: LLMRequest) -> LLMResponse:
         """
@@ -728,23 +789,26 @@ class LLMInterface:
         """
         # CRITICAL FIX: Ensure Ollama host from environment variables
         import os
-        ollama_host = os.getenv('AUTOBOT_OLLAMA_HOST')
-        ollama_port = os.getenv('AUTOBOT_OLLAMA_PORT')
+
+        ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST")
+        ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT")
         if not ollama_host or not ollama_port:
-            raise ValueError('Ollama configuration missing: AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT environment variables must be set')
+            raise ValueError(
+                "Ollama configuration missing: AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT environment variables must be set"
+            )
         self.ollama_host = f"http://{ollama_host}:{ollama_port}"
         logger.debug(f"[REQUEST] Using Ollama URL from environment: {self.ollama_host}")
-        
+
         url = f"{self.ollama_host}/api/chat"
         headers = {"Content-Type": "application/json"}
-        
+
         # Extract parameters from request
         model = request.model_name or self.settings.default_model
         messages = request.messages
         temperature = request.temperature
         structured_output = request.structured_output
         use_streaming = self._should_use_streaming(model)
-        
+
         data = {
             "model": model,
             "messages": messages,
@@ -759,9 +823,9 @@ class LLMInterface:
                 "num_ctx": self.settings.num_ctx,
             },
         }
-        
+
         start_time = time.time()
-        
+
         try:
             if use_streaming:
                 # Use improved streaming with timeout protection
@@ -774,12 +838,14 @@ class LLMInterface:
                 response = await self._non_streaming_ollama_request(
                     url, headers, data, request.request_id
                 )
-            
+
             processing_time = time.time() - start_time
 
             # ROOT CAUSE FIX: Add type checking for streaming response
             if not isinstance(response, dict):
-                logger.error(f"Streaming response is not a dict: {type(response)} - {response}")
+                logger.error(
+                    f"Streaming response is not a dict: {type(response)} - {response}"
+                )
                 response = {"message": {"content": str(response)}, "model": model}
 
             # Safely extract content with fallback handling
@@ -799,9 +865,9 @@ class LLMInterface:
                 processing_time=processing_time,
                 request_id=request.request_id,
                 metadata=response.get("stats", {}),
-                usage=response.get("usage", {})
+                usage=response.get("usage", {}),
             )
-            
+
         except Exception as e:
             if use_streaming:
                 self._record_streaming_failure(model)
@@ -812,10 +878,10 @@ class LLMInterface:
                 response = {
                     "message": {
                         "role": "assistant",
-                        "content": f"Streaming error occurred: {str(e)}"
+                        "content": f"Streaming error occurred: {str(e)}",
                     },
                     "model": model,
-                    "error": str(e)
+                    "error": str(e),
                 }
 
                 # Safely extract content with fallback handling
@@ -834,7 +900,7 @@ class LLMInterface:
                     provider="ollama",
                     processing_time=processing_time,
                     request_id=request.request_id,
-                    fallback_used=True
+                    fallback_used=True,
                 )
 
             # If not streaming or other error, raise the original exception
@@ -850,37 +916,52 @@ class LLMInterface:
         chunk_count = 0
         start_time = time.time()
         last_chunk_time = start_time
-        
+
         logger.info(f"[{request_id}] Starting protected streaming for model {model}")
-        
+
         try:
             # ROOT CAUSE FIX: Use async stream processor instead of timeouts
             from src.utils.async_stream_processor import process_llm_stream
-            
+
             async with self._get_session() as session:
                 # No timeout - let stream processor handle completion detection
                 timeout = aiohttp.ClientTimeout(connect=5.0)  # Only connection timeout
-                
-                async with session.post(url, headers=headers, json=data, timeout=timeout) as response:
+
+                async with session.post(
+                    url, headers=headers, json=data, timeout=timeout
+                ) as response:
                     if response.status != 200:
-                        raise aiohttp.ClientError(f"HTTP {response.status}: {await response.text()}")
-                    
+                        raise aiohttp.ClientError(
+                            f"HTTP {response.status}: {await response.text()}"
+                        )
+
                     # Use proper stream processing instead of timeout management
-                    accumulated_content, completed_successfully = await process_llm_stream(
-                        response, provider="ollama", max_chunks=self.settings.max_chunks
+                    accumulated_content, completed_successfully = (
+                        await process_llm_stream(
+                            response,
+                            provider="ollama",
+                            max_chunks=self.settings.max_chunks,
+                        )
                     )
-                    
+
                     if not completed_successfully:
-                        logger.warning(f"[{request_id}] Stream did not complete properly")
+                        logger.warning(
+                            f"[{request_id}] Stream did not complete properly"
+                        )
                         # Still return content if we got some
 
-                    logger.info(f"[{request_id}] Stream processing completed: {len(accumulated_content)} chars")
+                    logger.info(
+                        f"[{request_id}] Stream processing completed: {len(accumulated_content)} chars"
+                    )
 
                     # ROOT CAUSE FIX COMPLETE: Return proper dictionary structure
                     return {
-                        "message": {"role": "assistant", "content": accumulated_content},
+                        "message": {
+                            "role": "assistant",
+                            "content": accumulated_content,
+                        },
                         "done": True,
-                        "completed_successfully": completed_successfully
+                        "completed_successfully": completed_successfully,
                     }
         except Exception as e:
             duration = time.time() - start_time
@@ -893,15 +974,21 @@ class LLMInterface:
         """Non-streaming Ollama request as fallback"""
         data_copy = data.copy()
         data_copy["stream"] = False
-        
+
         logger.info(f"[{request_id}] Using non-streaming request")
-        
+
         async with self._get_session() as session:
-            timeout = aiohttp.ClientTimeout(total=30.0)  # Longer timeout for non-streaming
-            async with session.post(url, headers=headers, json=data_copy, timeout=timeout) as response:
+            timeout = aiohttp.ClientTimeout(
+                total=30.0
+            )  # Longer timeout for non-streaming
+            async with session.post(
+                url, headers=headers, json=data_copy, timeout=timeout
+            ) as response:
                 if response.status != 200:
-                    raise aiohttp.ClientError(f"HTTP {response.status}: {await response.text()}")
-                
+                    raise aiohttp.ClientError(
+                        f"HTTP {response.status}: {await response.text()}"
+                    )
+
                 result = await response.json()
                 return result
 
@@ -911,22 +998,23 @@ class LLMInterface:
         """Enhanced OpenAI chat completion"""
         if not self.openai_api_key:
             raise ValueError("OpenAI API key not configured")
-        
+
         import openai
+
         client = openai.AsyncOpenAI(api_key=self.openai_api_key)
-        
+
         start_time = time.time()
-        
+
         try:
             response = await client.chat.completions.create(
                 model=request.model_name or "gpt-3.5-turbo",
                 messages=request.messages,
                 temperature=request.temperature,
-                max_tokens=request.max_tokens
+                max_tokens=request.max_tokens,
             )
-            
+
             processing_time = time.time() - start_time
-            
+
             return LLMResponse(
                 content=response.choices[0].message.content,
                 model=response.model,
@@ -936,10 +1024,10 @@ class LLMInterface:
                 usage={
                     "prompt_tokens": response.usage.prompt_tokens,
                     "completion_tokens": response.usage.completion_tokens,
-                    "total_tokens": response.usage.total_tokens
-                }
+                    "total_tokens": response.usage.total_tokens,
+                },
             )
-            
+
         except Exception as e:
             processing_time = time.time() - start_time
             logger.error(f"OpenAI completion error: {e}")
@@ -949,23 +1037,23 @@ class LLMInterface:
     async def _transformers_chat_completion(self, request: LLMRequest) -> LLMResponse:
         """Enhanced Transformers chat completion with local model support"""
         start_time = time.time()
-        
+
         try:
             # Use local LLM fallback for now
             response = await local_llm.generate(
                 "\n".join([f"{m['role']}: {m['content']}" for m in request.messages])
             )
-            
+
             processing_time = time.time() - start_time
-            
+
             return LLMResponse(
                 content=response["choices"][0]["message"]["content"],
                 model=request.model_name or "local-transformers",
                 provider="transformers",
                 processing_time=processing_time,
-                request_id=request.request_id
+                request_id=request.request_id,
             )
-            
+
         except Exception as e:
             processing_time = time.time() - start_time
             logger.error(f"Transformers completion error: {e}")
@@ -981,33 +1069,33 @@ class LLMInterface:
         """Handle mock requests for testing"""
         start_time = time.time()
         await asyncio.sleep(0.1)  # Simulate processing
-        
+
         processing_time = time.time() - start_time
-        
+
         return LLMResponse(
             content=f"Mock response to: {request.messages[-1]['content'][:50]}...",
             model="mock-model",
             provider="mock",
             processing_time=processing_time,
-            request_id=request.request_id
+            request_id=request.request_id,
         )
 
     async def _handle_local_request(self, request: LLMRequest) -> LLMResponse:
         """Handle local LLM requests"""
         start_time = time.time()
-        
+
         response = await local_llm.generate(
             "\n".join([f"{m['role']}: {m['content']}" for m in request.messages])
         )
-        
+
         processing_time = time.time() - start_time
-        
+
         return LLMResponse(
             content=response["choices"][0]["message"]["content"],
             model="local-tinyllama",
             provider="local",
             processing_time=processing_time,
-            request_id=request.request_id
+            request_id=request.request_id,
         )
 
     # Utility methods
@@ -1016,13 +1104,18 @@ class LLMInterface:
         if provider == "ollama":
             # CRITICAL FIX: Ensure Ollama host from environment variables
             import os
-            ollama_host = os.getenv('AUTOBOT_OLLAMA_HOST')
-            ollama_port = os.getenv('AUTOBOT_OLLAMA_PORT')
+
+            ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST")
+            ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT")
             if not ollama_host or not ollama_port:
-                raise ValueError('Ollama configuration missing: AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT environment variables must be set')
+                raise ValueError(
+                    "Ollama configuration missing: AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT environment variables must be set"
+                )
             self.ollama_host = f"http://{ollama_host}:{ollama_port}"
-            logger.debug(f"[MODEL_LIST] Using Ollama URL from environment: {self.ollama_host}")
-            
+            logger.debug(
+                f"[MODEL_LIST] Using Ollama URL from environment: {self.ollama_host}"
+            )
+
             try:
                 async with self._get_session() as session:
                     async with session.get(f"{self.ollama_host}/api/tags") as response:
@@ -1031,7 +1124,7 @@ class LLMInterface:
                             return [model["name"] for model in data.get("models", [])]
             except Exception as e:
                 logger.error(f"Failed to get Ollama models: {e}")
-        
+
         return []
 
     def get_metrics(self) -> Dict[str, Any]:
@@ -1049,17 +1142,18 @@ async def safe_query(prompt, retries=2, initial_delay=1):
     """Safe LLM query with retries (preserved for backward compatibility)"""
     interface = LLMInterface()
     messages = [{"role": "user", "content": prompt}]
-    
+
     for attempt in range(retries + 1):
         try:
             response = await interface.chat_completion(messages, llm_type="general")
             return response.content
         except Exception as e:
             if attempt < retries:
-                await asyncio.sleep(initial_delay * (2 ** attempt))
+                await asyncio.sleep(initial_delay * (2**attempt))
             else:
                 logger.error(f"All query attempts failed: {e}")
                 return f"Error after {retries + 1} attempts: {str(e)}"
+
 
 # Backward compatibility aliases
 execute_ollama_request = safe_query  # Common alias used in imports
@@ -1076,18 +1170,18 @@ def get_llm_interface(settings: Optional[LLMSettings] = None) -> LLMInterface:
 
 # Export compatibility classes and functions
 __all__ = [
-    "LLMInterface", 
+    "LLMInterface",
     "AsyncLLMInterface",  # Backward compatibility alias
-    "LLMSettings", 
-    "LLMResponse", 
-    "ChatMessage", 
+    "LLMSettings",
+    "LLMResponse",
+    "ChatMessage",
     "LLMRequest",
-    "ProviderType", 
+    "ProviderType",
     "LLMType",
-    "safe_query", 
+    "safe_query",
     "execute_ollama_request",
     "get_llm_interface",
-    "local_llm", 
+    "local_llm",
     "palm",
-    "TORCH_AVAILABLE"
+    "TORCH_AVAILABLE",
 ]

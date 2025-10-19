@@ -12,7 +12,12 @@ from typing import Any, Dict
 
 import requests
 
-from src.unified_config_manager import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT, config as global_config_manager
+from src.unified_config_manager import (
+    HTTP_PROTOCOL,
+    OLLAMA_HOST_IP,
+    OLLAMA_PORT,
+    config as global_config_manager,
+)
 from src.utils.redis_client import get_redis_client
 from src.constants.network_constants import NetworkConstants
 
@@ -122,7 +127,9 @@ class ConnectionTester:
             if not ollama_model:
                 ollama_model = global_config_manager.get_nested(
                     "backend.ollama_model",
-                    os.getenv("AUTOBOT_OLLAMA_MODEL", "artifish/llama3.2-uncensored:latest"),  # Changed from deepseek-r1:14b
+                    os.getenv(
+                        "AUTOBOT_OLLAMA_MODEL", "artifish/llama3.2-uncensored:latest"
+                    ),  # Changed from deepseek-r1:14b
                 )
 
             # Default fallbacks with environment variable support
@@ -131,7 +138,9 @@ class ConnectionTester:
 
                 ollama_endpoint = f"{OLLAMA_URL}/api/generate"
             if not ollama_model:
-                ollama_model = os.getenv("AUTOBOT_OLLAMA_MODEL", "artifish/llama3.2-uncensored:latest")  # Changed from deepseek-r1:14b
+                ollama_model = os.getenv(
+                    "AUTOBOT_OLLAMA_MODEL", "artifish/llama3.2-uncensored:latest"
+                )  # Changed from deepseek-r1:14b
 
             # Test Ollama connection
             ollama_check_url = ollama_endpoint.replace("/api/generate", "/api/tags")
@@ -210,7 +219,12 @@ class ConnectionTester:
                     "host", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
                 )
                 redis_port = redis_config.get(
-                    "port", int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)))
+                    "port",
+                    int(
+                        os.getenv(
+                            "AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)
+                        )
+                    ),
                 )
             else:
                 # Check memory.redis config (current structure)
@@ -222,7 +236,12 @@ class ConnectionTester:
                         "host", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
                     )
                     redis_port = redis_config.get(
-                        "port", int(os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)))
+                        "port",
+                        int(
+                            os.getenv(
+                                "AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT)
+                            )
+                        ),
                     )
                 else:
                     return {
@@ -477,8 +496,12 @@ class ModelManager:
         except Exception as e:
             # Implement rate limiting to prevent log spam
             import time
+
             current_time = time.time()
-            if current_time - ModelManager._last_ollama_warning >= ModelManager._warning_interval:
+            if (
+                current_time - ModelManager._last_ollama_warning
+                >= ModelManager._warning_interval
+            ):
                 logger.warning(f"Failed to get Ollama models: {str(e)}")
                 ModelManager._last_ollama_warning = current_time
             return []

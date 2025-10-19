@@ -20,6 +20,7 @@ router = APIRouter()
 
 class ValidationRequest(BaseModel):
     """Request model for system validation"""
+
     validation_type: str = "comprehensive"
     include_performance_tests: bool = True
     include_stress_tests: bool = False
@@ -28,6 +29,7 @@ class ValidationRequest(BaseModel):
 
 class ValidationResult(BaseModel):
     """Response model for validation results"""
+
     validation_id: str
     status: str
     overall_score: float
@@ -47,7 +49,7 @@ async def validation_health():
             "status": "healthy",
             "message": "System validation API is operational",
             "validator_initialized": validator is not None,
-            "timestamp": validator._get_timestamp() if validator else None
+            "timestamp": validator._get_timestamp() if validator else None,
         }
     except Exception as e:
         logger.error(f"Validation health check failed: {e}")
@@ -56,22 +58,21 @@ async def validation_health():
 
 @router.post("/validate/comprehensive", response_model=ValidationResult)
 async def run_comprehensive_validation(
-    request: ValidationRequest,
-    background_tasks: BackgroundTasks
+    request: ValidationRequest, background_tasks: BackgroundTasks
 ):
     """Run comprehensive system validation"""
     try:
         validator = get_system_validator()
-        
+
         # Run validation
         result = await validator.run_comprehensive_validation()
-        
+
         if not result["success"]:
             raise HTTPException(
-                status_code=500, 
-                detail=f"Validation failed: {result.get('error', 'Unknown error')}"
+                status_code=500,
+                detail=f"Validation failed: {result.get('error', 'Unknown error')}",
             )
-        
+
         # Format response
         validation_result = ValidationResult(
             validation_id=result["validation_id"],
@@ -81,11 +82,11 @@ async def run_comprehensive_validation(
             recommendations=result["recommendations"],
             test_results=result["test_results"],
             execution_time=result["execution_time"],
-            timestamp=result["timestamp"]
+            timestamp=result["timestamp"],
         )
-        
+
         return validation_result
-        
+
     except Exception as e:
         logger.error(f"Comprehensive validation failed: {e}")
         raise HTTPException(status_code=500, detail=f"Validation error: {str(e)}")
@@ -96,54 +97,58 @@ async def run_quick_validation():
     """Run quick system validation check"""
     try:
         validator = get_system_validator()
-        
+
         # Run quick checks only
         quick_results = {}
-        
+
         # Cache validation
         cache_result = await validator.validate_knowledge_base_caching()
         quick_results["cache"] = {
             "status": "healthy" if cache_result["success"] else "unhealthy",
             "score": cache_result.get("score", 0),
-            "message": cache_result.get("message", "No message")
+            "message": cache_result.get("message", "No message"),
         }
-        
+
         # Search validation
         search_result = await validator.validate_hybrid_search()
         quick_results["search"] = {
-            "status": "healthy" if search_result["success"] else "unhealthy", 
+            "status": "healthy" if search_result["success"] else "unhealthy",
             "score": search_result.get("score", 0),
-            "message": search_result.get("message", "No message")
+            "message": search_result.get("message", "No message"),
         }
-        
+
         # Monitoring validation
         monitoring_result = await validator.validate_monitoring_system()
         quick_results["monitoring"] = {
             "status": "healthy" if monitoring_result["success"] else "unhealthy",
             "score": monitoring_result.get("score", 0),
-            "message": monitoring_result.get("message", "No message")
+            "message": monitoring_result.get("message", "No message"),
         }
-        
+
         # Model optimization validation
         model_result = await validator.validate_model_optimization()
         quick_results["model_optimization"] = {
             "status": "healthy" if model_result["success"] else "unhealthy",
             "score": model_result.get("score", 0),
-            "message": model_result.get("message", "No message")
+            "message": model_result.get("message", "No message"),
         }
-        
+
         # Calculate overall status
         all_scores = [result["score"] for result in quick_results.values()]
         overall_score = sum(all_scores) / len(all_scores) if all_scores else 0
-        overall_status = "healthy" if overall_score >= 80 else "degraded" if overall_score >= 60 else "unhealthy"
-        
+        overall_status = (
+            "healthy"
+            if overall_score >= 80
+            else "degraded" if overall_score >= 60 else "unhealthy"
+        )
+
         return {
             "status": overall_status,
             "overall_score": overall_score,
             "components": quick_results,
-            "timestamp": validator._get_timestamp()
+            "timestamp": validator._get_timestamp(),
         }
-        
+
     except Exception as e:
         logger.error(f"Quick validation failed: {e}")
         raise HTTPException(status_code=500, detail=f"Quick validation error: {str(e)}")
@@ -154,7 +159,7 @@ async def validate_component(component_name: str):
     """Validate specific component"""
     try:
         validator = get_system_validator()
-        
+
         # Map component names to validation methods
         component_methods = {
             "cache": validator.validate_knowledge_base_caching,
@@ -164,32 +169,34 @@ async def validate_component(component_name: str):
             "monitoring": validator.validate_monitoring_system,
             "model": validator.validate_model_optimization,
             "model_optimization": validator.validate_model_optimization,
-            "integration": validator.validate_integration_tests
+            "integration": validator.validate_integration_tests,
         }
-        
+
         if component_name.lower() not in component_methods:
             raise HTTPException(
                 status_code=404,
-                detail=f"Component '{component_name}' not found. Available: {list(component_methods.keys())}"
+                detail=f"Component '{component_name}' not found. Available: {list(component_methods.keys())}",
             )
-        
+
         # Run specific validation
         method = component_methods[component_name.lower()]
         result = await method()
-        
+
         return {
             "component": component_name,
             "status": "healthy" if result["success"] else "unhealthy",
             "score": result.get("score", 0),
             "details": result,
-            "timestamp": validator._get_timestamp()
+            "timestamp": validator._get_timestamp(),
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Component validation failed for {component_name}: {e}")
-        raise HTTPException(status_code=500, detail=f"Component validation error: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Component validation error: {str(e)}"
+        )
 
 
 @router.get("/validate/recommendations")
@@ -197,48 +204,56 @@ async def get_optimization_recommendations():
     """Get system optimization recommendations"""
     try:
         validator = get_system_validator()
-        
+
         # Get recommendations from each component
         recommendations = []
-        
+
         # Cache recommendations
         cache_result = await validator.validate_knowledge_base_caching()
         if "recommendations" in cache_result:
-            recommendations.extend([
-                {"component": "cache", "recommendation": rec}
-                for rec in cache_result["recommendations"]
-            ])
-        
-        # Search recommendations  
+            recommendations.extend(
+                [
+                    {"component": "cache", "recommendation": rec}
+                    for rec in cache_result["recommendations"]
+                ]
+            )
+
+        # Search recommendations
         search_result = await validator.validate_hybrid_search()
         if "recommendations" in search_result:
-            recommendations.extend([
-                {"component": "search", "recommendation": rec}
-                for rec in search_result["recommendations"]
-            ])
-        
+            recommendations.extend(
+                [
+                    {"component": "search", "recommendation": rec}
+                    for rec in search_result["recommendations"]
+                ]
+            )
+
         # Monitoring recommendations
         monitoring_result = await validator.validate_monitoring_system()
         if "recommendations" in monitoring_result:
-            recommendations.extend([
-                {"component": "monitoring", "recommendation": rec}
-                for rec in monitoring_result["recommendations"]
-            ])
-        
+            recommendations.extend(
+                [
+                    {"component": "monitoring", "recommendation": rec}
+                    for rec in monitoring_result["recommendations"]
+                ]
+            )
+
         # Model optimization recommendations
         model_result = await validator.validate_model_optimization()
         if "recommendations" in model_result:
-            recommendations.extend([
-                {"component": "model_optimization", "recommendation": rec}
-                for rec in model_result["recommendations"]
-            ])
-        
+            recommendations.extend(
+                [
+                    {"component": "model_optimization", "recommendation": rec}
+                    for rec in model_result["recommendations"]
+                ]
+            )
+
         return {
             "total_recommendations": len(recommendations),
             "recommendations": recommendations,
-            "timestamp": validator._get_timestamp()
+            "timestamp": validator._get_timestamp(),
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to get recommendations: {e}")
         raise HTTPException(status_code=500, detail=f"Recommendations error: {str(e)}")
@@ -249,18 +264,23 @@ async def get_validation_status():
     """Get current validation system status"""
     try:
         validator = get_system_validator()
-        
+
         return {
             "validation_system": "operational",
             "available_validations": [
-                "comprehensive", "quick", "cache", "search", 
-                "monitoring", "model_optimization", "integration"
+                "comprehensive",
+                "quick",
+                "cache",
+                "search",
+                "monitoring",
+                "model_optimization",
+                "integration",
             ],
             "last_validation": None,  # Could store last validation timestamp
             "system_health": "unknown",  # Would require running quick validation
-            "timestamp": validator._get_timestamp()
+            "timestamp": validator._get_timestamp(),
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to get validation status: {e}")
         raise HTTPException(status_code=500, detail=f"Status error: {str(e)}")
@@ -271,39 +291,39 @@ async def run_performance_benchmark():
     """Run performance benchmarking tests"""
     try:
         validator = get_system_validator()
-        
+
         # This would run performance benchmarks for each component
         # For now, return a placeholder structure
         benchmarks = {
             "cache_performance": {
                 "hit_rate": 0.0,
                 "response_time_ms": 0.0,
-                "throughput_ops_sec": 0.0
+                "throughput_ops_sec": 0.0,
             },
             "search_performance": {
                 "semantic_time_ms": 0.0,
                 "hybrid_time_ms": 0.0,
-                "relevance_score": 0.0
+                "relevance_score": 0.0,
             },
             "monitoring_performance": {
                 "collection_time_ms": 0.0,
                 "storage_time_ms": 0.0,
-                "query_time_ms": 0.0
+                "query_time_ms": 0.0,
             },
             "model_performance": {
                 "selection_time_ms": 0.0,
                 "accuracy_score": 0.0,
-                "resource_efficiency": 0.0
-            }
+                "resource_efficiency": 0.0,
+            },
         }
-        
+
         return {
             "benchmark_status": "completed",
             "benchmarks": benchmarks,
             "overall_performance_score": 85.0,  # Calculated from benchmarks
-            "timestamp": validator._get_timestamp()
+            "timestamp": validator._get_timestamp(),
         }
-        
+
     except Exception as e:
         logger.error(f"Performance benchmark failed: {e}")
         raise HTTPException(status_code=500, detail=f"Benchmark error: {str(e)}")

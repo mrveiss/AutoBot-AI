@@ -49,11 +49,13 @@ class ResearchBrowserSession:
 
             # Get optimal configuration for current display
             config = get_playwright_config()
-            viewport = config['viewport']
-            browser_args = config['browser_args']
+            viewport = config["viewport"]
+            browser_args = config["browser_args"]
 
-            logger.info(f"Using dynamic resolution: {viewport['width']}x{viewport['height']} "
-                       f"(detected: {config['detected_resolution']['width']}x{config['detected_resolution']['height']})")
+            logger.info(
+                f"Using dynamic resolution: {viewport['width']}x{viewport['height']} "
+                f"(detected: {config['detected_resolution']['width']}x{config['detected_resolution']['height']})"
+            )
 
             # Use existing browser if available (Docker container)
             # Note: The Playwright container runs an Express API server on port 3000,
@@ -61,7 +63,8 @@ class ResearchBrowserSession:
             try:
                 # Try to connect to CDP if available (for future use)
                 self.browser = await self.playwright.chromium.connect_over_cdp(
-                    cfg.get_service_url('chrome', '/devtools') or "http://localhost:9222"
+                    cfg.get_service_url("chrome", "/devtools")
+                    or "http://localhost:9222"
                 )
                 logger.info(
                     f"Connected to existing browser via CDP for session "

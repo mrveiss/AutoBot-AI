@@ -113,9 +113,7 @@ class OptimizedAgentLoader:
             # Enforce cache size limit
             if len(self._cache) >= self.cache_size_limit:
                 # Remove oldest entry
-                oldest_key = min(
-                    self._cache.keys(), key=lambda k: self._cache[k][1]
-                )
+                oldest_key = min(self._cache.keys(), key=lambda k: self._cache[k][1])
                 del self._cache[oldest_key]
 
             # Store with timestamp
@@ -200,14 +198,10 @@ def strip_code_blocks(content: str) -> str:
 
     # Pattern to match code blocks: ```language\ncode\n```
     # Uses non-greedy matching and handles nested backticks
-    code_block_pattern = re.compile(
-        r"```[\w]*\n.*?\n```", re.DOTALL | re.MULTILINE
-    )
+    code_block_pattern = re.compile(r"```[\w]*\n.*?\n```", re.DOTALL | re.MULTILINE)
 
     # Replace code blocks with markers
-    optimized = code_block_pattern.sub(
-        "\n[Code example omitted]\n", content
-    )
+    optimized = code_block_pattern.sub("\n[Code example omitted]\n", content)
 
     return optimized
 

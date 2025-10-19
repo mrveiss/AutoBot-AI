@@ -94,7 +94,9 @@ class ScreenState:
     automation_opportunities: List[Dict[str, Any]]
     context_analysis: Dict[str, Any]
     confidence_score: float
-    multimodal_analysis: Optional[List[Dict[str, Any]]] = None  # New field for multi-modal processing results
+    multimodal_analysis: Optional[List[Dict[str, Any]]] = (
+        None  # New field for multi-modal processing results
+    )
 
 
 class ScreenAnalyzer:
@@ -142,7 +144,7 @@ class ScreenAnalyzer:
                     modality_type=ModalityType.IMAGE,
                     intent=ProcessingIntent.SCREEN_ANALYSIS,
                     data=screenshot,
-                    metadata={"session_id": session_id}
+                    metadata={"session_id": session_id},
                 )
                 modal_inputs.append(image_input)
 
@@ -153,7 +155,10 @@ class ScreenAnalyzer:
                         modality_type=ModalityType.AUDIO,
                         intent=ProcessingIntent.VOICE_COMMAND,
                         data=context_audio,
-                        metadata={"session_id": session_id, "context": "screen_analysis"}
+                        metadata={
+                            "session_id": session_id,
+                            "context": "screen_analysis",
+                        },
                     )
                     modal_inputs.append(audio_input)
 
@@ -174,10 +179,12 @@ class ScreenAnalyzer:
                         metadata={
                             "image_result": processing_results[0].result_data,
                             "audio_result": processing_results[1].result_data,
-                            "session_id": session_id
-                        }
+                            "session_id": session_id,
+                        },
                     )
-                    combined_result = await self.multimodal_processor.process(combined_input)
+                    combined_result = await self.multimodal_processor.process(
+                        combined_input
+                    )
                     # Use combined result as primary if successful
                     if combined_result.success:
                         primary_result = combined_result
@@ -194,9 +201,15 @@ class ScreenAnalyzer:
 
                 # Add multi-modal context if available
                 if len(processing_results) > 1 and processing_results[1].result_data:
-                    voice_intent = processing_results[1].result_data.get("transcribed_text", "")
-                    context_analysis["multimodal_understanding"] = primary_result.result_data
-                    context_analysis["cross_modal_confidence"] = primary_result.confidence
+                    voice_intent = processing_results[1].result_data.get(
+                        "transcribed_text", ""
+                    )
+                    context_analysis["multimodal_understanding"] = (
+                        primary_result.result_data
+                    )
+                    context_analysis["cross_modal_confidence"] = (
+                        primary_result.confidence
+                    )
                     context_analysis["voice_intent"] = voice_intent
 
                 automation_opportunities = await self._find_automation_opportunities(
@@ -208,27 +221,40 @@ class ScreenAnalyzer:
                     timestamp=time.time(),
                     screenshot=screenshot,
                     ui_elements=ui_elements,
-                    text_regions=primary_result.result_data.get("text_content", {}).get(
-                        "text_regions", []
-                    ) if primary_result.result_data else [],
-                    dominant_colors=primary_result.result_data.get(
-                        "dominant_colors", []
-                    ) if primary_result.result_data else [],
-                    layout_structure=primary_result.result_data.get(
-                        "layout_analysis", {}
-                    ) if primary_result.result_data else {},
+                    text_regions=(
+                        primary_result.result_data.get("text_content", {}).get(
+                            "text_regions", []
+                        )
+                        if primary_result.result_data
+                        else []
+                    ),
+                    dominant_colors=(
+                        primary_result.result_data.get("dominant_colors", [])
+                        if primary_result.result_data
+                        else []
+                    ),
+                    layout_structure=(
+                        primary_result.result_data.get("layout_analysis", {})
+                        if primary_result.result_data
+                        else {}
+                    ),
                     automation_opportunities=automation_opportunities,
                     context_analysis=context_analysis,
                     confidence_score=max(r.confidence for r in processing_results),
                     multimodal_analysis=[
                         {
-                            "modality": r.modality_type.value if hasattr(r.modality_type, 'value') else str(r.modality_type),
+                            "modality": (
+                                r.modality_type.value
+                                if hasattr(r.modality_type, "value")
+                                else str(r.modality_type)
+                            ),
                             "confidence": r.confidence,
                             "data": r.result_data,
                             "success": r.success,
-                            "processing_time": getattr(r, 'processing_time', 0.0)
-                        } for r in processing_results
-                    ]
+                            "processing_time": getattr(r, "processing_time", 0.0),
+                        }
+                        for r in processing_results
+                    ],
                 )
 
                 # Update screenshot cache
@@ -587,13 +613,17 @@ class ScreenAnalyzer:
                 query_modality="text",
                 target_modalities=["image"],
                 limit=10,
-                similarity_threshold=0.7
+                similarity_threshold=0.7,
             )
 
             # Map search results back to UI elements on current screen
-            matched_elements = await self._map_search_to_ui_elements(search_results, screenshot)
+            matched_elements = await self._map_search_to_ui_elements(
+                search_results, screenshot
+            )
 
-            logger.info(f"Found {len(matched_elements)} elements matching voice description: '{voice_description}'")
+            logger.info(
+                f"Found {len(matched_elements)} elements matching voice description: '{voice_description}'"
+            )
             return matched_elements
 
         except Exception as e:
@@ -619,29 +649,27 @@ class ScreenAnalyzer:
                 # Create bounding box estimate (in real implementation, would use more sophisticated mapping)
                 # For now, create a centered bounding box as placeholder
                 h, w = screenshot.shape[:2]
-                bbox = {
-                    "x": w // 4,
-                    "y": h // 4,
-                    "width": w // 2,
-                    "height": h // 2
-                }
+                bbox = {"x": w // 4, "y": h // 4, "width": w // 2, "height": h // 2}
 
                 # Create UI element from search result
                 ui_element = UIElement(
                     element_id=f"voice_detected_{i}_{int(time.time())}",
                     element_type=ElementType.UNKNOWN,  # Would need classification
                     bbox=bbox,
-                    center_point=(bbox["x"] + bbox["width"] // 2, bbox["y"] + bbox["height"] // 2),
+                    center_point=(
+                        bbox["x"] + bbox["width"] // 2,
+                        bbox["y"] + bbox["height"] // 2,
+                    ),
                     confidence=score,
                     text_content=content,
                     attributes={
                         "voice_description_match": True,
                         "search_score": score,
-                        "source_modality": result.get("source_modality", "image")
+                        "source_modality": result.get("source_modality", "image"),
                     },
                     possible_interactions=[InteractionType.CLICK],
                     screenshot_region=None,
-                    ocr_data=metadata
+                    ocr_data=metadata,
                 )
 
                 matched_elements.append(ui_element)

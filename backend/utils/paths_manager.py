@@ -32,7 +32,9 @@ class PathsManager:
         if PathsManager._cache_timestamp is None:
             return True
 
-        return (time.time() - PathsManager._cache_timestamp) > PathsManager.CACHE_DURATION
+        return (
+            time.time() - PathsManager._cache_timestamp
+        ) > PathsManager.CACHE_DURATION
 
     @staticmethod
     def clear_cache():

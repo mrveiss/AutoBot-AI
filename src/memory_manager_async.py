@@ -71,7 +71,6 @@ class AsyncLongTermMemoryManager:
         self.logger = logging.getLogger(__name__)
         logging.info(f"Async long-term memory manager initialized at {self.db_path}")
 
-
     async def _init_memory_db(self):
         """Initialize async SQLite database with comprehensive memory tables"""
         if self._initialized:

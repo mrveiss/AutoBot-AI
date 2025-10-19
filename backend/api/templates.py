@@ -49,8 +49,8 @@ async def get_templates_root():
             "get_template": "/api/templates/templates/{template_id}",
             "search_templates": "/api/templates/templates/search",
             "categories": "/api/templates/templates/categories",
-            "stats": "/api/templates/templates/stats"
-        }
+            "stats": "/api/templates/templates/stats",
+        },
     }
 
 

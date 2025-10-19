@@ -64,7 +64,7 @@ class AutoBotMemoryGraph:
         "context",
         "learning",
         "research",
-        "implementation"
+        "implementation",
     }
 
     # Valid relation types
@@ -77,7 +77,7 @@ class AutoBotMemoryGraph:
         "guides",
         "follows",
         "contains",
-        "blocks"
+        "blocks",
     }
 
     def __init__(
@@ -85,7 +85,7 @@ class AutoBotMemoryGraph:
         redis_host: Optional[str] = None,
         redis_port: Optional[int] = None,
         database: int = 9,
-        chat_history_manager: Optional[Any] = None
+        chat_history_manager: Optional[Any] = None,
     ):
         """
         Initialize Memory Graph interface.
@@ -100,9 +100,9 @@ class AutoBotMemoryGraph:
         self.initialization_lock = asyncio.Lock()
 
         # Configuration
-        self.redis_host = redis_host or config.get_host('redis')
-        self.redis_port = redis_port or config.get_port('redis')
-        self.redis_password = config.get('redis.password')
+        self.redis_host = redis_host or config.get_host("redis")
+        self.redis_port = redis_port or config.get_port("redis")
+        self.redis_password = config.get("redis.password")
         self.redis_db = database
 
         # Connection clients
@@ -162,19 +162,21 @@ class AutoBotMemoryGraph:
             # Get async Redis client for DB 9
             redis_config = config.get_redis_config()
             self.redis_client = aioredis.Redis(
-                host=redis_config['host'],
-                port=redis_config['port'],
+                host=redis_config["host"],
+                port=redis_config["port"],
                 db=self.redis_db,
-                password=redis_config.get('password'),
+                password=redis_config.get("password"),
                 decode_responses=True,
-                socket_timeout=redis_config['socket_timeout'],
-                socket_connect_timeout=redis_config['socket_connect_timeout'],
-                retry_on_timeout=redis_config['retry_on_timeout']
+                socket_timeout=redis_config["socket_timeout"],
+                socket_connect_timeout=redis_config["socket_connect_timeout"],
+                retry_on_timeout=redis_config["retry_on_timeout"],
             )
 
             # Test connection
             await self.redis_client.ping()
-            logger.info(f"Memory Graph Redis client connected (database {self.redis_db})")
+            logger.info(
+                f"Memory Graph Redis client connected (database {self.redis_db})"
+            )
 
         except Exception as e:
             logger.error(f"Failed to initialize Redis connection: {e}")
@@ -194,19 +196,59 @@ class AutoBotMemoryGraph:
 
             # Create entity search index
             await self.redis_client.execute_command(
-                "FT.CREATE", "memory_entity_idx",
-                "ON", "JSON",
-                "PREFIX", "1", "memory:entity:",
+                "FT.CREATE",
+                "memory_entity_idx",
+                "ON",
+                "JSON",
+                "PREFIX",
+                "1",
+                "memory:entity:",
                 "SCHEMA",
-                "$.type", "AS", "type", "TAG", "SORTABLE",
-                "$.name", "AS", "name", "TEXT", "WEIGHT", "2.0", "SORTABLE",
-                "$.observations[*]", "AS", "observations", "TEXT",
-                "$.created_at", "AS", "created_at", "NUMERIC", "SORTABLE",
-                "$.updated_at", "AS", "updated_at", "NUMERIC", "SORTABLE",
-                "$.metadata.priority", "AS", "priority", "TAG",
-                "$.metadata.status", "AS", "status", "TAG", "SORTABLE",
-                "$.metadata.tags[*]", "AS", "tags", "TAG", "SEPARATOR", ",",
-                "$.metadata.session_id", "AS", "session_id", "TAG"
+                "$.type",
+                "AS",
+                "type",
+                "TAG",
+                "SORTABLE",
+                "$.name",
+                "AS",
+                "name",
+                "TEXT",
+                "WEIGHT",
+                "2.0",
+                "SORTABLE",
+                "$.observations[*]",
+                "AS",
+                "observations",
+                "TEXT",
+                "$.created_at",
+                "AS",
+                "created_at",
+                "NUMERIC",
+                "SORTABLE",
+                "$.updated_at",
+                "AS",
+                "updated_at",
+                "NUMERIC",
+                "SORTABLE",
+                "$.metadata.priority",
+                "AS",
+                "priority",
+                "TAG",
+                "$.metadata.status",
+                "AS",
+                "status",
+                "TAG",
+                "SORTABLE",
+                "$.metadata.tags[*]",
+                "AS",
+                "tags",
+                "TAG",
+                "SEPARATOR",
+                ",",
+                "$.metadata.session_id",
+                "AS",
+                "session_id",
+                "TAG",
             )
 
             logger.info("Created RediSearch index: memory_entity_idx")
@@ -226,7 +268,9 @@ class AutoBotMemoryGraph:
             logger.info("Knowledge Base initialized for embedding generation")
 
         except Exception as e:
-            logger.warning(f"Could not initialize Knowledge Base (embeddings unavailable): {e}")
+            logger.warning(
+                f"Could not initialize Knowledge Base (embeddings unavailable): {e}"
+            )
             self.knowledge_base = None
 
     async def _cleanup_on_failure(self):
@@ -260,7 +304,7 @@ class AutoBotMemoryGraph:
         name: str,
         observations: List[str],
         metadata: Optional[Dict[str, Any]] = None,
-        tags: Optional[List[str]] = None
+        tags: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Create a new entity in the memory graph.
@@ -283,7 +327,9 @@ class AutoBotMemoryGraph:
 
         # Validation
         if entity_type not in self.ENTITY_TYPES:
-            raise ValueError(f"Invalid entity_type: {entity_type}. Must be one of {self.ENTITY_TYPES}")
+            raise ValueError(
+                f"Invalid entity_type: {entity_type}. Must be one of {self.ENTITY_TYPES}"
+            )
 
         if not name or not name.strip():
             raise ValueError("Entity name cannot be empty")
@@ -294,15 +340,17 @@ class AutoBotMemoryGraph:
 
             # Prepare metadata
             entity_metadata = metadata or {}
-            entity_metadata.update({
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-                "created_by": "autobot",
-                "tags": tags or [],
-                "priority": entity_metadata.get("priority", "medium"),
-                "status": entity_metadata.get("status", "active"),
-                "version": 1
-            })
+            entity_metadata.update(
+                {
+                    "created_at": datetime.now().isoformat(),
+                    "updated_at": datetime.now().isoformat(),
+                    "created_by": "autobot",
+                    "tags": tags or [],
+                    "priority": entity_metadata.get("priority", "medium"),
+                    "status": entity_metadata.get("status", "active"),
+                    "version": 1,
+                }
+            )
 
             # Create entity document
             entity = {
@@ -312,7 +360,7 @@ class AutoBotMemoryGraph:
                 "created_at": int(datetime.now().timestamp() * 1000),
                 "updated_at": int(datetime.now().timestamp() * 1000),
                 "observations": observations,
-                "metadata": entity_metadata
+                "metadata": entity_metadata,
             }
 
             # Store in Redis
@@ -335,7 +383,7 @@ class AutoBotMemoryGraph:
         self,
         entity_id: Optional[str] = None,
         entity_name: Optional[str] = None,
-        include_relations: bool = False
+        include_relations: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """
         Retrieve entity by ID or name.
@@ -357,10 +405,7 @@ class AutoBotMemoryGraph:
                 entity = await self.redis_client.json().get(entity_key)
             elif entity_name:
                 # Search by name
-                results = await self.search_entities(
-                    query=entity_name,
-                    limit=1
-                )
+                results = await self.search_entities(query=entity_name, limit=1)
                 if not results:
                     return None
                 entity = results[0]
@@ -375,7 +420,7 @@ class AutoBotMemoryGraph:
             if include_relations and entity_id:
                 entity["relations"] = {
                     "outgoing": await self._get_outgoing_relations(entity_id),
-                    "incoming": await self._get_incoming_relations(entity_id)
+                    "incoming": await self._get_incoming_relations(entity_id),
                 }
 
             return entity
@@ -385,9 +430,7 @@ class AutoBotMemoryGraph:
             return None
 
     async def add_observations(
-        self,
-        entity_name: str,
-        observations: List[str]
+        self, entity_name: str, observations: List[str]
     ) -> Dict[str, Any]:
         """
         Add new observations to an existing entity.
@@ -416,16 +459,12 @@ class AutoBotMemoryGraph:
             # Append observations
             for observation in observations:
                 await self.redis_client.json().arrappend(
-                    entity_key,
-                    "$.observations",
-                    observation
+                    entity_key, "$.observations", observation
                 )
 
             # Update timestamp
             await self.redis_client.json().set(
-                entity_key,
-                "$.updated_at",
-                int(datetime.now().timestamp() * 1000)
+                entity_key, "$.updated_at", int(datetime.now().timestamp() * 1000)
             )
 
             # Update embedding
@@ -436,7 +475,9 @@ class AutoBotMemoryGraph:
             # Invalidate cache
             self.search_cache.clear()
 
-            logger.info(f"Added {len(observations)} observations to entity: {entity_name}")
+            logger.info(
+                f"Added {len(observations)} observations to entity: {entity_name}"
+            )
 
             return await self.redis_client.json().get(entity_key)
 
@@ -445,9 +486,7 @@ class AutoBotMemoryGraph:
             raise RuntimeError(f"Add observations failed: {str(e)}")
 
     async def delete_entity(
-        self,
-        entity_name: str,
-        cascade_relations: bool = True
+        self, entity_name: str, cascade_relations: bool = True
     ) -> bool:
         """
         Delete entity and optionally its relations.
@@ -505,7 +544,7 @@ class AutoBotMemoryGraph:
         relation_type: str,
         bidirectional: bool = False,
         strength: float = 1.0,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Create relationship between two entities.
@@ -543,10 +582,7 @@ class AutoBotMemoryGraph:
                 "to": to_id,
                 "type": relation_type,
                 "created_at": int(datetime.now().timestamp() * 1000),
-                "metadata": {
-                    "strength": strength,
-                    **(metadata or {})
-                }
+                "metadata": {"strength": strength, **(metadata or {})},
             }
 
             # Store outgoing relation
@@ -554,10 +590,9 @@ class AutoBotMemoryGraph:
 
             # Initialize if doesn't exist
             if not await self.redis_client.exists(out_key):
-                await self.redis_client.json().set(out_key, "$", {
-                    "entity_id": from_id,
-                    "relations": []
-                })
+                await self.redis_client.json().set(
+                    out_key, "$", {"entity_id": from_id, "relations": []}
+                )
 
             # Append relation
             await self.redis_client.json().arrappend(out_key, "$.relations", relation)
@@ -566,20 +601,21 @@ class AutoBotMemoryGraph:
             in_key = f"memory:relations:in:{to_id}"
 
             if not await self.redis_client.exists(in_key):
-                await self.redis_client.json().set(in_key, "$", {
-                    "entity_id": to_id,
-                    "relations": []
-                })
+                await self.redis_client.json().set(
+                    in_key, "$", {"entity_id": to_id, "relations": []}
+                )
 
             reverse_rel = {
                 "from": from_id,
                 "type": relation_type,
-                "created_at": int(datetime.now().timestamp() * 1000)
+                "created_at": int(datetime.now().timestamp() * 1000),
             }
 
             await self.redis_client.json().arrappend(in_key, "$.relations", reverse_rel)
 
-            logger.info(f"Created relation: {from_entity} --[{relation_type}]--> {to_entity}")
+            logger.info(
+                f"Created relation: {from_entity} --[{relation_type}]--> {to_entity}"
+            )
 
             return relation
 
@@ -592,7 +628,7 @@ class AutoBotMemoryGraph:
         entity_name: str,
         relation_type: Optional[str] = None,
         direction: str = "both",
-        max_depth: int = 1
+        max_depth: int = 1,
     ) -> List[Dict[str, Any]]:
         """
         Get entities related to specified entity.
@@ -637,11 +673,13 @@ class AutoBotMemoryGraph:
                         if relation_type is None or rel["type"] == relation_type:
                             related_entity = await self.get_entity(entity_id=rel["to"])
                             if related_entity:
-                                related.append({
-                                    "entity": related_entity,
-                                    "relation": rel,
-                                    "direction": "outgoing"
-                                })
+                                related.append(
+                                    {
+                                        "entity": related_entity,
+                                        "relation": rel,
+                                        "direction": "outgoing",
+                                    }
+                                )
                                 if depth + 1 <= max_depth:
                                     queue.append((rel["to"], depth + 1))
 
@@ -650,13 +688,17 @@ class AutoBotMemoryGraph:
                     incoming = await self._get_incoming_relations(current_id)
                     for rel in incoming:
                         if relation_type is None or rel["type"] == relation_type:
-                            related_entity = await self.get_entity(entity_id=rel["from"])
+                            related_entity = await self.get_entity(
+                                entity_id=rel["from"]
+                            )
                             if related_entity:
-                                related.append({
-                                    "entity": related_entity,
-                                    "relation": rel,
-                                    "direction": "incoming"
-                                })
+                                related.append(
+                                    {
+                                        "entity": related_entity,
+                                        "relation": rel,
+                                        "direction": "incoming",
+                                    }
+                                )
                                 if depth + 1 <= max_depth:
                                     queue.append((rel["from"], depth + 1))
 
@@ -667,10 +709,7 @@ class AutoBotMemoryGraph:
             return []
 
     async def delete_relation(
-        self,
-        from_entity: str,
-        to_entity: str,
-        relation_type: str
+        self, from_entity: str, to_entity: str, relation_type: str
     ) -> bool:
         """
         Delete specific relation between entities.
@@ -702,10 +741,13 @@ class AutoBotMemoryGraph:
 
             if out_data and "relations" in out_data:
                 filtered_relations = [
-                    rel for rel in out_data["relations"]
+                    rel
+                    for rel in out_data["relations"]
                     if not (rel["to"] == to_id and rel["type"] == relation_type)
                 ]
-                await self.redis_client.json().set(out_key, "$.relations", filtered_relations)
+                await self.redis_client.json().set(
+                    out_key, "$.relations", filtered_relations
+                )
 
             # Remove reverse relation
             in_key = f"memory:relations:in:{to_id}"
@@ -713,12 +755,17 @@ class AutoBotMemoryGraph:
 
             if in_data and "relations" in in_data:
                 filtered_relations = [
-                    rel for rel in in_data["relations"]
+                    rel
+                    for rel in in_data["relations"]
                     if not (rel["from"] == from_id and rel["type"] == relation_type)
                 ]
-                await self.redis_client.json().set(in_key, "$.relations", filtered_relations)
+                await self.redis_client.json().set(
+                    in_key, "$.relations", filtered_relations
+                )
 
-            logger.info(f"Deleted relation: {from_entity} --[{relation_type}]--> {to_entity}")
+            logger.info(
+                f"Deleted relation: {from_entity} --[{relation_type}]--> {to_entity}"
+            )
 
             return True
 
@@ -752,7 +799,7 @@ class AutoBotMemoryGraph:
         entity_type: Optional[str] = None,
         tags: Optional[List[str]] = None,
         status: Optional[str] = None,
-        limit: int = 50
+        limit: int = 50,
     ) -> List[Dict[str, Any]]:
         """
         Semantic search across all entities.
@@ -796,10 +843,17 @@ class AutoBotMemoryGraph:
             # Execute search
             try:
                 results = await self.redis_client.execute_command(
-                    "FT.SEARCH", "memory_entity_idx",
+                    "FT.SEARCH",
+                    "memory_entity_idx",
                     redis_query,
-                    "LIMIT", "0", str(limit),
-                    "RETURN", "3", "$.name", "$.type", "$.observations"
+                    "LIMIT",
+                    "0",
+                    str(limit),
+                    "RETURN",
+                    "3",
+                    "$.name",
+                    "$.type",
+                    "$.observations",
                 )
 
                 # Parse results
@@ -829,10 +883,7 @@ class AutoBotMemoryGraph:
             return []
 
     async def _fallback_search(
-        self,
-        query: str,
-        entity_type: Optional[str],
-        limit: int
+        self, query: str, entity_type: Optional[str], limit: int
     ) -> List[Dict[str, Any]]:
         """Fallback search when RediSearch is unavailable"""
         try:
@@ -880,7 +931,9 @@ class AutoBotMemoryGraph:
             observations = entity.get("observations", [])
 
             # Weighted text (name: 0.3, type: 0.1, observations: 0.6)
-            embedding_text = f"{name} {name} {name} {entity_type} {' '.join(observations * 6)}"
+            embedding_text = (
+                f"{name} {name} {name} {entity_type} {' '.join(observations * 6)}"
+            )
 
             # Generate embedding using Knowledge Base
             # Store embedding for future semantic search
@@ -892,9 +945,7 @@ class AutoBotMemoryGraph:
     # ==================== INTEGRATION METHODS ====================
 
     async def create_conversation_entity(
-        self,
-        session_id: str,
-        metadata: Optional[Dict[str, Any]] = None
+        self, session_id: str, metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Automatically create entity from chat session.
@@ -921,11 +972,9 @@ class AutoBotMemoryGraph:
 
             # Create conversation metadata
             conv_metadata = metadata or {}
-            conv_metadata.update({
-                "session_id": session_id,
-                "priority": "low",
-                "status": "active"
-            })
+            conv_metadata.update(
+                {"session_id": session_id, "priority": "low", "status": "active"}
+            )
 
             # Create entity
             entity = await self.create_entity(
@@ -933,7 +982,7 @@ class AutoBotMemoryGraph:
                 name=f"Conversation {session_id[:8]}",
                 observations=observations,
                 metadata=conv_metadata,
-                tags=tags
+                tags=tags,
             )
 
             logger.info(f"Created conversation entity for session {session_id}")

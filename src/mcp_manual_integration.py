@@ -23,6 +23,7 @@ MCP_AVAILABLE = True
 # Import existing command manual manager
 try:
     from .command_manual_manager import CommandManualManager
+
     COMMAND_MANAGER_AVAILABLE = True
 except ImportError:
     logger.warning("CommandManualManager not available")
@@ -32,14 +33,14 @@ except ImportError:
 class MCPManualService:
     """
     Service for looking up system manuals and help information via MCP.
-    
+
     Integrates with MCP servers to provide:
     - Linux manual pages (man pages)
     - Command help information (--help output)
     - System documentation
     - Tool usage instructions
     """
-    
+
     def __init__(self):
         """Initialize the MCP manual service"""
         self.available_mcps = []
@@ -61,15 +62,17 @@ class MCPManualService:
                 self.command_manager = None
 
         logger.info("MCPManualService initialized")
-    
-    async def lookup_manual(self, query: str, command: Optional[str] = None) -> Optional[Dict[str, Any]]:
+
+    async def lookup_manual(
+        self, query: str, command: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         """
         Look up manual information for a query or specific command.
-        
+
         Args:
             query: Search query or description
             command: Specific command to look up (optional)
-            
+
         Returns:
             Dictionary with manual information or None if not found
         """
@@ -77,35 +80,35 @@ class MCPManualService:
             # Extract command from query if not provided
             if not command:
                 command = self._extract_command_from_query(query)
-            
+
             if command:
                 logger.info(f"Looking up manual for command: {command}")
-                
+
                 # Try different lookup strategies
                 manual_info = await self._lookup_command_manual(command)
                 if manual_info:
                     return manual_info
-                
+
                 # Try help lookup if manual not found
                 help_info = await self._lookup_command_help(command)
                 if help_info:
                     return help_info
-            
+
             # General documentation search
             doc_info = await self._search_documentation(query)
             return doc_info
-            
+
         except Exception as e:
             logger.error(f"Manual lookup failed for '{query}': {e}")
             return None
-    
+
     def _extract_command_from_query(self, query: str) -> Optional[str]:
         """
         Extract command name from a natural language query.
-        
+
         Args:
             query: Natural language query
-            
+
         Returns:
             Extracted command name or None
         """
@@ -118,28 +121,41 @@ class MCPManualService:
             r"help with (\w+)",
             r"manual for (\w+)",
             r"documentation for (\w+)",
-            r"(?:^|\s)(\w+)(?:\s|$)"  # Single word (last resort)
+            r"(?:^|\s)(\w+)(?:\s|$)",  # Single word (last resort)
         ]
-        
+
         query_lower = query.lower()
-        
+
         for pattern in patterns:
             match = re.search(pattern, query_lower)
             if match:
                 command = match.group(1)
                 # Filter out common non-command words
-                if command not in ['how', 'to', 'use', 'the', 'a', 'an', 'is', 'are', 'can', 'will', 'help', 'with']:
+                if command not in [
+                    "how",
+                    "to",
+                    "use",
+                    "the",
+                    "a",
+                    "an",
+                    "is",
+                    "are",
+                    "can",
+                    "will",
+                    "help",
+                    "with",
+                ]:
                     return command
-        
+
         return None
-    
+
     async def _lookup_command_manual(self, command: str) -> Optional[Dict[str, Any]]:
         """
         Look up manual page for a specific command.
-        
+
         Args:
             command: Command name to look up
-            
+
         Returns:
             Manual page information or None
         """
@@ -147,29 +163,29 @@ class MCPManualService:
             # Check cache first
             cache_key = f"man_{command}"
             if self._check_cache(cache_key):
-                return self.command_cache[cache_key]['data']
-            
+                return self.command_cache[cache_key]["data"]
+
             # Use real MCP server integration for manual pages
             manual_data = await self._real_manual_lookup(command)
-            
+
             if manual_data:
                 # Cache the result
                 self._cache_result(cache_key, manual_data)
                 return manual_data
-            
+
             return None
-            
+
         except Exception as e:
             logger.error(f"Manual lookup failed for command '{command}': {e}")
             return None
-    
+
     async def _lookup_command_help(self, command: str) -> Optional[Dict[str, Any]]:
         """
         Look up help information for a command (--help output).
-        
+
         Args:
             command: Command name
-            
+
         Returns:
             Help information or None
         """
@@ -177,29 +193,29 @@ class MCPManualService:
             # Check cache first
             cache_key = f"help_{command}"
             if self._check_cache(cache_key):
-                return self.command_cache[cache_key]['data']
-            
+                return self.command_cache[cache_key]["data"]
+
             # Use real MCP server integration for command help
             help_data = await self._real_help_lookup(command)
-            
+
             if help_data:
                 # Cache the result
                 self._cache_result(cache_key, help_data)
                 return help_data
-            
+
             return None
-            
+
         except Exception as e:
             logger.error(f"Help lookup failed for command '{command}': {e}")
             return None
-    
+
     async def _search_documentation(self, query: str) -> Optional[Dict[str, Any]]:
         """
         Search general documentation for a query.
-        
+
         Args:
             query: Search query
-            
+
         Returns:
             Documentation results or None
         """
@@ -207,11 +223,11 @@ class MCPManualService:
             # Use real MCP server integration for documentation search
             doc_data = await self._real_documentation_search(query)
             return doc_data
-            
+
         except Exception as e:
             logger.error(f"Documentation search failed for '{query}': {e}")
             return None
-    
+
     async def _real_manual_lookup(self, command: str) -> Optional[Dict[str, Any]]:
         """
         Real manual lookup using MCP filesystem server and system commands.
@@ -224,16 +240,16 @@ class MCPManualService:
                 existing_manual = self.command_manager.get_manual(command)
                 if existing_manual:
                     return {
-                        'name': existing_manual.command_name,
-                        'section': str(existing_manual.section),
-                        'description': existing_manual.description,
-                        'synopsis': existing_manual.syntax,
-                        'content': existing_manual.manual_text,
-                        'source': 'command_manager',
-                        'risk_level': existing_manual.risk_level,
-                        'category': existing_manual.category,
-                        'examples': existing_manual.examples,
-                        'related_commands': existing_manual.related_commands
+                        "name": existing_manual.command_name,
+                        "section": str(existing_manual.section),
+                        "description": existing_manual.description,
+                        "synopsis": existing_manual.syntax,
+                        "content": existing_manual.manual_text,
+                        "source": "command_manager",
+                        "risk_level": existing_manual.risk_level,
+                        "category": existing_manual.category,
+                        "examples": existing_manual.examples,
+                        "related_commands": existing_manual.related_commands,
                     }
 
             # If not in command manager, try to execute man command
@@ -250,12 +266,12 @@ class MCPManualService:
                         logger.warning(f"Failed to store manual for {command}: {e}")
 
                 return {
-                    'name': command,
-                    'section': '1',  # Default section
-                    'description': self._extract_description(manual_text),
-                    'synopsis': self._extract_synopsis(manual_text),
-                    'content': manual_text,
-                    'source': 'system_manual'
+                    "name": command,
+                    "section": "1",  # Default section
+                    "description": self._extract_description(manual_text),
+                    "synopsis": self._extract_synopsis(manual_text),
+                    "content": manual_text,
+                    "source": "system_manual",
                 }
 
             return None
@@ -273,7 +289,7 @@ class MCPManualService:
         """
         try:
             # Execute man command directly - this is more reliable than complex MCP scripting
-            result = await self._run_subprocess(['man', command])
+            result = await self._run_subprocess(["man", command])
             return result if result else None
 
         except Exception as e:
@@ -284,14 +300,14 @@ class MCPManualService:
         """Run subprocess command safely and return output."""
         try:
             process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
             # Wait for the process to complete with timeout
             try:
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10.0)
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(), timeout=10.0
+                )
             except asyncio.TimeoutError:
                 logger.warning(f"Command {' '.join(cmd)} timed out")
                 process.kill()
@@ -299,9 +315,11 @@ class MCPManualService:
                 return None
 
             if process.returncode == 0:
-                return stdout.decode('utf-8', errors='ignore')
+                return stdout.decode("utf-8", errors="ignore")
             else:
-                logger.warning(f"Command {' '.join(cmd)} failed with return code {process.returncode}")
+                logger.warning(
+                    f"Command {' '.join(cmd)} failed with return code {process.returncode}"
+                )
                 return None
 
         except Exception as e:
@@ -319,9 +337,9 @@ class MCPManualService:
 
     def _extract_description(self, manual_text: str) -> str:
         """Extract description from manual text."""
-        lines = manual_text.split('\n')
+        lines = manual_text.split("\n")
         for i, line in enumerate(lines):
-            if 'DESCRIPTION' in line.upper() and i + 1 < len(lines):
+            if "DESCRIPTION" in line.upper() and i + 1 < len(lines):
                 # Get the first meaningful line after DESCRIPTION
                 for j in range(i + 1, min(i + 5, len(lines))):
                     desc_line = lines[j].strip()
@@ -331,9 +349,9 @@ class MCPManualService:
 
     def _extract_synopsis(self, manual_text: str) -> str:
         """Extract synopsis from manual text."""
-        lines = manual_text.split('\n')
+        lines = manual_text.split("\n")
         for i, line in enumerate(lines):
-            if 'SYNOPSIS' in line.upper() and i + 1 < len(lines):
+            if "SYNOPSIS" in line.upper() and i + 1 < len(lines):
                 # Get the next non-empty line
                 for j in range(i + 1, min(i + 3, len(lines))):
                     synopsis_line = lines[j].strip()
@@ -344,34 +362,34 @@ class MCPManualService:
     async def _fallback_manual_lookup(self, command: str) -> Optional[Dict[str, Any]]:
         """Fallback to basic mock data for critical commands."""
         critical_commands = {
-            'ls': {
-                'name': 'ls',
-                'section': '1',
-                'description': 'list directory contents',
-                'synopsis': 'ls [OPTION]... [FILE]...',
-                'content': 'Basic file listing command. Use ls -la for detailed output.',
-                'source': 'fallback'
+            "ls": {
+                "name": "ls",
+                "section": "1",
+                "description": "list directory contents",
+                "synopsis": "ls [OPTION]... [FILE]...",
+                "content": "Basic file listing command. Use ls -la for detailed output.",
+                "source": "fallback",
             },
-            'grep': {
-                'name': 'grep',
-                'section': '1',
-                'description': 'search text using patterns',
-                'synopsis': 'grep [OPTIONS] PATTERN [FILE...]',
-                'content': 'Text search command. Use grep -r for recursive search.',
-                'source': 'fallback'
+            "grep": {
+                "name": "grep",
+                "section": "1",
+                "description": "search text using patterns",
+                "synopsis": "grep [OPTIONS] PATTERN [FILE...]",
+                "content": "Text search command. Use grep -r for recursive search.",
+                "source": "fallback",
             },
-            'cat': {
-                'name': 'cat',
-                'section': '1',
-                'description': 'concatenate files and print on the standard output',
-                'synopsis': 'cat [OPTION]... [FILE]...',
-                'content': 'Display file contents. Use cat filename to view a file.',
-                'source': 'fallback'
-            }
+            "cat": {
+                "name": "cat",
+                "section": "1",
+                "description": "concatenate files and print on the standard output",
+                "synopsis": "cat [OPTION]... [FILE]...",
+                "content": "Display file contents. Use cat filename to view a file.",
+                "source": "fallback",
+            },
         }
 
         return critical_commands.get(command)
-    
+
     async def _real_help_lookup(self, command: str) -> Optional[Dict[str, Any]]:
         """
         Real help lookup using command --help execution via MCP filesystem server.
@@ -381,31 +399,33 @@ class MCPManualService:
         try:
             # Try different help variations
             help_variations = [
-                [command, '--help'],
-                [command, '-h'],
-                [command, 'help'],
-                ['help', command]
+                [command, "--help"],
+                [command, "-h"],
+                [command, "help"],
+                ["help", command],
             ]
 
             for cmd_args in help_variations:
                 help_text = await self._execute_help_command(cmd_args)
                 if help_text and self._is_valid_help_output(help_text):
                     return {
-                        'name': command,
-                        'description': self._extract_help_description(help_text),
-                        'content': help_text,
-                        'source': 'command_help',
-                        'command_args': ' '.join(cmd_args)
+                        "name": command,
+                        "description": self._extract_help_description(help_text),
+                        "content": help_text,
+                        "source": "command_help",
+                        "command_args": " ".join(cmd_args),
                     }
 
             # If no help found, try to get from manual
             manual_data = await self._real_manual_lookup(command)
             if manual_data:
                 return {
-                    'name': command,
-                    'description': manual_data.get('description', f'Help for {command}'),
-                    'content': manual_data.get('content', ''),
-                    'source': 'manual_fallback'
+                    "name": command,
+                    "description": manual_data.get(
+                        "description", f"Help for {command}"
+                    ),
+                    "content": manual_data.get("content", ""),
+                    "source": "manual_fallback",
                 }
 
             return None
@@ -443,35 +463,104 @@ class MCPManualService:
 
         # Whitelist of safe commands
         safe_commands = {
-            'ls', 'grep', 'cat', 'echo', 'pwd', 'date', 'whoami', 'id',
-            'curl', 'wget', 'git', 'python', 'python3', 'pip', 'pip3',
-            'node', 'npm', 'yarn', 'docker', 'kubectl', 'terraform',
-            'ansible', 'ssh', 'scp', 'rsync', 'find', 'locate', 'which',
-            'man', 'info', 'help', 'type', 'alias', 'history', 'env',
-            'ps', 'top', 'htop', 'free', 'df', 'du', 'mount', 'lsblk',
-            'systemctl', 'service', 'journalctl', 'awk', 'sed', 'sort',
-            'uniq', 'wc', 'head', 'tail', 'tr', 'cut', 'paste', 'join'
+            "ls",
+            "grep",
+            "cat",
+            "echo",
+            "pwd",
+            "date",
+            "whoami",
+            "id",
+            "curl",
+            "wget",
+            "git",
+            "python",
+            "python3",
+            "pip",
+            "pip3",
+            "node",
+            "npm",
+            "yarn",
+            "docker",
+            "kubectl",
+            "terraform",
+            "ansible",
+            "ssh",
+            "scp",
+            "rsync",
+            "find",
+            "locate",
+            "which",
+            "man",
+            "info",
+            "help",
+            "type",
+            "alias",
+            "history",
+            "env",
+            "ps",
+            "top",
+            "htop",
+            "free",
+            "df",
+            "du",
+            "mount",
+            "lsblk",
+            "systemctl",
+            "service",
+            "journalctl",
+            "awk",
+            "sed",
+            "sort",
+            "uniq",
+            "wc",
+            "head",
+            "tail",
+            "tr",
+            "cut",
+            "paste",
+            "join",
         }
 
         # Blacklist of dangerous commands
         dangerous_commands = {
-            'rm', 'rmdir', 'mv', 'cp', 'dd', 'mkfs', 'fdisk', 'parted',
-            'shutdown', 'reboot', 'halt', 'init', 'kill', 'killall',
-            'pkill', 'chmod', 'chown', 'chgrp', 'su', 'sudo', 'passwd',
-            'crontab', 'at', 'batch'
+            "rm",
+            "rmdir",
+            "mv",
+            "cp",
+            "dd",
+            "mkfs",
+            "fdisk",
+            "parted",
+            "shutdown",
+            "reboot",
+            "halt",
+            "init",
+            "kill",
+            "killall",
+            "pkill",
+            "chmod",
+            "chown",
+            "chgrp",
+            "su",
+            "sudo",
+            "passwd",
+            "crontab",
+            "at",
+            "batch",
         }
 
         if command in dangerous_commands:
             return False
 
         # Only allow help-related arguments
-        help_args = {'--help', '-h', 'help'}
+        help_args = {"--help", "-h", "help"}
         if len(cmd_args) > 1 and not any(arg in help_args for arg in cmd_args[1:]):
             # Special case for 'help command'
-            if cmd_args[0] != 'help':
+            if cmd_args[0] != "help":
                 return False
 
-        return command in safe_commands or command.startswith(('help', 'man', 'info'))
+        return command in safe_commands or command.startswith(("help", "man", "info"))
 
     def _is_valid_help_output(self, output: str) -> bool:
         """Check if output looks like valid help text."""
@@ -480,11 +569,21 @@ class MCPManualService:
 
         # Look for common help indicators
         help_indicators = [
-            'usage:', 'Usage:', 'USAGE:',
-            'options:', 'Options:', 'OPTIONS:',
-            'help', 'Help', 'HELP',
-            'commands:', 'Commands:', 'COMMANDS:',
-            'examples:', 'Examples:', 'EXAMPLES:'
+            "usage:",
+            "Usage:",
+            "USAGE:",
+            "options:",
+            "Options:",
+            "OPTIONS:",
+            "help",
+            "Help",
+            "HELP",
+            "commands:",
+            "Commands:",
+            "COMMANDS:",
+            "examples:",
+            "Examples:",
+            "EXAMPLES:",
         ]
 
         output_lower = output.lower()
@@ -492,12 +591,12 @@ class MCPManualService:
 
     def _extract_help_description(self, help_text: str) -> str:
         """Extract description from help text."""
-        lines = help_text.split('\n')
+        lines = help_text.split("\n")
 
         # Look for description patterns
         for line in lines[:10]:  # Check first 10 lines
             line = line.strip()
-            if line and not line.startswith(('-', 'Usage:', 'usage:')):
+            if line and not line.startswith(("-", "Usage:", "usage:")):
                 # Skip lines that are just the command name
                 if len(line.split()) > 2:
                     return line
@@ -513,34 +612,34 @@ class MCPManualService:
     async def _fallback_help_lookup(self, command: str) -> Optional[Dict[str, Any]]:
         """Fallback help lookup for critical commands."""
         critical_help = {
-            'ls': {
-                'name': 'ls',
-                'description': 'list directory contents',
-                'content': 'Usage: ls [OPTION]... [FILE]...\nList information about the FILEs.',
-                'source': 'fallback_help'
+            "ls": {
+                "name": "ls",
+                "description": "list directory contents",
+                "content": "Usage: ls [OPTION]... [FILE]...\nList information about the FILEs.",
+                "source": "fallback_help",
             },
-            'grep': {
-                'name': 'grep',
-                'description': 'search text using patterns',
-                'content': 'Usage: grep [OPTIONS] PATTERN [FILE...]\nSearch for PATTERN in each FILE.',
-                'source': 'fallback_help'
+            "grep": {
+                "name": "grep",
+                "description": "search text using patterns",
+                "content": "Usage: grep [OPTIONS] PATTERN [FILE...]\nSearch for PATTERN in each FILE.",
+                "source": "fallback_help",
             },
-            'cat': {
-                'name': 'cat',
-                'description': 'concatenate files and print on the standard output',
-                'content': 'Usage: cat [OPTION]... [FILE]...\nConcatenate FILE(s) to standard output.',
-                'source': 'fallback_help'
+            "cat": {
+                "name": "cat",
+                "description": "concatenate files and print on the standard output",
+                "content": "Usage: cat [OPTION]... [FILE]...\nConcatenate FILE(s) to standard output.",
+                "source": "fallback_help",
             },
-            'curl': {
-                'name': 'curl',
-                'description': 'transfer data from or to a server',
-                'content': 'Usage: curl [options...] <url>\nTransfer data from or to a server.',
-                'source': 'fallback_help'
-            }
+            "curl": {
+                "name": "curl",
+                "description": "transfer data from or to a server",
+                "content": "Usage: curl [options...] <url>\nTransfer data from or to a server.",
+                "source": "fallback_help",
+            },
         }
 
         return critical_help.get(command)
-    
+
     async def _real_documentation_search(self, query: str) -> Optional[Dict[str, Any]]:
         """
         Real documentation search using MCP filesystem and SQLite servers.
@@ -567,16 +666,16 @@ class MCPManualService:
             results.extend(info_results)
 
             # Sort results by relevance
-            results.sort(key=lambda x: x.get('relevance', 0), reverse=True)
+            results.sort(key=lambda x: x.get("relevance", 0), reverse=True)
 
             # Limit results to top 10
             results = results[:10]
 
             return {
-                'query': query,
-                'results': results,
-                'total_found': len(results),
-                'sources_searched': [source['name'] for source in doc_sources]
+                "query": query,
+                "results": results,
+                "total_found": len(results),
+                "sources_searched": [source["name"] for source in doc_sources],
             }
 
         except Exception as e:
@@ -589,12 +688,12 @@ class MCPManualService:
 
         # Common documentation directories
         common_doc_dirs = [
-            '/usr/share/doc',
-            '/usr/local/share/doc',
-            '/opt/autobot/docs',
-            '/home/kali/Desktop/AutoBot/docs',
-            '/usr/share/man',
-            '/usr/local/share/man'
+            "/usr/share/doc",
+            "/usr/local/share/doc",
+            "/opt/autobot/docs",
+            "/home/kali/Desktop/AutoBot/docs",
+            "/usr/share/man",
+            "/usr/local/share/man",
         ]
 
         if self.mcp_available:
@@ -603,11 +702,9 @@ class MCPManualService:
                 try:
                     # Use direct filesystem access to check directory existence
                     if os.path.exists(doc_dir) and os.path.isdir(doc_dir):
-                        sources.append({
-                            'name': doc_dir,
-                            'type': 'directory',
-                            'searchable': True
-                        })
+                        sources.append(
+                            {"name": doc_dir, "type": "directory", "searchable": True}
+                        )
                 except Exception:
                     # Directory doesn't exist or not accessible
                     pass
@@ -615,32 +712,34 @@ class MCPManualService:
         # Add AutoBot specific documentation
         autobot_docs = [
             {
-                'name': '/home/kali/Desktop/AutoBot/docs',
-                'type': 'autobot_docs',
-                'searchable': True
+                "name": "/home/kali/Desktop/AutoBot/docs",
+                "type": "autobot_docs",
+                "searchable": True,
             },
             {
-                'name': '/home/kali/Desktop/AutoBot/README.md',
-                'type': 'readme',
-                'searchable': True
-            }
+                "name": "/home/kali/Desktop/AutoBot/README.md",
+                "type": "readme",
+                "searchable": True,
+            },
         ]
 
         sources.extend(autobot_docs)
         return sources
 
-    async def _search_documentation_source(self, query: str, source: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def _search_documentation_source(
+        self, query: str, source: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """Search a specific documentation source."""
         results = []
 
         try:
-            if source['type'] == 'directory' and self.mcp_available:
+            if source["type"] == "directory" and self.mcp_available:
                 # Search files in directory using direct filesystem access
                 try:
                     files = []
-                    for root, dirs, filenames in os.walk(source['name']):
+                    for root, dirs, filenames in os.walk(source["name"]):
                         # Limit depth to avoid excessive scanning
-                        if root.count(os.sep) - source['name'].count(os.sep) > 2:
+                        if root.count(os.sep) - source["name"].count(os.sep) > 2:
                             continue
 
                         for filename in filenames[:20]:  # Limit files per directory
@@ -656,33 +755,62 @@ class MCPManualService:
                 except Exception as e:
                     logger.warning(f"Failed to search directory {source['name']}: {e}")
 
-            elif source['type'] in ['autobot_docs', 'readme'] and self.mcp_available:
+            elif source["type"] in ["autobot_docs", "readme"] and self.mcp_available:
                 # Search specific AutoBot documentation
-                if os.path.isdir(source['name']):
+                if os.path.isdir(source["name"]):
                     # If it's a directory, search recursively
                     try:
-                        for root, dirs, filenames in os.walk(source['name']):
+                        for root, dirs, filenames in os.walk(source["name"]):
                             for filename in filenames:
                                 file_path = os.path.join(root, filename)
                                 if self._is_documentation_file(file_path):
-                                    file_results = await self._search_file_content(query, file_path)
+                                    file_results = await self._search_file_content(
+                                        query, file_path
+                                    )
                                     results.extend(file_results)
                     except Exception as e:
-                        logger.warning(f"Failed to search docs directory {source['name']}: {e}")
+                        logger.warning(
+                            f"Failed to search docs directory {source['name']}: {e}"
+                        )
                 else:
                     # Single file
-                    file_results = await self._search_file_content(query, source['name'])
+                    file_results = await self._search_file_content(
+                        query, source["name"]
+                    )
                     results.extend(file_results)
 
         except Exception as e:
-            logger.warning(f"Failed to search documentation source {source['name']}: {e}")
+            logger.warning(
+                f"Failed to search documentation source {source['name']}: {e}"
+            )
 
         return results
 
     def _is_documentation_file(self, file_path: str) -> bool:
         """Check if a file is likely documentation."""
-        doc_extensions = {'.md', '.txt', '.rst', '.man', '.1', '.2', '.3', '.4', '.5', '.6', '.7', '.8'}
-        doc_names = {'readme', 'changelog', 'license', 'install', 'usage', 'help', 'manual'}
+        doc_extensions = {
+            ".md",
+            ".txt",
+            ".rst",
+            ".man",
+            ".1",
+            ".2",
+            ".3",
+            ".4",
+            ".5",
+            ".6",
+            ".7",
+            ".8",
+        }
+        doc_names = {
+            "readme",
+            "changelog",
+            "license",
+            "install",
+            "usage",
+            "help",
+            "manual",
+        }
 
         file_lower = file_path.lower()
 
@@ -699,7 +827,9 @@ class MCPManualService:
 
         return False
 
-    async def _search_file_content(self, query: str, file_path: str) -> List[Dict[str, Any]]:
+    async def _search_file_content(
+        self, query: str, file_path: str
+    ) -> List[Dict[str, Any]]:
         """Search content of a specific file."""
         results = []
 
@@ -707,7 +837,7 @@ class MCPManualService:
             # Read file content directly
             if os.path.exists(file_path) and os.path.isfile(file_path):
                 try:
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                         content = f.read()
 
                     if content:
@@ -718,10 +848,14 @@ class MCPManualService:
                 except UnicodeDecodeError:
                     # Try with different encoding for binary files
                     try:
-                        with open(file_path, 'r', encoding='latin-1', errors='ignore') as f:
+                        with open(
+                            file_path, "r", encoding="latin-1", errors="ignore"
+                        ) as f:
                             content = f.read()
                         if content:
-                            matches = self._find_query_matches(query, content, file_path)
+                            matches = self._find_query_matches(
+                                query, content, file_path
+                            )
                             results.extend(matches)
                     except Exception:
                         pass  # Skip files that can't be read
@@ -731,11 +865,13 @@ class MCPManualService:
 
         return results
 
-    def _find_query_matches(self, query: str, content: str, file_path: str) -> List[Dict[str, Any]]:
+    def _find_query_matches(
+        self, query: str, content: str, file_path: str
+    ) -> List[Dict[str, Any]]:
         """Find matches for query in file content."""
         matches = []
         query_lower = query.lower()
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         for i, line in enumerate(lines):
             if query_lower in line.lower():
@@ -751,16 +887,18 @@ class MCPManualService:
                 # Get context lines
                 start_line = max(0, i - 2)
                 end_line = min(len(lines), i + 3)
-                context = '\n'.join(lines[start_line:end_line])
+                context = "\n".join(lines[start_line:end_line])
 
-                matches.append({
-                    'title': f'{os.path.basename(file_path)} (line {i + 1})',
-                    'content': context,
-                    'source': file_path,
-                    'line_number': i + 1,
-                    'relevance': relevance,
-                    'match_line': line.strip()
-                })
+                matches.append(
+                    {
+                        "title": f"{os.path.basename(file_path)} (line {i + 1})",
+                        "content": context,
+                        "source": file_path,
+                        "line_number": i + 1,
+                        "relevance": relevance,
+                        "match_line": line.strip(),
+                    }
+                )
 
         return matches
 
@@ -772,20 +910,21 @@ class MCPManualService:
             if self.command_manager:
                 # Use command manager's search functionality
                 manual_matches = self.command_manager.search_manuals(
-                    query_text=query,
-                    limit=5
+                    query_text=query, limit=5
                 )
 
                 for manual in manual_matches:
-                    results.append({
-                        'title': f'Manual: {manual.command_name}',
-                        'content': f'{manual.description}\n\nSyntax: {manual.syntax}',
-                        'source': 'command_manual',
-                        'relevance': 0.7,
-                        'command': manual.command_name,
-                        'category': manual.category,
-                        'risk_level': manual.risk_level
-                    })
+                    results.append(
+                        {
+                            "title": f"Manual: {manual.command_name}",
+                            "content": f"{manual.description}\n\nSyntax: {manual.syntax}",
+                            "source": "command_manual",
+                            "relevance": 0.7,
+                            "command": manual.command_name,
+                            "category": manual.category,
+                            "risk_level": manual.risk_level,
+                        }
+                    )
 
         except Exception as e:
             logger.warning(f"Failed to search command manuals: {e}")
@@ -798,100 +937,105 @@ class MCPManualService:
 
         try:
             # Try to get info about the query
-            info_output = await self._run_subprocess(['info', '--where', query])
+            info_output = await self._run_subprocess(["info", "--where", query])
             if info_output and info_output.strip():
                 info_file = info_output.strip()
 
                 # Get actual info content
-                content = await self._run_subprocess(['info', query, '--output=-'])
+                content = await self._run_subprocess(["info", query, "--output=-"])
                 if content:
-                    results.append({
-                        'title': f'Info: {query}',
-                        'content': content[:500] + '...' if len(content) > 500 else content,
-                        'source': f'info:{info_file}',
-                        'relevance': 0.8
-                    })
+                    results.append(
+                        {
+                            "title": f"Info: {query}",
+                            "content": (
+                                content[:500] + "..." if len(content) > 500 else content
+                            ),
+                            "source": f"info:{info_file}",
+                            "relevance": 0.8,
+                        }
+                    )
 
         except Exception as e:
             logger.warning(f"Failed to search info files for {query}: {e}")
 
         return results
 
-    async def _fallback_documentation_search(self, query: str) -> Optional[Dict[str, Any]]:
+    async def _fallback_documentation_search(
+        self, query: str
+    ) -> Optional[Dict[str, Any]]:
         """Fallback documentation search with basic results."""
         fallback_docs = {
-            'autobot': {
-                'title': 'AutoBot Documentation',
-                'content': 'AutoBot is an intelligent automation platform with distributed VM architecture.',
-                'source': 'fallback',
-                'relevance': 0.9
+            "autobot": {
+                "title": "AutoBot Documentation",
+                "content": "AutoBot is an intelligent automation platform with distributed VM architecture.",
+                "source": "fallback",
+                "relevance": 0.9,
             },
-            'linux': {
-                'title': 'Linux Command Information',
-                'content': 'Use man command_name to get detailed manual pages for Linux commands.',
-                'source': 'fallback',
-                'relevance': 0.7
+            "linux": {
+                "title": "Linux Command Information",
+                "content": "Use man command_name to get detailed manual pages for Linux commands.",
+                "source": "fallback",
+                "relevance": 0.7,
             },
-            'help': {
-                'title': 'Getting Help',
-                'content': 'Use --help flag with most commands to get usage information.',
-                'source': 'fallback',
-                'relevance': 0.8
-            }
+            "help": {
+                "title": "Getting Help",
+                "content": "Use --help flag with most commands to get usage information.",
+                "source": "fallback",
+                "relevance": 0.8,
+            },
         }
 
         # Find best match
         for key, doc in fallback_docs.items():
             if key in query.lower():
                 return {
-                    'query': query,
-                    'results': [doc],
-                    'total_found': 1,
-                    'sources_searched': ['fallback']
+                    "query": query,
+                    "results": [doc],
+                    "total_found": 1,
+                    "sources_searched": ["fallback"],
                 }
 
         # Generic response
         return {
-            'query': query,
-            'results': [{
-                'title': f'Documentation search for: {query}',
-                'content': f'Search performed for "{query}". Try using man command_name for manual pages.',
-                'source': 'fallback',
-                'relevance': 0.5
-            }],
-            'total_found': 1,
-            'sources_searched': ['fallback']
+            "query": query,
+            "results": [
+                {
+                    "title": f"Documentation search for: {query}",
+                    "content": f'Search performed for "{query}". Try using man command_name for manual pages.',
+                    "source": "fallback",
+                    "relevance": 0.5,
+                }
+            ],
+            "total_found": 1,
+            "sources_searched": ["fallback"],
         }
-    
+
     def _check_cache(self, cache_key: str) -> bool:
         """Check if cached result is still valid"""
         import time
-        
+
         if cache_key in self.command_cache:
             cache_entry = self.command_cache[cache_key]
-            if time.time() - cache_entry['timestamp'] < self.cache_timeout:
+            if time.time() - cache_entry["timestamp"] < self.cache_timeout:
                 return True
             else:
                 # Remove expired cache entry
                 del self.command_cache[cache_key]
-        
+
         return False
-    
+
     def _cache_result(self, cache_key: str, data: Dict[str, Any]):
         """Cache lookup result"""
         import time
-        
-        self.command_cache[cache_key] = {
-            'data': data,
-            'timestamp': time.time()
-        }
-        
+
+        self.command_cache[cache_key] = {"data": data, "timestamp": time.time()}
+
         # Limit cache size
         if len(self.command_cache) > 100:
             # Remove oldest entries
             sorted_keys = sorted(
                 self.command_cache.keys(),
-                key=lambda k: self.command_cache[k]['timestamp']
+                key=lambda k: self.command_cache[k]["timestamp"],
             )
             for key in sorted_keys[:20]:  # Remove oldest 20 entries
                 del self.command_cache[key]
@@ -901,14 +1045,16 @@ class MCPManualService:
 mcp_manual_service = MCPManualService()
 
 
-async def lookup_system_manual(query: str, command: Optional[str] = None) -> Optional[Dict[str, Any]]:
+async def lookup_system_manual(
+    query: str, command: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     """
     Convenience function to look up system manual information.
-    
+
     Args:
         query: Search query or description
         command: Specific command to look up (optional)
-        
+
     Returns:
         Manual information or None if not found
     """
@@ -918,30 +1064,30 @@ async def lookup_system_manual(query: str, command: Optional[str] = None) -> Opt
 async def get_command_help(command: str) -> Optional[str]:
     """
     Get help information for a specific command.
-    
+
     Args:
         command: Command name
-        
+
     Returns:
         Help text or None if not found
     """
     result = await mcp_manual_service._lookup_command_help(command)
     if result:
-        return result.get('content', '')
+        return result.get("content", "")
     return None
 
 
 async def search_system_documentation(query: str) -> List[Dict[str, Any]]:
     """
     Search system documentation for a query.
-    
+
     Args:
         query: Search query
-        
+
     Returns:
         List of documentation results
     """
     result = await mcp_manual_service._search_documentation(query)
-    if result and 'results' in result:
-        return result['results']
+    if result and "results" in result:
+        return result["results"]
     return []

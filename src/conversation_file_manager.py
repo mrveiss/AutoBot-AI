@@ -23,7 +23,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.utils.async_redis_manager import AsyncRedisDatabase, get_redis_manager
-from redis.exceptions import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError, RedisError
+from redis.exceptions import (
+    ConnectionError as RedisConnectionError,
+    TimeoutError as RedisTimeoutError,
+    RedisError,
+)
 from src.unified_config_manager import unified_config_manager
 from src.constants.network_constants import NetworkConstants
 
@@ -55,7 +59,7 @@ class ConversationFileManager:
         storage_dir: Optional[Path] = None,
         db_path: Optional[Path] = None,
         redis_host: str = None,
-        redis_port: int = None
+        redis_port: int = None,
     ):
         """
         Initialize ConversationFileManager.
@@ -79,14 +83,16 @@ class ConversationFileManager:
         """
         # Storage paths with environment variable support (no hardcoded absolute paths)
         project_root = Path(__file__).parent.parent
-        default_storage = Path(os.getenv(
-            "AUTOBOT_STORAGE_DIR",
-            str(project_root / "data" / "conversation_files")
-        ))
-        default_db = Path(os.getenv(
-            "AUTOBOT_DB_PATH",
-            str(project_root / "data" / "conversation_files.db")
-        ))
+        default_storage = Path(
+            os.getenv(
+                "AUTOBOT_STORAGE_DIR", str(project_root / "data" / "conversation_files")
+            )
+        )
+        default_db = Path(
+            os.getenv(
+                "AUTOBOT_DB_PATH", str(project_root / "data" / "conversation_files.db")
+            )
+        )
 
         self.storage_dir = storage_dir or default_storage
         self.db_path = db_path or default_db
@@ -140,7 +146,7 @@ class ConversationFileManager:
 
         connection = self._get_db_connection()
         try:
-            with open(schema_path, 'r') as f:
+            with open(schema_path, "r") as f:
                 schema_sql = f.read()
 
             # Validate SQL syntax before execution
@@ -170,8 +176,7 @@ class ConversationFileManager:
         if self._redis_sessions is None:
             if self._redis_manager is None:
                 self._redis_manager = await get_redis_manager(
-                    host=self.redis_host,
-                    port=self.redis_port
+                    host=self.redis_host, port=self.redis_port
                 )
 
             self._redis_sessions = await self._redis_manager.sessions()
@@ -191,7 +196,7 @@ class ConversationFileManager:
         connection = sqlite3.connect(
             str(self.db_path),
             timeout=30.0,
-            check_same_thread=False  # Allow connection use across threads
+            check_same_thread=False,  # Allow connection use across threads
         )
 
         # Enable foreign keys
@@ -256,7 +261,9 @@ class ConversationFileManager:
 
         return f"{hash_prefix}_{unique_id}_{safe_filename}"
 
-    async def _cache_session_files(self, session_id: str, file_list: List[Dict[str, Any]]) -> None:
+    async def _cache_session_files(
+        self, session_id: str, file_list: List[Dict[str, Any]]
+    ) -> None:
         """
         Cache session file list in Redis for fast lookups.
 
@@ -269,11 +276,7 @@ class ConversationFileManager:
             cache_key = f"{self.CACHE_KEY_PREFIX}{session_id}"
 
             # Store as JSON with TTL
-            await redis_db.set(
-                cache_key,
-                json.dumps(file_list),
-                ex=self.CACHE_TTL
-            )
+            await redis_db.set(cache_key, json.dumps(file_list), ex=self.CACHE_TTL)
 
             logger.debug(f"Cached {len(file_list)} files for session {session_id}")
 
@@ -316,7 +319,7 @@ class ConversationFileManager:
         mime_type: Optional[str] = None,
         uploaded_by: Optional[str] = None,
         message_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Add a file to the conversation file system.
@@ -361,7 +364,9 @@ class ConversationFileManager:
 
             # Generate unique identifiers
             file_id = str(uuid.uuid4())
-            stored_filename = self._generate_stored_filename(original_filename, file_hash)
+            stored_filename = self._generate_stored_filename(
+                original_filename, file_hash
+            )
             file_path = self.storage_dir / stored_filename
 
             # Database operations
@@ -370,19 +375,22 @@ class ConversationFileManager:
 
             try:
                 # Check for existing file with same hash (deduplication)
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT file_id, stored_filename, file_path
                     FROM conversation_files
                     WHERE file_hash = ? AND is_deleted = 0
                     LIMIT 1
-                """, (file_hash,))
+                """,
+                    (file_hash,),
+                )
 
                 existing_file = cursor.fetchone()
 
                 if existing_file:
                     # File already exists, create association only
-                    existing_file_id = existing_file['file_id']
-                    existing_path = Path(existing_file['file_path'])
+                    existing_file_id = existing_file["file_id"]
+                    existing_path = Path(existing_file["file_path"])
 
                     logger.info(
                         f"File with hash {file_hash[:8]}... already exists, "
@@ -390,70 +398,89 @@ class ConversationFileManager:
                     )
 
                     # Create session association
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT INTO session_file_associations
                         (session_id, file_id, message_id, association_type)
                         VALUES (?, ?, ?, 'reference')
-                    """, (session_id, existing_file_id, message_id))
+                    """,
+                        (session_id, existing_file_id, message_id),
+                    )
 
                     connection.commit()
 
                     # Log access
                     await self._log_access(
                         existing_file_id,
-                        'reference',
+                        "reference",
                         uploaded_by,
-                        {'session_id': session_id, 'deduplication': True}
+                        {"session_id": session_id, "deduplication": True},
                     )
 
                     # Invalidate cache
                     await self._invalidate_session_cache(session_id)
 
                     return {
-                        'file_id': existing_file_id,
-                        'session_id': session_id,
-                        'original_filename': original_filename,
-                        'stored_filename': existing_file['stored_filename'],
-                        'file_path': str(existing_path),
-                        'file_size': file_size,
-                        'file_hash': file_hash,
-                        'mime_type': mime_type,
-                        'uploaded_at': datetime.now().isoformat(),
-                        'deduplicated': True
+                        "file_id": existing_file_id,
+                        "session_id": session_id,
+                        "original_filename": original_filename,
+                        "stored_filename": existing_file["stored_filename"],
+                        "file_path": str(existing_path),
+                        "file_size": file_size,
+                        "file_hash": file_hash,
+                        "mime_type": mime_type,
+                        "uploaded_at": datetime.now().isoformat(),
+                        "deduplicated": True,
                     }
 
                 # File doesn't exist, store it
                 # Write file to disk
-                with open(file_path, 'wb') as f:
+                with open(file_path, "wb") as f:
                     f.write(file_content)
 
                 logger.info(f"Stored file: {stored_filename} ({file_size} bytes)")
 
                 # Insert file record
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO conversation_files
                     (file_id, session_id, original_filename, stored_filename,
                      file_path, file_size, file_hash, mime_type, uploaded_by)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    file_id, session_id, original_filename, stored_filename,
-                    str(file_path), file_size, file_hash, mime_type, uploaded_by
-                ))
+                """,
+                    (
+                        file_id,
+                        session_id,
+                        original_filename,
+                        stored_filename,
+                        str(file_path),
+                        file_size,
+                        file_hash,
+                        mime_type,
+                        uploaded_by,
+                    ),
+                )
 
                 # Create session association
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO session_file_associations
                     (session_id, file_id, message_id, association_type)
                     VALUES (?, ?, ?, 'upload')
-                """, (session_id, file_id, message_id))
+                """,
+                    (session_id, file_id, message_id),
+                )
 
                 # Add metadata if provided
                 if metadata:
                     for key, value in metadata.items():
-                        cursor.execute("""
+                        cursor.execute(
+                            """
                             INSERT INTO file_metadata (file_id, metadata_key, metadata_value)
                             VALUES (?, ?, ?)
-                        """, (file_id, key, str(value)))
+                        """,
+                            (file_id, key, str(value)),
+                        )
 
                 connection.commit()
 
@@ -466,16 +493,16 @@ class ConversationFileManager:
                 await self._invalidate_session_cache(session_id)
 
                 return {
-                    'file_id': file_id,
-                    'session_id': session_id,
-                    'original_filename': original_filename,
-                    'stored_filename': stored_filename,
-                    'file_path': str(file_path),
-                    'file_size': file_size,
-                    'file_hash': file_hash,
-                    'mime_type': mime_type,
-                    'uploaded_at': datetime.now().isoformat(),
-                    'deduplicated': False
+                    "file_id": file_id,
+                    "session_id": session_id,
+                    "original_filename": original_filename,
+                    "stored_filename": stored_filename,
+                    "file_path": str(file_path),
+                    "file_size": file_size,
+                    "file_hash": file_hash,
+                    "mime_type": mime_type,
+                    "uploaded_at": datetime.now().isoformat(),
+                    "deduplicated": False,
                 }
 
             except Exception as e:
@@ -491,10 +518,7 @@ class ConversationFileManager:
                 connection.close()
 
     async def list_files(
-        self,
-        session_id: str,
-        page: int = 1,
-        page_size: int = 50
+        self, session_id: str, page: int = 1, page_size: int = 50
     ) -> Dict[str, Any]:
         """
         List files for a session with pagination support.
@@ -515,20 +539,24 @@ class ConversationFileManager:
 
         try:
             # Get total count
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*) as total, COALESCE(SUM(cf.file_size), 0) as total_size
                 FROM conversation_files cf
                 JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
                 WHERE sfa.session_id = ? AND cf.is_deleted = 0
-            """, (session_id,))
+            """,
+                (session_id,),
+            )
 
             totals = cursor.fetchone()
-            total_files = totals['total']
-            total_size = totals['total_size']
+            total_files = totals["total"]
+            total_size = totals["total_size"]
 
             # Get paginated files
             offset = (page - 1) * page_size
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT
                     cf.file_id,
                     cf.session_id,
@@ -552,19 +580,23 @@ class ConversationFileManager:
                 WHERE sfa.session_id = ? AND cf.is_deleted = 0
                 ORDER BY sfa.associated_at DESC
                 LIMIT ? OFFSET ?
-            """, (session_id, page_size, offset))
+            """,
+                (session_id, page_size, offset),
+            )
 
             files = []
             for row in cursor.fetchall():
                 file_info = dict(row)
                 files.append(file_info)
 
-            logger.info(f"Listed {len(files)} files for session {session_id} (page {page}/{(total_files + page_size - 1) // page_size})")
+            logger.info(
+                f"Listed {len(files)} files for session {session_id} (page {page}/{(total_files + page_size - 1) // page_size})"
+            )
 
             return {
-                'files': files,
-                'total_files': total_files,
-                'total_size': total_size
+                "files": files,
+                "total_files": total_files,
+                "total_size": total_size,
             }
 
         except Exception as e:
@@ -576,9 +608,7 @@ class ConversationFileManager:
             connection.close()
 
     async def get_session_files(
-        self,
-        session_id: str,
-        include_deleted: bool = False
+        self, session_id: str, include_deleted: bool = False
     ) -> List[Dict[str, Any]]:
         """
         Get all files associated with a chat session.
@@ -616,7 +646,8 @@ class ConversationFileManager:
         try:
             deleted_filter = "" if include_deleted else "AND cf.is_deleted = 0"
 
-            cursor.execute(f"""
+            cursor.execute(
+                f"""
                 SELECT
                     cf.file_id,
                     cf.session_id,
@@ -637,7 +668,9 @@ class ConversationFileManager:
                 JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
                 WHERE sfa.session_id = ? {deleted_filter}
                 ORDER BY sfa.associated_at DESC
-            """, (session_id,))
+            """,
+                (session_id,),
+            )
 
             files = []
             for row in cursor.fetchall():
@@ -660,9 +693,7 @@ class ConversationFileManager:
             connection.close()
 
     async def delete_session_files(
-        self,
-        session_id: str,
-        hard_delete: bool = False
+        self, session_id: str, hard_delete: bool = False
     ) -> int:
         """
         Delete all files associated with a session.
@@ -680,26 +711,32 @@ class ConversationFileManager:
 
             try:
                 # Get all file IDs for session
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT DISTINCT cf.file_id, cf.file_path, cf.stored_filename
                     FROM conversation_files cf
                     JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
                     WHERE sfa.session_id = ? AND cf.is_deleted = 0
-                """, (session_id,))
+                """,
+                    (session_id,),
+                )
 
                 files_to_delete = cursor.fetchall()
                 deleted_count = 0
 
                 for file_row in files_to_delete:
-                    file_id = file_row['file_id']
-                    file_path = Path(file_row['file_path'])
+                    file_id = file_row["file_id"]
+                    file_path = Path(file_row["file_path"])
 
                     if hard_delete:
                         # Permanently delete file and records
                         # Delete from database (cascades to related tables)
-                        cursor.execute("""
+                        cursor.execute(
+                            """
                             DELETE FROM conversation_files WHERE file_id = ?
-                        """, (file_id,))
+                        """,
+                            (file_id,),
+                        )
 
                         # Delete physical file
                         if file_path.exists():
@@ -708,11 +745,14 @@ class ConversationFileManager:
 
                     else:
                         # Soft delete (mark as deleted)
-                        cursor.execute("""
+                        cursor.execute(
+                            """
                             UPDATE conversation_files
                             SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP
                             WHERE file_id = ?
-                        """, (file_id,))
+                        """,
+                            (file_id,),
+                        )
 
                         logger.info(f"Soft deleted file: {file_id}")
 
@@ -744,7 +784,7 @@ class ConversationFileManager:
         file_id: str,
         access_type: str,
         accessed_by: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Log file access to audit trail.
@@ -759,16 +799,19 @@ class ConversationFileManager:
         cursor = connection.cursor()
 
         try:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO file_access_log
                 (file_id, access_type, accessed_by, access_metadata)
                 VALUES (?, ?, ?, ?)
-            """, (
-                file_id,
-                access_type,
-                accessed_by,
-                json.dumps(metadata) if metadata else None
-            ))
+            """,
+                (
+                    file_id,
+                    access_type,
+                    accessed_by,
+                    json.dumps(metadata) if metadata else None,
+                ),
+            )
 
             connection.commit()
 
@@ -793,8 +836,12 @@ class ConversationFileManager:
             logger.info("Initializing conversation files database...")
 
             # Dynamic import to handle numeric module name
-            migration_module = importlib.import_module('database.migrations.001_create_conversation_files')
-            ConversationFilesMigration = getattr(migration_module, 'ConversationFilesMigration')
+            migration_module = importlib.import_module(
+                "database.migrations.001_create_conversation_files"
+            )
+            ConversationFilesMigration = getattr(
+                migration_module, "ConversationFilesMigration"
+            )
 
             # Resolve schema directory relative to project root (no hardcoded absolute paths)
             project_root = Path(__file__).parent.parent
@@ -805,7 +852,7 @@ class ConversationFileManager:
             migration = ConversationFilesMigration(
                 data_dir=self.db_path.parent,
                 schema_dir=schema_dir,
-                db_path=self.db_path  # Use the exact database path specified in constructor
+                db_path=self.db_path,  # Use the exact database path specified in constructor
             )
 
             # Execute migration (safe to run on existing database)
@@ -816,7 +863,9 @@ class ConversationFileManager:
 
             # Verify schema version
             version = await self.get_schema_version()
-            logger.info(f"✅ Conversation files database initialized (schema version: {version})")
+            logger.info(
+                f"✅ Conversation files database initialized (schema version: {version})"
+            )
 
         except Exception as e:
             logger.error(f"❌ Failed to initialize conversation files database: {e}")
@@ -832,22 +881,23 @@ class ConversationFileManager:
             str: Current schema version or "unknown" if not found or table doesn't exist
         """
         try:
+
             def _query_version():
                 """Thread-safe database query for schema version."""
                 connection = sqlite3.connect(
-                    str(self.db_path),
-                    timeout=30.0,
-                    check_same_thread=False
+                    str(self.db_path), timeout=30.0, check_same_thread=False
                 )
                 cursor = connection.cursor()
 
                 try:
                     # CRITICAL: Check if schema_migrations table exists BEFORE querying (Bug Fix #3)
                     # Prevents race condition where query runs before migration creates the table
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT name FROM sqlite_master
                         WHERE type='table' AND name='schema_migrations'
-                    """)
+                    """
+                    )
 
                     if not cursor.fetchone():
                         # Table doesn't exist yet - this is not an error during initialization
@@ -855,10 +905,12 @@ class ConversationFileManager:
 
                     # Table exists, safe to query version
                     # Use migration_id for deterministic ordering (applied_at can have same timestamp)
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT version FROM schema_migrations
                         ORDER BY migration_id DESC LIMIT 1
-                    """)
+                    """
+                    )
                     result = cursor.fetchone()
 
                     return result[0] if result else "unknown"
@@ -887,39 +939,45 @@ class ConversationFileManager:
 
         try:
             # Total active files
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*) as total_files, SUM(file_size) as total_size
                 FROM conversation_files
                 WHERE is_deleted = 0
-            """)
+            """
+            )
             totals = cursor.fetchone()
 
             # Files by session
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(DISTINCT session_id) as total_sessions
                 FROM conversation_files
                 WHERE is_deleted = 0
-            """)
+            """
+            )
             sessions = cursor.fetchone()
 
             # Deleted files
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*) as deleted_files, SUM(file_size) as deleted_size
                 FROM conversation_files
                 WHERE is_deleted = 1
-            """)
+            """
+            )
             deleted = cursor.fetchone()
 
             return {
-                'total_files': totals['total_files'] or 0,
-                'total_size_bytes': totals['total_size'] or 0,
-                'total_size_mb': round((totals['total_size'] or 0) / (1024 * 1024), 2),
-                'total_sessions': sessions['total_sessions'] or 0,
-                'deleted_files': deleted['deleted_files'] or 0,
-                'deleted_size_bytes': deleted['deleted_size'] or 0,
-                'storage_directory': str(self.storage_dir),
-                'database_path': str(self.db_path),
-                'schema_version': 'unknown'  # Will be updated by caller if needed
+                "total_files": totals["total_files"] or 0,
+                "total_size_bytes": totals["total_size"] or 0,
+                "total_size_mb": round((totals["total_size"] or 0) / (1024 * 1024), 2),
+                "total_sessions": sessions["total_sessions"] or 0,
+                "deleted_files": deleted["deleted_files"] or 0,
+                "deleted_size_bytes": deleted["deleted_size"] or 0,
+                "storage_directory": str(self.storage_dir),
+                "database_path": str(self.db_path),
+                "schema_version": "unknown",  # Will be updated by caller if needed
             }
 
         finally:

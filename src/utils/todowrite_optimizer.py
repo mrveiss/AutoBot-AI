@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 class TodoOptimizationStrategy(Enum):
     """Strategy for optimizing TodoWrite operations"""
+
     CONSOLIDATION = "consolidation"  # Merge similar todos
     BATCHING = "batching"  # Batch multiple todos into single operation
     DEDUPLICATION = "deduplication"  # Remove duplicate todos
@@ -41,6 +42,7 @@ class TodoOptimizationStrategy(Enum):
 
 class TodoStatus(Enum):
     """Todo item status"""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -49,6 +51,7 @@ class TodoStatus(Enum):
 @dataclass
 class OptimizedTodoItem:
     """Optimized todo item with metadata"""
+
     content: str
     status: TodoStatus
     active_form: str
@@ -69,6 +72,7 @@ class OptimizedTodoItem:
 @dataclass
 class TodoBatch:
     """Batch of todo operations for optimization"""
+
     todos: List[OptimizedTodoItem]
     batch_type: str
     optimization_score: float
@@ -79,6 +83,7 @@ class TodoBatch:
 @dataclass
 class ToolUsagePattern:
     """Pattern analysis for tool usage optimization"""
+
     tool_name: str
     usage_frequency: int
     avg_response_time: float
@@ -103,8 +108,12 @@ class TodoWriteOptimizer:
         # Optimization settings
         self.max_batch_size = self.config.get("max_batch_size", 8)
         self.similarity_threshold = self.config.get("similarity_threshold", 0.8)
-        self.consolidation_window = self.config.get("consolidation_window", 30)  # seconds
-        self.min_api_savings = self.config.get("min_api_savings", 2)  # minimum API calls saved
+        self.consolidation_window = self.config.get(
+            "consolidation_window", 30
+        )  # seconds
+        self.min_api_savings = self.config.get(
+            "min_api_savings", 2
+        )  # minimum API calls saved
 
         # State tracking
         self.pending_todos: List[OptimizedTodoItem] = []
@@ -115,21 +124,25 @@ class TodoWriteOptimizer:
             "api_calls_saved": 0,
             "batches_created": 0,
             "duplicates_removed": 0,
-            "consolidations_performed": 0
+            "consolidations_performed": 0,
         }
 
         # Caching and deduplication
         self.content_cache: Dict[str, OptimizedTodoItem] = {}
         self.recent_operations: List[Tuple[str, datetime]] = []
 
-        logger.info("TodoWrite optimizer initialized with intelligent batching and deduplication")
+        logger.info(
+            "TodoWrite optimizer initialized with intelligent batching and deduplication"
+        )
 
-    def add_todo_for_optimization(self,
-                                 content: str,
-                                 status: str = "pending",
-                                 active_form: str = "",
-                                 priority: int = 5,
-                                 tags: Optional[List[str]] = None) -> bool:
+    def add_todo_for_optimization(
+        self,
+        content: str,
+        status: str = "pending",
+        active_form: str = "",
+        priority: int = 5,
+        tags: Optional[List[str]] = None,
+    ) -> bool:
         """
         Add a todo item for optimization instead of immediate writing.
 
@@ -151,9 +164,10 @@ class TodoWriteOptimizer:
             todo_item = OptimizedTodoItem(
                 content=content,
                 status=todo_status,
-                active_form=active_form or f"{content.split()[0].title()}ing {' '.join(content.split()[1:]).lower()}",
+                active_form=active_form
+                or f"{content.split()[0].title()}ing {' '.join(content.split()[1:]).lower()}",
                 priority=priority,
-                tags=set(tags or [])
+                tags=set(tags or []),
             )
 
             # Check for duplicates and similar items
@@ -186,7 +200,9 @@ class TodoWriteOptimizer:
 
         # Check semantic similarity with existing todos
         for existing_todo in self.pending_todos:
-            similarity = self._calculate_similarity(todo_item.content, existing_todo.content)
+            similarity = self._calculate_similarity(
+                todo_item.content, existing_todo.content
+            )
             if similarity > self.similarity_threshold:
                 logger.debug(f"Similar todo found: {similarity:.2f} similarity")
                 return True
@@ -195,8 +211,12 @@ class TodoWriteOptimizer:
         current_time = datetime.now()
         for operation_content, operation_time in self.recent_operations:
             if (current_time - operation_time).seconds < 10:  # 10 second window
-                similarity = self._calculate_similarity(todo_item.content, operation_content)
-                if similarity > 0.9:  # Very high similarity threshold for recent operations
+                similarity = self._calculate_similarity(
+                    todo_item.content, operation_content
+                )
+                if (
+                    similarity > 0.9
+                ):  # Very high similarity threshold for recent operations
                     return True
 
         return False
@@ -213,7 +233,9 @@ class TodoWriteOptimizer:
         # Enhanced similarity for common todo patterns
         common_words = set(text1_norm.split()) & set(text2_norm.split())
         if common_words:
-            word_bonus = len(common_words) / max(len(text1_norm.split()), len(text2_norm.split()))
+            word_bonus = len(common_words) / max(
+                len(text1_norm.split()), len(text2_norm.split())
+            )
             similarity = min(1.0, similarity + (word_bonus * 0.2))
 
         return similarity
@@ -228,11 +250,15 @@ class TodoWriteOptimizer:
         # Trigger on time window
         if self.pending_todos:
             oldest_todo = min(self.pending_todos, key=lambda t: t.created_at)
-            if (datetime.now() - oldest_todo.created_at).seconds >= self.consolidation_window:
+            if (
+                datetime.now() - oldest_todo.created_at
+            ).seconds >= self.consolidation_window:
                 return True
 
         # Trigger on high priority items
-        high_priority_count = sum(1 for todo in self.pending_todos if todo.priority >= 8)
+        high_priority_count = sum(
+            1 for todo in self.pending_todos if todo.priority >= 8
+        )
         if high_priority_count >= 3:
             return True
 
@@ -248,8 +274,11 @@ class TodoWriteOptimizer:
             batch = TodoBatch(
                 todos=self.pending_todos.copy(),
                 batch_type="consolidated",
-                optimization_score=self._calculate_optimization_score(self.pending_todos),
-                estimated_api_savings=len(self.pending_todos) - 1  # N todos -> 1 API call
+                optimization_score=self._calculate_optimization_score(
+                    self.pending_todos
+                ),
+                estimated_api_savings=len(self.pending_todos)
+                - 1,  # N todos -> 1 API call
             )
 
             # Apply optimization strategies
@@ -261,7 +290,9 @@ class TodoWriteOptimizer:
             if success:
                 # Update statistics
                 self.optimization_stats["total_optimizations"] += 1
-                self.optimization_stats["api_calls_saved"] += batch.estimated_api_savings
+                self.optimization_stats[
+                    "api_calls_saved"
+                ] += batch.estimated_api_savings
                 self.optimization_stats["batches_created"] += 1
 
                 # Move todos to history
@@ -274,7 +305,9 @@ class TodoWriteOptimizer:
                 # Clear pending todos
                 self.pending_todos.clear()
 
-                logger.info(f"Successfully optimized batch of {len(batch.todos)} todos, saved {batch.estimated_api_savings} API calls")
+                logger.info(
+                    f"Successfully optimized batch of {len(batch.todos)} todos, saved {batch.estimated_api_savings} API calls"
+                )
 
                 return batch
 
@@ -300,13 +333,20 @@ class TodoWriteOptimizer:
         dedup_score = (len(todos) - unique_hashes) * 0.5
 
         # Time consolidation bonus
-        time_span = max(todos, key=lambda t: t.created_at).created_at - min(todos, key=lambda t: t.created_at).created_at
-        time_score = min(2.0, time_span.seconds / 30.0)  # Max 2 points for 30+ second span
+        time_span = (
+            max(todos, key=lambda t: t.created_at).created_at
+            - min(todos, key=lambda t: t.created_at).created_at
+        )
+        time_score = min(
+            2.0, time_span.seconds / 30.0
+        )  # Max 2 points for 30+ second span
 
         total_score = api_savings_score + priority_score + dedup_score + time_score
         return min(10.0, total_score)
 
-    async def _apply_optimization_strategies(self, todos: List[OptimizedTodoItem]) -> List[OptimizedTodoItem]:
+    async def _apply_optimization_strategies(
+        self, todos: List[OptimizedTodoItem]
+    ) -> List[OptimizedTodoItem]:
         """Apply various optimization strategies to todo batch"""
         optimized_todos = todos.copy()
 
@@ -324,7 +364,9 @@ class TodoWriteOptimizer:
 
         return optimized_todos
 
-    def _remove_duplicates(self, todos: List[OptimizedTodoItem]) -> List[OptimizedTodoItem]:
+    def _remove_duplicates(
+        self, todos: List[OptimizedTodoItem]
+    ) -> List[OptimizedTodoItem]:
         """Remove exact duplicate todos"""
         seen_hashes = set()
         unique_todos = []
@@ -338,7 +380,9 @@ class TodoWriteOptimizer:
 
         return unique_todos
 
-    def _consolidate_similar_todos(self, todos: List[OptimizedTodoItem]) -> List[OptimizedTodoItem]:
+    def _consolidate_similar_todos(
+        self, todos: List[OptimizedTodoItem]
+    ) -> List[OptimizedTodoItem]:
         """Consolidate similar todos into more comprehensive ones"""
         consolidated = []
         processed = set()
@@ -349,9 +393,11 @@ class TodoWriteOptimizer:
 
             # Find similar todos
             similar_todos = [todo]
-            for j, other_todo in enumerate(todos[i+1:], i+1):
+            for j, other_todo in enumerate(todos[i + 1 :], i + 1):
                 if j not in processed:
-                    similarity = self._calculate_similarity(todo.content, other_todo.content)
+                    similarity = self._calculate_similarity(
+                        todo.content, other_todo.content
+                    )
                     if similarity > 0.7:  # Lower threshold for consolidation
                         similar_todos.append(other_todo)
                         processed.add(j)
@@ -364,10 +410,12 @@ class TodoWriteOptimizer:
                     status=similar_todos[0].status,
                     active_form=f"Executing consolidated task: {consolidated_content[:50]}...",
                     priority=max(todo.priority for todo in similar_todos),
-                    tags=set().union(*(todo.tags for todo in similar_todos))
+                    tags=set().union(*(todo.tags for todo in similar_todos)),
                 )
                 consolidated.append(consolidated_todo)
-                self.optimization_stats["consolidations_performed"] += len(similar_todos) - 1
+                self.optimization_stats["consolidations_performed"] += (
+                    len(similar_todos) - 1
+                )
             else:
                 consolidated.append(todo)
 
@@ -375,7 +423,9 @@ class TodoWriteOptimizer:
 
         return consolidated
 
-    def _create_consolidated_content(self, similar_todos: List[OptimizedTodoItem]) -> str:
+    def _create_consolidated_content(
+        self, similar_todos: List[OptimizedTodoItem]
+    ) -> str:
         """Create consolidated content from similar todos"""
         if len(similar_todos) == 1:
             return similar_todos[0].content
@@ -386,7 +436,22 @@ class TodoWriteOptimizer:
             all_words.extend(todo.content.lower().split())
 
         # Find most common words (excluding common words)
-        common_stopwords = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
+        common_stopwords = {
+            "the",
+            "a",
+            "an",
+            "and",
+            "or",
+            "but",
+            "in",
+            "on",
+            "at",
+            "to",
+            "for",
+            "of",
+            "with",
+            "by",
+        }
         word_freq = Counter(word for word in all_words if word not in common_stopwords)
 
         # Use the most comprehensive todo as base
@@ -410,7 +475,9 @@ class TodoWriteOptimizer:
         else:
             return base_todo.content
 
-    def _optimize_todo_order(self, todos: List[OptimizedTodoItem]) -> List[OptimizedTodoItem]:
+    def _optimize_todo_order(
+        self, todos: List[OptimizedTodoItem]
+    ) -> List[OptimizedTodoItem]:
         """Optimize order of todos based on priority and dependencies"""
         # Sort by priority (highest first), then by creation time
         sorted_todos = sorted(todos, key=lambda t: (-t.priority, t.created_at))
@@ -424,7 +491,10 @@ class TodoWriteOptimizer:
             # Find todos with no unmet dependencies
             ready_todos = []
             for todo in remaining_todos:
-                if not todo.dependencies or all(dep in [t.content for t in optimized_order] for dep in todo.dependencies):
+                if not todo.dependencies or all(
+                    dep in [t.content for t in optimized_order]
+                    for dep in todo.dependencies
+                ):
                     ready_todos.append(todo)
 
             if ready_todos:
@@ -439,14 +509,18 @@ class TodoWriteOptimizer:
 
         return optimized_order
 
-    def _apply_semantic_grouping(self, todos: List[OptimizedTodoItem]) -> List[OptimizedTodoItem]:
+    def _apply_semantic_grouping(
+        self, todos: List[OptimizedTodoItem]
+    ) -> List[OptimizedTodoItem]:
         """Apply semantic grouping for better organization"""
         # Group todos by semantic similarity and common tags
         groups = defaultdict(list)
 
         for todo in todos:
             # Simple grouping by first word (action verb)
-            first_word = todo.content.split()[0].lower() if todo.content.split() else "misc"
+            first_word = (
+                todo.content.split()[0].lower() if todo.content.split() else "misc"
+            )
             groups[first_word].append(todo)
 
         # Reorder within groups and flatten
@@ -458,17 +532,21 @@ class TodoWriteOptimizer:
 
         return ordered_todos
 
-    async def _execute_optimized_todowrite(self, todos: List[OptimizedTodoItem]) -> bool:
+    async def _execute_optimized_todowrite(
+        self, todos: List[OptimizedTodoItem]
+    ) -> bool:
         """Execute the optimized TodoWrite operation"""
         try:
             # Convert optimized todos back to TodoWrite format
             todowrite_format = []
             for todo in todos:
-                todowrite_format.append({
-                    "content": todo.content,
-                    "status": todo.status.value,
-                    "activeForm": todo.active_form
-                })
+                todowrite_format.append(
+                    {
+                        "content": todo.content,
+                        "status": todo.status.value,
+                        "activeForm": todo.active_form,
+                    }
+                )
 
             # Here we would call the actual TodoWrite tool
             # For now, we'll simulate success
@@ -492,7 +570,7 @@ class TodoWriteOptimizer:
                 avg_response_time=0.0,
                 error_rate=0.0,
                 api_cost_score=5,  # Default middle value
-                optimization_potential=0.0
+                optimization_potential=0.0,
             )
 
         pattern = self.tool_usage_stats[tool_name]
@@ -502,14 +580,18 @@ class TodoWriteOptimizer:
         # Update average response time
         current_avg = pattern.avg_response_time
         current_count = pattern.usage_frequency
-        pattern.avg_response_time = ((current_avg * (current_count - 1)) + response_time) / current_count
+        pattern.avg_response_time = (
+            (current_avg * (current_count - 1)) + response_time
+        ) / current_count
 
         # Update error rate
         if not success:
             total_errors = pattern.error_rate * (current_count - 1) + 1
             pattern.error_rate = total_errors / current_count
         else:
-            pattern.error_rate = (pattern.error_rate * (current_count - 1)) / current_count
+            pattern.error_rate = (
+                pattern.error_rate * (current_count - 1)
+            ) / current_count
 
         # Calculate optimization potential
         self._calculate_optimization_potential(pattern)
@@ -518,13 +600,15 @@ class TodoWriteOptimizer:
         """Calculate optimization potential for a tool usage pattern"""
         # High frequency + high response time = high optimization potential
         frequency_score = min(1.0, pattern.usage_frequency / 100.0)  # Normalize to 0-1
-        response_time_score = min(1.0, pattern.avg_response_time / 5.0)  # 5 seconds as high
+        response_time_score = min(
+            1.0, pattern.avg_response_time / 5.0
+        )  # 5 seconds as high
         error_score = pattern.error_rate  # Already 0-1
 
         # Weighted combination
-        pattern.optimization_potential = (frequency_score * 0.4 +
-                                        response_time_score * 0.4 +
-                                        error_score * 0.2)
+        pattern.optimization_potential = (
+            frequency_score * 0.4 + response_time_score * 0.4 + error_score * 0.2
+        )
 
         # Assign API cost score based on tool characteristics
         if "TodoWrite" in pattern.tool_name:
@@ -542,33 +626,40 @@ class TodoWriteOptimizer:
             "todowrite_optimizations": [],
             "tool_usage_optimizations": [],
             "general_recommendations": [],
-            "statistics": self.optimization_stats.copy()
+            "statistics": self.optimization_stats.copy(),
         }
 
         # TodoWrite specific recommendations
         if len(self.pending_todos) > 0:
-            recommendations["todowrite_optimizations"].append({
-                "type": "pending_optimization",
-                "message": f"You have {len(self.pending_todos)} pending todos that could be optimized",
-                "potential_savings": len(self.pending_todos) - 1,
-                "action": "call process_optimization_batch()"
-            })
+            recommendations["todowrite_optimizations"].append(
+                {
+                    "type": "pending_optimization",
+                    "message": f"You have {len(self.pending_todos)} pending todos that could be optimized",
+                    "potential_savings": len(self.pending_todos) - 1,
+                    "action": "call process_optimization_batch()",
+                }
+            )
 
         # Tool usage recommendations
         high_potential_tools = [
-            pattern for pattern in self.tool_usage_stats.values()
+            pattern
+            for pattern in self.tool_usage_stats.values()
             if pattern.optimization_potential > 0.6
         ]
 
-        for pattern in sorted(high_potential_tools, key=lambda p: p.optimization_potential, reverse=True):
-            recommendations["tool_usage_optimizations"].append({
-                "tool_name": pattern.tool_name,
-                "optimization_potential": pattern.optimization_potential,
-                "usage_frequency": pattern.usage_frequency,
-                "avg_response_time": pattern.avg_response_time,
-                "error_rate": pattern.error_rate,
-                "recommendations": self._get_tool_specific_recommendations(pattern)
-            })
+        for pattern in sorted(
+            high_potential_tools, key=lambda p: p.optimization_potential, reverse=True
+        ):
+            recommendations["tool_usage_optimizations"].append(
+                {
+                    "tool_name": pattern.tool_name,
+                    "optimization_potential": pattern.optimization_potential,
+                    "usage_frequency": pattern.usage_frequency,
+                    "avg_response_time": pattern.avg_response_time,
+                    "error_rate": pattern.error_rate,
+                    "recommendations": self._get_tool_specific_recommendations(pattern),
+                }
+            )
 
         # General recommendations
         if self.optimization_stats["total_optimizations"] == 0:
@@ -583,21 +674,31 @@ class TodoWriteOptimizer:
 
         return recommendations
 
-    def _get_tool_specific_recommendations(self, pattern: ToolUsagePattern) -> List[str]:
+    def _get_tool_specific_recommendations(
+        self, pattern: ToolUsagePattern
+    ) -> List[str]:
         """Get specific recommendations for a tool usage pattern"""
         recommendations = []
 
         if pattern.avg_response_time > 3.0:
-            recommendations.append("Consider batching requests to reduce response time impact")
+            recommendations.append(
+                "Consider batching requests to reduce response time impact"
+            )
 
         if pattern.error_rate > 0.1:
-            recommendations.append("High error rate detected - implement retry logic or error handling")
+            recommendations.append(
+                "High error rate detected - implement retry logic or error handling"
+            )
 
         if pattern.usage_frequency > 50 and "TodoWrite" in pattern.tool_name:
-            recommendations.append("Very frequent TodoWrite usage - enable automatic optimization")
+            recommendations.append(
+                "Very frequent TodoWrite usage - enable automatic optimization"
+            )
 
         if pattern.api_cost_score > 7:
-            recommendations.append("High API cost tool - prioritize optimization for this tool")
+            recommendations.append(
+                "High API cost tool - prioritize optimization for this tool"
+            )
 
         return recommendations
 
@@ -621,12 +722,12 @@ class TodoWriteOptimizer:
                     "avg_response_time": pattern.avg_response_time,
                     "error_rate": pattern.error_rate,
                     "optimization_potential": pattern.optimization_potential,
-                    "api_cost_score": pattern.api_cost_score
+                    "api_cost_score": pattern.api_cost_score,
                 }
                 for name, pattern in self.tool_usage_stats.items()
             },
             "cache_size": len(self.content_cache),
-            "recent_operations_count": len(self.recent_operations)
+            "recent_operations_count": len(self.recent_operations),
         }
 
     def reset_optimization_state(self):
@@ -639,7 +740,7 @@ class TodoWriteOptimizer:
             "api_calls_saved": 0,
             "batches_created": 0,
             "duplicates_removed": 0,
-            "consolidations_performed": 0
+            "consolidations_performed": 0,
         }
         logger.info("TodoWrite optimizer state reset")
 
@@ -675,12 +776,14 @@ class TodoWriteInterceptor:
                 status=todo.get("status", "pending"),
                 active_form=todo.get("activeForm", ""),
                 priority=todo.get("priority", 5),
-                tags=todo.get("tags", [])
+                tags=todo.get("tags", []),
             )
             if success:
                 success_count += 1
 
-        logger.info(f"Intercepted TodoWrite: {success_count}/{len(todos)} todos added for optimization")
+        logger.info(
+            f"Intercepted TodoWrite: {success_count}/{len(todos)} todos added for optimization"
+        )
         return success_count > 0
 
 
@@ -688,7 +791,9 @@ class TodoWriteInterceptor:
 _global_optimizer: Optional[TodoWriteOptimizer] = None
 
 
-def get_todowrite_optimizer(config: Optional[Dict[str, Any]] = None) -> TodoWriteOptimizer:
+def get_todowrite_optimizer(
+    config: Optional[Dict[str, Any]] = None,
+) -> TodoWriteOptimizer:
     """Get global TodoWrite optimizer instance"""
     global _global_optimizer
     if _global_optimizer is None:
@@ -716,32 +821,30 @@ async def example_usage():
     """Example of how to use the TodoWrite optimizer"""
 
     # Get optimizer instance
-    optimizer = get_todowrite_optimizer({
-        "max_batch_size": 6,
-        "similarity_threshold": 0.75,
-        "consolidation_window": 45
-    })
+    optimizer = get_todowrite_optimizer(
+        {"max_batch_size": 6, "similarity_threshold": 0.75, "consolidation_window": 45}
+    )
 
     # Add todos for optimization instead of immediate writing
     optimizer.add_todo_for_optimization(
         content="Implement user authentication system",
         status="pending",
         priority=8,
-        tags=["auth", "security"]
+        tags=["auth", "security"],
     )
 
     optimizer.add_todo_for_optimization(
         content="Create user login endpoint",
         status="pending",
         priority=7,
-        tags=["auth", "api"]
+        tags=["auth", "api"],
     )
 
     optimizer.add_todo_for_optimization(
         content="Add user authentication middleware",
         status="pending",
         priority=6,
-        tags=["auth", "middleware"]
+        tags=["auth", "middleware"],
     )
 
     # Force optimization if needed
@@ -751,7 +854,10 @@ async def example_usage():
 
     # Get recommendations
     recommendations = optimizer.get_optimization_recommendations()
-    print("Optimization recommendations:", json.dumps(recommendations, indent=2, default=str))
+    print(
+        "Optimization recommendations:",
+        json.dumps(recommendations, indent=2, default=str),
+    )
 
     # Record tool usage for pattern analysis
     optimizer.record_tool_usage("TodoWrite", 1.5, True)

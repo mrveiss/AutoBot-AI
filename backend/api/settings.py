@@ -128,8 +128,8 @@ async def clear_cache():
             "available_endpoints": {
                 "clear_all_redis": "/api/cache/redis/clear/all",
                 "clear_specific_redis": "/api/cache/redis/clear/{database_name}",
-                "clear_cache_type": "/api/cache/clear/{cache_type}"
-            }
+                "clear_cache_type": "/api/cache/clear/{cache_type}",
+            },
         }
     except Exception as e:
         logger.error(f"Error in clear-cache endpoint: {str(e)}")

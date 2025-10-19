@@ -22,17 +22,17 @@ from .network_constants import (
 from .path_constants import PATH
 
 __all__ = [
-    'NetworkConstants',
-    'ServiceURLs',
-    'NetworkConfig',
-    'DatabaseConstants',
-    'get_network_config',
+    "NetworkConstants",
+    "ServiceURLs",
+    "NetworkConfig",
+    "DatabaseConstants",
+    "get_network_config",
     # Legacy compatibility
-    'BACKEND_URL',
-    'FRONTEND_URL',
-    'REDIS_HOST',
-    'MAIN_MACHINE_IP',
-    'LOCALHOST_IP',
+    "BACKEND_URL",
+    "FRONTEND_URL",
+    "REDIS_HOST",
+    "MAIN_MACHINE_IP",
+    "LOCALHOST_IP",
     # Path constants
-    'PATH',
+    "PATH",
 ]
