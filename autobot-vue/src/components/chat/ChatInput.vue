@@ -394,7 +394,15 @@ const handleFileSelect = async (event: Event) => {
   // Process files with upload progress
   for (const file of validFiles) {
     const uploadId = generateId()
-    const upload = {
+    const upload: {
+      id: string;
+      filename: string;
+      progress: number;
+      status: string;
+      current: number;
+      total: number;
+      error?: string;
+    } = {
       id: uploadId,
       filename: file.name,
       progress: 0,

@@ -14,9 +14,10 @@ import logging
 import os
 import time
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from src.unified_config_manager import config_manager
 from src.memory_manager import LongTermMemoryManager
@@ -25,9 +26,16 @@ from src.circuit_breaker import circuit_breaker_async
 from src.llm_interface import LLMInterface
 from src.conversation import ConversationManager
 from src.task_execution_tracker import task_tracker, Priority, TaskType
-from src.agents.agent_manager import AgentManager
 from src.utils.logging_manager import get_logger
 from src.constants.network_constants import NetworkConstants
+
+# Import KnowledgeBase for enhanced features
+try:
+    from src.knowledge_base import KnowledgeBase
+    KNOWLEDGE_BASE_AVAILABLE = True
+except ImportError:
+    KNOWLEDGE_BASE_AVAILABLE = False
+    logger.warning("KnowledgeBase not available - auto-documentation features disabled")
 
 # Import task classification
 try:
@@ -36,6 +44,22 @@ try:
     CLASSIFICATION_AVAILABLE = True
 except ImportError:
     CLASSIFICATION_AVAILABLE = False
+
+# Import agent manager
+try:
+    from src.agents.agent_manager import AgentManager
+    AGENT_MANAGER_AVAILABLE = True
+except ImportError:
+    AGENT_MANAGER_AVAILABLE = False
+    # Create a fallback AgentManager class
+    class AgentManager:
+        """Fallback AgentManager when the real one is not available"""
+        async def initialize(self):
+            pass
+        async def cleanup(self):
+            pass
+        async def execute_agent_task(self, agent_name, task, context=None):
+            return {"error": "Agent manager not available", "agent_name": agent_name}
 
 # Import workflow types for backward compatibility
 try:
@@ -79,6 +103,72 @@ class OrchestrationMode(Enum):
     ENHANCED = "enhanced"
     PARALLEL = "parallel"
     SEQUENTIAL = "sequential"
+
+
+class AgentCapability(Enum):
+    """Agent capabilities for dynamic task assignment"""
+    RESEARCH = "research"
+    ANALYSIS = "analysis"
+    DOCUMENTATION = "documentation"
+    CODE_GENERATION = "code_generation"
+    SYSTEM_OPERATIONS = "system_operations"
+    DATA_PROCESSING = "data_processing"
+    KNOWLEDGE_MANAGEMENT = "knowledge_management"
+    WORKFLOW_COORDINATION = "workflow_coordination"
+
+
+class DocumentationType(Enum):
+    """Types of auto-generated documentation"""
+    WORKFLOW_SUMMARY = "workflow_summary"
+    AGENT_INTERACTION = "agent_interaction"
+    DECISION_LOG = "decision_log"
+    PERFORMANCE_REPORT = "performance_report"
+    KNOWLEDGE_EXTRACTION = "knowledge_extraction"
+    ERROR_ANALYSIS = "error_analysis"
+
+
+@dataclass
+class AgentProfile:
+    """Enhanced agent profile with capabilities and performance metrics"""
+    agent_id: str
+    agent_type: str
+    capabilities: Set[AgentCapability]
+    specializations: List[str]
+    performance_metrics: Dict[str, float] = field(default_factory=dict)
+    availability_status: str = "available"
+    current_workload: int = 0
+    max_concurrent_tasks: int = 3
+    success_rate: float = 1.0
+    average_completion_time: float = 0.0
+    preferred_task_types: List[str] = field(default_factory=list)
+
+
+@dataclass
+class WorkflowDocumentation:
+    """Auto-generated documentation for workflow execution"""
+    workflow_id: str
+    title: str
+    description: str
+    created_at: datetime
+    updated_at: datetime
+    documentation_type: DocumentationType
+    content: Dict[str, Any]
+    tags: List[str] = field(default_factory=list)
+    related_workflows: List[str] = field(default_factory=list)
+    knowledge_extracted: List[Dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class AgentInteraction:
+    """Record of interaction between agents"""
+    interaction_id: str
+    timestamp: datetime
+    source_agent: str
+    target_agent: str
+    interaction_type: str  # request, response, notification, collaboration
+    message: Dict[str, Any]
+    context: Dict[str, Any]
+    outcome: str = "pending"
 
 
 class OrchestratorConfig:
@@ -159,6 +249,32 @@ class ConsolidatedOrchestrator:
             "average_response_time": 0
         }
 
+        # Enhanced orchestrator components (from enhanced_orchestrator)
+        self.agent_registry: Dict[str, AgentProfile] = {}
+        self.workflow_documentation: Dict[str, WorkflowDocumentation] = {}
+        self.agent_interactions: List[AgentInteraction] = []
+
+        # Initialize knowledge base if available
+        if KNOWLEDGE_BASE_AVAILABLE:
+            self.knowledge_base = KnowledgeBase()
+        else:
+            self.knowledge_base = None
+
+        # Auto-documentation settings
+        self.auto_doc_enabled = True
+        self.doc_generation_threshold = 0.8  # Generate docs for workflows with >80% completion
+        self.knowledge_extraction_enabled = KNOWLEDGE_BASE_AVAILABLE
+
+        # Enhanced workflow metrics
+        self.workflow_metrics = {
+            "total_workflows": 0,
+            "successful_workflows": 0,
+            "average_execution_time": 0.0,
+            "agent_utilization": {},
+            "documentation_generated": 0,
+            "knowledge_extracted": 0,
+        }
+
         # Classification agent
         self.classification_agent = None
         if CLASSIFICATION_AVAILABLE:
@@ -168,7 +284,77 @@ class ConsolidatedOrchestrator:
             except Exception as e:
                 logger.warning(f"Failed to initialize classification agent: {e}")
 
+        # Initialize default agent profiles
+        self._initialize_default_agents()
+
         logger.info(f"Consolidated Orchestrator initialized with session: {self.session_id}")
+
+    def _initialize_default_agents(self):
+        """Initialize default agent profiles"""
+        default_agents = [
+            AgentProfile(
+                agent_id="research_agent",
+                agent_type="research",
+                capabilities={AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
+                specializations=[
+                    "web_search",
+                    "data_analysis",
+                    "information_synthesis",
+                ],
+                max_concurrent_tasks=5,
+                preferred_task_types=["research", "information_gathering", "analysis"],
+            ),
+            AgentProfile(
+                agent_id="documentation_agent",
+                agent_type="librarian",
+                capabilities={
+                    AgentCapability.DOCUMENTATION,
+                    AgentCapability.KNOWLEDGE_MANAGEMENT,
+                },
+                specializations=[
+                    "auto_documentation",
+                    "knowledge_extraction",
+                    "content_organization",
+                ],
+                max_concurrent_tasks=3,
+                preferred_task_types=["documentation", "knowledge_management"],
+            ),
+            AgentProfile(
+                agent_id="system_agent",
+                agent_type="system_commands",
+                capabilities={
+                    AgentCapability.SYSTEM_OPERATIONS,
+                    AgentCapability.CODE_GENERATION,
+                },
+                specializations=[
+                    "command_execution",
+                    "system_administration",
+                    "automation",
+                ],
+                max_concurrent_tasks=2,
+                preferred_task_types=["system_operations", "command_execution"],
+            ),
+            AgentProfile(
+                agent_id="coordination_agent",
+                agent_type="orchestrator",
+                capabilities={
+                    AgentCapability.WORKFLOW_COORDINATION,
+                    AgentCapability.ANALYSIS,
+                },
+                specializations=[
+                    "workflow_management",
+                    "resource_allocation",
+                    "decision_making",
+                ],
+                max_concurrent_tasks=10,
+                preferred_task_types=["coordination", "planning", "optimization"],
+            ),
+        ]
+
+        for agent in default_agents:
+            self.agent_registry[agent.agent_id] = agent
+
+        logger.info(f"Initialized {len(default_agents)} default agent profiles")
 
     async def initialize(self):
         """Initialize orchestrator components"""
@@ -553,6 +739,144 @@ class ConsolidatedOrchestrator:
 
         return synthesis
 
+    # ========================================================================
+    # Enhanced Agent Management Methods (from enhanced_orchestrator)
+    # ========================================================================
+
+    async def register_agent(self, agent_profile: AgentProfile) -> bool:
+        """Register a new agent with the orchestrator"""
+        try:
+            if agent_profile.agent_id in self.agent_registry:
+                logger.warning(
+                    f"Agent {agent_profile.agent_id} already registered, updating profile"
+                )
+
+            self.agent_registry[agent_profile.agent_id] = agent_profile
+            logger.info(
+                f"Agent {agent_profile.agent_id} registered with capabilities: {agent_profile.capabilities}"
+            )
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to register agent {agent_profile.agent_id}: {e}")
+            return False
+
+    def find_best_agent_for_task(
+        self, task_type: str, required_capabilities: Set[AgentCapability] = None
+    ) -> Optional[str]:
+        """
+        Find the best agent for a specific task based on capabilities and current workload
+        """
+        required_capabilities = required_capabilities or set()
+
+        suitable_agents = []
+
+        for agent_id, agent in self.agent_registry.items():
+            # Check availability
+            if agent.availability_status != "available":
+                continue
+
+            # Check workload capacity
+            if agent.current_workload >= agent.max_concurrent_tasks:
+                continue
+
+            # Check capabilities
+            if required_capabilities and not required_capabilities.issubset(
+                agent.capabilities
+            ):
+                continue
+
+            # Check task type preference
+            task_match_score = 0
+            if task_type in agent.preferred_task_types:
+                task_match_score += 2
+            if any(spec in task_type for spec in agent.specializations):
+                task_match_score += 1
+
+            # Calculate overall suitability score
+            workload_factor = 1.0 - (
+                agent.current_workload / agent.max_concurrent_tasks
+            )
+            performance_factor = agent.success_rate
+
+            suitability_score = (
+                (task_match_score * 0.4)
+                + (workload_factor * 0.3)
+                + (performance_factor * 0.3)
+            )
+
+            suitable_agents.append((agent_id, suitability_score))
+
+        if not suitable_agents:
+            logger.warning(f"No suitable agent found for task type: {task_type}")
+            return None
+
+        # Return agent with highest suitability score
+        suitable_agents.sort(key=lambda x: x[1], reverse=True)
+        best_agent_id = suitable_agents[0][0]
+
+        logger.debug(
+            f"Selected agent {best_agent_id} for task {task_type} (score: {suitable_agents[0][1]:.2f})"
+        )
+        return best_agent_id
+
+    def _reserve_agent(self, agent_id: str):
+        """Reserve an agent for task execution"""
+        if agent_id in self.agent_registry:
+            agent = self.agent_registry[agent_id]
+            agent.current_workload += 1
+            agent.availability_status = (
+                "busy"
+                if agent.current_workload >= agent.max_concurrent_tasks
+                else "available"
+            )
+
+    def _release_agent(self, agent_id: str):
+        """Release an agent after task completion"""
+        if agent_id in self.agent_registry:
+            agent = self.agent_registry[agent_id]
+            agent.current_workload = max(0, agent.current_workload - 1)
+            agent.availability_status = (
+                "available"
+                if agent.current_workload < agent.max_concurrent_tasks
+                else "busy"
+            )
+
+    def _update_agent_performance(
+        self, agent_id: str, success: bool, execution_time: float
+    ):
+        """Update agent performance metrics"""
+        if agent_id not in self.agent_registry:
+            return
+
+        agent = self.agent_registry[agent_id]
+
+        # Update success rate
+        current_attempts = agent.performance_metrics.get("total_attempts", 0)
+        current_successes = agent.performance_metrics.get("total_successes", 0)
+
+        new_attempts = current_attempts + 1
+        new_successes = current_successes + (1 if success else 0)
+
+        agent.success_rate = new_successes / new_attempts if new_attempts > 0 else 1.0
+        agent.performance_metrics["total_attempts"] = new_attempts
+        agent.performance_metrics["total_successes"] = new_successes
+
+        # Update average completion time
+        current_avg_time = agent.average_completion_time
+        if current_avg_time == 0:
+            agent.average_completion_time = execution_time
+        else:
+            # Weighted average (give more weight to recent performance)
+            agent.average_completion_time = (current_avg_time * 0.7) + (
+                execution_time * 0.3
+            )
+
+        logger.debug(
+            f"Updated agent {agent_id} performance: success_rate={agent.success_rate:.2f}, avg_time={agent.average_completion_time:.2f}s"
+        )
+
     def set_phi2_enabled(self, enabled: bool):
         """Set Phi-2 model enabled status"""
         self.config.phi2_enabled = enabled
@@ -566,7 +890,7 @@ class ConsolidatedOrchestrator:
             logger.debug("Event manager not available for settings update")
 
     async def get_status(self) -> Dict[str, Any]:
-        """Get orchestrator status and metrics"""
+        """Get comprehensive orchestrator status and metrics (enhanced version)"""
         uptime = datetime.now() - self.start_time if self.start_time else 0
 
         return {
@@ -576,12 +900,36 @@ class ConsolidatedOrchestrator:
             "active_tasks": len(self.active_tasks),
             "queued_tasks": len(self.task_queue),
             "metrics": self.metrics,
+            "workflow_metrics": self.workflow_metrics,
             "configuration": {
                 "orchestrator_model": self.config.orchestrator_llm_model,
                 "task_model": self.config.task_llm_model,
                 "max_parallel_tasks": self.config.max_parallel_tasks,
-                "classification_enabled": self.classification_agent is not None
-            }
+                "classification_enabled": self.classification_agent is not None,
+                "auto_doc_enabled": self.auto_doc_enabled,
+                "knowledge_extraction_enabled": self.knowledge_extraction_enabled
+            },
+            "agent_registry": {
+                agent_id: {
+                    "agent_type": agent.agent_type,
+                    "capabilities": [cap.value for cap in agent.capabilities],
+                    "availability_status": agent.availability_status,
+                    "current_workload": agent.current_workload,
+                    "max_concurrent_tasks": agent.max_concurrent_tasks,
+                    "success_rate": agent.success_rate,
+                    "average_completion_time": agent.average_completion_time,
+                }
+                for agent_id, agent in self.agent_registry.items()
+            },
+            "active_workflows": len(
+                [
+                    doc
+                    for doc in self.workflow_documentation.values()
+                    if doc.content.get("status") == "in_progress"
+                ]
+            ),
+            "total_documentation": len(self.workflow_documentation),
+            "total_interactions": len(self.agent_interactions),
         }
 
     async def update_configuration(self, new_config: Dict[str, Any]) -> bool:
@@ -746,8 +1094,13 @@ __all__ = [
     "OrchestrationMode",
     "TaskComplexity",
     "WorkflowStatus",
+    "AgentCapability",  # Enhanced feature from enhanced_orchestrator
+    "DocumentationType",  # Enhanced feature from enhanced_orchestrator
     # Data classes
     "WorkflowStep",
+    "AgentProfile",  # Enhanced feature from enhanced_orchestrator
+    "WorkflowDocumentation",  # Enhanced feature from enhanced_orchestrator
+    "AgentInteraction",  # Enhanced feature from enhanced_orchestrator
     # Functions
     "get_orchestrator",
     "shutdown_orchestrator",

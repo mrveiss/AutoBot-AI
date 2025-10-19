@@ -148,7 +148,7 @@ const initializeSession = async (): Promise<string> => {
         const existingSession = data.sessions[0]
         sessionId.value = existingSession.session_id
         console.log(`[Terminal] Using existing terminal session: ${sessionId.value}`)
-        addTerminalLine('system', `Connected to existing terminal session ${sessionId.value.slice(-8)}`, 'info')
+        addTerminalLine('system', `Connected to existing terminal session ${sessionId.value?.slice(-8) || 'unknown'}`, 'info')
       } else {
         // Create new session via AgentTerminalService
         console.log(`[Terminal] Creating new terminal session for chat ${props.chatSessionId}`)
@@ -171,17 +171,17 @@ const initializeSession = async (): Promise<string> => {
         const createData = await createResponse.json()
         sessionId.value = createData.session_id
         console.log(`[Terminal] Created new terminal session: ${sessionId.value}`)
-        addTerminalLine('system', `Created new terminal session ${sessionId.value.slice(-8)}`, 'success')
+        addTerminalLine('system', `Created new terminal session ${sessionId.value?.slice(-8) || 'unknown'}`, 'success')
       }
     } else {
       // System terminal - generate local ID
       sessionId.value = `system_terminal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       console.log(`[Terminal] Created system terminal session: ${sessionId.value}`)
-      addTerminalLine('system', `System terminal session ${sessionId.value.slice(-8)}`, 'info')
+      addTerminalLine('system', `System terminal session ${sessionId.value?.slice(-8) || 'unknown'}`, 'info')
     }
 
     sessionInitialized.value = true
-    return sessionId.value
+    return sessionId.value as string
   } catch (error) {
     console.error('[Terminal] Failed to initialize session:', error)
     // Fallback to local generation

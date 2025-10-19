@@ -845,6 +845,22 @@ NEVER teach commands - ALWAYS execute them."""
                                                                 # Found the execution result
                                                                 approval_result = last_command.get("result", {})
                                                                 logger.info(f"Command approval completed: {approval_result.get('status')}")
+
+                                                                # Send approval status update to frontend
+                                                                approval_status = "approved" if last_command.get("approved_by") else "denied"
+                                                                comment = last_command.get("approval_comment") or last_command.get("denial_reason")
+
+                                                                yield WorkflowMessage(
+                                                                    type="metadata_update",
+                                                                    content="",
+                                                                    metadata={
+                                                                        "message_type": "approval_status_update",
+                                                                        "terminal_session_id": terminal_session_id,
+                                                                        "approval_status": approval_status,
+                                                                        "approval_comment": comment,
+                                                                        "command": command
+                                                                    }
+                                                                )
                                                                 break
                                                 except Exception as check_error:
                                                     logger.error(f"Error checking approval status: {check_error}")

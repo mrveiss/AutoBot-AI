@@ -300,7 +300,8 @@ const populateSystemCommands = async () => {
     startProgress('Populating System Commands', 150)
     progressDetails.value = 'Adding common Linux commands and examples...'
 
-    const response = await ApiClient.post('/api/knowledge_base/populate_system_commands', {})
+    const apiResponse = await ApiClient.post('/api/knowledge_base/populate_system_commands', {})
+    const response = await apiResponse.json()
 
     if (response.status === 'success') {
       populateStatus.value.systemCommands = 'success'
@@ -338,7 +339,8 @@ const populateManPages = async () => {
     startProgress('Populating Manual Pages', 50)
     progressDetails.value = 'Adding system manual pages...'
 
-    const response = await ApiClient.post('/api/knowledge_base/populate_man_pages', {})
+    const apiResponse = await ApiClient.post('/api/knowledge_base/populate_man_pages', {})
+    const response = await apiResponse.json()
 
     if (response.status === 'success') {
       populateStatus.value.manPages = 'success'
@@ -376,7 +378,8 @@ const populateAutoBotDocs = async () => {
     startProgress('Populating AutoBot Documentation', 30)
     progressDetails.value = 'Adding AutoBot documentation and guides...'
 
-    const response = await ApiClient.post('/api/knowledge_base/populate_autobot_docs', {})
+    const apiResponse = await ApiClient.post('/api/knowledge_base/populate_autobot_docs', {})
+    const response = await apiResponse.json()
 
     if (response.status === 'success') {
       populateStatus.value.autobotDocs = 'success'
@@ -436,7 +439,8 @@ const clearAllKnowledge = async () => {
     startProgress('Clearing Knowledge Base', 1)
     progressDetails.value = 'Removing all entries from the knowledge base...'
 
-    const response = await ApiClient.post('/api/knowledge_base/clear_all', {})
+    const apiResponse = await ApiClient.post('/api/knowledge_base/clear_all', {})
+    const response = await apiResponse.json()
 
     if (response.status === 'success') {
       addStatusMessage('success', 'Knowledge Base Cleared',

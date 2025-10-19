@@ -148,7 +148,8 @@ const sortedFiles = computed(() => {
 const refreshFiles = async () => {
   try {
     const response = await apiClient.get(`/api/files/list?path=${encodeURIComponent(currentPath.value)}`)
-    files.value = response.files || []
+    const data = await response.json()
+    files.value = data.files || []
 
     if (viewMode.value === 'tree') {
       await loadDirectoryTree()
@@ -162,7 +163,8 @@ const refreshFiles = async () => {
 const loadDirectoryTree = async () => {
   try {
     const response = await apiClient.get('/api/files/tree')
-    directoryTree.value = response.tree || []
+    const data = await response.json()
+    directoryTree.value = data.tree || []
   } catch (error) {
     console.error('Failed to load directory tree:', error)
     directoryTree.value = []
@@ -215,11 +217,12 @@ const handleFileSelected = async (fileList: FileList) => {
 const viewFile = async (file: any) => {
   try {
     const response = await apiClient.get(`/api/files/preview?path=${encodeURIComponent(file.path)}`)
+    const data = await response.json()
     previewFile.value = {
       name: file.name,
-      type: response.type,
-      url: response.url,
-      content: response.content,
+      type: data.type,
+      url: data.url,
+      content: data.content,
       fileType: getFileType(file.name),
       size: file.size
     }

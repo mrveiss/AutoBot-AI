@@ -396,6 +396,81 @@ class ChatHistoryManager:
             os.getenv("AUTOBOT_CHATS_DIRECTORY", "data/chats"),
         )
 
+    async def _async_cache_session(self, cache_key: str, chat_data: Dict[str, Any]):
+        """
+        Helper method to cache session data in Redis asynchronously.
+
+        Args:
+            cache_key: Redis key for the session
+            chat_data: Session data to cache
+        """
+        try:
+            # Redis sync client expects sync operations
+            self.redis_client.setex(
+                cache_key,
+                3600,  # 1 hour TTL
+                json.dumps(chat_data)
+            )
+        except Exception as e:
+            logger.error(f"Failed to cache session data: {e}")
+
+    async def add_tool_marker_to_last_message(
+        self,
+        session_id: str,
+        tool_type: str,
+        tool_action: str,
+        **marker_data: Any
+    ) -> bool:
+        """
+        Add a tool usage marker to the most recent message in a session.
+
+        Args:
+            session_id: Chat session ID
+            tool_type: Type of tool used (e.g., "terminal", "knowledge_base", "search")
+            tool_action: Action performed (e.g., "execute_command", "search_docs")
+            **marker_data: Additional marker data (command, run_type, log_file, etc.)
+
+        Returns:
+            True if marker was added successfully, False otherwise
+        """
+        try:
+            messages = await self.load_session(session_id)
+
+            if not messages:
+                logger.warning(f"No messages found in session {session_id}")
+                return False
+
+            # Get last message
+            last_message = messages[-1]
+
+            # Create tool marker
+            tool_marker = {
+                "tool_type": tool_type,
+                "tool_action": tool_action,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+
+            # Add any additional marker data
+            tool_marker.update(marker_data)
+
+            # Add marker to message
+            if "toolMarkers" not in last_message:
+                last_message["toolMarkers"] = []
+
+            last_message["toolMarkers"].append(tool_marker)
+
+            # Save updated messages
+            await self.save_session(session_id, messages=messages)
+
+            logger.debug(
+                f"Added {tool_type} tool marker to last message in session {session_id}"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to add tool marker to session {session_id}: {e}")
+            return False
+
     def _load_history(self):
         """
         Loads chat history from the JSON file or Redis if enabled.
@@ -615,11 +690,15 @@ class ChatHistoryManager:
         """
         try:
             chats_directory = self._get_chats_directory()
-            chat_file = f"{chats_directory}/chat_{session_id}.json"
 
+            # Try new format first
+            chat_file = f"{chats_directory}/{session_id}_chat.json"
             if not os.path.exists(chat_file):
-                logging.warning(f"Session {session_id} not found for update")
-                return False
+                # Try old format
+                chat_file = f"{chats_directory}/chat_{session_id}.json"
+                if not os.path.exists(chat_file):
+                    logging.warning(f"Session {session_id} not found for update")
+                    return False
 
             # Load existing data
             async with aiofiles.open(chat_file, "r") as f:
@@ -630,10 +709,19 @@ class ChatHistoryManager:
             chat_data.update(updates)
             chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
-            # Save updated data
+            # Save updated data (always use new format)
+            chat_file_new = f"{chats_directory}/{session_id}_chat.json"
             encrypted_data = self._encrypt_data(chat_data)
-            async with aiofiles.open(chat_file, "w") as f:
+            async with aiofiles.open(chat_file_new, "w") as f:
                 await f.write(encrypted_data)
+
+            # Update Redis cache
+            if self.redis_client:
+                try:
+                    cache_key = f"chat:session:{session_id}"
+                    await self._async_cache_session(cache_key, chat_data)
+                except Exception as e:
+                    logger.error(f"Failed to update Redis cache: {e}")
 
             logging.info(f"Session {session_id} updated successfully")
             return True
@@ -689,6 +777,7 @@ class ChatHistoryManager:
         message_type: str = "default",
         raw_data: Any = None,
         session_id: Optional[str] = None,
+        tool_markers: Optional[List[Dict[str, Any]]] = None,
     ):
         """
         Adds a new message to the history and saves it to file.
@@ -701,6 +790,7 @@ class ChatHistoryManager:
             message_type (str): The type of message (default is 'default').
             raw_data (Any): Additional raw data associated with the message.
             session_id (str): Optional session ID to add message to specific session.
+            tool_markers (List[Dict[str, Any]]): Optional list of tool usage markers.
         """
         message = {
             "sender": sender,
@@ -709,6 +799,10 @@ class ChatHistoryManager:
             "rawData": raw_data,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
+
+        # Add tool markers if provided
+        if tool_markers:
+            message["toolMarkers"] = tool_markers
 
         # If session_id provided, add to that session
         if session_id:
@@ -767,15 +861,25 @@ class ChatHistoryManager:
             # Clean up old session files if needed
             self._cleanup_old_session_files()
 
-            # Look for chat files in the chats directory
+            # Look for chat files in the chats directory (both old and new formats)
             for filename in os.listdir(chats_directory):
+                # Support both formats: chat_{uuid}.json and {uuid}_chat.json
+                chat_id = None
                 if filename.startswith("chat_") and filename.endswith(".json"):
+                    # Old format: chat_{uuid}.json
                     chat_id = filename.replace("chat_", "").replace(".json", "")
-                    chat_path = os.path.join(chats_directory, filename)
+                elif filename.endswith("_chat.json"):
+                    # New format: {uuid}_chat.json
+                    chat_id = filename.replace("_chat.json", "")
 
-                    try:
-                        async with aiofiles.open(chat_path, "r") as f:
-                            file_content = await f.read()
+                if not chat_id:
+                    continue
+
+                chat_path = os.path.join(chats_directory, filename)
+
+                try:
+                    async with aiofiles.open(chat_path, "r") as f:
+                        file_content = await f.read()
                         chat_data = self._decrypt_data(file_content)
 
                         # Get chat metadata
@@ -793,9 +897,9 @@ class ChatHistoryManager:
                                 "lastModified": last_modified,
                             }
                         )
-                    except Exception as e:
-                        logging.error(f"Error reading chat file {filename}: {str(e)}")
-                        continue
+                except Exception as e:
+                    logging.error(f"Error reading chat file {filename}: {str(e)}")
+                    continue
 
             # Sort by last modified time (most recent first)
             sessions.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
@@ -817,68 +921,78 @@ class ChatHistoryManager:
                 return sessions
 
             # Use file system metadata for performance - avoid decryption
+            # Support both formats: chat_{uuid}.json and {uuid}_chat.json
             for filename in os.listdir(chats_directory):
+                chat_id = None
                 if filename.startswith("chat_") and filename.endswith(".json"):
+                    # Old format: chat_{uuid}.json
                     chat_id = filename.replace("chat_", "").replace(".json", "")
-                    chat_path = os.path.join(chats_directory, filename)
+                elif filename.endswith("_chat.json"):
+                    # New format: {uuid}_chat.json
+                    chat_id = filename.replace("_chat.json", "")
 
+                if not chat_id:
+                    continue
+
+                chat_path = os.path.join(chats_directory, filename)
+
+                try:
+                    # Get file stats for metadata
+                    stat = os.stat(chat_path)
+                    created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
+                    last_modified = datetime.fromtimestamp(
+                        stat.st_mtime
+                    ).isoformat()
+                    file_size = stat.st_size
+
+                    # Read chat name and message count from file (lightweight, no full decryption)
+                    chat_name = None
+                    message_count = 0
                     try:
-                        # Get file stats for metadata
-                        stat = os.stat(chat_path)
-                        created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
-                        last_modified = datetime.fromtimestamp(
-                            stat.st_mtime
-                        ).isoformat()
-                        file_size = stat.st_size
+                        with open(chat_path, 'r', encoding='utf-8') as f:
+                            chat_data = json.load(f)
+                            chat_name = chat_data.get('name', '').strip()
+                            messages = chat_data.get('messages', [])
+                            message_count = len(messages) if isinstance(messages, list) else 0
+                    except Exception as read_err:
+                        logging.debug(f"Could not read chat file content for {filename}: {read_err}")
 
-                        # Read chat name and message count from file (lightweight, no full decryption)
-                        chat_name = None
-                        message_count = 0
-                        try:
-                            with open(chat_path, 'r', encoding='utf-8') as f:
-                                chat_data = json.load(f)
-                                chat_name = chat_data.get('name', '').strip()
-                                messages = chat_data.get('messages', [])
-                                message_count = len(messages) if isinstance(messages, list) else 0
-                        except Exception as read_err:
-                            logging.debug(f"Could not read chat file content for {filename}: {read_err}")
+                    # Create unique chat names using timestamp or full UUID
+                    if not chat_name:  # Only generate default if no name in file
+                        if chat_id.startswith("chat-") and len(chat_id) > 15:
+                            # For timestamp-based IDs, use the last 8 digits for uniqueness
+                            unique_part = chat_id[-8:]
+                            chat_name = f"Chat {unique_part}"
+                        elif len(chat_id) >= 8:
+                            # For UUID-based IDs, use first 8 characters
+                            chat_name = f"Chat {chat_id[:8]}"
+                        else:
+                            # Fallback for short IDs
+                            chat_name = f"Chat {chat_id}"
 
-                        # Create unique chat names using timestamp or full UUID
-                        if not chat_name:  # Only generate default if no name in file
-                            if chat_id.startswith("chat-") and len(chat_id) > 15:
-                                # For timestamp-based IDs, use the last 8 digits for uniqueness
-                                unique_part = chat_id[-8:]
-                                chat_name = f"Chat {unique_part}"
-                            elif len(chat_id) >= 8:
-                                # For UUID-based IDs, use first 8 characters
-                                chat_name = f"Chat {chat_id[:8]}"
-                            else:
-                                # Fallback for short IDs
-                                chat_name = f"Chat {chat_id}"
-
-                        sessions.append(
-                            {
-                                # Frontend-compatible property names
-                                "id": chat_id,  # Frontend expects 'id'
-                                "chatId": chat_id,  # Keep for backward compatibility
-                                "title": chat_name,  # Frontend expects 'title' - use actual name from file
-                                "name": chat_name,  # Keep for backward compatibility
-                                "messages": [],  # Frontend expects messages array - empty in fast mode
-                                "messageCount": message_count,  # Actual count from file
-                                "createdAt": created_time,  # Frontend expects 'createdAt'
-                                "createdTime": created_time,  # Keep for backward compatibility
-                                "updatedAt": last_modified,  # Frontend expects 'updatedAt'
-                                "lastModified": last_modified,  # Keep for backward compatibility
-                                "isActive": False,  # Frontend expects 'isActive'
-                                "fileSize": file_size,
-                                "fast_mode": True,  # Indicate this is fast mode without full data
-                            }
-                        )
-                    except Exception as e:
-                        logging.error(
-                            f"Error reading file stats for {filename}: {str(e)}"
-                        )
-                        continue
+                    sessions.append(
+                        {
+                            # Frontend-compatible property names
+                            "id": chat_id,  # Frontend expects 'id'
+                            "chatId": chat_id,  # Keep for backward compatibility
+                            "title": chat_name,  # Frontend expects 'title' - use actual name from file
+                            "name": chat_name,  # Keep for backward compatibility
+                            "messages": [],  # Frontend expects messages array - empty in fast mode
+                            "messageCount": message_count,  # Actual count from file
+                            "createdAt": created_time,  # Frontend expects 'createdAt'
+                            "createdTime": created_time,  # Keep for backward compatibility
+                            "updatedAt": last_modified,  # Frontend expects 'updatedAt'
+                            "lastModified": last_modified,  # Keep for backward compatibility
+                            "isActive": False,  # Frontend expects 'isActive'
+                            "fileSize": file_size,
+                            "fast_mode": True,  # Indicate this is fast mode without full data
+                        }
+                    )
+                except Exception as e:
+                    logging.error(
+                        f"Error reading file stats for {filename}: {str(e)}"
+                    )
+                    continue
 
             # Sort by last modified time (most recent first)
             sessions.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
@@ -889,20 +1003,55 @@ class ChatHistoryManager:
             return []
 
     async def load_session(self, session_id: str) -> List[Dict[str, Any]]:
-        """Loads a specific chat session."""
+        """Loads a specific chat session with Redis cache-first strategy."""
         try:
-            chats_directory = self._get_chats_directory()
-            chat_file = f"{chats_directory}/chat_{session_id}.json"
+            # Try Redis cache first
+            if self.redis_client:
+                try:
+                    cache_key = f"chat:session:{session_id}"
+                    cached_data = self.redis_client.get(cache_key)
 
+                    if cached_data:
+                        if isinstance(cached_data, bytes):
+                            cached_data = cached_data.decode('utf-8')
+                        chat_data = json.loads(cached_data)
+                        logger.debug(f"Cache HIT for session {session_id}")
+                        return chat_data.get("messages", [])
+                except Exception as e:
+                    logger.error(f"Failed to read from Redis cache: {e}")
+
+            logger.debug(f"Cache MISS for session {session_id}")
+
+            # Cache miss - read from file
+            chats_directory = self._get_chats_directory()
+
+            # Try new naming convention first: {uuid}_chat.json
+            chat_file = f"{chats_directory}/{session_id}_chat.json"
+
+            # Backward compatibility: try old naming convention if new doesn't exist
             if not os.path.exists(chat_file):
-                logging.warning(f"Chat session {session_id} not found")
-                return []
+                chat_file_old = f"{chats_directory}/chat_{session_id}.json"
+                if os.path.exists(chat_file_old):
+                    chat_file = chat_file_old
+                    logger.debug(f"Using legacy file format for session {session_id}")
+                else:
+                    logging.warning(f"Chat session {session_id} not found")
+                    return []
 
             async with aiofiles.open(chat_file, "r") as f:
                 file_content = await f.read()
 
             # Decrypt data if encryption is enabled
             chat_data = self._decrypt_data(file_content)
+
+            # Warm up Redis cache with file data
+            if self.redis_client:
+                try:
+                    cache_key = f"chat:session:{session_id}"
+                    await self._async_cache_session(cache_key, chat_data)
+                    logger.debug(f"Warmed cache for session {session_id}")
+                except Exception as e:
+                    logger.error(f"Failed to warm cache: {e}")
 
             return chat_data.get("messages", [])
 
@@ -933,12 +1082,13 @@ class ChatHistoryManager:
             if not os.path.exists(chats_directory):
                 os.makedirs(chats_directory, exist_ok=True)
 
-            chat_file = f"{chats_directory}/chat_{session_id}.json"
+            # Use new naming convention: {uuid}_chat.json
+            chat_file = f"{chats_directory}/{session_id}_chat.json"
             current_time = time.strftime("%Y-%m-%d %H:%M:%S")
 
             # Use provided messages or current history
             session_messages = self.history if messages is None else messages
-            
+
             # PERFORMANCE: Limit session messages to prevent excessive file sizes
             if len(session_messages) > self.max_messages:
                 logger.warning(
@@ -949,6 +1099,8 @@ class ChatHistoryManager:
 
             # Load existing chat data if it exists to preserve metadata
             chat_data = {}
+
+            # Check new format first, then old format for backward compatibility
             if os.path.exists(chat_file):
                 try:
                     async with aiofiles.open(chat_file, "r") as f:
@@ -959,6 +1111,17 @@ class ChatHistoryManager:
                         "Could not load existing chat data for "
                         f"{session_id}: {str(e)}"
                     )
+            else:
+                # Try old format for backward compatibility
+                chat_file_old = f"{chats_directory}/chat_{session_id}.json"
+                if os.path.exists(chat_file_old):
+                    try:
+                        async with aiofiles.open(chat_file_old, "r") as f:
+                            file_content = await f.read()
+                        chat_data = self._decrypt_data(file_content)
+                        logger.debug(f"Migrating session {session_id} from old format")
+                    except Exception as e:
+                        logging.warning(f"Could not load old format data: {str(e)}")
 
             # Update chat data
             chat_data.update(
@@ -971,10 +1134,23 @@ class ChatHistoryManager:
                 }
             )
 
-            # Save to file with encryption if enabled
+            # Save to file with encryption if enabled (always use new format)
             encrypted_data = self._encrypt_data(chat_data)
             async with aiofiles.open(chat_file, "w") as f:
                 await f.write(encrypted_data)
+
+            # Update Redis cache (write-through)
+            if self.redis_client:
+                try:
+                    cache_key = f"chat:session:{session_id}"
+                    await self._async_cache_session(cache_key, chat_data)
+
+                    # Update recent chats sorted set for fast listing
+                    self.redis_client.zadd("chat:recent", {session_id: time.time()})
+
+                    logger.debug(f"Cached session {session_id} in Redis")
+                except Exception as e:
+                    logger.error(f"Failed to cache session in Redis: {e}")
 
             logging.info(f"Chat session '{session_id}' saved successfully")
 
@@ -1050,7 +1226,7 @@ class ChatHistoryManager:
 
     def delete_session(self, session_id: str) -> bool:
         """
-        Deletes a chat session.
+        Deletes a chat session and its companion files.
 
         Args:
             session_id (str): The identifier for the session to delete.
@@ -1060,13 +1236,40 @@ class ChatHistoryManager:
         """
         try:
             chats_directory = self._get_chats_directory()
-            chat_file = f"{chats_directory}/chat_{session_id}.json"
+            deleted = False
 
-            if not os.path.exists(chat_file):
+            # Delete new format file
+            chat_file_new = f"{chats_directory}/{session_id}_chat.json"
+            if os.path.exists(chat_file_new):
+                os.remove(chat_file_new)
+                deleted = True
+
+            # Delete old format file if exists
+            chat_file_old = f"{chats_directory}/chat_{session_id}.json"
+            if os.path.exists(chat_file_old):
+                os.remove(chat_file_old)
+                deleted = True
+
+            # Delete companion files (terminal logs, etc.)
+            terminal_log = f"{chats_directory}/{session_id}_terminal.log"
+            if os.path.exists(terminal_log):
+                os.remove(terminal_log)
+                logger.debug(f"Deleted terminal log for session {session_id}")
+
+            # Clear Redis cache
+            if self.redis_client:
+                try:
+                    cache_key = f"chat:session:{session_id}"
+                    self.redis_client.delete(cache_key)
+                    self.redis_client.zrem("chat:recent", session_id)
+                    logger.debug(f"Cleared Redis cache for session {session_id}")
+                except Exception as e:
+                    logger.error(f"Failed to clear Redis cache: {e}")
+
+            if not deleted:
                 logging.warning(f"Chat session {session_id} not found for deletion")
                 return False
 
-            os.remove(chat_file)
             logging.info(f"Chat session '{session_id}' deleted successfully")
             return True
 
@@ -1087,11 +1290,15 @@ class ChatHistoryManager:
         """
         try:
             chats_directory = self._get_chats_directory()
-            chat_file = f"{chats_directory}/chat_{session_id}.json"
 
+            # Try new format first
+            chat_file = f"{chats_directory}/{session_id}_chat.json"
             if not os.path.exists(chat_file):
-                logging.warning(f"Chat session {session_id} not found for name update")
-                return False
+                # Try old format
+                chat_file = f"{chats_directory}/chat_{session_id}.json"
+                if not os.path.exists(chat_file):
+                    logging.warning(f"Chat session {session_id} not found for name update")
+                    return False
 
             # Load existing chat data
             async with aiofiles.open(chat_file, "r") as f:
@@ -1102,9 +1309,18 @@ class ChatHistoryManager:
             chat_data["name"] = name
             chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
-            # Save updated data
-            async with aiofiles.open(chat_file, "w") as f:
+            # Save updated data (always use new format)
+            chat_file_new = f"{chats_directory}/{session_id}_chat.json"
+            async with aiofiles.open(chat_file_new, "w") as f:
                 await f.write(json.dumps(chat_data, indent=2))
+
+            # Update Redis cache
+            if self.redis_client:
+                try:
+                    cache_key = f"chat:session:{session_id}"
+                    await self._async_cache_session(cache_key, chat_data)
+                except Exception as e:
+                    logger.error(f"Failed to update Redis cache: {e}")
 
             logging.info(f"Chat session '{session_id}' name updated to '{name}'")
             return True

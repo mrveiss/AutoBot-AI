@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 
 from src.secure_command_executor import CommandRisk, SecureCommandExecutor, SecurityPolicy
 from src.constants.network_constants import NetworkConstants
+from src.logging.terminal_logger import TerminalLogger
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,16 @@ class AgentTerminalService:
         self.redis_client = redis_client
         self.sessions: Dict[str, AgentTerminalSession] = {}
         self.security_policy = SecurityPolicy()
+
+        # Terminal command logger
+        self.terminal_logger = TerminalLogger(
+            redis_client=redis_client,
+            data_dir="data/chats"
+        )
+
+        # Auto-approve rules storage
+        # Format: {user_id: [{command_pattern, risk_level, created_at}, ...]}
+        self.auto_approve_rules: Dict[str, List[Dict[str, Any]]] = {}
 
         # Agent-specific security policy
         self.agent_permissions = {
@@ -469,52 +480,114 @@ class AgentTerminalService:
         needs_approval = self._needs_approval(session.agent_role, risk) or force_approval
 
         if needs_approval:
-            # Store command in pending approval
-            session.pending_approval = {
-                "command": command,
-                "description": description,
-                "risk": risk.value,
-                "reasons": reasons,
-                "timestamp": time.time(),
-            }
-
-            logger.info(
-                f"Command requires approval: {command} "
-                f"(agent: {session.agent_id}, risk: {risk.value})"
+            # Check auto-approve rules (use conversation_id as user_id proxy)
+            user_id = session.conversation_id or "default_user"
+            is_auto_approved = await self._check_auto_approve_rules(
+                user_id=user_id,
+                command=command,
+                risk_level=risk.value,
             )
 
-            return {
-                "status": "pending_approval",
-                "command": command,
-                "risk": risk.value,
-                "reasons": reasons,
-                "description": description,
-                "agent_role": session.agent_role.value,
-                "approval_required": True,
-            }
+            if is_auto_approved:
+                # Auto-approve based on stored rule - treat as if user approved
+                logger.info(
+                    f"Command auto-approved by rule: {command} "
+                    f"(user: {user_id}, risk: {risk.value})"
+                )
+                # Fall through to execute command below
+            else:
+                # Store command in pending approval
+                session.pending_approval = {
+                    "command": command,
+                    "description": description,
+                    "risk": risk.value,
+                    "reasons": reasons,
+                    "timestamp": time.time(),
+                }
+
+                logger.info(
+                    f"Command requires approval: {command} "
+                    f"(agent: {session.agent_id}, risk: {risk.value})"
+                )
+
+                # Log pending approval command
+                if session.conversation_id:
+                    await self.terminal_logger.log_command(
+                        session_id=session.conversation_id,
+                        command=command,
+                        run_type="autobot",
+                        status="pending_approval",
+                        user_id=user_id,
+                    )
+
+                return {
+                    "status": "pending_approval",
+                    "command": command,
+                    "risk": risk.value,
+                    "reasons": reasons,
+                    "description": description,
+                    "agent_role": session.agent_role.value,
+                    "approval_required": True,
+                }
 
         # Execute command (auto-approved safe commands)
         try:
+            # Log command execution start
+            if session.conversation_id:
+                await self.terminal_logger.log_command(
+                    session_id=session.conversation_id,
+                    command=command,
+                    run_type="autobot",
+                    status="executing",
+                    user_id=None,
+                )
+
             # Write command to PTY terminal for visibility
             self._write_to_pty(session, f"{command}\n")
 
             # Execute the command
             result = await executor.run_shell_command(command, force_approval=False)
 
+            # Log command execution result
+            if session.conversation_id:
+                await self.terminal_logger.log_command(
+                    session_id=session.conversation_id,
+                    command=command,
+                    run_type="autobot",
+                    status="success" if result.get("status") == "success" else "error",
+                    result=result,
+                    user_id=None,
+                )
+
             # Add to command history
             session.command_history.append({
                 "command": command,
                 "risk": risk.value,
                 "timestamp": time.time(),
+                "auto_approved": True,
                 "result": result,
             })
 
             session.last_activity = time.time()
 
+            # Broadcast pre-approval status update to WebSocket clients
+            await self._broadcast_approval_status(
+                session,
+                command=command,
+                approved=True,
+                comment=f"Auto-approved ({risk.value} risk)",
+                pre_approved=True,
+            )
+
             # Write output to PTY if available
             if result.get("status") == "success" and result.get("stdout"):
                 # Output is already in PTY from command execution
                 pass
+
+            # Add approval metadata to result for UI display
+            result["approval_status"] = "pre_approved"
+            result["approval_comment"] = f"Auto-approved ({risk.value} risk)"
+            result["command"] = command
 
             return result
 
@@ -531,6 +604,8 @@ class AgentTerminalService:
         session_id: str,
         approved: bool,
         user_id: Optional[str] = None,
+        comment: Optional[str] = None,
+        auto_approve_future: bool = False,
     ) -> Dict[str, Any]:
         """
         Approve or deny a pending agent command.
@@ -539,6 +614,8 @@ class AgentTerminalService:
             session_id: Agent session ID
             approved: Whether command is approved
             user_id: User who made the decision
+            comment: Optional comment or reason for the decision
+            auto_approve_future: Auto-approve similar commands in the future
 
         Returns:
             Result of approval decision
@@ -552,7 +629,7 @@ class AgentTerminalService:
                 "error": "Session not found",
             }
 
-        logger.warning(f"approve_command: session_id={session_id}, pending_approval={session.pending_approval is not None}, approved={approved}")
+        logger.warning(f"approve_command: session_id={session_id}, pending_approval={session.pending_approval is not None}, approved={approved}, comment={comment}")
         logger.warning(f"approve_command: Session state={session.state.value}, agent_id={session.agent_id}")
         logger.warning(f"approve_command: pending_approval content={session.pending_approval}")
 
@@ -564,27 +641,55 @@ class AgentTerminalService:
             }
 
         command = session.pending_approval.get("command")
+        risk_level = session.pending_approval.get("risk")  # Save before clearing
 
         if approved:
             # Execute approved command
+            # User has already approved, so callback always returns True
+            async def pre_approved_callback(approval_data):
+                return True
+
             executor = SecureCommandExecutor(
                 policy=self.security_policy,
+                require_approval_callback=pre_approved_callback,
                 use_docker_sandbox=False,
             )
 
             try:
+                # Log approval
+                if session.conversation_id:
+                    await self.terminal_logger.log_command(
+                        session_id=session.conversation_id,
+                        command=command,
+                        run_type="manual",  # User approved, treat as manual
+                        status="approved",
+                        user_id=user_id,
+                    )
+
                 # Write command to PTY terminal for visibility
                 self._write_to_pty(session, f"{command}\n")
 
                 # Execute the command
                 result = await executor.run_shell_command(command, force_approval=False)
 
+                # Log command execution result
+                if session.conversation_id:
+                    await self.terminal_logger.log_command(
+                        session_id=session.conversation_id,
+                        command=command,
+                        run_type="manual",
+                        status="success" if result.get("status") == "success" else "error",
+                        result=result,
+                        user_id=user_id,
+                    )
+
                 # Add to command history
                 session.command_history.append({
                     "command": command,
-                    "risk": session.pending_approval.get("risk"),
+                    "risk": risk_level,
                     "timestamp": time.time(),
                     "approved_by": user_id,
+                    "approval_comment": comment,
                     "result": result,
                 })
 
@@ -592,7 +697,23 @@ class AgentTerminalService:
                 session.state = AgentSessionState.AGENT_CONTROL
                 session.last_activity = time.time()
 
-                logger.info(f"Command approved and executed: {command}")
+                logger.info(f"Command approved and executed: {command}" + (f" with comment: {comment}" if comment else ""))
+
+                # Store auto-approve rule if requested
+                if auto_approve_future and user_id:
+                    await self._store_auto_approve_rule(
+                        user_id=user_id,
+                        command=command,
+                        risk_level=risk_level,
+                    )
+
+                # Broadcast approval status update to WebSocket clients
+                await self._broadcast_approval_status(
+                    session,
+                    command=command,
+                    approved=True,
+                    comment=comment,
+                )
 
                 # Write output to PTY if available
                 if result.get("status") == "success" and result.get("stdout"):
@@ -603,6 +724,8 @@ class AgentTerminalService:
                     "status": "approved",
                     "command": command,
                     "result": result,
+                    "comment": comment,
+                    "auto_approve_stored": auto_approve_future,
                 }
 
             except Exception as e:
@@ -614,15 +737,44 @@ class AgentTerminalService:
                 }
         else:
             # Command denied
-            logger.info(f"Command denied by user: {command}")
+            logger.info(f"Command denied by user: {command}" + (f" with reason: {comment}" if comment else ""))
+
+            # Log denial
+            if session.conversation_id:
+                await self.terminal_logger.log_command(
+                    session_id=session.conversation_id,
+                    command=command,
+                    run_type="manual",
+                    status="denied",
+                    user_id=user_id,
+                )
+
+            # Add to command history (for audit trail)
+            session.command_history.append({
+                "command": command,
+                "risk": session.pending_approval.get("risk"),
+                "timestamp": time.time(),
+                "denied_by": user_id,
+                "denial_reason": comment,
+                "result": {"status": "denied_by_user"},
+            })
 
             session.pending_approval = None
             session.state = AgentSessionState.AGENT_CONTROL
+
+            # Broadcast denial status update to WebSocket clients
+            await self._broadcast_approval_status(
+                session,
+                command=command,
+                approved=False,
+                comment=comment,
+            )
 
             return {
                 "status": "denied",
                 "command": command,
                 "message": "Command execution denied by user",
+                "comment": comment,
             }
 
     async def user_interrupt(
@@ -728,3 +880,172 @@ class AgentTerminalService:
             "pending_approval": session.pending_approval,
             "metadata": session.metadata,
         }
+
+    async def _store_auto_approve_rule(
+        self,
+        user_id: str,
+        command: str,
+        risk_level: str,
+    ):
+        """
+        Store an auto-approve rule for future similar commands.
+
+        Args:
+            user_id: User who created the rule
+            command: Command that was approved
+            risk_level: Risk level of the command
+        """
+        try:
+            # Extract command pattern (first word + arguments pattern)
+            pattern = self._extract_command_pattern(command)
+
+            # Create rule
+            rule = {
+                "pattern": pattern,
+                "risk_level": risk_level,
+                "created_at": time.time(),
+                "original_command": command,
+            }
+
+            # Store in memory (could be persisted to Redis later)
+            if user_id not in self.auto_approve_rules:
+                self.auto_approve_rules[user_id] = []
+
+            self.auto_approve_rules[user_id].append(rule)
+
+            logger.info(
+                f"Auto-approve rule stored for user {user_id}: "
+                f"pattern='{pattern}', risk={risk_level}"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to store auto-approve rule: {e}")
+
+    def _extract_command_pattern(self, command: str) -> str:
+        """
+        Extract a pattern from a command for auto-approve matching.
+
+        Examples:
+            "ls -la /home" -> "ls *"
+            "cat file.txt" -> "cat *"
+            "git status" -> "git status"
+
+        Args:
+            command: Full command string
+
+        Returns:
+            Command pattern for matching
+        """
+        parts = command.split()
+        if len(parts) == 0:
+            return command
+
+        # First word is the base command
+        base_cmd = parts[0]
+
+        # If there are arguments, use wildcard pattern
+        if len(parts) > 1:
+            # For commands with subcommands (like git status), preserve them
+            if base_cmd in ['git', 'docker', 'kubectl', 'npm', 'yarn']:
+                if len(parts) >= 2:
+                    return f"{base_cmd} {parts[1]} *"
+            # For simple commands, use wildcard
+            return f"{base_cmd} *"
+
+        # No arguments - exact match
+        return base_cmd
+
+    async def _check_auto_approve_rules(
+        self,
+        user_id: str,
+        command: str,
+        risk_level: str,
+    ) -> bool:
+        """
+        Check if command matches any auto-approve rules.
+
+        Args:
+            user_id: User ID to check rules for
+            command: Command to check
+            risk_level: Risk level of the command
+
+        Returns:
+            True if command should be auto-approved
+        """
+        try:
+            if user_id not in self.auto_approve_rules:
+                return False
+
+            pattern = self._extract_command_pattern(command)
+            rules = self.auto_approve_rules[user_id]
+
+            for rule in rules:
+                # Match pattern and risk level
+                if rule["pattern"] == pattern and rule["risk_level"] == risk_level:
+                    logger.info(
+                        f"Auto-approve rule matched for user {user_id}: "
+                        f"pattern='{pattern}', risk={risk_level}"
+                    )
+                    return True
+
+            return False
+
+        except Exception as e:
+            logger.error(f"Failed to check auto-approve rules: {e}")
+            return False
+
+    async def _broadcast_approval_status(
+        self,
+        session: AgentTerminalSession,
+        command: str,
+        approved: bool,
+        comment: Optional[str] = None,
+        pre_approved: bool = False,
+    ):
+        """
+        Broadcast approval status update to WebSocket clients.
+
+        This updates the chat message metadata to show approval/denial status
+        in the UI with color-coded visual indicators:
+        - pre_approved (blue): Auto-approved by security policy
+        - approved (green): User manually approved
+        - denied (red): User manually denied
+
+        Args:
+            session: Agent terminal session
+            command: Command that was approved/denied
+            approved: Whether command was approved
+            comment: Optional comment from user
+            pre_approved: Whether this was auto-approved by security policy
+        """
+        try:
+            # Only broadcast if there's a linked conversation
+            if not session.conversation_id:
+                logger.debug("No conversation_id - skipping WebSocket broadcast")
+                return
+
+            # Determine status based on approval type
+            if pre_approved:
+                status = "pre_approved"
+            elif approved:
+                status = "approved"
+            else:
+                status = "denied"
+
+            # TODO: Implement WebSocket broadcasting for real-time UI updates
+            # For now, log the approval status (will be picked up on next message/refresh)
+            logger.info(
+                f"Approval status update (WebSocket broadcast pending): "
+                f"conversation_id={session.conversation_id}, "
+                f"status={status}, "
+                f"command={command}, "
+                f"comment={comment}"
+            )
+
+            # Future implementation:
+            # from backend.api.websockets import websocket_manager
+            # await websocket_manager.broadcast_to_conversation(...)
+
+        except Exception as e:
+            logger.error(f"Error in approval status update: {e}", exc_info=True)
+            # Don't fail the approval process if broadcast fails

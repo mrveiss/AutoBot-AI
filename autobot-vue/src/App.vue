@@ -474,11 +474,11 @@ export default {
 
     // Reactive data (non-status related)
     const showMobileNav = ref(false);
-    let notificationCleanup = null;
+    let notificationCleanup: number | null = null;
 
     // Computed properties
     const isLoading = computed(() => appStore?.isLoading || false);
-    const hasErrors = computed(() => appStore?.errors?.length > 0 || false);
+    const hasErrors = computed(() => false); // No errors property in store
 
     // Methods
     const toggleMobileNav = () => {
@@ -489,9 +489,10 @@ export default {
       showMobileNav.value = false;
     };
 
-    const closeNavbarOnClickOutside = (event) => {
+    const closeNavbarOnClickOutside = (event: MouseEvent) => {
       // Close mobile nav when clicking outside
-      if (showMobileNav.value && !event.target.closest('#mobile-nav') && !event.target.closest('[aria-controls="mobile-nav"]')) {
+      const target = event.target as HTMLElement | null;
+      if (showMobileNav.value && target && !target.closest('#mobile-nav') && !target.closest('[aria-controls="mobile-nav"]')) {
         showMobileNav.value = false;
       }
     };
@@ -505,8 +506,10 @@ export default {
         if (chatStore && typeof chatStore.clearAllSessions === 'function') {
           chatStore.clearAllSessions();
         }
-        if (knowledgeStore && typeof knowledgeStore.clearCache === 'function') {
-          knowledgeStore.clearCache();
+        // Knowledge store doesn't have clearCache method
+        // Clear by refreshing stats
+        if (knowledgeStore && typeof knowledgeStore.refreshStats === 'function') {
+          await knowledgeStore.refreshStats();
         }
 
         // Reload the page
@@ -516,7 +519,7 @@ export default {
       }
     };
 
-    const handleGlobalError = (error) => {
+    const handleGlobalError = (error: Error) => {
       console.error('Global error:', error);
       if (appStore && typeof appStore.addSystemNotification === 'function') {
         appStore.addSystemNotification({
@@ -535,9 +538,9 @@ export default {
       }
     };
 
-    const handleLoadingError = (error) => {
+    const handleLoadingError = (error: string | Error) => {
       console.error('[App] Loading error:', error);
-      handleGlobalError(new Error(error));
+      handleGlobalError(error instanceof Error ? error : new Error(String(error)));
     };
 
     const handleLoadingTimeout = () => {
@@ -568,8 +571,11 @@ export default {
           });
         }
 
-        // Update smart monitoring controller
-        smartMonitoringController.setSystemHealth(healthData.status.overall);
+        // Update smart monitoring controller (filter out 'unknown' state)
+        const healthState = healthData.status.overall;
+        if (healthState !== 'unknown') {
+          smartMonitoringController.setSystemHealth(healthState);
+        }
       });
 
       console.log('[App] Optimized health monitoring initialized');

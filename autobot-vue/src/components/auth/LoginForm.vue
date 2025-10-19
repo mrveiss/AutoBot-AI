@@ -186,10 +186,11 @@ async function handleLogin() {
 
   try {
     // Call login API
-    const response = await ApiClient.post('/api/auth/login', {
+    const apiResponse = await ApiClient.post('/api/auth/login', {
       username: credentials.username,
       password: credentials.password
     })
+    const response = await apiResponse.json()
 
     if (response.success && response.user && response.token) {
       // Store authentication data

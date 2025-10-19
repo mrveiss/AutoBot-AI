@@ -134,11 +134,24 @@ export const useAppStore = defineStore('app', () => {
   
   // System status for status indicator
   const systemStatusIndicator = computed(() => {
-    if (systemNotifications.value.some(n => n.severity === 'error' && n.visible)) {
-      return { status: 'error', text: 'System errors detected', pulse: true }
+    const errorNotification = systemNotifications.value.find(n => n.severity === 'error' && n.visible);
+    const warningNotification = systemNotifications.value.find(n => n.severity === 'warning' && n.visible);
+    
+    if (errorNotification) {
+      return { 
+        status: 'error', 
+        text: 'System errors detected', 
+        pulse: true,
+        statusDetails: errorNotification.statusDetails
+      }
     }
-    if (systemNotifications.value.some(n => n.severity === 'warning' && n.visible)) {
-      return { status: 'warning', text: 'System warnings', pulse: false }
+    if (warningNotification) {
+      return { 
+        status: 'warning', 
+        text: 'System warnings', 
+        pulse: false,
+        statusDetails: warningNotification.statusDetails
+      }
     }
     if (backendStatus.value.class === 'success') {
       return { status: 'success', text: backendStatus.value.text, pulse: false }  // Use actual backend status text instead of generic message

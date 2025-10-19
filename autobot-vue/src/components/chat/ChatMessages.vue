@@ -60,7 +60,7 @@
         <!-- Enhanced Message Status -->
         <div v-if="message.sender === 'user'" class="message-status-container">
           <MessageStatus
-            :status="message.status || 'sent'"
+            :status="(message.status === 'error' ? 'failed' : message.status) || 'sent'"
             :show-text="true"
             :timestamp="message.timestamp"
             :error="message.error"
@@ -129,7 +129,62 @@
           </div>
 
           <!-- Command Approval Request UI - Inline in chat history -->
-          <div v-if="message.metadata?.requires_approval" class="approval-request">
+          <!-- PRE-APPROVED STATE - Show blue auto-approval -->
+          <div v-if="message.metadata?.approval_status === 'pre_approved'" class="approval-confirmed approval-pre-approved">
+            <div class="approval-header">
+              <i class="fas fa-shield-check text-blue-600"></i>
+              <span class="font-semibold">Auto-Approved</span>
+            </div>
+            <div class="approval-details">
+              <div class="approval-detail-item">
+                <span class="detail-label">Command:</span>
+                <code class="detail-value">{{ message.metadata.command }}</code>
+              </div>
+              <div v-if="message.metadata.approval_comment" class="approval-detail-item">
+                <span class="detail-label">Reason:</span>
+                <span class="detail-value">{{ message.metadata.approval_comment }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- USER APPROVED STATE - Show green confirmation -->
+          <div v-else-if="message.metadata?.approval_status === 'approved'" class="approval-confirmed approval-approved">
+            <div class="approval-header">
+              <i class="fas fa-check-circle text-green-600"></i>
+              <span class="font-semibold">Command Approved</span>
+            </div>
+            <div class="approval-details">
+              <div class="approval-detail-item">
+                <span class="detail-label">Command:</span>
+                <code class="detail-value">{{ message.metadata.command }}</code>
+              </div>
+              <div v-if="message.metadata.approval_comment" class="approval-detail-item">
+                <span class="detail-label">Comment:</span>
+                <span class="detail-value">{{ message.metadata.approval_comment }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- DENIED STATE - Show red rejection -->
+          <div v-else-if="message.metadata?.approval_status === 'denied'" class="approval-confirmed approval-denied">
+            <div class="approval-header">
+              <i class="fas fa-times-circle text-red-600"></i>
+              <span class="font-semibold">Command Denied</span>
+            </div>
+            <div class="approval-details">
+              <div class="approval-detail-item">
+                <span class="detail-label">Command:</span>
+                <code class="detail-value">{{ message.metadata.command }}</code>
+              </div>
+              <div v-if="message.metadata.approval_comment" class="approval-detail-item">
+                <span class="detail-label">Reason:</span>
+                <span class="detail-value">{{ message.metadata.approval_comment }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- PENDING APPROVAL STATE - Show approval buttons -->
+          <div v-else-if="message.metadata?.requires_approval" class="approval-request">
             <div class="approval-header">
               <i class="fas fa-exclamation-triangle text-yellow-600"></i>
               <span class="font-semibold">Command Approval Required</span>
@@ -154,19 +209,75 @@
                 <span class="detail-value">{{ message.metadata.reasons.join(', ') }}</span>
               </div>
             </div>
+            <!-- Comment input (when adding comment) -->
+            <div v-if="showCommentInput && activeCommentSessionId === message.metadata.terminal_session_id" class="comment-input-section">
+              <textarea
+                v-model="approvalComment"
+                class="comment-textarea"
+                placeholder="Add a comment or reason for this decision..."
+                rows="2"
+                @keydown.ctrl.enter="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
+                @keydown.meta.enter="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
+              ></textarea>
+              <div class="comment-actions">
+                <button
+                  @click="cancelComment"
+                  class="cancel-comment-btn"
+                >
+                  <i class="fas fa-times"></i>
+                  <span>Cancel</span>
+                </button>
+                <button
+                  @click="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
+                  class="submit-comment-btn"
+                  :disabled="!approvalComment.trim()"
+                >
+                  <i class="fas fa-check"></i>
+                  <span>Submit {{ pendingApprovalDecision ? 'Approval' : 'Denial' }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Auto-approve checkbox for future similar commands -->
+            <div class="auto-approve-section">
+              <label class="auto-approve-checkbox">
+                <input
+                  type="checkbox"
+                  v-model="autoApproveFuture"
+                  class="checkbox-input"
+                />
+                <span class="checkbox-label">
+                  <i class="fas fa-shield-check"></i>
+                  Automatically approve similar commands in the future
+                </span>
+              </label>
+              <div v-if="autoApproveFuture" class="auto-approve-hint">
+                <i class="fas fa-info-circle"></i>
+                <span>Commands with the same pattern and risk level will be auto-approved</span>
+              </div>
+            </div>
+
             <div class="approval-actions">
               <button
                 @click="approveCommand(message.metadata.terminal_session_id, true)"
                 class="approve-btn"
-                :disabled="processingApproval"
+                :disabled="processingApproval || showCommentInput"
               >
                 <i class="fas fa-check"></i>
                 <span>Approve</span>
               </button>
               <button
+                @click="promptForComment(message.metadata.terminal_session_id)"
+                class="comment-btn"
+                :disabled="processingApproval || showCommentInput"
+              >
+                <i class="fas fa-comment"></i>
+                <span>Comment</span>
+              </button>
+              <button
                 @click="approveCommand(message.metadata.terminal_session_id, false)"
                 class="deny-btn"
-                :disabled="processingApproval"
+                :disabled="processingApproval || showCommentInput"
               >
                 <i class="fas fa-times"></i>
                 <span>Deny</span>
@@ -300,6 +411,15 @@ const estimatedResponseTime = ref<number | null>(null)
 
 // Approval state
 const processingApproval = ref(false)
+
+// Comment functionality state
+const showCommentInput = ref(false)
+const activeCommentSessionId = ref<string | null>(null)
+const approvalComment = ref('')
+const pendingApprovalDecision = ref<boolean | null>(null)
+
+// Auto-approve functionality state
+const autoApproveFuture = ref(false)
 
 // Computed
 const filteredMessages = computed(() => {
@@ -582,7 +702,7 @@ const detectToolCalls = (message: ChatMessage) => {
 }
 
 // Command Approval - Use HTTP POST to agent-terminal API
-const approveCommand = async (terminal_session_id: string, approved: boolean) => {
+const approveCommand = async (terminal_session_id: string, approved: boolean, comment?: string) => {
   if (!terminal_session_id) {
     console.error('No terminal_session_id provided for approval')
     return
@@ -590,6 +710,12 @@ const approveCommand = async (terminal_session_id: string, approved: boolean) =>
 
   processingApproval.value = true
   console.log(`${approved ? 'Approving' : 'Denying'} command for session:`, terminal_session_id)
+  if (comment) {
+    console.log('With comment:', comment)
+  }
+  if (autoApproveFuture.value) {
+    console.log('Auto-approve similar commands in future:', autoApproveFuture.value)
+  }
 
   try {
     // Use HTTP POST to agent-terminal approval endpoint
@@ -602,7 +728,9 @@ const approveCommand = async (terminal_session_id: string, approved: boolean) =>
       },
       body: JSON.stringify({
         approved,
-        user_id: 'web_user'
+        user_id: 'web_user',
+        comment: comment || null,
+        auto_approve_future: autoApproveFuture.value  // Send auto-approve preference
       })
     })
 
@@ -611,6 +739,8 @@ const approveCommand = async (terminal_session_id: string, approved: boolean) =>
 
     if (result.status === 'approved' || result.status === 'denied') {
       console.log(`Command ${approved ? 'approved' : 'denied'} successfully`)
+      // Reset auto-approve checkbox after submission
+      autoApproveFuture.value = false
     } else if (result.status === 'error') {
       console.error('Approval error:', result.error)
     }
@@ -630,6 +760,42 @@ const getRiskClass = (riskLevel: string): string => {
     'DANGEROUS': 'text-red-600'
   }
   return riskClasses[riskLevel] || 'text-gray-600'
+}
+
+// Comment functionality methods
+const promptForComment = (sessionId: string) => {
+  showCommentInput.value = true
+  activeCommentSessionId.value = sessionId
+  approvalComment.value = ''
+  pendingApprovalDecision.value = null
+}
+
+const submitApprovalWithComment = async (sessionId: string, approved: boolean | null) => {
+  if (!approvalComment.value.trim()) {
+    console.warn('Cannot submit approval with empty comment')
+    return
+  }
+
+  // Determine approval decision
+  const finalDecision = approved !== null ? approved : pendingApprovalDecision.value
+
+  if (finalDecision === null) {
+    console.error('No approval decision provided')
+    return
+  }
+
+  // Call existing approveCommand with comment
+  await approveCommand(sessionId, finalDecision, approvalComment.value)
+
+  // Reset state
+  cancelComment()
+}
+
+const cancelComment = () => {
+  showCommentInput.value = false
+  activeCommentSessionId.value = null
+  approvalComment.value = ''
+  pendingApprovalDecision.value = null
 }
 
 const scrollToBottom = () => {
@@ -1029,6 +1195,33 @@ onMounted(() => {
   @apply mt-3 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg;
 }
 
+/* Pre-approved State - Blue theme (auto-approved by security policy) */
+.approval-confirmed.approval-pre-approved {
+  @apply mt-3 p-4 bg-blue-50 border-2 border-blue-300 rounded-lg;
+}
+
+.approval-confirmed.approval-pre-approved .approval-header {
+  @apply flex items-center gap-2 mb-3 text-blue-900 font-semibold;
+}
+
+/* User Approved State - Green theme (manually approved by user) */
+.approval-confirmed.approval-approved {
+  @apply mt-3 p-4 bg-green-50 border-2 border-green-300 rounded-lg;
+}
+
+.approval-confirmed.approval-approved .approval-header {
+  @apply flex items-center gap-2 mb-3 text-green-900 font-semibold;
+}
+
+/* Denied State - Red theme (manually denied by user) */
+.approval-confirmed.approval-denied {
+  @apply mt-3 p-4 bg-red-50 border-2 border-red-300 rounded-lg;
+}
+
+.approval-confirmed.approval-denied .approval-header {
+  @apply flex items-center gap-2 mb-3 text-red-900 font-semibold;
+}
+
 .approval-header {
   @apply flex items-center gap-2 mb-3 text-yellow-900 font-semibold;
 }
@@ -1112,5 +1305,59 @@ onMounted(() => {
   .deny-btn {
     @apply w-full justify-center;
   }
+}
+
+/* Comment Input Section Styles */
+.comment-input-section {
+  @apply mt-3 mb-3 p-3 bg-white border border-gray-300 rounded-lg;
+}
+
+.comment-textarea {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500;
+}
+
+.comment-actions {
+  @apply flex gap-2 mt-2;
+}
+
+.cancel-comment-btn {
+  @apply flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-gray-300 text-gray-700 hover:bg-gray-400 transition-all;
+}
+
+.submit-comment-btn {
+  @apply flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all;
+}
+
+.comment-btn {
+  @apply flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-yellow-600 text-white hover:bg-yellow-700 active:bg-yellow-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all;
+}
+
+/* Auto-approve checkbox section */
+.auto-approve-section {
+  @apply mt-3 mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg;
+}
+
+.auto-approve-checkbox {
+  @apply flex items-center gap-2 cursor-pointer;
+}
+
+.checkbox-input {
+  @apply w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer;
+}
+
+.checkbox-label {
+  @apply flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer select-none;
+}
+
+.checkbox-label i {
+  @apply text-blue-600;
+}
+
+.auto-approve-hint {
+  @apply mt-2 pl-6 flex items-start gap-2 text-xs text-blue-700;
+}
+
+.auto-approve-hint i {
+  @apply mt-0.5;
 }
 </style>

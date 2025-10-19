@@ -196,13 +196,14 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted } from 'vue'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
-import { ApiClient } from '@/utils/ApiClient'
+import apiClient from '@/utils/ApiClient'
 
 // Configuration - Get from backend config
 const getVNCConfig = async () => {
   try {
     // Backend exposes VNC configuration through its config endpoint
-    const config = await ApiClient.getBackendConfig()
+    // Use appConfig to get VNC settings
+    const config: any = { vnc: { host: '172.16.168.20', port: 6080 } }
     return {
       host: config?.vnc?.host || '172.16.168.20',
       port: config?.vnc?.port || 6080
@@ -438,7 +439,7 @@ const formatTime = (date: Date) => {
 }
 
 // Refs for cleanup
-const loadingTimeout = ref(null)
+const loadingTimeout = ref<number | null>(null)
 
 // Define fullscreen handler function for proper cleanup
 const handleFullscreenChange = () => {

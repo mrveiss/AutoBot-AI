@@ -717,8 +717,8 @@ export default {
           autoconnect: true,
           resize: 'remote',
           reconnect: true,
-          quality: 9,
-          compression: 9
+          quality: '9',
+          compression: '9'
         });
         vncUrl.value = dynamicVncUrl;
         console.log('Playwright VNC URL loaded from configuration:', dynamicVncUrl);
