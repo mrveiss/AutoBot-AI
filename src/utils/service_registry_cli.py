@@ -20,8 +20,9 @@ import sys
 import time
 from typing import Any, Dict
 
-from .service_registry import ServiceStatus, get_service_registry, get_service_url
 from src.constants.network_constants import NetworkConstants
+
+from .service_registry import ServiceStatus, get_service_registry, get_service_url
 
 
 def print_header(title: str):

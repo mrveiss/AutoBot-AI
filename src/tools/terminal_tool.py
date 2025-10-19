@@ -13,6 +13,7 @@ Security Integration:
 
 import logging
 from typing import Any, Dict, Optional
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -256,6 +257,7 @@ class TerminalTool:
         try:
             # Import httpx for API call
             import httpx
+
             from src.constants.network_constants import NetworkConstants
 
             # Get user's terminal session ID from conversation

@@ -2,15 +2,16 @@
 Simple synchronous PTY implementation that works reliably
 """
 
+import logging
 import os
 import pty
-import select
-import subprocess
-import signal
-import threading
 import queue
-import logging
-from typing import Optional, Callable
+import select
+import signal
+import subprocess
+import threading
+from typing import Callable, Optional
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -158,7 +159,9 @@ class SimplePTY:
             return False
 
         try:
-            import struct, fcntl, termios
+            import fcntl
+            import struct
+            import termios
 
             winsize = struct.pack("HHHH", rows, cols, 0, 0)
             fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, winsize)

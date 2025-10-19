@@ -7,9 +7,11 @@ Implements LRU eviction and adaptive cleanup to prevent 50MB/hour memory growth
 import asyncio
 import gc
 import logging
-import psutil
 from collections import OrderedDict
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
+import psutil
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

@@ -9,26 +9,27 @@ import base64
 import io
 import logging
 import time
-from typing import List, Optional, Dict, Any, Union
 import uuid
-import numpy as np
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, File, UploadFile, HTTPException, Form, Depends
+import numpy as np
+import torch
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-import torch
+
+from src.ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
 
 # Import AutoBot multi-modal components
 from src.constants.network_constants import NetworkConstants
-from src.unified_multimodal_processor import (
-    unified_processor,
-    MultiModalInput,
-    ModalityType,
-    ProcessingIntent,
-)
-from src.ai_hardware_accelerator import accelerated_embedding_generation, HardwareDevice
 from src.npu_semantic_search import get_npu_search_engine
+from src.unified_multimodal_processor import (
+    ModalityType,
+    MultiModalInput,
+    ProcessingIntent,
+    unified_processor,
+)
 
 logger = logging.getLogger(__name__)
 

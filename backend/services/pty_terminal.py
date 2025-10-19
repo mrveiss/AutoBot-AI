@@ -13,7 +13,8 @@ import signal
 import subprocess
 import threading
 import time
-from typing import Dict, Optional, Callable
+from typing import Callable, Dict, Optional
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -162,7 +163,9 @@ class PTYTerminal:
             return False
 
         try:
-            import struct, fcntl, termios
+            import fcntl
+            import struct
+            import termios
 
             # Set window size
             winsize = struct.pack("HHHH", rows, cols, 0, 0)

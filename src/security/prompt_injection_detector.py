@@ -10,11 +10,12 @@ This module provides comprehensive prompt injection detection for:
 - Shell metacharacter detection
 """
 
-import re
 import logging
-from typing import List, Tuple, Dict, Any
-from enum import Enum
+import re
 from dataclasses import dataclass
+from enum import Enum
+from typing import Any, Dict, List, Tuple
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

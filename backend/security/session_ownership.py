@@ -12,8 +12,10 @@ FEATURE FLAG SUPPORT:
 """
 
 import logging
-from typing import Optional, Dict
-from fastapi import Request, HTTPException
+from typing import Dict, Optional
+
+from fastapi import HTTPException, Request
+
 from src.auth_middleware import auth_middleware
 from src.constants.network_constants import NetworkConstants
 
@@ -318,9 +320,9 @@ async def validate_session_ownership(session_id: str, request: Request) -> Dict:
     Raises:
         HTTPException: 401 if not authenticated, 403 if not authorized (ENFORCED mode)
     """
-    from backend.utils.async_redis_manager import get_redis_manager
-    from backend.services.feature_flags import get_feature_flags
     from backend.services.access_control_metrics import get_metrics_service
+    from backend.services.feature_flags import get_feature_flags
+    from backend.utils.async_redis_manager import get_redis_manager
 
     # Get Redis connection
     redis_manager = await get_redis_manager()

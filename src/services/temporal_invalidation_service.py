@@ -12,12 +12,12 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.constants.network_constants import NetworkConstants
 from src.models.atomic_fact import AtomicFact, FactType, TemporalType
 from src.services.fact_extraction_service import FactExtractionService
 from src.unified_config_manager import config_manager
 from src.utils.logging_manager import get_llm_logger
 from src.utils.redis_client import get_redis_client
-from src.constants.network_constants import NetworkConstants
 
 logger = get_llm_logger("temporal_invalidation")
 

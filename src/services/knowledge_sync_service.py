@@ -13,18 +13,19 @@ Features:
 
 import asyncio
 import json
-import time
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
-from dataclasses import asdict
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse
 import logging
+import time
+from dataclasses import asdict
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 
-from src.knowledge_sync_incremental import IncrementalKnowledgeSync, SyncMetrics
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi.responses import JSONResponse
+
 from src.advanced_rag_optimizer import get_rag_optimizer
-from src.utils.logging_manager import get_llm_logger
 from src.constants.network_constants import NetworkConstants
+from src.knowledge_sync_incremental import IncrementalKnowledgeSync, SyncMetrics
+from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("knowledge_sync_service")
 

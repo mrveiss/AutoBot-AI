@@ -15,13 +15,14 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
-# Import existing components
-from src.constants.network_constants import NetworkConstants
 from backend.api.workflow_automation import (
     AutomationMode,
     WorkflowAutomationManager,
     WorkflowStep,
 )
+
+# Import existing components
+from src.constants.network_constants import NetworkConstants
 from src.enhanced_orchestrator import EnhancedOrchestrator
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface

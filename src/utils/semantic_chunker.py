@@ -7,6 +7,7 @@ segmentation.
 """
 
 import os
+
 from src.constants.network_constants import NetworkConstants
 
 # CRITICAL FIX: Force tf-keras usage before importing transformers/sentence-transformers
@@ -94,9 +95,10 @@ class AutoBotSemanticChunker:
             # Run model loading in thread pool to avoid blocking event loop
             def load_model():
                 # Import only when needed to avoid startup delay
-                from sentence_transformers import SentenceTransformer
-                import torch
                 import time
+
+                import torch
+                from sentence_transformers import SentenceTransformer
 
                 # Detect best available device
                 device = "cpu"  # Default fallback
@@ -236,8 +238,8 @@ class AutoBotSemanticChunker:
             )
             # Fallback to a more basic model with safer loading
             try:
-                from sentence_transformers import SentenceTransformer
                 import torch
+                from sentence_transformers import SentenceTransformer
 
                 # Use CPU only for fallback to avoid device/tensor issues
                 logger.info(
@@ -263,8 +265,8 @@ class AutoBotSemanticChunker:
 
         try:
             # Import only when needed to avoid startup delay
-            from sentence_transformers import SentenceTransformer
             import torch
+            from sentence_transformers import SentenceTransformer
 
             # Detect best available device
             device = "cpu"  # Default fallback
@@ -323,8 +325,8 @@ class AutoBotSemanticChunker:
             )
             # Fallback to a more basic model
             try:
-                from sentence_transformers import SentenceTransformer
                 import torch
+                from sentence_transformers import SentenceTransformer
 
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 # Load model without specifying device to avoid meta tensor issues
@@ -409,8 +411,9 @@ class AutoBotSemanticChunker:
         """
         import asyncio
         import concurrent.futures
-        import psutil
         import os
+
+        import psutil
 
         # Ensure model is loaded before use
         await self._initialize_model()

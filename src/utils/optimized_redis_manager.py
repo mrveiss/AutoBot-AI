@@ -4,11 +4,13 @@ Addresses connection leaks and provides proper resource management
 Identified by performance agent analysis for stable Redis performance
 """
 
-import redis
-import logging
 import asyncio
-from typing import Dict, Optional
+import logging
 from contextlib import asynccontextmanager
+from typing import Dict, Optional
+
+import redis
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

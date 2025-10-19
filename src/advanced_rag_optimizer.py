@@ -14,18 +14,19 @@ Features:
 
 import asyncio
 import json
-import time
-import numpy as np
-from typing import Dict, List, Optional, Tuple, Any, Set
-from dataclasses import dataclass, field
-from collections import defaultdict
-import re
 import math
+import re
+import time
+from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-from src.knowledge_base import KnowledgeBase
-from src.utils.semantic_chunker_gpu_optimized import get_optimized_semantic_chunker
-from src.utils.logging_manager import get_llm_logger
+import numpy as np
+
 from src.constants.network_constants import NetworkConstants
+from src.knowledge_base import KnowledgeBase
+from src.utils.logging_manager import get_llm_logger
+from src.utils.semantic_chunker_gpu_optimized import get_optimized_semantic_chunker
 
 logger = get_llm_logger("advanced_rag_optimizer")
 

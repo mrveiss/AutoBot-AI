@@ -17,7 +17,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from backend.utils.async_redis_manager import get_redis_manager
 from src.constants.network_constants import NetworkConstants

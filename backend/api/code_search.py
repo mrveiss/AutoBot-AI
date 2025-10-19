@@ -14,12 +14,12 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.constants.network_constants import NetworkConstants
 from src.agents.npu_code_search_agent import (
-    index_project,
     get_npu_code_search,
+    index_project,
     search_codebase,
 )
+from src.constants.network_constants import NetworkConstants
 from src.utils.redis_client import get_redis_client
 
 router = APIRouter()

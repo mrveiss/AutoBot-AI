@@ -12,12 +12,14 @@ from typing import Any, Callable, Dict, List, Optional
 
 from src.constants.network_constants import NetworkConstants
 from src.enhanced_memory_manager_async import (
-    AsyncEnhancedMemoryManager,
-    get_async_enhanced_memory_manager,
-    ExecutionRecord,
     Priority,  # Import Priority for backward compatibility
+)
+from src.enhanced_memory_manager_async import (
+    AsyncEnhancedMemoryManager,
+    ExecutionRecord,
     TaskPriority,
     TaskStatus,
+    get_async_enhanced_memory_manager,
 )
 
 logger = logging.getLogger(__name__)

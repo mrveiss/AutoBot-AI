@@ -15,12 +15,12 @@ Endpoints:
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from backend.services.audit_logger import get_audit_logger, AuditEntry, AuditResult
+from backend.services.audit_logger import AuditEntry, AuditResult, get_audit_logger
 from src.auth_middleware import auth_middleware
 from src.constants.network_constants import NetworkConstants
 

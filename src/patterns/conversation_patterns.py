@@ -6,8 +6,9 @@ the application for consistent pattern recognition.
 """
 
 import re
-from typing import Dict, List, Pattern
 from enum import Enum
+from typing import Dict, List, Pattern
+
 from src.constants.network_constants import NetworkConstants
 
 

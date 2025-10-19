@@ -7,8 +7,9 @@ Defines the 3 main categories for AutoBot's knowledge base:
 3. User Knowledge - User-provided documents and reference materials
 """
 
-from typing import Dict, List
 from enum import Enum
+from typing import Dict, List
+
 from src.constants.network_constants import NetworkConstants
 
 

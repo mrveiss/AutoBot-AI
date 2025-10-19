@@ -23,7 +23,7 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, AsyncGenerator
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 import aiofiles
 import aioredis
@@ -39,8 +39,8 @@ from pypdf import PdfReader
 from redisvl.schema import IndexSchema
 
 from src.circuit_breaker import circuit_breaker_async
-from src.unified_config import config
 from src.constants.network_constants import NetworkConstants
+from src.unified_config import config
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,7 @@ class KnowledgeBaseV2:
     async def _init_redis_connections(self):
         """Initialize Redis connections using standardized pool manager"""
         try:
-            from src.redis_pool_manager import get_redis_sync, get_redis_async
+            from src.redis_pool_manager import get_redis_async, get_redis_sync
 
             # Get sync Redis client for binary operations (needed for vector store)
             # Note: We need a special non-decode client for binary vector operations

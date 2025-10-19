@@ -5,8 +5,9 @@ This module configures Celery for asynchronous Ansible playbook execution
 with real-time event streaming and task routing.
 """
 
-from celery import Celery
 import os
+
+from celery import Celery
 
 # Configure Celery with Redis broker and result backend
 celery_app = Celery(

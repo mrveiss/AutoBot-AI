@@ -5,12 +5,13 @@ System Validation API endpoints for AutoBot optimization suite
 
 import asyncio
 import logging
-from typing import Dict, Any, List
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
-from src.utils.system_validator import get_system_validator
 from src.constants.network_constants import NetworkConstants
+from src.utils.system_validator import get_system_validator
 
 logger = logging.getLogger(__name__)
 

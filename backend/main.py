@@ -11,9 +11,10 @@ the best features from all previous implementations:
 - Production-ready configuration
 """
 
+import logging
 import os
 import sys
-import logging
+
 from backend.app_factory import create_app
 
 # Configure logging for main entry point

@@ -1,51 +1,52 @@
-import os
-import logging
+import asyncio
 import inspect
-from typing import Optional, List, Dict, Any, Union
+import json
+import logging
+import os
+import sys
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-import json
-from contextlib import asynccontextmanager
+from typing import Any, Dict, List, Optional, Union
+
 import redis
-import asyncio
-import sys
 
 # Add the project root to Python path for absolute imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
-from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
+from contextlib import asynccontextmanager
+
+import uvicorn
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
-from contextlib import asynccontextmanager
-import uvicorn
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
-from backend.dependencies import get_config, get_knowledge_base
-
-from src.unified_config_manager import UnifiedConfigManager
-from backend.knowledge_factory import get_or_create_knowledge_base
-from src.chat_workflow_manager import ChatWorkflowManager
-from src.chat_history_manager import ChatHistoryManager
-from src.utils.background_llm_sync import BackgroundLLMSync
+from backend.api.agent import router as agent_router
+from backend.api.agent_config import router as agent_config_router
 
 # Import API routers
 from backend.api.chat import router as chat_router
-from backend.api.system import router as system_router
-from backend.api.settings import router as settings_router
-from backend.api.prompts import router as prompts_router
+from backend.api.developer import router as developer_router
+from backend.api.files import router as files_router
+from backend.api.frontend_config import router as frontend_config_router
+from backend.api.intelligent_agent import router as intelligent_agent_router
 from backend.api.knowledge import router as knowledge_router
 from backend.api.llm import router as llm_router
-from backend.api.redis import router as redis_router
-from backend.api.voice import router as voice_router
-from backend.api.agent import router as agent_router
-from backend.api.agent_config import router as agent_config_router
-from backend.api.intelligent_agent import router as intelligent_agent_router
-from backend.api.files import router as files_router
-from backend.api.developer import router as developer_router
-from backend.api.frontend_config import router as frontend_config_router
 from backend.api.memory import router as memory_router
+from backend.api.prompts import router as prompts_router
+from backend.api.redis import router as redis_router
+from backend.api.settings import router as settings_router
+from backend.api.system import router as system_router
+from backend.api.voice import router as voice_router
+from backend.dependencies import get_config, get_knowledge_base
+from backend.knowledge_factory import get_or_create_knowledge_base
+from src.chat_history_manager import ChatHistoryManager
+from src.chat_workflow_manager import ChatWorkflowManager
+from src.unified_config_manager import UnifiedConfigManager
+from src.utils.background_llm_sync import BackgroundLLMSync
 
 # Enhanced routers with optional imports
 optional_routers = []
@@ -983,6 +984,7 @@ class AppFactory:
         # Service authentication middleware - ENFORCEMENT MODE (Week 3 Phase 3)
         try:
             from starlette.middleware.base import BaseHTTPMiddleware
+
             from backend.middleware.service_auth_enforcement import (
                 enforce_service_auth,
                 log_enforcement_status,

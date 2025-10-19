@@ -10,7 +10,7 @@ import logging
 import os
 import re
 import time
-from collections import defaultdict, Counter
+from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -20,8 +20,8 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.utils.distributed_service_discovery import get_redis_connection_params_sync
 from src.constants.network_constants import NetworkConstants
+from src.utils.distributed_service_discovery import get_redis_connection_params_sync
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/codebase", tags=["codebase-analytics"])

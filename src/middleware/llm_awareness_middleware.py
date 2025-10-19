@@ -13,8 +13,8 @@ from typing import Any, Dict, Optional
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from src.llm_self_awareness import get_llm_self_awareness
 from src.constants.network_constants import NetworkConstants
+from src.llm_self_awareness import get_llm_self_awareness
 
 logger = logging.getLogger(__name__)
 

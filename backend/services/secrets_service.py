@@ -15,8 +15,8 @@ from uuid import uuid4
 import aiofiles
 from cryptography.fernet import Fernet
 
-from src.unified_config_manager import config_manager
 from src.constants.network_constants import NetworkConstants
+from src.unified_config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ class SecretsService:
         """Initialize the secrets service with encryption"""
         if db_path is None:
             # Use centralized path management for default path
-            from backend.utils.paths_manager import get_data_path, ensure_data_directory
+            from backend.utils.paths_manager import ensure_data_directory, get_data_path
 
             ensure_data_directory()
             db_path = str(get_data_path("secrets.db"))

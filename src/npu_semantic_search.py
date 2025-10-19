@@ -9,24 +9,26 @@ import json
 import logging
 import time
 import uuid
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple, Union
-import numpy as np
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import aiohttp
+import numpy as np
+
+from src.ai_hardware_accelerator import (
+    HardwareDevice,
+    ProcessingTask,
+    TaskComplexity,
+    accelerated_embedding_generation,
+    get_ai_accelerator,
+)
 
 # Import existing AutoBot components
 from src.constants.network_constants import NetworkConstants
-from src.ai_hardware_accelerator import (
-    get_ai_accelerator,
-    HardwareDevice,
-    TaskComplexity,
-    ProcessingTask,
-    accelerated_embedding_generation,
-)
 from src.knowledge_base import KnowledgeBase
-from src.utils.logging_manager import get_llm_logger
 from src.unified_config_manager import cfg
+from src.utils.logging_manager import get_llm_logger
 
 # Import ChromaDB for multi-modal vector storage
 try:

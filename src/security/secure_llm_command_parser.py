@@ -7,13 +7,13 @@ by validating LLM responses before extracting executable commands.
 """
 
 import logging
-from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 from src.constants.network_constants import NetworkConstants
 from src.security.prompt_injection_detector import (
-    PromptInjectionDetector,
     InjectionRisk,
+    PromptInjectionDetector,
     get_prompt_injection_detector,
 )
 from src.utils.command_validator import CommandValidator

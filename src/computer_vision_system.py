@@ -15,13 +15,13 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from src.constants.network_constants import NetworkConstants
 from src.desktop_streaming_manager import desktop_streaming
 from src.enhanced_memory_manager import EnhancedMemoryManager, TaskPriority
 
 # Import correct classes for multimodal processing
 from src.multimodal_processor import ModalInput, multimodal_processor
 from src.task_execution_tracker import task_tracker
-from src.constants.network_constants import NetworkConstants
 from src.unified_multimodal_processor import (
     ModalityType,
     MultiModalInput,

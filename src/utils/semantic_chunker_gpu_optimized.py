@@ -11,6 +11,7 @@ Optimizations implemented:
 """
 
 import os
+
 from src.constants.network_constants import NetworkConstants
 
 # CRITICAL FIX: Force tf-keras usage before importing transformers/sentence-transformers
@@ -27,14 +28,15 @@ os.environ["TRANSFORMERS_OFFLINE"] = "0"
 os.environ["HF_HUB_CACHE"] = os.path.expanduser("~/.cache/huggingface")
 os.environ["HUGGINGFACE_HUB_CACHE"] = os.path.expanduser("~/.cache/huggingface")
 
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
-import numpy as np
 import asyncio
 import concurrent.futures
-import psutil
-import time
 import threading
+import time
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+import psutil
 
 # Import centralized logging
 from src.utils.logging_manager import get_llm_logger
@@ -214,8 +216,8 @@ class OptimizedGPUSemanticChunker:
             except Exception as e:
                 logger.error(f"Failed to load optimized model: {e}")
                 # Fallback to basic model
-                from sentence_transformers import SentenceTransformer
                 import torch
+                from sentence_transformers import SentenceTransformer
 
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 self._embedding_model = SentenceTransformer(

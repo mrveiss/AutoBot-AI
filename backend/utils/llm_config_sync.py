@@ -13,7 +13,7 @@ This runs as part of the system startup to ensure configuration consistency.
 
 import asyncio
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 # Import network constants
 from src.constants.network_constants import NetworkConstants
@@ -33,8 +33,8 @@ class LLMConfigurationSynchronizer:
             Dict containing the synchronization result
         """
         try:
-            from src.unified_config_manager import config as global_config_manager
             from backend.api.agent_config import DEFAULT_AGENT_CONFIGS
+            from src.unified_config_manager import config as global_config_manager
 
             logger.info("Starting LLM configuration synchronization...")
 

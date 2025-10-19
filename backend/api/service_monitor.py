@@ -8,8 +8,8 @@ import logging
 import os
 import subprocess
 import time
-from typing import Dict, List, Optional, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 import redis
 from fastapi import APIRouter, HTTPException

@@ -14,8 +14,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from backend.utils.connection_utils import ConnectionTester
 from backend.services.config_service import ConfigService
+from backend.utils.connection_utils import ConnectionTester
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

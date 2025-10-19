@@ -16,10 +16,11 @@ Examples include:
 
 import asyncio
 import logging
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
-import sys
+
 from src.constants.network_constants import NetworkConstants
 
 # Add AutoBot paths
@@ -27,13 +28,13 @@ sys.path.append("/home/kali/Desktop/AutoBot")
 
 from .long_running_operations_framework import (
     LongRunningOperationManager,
-    OperationType,
-    OperationPriority,
     OperationExecutionContext,
+    OperationPriority,
+    OperationType,
 )
 from .operation_timeout_integration import (
-    operation_integration_manager,
     long_running_operation,
+    operation_integration_manager,
 )
 
 logger = logging.getLogger(__name__)
@@ -218,8 +219,8 @@ class ExistingOperationMigrator:
                 start_index = 0
 
             # Run tests with proper resource management
-            import subprocess
             import concurrent.futures
+            import subprocess
 
             # Limit concurrent test execution
             max_concurrent = min(4, len(test_files))

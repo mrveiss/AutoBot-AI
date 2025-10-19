@@ -4,13 +4,15 @@ Uses heartbeat and event-driven patterns instead of arbitrary timeouts
 """
 
 import asyncio
+import json
 import logging
 import time
-import json
-from typing import Dict, Any, Optional, Callable, Set
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Callable, Dict, Optional, Set
+
 from fastapi import WebSocket, WebSocketDisconnect
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

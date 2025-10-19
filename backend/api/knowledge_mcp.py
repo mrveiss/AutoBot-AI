@@ -7,15 +7,16 @@ Integrates with LangChain, LlamaIndex, and Redis Vector Store
 import asyncio
 import json
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from src.constants.network_constants import NetworkConstants
 from src.knowledge_base import KnowledgeBase
 from src.langchain_agent_orchestrator import LangChainAgentOrchestrator
-from src.utils.redis_database_manager import RedisDatabaseManager, RedisDatabase
 from src.unified_config_manager import config as global_config_manager
-from src.constants.network_constants import NetworkConstants
+from src.utils.redis_database_manager import RedisDatabase, RedisDatabaseManager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])

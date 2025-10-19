@@ -12,8 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from src.enhanced_memory_manager import EnhancedMemoryManager
 from src.constants.network_constants import NetworkConstants
+from src.enhanced_memory_manager import EnhancedMemoryManager
 
 logger = logging.getLogger(__name__)
 

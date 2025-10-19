@@ -8,16 +8,17 @@ import asyncio
 import json
 import logging
 import time
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Body
+from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel, Field
 
-# Import NPU semantic search components
-from src.npu_semantic_search import get_npu_search_engine, SearchResult, SearchMetrics
 from src.ai_hardware_accelerator import HardwareDevice
-from src.utils.logging_manager import get_llm_logger
 from src.constants.network_constants import NetworkConstants
+
+# Import NPU semantic search components
+from src.npu_semantic_search import SearchMetrics, SearchResult, get_npu_search_engine
+from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("enhanced_search_api")
 

@@ -6,19 +6,19 @@ Manages all async services with proper lifecycle and dependency resolution
 
 import asyncio
 import logging
-from contextlib import asynccontextmanager
-from typing import Dict, Any, Optional, TypeVar, Type, Callable, AsyncGenerator
-from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
+from typing import Any, AsyncGenerator, Callable, Dict, Optional, Type, TypeVar
 
+from src.constants.network_constants import NetworkConstants
+from src.llm_interface import LLMInterface, LLMSettings, get_llm_interface
+from src.unified_config_manager import UnifiedConfigManager, unified_config_manager
 from src.utils.async_redis_manager import (
     AsyncRedisManager,
     async_redis_manager,
     initialize_default_redis,
 )
-from src.llm_interface import LLMInterface, LLMSettings, get_llm_interface
-from src.unified_config_manager import UnifiedConfigManager, unified_config_manager
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

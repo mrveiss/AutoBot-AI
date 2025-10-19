@@ -7,15 +7,16 @@ import hashlib
 import json
 import logging
 import shutil
-import yaml
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+import yaml
+
 from src.agents.system_knowledge_manager import SystemKnowledgeManager
-from src.intelligence.os_detector import get_os_detector, OSType, LinuxDistro
-from src.knowledge_base import KnowledgeBase
 from src.constants.network_constants import NetworkConstants
+from src.intelligence.os_detector import LinuxDistro, OSType, get_os_detector
+from src.knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 

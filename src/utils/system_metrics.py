@@ -6,18 +6,18 @@ Provides real-time metrics for AutoBot system components.
 import asyncio
 import json
 import logging
-import psutil
 import time
+from collections import deque
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, asdict
-from collections import deque
 
 import aiohttp
+import psutil
 
 from src.config_helper import cfg
-from src.utils.redis_database_manager import get_redis_client
 from src.constants.network_constants import NetworkConstants
+from src.utils.redis_database_manager import get_redis_client
 
 
 @dataclass

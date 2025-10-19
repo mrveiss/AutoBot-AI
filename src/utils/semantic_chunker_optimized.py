@@ -9,6 +9,7 @@ High-performance semantic chunking implementation optimized for:
 """
 
 import os
+
 from src.constants.network_constants import NetworkConstants
 
 # CRITICAL FIX: Force tf-keras usage before importing transformers/sentence-transformers
@@ -23,12 +24,12 @@ os.environ["HUGGINGFACE_HUB_CACHE"] = os.path.expanduser("~/.cache/huggingface")
 
 import asyncio
 import logging
+import threading
 import time
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-from concurrent.futures import ThreadPoolExecutor
-import threading
 
 import numpy as np
 
@@ -133,8 +134,8 @@ class GPUOptimizedSemanticChunker:
 
                 def load_optimized_model():
                     """Load model with maximum GPU optimization."""
-                    from sentence_transformers import SentenceTransformer
                     import torch
+                    from sentence_transformers import SentenceTransformer
 
                     # Detect optimal device
                     if torch.cuda.is_available():

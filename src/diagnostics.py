@@ -9,18 +9,20 @@ import json
 import logging
 import os
 import platform
-import psutil
 import subprocess
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+import psutil
+
 from src.constants.network_constants import NetworkConstants
 
 try:
-    from src.unified_config_manager import config as global_config_manager
     from src.event_manager import event_manager
+    from src.unified_config_manager import config as global_config_manager
     from src.utils.redis_client import get_redis_client
 except ImportError as e:
     logging.warning(f"Import error in diagnostics: {e}")

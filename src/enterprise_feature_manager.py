@@ -9,9 +9,10 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
-from enum import Enum
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

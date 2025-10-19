@@ -5,15 +5,16 @@ This module provides a unified way to load, format, and manage all prompts
 across the AutoBot application, eliminating hardcoded prompts in Python code.
 """
 
+import hashlib
+import json
 import logging
 import re
-import json
-import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from jinja2 import Environment, FileSystemLoader, Template
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -390,8 +391,8 @@ class PromptManager:
         """Load cached prompt file states from Redis"""
         try:
             from src.utils.redis_database_manager import (
-                RedisDatabaseManager,
                 RedisDatabase,
+                RedisDatabaseManager,
             )
 
             db_manager = RedisDatabaseManager()
@@ -416,8 +417,8 @@ class PromptManager:
         """Update the cached prompt file states in Redis"""
         try:
             from src.utils.redis_database_manager import (
-                RedisDatabaseManager,
                 RedisDatabase,
+                RedisDatabaseManager,
             )
 
             db_manager = RedisDatabaseManager()
@@ -475,8 +476,8 @@ class PromptManager:
         """Load prompts from Redis cache using dedicated prompts database"""
         try:
             from src.utils.redis_database_manager import (
-                RedisDatabaseManager,
                 RedisDatabase,
+                RedisDatabaseManager,
             )
 
             db_manager = RedisDatabaseManager()
@@ -496,8 +497,8 @@ class PromptManager:
         """Save prompts to Redis cache using dedicated prompts database"""
         try:
             from src.utils.redis_database_manager import (
-                RedisDatabaseManager,
                 RedisDatabase,
+                RedisDatabaseManager,
             )
 
             db_manager = RedisDatabaseManager()

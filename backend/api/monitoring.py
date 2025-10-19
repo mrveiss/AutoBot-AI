@@ -14,12 +14,12 @@ from typing import Any, Dict, List, Optional, Union
 import aiofiles
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     HTTPException,
     Query,
-    BackgroundTasks,
+    Response,
     WebSocket,
     WebSocketDisconnect,
-    Response,
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -27,14 +27,14 @@ from pydantic import BaseModel, Field
 # Import AutoBot monitoring system
 from src.constants.network_constants import NetworkConstants
 from src.utils.performance_monitor import (
+    add_phase9_alert_callback,
+    collect_phase9_metrics,
+    get_phase9_optimization_recommendations,
+    get_phase9_performance_dashboard,
+    monitor_performance,
     phase9_monitor,
     start_monitoring,
     stop_monitoring,
-    get_phase9_performance_dashboard,
-    get_phase9_optimization_recommendations,
-    collect_phase9_metrics,
-    add_phase9_alert_callback,
-    monitor_performance,
 )
 
 logger = logging.getLogger(__name__)
@@ -995,8 +995,8 @@ def _calculate_npu_efficiency(npu_metrics) -> float:
 def _convert_metrics_to_csv(data: Dict[str, Any]) -> str:
     """Convert metrics data to CSV format"""
     try:
-        import io
         import csv
+        import io
 
         output = io.StringIO()
         writer = csv.writer(output)

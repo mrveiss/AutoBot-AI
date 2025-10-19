@@ -7,6 +7,7 @@ import sys
 from typing import Any, Dict
 
 import psutil
+
 from src.constants.network_constants import NetworkConstants
 
 # Conditional torch import for environments without CUDA
@@ -19,13 +20,14 @@ except ImportError:
     TORCH_AVAILABLE = False
     torch = None
 
-# Import the centralized ConfigManager and Redis client utility
-from src.unified_config_manager import config as global_config_manager
 from src.event_manager import event_manager
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 from src.security_layer import SecurityLayer
 from src.system_integration import SystemIntegration
+
+# Import the centralized ConfigManager and Redis client utility
+from src.unified_config_manager import config as global_config_manager
 from src.utils.command_validator import command_validator
 from src.utils.redis_client import get_redis_client
 

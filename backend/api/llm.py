@@ -4,14 +4,14 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from backend.services.config_service import ConfigService
-from backend.utils.connection_utils import ConnectionTester, ModelManager
-
-# Import unified configuration system - NO HARDCODED VALUES
-from src.unified_config import config
 
 # Import caching utilities (RESTORED - Fixed FastAPI 0.115.9 compatibility)
 from backend.utils.cache_manager import cache_response
+from backend.utils.connection_utils import ConnectionTester, ModelManager
 from src.constants.network_constants import NetworkConstants
+
+# Import unified configuration system - NO HARDCODED VALUES
+from src.unified_config import config
 
 router = APIRouter()
 

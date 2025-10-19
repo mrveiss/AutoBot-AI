@@ -11,10 +11,10 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 
+from src.constants.network_constants import NetworkConstants
 from src.event_manager import event_manager
 from src.metrics.system_monitor import system_monitor
 from src.metrics.workflow_metrics import workflow_metrics
-from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
 

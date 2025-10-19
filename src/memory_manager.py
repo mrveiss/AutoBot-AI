@@ -7,28 +7,29 @@ handling task logs, execution history, agent state, configuration changes,
 and knowledge base integration with optional embedding storage.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
 import os
 import pickle  # Still imported for backward compatibility, but using JSON for new data
 import sqlite3
-import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import aiosqlite
 
+from src.constants.network_constants import NetworkConstants
+
 # Import the centralized ConfigManager
 from src.unified_config_manager import config as global_config_manager
 
-# Import database pooling for performance
-from src.utils.database_pool import get_connection_pool
-
 # Import shared path utilities
 from src.utils.common import PathUtils
-from src.constants.network_constants import NetworkConstants
+
+# Import database pooling for performance
+from src.utils.database_pool import get_connection_pool
 
 
 @dataclass

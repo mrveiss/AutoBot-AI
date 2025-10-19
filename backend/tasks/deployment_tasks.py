@@ -4,11 +4,12 @@ Deployment Tasks for AutoBot IaC Platform
 Celery tasks for asynchronous Ansible playbook execution with real-time progress.
 """
 
-from backend.celery_app import celery_app
-from backend.services.ansible_executor import AnsibleExecutor
 import asyncio
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
+
+from backend.celery_app import celery_app
+from backend.services.ansible_executor import AnsibleExecutor
 
 logger = logging.getLogger(__name__)
 

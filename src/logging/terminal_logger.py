@@ -79,9 +79,7 @@ class TerminalLogger:
             try:
                 async with aiofiles.open(chat_file, "w") as f:
                     await f.write(json.dumps(chat_data, indent=2))
-                logger.info(
-                    f"✅ Created chat.json for terminal session: {session_id}"
-                )
+                logger.info(f"✅ Created chat.json for terminal session: {session_id}")
             except Exception as e:
                 logger.error(
                     f"❌ Failed to create chat.json for session {session_id}: {e}"

@@ -6,6 +6,7 @@ command patterns, security patterns, and more.
 """
 
 from src.constants.network_constants import NetworkConstants
+
 from .conversation_patterns import (
     ConversationPatterns,
     ConversationType,

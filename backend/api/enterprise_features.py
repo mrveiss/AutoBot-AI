@@ -4,18 +4,18 @@ Provides API endpoints for managing enterprise-grade features.
 """
 
 import logging
-from typing import Optional, List
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from src.constants.network_constants import NetworkConstants
 from src.enterprise_feature_manager import (
-    get_enterprise_manager,
     FeatureCategory,
     FeatureStatus,
+    get_enterprise_manager,
 )
-from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -15,13 +15,13 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from src.circuit_breaker import circuit_breaker_async
+from src.constants.network_constants import NetworkConstants
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 
 # Import existing orchestrator components
 from src.orchestrator import Orchestrator, TaskComplexity, WorkflowStatus, WorkflowStep
 from src.retry_mechanism import RetryStrategy, retry_async
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

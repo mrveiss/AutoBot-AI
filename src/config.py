@@ -21,9 +21,10 @@ from typing import Any, Dict
 
 import yaml
 
-from .utils.service_registry import get_service_url
-from .config_helper import cfg
 from src.constants.network_constants import NetworkConstants
+
+from .config_helper import cfg
+from .utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
 

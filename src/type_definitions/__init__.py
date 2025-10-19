@@ -8,9 +8,6 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum, IntEnum
 from pathlib import Path
-
-# Standard typing imports
-from src.constants.network_constants import NetworkConstants
 from typing import (
     Any,
     AsyncGenerator,
@@ -40,6 +37,9 @@ from typing import (
 )
 
 from typing_extensions import NotRequired, TypedDict
+
+# Standard typing imports
+from src.constants.network_constants import NetworkConstants
 
 # Common type aliases
 StrDict = Dict[str, Any]

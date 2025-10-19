@@ -21,7 +21,6 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 
-from src.constants.network_constants import NetworkConstants
 from backend.models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,
@@ -30,6 +29,7 @@ from backend.models.npu_models import (
     WorkerTestResult,
 )
 from backend.services.npu_worker_manager import get_worker_manager
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

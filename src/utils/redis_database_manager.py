@@ -14,8 +14,9 @@ import redis.asyncio as aioredis
 import yaml
 
 from src.config_helper import cfg
-from .service_registry import get_service_registry
 from src.constants.network_constants import NetworkConstants
+
+from .service_registry import get_service_registry
 
 logger = logging.getLogger(__name__)
 

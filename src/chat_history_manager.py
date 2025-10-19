@@ -9,22 +9,22 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
-# Import the centralized ConfigManager and Redis client utility
-from src.unified_config_manager import config as global_config_manager
+# Import Memory Graph for entity tracking
+from src.autobot_memory_graph import AutoBotMemoryGraph
 from src.constants.network_constants import NetworkConstants
+
+# Import Context Window Manager for model-aware message limits
+from src.context_window_manager import ContextWindowManager
 from src.encryption_service import (
     decrypt_data,
     encrypt_data,
     get_encryption_service,
     is_encryption_enabled,
 )
+
+# Import the centralized ConfigManager and Redis client utility
+from src.unified_config_manager import config as global_config_manager
 from src.utils.redis_client import get_redis_client
-
-# Import Memory Graph for entity tracking
-from src.autobot_memory_graph import AutoBotMemoryGraph
-
-# Import Context Window Manager for model-aware message limits
-from src.context_window_manager import ContextWindowManager
 
 logger = logging.getLogger(__name__)
 

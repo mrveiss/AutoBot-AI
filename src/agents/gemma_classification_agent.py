@@ -11,13 +11,13 @@ import aiohttp
 
 from src.agents.classification_agent import ClassificationResult
 from src.autobot_types import TaskComplexity
+from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import config as global_config_manager
 from src.utils.redis_client import get_redis_client
 from src.workflow_classifier import WorkflowClassifier
 
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

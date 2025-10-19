@@ -4,11 +4,12 @@ Provides easy access to all configuration values from the unified config.
 NO HARDCODED VALUES ALLOWED - Everything comes from configuration.
 """
 
-from typing import Any, Optional, Dict
+import logging
 import os
 from pathlib import Path
+from typing import Any, Dict, Optional
+
 import yaml
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,7 @@ class ConfigHelper:
     def _substitute_variables(self, value: str) -> str:
         """Substitute ${path} references with actual values"""
         import re
+
         from src.constants import NetworkConstants, ServiceURLs
 
         def replace_var(match):

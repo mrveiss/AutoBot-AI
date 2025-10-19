@@ -11,10 +11,11 @@ import subprocess
 import threading
 from abc import ABC, abstractmethod
 from typing import Optional
+
 from fastapi import APIRouter
 
-from src.utils.terminal_websocket_manager import TerminalWebSocketAdapter
 from src.constants.network_constants import NetworkConstants
+from src.utils.terminal_websocket_manager import TerminalWebSocketAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -278,7 +279,7 @@ class BaseTerminalWebSocket(ABC):
 
         try:
             # Import here to avoid circular imports
-            from src.secure_command_executor import SecureCommandExecutor, CommandRisk
+            from src.secure_command_executor import CommandRisk, SecureCommandExecutor
 
             # Lazy initialize secure executor
             if not hasattr(self, "_secure_executor"):

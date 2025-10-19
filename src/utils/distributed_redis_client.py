@@ -5,9 +5,11 @@ Handles connection to remote Redis VM (172.16.168.23)
 
 import asyncio
 import logging
-import redis
 import time
 from typing import Optional
+
+import redis
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

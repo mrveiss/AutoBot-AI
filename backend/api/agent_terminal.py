@@ -15,16 +15,16 @@ Security Features:
 import logging
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.dependencies import get_redis_client
-from src.constants.network_constants import NetworkConstants
 from backend.services.agent_terminal_service import (
-    AgentTerminalService,
     AgentRole,
     AgentSessionState,
+    AgentTerminalService,
 )
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

@@ -3,11 +3,12 @@ Fixed LLM Interface - Removes timeout workarounds and implements proper async pa
 """
 
 import asyncio
-import aiohttp
 import json
 import logging
 import time
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
+
+import aiohttp
 
 # Import unified configuration
 from src.config_helper import cfg

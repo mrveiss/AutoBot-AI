@@ -12,9 +12,9 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from src.constants.network_constants import NetworkConstants
 from src.knowledge_base import KnowledgeBase
 from src.prompt_manager import prompt_manager
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

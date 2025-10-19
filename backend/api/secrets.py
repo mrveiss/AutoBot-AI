@@ -10,19 +10,20 @@ Provides comprehensive secrets management with dual scope:
 - Cleanup management: Handle secrets on chat deletion
 """
 
-import logging
+import base64
 import json
+import logging
+import os
 import uuid
 from datetime import datetime
-from typing import Dict, Any, List, Optional
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
+from cryptography.fernet import Fernet
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from cryptography.fernet import Fernet
-import base64
-import os
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ class SecretsManager:
 
     def __init__(self):
         # Use centralized path management
-        from backend.utils.paths_manager import get_data_path, ensure_data_directory
+        from backend.utils.paths_manager import ensure_data_directory, get_data_path
 
         # Ensure data directory exists
         ensure_data_directory()

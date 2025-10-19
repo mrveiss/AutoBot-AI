@@ -6,10 +6,11 @@ Tracks and formats information sources for all responses
 import gc
 import json
 import logging
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

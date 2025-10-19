@@ -4,8 +4,9 @@ Single source of truth for all path configurations
 """
 
 import os
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
+
 from src.constants.network_constants import NetworkConstants
 
 

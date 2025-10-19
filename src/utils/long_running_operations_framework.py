@@ -26,25 +26,27 @@ Operation Types Supported:
 import asyncio
 import json
 import logging
+import os
+import pickle
+import signal
 import time
 import uuid
-from dataclasses import dataclass, field, asdict
+from contextlib import asynccontextmanager
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union, AsyncGenerator
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Union
+
 import redis.asyncio as redis
-from contextlib import asynccontextmanager
-import pickle
-import signal
-import os
 
 # Import existing timeout framework
 from src.constants.network_constants import NetworkConstants
+
 from .performance_optimized_timeouts import (
-    TimeoutCategory,
     OptimizedTimeoutConfig,
     PerformanceOptimizedTimeout,
+    TimeoutCategory,
 )
 
 logger = logging.getLogger(__name__)
@@ -862,8 +864,8 @@ async def execute_codebase_indexing(
     async def indexing_operation(context: OperationExecutionContext):
         """Actual indexing implementation"""
 
-        from pathlib import Path
         import fnmatch
+        from pathlib import Path
 
         path = Path(codebase_path)
         patterns = file_patterns or ["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"]

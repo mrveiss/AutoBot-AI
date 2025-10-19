@@ -33,18 +33,18 @@ import time
 import weakref
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Any, AsyncGenerator, Union
 from threading import Lock
+from typing import Any, AsyncGenerator, Dict, Optional, Union
 
-import redis
 import aioredis
+import redis
+from redis.backoff import ExponentialBackoff
 from redis.connection import ConnectionPool
 from redis.retry import Retry
-from redis.backoff import ExponentialBackoff
 
+from src.constants.network_constants import NetworkConstants
 from src.unified_config import config
 from src.utils.distributed_service_discovery import get_redis_connection_params_sync
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

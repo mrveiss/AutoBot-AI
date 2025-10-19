@@ -4,12 +4,13 @@ Integrates Docker-based Playwright into the main AutoBot application
 """
 
 import asyncio
+import json
 import logging
 import os
-from typing import Dict, Any, Optional, List
-import aiohttp
-import json
 from contextlib import asynccontextmanager
+from typing import Any, Dict, List, Optional
+
+import aiohttp
 
 logger = logging.getLogger(__name__)
 

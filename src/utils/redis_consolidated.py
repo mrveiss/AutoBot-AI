@@ -49,11 +49,12 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
 from src.constants.network_constants import NetworkConstants
 
 # Configuration imports with fallbacks
 try:
-    from src.config_consolidated import config, cfg
+    from src.config_consolidated import cfg, config
 except ImportError:
     try:
         from src.config_helper import cfg

@@ -1,7 +1,7 @@
-import os
 import asyncio
 import json
 import logging
+import os
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -25,19 +25,19 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
 from starlette.responses import Response as StarletteResponse
 
+# Import dependencies and utilities - Using available dependencies
+from backend.dependencies import get_config, get_knowledge_base
+
+# CRITICAL SECURITY FIX: Import session ownership validation
+from backend.security.session_ownership import validate_session_ownership
+from src.constants.network_constants import NetworkConstants
 from src.utils.redis_database_manager import get_redis_client
 
 # Import models - DISABLED: Models don't exist yet
 # from src.models.conversation import ConversationModel
 # from src.models.message import MessageModel
 
-# Import dependencies and utilities - Using available dependencies
-from backend.dependencies import get_config, get_knowledge_base
-from fastapi import Depends
 
-# CRITICAL SECURITY FIX: Import session ownership validation
-from backend.security.session_ownership import validate_session_ownership
-from src.constants.network_constants import NetworkConstants
 
 
 # Create placeholder dependency functions for missing imports

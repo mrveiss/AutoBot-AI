@@ -3,9 +3,11 @@ Test endpoint for Knowledge Base functionality
 This bypasses cached instances and creates fresh knowledge base for testing
 """
 
-from fastapi import APIRouter
 import asyncio
 import logging
+
+from fastapi import APIRouter
+
 from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()

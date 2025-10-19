@@ -18,11 +18,11 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from src.chat_history_manager import ChatHistoryManager
+from src.constants.network_constants import NetworkConstants
 
 # Import existing components
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ class ChatKnowledgeManager:
         self.pending_decisions: Dict[str, List[Dict[str, Any]]] = {}
 
         # Initialize storage directory using centralized path management
-        from backend.utils.paths_manager import get_data_path, ensure_data_directory
+        from backend.utils.paths_manager import ensure_data_directory, get_data_path
 
         ensure_data_directory()
         self.storage_dir = str(get_data_path("chat_knowledge"))

@@ -11,59 +11,60 @@ import logging
 import os
 import time
 import traceback
-from typing import Dict, List, Union, Optional
 from contextlib import asynccontextmanager
 from enum import Enum
+from typing import Dict, List, Optional, Union
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
-# Import authentication and security middleware
-from src.auth_middleware import AuthenticationMiddleware
-from src.security_layer import SecurityLayer
-
-# Import original API routers
-from backend.api.chat import router as chat_router
-from backend.api.system import router as system_router
-from backend.api.settings import router as settings_router
-from backend.api.prompts import router as prompts_router
-from backend.api.knowledge import router as knowledge_router
-from backend.api.llm import router as llm_router
-from backend.api.redis import router as redis_router
-from backend.api.voice import router as voice_router
 from backend.api.agent import router as agent_router
 from backend.api.agent_config import router as agent_config_router
-from backend.api.intelligent_agent import router as intelligent_agent_router
-from backend.api.files import router as files_router
-from backend.api.developer import router as developer_router
-from backend.api.embeddings import router as embeddings_router
-from backend.api.kb_librarian import router as kb_librarian_router
-from backend.api.terminal import router as terminal_router
-from backend.api.workflow import router as workflow_router
-from backend.api.metrics import router as metrics_router
-from backend.api.monitoring import router as monitoring_router
-from backend.api.templates import router as templates_router
-from backend.api.scheduler import router as scheduler_router
-from backend.api.secrets import router as secrets_router
-from backend.api.research_browser import router as research_browser_router
-from backend.api.security import router as security_router
-from backend.api.error_monitoring import router as error_monitoring_router
-from backend.api.websockets import router as websocket_router
 
 # Import new AI Stack integration routers
 from backend.api.ai_stack_integration import router as ai_stack_router
+
+# Import original API routers
+from backend.api.chat import router as chat_router
 from backend.api.chat_enhanced import router as chat_enhanced_router
+from backend.api.developer import router as developer_router
+from backend.api.embeddings import router as embeddings_router
+from backend.api.error_monitoring import router as error_monitoring_router
+from backend.api.files import router as files_router
+from backend.api.intelligent_agent import router as intelligent_agent_router
+from backend.api.kb_librarian import router as kb_librarian_router
+from backend.api.knowledge import router as knowledge_router
 from backend.api.knowledge_enhanced import router as knowledge_enhanced_router
+from backend.api.llm import router as llm_router
+from backend.api.metrics import router as metrics_router
+from backend.api.monitoring import router as monitoring_router
+from backend.api.prompts import router as prompts_router
+from backend.api.redis import router as redis_router
+from backend.api.research_browser import router as research_browser_router
+from backend.api.scheduler import router as scheduler_router
+from backend.api.secrets import router as secrets_router
+from backend.api.security import router as security_router
+from backend.api.settings import router as settings_router
+from backend.api.system import router as system_router
+from backend.api.templates import router as templates_router
+from backend.api.terminal import router as terminal_router
+from backend.api.voice import router as voice_router
+from backend.api.websockets import router as websocket_router
+from backend.api.workflow import router as workflow_router
+from backend.services.ai_stack_client import close_ai_stack_client, get_ai_stack_client
 
 # Import additional modules
 from src.api_registry import APIRegistry
+
+# Import authentication and security middleware
+from src.auth_middleware import AuthenticationMiddleware
 from src.chat_workflow_manager import ChatWorkflowManager
-from src.redis_pool_manager import RedisPoolManager
-from src.utils.background_llm_sync import background_llm_sync
-from backend.services.ai_stack_client import get_ai_stack_client, close_ai_stack_client
 from src.constants.network_constants import NetworkConstants
+from src.redis_pool_manager import RedisPoolManager
+from src.security_layer import SecurityLayer
+from src.utils.background_llm_sync import background_llm_sync
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

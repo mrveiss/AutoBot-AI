@@ -11,6 +11,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
+
 from src.constants.network_constants import NetworkConstants
 
 try:
@@ -23,9 +24,9 @@ except ImportError:
     Page = None
     PLAYWRIGHT_AVAILABLE = False
 
-from src.unified_config_manager import config
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
+from src.unified_config_manager import config
 
 logger = logging.getLogger(__name__)
 

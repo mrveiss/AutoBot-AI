@@ -3,14 +3,15 @@ RUM (Real User Monitoring) API endpoints for logging frontend events.
 Provides comprehensive logging of user interactions, errors, and performance metrics.
 """
 
-import logging
 import json
+import logging
 import os
 from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
 from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
@@ -63,7 +64,7 @@ def setup_rum_logger():
     rum_logger.setLevel(getattr(logging, rum_config["log_level"].upper(), logging.INFO))
 
     # Use centralized path management
-    from backend.utils.paths_manager import get_rum_log_path, ensure_log_directory
+    from backend.utils.paths_manager import ensure_log_directory, get_rum_log_path
 
     # Ensure logs directory exists
     ensure_log_directory()

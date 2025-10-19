@@ -15,8 +15,8 @@ import time
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from src.event_manager import event_manager
 from src.constants.network_constants import NetworkConstants
+from src.event_manager import event_manager
 
 logger = logging.getLogger(__name__)
 

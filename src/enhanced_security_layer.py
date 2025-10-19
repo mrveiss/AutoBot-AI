@@ -9,14 +9,15 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
-# Import the centralized ConfigManager
-from src.unified_config_manager import config as global_config_manager
 from src.constants.network_constants import NetworkConstants
 from src.secure_command_executor import (
     CommandRisk,
     SecureCommandExecutor,
     SecurityPolicy,
 )
+
+# Import the centralized ConfigManager
+from src.unified_config_manager import config as global_config_manager
 
 
 class EnhancedSecurityLayer:

@@ -13,8 +13,8 @@ import traceback
 from contextlib import contextmanager
 from typing import Any, Callable, Optional, Type, TypeVar
 
-from src.exceptions import AutoBotError, InternalError
 from src.constants.network_constants import NetworkConstants
+from src.exceptions import AutoBotError, InternalError
 
 logger = logging.getLogger(__name__)
 

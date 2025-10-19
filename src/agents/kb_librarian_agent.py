@@ -8,10 +8,10 @@ import asyncio
 import logging
 from typing import Any, Dict, List
 
-from src.unified_config_manager import config
+from src.constants.network_constants import NetworkConstants
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
-from src.constants.network_constants import NetworkConstants
+from src.unified_config_manager import config
 
 logger = logging.getLogger(__name__)
 

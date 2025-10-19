@@ -6,20 +6,21 @@ Provides REST API for managing alerts and notifications
 
 import asyncio
 import logging
-from typing import Dict, List, Optional, Any
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.monitoring_alerts import (
-    get_alerts_manager,
-    AlertRule,
     Alert,
+    AlertRule,
     AlertSeverity,
     AlertStatus,
     LogNotificationChannel,
     RedisNotificationChannel,
+    get_alerts_manager,
 )
 
 logger = logging.getLogger(__name__)

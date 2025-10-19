@@ -15,9 +15,11 @@ Usage:
     async_client = await get_async_redis_connection(db=0)
 """
 
+from typing import Optional
+
 import redis
 import redis.asyncio as aioredis
-from typing import Optional
+
 from src.constants.network_constants import NetworkConstants
 
 try:

@@ -20,18 +20,18 @@ import logging
 import os
 import re
 import time
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
 import aiofiles
 
-from src.async_chat_workflow import AsyncChatWorkflow, WorkflowMessage, MessageType
-from backend.utils.async_redis_manager import get_redis_manager
-from src.prompt_manager import get_prompt
 from backend.dependencies import global_config_manager
+from backend.utils.async_redis_manager import get_redis_manager
+from src.async_chat_workflow import AsyncChatWorkflow, MessageType, WorkflowMessage
 from src.constants.network_constants import NetworkConstants
+from src.prompt_manager import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -309,8 +309,8 @@ class ChatWorkflowManager:
     def _init_terminal_tool(self):
         """Initialize terminal tool for command execution."""
         try:
-            from src.tools.terminal_tool import TerminalTool
             import backend.api.agent_terminal as agent_terminal_api
+            from src.tools.terminal_tool import TerminalTool
 
             # CRITICAL: Access the global singleton instance directly
             # This ensures sessions created here are visible to the approval API

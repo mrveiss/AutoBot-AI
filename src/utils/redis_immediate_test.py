@@ -5,9 +5,11 @@ Replaces timeout-based Redis connection with immediate success/failure patterns
 
 import asyncio
 import logging
-import redis
-from typing import Dict, Any, Optional, Tuple
 from contextlib import asynccontextmanager
+from typing import Any, Dict, Optional, Tuple
+
+import redis
+
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

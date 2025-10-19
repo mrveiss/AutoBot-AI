@@ -11,12 +11,12 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.constants.network_constants import NetworkConstants
 from src.agents.development_speedup_agent import (
     analyze_codebase,
-    get_development_speedup_agent,
     find_duplicates,
+    get_development_speedup_agent,
 )
+from src.constants.network_constants import NetworkConstants
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
