@@ -5,26 +5,35 @@ import apiClient from '@/utils/ApiClient.js'
 import type { ChatMessage, ChatSession } from '@/stores/useChatStore'
 
 export class ChatController {
-  private chatStore = useChatStore()
-  private appStore: ReturnType<typeof useAppStore> | null = null
+  // FIXED: Lazy initialization - stores only created when accessed, not at module load
+  private _chatStore?: ReturnType<typeof useChatStore>
+  private _appStore?: ReturnType<typeof useAppStore>
   private retryAttempts = 3
   private retryDelay = 1000
 
   constructor() {
-    // AppStore will be initialized lazily when needed
+    // Stores will be initialized lazily when needed
+  }
+
+  // Lazy initialization of chatStore
+  private get chatStore() {
+    if (!this._chatStore) {
+      this._chatStore = useChatStore()
+    }
+    return this._chatStore
   }
 
   // Lazy initialization of appStore
   private getAppStore(): ReturnType<typeof useAppStore> | null {
-    if (!this.appStore) {
+    if (!this._appStore) {
       try {
-        this.appStore = useAppStore()
+        this._appStore = useAppStore()
       } catch (error) {
         console.warn('[ChatController] AppStore not available, running without store integration')
         return null
       }
     }
-    return this.appStore
+    return this._appStore
   }
 
   // Enhanced message operations with comprehensive error handling
