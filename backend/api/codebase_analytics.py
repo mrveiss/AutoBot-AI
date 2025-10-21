@@ -858,6 +858,130 @@ async def get_codebase_problems(problem_type: Optional[str] = None):
         )
 
 
+@router.get("/declarations")
+async def get_code_declarations(declaration_type: Optional[str] = None):
+    """Get code declarations (functions, classes, variables) detected during analysis"""
+    try:
+        redis_client = await get_redis_connection()
+
+        all_declarations = []
+
+        if redis_client:
+            if declaration_type:
+                declarations_data = redis_client.get(f"codebase:declarations:{declaration_type}")
+                if declarations_data:
+                    all_declarations = json.loads(declarations_data)
+            else:
+                for key in redis_client.scan_iter(match="codebase:declarations:*"):
+                    declarations_data = redis_client.get(key)
+                    if declarations_data:
+                        all_declarations.extend(json.loads(declarations_data))
+            storage_type = "redis"
+        else:
+            global _in_memory_storage
+            if not _in_memory_storage:
+                return JSONResponse(
+                    {
+                        "status": "no_data",
+                        "message": "No codebase data found. Run indexing first.",
+                        "declarations": [],
+                    }
+                )
+
+            storage = _in_memory_storage
+            if declaration_type:
+                declarations_data = storage.get(f"codebase:declarations:{declaration_type}")
+                if declarations_data:
+                    all_declarations = json.loads(declarations_data)
+            else:
+                for key in storage.keys():
+                    if key.startswith("codebase:declarations:"):
+                        declarations_data = storage.get(key)
+                        if declarations_data:
+                            all_declarations.extend(json.loads(declarations_data))
+            storage_type = "memory"
+
+        # Count by type
+        functions = sum(1 for d in all_declarations if d.get("type") == "function")
+        classes = sum(1 for d in all_declarations if d.get("type") == "class")
+        variables = sum(1 for d in all_declarations if d.get("type") == "variable")
+
+        # Sort by usage count (most used first)
+        all_declarations.sort(key=lambda x: x.get("usage_count", 0), reverse=True)
+
+        return JSONResponse(
+            {
+                "status": "success",
+                "declarations": all_declarations,
+                "total_count": len(all_declarations),
+                "functions": functions,
+                "classes": classes,
+                "variables": variables,
+                "storage_type": storage_type,
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get code declarations: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Declarations retrieval failed: {str(e)}"
+        )
+
+
+@router.get("/duplicates")
+async def get_duplicate_code():
+    """Get duplicate code detected during analysis"""
+    try:
+        redis_client = await get_redis_connection()
+
+        all_duplicates = []
+
+        if redis_client:
+            for key in redis_client.scan_iter(match="codebase:duplicates:*"):
+                duplicates_data = redis_client.get(key)
+                if duplicates_data:
+                    all_duplicates.extend(json.loads(duplicates_data))
+            storage_type = "redis"
+        else:
+            global _in_memory_storage
+            if not _in_memory_storage:
+                return JSONResponse(
+                    {
+                        "status": "no_data",
+                        "message": "No codebase data found. Run indexing first.",
+                        "duplicates": [],
+                    }
+                )
+
+            storage = _in_memory_storage
+            for key in storage.keys():
+                if key.startswith("codebase:duplicates:"):
+                    duplicates_data = storage.get(key)
+                    if duplicates_data:
+                        all_duplicates.extend(json.loads(duplicates_data))
+            storage_type = "memory"
+
+        # Sort by number of files affected (most duplicated first)
+        all_duplicates.sort(
+            key=lambda x: len(x.get("files", [])), reverse=True
+        )
+
+        return JSONResponse(
+            {
+                "status": "success",
+                "duplicates": all_duplicates,
+                "total_count": len(all_duplicates),
+                "storage_type": storage_type,
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get duplicate code: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Duplicates retrieval failed: {str(e)}"
+        )
+
+
 @router.delete("/cache")
 async def clear_codebase_cache():
     """Clear codebase analysis cache from storage"""
