@@ -1,0 +1,238 @@
+#!/usr/bin/env python3
+"""
+System Context Detection for AutoBot
+Collects OS, machine, and architecture information for knowledge base tagging
+"""
+
+import logging
+import platform
+import socket
+from pathlib import Path
+from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
+
+
+def get_system_context(machine_id: Optional[str] = None) -> Dict[str, any]:
+    """
+    Collect comprehensive system information for man page tagging and context awareness
+
+    Args:
+        machine_id: Override machine identifier (default: auto-detect from hostname)
+
+    Returns:
+        Dictionary with system context information
+    """
+    context = {
+        "machine_id": machine_id or get_machine_id(),
+        "machine_ip": get_local_ip(),
+        "os_name": get_os_name(),
+        "os_version": get_os_version(),
+        "os_type": platform.system(),  # Linux, Windows, Darwin
+        "architecture": platform.machine(),  # x86_64, aarch64, etc.
+        "kernel_version": platform.release(),
+    }
+
+    logger.debug(f"System context: {context}")
+    return context
+
+
+def get_machine_id() -> str:
+    """
+    Get machine identifier from hostname or environment
+
+    Returns:
+        Machine identifier (e.g., 'main', 'vm1', etc.)
+    """
+    try:
+        hostname = socket.gethostname().lower()
+
+        # Map common hostnames to machine IDs
+        hostname_map = {
+            "kali": "main",
+            "autobot-frontend": "vm1",
+            "autobot-npu": "vm2",
+            "autobot-redis": "vm3",
+            "autobot-ai": "vm4",
+            "autobot-browser": "vm5",
+        }
+
+        # Check for exact matches or partial matches
+        for host_pattern, machine_id in hostname_map.items():
+            if host_pattern in hostname:
+                return machine_id
+
+        # Default: use hostname
+        return hostname.split(".")[0]
+
+    except Exception as e:
+        logger.warning(f"Failed to get machine ID: {e}")
+        return "unknown"
+
+
+def get_local_ip() -> str:
+    """
+    Get primary local IP address
+
+    Returns:
+        IP address string or 'unknown'
+    """
+    try:
+        # Get local IP without external network dependency
+        # First try getting hostname and resolving it
+        hostname = socket.gethostname()
+        ip = socket.gethostbyname(hostname)
+
+        # If we got loopback, try more robust method
+        if ip.startswith("127."):
+            # Try getting IP from network interfaces
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                # Connect to local network address (doesn't actually send data)
+                s.connect(("10.255.255.255", 1))
+                ip = s.getsockname()[0]
+            finally:
+                s.close()
+
+        return ip
+    except Exception as e:
+        logger.warning(f"Failed to get local IP: {e}")
+        return "unknown"
+
+
+def get_os_name() -> str:
+    """
+    Get specific OS distribution name (e.g., 'Kali', 'Ubuntu', 'Fedora')
+
+    Returns:
+        OS distribution name or system name
+    """
+    try:
+        # Try reading /etc/os-release (Linux)
+        os_release_path = Path("/etc/os-release")
+        if os_release_path.exists():
+            with open(os_release_path, "r") as f:
+                for line in f:
+                    if line.startswith("NAME="):
+                        # Extract value between quotes
+                        name = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        # Clean up common suffixes
+                        name = name.replace(" GNU/Linux", "").replace(" Linux", "")
+                        return name
+
+        # Fallback to platform system
+        return platform.system()
+
+    except Exception as e:
+        logger.warning(f"Failed to get OS name: {e}")
+        return platform.system()
+
+
+def get_os_version() -> str:
+    """
+    Get OS version number
+
+    Returns:
+        OS version string
+    """
+    try:
+        # Try reading /etc/os-release (Linux)
+        os_release_path = Path("/etc/os-release")
+        if os_release_path.exists():
+            with open(os_release_path, "r") as f:
+                for line in f:
+                    if line.startswith("VERSION_ID="):
+                        # Extract value between quotes
+                        version = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        return version
+
+        # Fallback to platform release
+        return platform.release()
+
+    except Exception as e:
+        logger.warning(f"Failed to get OS version: {e}")
+        return platform.release()
+
+
+def get_compatible_os_list(os_name: str) -> List[str]:
+    """
+    Get list of OSes that are likely compatible with this OS
+
+    Args:
+        os_name: The OS name to find compatible OSes for
+
+    Returns:
+        List of compatible OS names
+    """
+    # OS family compatibility mappings
+    os_families = {
+        "Kali": ["Kali", "Debian", "Ubuntu"],
+        "Ubuntu": ["Ubuntu", "Debian"],
+        "Debian": ["Debian"],
+        "Fedora": ["Fedora", "Red Hat", "CentOS", "Rocky"],
+        "Red Hat": ["Red Hat", "CentOS", "Fedora", "Rocky"],
+        "CentOS": ["CentOS", "Red Hat", "Fedora", "Rocky"],
+        "Rocky": ["Rocky", "CentOS", "Red Hat", "Fedora"],
+        "Arch": ["Arch", "Manjaro"],
+        "Manjaro": ["Manjaro", "Arch"],
+        "openSUSE": ["openSUSE", "SUSE"],
+        "SUSE": ["SUSE", "openSUSE"],
+        "Alpine": ["Alpine"],
+        "Gentoo": ["Gentoo"],
+    }
+
+    # Return compatible list or just the OS itself
+    return os_families.get(os_name, [os_name])
+
+
+def generate_unique_key(
+    machine_id: str, os_name: str, command: str, section: str
+) -> str:
+    """
+    Generate unique key for man page deduplication
+
+    Format: {machine_id}:{os_name}:{command}:{section}
+
+    Args:
+        machine_id: Machine identifier
+        os_name: OS distribution name
+        command: Command name
+        section: Man page section
+
+    Returns:
+        Unique key string
+    """
+    # Normalize components to lowercase for consistency
+    return f"{machine_id.lower()}:{os_name.lower()}:{command.lower()}:{section}"
+
+
+# Test function for manual verification
+def test_system_context():
+    """Test system context detection"""
+    print("=" * 80)
+    print("System Context Detection Test")
+    print("=" * 80)
+
+    context = get_system_context()
+
+    print(f"\nMachine ID: {context['machine_id']}")
+    print(f"Machine IP: {context['machine_ip']}")
+    print(f"OS Name: {context['os_name']}")
+    print(f"OS Version: {context['os_version']}")
+    print(f"OS Type: {context['os_type']}")
+    print(f"Architecture: {context['architecture']}")
+    print(f"Kernel Version: {context['kernel_version']}")
+
+    print(f"\nCompatible OSes: {get_compatible_os_list(context['os_name'])}")
+
+    # Test unique key generation
+    test_key = generate_unique_key(context["machine_id"], context["os_name"], "ls", "1")
+    print(f"\nSample unique key (ls): {test_key}")
+
+    print("=" * 80)
+
+
+if __name__ == "__main__":
+    # Enable debug logging for testing
+    logging.basicConfig(level=logging.DEBUG)
+    test_system_context()

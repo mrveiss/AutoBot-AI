@@ -2,6 +2,7 @@
 """
 Index ALL Available Man Pages on AutoBot Machines
 Indexes every command with a man page for comprehensive CLI tool awareness
+Enhanced with OS/Machine context for deduplication and agent awareness
 """
 
 import asyncio
@@ -9,6 +10,16 @@ import logging
 import subprocess
 import sys
 from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+from src.utils.system_context import (
+    get_system_context,
+    get_compatible_os_list,
+    generate_unique_key
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -57,9 +68,13 @@ async def get_all_available_commands():
         logger.error(f"Error scanning commands: {e}")
         return []
 
-async def index_command_batch(kb_v2, commands_batch, machine_id="main"):
-    """Index a batch of commands"""
+async def index_command_batch(kb_v2, commands_batch, system_ctx=None):
+    """Index a batch of commands with OS/machine context"""
     indexed_count = 0
+
+    # Get system context once for the batch
+    if system_ctx is None:
+        system_ctx = get_system_context()
 
     for command, section in commands_batch:
         try:
@@ -93,10 +108,12 @@ async def index_command_batch(kb_v2, commands_batch, machine_id="main"):
                         description = line.split('-', 1)[1].strip()
                         break
 
-            # Build content
+            # Build content with enhanced context
             content = f"""# {command}({section}) - {description}
 
-**Machine:** {machine_id}
+**Machine:** {system_ctx['machine_id']} ({system_ctx['machine_ip']})
+**OS:** {system_ctx['os_name']} {system_ctx['os_version']} ({system_ctx['os_type']})
+**Architecture:** {system_ctx['architecture']}
 **Section:** {section} ({'User Commands' if section == '1' else 'Configuration Files' if section == '5' else 'System Administration'})
 
 {man_content[:5000]}  # Limit to 5000 chars to avoid huge documents
@@ -105,17 +122,42 @@ async def index_command_batch(kb_v2, commands_batch, machine_id="main"):
 *Full manual: `man {section} {command}`*
 """
 
-            # Store in Knowledge Base
+            # Generate unique key for deduplication
+            unique_key = generate_unique_key(
+                system_ctx['machine_id'],
+                system_ctx['os_name'],
+                command,
+                section
+            )
+
+            # Store in Knowledge Base with enhanced metadata
             result = await kb_v2.store_fact(
                 content=content,
                 metadata={
                     "type": "man_page",
                     "command": command,
                     "section": section,
-                    "machine_id": machine_id,
+                    "title": f"man {command}({section})",
+
+                    # Machine/OS Context
+                    "machine_id": system_ctx['machine_id'],
+                    "machine_ip": system_ctx['machine_ip'],
+                    "os_name": system_ctx['os_name'],
+                    "os_version": system_ctx['os_version'],
+                    "os_type": system_ctx['os_type'],
+                    "architecture": system_ctx['architecture'],
+                    "kernel_version": system_ctx['kernel_version'],
+
+                    # Applicability
+                    "applies_to_machines": [system_ctx['machine_id']],
+                    "applies_to_os": get_compatible_os_list(system_ctx['os_name']),
+
+                    # Unique key for deduplication
+                    "unique_key": unique_key,
+
+                    # Standard fields
                     "category": "system_commands",
-                    "source": "comprehensive_man_pages",
-                    "title": f"man {command}({section})"
+                    "source": "comprehensive_man_pages"
                 }
             )
 
@@ -161,14 +203,22 @@ async def main():
 
         logger.info(f"✓ Found {len(all_commands)} commands to index")
 
+        # Get system context for indexing
+        logger.info("\n3. Detecting system context...")
+        system_ctx = get_system_context()
+        logger.info(f"✓ Machine: {system_ctx['machine_id']} ({system_ctx['machine_ip']})")
+        logger.info(f"✓ OS: {system_ctx['os_name']} {system_ctx['os_version']}")
+        logger.info(f"✓ Architecture: {system_ctx['architecture']}")
+        logger.info(f"✓ Compatible with: {', '.join(get_compatible_os_list(system_ctx['os_name']))}")
+
         # Index in batches
-        logger.info("\n3. Indexing man pages...")
+        logger.info("\n4. Indexing man pages...")
         batch_size = 50
         total_indexed = 0
 
         for i in range(0, len(all_commands), batch_size):
             batch = all_commands[i:i+batch_size]
-            batch_indexed = await index_command_batch(kb_v2, batch)
+            batch_indexed = await index_command_batch(kb_v2, batch, system_ctx)
             total_indexed += batch_indexed
 
             progress = min(i + batch_size, len(all_commands))
