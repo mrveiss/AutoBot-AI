@@ -19,6 +19,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import redis
 import logging
 
+from src.constants.network_constants import NetworkConstants
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -34,8 +36,8 @@ class AnalyticsRedisOptimizer:
         try:
             # Create connection pool for better performance
             self.connection_pool = redis.ConnectionPool(
-                host="172.16.168.23",
-                port=6379,
+                host=NetworkConstants.REDIS_VM_IP,
+                port=NetworkConstants.REDIS_PORT,
                 db=8,
                 max_connections=10,
                 socket_timeout=5,  # Reduced from default 30s

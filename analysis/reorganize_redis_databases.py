@@ -21,6 +21,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import redis
 import logging
 
+from src.constants.network_constants import NetworkConstants
+
 logging.basicConfig(level=logging.INFO)
 
 async def main():
@@ -31,8 +33,8 @@ async def main():
         connections = {}
         for db in range(4):
             connections[db] = redis.Redis(
-                host="172.16.168.23",
-                port=6379,
+                host=NetworkConstants.REDIS_VM_IP,
+                port=NetworkConstants.REDIS_PORT,
                 db=db,
                 decode_responses=False,  # Handle binary data
                 socket_timeout=10,

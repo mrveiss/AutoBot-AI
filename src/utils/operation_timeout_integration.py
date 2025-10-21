@@ -29,7 +29,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.constants.network_constants import NetworkConstants
+from src.constants.network_constants import NetworkConstants, ServiceURLs
 
 from .long_running_operations_framework import (
     LongRunningOperation,
@@ -93,7 +93,7 @@ class ProgressUpdateRequest(BaseModel):
 class OperationIntegrationManager:
     """Integration manager for long-running operations with AutoBot"""
 
-    def __init__(self, redis_url: str = "redis://172.16.168.23:6379/9"):
+    def __init__(self, redis_url: str = f"{ServiceURLs.REDIS_VM}/9"):
         self.redis_client = None
         self.redis_url = redis_url
         self.operation_manager = None

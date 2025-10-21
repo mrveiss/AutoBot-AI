@@ -1,6 +1,6 @@
 """
 Distributed Redis Client for AutoBot 6-VM Architecture
-Handles connection to remote Redis VM (172.16.168.23)
+Handles connection to remote Redis VM
 """
 
 import asyncio
@@ -19,8 +19,8 @@ class DistributedRedisClient:
     """Redis client optimized for distributed AutoBot architecture"""
 
     def __init__(self):
-        self.redis_host = "172.16.168.23"  # Redis VM
-        self.redis_port = 6379
+        self.redis_host = NetworkConstants.REDIS_VM_IP
+        self.redis_port = NetworkConstants.REDIS_PORT
         self.redis_password = None  # Will be loaded from environment
         self._client = None
         self._connection_attempts = 0
@@ -172,4 +172,4 @@ if __name__ == "__main__":
         print("✅ Distributed Redis connection working correctly!")
     else:
         print("❌ Distributed Redis connection failed!")
-        print("Check that Redis VM (172.16.168.23:6379) is accessible")
+        print(f"Check that Redis VM ({NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}) is accessible")

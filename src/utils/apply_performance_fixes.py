@@ -50,7 +50,7 @@ class PerformanceOptimizer:
             self.redis_manager = get_optimized_redis_manager()
 
             # Test Redis connectivity with correct host
-            test_client = self.redis_manager.get_redis_client("172.16.168.23", 6379, 0)
+            test_client = self.redis_manager.get_redis_client(NetworkConstants.REDIS_VM_IP, NetworkConstants.REDIS_PORT, 0)
             test_client.ping()
 
             results["optimizations"]["redis_pooling"] = {
