@@ -23,6 +23,7 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +191,7 @@ class ConsolidatedTerminalWebSocket:
 
             # Create PTY session with SimplePTY manager
             self.pty_process = simple_pty_manager.create_session(
-                self.session_id, initial_cwd="/home/kali/Desktop/AutoBot"
+                self.session_id, initial_cwd=str(PATH.PROJECT_ROOT)
             )
 
             if self.pty_process:

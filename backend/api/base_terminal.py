@@ -15,6 +15,7 @@ from typing import Optional
 from fastapi import APIRouter
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 from src.utils.terminal_websocket_manager import TerminalWebSocketAdapter
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ class BaseTerminalWebSocket(ABC):
         self.process: Optional[subprocess.Popen] = None
         self.reader_thread: Optional[threading.Thread] = None
         self.active = False
-        self.current_dir = "/home/kali"
+        self.current_dir = str(PATH.USER_HOME)
         self.env = os.environ.copy()
 
     @abstractmethod

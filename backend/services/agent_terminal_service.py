@@ -19,6 +19,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 from src.logging.terminal_logger import TerminalLogger
 from src.secure_command_executor import (
     CommandRisk,
@@ -170,7 +171,7 @@ class AgentTerminalService:
             if not existing_pty:
                 # Create new PTY session
                 pty = simple_pty_manager.create_session(
-                    pty_session_id, initial_cwd="/home/kali/Desktop/AutoBot"
+                    pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT)
                 )
                 if pty:
                     logger.info(
@@ -422,6 +423,7 @@ class AgentTerminalService:
     def _write_to_pty(self, session: AgentTerminalSession, text: str) -> bool:
         """
         Write text to PTY terminal display.
+        Auto-recreates PTY if stale (e.g., after backend restart).
 
         Args:
             session: Agent terminal session
@@ -430,24 +432,45 @@ class AgentTerminalService:
         Returns:
             True if written successfully
         """
+        logger.info(f"[PTY_WRITE] Called for session {session.session_id}, pty_session_id={session.pty_session_id}, text_len={len(text)}")
+
         if not session.pty_session_id:
-            logger.debug("No PTY session available for writing")
+            logger.warning("No PTY session ID available for writing")
             return False
 
         try:
             from backend.services.simple_pty import simple_pty_manager
 
             pty = simple_pty_manager.get_session(session.pty_session_id)
-            if pty and pty.is_alive():
-                success = pty.write_input(text)
-                if success:
-                    logger.debug(
-                        f"Wrote to PTY {session.pty_session_id}: {text[:50]}..."
-                    )
-                return success
-            else:
-                logger.warning(f"PTY session {session.pty_session_id} not alive")
-                return False
+            logger.info(f"[PTY_WRITE] Got PTY session: {pty is not None}, alive: {pty.is_alive() if pty else 'N/A'}")
+
+            # If PTY is not alive, recreate it (handles stale sessions after restart)
+            if not pty or not pty.is_alive():
+                logger.warning(
+                    f"[PTY_WRITE] PTY session {session.pty_session_id} not alive (exists={pty is not None}), recreating..."
+                )
+
+                # Create new PTY with same session ID
+                new_pty = simple_pty_manager.create_session(
+                    session.pty_session_id,
+                    initial_cwd=str(PATH.PROJECT_ROOT)
+                )
+
+                if new_pty:
+                    logger.info(f"Recreated PTY session {session.pty_session_id}")
+                    pty = new_pty
+                else:
+                    logger.error(f"Failed to recreate PTY session {session.pty_session_id}")
+                    return False
+
+            # Write to PTY
+            success = pty.write_input(text)
+            if success:
+                logger.debug(
+                    f"Wrote to PTY {session.pty_session_id}: {text[:50]}..."
+                )
+            return success
+
         except Exception as e:
             logger.error(f"Error writing to PTY: {e}")
             return False
@@ -644,11 +667,13 @@ class AgentTerminalService:
                 pre_approved=True,
             )
 
-            # Write output to PTY for terminal display
-            if result.get("stdout"):
-                self._write_to_pty(session, result["stdout"])
-            if result.get("stderr"):
-                self._write_to_pty(session, result["stderr"])
+            # NOTE: Don't write stdout/stderr to PTY - the command already executed in PTY
+            # and produced its output naturally. Writing it again via write_input() would
+            # treat the output as keyboard input (commands), causing duplication.
+            # if result.get("stdout"):
+            #     self._write_to_pty(session, result["stdout"])
+            # if result.get("stderr"):
+            #     self._write_to_pty(session, result["stderr"])
 
             # Add approval metadata to result for UI display
             result["approval_status"] = "pre_approved"
@@ -798,11 +823,13 @@ class AgentTerminalService:
                     comment=comment,
                 )
 
-                # Write output to PTY for terminal display
-                if result.get("stdout"):
-                    self._write_to_pty(session, result["stdout"])
-                if result.get("stderr"):
-                    self._write_to_pty(session, result["stderr"])
+                # NOTE: Don't write stdout/stderr to PTY - the command already executed in PTY
+                # and produced its output naturally. Writing it again via write_input() would
+                # treat the output as keyboard input (commands), causing duplication.
+                # if result.get("stdout"):
+                #     self._write_to_pty(session, result["stdout"])
+                # if result.get("stderr"):
+                #     self._write_to_pty(session, result["stderr"])
 
                 return {
                     "status": "approved",
