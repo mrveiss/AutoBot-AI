@@ -13,6 +13,7 @@ import threading
 from typing import Callable, Optional
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class SimplePTY:
                 stdout=slave_fd,
                 stderr=slave_fd,
                 env=env,
-                cwd=initial_cwd or "/home/kali/Desktop/AutoBot",
+                cwd=initial_cwd or str(PATH.PROJECT_ROOT),
                 preexec_fn=os.setsid,
             )
 
