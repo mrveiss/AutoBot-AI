@@ -17,6 +17,22 @@
           <p>{{ mainCat.description }}</p>
           <div class="category-stats">
             <span class="fact-count">{{ mainCat.count }} facts</span>
+            <button
+              v-if="mainCat.id !== 'user-knowledge'"
+              class="populate-btn"
+              :class="{ 'is-populating': populationStates[mainCat.id]?.isPopulating }"
+              :disabled="populationStates[mainCat.id]?.isPopulating"
+              @click.stop="handlePopulate(mainCat.id)"
+            >
+              <i
+                :class="{
+                  'fas fa-sync': !populationStates[mainCat.id]?.isPopulating,
+                  'fas fa-spinner fa-spin': populationStates[mainCat.id]?.isPopulating
+                }"
+              ></i>
+              <span v-if="!populationStates[mainCat.id]?.isPopulating">Populate</span>
+              <span v-else>{{ populationStates[mainCat.id]?.progress || 0 }}%</span>
+            </button>
           </div>
         </div>
       </div>
@@ -80,6 +96,15 @@
       </div>
     </transition>
 
+    <!-- Vectorization Progress Modal -->
+    <VectorizationProgressModal
+      :show="showProgressModal"
+      :document-states="documentStates"
+      @close="showProgressModal = false"
+      @retry-failed="handleRetryFailed"
+      @cancel="handleCancelVectorization"
+    />
+
     <!-- Breadcrumb navigation -->
     <div v-if="selectedFile" class="breadcrumb">
       <button @click="clearSelection" class="breadcrumb-item">
@@ -126,6 +151,7 @@
             @select="selectNode"
             @toggle-select="toggleDocumentSelection"
             @vectorize="handleVectorizeDocument"
+            @vectorize-folder="handleVectorizeFolder"
           />
 
           <!-- Load More button for cursor-based pagination -->
@@ -193,6 +219,7 @@ import apiClient from '@/utils/ApiClient'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
 import TreeNodeComponent, { type TreeNode } from './TreeNodeComponent.vue'
+import VectorizationProgressModal from './VectorizationProgressModal.vue'
 
 // Helper function to safely parse JSON from response
 const parseResponse = async (response: any): Promise<any> => {
@@ -209,7 +236,9 @@ const {
   getFileIcon: getFileIconUtil,
   formatFileSize,
   formatDateOnly: formatDate,
-  getCategoryIcon
+  getCategoryIcon,
+  populateAutoBotDocs,
+  refreshSystemKnowledge
 } = useKnowledgeBase()
 
 const {
@@ -222,6 +251,7 @@ const {
   toggleDocumentSelection: toggleDocSelection,
   deselectAll: deselectAllDocs,
   vectorizeDocument,
+  vectorizeBatch,
   vectorizeSelected: vectorizeSelectedDocs,
   cleanup: cleanupVectorization
 } = useKnowledgeVectorization()
@@ -260,6 +290,11 @@ const selectedMainCategory = ref<string | null>(null)
 const mainCategories = ref<any[]>([])
 const categoryCounts = ref<Record<string, number>>({})
 const isVectorizing = ref(false)
+const showProgressModal = ref(false)
+const populationStates = ref<Record<string, { isPopulating: boolean; progress: number }>>({
+  'autobot-documentation': { isPopulating: false, progress: 0 },
+  'system-knowledge': { isPopulating: false, progress: 0 }
+})
 
 // Cursor-based pagination state
 const entriesCursor = ref<string>('0')
@@ -400,8 +435,10 @@ const buildNestedTree = (facts: any[], category: string): TreeNode[] => {
       if (isLast) {
         // It's a file
         if (!current._files) current._files = []
+        // Extract the actual fact ID from the Redis key (e.g., "fact:UUID" -> "UUID")
+        const factId = fact.key ? fact.key.replace('fact:', '') : `fact-${category}-${factIdx}`
         current._files.push({
-          id: `fact-${category}-${factIdx}`,
+          id: factId, // Use actual fact ID from Redis, not synthetic ID
           name: part,
           type: 'file' as const,
           path: `/${category}/${filename}`,
@@ -753,16 +790,131 @@ const handleVectorizeDocument = async (documentId: string) => {
   }
 }
 
+const handleVectorizeFolder = async (folderNode: TreeNode) => {
+  // Recursively collect all unvectorized file IDs from this folder
+  const collectUnvectorizedFiles = (node: TreeNode): string[] => {
+    const fileIds: string[] = []
+
+    if (node.type === 'file') {
+      // Check if file is not vectorized
+      const state = documentStates.value.get(node.id)
+      const status = state?.status || getDocumentStatus(node.id)
+      if (status !== 'vectorized') {
+        fileIds.push(node.id)
+      }
+    } else if (node.type === 'folder' && node.children) {
+      // Recursively collect from children
+      node.children.forEach(child => {
+        fileIds.push(...collectUnvectorizedFiles(child))
+      })
+    }
+
+    return fileIds
+  }
+
+  const documentIds = collectUnvectorizedFiles(folderNode)
+
+  if (documentIds.length === 0) {
+    console.log('No unvectorized documents found in this folder')
+    return
+  }
+
+  console.log(`Starting batch vectorization for ${documentIds.length} documents in folder: ${folderNode.name}`)
+
+  isVectorizing.value = true
+  showProgressModal.value = true
+
+  try {
+    const result = await vectorizeBatch(documentIds)
+    console.log('Folder vectorization complete:', result)
+    // Modal stays open to show results
+  } catch (error) {
+    console.error('Folder vectorization failed:', error)
+  } finally {
+    isVectorizing.value = false
+  }
+}
+
 const vectorizeSelected = async () => {
   isVectorizing.value = true
+  showProgressModal.value = true // Show progress modal
   try {
     const result = await vectorizeSelectedDocs()
     console.log('Batch vectorization complete:', result)
-    // Show success notification
+    // Keep modal open to show results
   } catch (error) {
     console.error('Batch vectorization failed:', error)
   } finally {
     isVectorizing.value = false
+  }
+}
+
+const handleRetryFailed = async () => {
+  // Get all failed document IDs
+  const failedDocs = Array.from(documentStates.value.entries())
+    .filter(([_, state]) => state.status === 'failed')
+    .map(([id, _]) => id)
+
+  if (failedDocs.length > 0) {
+    isVectorizing.value = true
+    for (const docId of failedDocs) {
+      try {
+        await vectorizeDocument(docId)
+      } catch (error) {
+        console.error(`Failed to retry vectorization for ${docId}:`, error)
+      }
+    }
+    isVectorizing.value = false
+  }
+}
+
+const handleCancelVectorization = () => {
+  // Stop ongoing vectorization
+  isVectorizing.value = false
+  showProgressModal.value = false
+  // Note: Actual cancellation of backend jobs would need additional backend support
+  console.log('Vectorization cancelled by user')
+}
+
+const handlePopulate = async (categoryId: string) => {
+  if (populationStates.value[categoryId]?.isPopulating) return
+
+  populationStates.value[categoryId] = { isPopulating: true, progress: 0 }
+
+  try {
+    let result
+    if (categoryId === 'autobot-documentation') {
+      result = await populateAutoBotDocs()
+    } else if (categoryId === 'system-knowledge') {
+      result = await refreshSystemKnowledge()
+    }
+
+    // Simulate progress updates (since backend doesn't provide real-time progress)
+    const progressInterval = setInterval(() => {
+      if (populationStates.value[categoryId].progress < 90) {
+        populationStates.value[categoryId].progress += 10
+      }
+    }, 500)
+
+    // Wait for result (assuming it takes some time)
+    await new Promise(resolve => setTimeout(resolve, 3000))
+
+    clearInterval(progressInterval)
+    populationStates.value[categoryId].progress = 100
+
+    // Show success for a moment
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
+    // Reset state
+    populationStates.value[categoryId] = { isPopulating: false, progress: 0 }
+
+    // Reload the knowledge tree to show new items
+    await loadKnowledgeTree()
+
+    console.log(`${categoryId} population completed:`, result)
+  } catch (error) {
+    console.error(`Failed to populate ${categoryId}:`, error)
+    populationStates.value[categoryId] = { isPopulating: false, progress: 0 }
   }
 }
 
@@ -903,8 +1055,8 @@ watch(() => props.mode, () => {
 .main-categories {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
-  padding: 1.5rem;
+  gap: 0.75rem;
+  padding: 0.75rem;
   background: white;
   border-bottom: 1px solid #e5e7eb;
 }
@@ -912,10 +1064,10 @@ watch(() => props.mode, () => {
 .main-category-card {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1.5rem;
+  gap: 0.75rem;
+  padding: 0.75rem;
   border: 2px solid;
-  border-radius: 12px;
+  border-radius: 8px;
   background: white;
   cursor: pointer;
   transition: all 0.2s;
@@ -927,14 +1079,14 @@ watch(() => props.mode, () => {
 }
 
 .category-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   flex-shrink: 0;
 }
 
@@ -943,17 +1095,17 @@ watch(() => props.mode, () => {
 }
 
 .category-info h3 {
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #111827;
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.25rem 0;
 }
 
 .category-info p {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: #6b7280;
-  margin: 0 0 0.75rem 0;
-  line-height: 1.4;
+  margin: 0 0 0.375rem 0;
+  line-height: 1.3;
 }
 
 .category-stats {
@@ -971,20 +1123,59 @@ watch(() => props.mode, () => {
   border-radius: 6px;
 }
 
+.populate-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 0.5rem;
+}
+
+.populate-btn:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.populate-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.populate-btn.is-populating {
+  background: #10b981;
+}
+
+.populate-btn i {
+  font-size: 0.875rem;
+}
+
 /* Header */
 .browser-header {
   background: white;
-  padding: 1.5rem;
+  padding: 1rem;
   border-bottom: 2px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 /* Category Tabs */
 .category-tabs {
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 1rem;
   overflow-x: auto;
-  padding-bottom: 0.5rem;
+  flex: 0 0 auto;
 }
 
 .category-tab {
@@ -1125,7 +1316,9 @@ watch(() => props.mode, () => {
   position: relative;
   display: flex;
   align-items: center;
+  flex: 1 1 300px;
   max-width: 500px;
+  min-width: 200px;
 }
 
 .search-bar i.fa-search {

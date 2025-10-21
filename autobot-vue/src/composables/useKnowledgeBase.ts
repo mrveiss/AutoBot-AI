@@ -556,6 +556,114 @@ export function useKnowledgeBase() {
       .join(' ')
   }
 
+  /**
+   * Get icon for category
+   */
+  const getCategoryIcon = (category: string): string => {
+    const categoryLower = category.toLowerCase()
+
+    if (categoryLower.includes('architecture') || categoryLower.includes('design')) {
+      return 'fas fa-drafting-compass'
+    }
+    if (categoryLower.includes('implementation') || categoryLower.includes('code')) {
+      return 'fas fa-code'
+    }
+    if (categoryLower.includes('security')) {
+      return 'fas fa-shield-alt'
+    }
+    if (categoryLower.includes('operations') || categoryLower.includes('devops')) {
+      return 'fas fa-cogs'
+    }
+    if (categoryLower.includes('research') || categoryLower.includes('analysis')) {
+      return 'fas fa-flask'
+    }
+    if (categoryLower.includes('reports') || categoryLower.includes('documentation')) {
+      return 'fas fa-file-alt'
+    }
+    if (categoryLower.includes('archives') || categoryLower.includes('history')) {
+      return 'fas fa-archive'
+    }
+    if (categoryLower.includes('project') || categoryLower.includes('planning')) {
+      return 'fas fa-project-diagram'
+    }
+
+    return 'fas fa-folder'
+  }
+
+  /**
+   * Get icon for document type
+   */
+  const getTypeIcon = (type: string): string => {
+    const typeLower = type.toLowerCase()
+
+    if (typeLower.includes('pdf')) return 'fas fa-file-pdf'
+    if (typeLower.includes('word') || typeLower.includes('doc')) return 'fas fa-file-word'
+    if (typeLower.includes('excel') || typeLower.includes('xls')) return 'fas fa-file-excel'
+    if (typeLower.includes('image') || typeLower.includes('png') || typeLower.includes('jpg')) return 'fas fa-file-image'
+    if (typeLower.includes('video')) return 'fas fa-file-video'
+    if (typeLower.includes('audio')) return 'fas fa-file-audio'
+    if (typeLower.includes('json') || typeLower.includes('code')) return 'fas fa-file-code'
+    if (typeLower.includes('csv')) return 'fas fa-file-csv'
+    if (typeLower.includes('text') || typeLower.includes('txt')) return 'fas fa-file-alt'
+    if (typeLower.includes('markdown') || typeLower.includes('md')) return 'fas fa-file-alt'
+
+    return 'fas fa-file'
+  }
+
+  /**
+   * Get icon for file based on name and type
+   */
+  const getFileIcon = (name: string, isDir: boolean = false): string => {
+    if (isDir) {
+      return 'fas fa-folder'
+    }
+
+    const extension = name.split('.').pop()?.toLowerCase() || ''
+
+    // Code files
+    if (['js', 'ts', 'jsx', 'tsx', 'vue'].includes(extension)) {
+      return 'fas fa-file-code text-blue-500'
+    }
+    if (['py', 'rb', 'go', 'java', 'c', 'cpp', 'h'].includes(extension)) {
+      return 'fas fa-file-code text-green-500'
+    }
+
+    // Documents
+    if (['md', 'txt'].includes(extension)) return 'fas fa-file-alt text-gray-600'
+    if (['pdf'].includes(extension)) return 'fas fa-file-pdf text-red-600'
+    if (['doc', 'docx'].includes(extension)) return 'fas fa-file-word text-blue-600'
+    if (['xls', 'xlsx'].includes(extension)) return 'fas fa-file-excel text-green-600'
+
+    // Data files
+    if (['json', 'yaml', 'yml', 'toml'].includes(extension)) {
+      return 'fas fa-file-code text-orange-500'
+    }
+    if (['csv'].includes(extension)) return 'fas fa-file-csv text-green-600'
+
+    // Images
+    if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(extension)) {
+      return 'fas fa-file-image text-purple-500'
+    }
+
+    // Archives
+    if (['zip', 'tar', 'gz', 'rar', '7z'].includes(extension)) {
+      return 'fas fa-file-archive text-yellow-600'
+    }
+
+    return 'fas fa-file text-gray-600'
+  }
+
+  /**
+   * Format file size in human-readable format
+   */
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
   // ==================== EXPORTS ====================
 
   return {
@@ -581,6 +689,12 @@ export function useKnowledgeBase() {
     formatDate,
     formatCategory,
     formatCategoryName: formatCategory, // Alias for backward compatibility
+    formatFileSize,
+    // Icon helpers
+    getCategoryIcon,
+    getTypeIcon,
+    getFileIcon,
+    formatDateOnly: formatDate, // Alias for backward compatibility
     // Helper function
     parseResponse
   }

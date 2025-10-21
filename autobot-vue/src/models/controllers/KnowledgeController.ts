@@ -5,8 +5,24 @@ import type { KnowledgeDocument, SearchResult, SearchFilters } from '@/stores/us
 import { generateCategoryId, generateDocumentId } from '@/utils/ChatIdGenerator.js'
 
 export class KnowledgeController {
-  private knowledgeStore = useKnowledgeStore()
-  private appStore = useAppStore()
+  // FIXED: Lazy initialization - stores only created when accessed, not at module load
+  // This prevents "composables can only be called in setup()" error
+  private _knowledgeStore?: ReturnType<typeof useKnowledgeStore>
+  private _appStore?: ReturnType<typeof useAppStore>
+
+  private get knowledgeStore() {
+    if (!this._knowledgeStore) {
+      this._knowledgeStore = useKnowledgeStore()
+    }
+    return this._knowledgeStore
+  }
+
+  private get appStore() {
+    if (!this._appStore) {
+      this._appStore = useAppStore()
+    }
+    return this._appStore
+  }
 
   // Search operations
   async performSearch(query?: string): Promise<void> {

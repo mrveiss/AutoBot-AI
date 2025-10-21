@@ -7,7 +7,7 @@
       </div>
 
       <!-- Sub-navigation for knowledge sections -->
-      <div class="mb-6">
+      <div>
         <nav class="flex space-x-4 border-b border-blueGray-200">
           <router-link
             to="/knowledge/search"

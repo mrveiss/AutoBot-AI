@@ -43,6 +43,18 @@
         {{ formatSize(node.size) }}
       </span>
 
+      <!-- Unvectorized count badge for folders -->
+      <button
+        v-if="node.type === 'folder' && unvectorizedCount > 0"
+        class="unvectorized-badge"
+        :title="`Click to vectorize ${unvectorizedCount} document${unvectorizedCount !== 1 ? 's' : ''}`"
+        @click.stop="$emit('vectorize-folder', node)"
+      >
+        <i class="fas fa-exclamation-circle"></i>
+        {{ unvectorizedCount }} unvectorized
+        <i class="fas fa-play-circle"></i>
+      </button>
+
       <!-- Vectorization status badge for files -->
       <VectorizationStatusBadge
         v-if="node.type === 'file'"
@@ -78,6 +90,7 @@
         @select="$emit('select', $event)"
         @toggle-select="$emit('toggle-select', $event)"
         @vectorize="$emit('vectorize', $event)"
+        @vectorize-folder="$emit('vectorize-folder', $event)"
       />
     </div>
   </div>
@@ -121,6 +134,7 @@ defineEmits<{
   'select': [node: TreeNode]
   'toggle-select': [documentId: string]
   'vectorize': [documentId: string]
+  'vectorize-folder': [node: TreeNode]
 }>()
 
 // Get document status from vectorization composable
@@ -146,6 +160,27 @@ const vectorizationStatus = computed(() => {
 const canVectorize = computed(() => {
   if (props.node.type !== 'file') return false
   return vectorizationStatus.value !== 'vectorized'
+})
+
+// Count unvectorized documents in a folder (recursive)
+const unvectorizedCount = computed(() => {
+  if (props.node.type !== 'folder' || !props.node.children) return 0
+
+  const countUnvectorized = (node: TreeNode): number => {
+    if (node.type === 'file') {
+      const state = props.vectorizationStates.get(node.id)
+      const status = state?.status || getDocumentStatus(node.id)
+      return status !== 'vectorized' ? 1 : 0
+    }
+
+    if (node.type === 'folder' && node.children) {
+      return node.children.reduce((sum, child) => sum + countUnvectorized(child), 0)
+    }
+
+    return 0
+  }
+
+  return countUnvectorized(props.node)
 })
 
 // Helper function
@@ -247,6 +282,44 @@ const formatSize = (bytes: number): string => {
 .node-size {
   font-size: 0.75rem;
   color: #9ca3af;
+}
+
+.unvectorized-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: #dc2626;
+  background: #fef2f2;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  margin-left: 0.5rem;
+  font-weight: 500;
+  border: 1px solid #fecaca;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.unvectorized-badge:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  transform: translateX(2px);
+  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
+}
+
+.unvectorized-badge i {
+  font-size: 0.75rem;
+}
+
+.unvectorized-badge i.fa-play-circle {
+  font-size: 0.875rem;
+  margin-left: 0.25rem;
+  opacity: 0.7;
+}
+
+.unvectorized-badge:hover i.fa-play-circle {
+  opacity: 1;
+  color: #b91c1c;
 }
 
 .vectorize-btn {
