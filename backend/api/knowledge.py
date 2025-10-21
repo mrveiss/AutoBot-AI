@@ -18,11 +18,9 @@ from pydantic import BaseModel, Field, validator
 
 from backend.background_vectorization import get_background_vectorizer
 from backend.knowledge_factory import get_or_create_knowledge_base
-from src.constants.network_constants import NetworkConstants
 
 # Import RAG Agent for enhanced search capabilities
 try:
-    from src.agents.agent_orchestrator import get_agent_orchestrator
     from src.agents.rag_agent import get_rag_agent
 
     RAG_AVAILABLE = True
@@ -154,8 +152,8 @@ async def _check_vectorization_batch_internal(
         for vector_key in vector_keys:
             pipeline.exists(vector_key)
 
-        # Execute pipeline
-        results = pipeline.execute()
+        # Execute pipeline (wrap in to_thread to avoid blocking event loop)
+        results = await asyncio.to_thread(pipeline.execute)
 
         # Build status map
         statuses = {}
@@ -284,6 +282,7 @@ async def get_knowledge_stats_basic(req: Request):
 async def get_main_categories(req: Request):
     """
     Get the 3 main knowledge base categories with their metadata and stats.
+    OPTIMIZED: Uses cached category counts for fast response (<50ms).
 
     Returns:
         {
@@ -309,6 +308,10 @@ async def get_main_categories(req: Request):
 
         kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
+        logger.info(
+            f"get_main_categories - kb_to_use: {kb_to_use is not None}, has_redis: {kb_to_use.aioredis_client is not None if kb_to_use else False}"
+        )
+
         # Initialize category counts
         category_counts = {
             KnowledgeCategory.AUTOBOT_DOCUMENTATION: 0,
@@ -316,32 +319,64 @@ async def get_main_categories(req: Request):
             KnowledgeCategory.USER_KNOWLEDGE: 0,
         }
 
-        # Count facts per main category by querying all facts
-        if kb_to_use:
+        # PERFORMANCE FIX: Use cached category counts instead of scanning all facts
+        # Scanning 393 facts and parsing JSON metadata takes seconds
+        # Use pre-computed counts stored in Redis for instant lookups (<50ms)
+        if kb_to_use and kb_to_use.aioredis_client:
+            logger.info("Attempting to get cached category counts...")
             try:
-                # Get all facts from knowledge base
-                all_facts = await kb_to_use.get_all_facts()
+                # Try to get cached counts first (instant lookup)
+                cache_keys = {
+                    KnowledgeCategory.AUTOBOT_DOCUMENTATION: "kb:stats:category:autobot-documentation",
+                    KnowledgeCategory.SYSTEM_KNOWLEDGE: "kb:stats:category:system-knowledge",
+                    KnowledgeCategory.USER_KNOWLEDGE: "kb:stats:category:user-knowledge",
+                }
 
-                logger.info(f"Categorizing {len(all_facts)} facts into main categories")
+                cached_values = await kb_to_use.aioredis_client.mget(
+                    list(cache_keys.values())
+                )
 
-                # Categorize each fact based on its source/metadata
-                for fact in all_facts:
-                    # Get source from fact metadata
-                    source = fact.get("metadata", {}).get("source", "") or fact.get(
-                        "source", ""
+                # Check if all cache values exist
+                if all(v is not None for v in cached_values):
+                    # Use cached values
+                    for i, cat_id in enumerate(cache_keys.keys()):
+                        category_counts[cat_id] = int(cached_values[i])
+                    logger.debug(f"Using cached category counts: {category_counts}")
+                else:
+                    # Cache miss - compute counts the slow way
+                    logger.info("Cache miss - computing category counts from all facts")
+
+                    # Get all facts from knowledge base
+                    all_facts = await kb_to_use.get_all_facts()
+
+                    logger.info(
+                        f"Categorizing {len(all_facts)} facts into main categories"
                     )
-                    if not source:
-                        # Try to get filename or title as fallback
-                        source = fact.get("metadata", {}).get(
-                            "filename", ""
-                        ) or fact.get("title", "")
 
-                    # Map to main category
-                    main_category = get_category_for_source(source)
-                    if main_category in category_counts:
-                        category_counts[main_category] += 1
+                    # Categorize each fact based on its source/metadata
+                    for fact in all_facts:
+                        # Get source from fact metadata
+                        source = fact.get("metadata", {}).get("source", "") or fact.get(
+                            "source", ""
+                        )
+                        if not source:
+                            # Try to get filename or title as fallback
+                            source = fact.get("metadata", {}).get(
+                                "filename", ""
+                            ) or fact.get("title", "")
 
-                logger.info(f"Category counts: {category_counts}")
+                        # Map to main category
+                        main_category = get_category_for_source(source)
+                        if main_category in category_counts:
+                            category_counts[main_category] += 1
+
+                    logger.info(f"Category counts: {category_counts}")
+
+                    # Cache the counts for 60 seconds
+                    for cat_id, cache_key in cache_keys.items():
+                        await kb_to_use.aioredis_client.set(
+                            cache_key, category_counts[cat_id], ex=60
+                        )
 
             except Exception as e:
                 logger.error(f"Error categorizing facts: {e}")
@@ -522,7 +557,8 @@ async def get_knowledge_categories(req: Request):
                 fact = json.loads(fact_json)
                 category = fact.get("metadata", {}).get("category", "uncategorized")
                 category_counts[category] = category_counts.get(category, 0) + 1
-            except:
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                logger.warning(f"Error parsing fact JSON: {e}")
                 continue
 
         # Format for frontend with counts
@@ -1570,7 +1606,7 @@ async def populate_autobot_docs(request: dict, req: Request):
         # Use project-relative path instead of absolute path
         autobot_base_path = PathLib(__file__).parent.parent.parent
 
-        # Scan for all markdown files recursively in docs/
+        # Scan for all markdown files recursively in docs/ ONLY
         doc_files = []
 
         # Initialize counters before any loops
@@ -1578,13 +1614,9 @@ async def populate_autobot_docs(request: dict, req: Request):
         items_skipped = 0
         items_failed = 0
 
-        # Key documentation files in root
-        root_files = ["CLAUDE.md", "README.md"]
-        for f in root_files:
-            if (autobot_base_path / f).exists():
-                doc_files.append(f)
-
-        # Recursively find all .md files in docs/
+        # Recursively find all .md files in docs/ folder ONLY
+        # AutoBot documentation should ONLY include files from docs/ folder
+        # Root files like CLAUDE.md, README.md are NOT documentation
         docs_path = autobot_base_path / "docs"
         if docs_path.exists():
             for md_file in docs_path.rglob("*.md"):
@@ -1685,25 +1717,29 @@ Type: Documentation
 
         # Add AutoBot configuration information
         try:
-            config_info = """AutoBot System Configuration
+            # Import constants for network configuration reference
+            from src.constants.network_constants import NetworkConstants
+            from src.constants.path_constants import PATH
+
+            config_info = f"""AutoBot System Configuration
 
 Network Layout:
-- Main Machine (WSL): 172.16.168.20 - Backend API (port 8001) + Desktop/Terminal VNC (port 6080)
-- VM1 Frontend: 172.16.168.21:5173 - Web interface (SINGLE FRONTEND SERVER)
-- VM2 NPU Worker: 172.16.168.22:8081 - Hardware AI acceleration
-- VM3 Redis: 172.16.168.23:6379 - Data layer
-- VM4 AI Stack: 172.16.168.24:8080 - AI processing
-- VM5 Browser: 172.16.168.25:3000 - Web automation (Playwright)
+- Main Machine (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API (port {NetworkConstants.BACKEND_PORT}) + NPU Worker (port 8082) + Desktop/Terminal VNC (port 6080)
+- VM1 Frontend: {NetworkConstants.FRONTEND_VM_IP}:5173 - Web interface (SINGLE FRONTEND SERVER)
+- VM2 NPU Worker: {NetworkConstants.NPU_WORKER_VM_IP}:8081 - Secondary NPU worker (Linux)
+- VM3 Redis: {NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT} - Data layer
+- VM4 AI Stack: {NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT} - AI processing
+- VM5 Browser: {NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT} - Web automation (Playwright)
 
 Key Commands:
 - Setup: bash setup.sh [--full|--minimal|--distributed]
 - Run: bash run_autobot.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
 
 Critical Rules:
-- NEVER edit code directly on remote VMs (172.16.168.21-25)
-- ALL code edits MUST be made locally in /home/kali/Desktop/AutoBot/
+- NEVER edit code directly on remote VMs (VM1-VM5)
+- ALL code edits MUST be made locally in {PATH.PROJECT_ROOT}/
 - Use ./sync-frontend.sh or sync scripts to deploy changes
-- Frontend ONLY runs on VM1 (172.16.168.21:5173)
+- Frontend ONLY runs on VM1 ({NetworkConstants.FRONTEND_VM_IP}:5173)
 - NO temporary fixes or workarounds allowed
 
 Source: AutoBot System Configuration
@@ -1932,7 +1968,8 @@ async def get_detailed_stats(req: Request):
                 content_size = len(content)
                 total_content_size += content_size
                 fact_sizes.append(content_size)
-            except:
+            except (KeyError, TypeError, AttributeError) as e:
+                logger.warning(f"Error processing fact for size calculation: {e}")
                 continue
 
         # Calculate size metrics
@@ -2054,7 +2091,8 @@ async def get_man_pages_summary(req: Request):
                         last_indexed is None or created_at > last_indexed
                     ):
                         last_indexed = created_at
-                except:
+                except (KeyError, TypeError, ValueError) as e:
+                    logger.warning(f"Error parsing fact metadata: {e}")
                     continue
 
             return {
@@ -2332,10 +2370,28 @@ async def _enhance_search_with_rag(
 async def get_facts_by_category(
     req: Request, category: Optional[str] = None, limit: int = 100
 ):
-    """Get facts grouped by category for browsing"""
+    """Get facts grouped by category for browsing with caching"""
     try:
         kb = await get_or_create_knowledge_base(req.app)
         import json
+
+        # Check cache first (60 second TTL)
+        cache_key = f"kb:cache:facts_by_category:{category or 'all'}:{limit}"
+        cached_result = kb.redis_client.get(cache_key)
+
+        if cached_result:
+            logger.debug(
+                f"Cache HIT for facts_by_category (category={category}, limit={limit})"
+            )
+            return json.loads(
+                cached_result.decode("utf-8")
+                if isinstance(cached_result, bytes)
+                else cached_result
+            )
+
+        logger.info(
+            f"Cache MISS for facts_by_category - scanning all facts (category={category}, limit={limit})"
+        )
 
         # Get all fact keys from Redis
         fact_keys = kb.redis_client.keys("fact:*")
@@ -2370,8 +2426,13 @@ async def get_facts_by_category(
                     else str(content_bytes)
                 )
 
-                # Get category from metadata
-                fact_category = metadata.get("category", "general")
+                # Get category based on source field (not metadata.category)
+                from backend.knowledge_categories import get_category_for_source
+
+                source = metadata.get("source", "")
+                fact_category = (
+                    get_category_for_source(source).value if source else "general"
+                )
                 fact_title = metadata.get("title", metadata.get("command", "Untitled"))
                 fact_type = metadata.get("type", "unknown")
 
@@ -2411,11 +2472,22 @@ async def get_facts_by_category(
         for cat in categories_dict:
             categories_dict[cat] = categories_dict[cat][:limit]
 
-        return {
+        result = {
             "categories": categories_dict,
             "total_facts": sum(len(v) for v in categories_dict.values()),
             "category_filter": category,
         }
+
+        # Cache the result for 60 seconds
+        try:
+            kb.redis_client.setex(cache_key, 60, json.dumps(result))
+            logger.debug(
+                f"Cached facts_by_category result (category={category}, limit={limit})"
+            )
+        except Exception as cache_error:
+            logger.warning(f"Failed to cache facts_by_category: {cache_error}")
+
+        return result
     except Exception as e:
         logger.error(f"Error getting facts by category: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -2696,15 +2768,25 @@ async def _vectorize_fact_background(
         )
         logger.info(f"Started vectorization job {job_id} for fact {fact_id}")
 
-        # Get fact data from Redis
-        fact_json = kb_instance.redis_client.hget("knowledge_base:facts", fact_id)
+        # Get fact data from Redis - facts are stored as individual hashes with key "fact:{uuid}"
+        fact_key = f"fact:{fact_id}"
+        fact_hash = kb_instance.redis_client.hgetall(fact_key)
 
-        if not fact_json:
+        if not fact_hash:
             raise ValueError(f"Fact {fact_id} not found in knowledge base")
 
-        fact_data = json.loads(fact_json)
-        content = fact_data.get("content", "")
-        metadata = fact_data.get("metadata", {})
+        # Extract content and metadata from hash
+        content = (
+            fact_hash.get("content", "")
+            if isinstance(fact_hash.get("content"), str)
+            else fact_hash.get("content", b"").decode("utf-8")
+        )
+        metadata_str = fact_hash.get("metadata", "{}")
+        metadata = (
+            json.loads(metadata_str)
+            if isinstance(metadata_str, str)
+            else json.loads(metadata_str.decode("utf-8"))
+        )
 
         # Update progress
         job_data["progress"] = 30
@@ -2808,9 +2890,10 @@ async def vectorize_individual_fact(
                 status_code=500, detail="Knowledge base not initialized"
             )
 
-        # Check if fact exists
-        fact_json = kb.redis_client.hget("knowledge_base:facts", fact_id)
-        if not fact_json:
+        # Check if fact exists - facts are stored as individual Redis hashes with key "fact:{uuid}"
+        fact_key = f"fact:{fact_id}"
+        fact_data = kb.redis_client.hgetall(fact_key)
+        if not fact_data:
             raise HTTPException(
                 status_code=404, detail=f"Fact {fact_id} not found in knowledge base"
             )
@@ -2893,6 +2976,507 @@ async def get_vectorization_job_status(job_id: str, req: Request):
         raise
     except Exception as e:
         logger.error(f"Error getting vectorization job status {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/vectorize_jobs/failed")
+async def get_failed_vectorization_jobs(req: Request):
+    """
+    Get all failed vectorization jobs from Redis.
+
+    Returns:
+        List of failed jobs with their error details
+    """
+    try:
+        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+        if kb is None:
+            raise HTTPException(
+                status_code=500, detail="Knowledge base not initialized"
+            )
+
+        # Use SCAN to iterate through keys efficiently (non-blocking)
+        failed_jobs = []
+        cursor = 0
+
+        while True:
+            cursor, keys = kb.redis_client.scan(
+                cursor, match="vectorization_job:*", count=100
+            )
+
+            # Use pipeline for batch operations
+            if keys:
+                pipe = kb.redis_client.pipeline()
+                for key in keys:
+                    pipe.get(key)
+                results = pipe.execute()
+
+                for job_json in results:
+                    if job_json:
+                        job_data = json.loads(job_json)
+                        if job_data.get("status") == "failed":
+                            failed_jobs.append(job_data)
+
+            if cursor == 0:
+                break
+
+        return {
+            "status": "success",
+            "failed_jobs": failed_jobs,
+            "total_failed": len(failed_jobs),
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting failed vectorization jobs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/vectorize_jobs/{job_id}/retry")
+async def retry_vectorization_job(
+    job_id: str, req: Request, background_tasks: BackgroundTasks, force: bool = False
+):
+    """
+    Retry a failed vectorization job.
+
+    Args:
+        job_id: ID of the failed job to retry
+        force: Force re-vectorization even if already vectorized
+
+    Returns:
+        New job tracking information
+    """
+    try:
+        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+        if kb is None:
+            raise HTTPException(
+                status_code=500, detail="Knowledge base not initialized"
+            )
+
+        # Get old job data
+        old_job_json = kb.redis_client.get(f"vectorization_job:{job_id}")
+
+        if not old_job_json:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        old_job_data = json.loads(old_job_json)
+        fact_id = old_job_data.get("fact_id")
+
+        if not fact_id:
+            raise HTTPException(status_code=400, detail="Job does not contain fact_id")
+
+        # Create new job
+        new_job_id = str(uuid.uuid4())
+        job_data = {
+            "job_id": new_job_id,
+            "fact_id": fact_id,
+            "status": "pending",
+            "progress": 0,
+            "started_at": datetime.now().isoformat(),
+            "completed_at": None,
+            "error": None,
+            "result": None,
+            "retry_of": job_id,  # Track that this is a retry
+        }
+
+        kb.redis_client.setex(
+            f"vectorization_job:{new_job_id}", 3600, json.dumps(job_data)
+        )
+
+        # Add background task
+        background_tasks.add_task(
+            _vectorize_fact_background, kb, fact_id, new_job_id, force
+        )
+
+        logger.info(f"Retrying vectorization job {job_id} as {new_job_id}")
+
+        return {
+            "status": "success",
+            "message": "Retry job started",
+            "new_job_id": new_job_id,
+            "fact_id": fact_id,
+            "original_job_id": job_id,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrying vectorization job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/vectorize_jobs/{job_id}")
+async def delete_vectorization_job(job_id: str, req: Request):
+    """
+    Delete a vectorization job record from Redis.
+
+    Args:
+        job_id: ID of the job to delete
+
+    Returns:
+        Deletion confirmation
+    """
+    try:
+        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+        if kb is None:
+            raise HTTPException(
+                status_code=500, detail="Knowledge base not initialized"
+            )
+
+        # Delete job from Redis
+        deleted = kb.redis_client.delete(f"vectorization_job:{job_id}")
+
+        if deleted == 0:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        logger.info(f"Deleted vectorization job {job_id}")
+
+        return {
+            "status": "success",
+            "message": f"Job {job_id} deleted",
+            "job_id": job_id,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting vectorization job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/vectorize_jobs/failed/clear")
+async def clear_failed_vectorization_jobs(req: Request):
+    """
+    Clear all failed vectorization jobs from Redis.
+
+    Returns:
+        Number of jobs cleared
+    """
+    try:
+        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+        if kb is None:
+            raise HTTPException(
+                status_code=500, detail="Knowledge base not initialized"
+            )
+
+        # Use SCAN to iterate through keys efficiently (non-blocking)
+        deleted_count = 0
+        cursor = 0
+
+        while True:
+            cursor, keys = kb.redis_client.scan(
+                cursor, match="vectorization_job:*", count=100
+            )
+
+            # Use pipeline for batch operations
+            if keys:
+                pipe = kb.redis_client.pipeline()
+                for key in keys:
+                    pipe.get(key)
+                results = pipe.execute()
+
+                # Collect failed job keys
+                failed_keys = []
+                for key, job_json in zip(keys, results):
+                    if job_json:
+                        job_data = json.loads(job_json)
+                        if job_data.get("status") == "failed":
+                            failed_keys.append(key)
+
+                # Delete failed jobs in batch
+                if failed_keys:
+                    kb.redis_client.delete(*failed_keys)
+                    deleted_count += len(failed_keys)
+
+            if cursor == 0:
+                break
+
+        logger.info(f"Cleared {deleted_count} failed vectorization jobs")
+
+        return {
+            "status": "success",
+            "message": f"Cleared {deleted_count} failed jobs",
+            "deleted_count": deleted_count,
+        }
+
+    except Exception as e:
+        logger.error(f"Error clearing failed vectorization jobs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/deduplicate")
+async def deduplicate_facts(req: Request, dry_run: bool = True):
+    """
+    Remove duplicate facts based on category + title.
+    Keeps the oldest fact and removes newer duplicates.
+
+    Args:
+        dry_run: If True, only report duplicates without deleting (default: True)
+
+    Returns:
+        Report of duplicates found and removed
+    """
+    try:
+        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+        if kb is None:
+            raise HTTPException(
+                status_code=500, detail="Knowledge base not initialized"
+            )
+
+        logger.info(f"Starting deduplication scan (dry_run={dry_run})...")
+
+        # Use SCAN to iterate through all fact keys
+        fact_groups = {}  # category:title -> list of (fact_id, created_at, fact_key)
+        cursor = 0
+        total_facts = 0
+
+        while True:
+            cursor, keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
+
+            if keys:
+                # Use pipeline for batch GET operations
+                pipe = kb.redis_client.pipeline()
+                for key in keys:
+                    pipe.hget(key, "metadata")
+                    pipe.hget(key, "created_at")
+                results = pipe.execute()
+
+                # Group facts by category+title
+                for i in range(0, len(results), 2):
+                    metadata_str = results[i]
+                    created_at = results[i + 1]
+                    fact_key = keys[i // 2]
+
+                    # Decode key if it's bytes
+                    if isinstance(fact_key, bytes):
+                        fact_key = fact_key.decode("utf-8")
+
+                    if metadata_str:
+                        try:
+                            metadata = json.loads(metadata_str)
+                            category = metadata.get("category", "unknown")
+                            title = metadata.get("title", "unknown")
+                            fact_id = metadata.get("fact_id", fact_key.split(":")[1])
+
+                            group_key = f"{category}:{title}"
+
+                            if group_key not in fact_groups:
+                                fact_groups[group_key] = []
+
+                            fact_groups[group_key].append(
+                                {
+                                    "fact_id": fact_id,
+                                    "fact_key": fact_key,
+                                    "created_at": created_at or "1970-01-01T00:00:00",
+                                    "category": category,
+                                    "title": title,
+                                }
+                            )
+                            total_facts += 1
+                        except json.JSONDecodeError:
+                            logger.warning(f"Failed to parse metadata for {fact_key}")
+
+            if cursor == 0:
+                break
+
+        logger.info(
+            f"Scanned {total_facts} facts, found {len(fact_groups)} unique category+title combinations"
+        )
+
+        # Find duplicates
+        duplicates_found = []
+        facts_to_delete = []
+
+        for group_key, facts in fact_groups.items():
+            if len(facts) > 1:
+                # Sort by created_at to keep the oldest
+                facts.sort(key=lambda x: x["created_at"])
+
+                # Keep first (oldest), mark rest for deletion
+                kept_fact = facts[0]
+                duplicate_facts = facts[1:]
+
+                duplicates_found.append(
+                    {
+                        "category": kept_fact["category"],
+                        "title": kept_fact["title"],
+                        "total_copies": len(facts),
+                        "kept_fact_id": kept_fact["fact_id"],
+                        "kept_created_at": kept_fact["created_at"],
+                        "removed_count": len(duplicate_facts),
+                        "removed_fact_ids": [f["fact_id"] for f in duplicate_facts],
+                    }
+                )
+
+                facts_to_delete.extend([f["fact_key"] for f in duplicate_facts])
+
+        # Delete duplicates if not dry run
+        deleted_count = 0
+        if not dry_run and facts_to_delete:
+            logger.info(f"Deleting {len(facts_to_delete)} duplicate facts...")
+
+            # Delete in batches
+            batch_size = 100
+            for i in range(0, len(facts_to_delete), batch_size):
+                batch = facts_to_delete[i : i + batch_size]
+                kb.redis_client.delete(*batch)
+                deleted_count += len(batch)
+
+            logger.info(f"Deleted {deleted_count} duplicate facts")
+
+        return {
+            "status": "success",
+            "dry_run": dry_run,
+            "total_facts_scanned": total_facts,
+            "unique_combinations": len(fact_groups),
+            "duplicate_groups_found": len(duplicates_found),
+            "total_duplicates": len(facts_to_delete),
+            "deleted_count": deleted_count,
+            "duplicates": duplicates_found[:50],  # Return first 50 for preview
+        }
+
+    except Exception as e:
+        logger.error(f"Error during deduplication: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/orphans")
+async def find_orphaned_facts(req: Request):
+    """
+    Find facts whose source files no longer exist.
+    Only checks facts with file_path metadata.
+
+    Returns:
+        List of orphaned facts
+    """
+    try:
+        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+        if kb is None:
+            raise HTTPException(
+                status_code=500, detail="Knowledge base not initialized"
+            )
+
+        logger.info("Scanning for orphaned facts...")
+
+        orphaned_facts = []
+        cursor = 0
+        total_checked = 0
+
+        while True:
+            cursor, keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
+
+            if keys:
+                # Use pipeline for batch operations
+                pipe = kb.redis_client.pipeline()
+                for key in keys:
+                    pipe.hget(key, "metadata")
+                results = pipe.execute()
+
+                for key, metadata_str in zip(keys, results):
+                    # Decode key if it's bytes
+                    if isinstance(key, bytes):
+                        key = key.decode("utf-8")
+
+                    if metadata_str:
+                        try:
+                            metadata = json.loads(metadata_str)
+                            file_path = metadata.get("file_path")
+
+                            # Only check facts with file_path metadata
+                            if file_path:
+                                total_checked += 1
+
+                                # Check if file exists
+                                if not PathLib(file_path).exists():
+                                    orphaned_facts.append(
+                                        {
+                                            "fact_id": metadata.get("fact_id"),
+                                            "fact_key": key,
+                                            "title": metadata.get("title", "Unknown"),
+                                            "category": metadata.get(
+                                                "category", "Unknown"
+                                            ),
+                                            "file_path": file_path,
+                                            "source": metadata.get("source", "Unknown"),
+                                        }
+                                    )
+                        except json.JSONDecodeError:
+                            logger.warning(f"Failed to parse metadata for {key}")
+
+            if cursor == 0:
+                break
+
+        logger.info(
+            f"Checked {total_checked} facts with file paths, found {len(orphaned_facts)} orphans"
+        )
+
+        return {
+            "status": "success",
+            "total_facts_checked": total_checked,
+            "orphaned_count": len(orphaned_facts),
+            "orphaned_facts": orphaned_facts,
+        }
+
+    except Exception as e:
+        logger.error(f"Error finding orphaned facts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/orphans")
+async def cleanup_orphaned_facts(req: Request, dry_run: bool = True):
+    """
+    Remove facts whose source files no longer exist.
+
+    Args:
+        dry_run: If True, only report orphans without deleting (default: True)
+
+    Returns:
+        Report of orphans found and removed
+    """
+    try:
+        # First find orphans
+        orphans_response = await find_orphaned_facts(req)
+        orphaned_facts = orphans_response.get("orphaned_facts", [])
+
+        if not orphaned_facts:
+            return {
+                "status": "success",
+                "message": "No orphaned facts found",
+                "deleted_count": 0,
+            }
+
+        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+        # Delete orphans if not dry run
+        deleted_count = 0
+        if not dry_run:
+            logger.info(f"Deleting {len(orphaned_facts)} orphaned facts...")
+
+            fact_keys = [f["fact_key"] for f in orphaned_facts]
+
+            # Delete in batches
+            batch_size = 100
+            for i in range(0, len(fact_keys), batch_size):
+                batch = fact_keys[i : i + batch_size]
+                kb.redis_client.delete(*batch)
+                deleted_count += len(batch)
+
+            logger.info(f"Deleted {deleted_count} orphaned facts")
+
+        return {
+            "status": "success",
+            "dry_run": dry_run,
+            "orphaned_count": len(orphaned_facts),
+            "deleted_count": deleted_count,
+            "orphaned_facts": orphaned_facts[:20],  # Return first 20 for preview
+        }
+
+    except Exception as e:
+        logger.error(f"Error cleaning up orphaned facts: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -2986,3 +3570,171 @@ async def get_vectorization_status(req: Request):
     except Exception as e:
         logger.error(f"Failed to get vectorization status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== CRUD OPERATIONS FOR FACTS =====
+
+
+class UpdateFactRequest(BaseModel):
+    """Request body for updating a fact"""
+
+    content: Optional[str] = Field(None, description="New content for the fact")
+    metadata: Optional[Dict[str, Any]] = Field(
+        None, description="Metadata updates (title, source, category, etc.)"
+    )
+
+    @validator("content")
+    def validate_content(cls, v):
+        """Validate content is not empty if provided"""
+        if v is not None and not v.strip():
+            raise ValueError("Content cannot be empty")
+        return v
+
+
+@router.put("/fact/{fact_id}")
+async def update_fact(
+    fact_id: str = Path(..., description="Fact ID to update"),
+    request: UpdateFactRequest = ...,
+    req: Request = None,
+):
+    """
+    Update an existing knowledge base fact.
+
+    Parameters:
+    - fact_id: UUID of the fact to update
+    - content (optional): New text content
+    - metadata (optional): Metadata updates (title, source, category)
+
+    Returns:
+    - status: success or error
+    - fact_id: ID of the updated fact
+    - updated_fields: List of fields that were updated
+    - message: Success or error message
+    """
+    try:
+        # Validate fact_id format
+        if not fact_id or not isinstance(fact_id, str):
+            raise HTTPException(status_code=400, detail="Invalid fact_id format")
+
+        # Validate at least one field is provided
+        if request.content is None and request.metadata is None:
+            raise HTTPException(
+                status_code=400,
+                detail="At least one field (content or metadata) must be provided",
+            )
+
+        # Get knowledge base instance
+        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+        if kb is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Knowledge base not initialized - please check logs for errors",
+            )
+
+        # Check if update_fact method exists (KnowledgeBaseV2)
+        if not hasattr(kb, "update_fact"):
+            raise HTTPException(
+                status_code=501,
+                detail="Update operation not supported by current knowledge base implementation",
+            )
+
+        logger.info(
+            f"Updating fact {fact_id}: content={'provided' if request.content else 'unchanged'}, metadata={'provided' if request.metadata else 'unchanged'}"
+        )
+
+        # Call update_fact method
+        result = await kb.update_fact(
+            fact_id=fact_id, content=request.content, metadata=request.metadata
+        )
+
+        # Check if update was successful
+        if result.get("success"):
+            return {
+                "status": "success",
+                "fact_id": fact_id,
+                "updated_fields": result.get("updated_fields", []),
+                "vector_updated": result.get("vector_updated", False),
+                "message": result.get("message", "Fact updated successfully"),
+            }
+        else:
+            # Update failed - return error
+            error_message = result.get("message", "Unknown error")
+            if "not found" in error_message.lower():
+                raise HTTPException(status_code=404, detail=error_message)
+            else:
+                raise HTTPException(status_code=500, detail=error_message)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating fact {fact_id}: {str(e)}")
+        import traceback
+
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Update fact failed: {str(e)}")
+
+
+@router.delete("/fact/{fact_id}")
+async def delete_fact(
+    fact_id: str = Path(..., description="Fact ID to delete"), req: Request = None
+):
+    """
+    Delete a knowledge base fact and its vectorization.
+
+    Parameters:
+    - fact_id: UUID of the fact to delete
+
+    Returns:
+    - status: success or error
+    - fact_id: ID of the deleted fact
+    - message: Success or error message
+    """
+    try:
+        # Validate fact_id format
+        if not fact_id or not isinstance(fact_id, str):
+            raise HTTPException(status_code=400, detail="Invalid fact_id format")
+
+        # Get knowledge base instance
+        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+        if kb is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Knowledge base not initialized - please check logs for errors",
+            )
+
+        # Check if delete_fact method exists (KnowledgeBaseV2)
+        if not hasattr(kb, "delete_fact"):
+            raise HTTPException(
+                status_code=501,
+                detail="Delete operation not supported by current knowledge base implementation",
+            )
+
+        logger.info(f"Deleting fact {fact_id}")
+
+        # Call delete_fact method
+        result = await kb.delete_fact(fact_id=fact_id)
+
+        # Check if deletion was successful
+        if result.get("success"):
+            return {
+                "status": "success",
+                "fact_id": fact_id,
+                "vector_deleted": result.get("vector_deleted", False),
+                "message": result.get("message", "Fact deleted successfully"),
+            }
+        else:
+            # Deletion failed - return error
+            error_message = result.get("message", "Unknown error")
+            if "not found" in error_message.lower():
+                raise HTTPException(status_code=404, detail=error_message)
+            else:
+                raise HTTPException(status_code=500, detail=error_message)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting fact {fact_id}: {str(e)}")
+        import traceback
+
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Delete fact failed: {str(e)}")

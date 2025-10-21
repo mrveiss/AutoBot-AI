@@ -14,31 +14,23 @@ Key Improvements:
 """
 
 import asyncio
-import hashlib
 import json
 import logging
-import os
-import tempfile
 import uuid
 from datetime import datetime
-from io import BytesIO
-from pathlib import Path
-from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-import aiofiles
 import aioredis
 import redis
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from llama_index.core import Document, Settings, VectorStoreIndex
-from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.storage.storage_context import StorageContext
-from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
+from llama_index.embeddings.ollama import (
+    OllamaEmbedding as LlamaIndexOllamaEmbedding,
+)
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
 from llama_index.vector_stores.redis import RedisVectorStore
-from pypdf import PdfReader
 from redisvl.schema import IndexSchema
 
-from src.circuit_breaker import circuit_breaker_async
 from src.constants.network_constants import NetworkConstants
 from src.unified_config import config
 
@@ -57,7 +49,8 @@ class KnowledgeBaseV2:
         self.redis_host = config.get_host("redis")
         self.redis_port = config.get_port("redis")
         self.redis_password = config.get("redis.password")
-        self.redis_db = config.get("redis.databases.knowledge", 1)
+        # CRITICAL: Knowledge base MUST use DB 0 for RedisSearch compatibility
+        self.redis_db = config.get("redis.databases.knowledge", 0)
         self.redis_index_name = config.get(
             "redis.indexes.knowledge_base", "llama_index"
         )
@@ -446,8 +439,15 @@ class KnowledgeBaseV2:
                                 if isinstance(metadata_str, bytes):
                                     metadata_str = metadata_str.decode()
                                 metadata = json.loads(metadata_str)
-                            except:
-                                pass
+                            except (
+                                json.JSONDecodeError,
+                                TypeError,
+                                UnicodeDecodeError,
+                            ) as e:
+                                logger.warning(
+                                    f"Invalid metadata for fact {fact_id}: {e}"
+                                )
+                                metadata = {}
 
                         # Create document and index it
                         document = Document(
@@ -615,10 +615,125 @@ class KnowledgeBaseV2:
             logger.error(f"Knowledge base search failed: {e}")
             return []
 
+    async def _find_fact_by_unique_key(
+        self, unique_key: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Find an existing fact by unique key (fast Redis SET lookup).
+
+        Args:
+            unique_key: The unique key to search for (e.g., "machine:os:command:section")
+
+        Returns:
+            Dict with fact info if found, None otherwise
+        """
+        try:
+            # Check Redis SET for unique key mapping
+            unique_key_name = f"unique_key:man_page:{unique_key}"
+            fact_id = self.redis_client.get(unique_key_name)
+
+            if fact_id:
+                # Decode bytes if necessary
+                if isinstance(fact_id, bytes):
+                    fact_id = fact_id.decode("utf-8")
+
+                # Retrieve the fact metadata
+                fact_key = f"fact:{fact_id}"
+                metadata_str = self.redis_client.hget(fact_key, "metadata")
+                created_at = self.redis_client.hget(fact_key, "created_at")
+
+                if metadata_str:
+                    metadata = json.loads(metadata_str)
+                    logger.info(
+                        f"Found existing fact by unique key: {unique_key} → {fact_id}"
+                    )
+                    return {
+                        "fact_id": fact_id,
+                        "created_at": created_at,
+                        "metadata": metadata,
+                    }
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error finding fact by unique key '{unique_key}': {e}")
+            return None
+
+    async def _find_existing_fact(
+        self, category: str, title: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Find an existing fact with the same category and title.
+
+        Args:
+            category: The category to search for
+            title: The title to search for
+
+        Returns:
+            Dict with fact info if found, None otherwise
+        """
+        try:
+            # Use SCAN to iterate through fact keys
+            cursor = 0
+
+            while True:
+                cursor, keys = self.redis_client.scan(cursor, match="fact:*", count=100)
+
+                if keys:
+                    # Use pipeline for batch operations
+                    pipe = self.redis_client.pipeline()
+                    for key in keys:
+                        pipe.hget(key, "metadata")
+                        pipe.hget(key, "created_at")
+                    results = pipe.execute()
+
+                    # Check each fact's metadata
+                    for i in range(0, len(results), 2):
+                        metadata_str = results[i]
+                        created_at = results[i + 1]
+
+                        if metadata_str:
+                            try:
+                                metadata = json.loads(metadata_str)
+                                if (
+                                    metadata.get("category") == category
+                                    and metadata.get("title") == title
+                                ):
+                                    # Found a matching fact
+                                    return {
+                                        "fact_id": metadata.get("fact_id"),
+                                        "created_at": created_at,
+                                        "metadata": metadata,
+                                    }
+                            except json.JSONDecodeError:
+                                continue
+
+                if cursor == 0:
+                    break
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error finding existing fact: {e}")
+            return None
+
     async def store_fact(
-        self, content: str, metadata: Optional[Dict[str, Any]] = None
+        self,
+        content: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        check_duplicates: bool = True,
     ) -> Dict[str, Any]:
-        """Store a fact in the knowledge base with vector indexing"""
+        """
+        Store a fact in the knowledge base with vector indexing
+
+        Args:
+            content: The fact content to store
+            metadata: Optional metadata dict with title, category, etc.
+            check_duplicates: If True, check for existing facts with same category+title (default: True)
+
+        Returns:
+            Dict with status, fact_id, and optional duplicate_of field
+        """
         self.ensure_initialized()
 
         try:
@@ -628,6 +743,65 @@ class KnowledgeBaseV2:
                     "message": "Content cannot be empty",
                     "fact_id": None,
                 }
+
+            # Check for duplicates based on unique_key first (faster, more specific)
+            if check_duplicates and metadata:
+                unique_key = metadata.get("unique_key")
+
+                if unique_key:
+                    # Fast lookup using Redis SET
+                    existing_fact = await self._find_fact_by_unique_key(unique_key)
+
+                    if existing_fact:
+                        logger.info(
+                            f"Duplicate fact detected by unique key: '{unique_key}', existing_fact_id={existing_fact['fact_id']}"
+                        )
+                        return {
+                            "status": "duplicate",
+                            "message": f"Fact already exists with unique key: {unique_key}",
+                            "fact_id": existing_fact["fact_id"],
+                            "duplicate_of": existing_fact["fact_id"],
+                            "existing_created_at": existing_fact.get("created_at"),
+                            "matched_by": "unique_key",
+                        }
+
+                # Fallback: Check for duplicates based on category + title
+                # FIXED: Use efficient Redis SET indexing instead of slow SCAN
+                category = metadata.get("category")
+                title = metadata.get("title")
+
+                if category and title:
+                    # Use fast O(1) lookup via Redis SET
+                    category_title_key = f"{category}:{title}"
+                    existing_fact_id = await self.aioredis_client.get(
+                        f"category_title:{category_title_key}"
+                    )
+
+                    if existing_fact_id:
+                        if isinstance(existing_fact_id, bytes):
+                            existing_fact_id = existing_fact_id.decode("utf-8")
+
+                        # Retrieve fact metadata
+                        fact_key = f"fact:{existing_fact_id}"
+                        metadata_str = await self.aioredis_client.hget(
+                            fact_key, "metadata"
+                        )
+                        created_at = await self.aioredis_client.hget(
+                            fact_key, "created_at"
+                        )
+
+                        if metadata_str:
+                            logger.info(
+                                f"Duplicate fact detected by category+title: category='{category}', title='{title}', existing_fact_id={existing_fact_id}"
+                            )
+                            return {
+                                "status": "duplicate",
+                                "message": f"Fact already exists with same category and title",
+                                "fact_id": existing_fact_id,
+                                "duplicate_of": existing_fact_id,
+                                "existing_created_at": created_at,
+                                "matched_by": "category_title",
+                            }
 
             # Generate unique fact ID
             fact_id = str(uuid.uuid4())
@@ -653,6 +827,27 @@ class KnowledgeBaseV2:
                 }
                 await self.aioredis_client.hset(fact_key, mapping=fact_data)
                 logger.debug(f"Stored fact {fact_id} in Redis")
+
+                # Store index keys for fast O(1) duplicate detection
+                unique_key = fact_metadata.get("unique_key")
+                if unique_key:
+                    await self.aioredis_client.set(
+                        f"unique_key:man_page:{unique_key}", fact_id
+                    )
+                    logger.debug(
+                        f"Stored unique key index: unique_key:man_page:{unique_key} → {fact_id}"
+                    )
+
+                category = fact_metadata.get("category")
+                title = fact_metadata.get("title")
+                if category and title:
+                    category_title_key = f"{category}:{title}"
+                    await self.aioredis_client.set(
+                        f"category_title:{category_title_key}", fact_id
+                    )
+                    logger.debug(
+                        f"Stored category_title index: category_title:{category_title_key} → {fact_id}"
+                    )
 
             # Store in vector index for semantic search - CRITICAL FOR SEARCHABILITY
             vector_indexed = False
@@ -851,53 +1046,29 @@ class KnowledgeBaseV2:
                             f"Using cached counts: {fact_count} facts, {vector_count} vectors"
                         )
                     else:
-                        # Cache miss - use fast count via redis-cli
-                        # This is still much faster than scan_iter()
-                        import subprocess
+                        # Cache miss - count using native async Redis
+                        fact_count = 0
+                        vector_count = 0
 
-                        # Count facts quickly using redis-cli
-                        fact_result = subprocess.run(
-                            [
-                                "redis-cli",
-                                "-h",
-                                self.redis_host,
-                                "-p",
-                                str(self.redis_port),
-                                "--scan",
-                                "--pattern",
-                                "fact:*",
-                            ],
-                            capture_output=True,
-                            text=True,
-                            timeout=15,
-                        )
-                        fact_count = (
-                            len(fact_result.stdout.strip().split("\n"))
-                            if fact_result.stdout.strip()
-                            else 0
-                        )
+                        # Count facts using async scan_iter (efficient cursor-based)
+                        try:
+                            async for _ in self.aioredis_client.scan_iter(
+                                match="fact:*", count=1000
+                            ):
+                                fact_count += 1
+                        except Exception as e:
+                            logger.error(f"Error counting facts: {e}")
+                            fact_count = 0
 
-                        # Count vectors quickly using redis-cli
-                        vector_result = subprocess.run(
-                            [
-                                "redis-cli",
-                                "-h",
-                                self.redis_host,
-                                "-p",
-                                str(self.redis_port),
-                                "--scan",
-                                "--pattern",
-                                "llama_index/vector_*",
-                            ],
-                            capture_output=True,
-                            text=True,
-                            timeout=15,
-                        )
-                        vector_count = (
-                            len(vector_result.stdout.strip().split("\n"))
-                            if vector_result.stdout.strip()
-                            else 0
-                        )
+                        # Count vectors using async scan_iter
+                        try:
+                            async for _ in self.aioredis_client.scan_iter(
+                                match="llama_index/vector_*", count=1000
+                            ):
+                                vector_count += 1
+                        except Exception as e:
+                            logger.error(f"Error counting vectors: {e}")
+                            vector_count = 0
 
                         # Cache the counts for 60 seconds
                         await self.aioredis_client.set(
@@ -1024,6 +1195,238 @@ class KnowledgeBaseV2:
 
         return None
 
+    async def update_fact(
+        self, fact_id: str, content: str = None, metadata: dict = None
+    ) -> dict:
+        """
+        Update an existing fact's content and/or metadata.
+
+        Args:
+            fact_id: The fact ID to update
+            content: New content (optional, keeps existing if None)
+            metadata: New metadata (optional, merges with existing if provided)
+
+        Returns:
+            dict: {
+                "success": bool,
+                "fact_id": str,
+                "updated_fields": list,
+                "message": str
+            }
+
+        Raises:
+            ValueError: If fact_id not found
+        """
+        self.ensure_initialized()
+
+        try:
+            # Validate fact_id format
+            if not fact_id or not isinstance(fact_id, str):
+                raise ValueError("Invalid fact_id format")
+
+            fact_key = f"fact:{fact_id}"
+
+            # Check if fact exists
+            fact_exists = await self.aioredis_client.exists(fact_key)
+            if not fact_exists:
+                raise ValueError(f"Fact with ID {fact_id} not found")
+
+            # Get existing fact data
+            fact_data = await self.aioredis_client.hgetall(fact_key)
+            if not fact_data:
+                raise ValueError(f"Fact {fact_id} exists but has no data")
+
+            updated_fields = []
+
+            # Get existing content and metadata
+            existing_content = fact_data.get("content", "")
+            if isinstance(existing_content, bytes):
+                existing_content = existing_content.decode("utf-8")
+
+            existing_metadata_raw = fact_data.get("metadata", "{}")
+            if isinstance(existing_metadata_raw, bytes):
+                existing_metadata_raw = existing_metadata_raw.decode("utf-8")
+
+            try:
+                existing_metadata = json.loads(existing_metadata_raw)
+            except (json.JSONDecodeError, TypeError):
+                existing_metadata = {}
+
+            # Determine what needs updating
+            content_changed = False
+            new_content = existing_content
+            new_metadata = existing_metadata.copy()
+
+            # Update content if provided
+            if content is not None and content != existing_content:
+                new_content = content
+                content_changed = True
+                updated_fields.append("content")
+                logger.info(f"Updating content for fact {fact_id}")
+
+            # Update metadata if provided
+            if metadata is not None:
+                # Merge new metadata with existing
+                new_metadata.update(metadata)
+                updated_fields.append("metadata")
+                logger.info(f"Updating metadata for fact {fact_id}")
+
+            # Update timestamp
+            new_metadata["updated_at"] = datetime.now().isoformat()
+            new_metadata["fact_id"] = fact_id  # Ensure fact_id is preserved
+
+            # Update Redis hash
+            update_data = {
+                "content": new_content,
+                "metadata": json.dumps(new_metadata),
+            }
+            await self.aioredis_client.hset(fact_key, mapping=update_data)
+
+            # If content changed, re-vectorize
+            vector_updated = False
+            if content_changed and self.vector_store and self.vector_index:
+                try:
+                    # Delete old vector document
+                    await asyncio.to_thread(
+                        self.vector_index.delete_ref_doc,
+                        fact_id,
+                        delete_from_docstore=True,
+                    )
+
+                    # Create new vector document
+                    document = Document(
+                        text=new_content, metadata=new_metadata, doc_id=fact_id
+                    )
+
+                    # Insert new vector
+                    await asyncio.to_thread(self.vector_index.insert, document)
+                    vector_updated = True
+                    updated_fields.append("vectorization")
+                    logger.info(f"Re-vectorized fact {fact_id} due to content change")
+
+                except Exception as vector_error:
+                    logger.error(
+                        f"Failed to update vectorization for fact {fact_id}: {vector_error}"
+                    )
+                    # Continue - Redis update succeeded even if vectorization failed
+
+            return {
+                "success": True,
+                "fact_id": fact_id,
+                "updated_fields": updated_fields,
+                "vector_updated": vector_updated,
+                "message": (
+                    f"Fact updated successfully ({', '.join(updated_fields)})"
+                    if updated_fields
+                    else "No changes made"
+                ),
+            }
+
+        except ValueError as e:
+            logger.error(f"Validation error updating fact {fact_id}: {e}")
+            return {
+                "success": False,
+                "fact_id": fact_id,
+                "updated_fields": [],
+                "message": str(e),
+            }
+        except Exception as e:
+            logger.error(f"Error updating fact {fact_id}: {e}")
+            import traceback
+
+            logger.error(traceback.format_exc())
+            return {
+                "success": False,
+                "fact_id": fact_id,
+                "updated_fields": [],
+                "message": f"Failed to update fact: {str(e)}",
+            }
+
+    async def delete_fact(self, fact_id: str) -> dict:
+        """
+        Delete a fact and its vectorization.
+
+        Args:
+            fact_id: The fact ID to delete
+
+        Returns:
+            dict: {
+                "success": bool,
+                "fact_id": str,
+                "message": str
+            }
+
+        Raises:
+            ValueError: If fact_id not found
+        """
+        self.ensure_initialized()
+
+        try:
+            # Validate fact_id format
+            if not fact_id or not isinstance(fact_id, str):
+                raise ValueError("Invalid fact_id format")
+
+            fact_key = f"fact:{fact_id}"
+
+            # Check if fact exists
+            fact_exists = await self.aioredis_client.exists(fact_key)
+            if not fact_exists:
+                raise ValueError(f"Fact with ID {fact_id} not found")
+
+            # Delete from vector index first (if exists)
+            vector_deleted = False
+            if self.vector_index:
+                try:
+                    await asyncio.to_thread(
+                        self.vector_index.delete_ref_doc,
+                        fact_id,
+                        delete_from_docstore=True,
+                    )
+                    vector_deleted = True
+                    logger.info(f"Deleted vectorization for fact {fact_id}")
+                except Exception as vector_error:
+                    logger.warning(
+                        f"Could not delete vector for fact {fact_id}: {vector_error}"
+                    )
+                    # Continue - will still delete from Redis
+
+            # Delete from Redis
+            deleted_count = await self.aioredis_client.delete(fact_key)
+
+            if deleted_count > 0:
+                logger.info(f"Deleted fact {fact_id} from Redis")
+                return {
+                    "success": True,
+                    "fact_id": fact_id,
+                    "vector_deleted": vector_deleted,
+                    "message": (
+                        "Fact and vectorization deleted successfully"
+                        if vector_deleted
+                        else "Fact deleted from Redis (vectorization not found)"
+                    ),
+                }
+            else:
+                # This shouldn't happen since we checked existence above
+                raise ValueError(f"Fact {fact_id} could not be deleted")
+
+        except ValueError as e:
+            logger.error(f"Validation error deleting fact {fact_id}: {e}")
+            return {
+                "success": False,
+                "fact_id": fact_id,
+                "message": str(e),
+            }
+        except Exception as e:
+            logger.error(f"Error deleting fact {fact_id}: {e}")
+            import traceback
+
+            logger.error(traceback.format_exc())
+            return {
+                "success": False,
+                "fact_id": fact_id,
+                "message": f"Failed to delete fact: {str(e)}",
+            }
+
     async def get_all_facts(
         self,
         limit: Optional[int] = None,
@@ -1082,7 +1485,8 @@ class KnowledgeBaseV2:
 
                 try:
                     # Parse metadata
-                    metadata_raw = fact_data.get(b"metadata", b"{}")
+                    # Note: async Redis client has decode_responses=True, so keys/values are strings
+                    metadata_raw = fact_data.get("metadata", "{}")
                     try:
                         metadata = json.loads(
                             metadata_raw.decode("utf-8")
@@ -1099,8 +1503,8 @@ class KnowledgeBaseV2:
                         if fact_collection != collection:
                             continue  # Skip facts not in requested collection
 
-                    # Parse content
-                    content_raw = fact_data.get(b"content", b"")
+                    # Parse content (string key because decode_responses=True)
+                    content_raw = fact_data.get("content", "")
                     content = (
                         content_raw.decode("utf-8")
                         if isinstance(content_raw, bytes)
@@ -1109,7 +1513,6 @@ class KnowledgeBaseV2:
 
                     # Validate required fields
                     if not content:
-                        logger.warning(f"Empty content in fact {fact_key}")
                         continue
 
                     # Build fact object

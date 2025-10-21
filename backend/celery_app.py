@@ -9,11 +9,23 @@ import os
 
 from celery import Celery
 
+from src.unified_config import config
+
+# Build Redis URLs from centralized configuration
+# Environment variables take precedence, then config-based construction
+_redis_host = config.get_host("redis")
+_redis_port = config.get_port("redis")
+_celery_broker_db = config.get("redis.databases.celery_broker", 1)
+_celery_results_db = config.get("redis.databases.celery_results", 2)
+
+_default_broker_url = f"redis://{_redis_host}:{_redis_port}/{_celery_broker_db}"
+_default_backend_url = f"redis://{_redis_host}:{_redis_port}/{_celery_results_db}"
+
 # Configure Celery with Redis broker and result backend
 celery_app = Celery(
     "autobot",
-    broker=os.environ.get("CELERY_BROKER_URL", "redis://172.16.168.23:6379/1"),
-    backend=os.environ.get("CELERY_RESULT_BACKEND", "redis://172.16.168.23:6379/2"),
+    broker=os.environ.get("CELERY_BROKER_URL", _default_broker_url),
+    backend=os.environ.get("CELERY_RESULT_BACKEND", _default_backend_url),
 )
 
 # Celery configuration
