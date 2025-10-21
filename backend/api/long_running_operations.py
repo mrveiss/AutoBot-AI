@@ -27,9 +27,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 # Add AutoBot paths
-sys.path.append("/home/kali/Desktop/AutoBot")
+sys.path.append(str(PATH.PROJECT_ROOT))
 
 # Import our long-running operations framework
 try:
@@ -60,7 +61,7 @@ class CodebaseIndexingRequest(BaseModel):
     """Request model for codebase indexing operations"""
 
     codebase_path: str = Field(
-        default="/home/kali/Desktop/AutoBot", description="Path to codebase to index"
+        default=str(PATH.PROJECT_ROOT), description="Path to codebase to index"
     )
     file_patterns: List[str] = Field(
         default=["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"],
@@ -78,7 +79,7 @@ class TestSuiteRequest(BaseModel):
     """Request model for comprehensive test suite operations"""
 
     test_path: str = Field(
-        default="/home/kali/Desktop/AutoBot/tests", description="Path to test directory"
+        default=str(PATH.TESTS_DIR), description="Path to test directory"
     )
     test_patterns: List[str] = Field(
         default=["test_*.py", "*_test.py"], description="Test file patterns"
@@ -98,7 +99,7 @@ class KnowledgeBaseRequest(BaseModel):
     """Request model for knowledge base operations"""
 
     source_paths: List[str] = Field(
-        default=["/home/kali/Desktop/AutoBot"], description="Paths to populate from"
+        default=[str(PATH.PROJECT_ROOT)], description="Paths to populate from"
     )
     document_types: List[str] = Field(
         default=["code", "docs", "config"], description="Document types to include"
@@ -115,7 +116,7 @@ class SecurityScanRequest(BaseModel):
     """Request model for security scan operations"""
 
     scan_paths: List[str] = Field(
-        default=["/home/kali/Desktop/AutoBot"], description="Paths to scan"
+        default=[str(PATH.PROJECT_ROOT)], description="Paths to scan"
     )
     scan_types: List[str] = Field(
         default=["vulnerability", "dependency", "secrets"],

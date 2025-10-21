@@ -48,7 +48,8 @@ class NetworkConstants:
     VNC_PORT: int = 6080
     BROWSER_SERVICE_PORT: int = 3000
     AI_STACK_PORT: int = 8080
-    NPU_WORKER_PORT: int = 8081
+    NPU_WORKER_PORT: int = 8081  # Linux NPU worker (VM2)
+    NPU_WORKER_WINDOWS_PORT: int = 8082  # Windows NPU worker (primary on main machine)
 
     # Development ports
     DEV_FRONTEND_PORT: int = 5173
@@ -109,9 +110,12 @@ class ServiceURLs:
         f"http://{NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT}"
     )
 
-    # NPU Worker service
+    # NPU Worker services
     NPU_WORKER_SERVICE: str = (
         f"http://{NetworkConstants.NPU_WORKER_VM_IP}:{NetworkConstants.NPU_WORKER_PORT}"
+    )
+    NPU_WORKER_WINDOWS_SERVICE: str = (
+        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.NPU_WORKER_WINDOWS_PORT}"
     )
 
 

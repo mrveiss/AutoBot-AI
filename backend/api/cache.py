@@ -41,7 +41,7 @@ def get_redis_connection(db_number: int = 0):
 
     ELIMINATES DNS RESOLUTION DELAYS BY:
     - Using cached service discovery endpoints
-    - Direct IP addressing (172.16.168.23) instead of DNS resolution
+    - Direct IP addressing (NetworkConstants.REDIS_VM_IP) instead of DNS resolution
     - Fast connection timeouts (0.5s vs 2s+)
     """
     try:

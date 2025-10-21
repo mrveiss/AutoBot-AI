@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from fastapi.responses import StreamingResponse
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,7 @@ async def get_log_sources():
 async def get_recent_logs(limit: int = 100):
     """Get recent log entries across all log files"""
     try:
-        log_dir = "/home/kali/Desktop/AutoBot/logs"
+        log_dir = str(PATH.LOGS_DIR)
         recent_entries = []
 
         # Get the most recent log file

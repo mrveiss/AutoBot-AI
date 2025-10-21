@@ -59,8 +59,11 @@ class ChatHistoryManager:
         self.use_redis = (
             use_redis if use_redis is not None else redis_config.get("enabled", False)
         )
+        # Use config system instead of hardcoded IP fallback
+        # Local import to avoid circular dependency with unified_config
+        from src.unified_config import config as unified_config
         self.redis_host = redis_host or redis_config.get(
-            "host", os.getenv("REDIS_HOST", "172.16.168.23")
+            "host", os.getenv("REDIS_HOST", unified_config.get_host("redis"))
         )
         self.redis_port = redis_port or redis_config.get(
             "port",

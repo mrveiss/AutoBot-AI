@@ -272,7 +272,7 @@ class SystemMonitor:
                 "url": f"{API_BASE_URL}/api/system/health",
                 "port": 8001,
             },
-            {"name": "frontend", "url": ServiceURLs.FRONTEND_LOCAL, "port": 5173},
+            {"name": "frontend", "url": ServiceURLs.FRONTEND_VM, "port": 5173},  # FIXED: Frontend on VM1 (172.16.168.21)
             {"name": "redis", "url": None, "port": 6379},
         ]
 

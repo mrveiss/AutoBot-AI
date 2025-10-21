@@ -20,7 +20,7 @@ class AutoBotMonitor:
     def __init__(self):
         self.backend_port = os.getenv("AUTOBOT_BACKEND_PORT", "8001")
         self.api_base = f"http://localhost:{self.backend_port}"
-        self.frontend_url = ServiceURLs.FRONTEND_LOCAL
+        self.frontend_url = ServiceURLs.FRONTEND_VM  # FIXED: Frontend on VM1 (172.16.168.21), not localhost
 
     def get_system_health(self) -> Dict[str, Any]:
         """Get AutoBot system health status."""

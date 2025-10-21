@@ -16,6 +16,7 @@ import structlog
 
 from backend.security.service_auth import ServiceAuthManager
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 logger = structlog.get_logger()
 
@@ -264,7 +265,7 @@ def create_service_client_from_env() -> ServiceHTTPClient:
     Example:
         # Set environment variables
         os.environ["SERVICE_ID"] = "main-backend"
-        os.environ["SERVICE_KEY_FILE"] = "/home/kali/.autobot/service-keys/main-backend.env"
+        os.environ["SERVICE_KEY_FILE"] = str(PATH.USER_HOME / ".autobot/service-keys/main-backend.env")
 
         # Create client
         client = create_service_client_from_env()

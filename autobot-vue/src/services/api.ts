@@ -18,31 +18,23 @@ class ApiService {
     this.client = apiClient
   }
 
-  // Core HTTP methods with JSON parsing
-  // FIXED: Pass endpoints directly to ApiClient (it handles baseURL internally)
+  // Core HTTP methods - ApiClient already returns parsed JSON
+  // FIXED: ApiClient.get/post/put/delete return parsed JSON data, NOT Response objects
+  // Removed double-parsing (.json() call) that was causing "response.json is not a function" errors
   async get<T>(endpoint: string): Promise<T> {
-    const response = await this.client.get(endpoint)
-    return await response.json()
+    return await this.client.get(endpoint) as T
   }
 
   async post<T>(endpoint: string, data: unknown): Promise<T> {
-    const response = await this.client.post(endpoint, data)
-    console.log('[ApiService.post] Response type:', typeof response, 'Has json?:', typeof response.json)
-    if (typeof response.json !== 'function') {
-      console.error('[ApiService.post] Invalid response object:', response)
-      throw new Error('Invalid response from ApiClient - response.json is not a function')
-    }
-    return await response.json()
+    return await this.client.post(endpoint, data) as T
   }
 
   async put<T>(endpoint: string, data: unknown): Promise<T> {
-    const response = await this.client.put(endpoint, data)
-    return await response.json()
+    return await this.client.put(endpoint, data) as T
   }
 
   async delete<T>(endpoint: string): Promise<T> {
-    const response = await this.client.delete(endpoint)
-    return await response.json()
+    return await this.client.delete(endpoint) as T
   }
 
   // Chat API - Updated to match backend specs
