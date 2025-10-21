@@ -18,6 +18,7 @@ from pydantic import BaseModel
 # Import unified configuration system - NO HARDCODED VALUES
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants, ServiceURLs
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -377,7 +378,7 @@ class ServiceMonitor:
             ssh_cmd = [
                 "ssh",
                 "-i",
-                "/home/kali/.ssh/autobot_key",
+                str(PATH.SSH_AUTOBOT_KEY),
                 "-o",
                 "ConnectTimeout=5",
                 "-o",
@@ -510,14 +511,14 @@ class ServiceMonitor:
             remote_vms = {
                 name: host
                 for name, host in vm_hosts.items()
-                if host not in ["127.0.0.1", "localhost", "172.16.168.20"]
+                if host not in [NetworkConstants.LOCALHOST_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.MAIN_MACHINE_IP]
             }
 
             # Add main machine status
             vm_results = []
 
             # Main machine (backend host) - FIXED: Only backend API + VNC Desktop, NO frontend
-            main_host = vm_hosts.get("backend", "172.16.168.20")
+            main_host = vm_hosts.get("backend", NetworkConstants.MAIN_MACHINE_IP)
             vm_results.append(
                 VMStatus(
                     name="Main Machine (WSL)",
@@ -774,7 +775,7 @@ async def get_all_services():
         # Get distributed service URLs from environment
         import os
 
-        redis_host = os.environ.get("REDIS_HOST", "172.16.168.23")
+        redis_host = os.environ.get("REDIS_HOST", NetworkConstants.REDIS_VM_IP)
         redis_port = os.environ.get("REDIS_PORT", str(NetworkConstants.REDIS_PORT))
 
         services = {
@@ -795,7 +796,7 @@ async def get_all_services():
             },
             "frontend": {
                 "status": "checking",
-                "url": ServiceURLs.FRONTEND_LOCAL,
+                "url": ServiceURLs.FRONTEND_VM,  # FIXED: Frontend runs on VM1 (172.16.168.21), not main machine
                 "health": "⏳",
             },
         }
@@ -910,7 +911,7 @@ async def get_single_vm_status(vm_name: str):
         host = vm_hosts[vm_name]
 
         # Special case for main machine
-        if host in ["127.0.0.1", "localhost", "172.16.168.20"]:
+        if host in [NetworkConstants.LOCALHOST_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.MAIN_MACHINE_IP]:
             return VMStatus(
                 name="Main Machine (WSL)",
                 host=host,
@@ -945,7 +946,7 @@ async def debug_vm_config():
             "remote_vms": {
                 name: host
                 for name, host in vm_hosts.items()
-                if host not in ["127.0.0.1", "localhost", "172.16.168.20"]
+                if host not in [NetworkConstants.LOCALHOST_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.MAIN_MACHINE_IP]
             },
         }
     except Exception as e:

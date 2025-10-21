@@ -737,27 +737,41 @@ class ChatWorkflowManager:
             try:
                 import httpx
 
-                # Get Ollama endpoint from config
+                # Get Ollama endpoint from config (use config-based construction, not hardcoded localhost)
                 try:
                     ollama_endpoint = global_config_manager.get_nested(
                         "backend.llm.ollama.endpoint",
-                        "http://localhost:11434/api/generate",
+                        None,  # No hardcoded fallback - will construct from config below
                     )
+
+                    # If not in config, construct from infrastructure config
+                    if not ollama_endpoint:
+                        from src.unified_config import config
+                        ollama_host = config.get_host("ollama")
+                        ollama_port = config.get_port("ollama")
+                        ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
 
                     # Validate endpoint format
                     if not ollama_endpoint or not ollama_endpoint.startswith(
                         ("http://", "https://")
                     ):
                         logger.error(
-                            f"Invalid endpoint URL: {ollama_endpoint}, using default"
+                            f"Invalid endpoint URL: {ollama_endpoint}, using config-based default"
                         )
-                        ollama_endpoint = "http://localhost:11434/api/generate"
+                        from src.unified_config import config
+                        ollama_host = config.get_host("ollama")
+                        ollama_port = config.get_port("ollama")
+                        ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
 
                 except Exception as config_error:
                     logger.error(
                         f"Failed to load Ollama endpoint from config: {config_error}"
                     )
-                    ollama_endpoint = "http://localhost:11434/api/generate"
+                    # Fallback to config-based construction instead of hardcoded localhost
+                    from src.unified_config import config
+                    ollama_host = config.get_host("ollama")
+                    ollama_port = config.get_port("ollama")
+                    ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
 
                 # Load SIMPLIFIED AutoBot system prompt (executor-focused, no bloat)
                 try:
@@ -853,7 +867,7 @@ NEVER teach commands - ALWAYS execute them."""
                             "options": {
                                 "temperature": 0.7,
                                 "top_p": 0.9,
-                                "num_ctx": 4096,
+                                "num_ctx": 2048,
                             },
                         },
                     ) as response:
@@ -1156,7 +1170,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                                                 "options": {
                                                                     "temperature": 0.7,
                                                                     "top_p": 0.9,
-                                                                    "num_ctx": 4096,
+                                                                    "num_ctx": 2048,
                                                                 },
                                                             },
                                                         )
@@ -1246,7 +1260,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                                         "options": {
                                                             "temperature": 0.7,
                                                             "top_p": 0.9,
-                                                            "num_ctx": 4096,
+                                                            "num_ctx": 2048,
                                                         },
                                                     },
                                                 )

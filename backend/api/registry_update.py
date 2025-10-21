@@ -6,12 +6,13 @@ Add Phase 9 monitoring router to the registry
 import re
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 
 def add_monitoring_to_registry():
     """Add Phase 9 monitoring router to the registry"""
 
-    registry_file = "/home/kali/Desktop/AutoBot/backend/api/registry.py"
+    registry_file = PATH.PROJECT_ROOT / "backend" / "api" / "registry.py"
 
     # Read the current file
     with open(registry_file, "r") as f:

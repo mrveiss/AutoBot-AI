@@ -479,7 +479,7 @@ try:
     optional_routers.append(
         (
             codebase_analytics_router,
-            "/codebase-analytics",
+            "/analytics",  # FIXED: Changed from /codebase-analytics to /analytics (router has /codebase prefix)
             ["codebase-analytics"],
             "codebase_analytics",
         )
@@ -956,18 +956,10 @@ class AppFactory:
         )
 
         # Configure CORS with specific origins for security
+        # Generate from centralized configuration instead of hardcoded list
         if allow_origins is None:
-            allow_origins = [
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                "http://172.16.168.20:5173",
-                "http://172.16.168.21:5173",
-                "http://172.16.168.20:3000",
-                "http://172.16.168.21:3000",
-                "http://172.16.168.25:3000",
-            ]
+            from src.unified_config import config
+            allow_origins = config.get_cors_origins()
 
         app.add_middleware(
             CORSMiddleware,

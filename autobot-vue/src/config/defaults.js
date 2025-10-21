@@ -26,8 +26,8 @@ export const DEFAULT_CONFIG = {
 
     // NPU Worker VM - AI processing
     npu_worker: {
-      host: import.meta.env.VITE_NPU_WORKER_HOST || '172.16.168.22',
-      port: import.meta.env.VITE_NPU_WORKER_PORT || '8081',
+      host: import.meta.env.VITE_NPU_WORKER_HOST || '172.16.168.20',
+      port: import.meta.env.VITE_NPU_WORKER_PORT || '8082',
       protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
     },
 

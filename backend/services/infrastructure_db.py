@@ -23,6 +23,7 @@ from backend.models.infrastructure import (
     InfraHost,
     InfraRole,
 )
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ class InfrastructureDB:
         # Use existing autobot_data.db database
         if db_path is None:
             db_path = os.environ.get(
-                "DATABASE_PATH", "/home/kali/Desktop/AutoBot/autobot_data.db"
+                "DATABASE_PATH", str(PATH.PROJECT_ROOT / "autobot_data.db")
             )
 
         self.db_path = db_path
@@ -104,9 +105,9 @@ class InfrastructureDB:
                     ),
                     InfraRole(
                         name="npu-worker",
-                        description="NPU hardware acceleration worker (port 8081)",
+                        description="NPU hardware acceleration worker (port 8082)",
                         ansible_playbook_path="ansible/playbooks/deploy_role.yml",
-                        required_ports=[8081],
+                        required_ports=[8082],
                     ),
                     InfraRole(
                         name="ai-stack",

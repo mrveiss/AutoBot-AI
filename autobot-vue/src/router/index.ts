@@ -92,9 +92,9 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'categories',
         name: 'knowledge-categories',
-        component: () => import('@/components/knowledge/KnowledgeCategories.vue'),
+        component: () => import('@/components/knowledge/KnowledgeBrowser.vue'),
         meta: {
-          title: 'Categories',
+          title: 'Browse Knowledge',
           parent: 'knowledge'
         }
       },
