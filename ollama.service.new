@@ -1,0 +1,15 @@
+[Unit]
+Description=Ollama Service
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/ollama serve
+User=ollama
+Group=ollama
+Restart=always
+RestartSec=3
+Environment="PATH=/home/kali/Desktop/AutoBot/AutoBot/bin:/home/kali/.pyenv/shims:/home/kali/.pyenv/bin:/home/kali/.local/bin:/home/kali/.pyenv/plugins/pyenv-virtualenv/shims:/home/kali/.pyenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/c/Program Files/WindowsApps/MicrosoftCorporationII.WindowsSubsystemForLinux_2.5.7.0_x64__8wekyb3d8bbwe:/mnt/c/Program Files/Python310/Scripts/:/mnt/c/Program Files/Python310/:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/bin:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/libnvvp:/mnt/c/Windows/system32:/mnt/c/Windows:/mnt/c/Windows/System32/Wbem:/mnt/c/Windows/System32/WindowsPowerShell/v1.0/:/mnt/c/Windows/System32/OpenSSH/:/mnt/c/Program Files/dotnet/:/mnt/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/c/WINDOWS/system32:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32/Wbem:/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/c/WINDOWS/System32/OpenSSH/:/mnt/c/Program Files/NVIDIA Corporation/Nsight Compute 2025.1.0/:/mnt/c/Program Files (x86)/IDEMIA/AWP/Dlls:/mnt/c/Program Files/IDEMIA/AWP/Dlls:/mnt/c/Program Files (x86)/eParaksts Token Signing/:/mnt/c/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR:/mnt/c/Program Files/WireGuard/:/mnt/c/Program Files/Git/cmd:/mnt/c/Program Files/eSpeak NG/:/mnt/c/Program Files/Docker/Docker/resources/bin:/mnt/c/Android:/mnt/c/Users/marti/AppData/Local/Programs/Python/Launcher/:/mnt/c/Users/marti/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/marti/AppData/Local/Microsoft/WinGet/Packages/UderzoSoftware.SpaceSniffer_Microsoft.Winget.Source_8wekyb3d8bbwe:/mnt/c/Users/marti/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Users/marti/AppData/Local/Programs/Ollama:/mnt/c/Users/marti/.lmstudio/bin:/mnt/c/Users/marti/AppData/Local/GitHubDesktop/bin"
+Environment="OLLAMA_NUM_THREADS=6"
+
+[Install]
+WantedBy=default.target
