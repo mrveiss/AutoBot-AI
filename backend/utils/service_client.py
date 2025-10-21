@@ -265,13 +265,15 @@ def create_service_client_from_env() -> ServiceHTTPClient:
         ValueError: If credentials not found in environment
 
     Example:
+        from src.constants.network_constants import ServiceURLs
+
         # Set environment variables
         os.environ["SERVICE_ID"] = "main-backend"
         os.environ["SERVICE_KEY_FILE"] = str(PATH.USER_HOME / ".autobot/service-keys/main-backend.env")
 
         # Create client
         client = create_service_client_from_env()
-        response = await client.get("http://172.16.168.24:8080/api/inference")
+        response = await client.get(f"{ServiceURLs.AI_STACK_SERVICE}/api/inference")
     """
     import os
 
