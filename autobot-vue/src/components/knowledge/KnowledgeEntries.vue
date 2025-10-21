@@ -30,6 +30,12 @@
       <!-- System Knowledge Management: Initialize, Reindex, Repopulate -->
       <SystemKnowledgeManager />
 
+      <!-- Deduplication & Orphan Management: Remove duplicates and clean up orphaned documents -->
+      <DeduplicationManager />
+
+      <!-- Failed Vectorizations Manager: Retry or Clear Failed Vectorization Jobs -->
+      <FailedVectorizationsManager />
+
       <!-- Man Page Management: Search, Browse, and Integrate Man Pages -->
       <ManPageManager />
     </div>
@@ -347,6 +353,8 @@ import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import KnowledgeUpload from './KnowledgeUpload.vue'
 import SystemKnowledgeManager from '@/components/SystemKnowledgeManager.vue'
 import ManPageManager from '@/components/ManPageManager.vue'
+import FailedVectorizationsManager from '@/components/knowledge/FailedVectorizationsManager.vue'
+import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vue'
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()

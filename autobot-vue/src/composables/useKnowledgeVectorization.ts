@@ -7,6 +7,7 @@
 
 import { ref, computed } from 'vue'
 import { useKnowledgeBase } from './useKnowledgeBase'
+import apiClient from '@/utils/ApiClient'
 
 export type VectorizationStatus = 'vectorized' | 'pending' | 'failed' | 'unknown'
 
@@ -26,7 +27,7 @@ export interface VectorizationProgress {
 }
 
 export function useKnowledgeVectorization() {
-  const { startBackgroundVectorization, getVectorizationStatus } = useKnowledgeBase()
+  const { vectorizeFacts, getVectorizationStatus } = useKnowledgeBase()
 
   // State
   const documentStates = ref<Map<string, DocumentVectorizationState>>(new Map())
@@ -164,21 +165,52 @@ export function useKnowledgeVectorization() {
     try {
       setDocumentStatus(documentId, 'pending', 0)
 
-      // PLACEHOLDER - Replace with actual API call
-      // const response = await apiClient.post(`/api/knowledge_base/vectorize_document/${documentId}`)
-      // const data = await response.json()
+      // Call backend API to vectorize the fact
+      // ApiClient.post() returns parsed JSON data, not fetch Response object
+      const data = await apiClient.post(`/api/knowledge_base/vectorize_fact/${documentId}`)
 
-      // Simulate processing
-      console.log(`[PLACEHOLDER] Vectorizing document: ${documentId}`)
-
-      // Simulate progress updates
-      for (let i = 0; i <= 100; i += 20) {
-        await new Promise(resolve => setTimeout(resolve, 200))
-        setDocumentStatus(documentId, 'pending', i)
+      // Check if backend returned success status
+      if (data.status !== 'success') {
+        throw new Error(`Vectorization failed: ${data.message || 'Unknown error'}`)
       }
 
-      // Mark as completed
-      setDocumentStatus(documentId, 'vectorized', 100)
+      const jobId = data.job_id
+
+      // Poll for completion
+      let completed = false
+      let attempts = 0
+      const maxAttempts = 60 // 60 seconds max
+
+      while (!completed && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
+
+        // ApiClient.get() returns parsed JSON data, not fetch Response object
+        const response = await apiClient.get(`/api/knowledge_base/vectorize_job/${jobId}`)
+
+        // Backend returns: { status: "success", job: { status: "completed", error: null, ... } }
+        const job = response.job
+
+        if (!job) {
+          throw new Error('Invalid job status response')
+        }
+
+        if (job.status === 'completed') {
+          completed = true
+          setDocumentStatus(documentId, 'vectorized', 100)
+        } else if (job.status === 'failed') {
+          throw new Error(job.error || 'Vectorization failed')
+        } else {
+          // Update progress
+          const progress = Math.min(95, (attempts / maxAttempts) * 100)
+          setDocumentStatus(documentId, 'pending', progress)
+        }
+
+        attempts++
+      }
+
+      if (!completed) {
+        throw new Error('Vectorization timed out')
+      }
 
       return true
     } catch (error) {
@@ -248,7 +280,7 @@ export function useKnowledgeVectorization() {
    */
   const startBackgroundVectorize = async () => {
     try {
-      const result = await startBackgroundVectorization()
+      const result = await vectorizeFacts()
       console.log('Background vectorization started:', result)
 
       // Start polling for status updates
@@ -271,12 +303,12 @@ export function useKnowledgeVectorization() {
       const status = await getVectorizationStatus()
 
       if (status) {
-        // Update global progress
+        // Update global progress using correct property names
         globalProgress.value = {
-          total: status.total_documents || 0,
-          completed: status.completed || 0,
-          failed: status.failed || 0,
-          inProgress: status.in_progress || 0
+          total: status.total_facts || 0,
+          completed: status.vectorized_facts || 0,
+          failed: 0, // Not provided by backend, calculate from document states if needed
+          inProgress: status.pending_vectorization || 0
         }
 
         // Stop polling if complete

@@ -1,10 +1,11 @@
 <template>
   <div class="knowledge-stats">
-    <div class="stats-header">
-      <h3>Knowledge Base Statistics</h3>
-      <button @click="refreshStats" :disabled="isRefreshing" class="refresh-btn">
-        <i class="fas fa-sync" :class="{ 'fa-spin': isRefreshing }"></i>
-        Refresh
+    <!-- Error Notification -->
+    <div v-if="errorMessage" class="error-notification" role="alert" aria-live="assertive">
+      <i class="fas fa-exclamation-circle"></i>
+      <span>{{ errorMessage }}</span>
+      <button @click="errorMessage = ''" class="close-btn" aria-label="Close error message">
+        <i class="fas fa-times"></i>
       </button>
     </div>
 
@@ -12,8 +13,11 @@
     <div v-if="vectorStats" class="vector-stats-section">
       <div class="section-header">
         <h3><i class="fas fa-project-diagram"></i> Vector Database Statistics</h3>
-        <button @click="refreshVectorStats" :disabled="isRefreshingVectorStats" class="refresh-btn">
-          <i class="fas fa-sync" :class="{ 'fa-spin': isRefreshingVectorStats }"></i>
+        <button @click="refreshVectorStats"
+                :disabled="isRefreshingVectorStats"
+                class="refresh-btn"
+                aria-label="Refresh vector database statistics">
+          <i class="fas fa-sync" :class="{ 'fa-spin': isRefreshingVectorStats }" aria-hidden="true"></i>
           Refresh
         </button>
       </div>
@@ -173,29 +177,43 @@
     </div>
 
     <!-- Overview Cards -->
-    <div class="stats-overview">
-      <div class="stat-card">
-        <div class="stat-icon documents">
-          <i class="fas fa-file-alt"></i>
+    <div class="stats-overview" role="region" aria-label="Knowledge base overview statistics">
+      <div class="stat-card" role="article" aria-labelledby="facts-title">
+        <div class="stat-icon facts" aria-hidden="true">
+          <i class="fas fa-lightbulb"></i>
         </div>
         <div class="stat-content">
-          <h4>Total Documents</h4>
-          <p class="stat-value">{{ store.documentCount }}</p>
-          <p class="stat-change positive">
-            <i class="fas fa-arrow-up"></i>
-            {{ recentDocsCount }} this week
+          <h4 id="facts-title">Total Facts</h4>
+          <p class="stat-value" aria-live="polite">{{ vectorStats?.total_facts || 0 }}</p>
+          <p class="stat-change" aria-label="Knowledge items stored in Redis database">
+            Knowledge items in Redis
           </p>
         </div>
       </div>
 
-      <div class="stat-card">
-        <div class="stat-icon categories">
+      <div class="stat-card" role="article" aria-labelledby="documents-title">
+        <div class="stat-icon documents" aria-hidden="true">
+          <i class="fas fa-file-alt"></i>
+        </div>
+        <div class="stat-content">
+          <h4 id="documents-title">Total Documents</h4>
+          <p class="stat-value" aria-live="polite">{{ vectorStats?.total_documents || 0 }}</p>
+          <p class="stat-change" :class="{ 'needs-vectorization': needsVectorization }"
+             :aria-label="needsVectorization ? 'Warning: Facts are not vectorized for semantic search' : 'Facts are vectorized and ready for semantic search'">
+            <i v-if="needsVectorization" class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+            {{ needsVectorization ? 'Not vectorized' : 'Vectorized for RAG' }}
+          </p>
+        </div>
+      </div>
+
+      <div class="stat-card" role="article" aria-labelledby="categories-title">
+        <div class="stat-icon categories" aria-hidden="true">
           <i class="fas fa-folder"></i>
         </div>
         <div class="stat-content">
-          <h4>Categories</h4>
-          <p class="stat-value">{{ store.categoryCount }}</p>
-          <p class="stat-change">
+          <h4 id="categories-title">Categories</h4>
+          <p class="stat-value" aria-live="polite">{{ store.categoryCount }}</p>
+          <p class="stat-change" aria-label="Average documents per category">
             {{ avgDocsPerCategory }} avg docs/category
           </p>
         </div>
@@ -292,13 +310,18 @@
     <!-- Tag Cloud -->
     <div class="tag-cloud-section">
       <h4>Popular Tags</h4>
-      <div class="tag-cloud">
+      <div class="tag-cloud" role="list" aria-label="Popular tags in knowledge base">
         <span
           v-for="tag in popularTags"
           :key="tag.name"
           class="tag-cloud-item"
           :style="{ fontSize: `${tag.size}rem` }"
           :title="`${tag.count} documents`"
+          :aria-label="`${tag.name}: ${tag.count} documents`"
+          role="listitem"
+          tabindex="0"
+          @click="() => {}"
+          @keypress.enter="() => {}"
         >
           {{ tag.name }}
         </span>
@@ -336,10 +359,48 @@ import type { KnowledgeCategory } from '@/stores/useKnowledgeStore'
 import ManPageManager from '@/components/ManPageManager.vue'
 import apiClient from '@/utils/ApiClient'
 
+// TypeScript Interfaces
+interface VectorStats {
+  total_facts: number
+  total_documents: number
+  total_vectors: number
+  indexed_documents: number
+  db_size: number
+  status: 'online' | 'offline' | 'unknown'
+  rag_available: boolean
+  initialized: boolean
+  llama_index_configured: boolean
+  index_available: boolean
+  redis_db: string | number
+  index_name: string
+  embedding_model?: string
+  embedding_dimensions?: number
+  last_updated?: string
+  categories?: string[]
+}
+
+interface Activity {
+  id: string | number
+  type: 'created' | 'updated' | 'deleted' | 'imported'
+  description: string
+  timestamp: Date | string
+}
+
+interface KnowledgeController {
+  refreshStats: () => Promise<void>
+  getDetailedStats: () => Promise<Record<string, any>>
+  cleanupKnowledgeBase: () => Promise<void>
+  reindexKnowledgeBase: () => Promise<void>
+}
+
+interface DetailedStats {
+  [key: string]: number | string | boolean | object
+}
+
 const store = useKnowledgeStore()
 
 // Defensive controller initialization
-let controller: any = null
+let controller: KnowledgeController | null = null
 try {
   controller = useKnowledgeController()
   console.log('Knowledge controller initialized:', controller)
@@ -354,12 +415,13 @@ try {
 }
 
 // State
-const isRefreshing = ref(false)
-const detailedStats = ref<any>(null)
-const recentActivities = ref<any[]>([])
-const vectorStats = ref<any>(null)
-const isRefreshingVectorStats = ref(false)
+const isRefreshing = ref<boolean>(false)
+const detailedStats = ref<DetailedStats | null>(null)
+const recentActivities = ref<Activity[]>([])
+const vectorStats = ref<VectorStats | null>(null)
+const isRefreshingVectorStats = ref<boolean>(false)
 const categoryFactCounts = ref<Record<string, number>>({})
+const errorMessage = ref<string>('')
 
 // Computed statistics
 const needsVectorization = computed(() => {
@@ -636,27 +698,74 @@ const capitalize = (str: string): string => {
   return str && str.length > 0 ? str.charAt(0).toUpperCase() + str.slice(1) : str || ''
 }
 
+// Helper function to show error notifications
+const showErrorNotification = (message: string) => {
+  errorMessage.value = message
+  console.error(message)
+  // Clear error message after 5 seconds
+  setTimeout(() => {
+    errorMessage.value = ''
+  }, 5000)
+}
+
 // Vector Stats Functions
 const refreshVectorStats = async () => {
   isRefreshingVectorStats.value = true
+  errorMessage.value = '' // Clear any previous errors
 
   try {
     const statsResponse = await apiClient.get('/api/knowledge_base/stats')
-    const stats = await statsResponse.json()
+
+    if (!statsResponse.ok) {
+      throw new Error(`Failed to fetch statistics: ${statsResponse.statusText}`)
+    }
+
+    const stats: VectorStats = await statsResponse.json()
+
+    // Validate stats response
+    if (typeof stats.total_facts !== 'number' || typeof stats.total_documents !== 'number') {
+      throw new Error('Invalid statistics response format')
+    }
+
     vectorStats.value = stats
 
     // Fetch category fact counts
     const factsResponse = await apiClient.get('/api/knowledge_base/facts/by_category')
-    const factsData = await factsResponse.json()
-    if (factsData && factsData.categories) {
-      const counts: Record<string, number> = {}
-      Object.keys(factsData.categories).forEach(category => {
-        counts[category] = factsData.categories[category].length
-      })
-      categoryFactCounts.value = counts
+
+    if (!factsResponse.ok) {
+      console.warn('Failed to fetch category facts, continuing with basic stats')
+    } else {
+      const factsData = await factsResponse.json()
+      if (factsData && factsData.categories) {
+        const counts: Record<string, number> = {}
+        Object.keys(factsData.categories).forEach((category: string) => {
+          counts[category] = factsData.categories[category].length
+        })
+        categoryFactCounts.value = counts
+      }
     }
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred'
     console.error('Failed to refresh vector stats:', error)
+    showErrorNotification(`Failed to load statistics: ${errorMsg}`)
+
+    // Set default values on error to prevent UI breaking
+    if (!vectorStats.value) {
+      vectorStats.value = {
+        total_facts: 0,
+        total_documents: 0,
+        total_vectors: 0,
+        indexed_documents: 0,
+        db_size: 0,
+        status: 'offline',
+        rag_available: false,
+        initialized: false,
+        llama_index_configured: false,
+        index_available: false,
+        redis_db: 0,
+        index_name: 'unknown'
+      }
+    }
   } finally {
     isRefreshingVectorStats.value = false
   }
@@ -757,6 +866,59 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
+/* Error Notification */
+.error-notification {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #ef4444;
+  border-radius: 0.5rem;
+  color: #991b1b;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.error-notification i.fa-exclamation-circle {
+  font-size: 1.25rem;
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+.error-notification span {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.error-notification .close-btn {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  color: #991b1b;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.error-notification .close-btn:hover {
+  opacity: 1;
+}
+
 /* Overview Cards */
 .stats-overview {
   display: grid;
@@ -783,6 +945,10 @@ onMounted(() => {
   justify-content: center;
   font-size: 1.5rem;
   color: white;
+}
+
+.stat-icon.facts {
+  background: linear-gradient(135deg, #f093fb, #f5576c);
 }
 
 .stat-icon.documents {
@@ -828,6 +994,11 @@ onMounted(() => {
 
 .stat-change.positive {
   color: #10b981;
+}
+
+.stat-change.needs-vectorization {
+  color: #f59e0b;
+  font-weight: 500;
 }
 
 /* Charts Section */
@@ -1034,11 +1205,19 @@ onMounted(() => {
   cursor: pointer;
   transition: all 0.2s;
   padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  outline: none;
 }
 
-.tag-cloud-item:hover {
+.tag-cloud-item:hover,
+.tag-cloud-item:focus {
   color: #2563eb;
   transform: scale(1.1);
+}
+
+.tag-cloud-item:focus {
+  box-shadow: 0 0 0 2px #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
 }
 
 /* Vector Database Statistics Section */

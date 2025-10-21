@@ -124,25 +124,25 @@
       <!-- Results List -->
       <div v-if="hasSearchResults" class="results-list">
         <div
-          v-for="result in searchResults"
-          :key="result.document.id"
+          v-for="(result, index) in searchResults"
+          :key="result?.document?.id || `result-${index}`"
           class="result-item"
         >
-          <div class="result-header">
+          <div v-if="result && result.document" class="result-header">
             <h5 class="result-title">{{ result.document.title || 'Knowledge Document' }}</h5>
             <span class="result-score" :class="getScoreClass(result.score)">
               {{ Math.round(result.score * 100) }}% match
             </span>
           </div>
-          <div class="result-meta">
+          <div v-if="result && result.document" class="result-meta">
             <span class="result-type">
               <i class="fas fa-file-text"></i>
               {{ result.document.type || 'text' }}
             </span>
             <span class="result-category">{{ result.document.category || 'general' }}</span>
           </div>
-          <div class="result-content">
-            <p>{{ result.highlights[0] || result.document.content.substring(0, 200) + '...' }}</p>
+          <div v-if="result && result.document" class="result-content">
+            <p>{{ result.highlights?.[0] || (result.document.content ? result.document.content.substring(0, 200) + '...' : 'No content') }}</p>
           </div>
         </div>
       </div>
