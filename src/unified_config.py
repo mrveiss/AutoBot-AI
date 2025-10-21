@@ -224,19 +224,29 @@ class UnifiedConfig:
         current[keys[-1]] = value
 
     def _load_emergency_defaults(self) -> None:
-        """Load minimal emergency defaults to prevent system failure"""
-        logger.warning("Loading emergency configuration defaults")
+        """Load minimal emergency defaults to prevent system failure
+
+        CRITICAL: Emergency defaults should NOT contain hardcoded IPs.
+        This method should fail fast and guide users to fix config/complete.yaml.
+        However, for backward compatibility during transition, we use localhost.
+        """
+        logger.error(
+            "CRITICAL: Config file missing or invalid! Emergency defaults loaded. "
+            "Please ensure config/complete.yaml exists and is properly configured. "
+            "Using localhost for all services - this will NOT work in distributed mode!"
+        )
 
         self._config = {
             "infrastructure": {
                 "hosts": {
-                    "backend": "172.16.168.20",
-                    "frontend": "172.16.168.21",
-                    "redis": "172.16.168.23",
-                    "ollama": "172.16.168.20",
-                    "ai_stack": "172.16.168.24",
-                    "npu_worker": "172.16.168.22",
-                    "browser_service": "172.16.168.25",
+                    # Use localhost as emergency fallback - will NOT work in distributed mode
+                    "backend": "127.0.0.1",
+                    "frontend": "127.0.0.1",
+                    "redis": "127.0.0.1",
+                    "ollama": "127.0.0.1",
+                    "ai_stack": "127.0.0.1",
+                    "npu_worker": "127.0.0.1",
+                    "browser_service": "127.0.0.1",
                 },
                 "ports": {
                     "backend": 8001,
@@ -255,7 +265,7 @@ class UnifiedConfig:
             },
             "redis": {
                 "enabled": True,
-                "databases": {"main": 0},
+                "databases": {"main": 0, "knowledge": 0},
                 "connection": {
                     "socket_timeout": 2,
                     "socket_connect_timeout": 2,
@@ -318,8 +328,8 @@ class UnifiedConfig:
         # Ensure required fields with proper defaults
         config = {
             "enabled": redis_config.get("enabled", True),
-            "host": self.get_host("redis", "172.16.168.23"),
-            "port": self.get_port("redis", 6379),
+            "host": self.get_host("redis", NetworkConstants.REDIS_VM_IP),
+            "port": self.get_port("redis", NetworkConstants.REDIS_PORT),
             "password": redis_config.get("password"),
             "db": redis_config.get("databases", {}).get("main", 0),
             "decode_responses": True,
@@ -335,6 +345,52 @@ class UnifiedConfig:
         }
 
         return config
+
+    def get_cors_origins(self) -> list:
+        """Generate CORS allowed origins from infrastructure configuration
+
+        Returns a list of allowed origins including:
+        - Localhost variants for development
+        - Frontend service (Vite dev server)
+        - Browser service (Playwright)
+        - Backend service (for WebSocket/CORS testing)
+        """
+        # Check if explicitly configured in security.cors_origins
+        explicit_origins = self.get("security.cors_origins", [])
+        if explicit_origins:
+            return explicit_origins
+
+        # Otherwise, generate from infrastructure config
+        frontend_host = self.get_host("frontend")
+        frontend_port = self.get_port("frontend")
+        browser_host = self.get_host("browser_service")
+        browser_port = self.get_port("browser_service")
+        backend_host = self.get_host("backend")
+        backend_port = self.get_port("backend")
+
+        origins = [
+            # Localhost variants for development
+            "http://localhost:5173",  # Vite dev server default
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",  # Browser/other dev tools
+            "http://127.0.0.1:3000",
+            # Frontend service
+            f"http://{frontend_host}:{frontend_port}",
+            # Browser service (Playwright)
+            f"http://{browser_host}:{browser_port}",
+            # Backend service (for testing/debugging)
+            f"http://{backend_host}:{backend_port}",
+        ]
+
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_origins = []
+        for origin in origins:
+            if origin not in seen:
+                seen.add(origin)
+                unique_origins.append(origin)
+
+        return unique_origins
 
     def is_feature_enabled(self, feature: str) -> bool:
         """Check if a feature is enabled"""
@@ -495,25 +551,6 @@ class UnifiedConfig:
             "security",
             {"session": {"timeout_minutes": 30}, "encryption": {"enabled": False}},
         )
-
-    def get_cors_origins(self) -> List[str]:
-        """Get CORS origins for the backend"""
-        configured_origins = self.get("security.cors_origins", [])
-
-        # Add dynamic origins based on frontend configuration
-        frontend_host = self.get_host("frontend")
-        frontend_port = self.get_port("frontend")
-
-        dynamic_origins = [
-            f"http://{frontend_host}:{frontend_port}",
-            ServiceURLs.FRONTEND_LOCAL,
-            "http://127.0.0.1:5173",
-        ]
-
-        # Combine and deduplicate
-        all_origins = list(set(configured_origins + dynamic_origins))
-        return all_origins
-
 
 # Create singleton instance
 config = UnifiedConfig()
