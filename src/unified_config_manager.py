@@ -543,6 +543,16 @@ class UnifiedConfigManager:
                 "selected_model"
             ] = selected_model
 
+        # Build Ollama endpoint from config instead of hardcoded IP
+        ollama_endpoint = backend_llm.get("local", {}).get("providers", {}).get("ollama", {}).get("endpoint")
+
+        # If not explicitly configured, construct from infrastructure config
+        if not ollama_endpoint:
+            from src.unified_config import config
+            ollama_host = config.get_host("ollama")
+            ollama_port = config.get_port("ollama")
+            ollama_endpoint = f"http://{ollama_host}:{ollama_port}"
+
         # Return legacy-compatible format for existing code
         return {
             "ollama": {
@@ -551,10 +561,7 @@ class UnifiedConfigManager:
                 .get("providers", {})
                 .get("ollama", {})
                 .get("models", []),
-                "endpoint": backend_llm.get("local", {})
-                .get("providers", {})
-                .get("ollama", {})
-                .get("endpoint", "http://172.16.168.20:11434"),
+                "endpoint": ollama_endpoint,
             },
             "unified": backend_llm,  # New unified format
         }
