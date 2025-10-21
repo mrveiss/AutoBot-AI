@@ -3,9 +3,11 @@ Service HTTP Client with Automatic Request Signing
 Provides authenticated HTTP client for service-to-service communication
 
 Usage:
+    from src.constants.network_constants import ServiceURLs
+
     client = ServiceHTTPClient(service_id="main-backend", service_key="...")
-    response = await client.get("http://172.16.168.24:8080/api/inference")
-    response = await client.post("http://172.16.168.22:8081/api/process", json={...})
+    response = await client.get(f"{ServiceURLs.AI_STACK_SERVICE}/api/inference")
+    response = await client.post(f"{ServiceURLs.NPU_WORKER_SERVICE}/api/process", json={...})
 """
 
 import time
