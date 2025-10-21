@@ -37,7 +37,7 @@ except ImportError:
 
 
 def get_redis_connection(
-    host: str = "172.16.168.23",
+    host: str = NetworkConstants.REDIS_VM_IP,
     port: int = NetworkConstants.REDIS_PORT,
     db: int = 0,
     password: Optional[str] = None,
@@ -47,8 +47,8 @@ def get_redis_connection(
     Get a standardized synchronous Redis connection
 
     Args:
-        host: Redis host (default: 172.16.168.23)
-        port: Redis port (default: 6379)
+        host: Redis host (default: Redis VM IP)
+        port: Redis port (default: Redis port)
         db: Database number (default: 0)
         password: Redis password if required
         **kwargs: Additional Redis connection parameters
@@ -75,7 +75,7 @@ def get_redis_connection(
 
 
 async def get_async_redis_connection(
-    host: str = "172.16.168.23",
+    host: str = NetworkConstants.REDIS_VM_IP,
     port: int = NetworkConstants.REDIS_PORT,
     db: int = 0,
     password: Optional[str] = None,
@@ -85,8 +85,8 @@ async def get_async_redis_connection(
     Get a standardized asynchronous Redis connection
 
     Args:
-        host: Redis host (default: 172.16.168.23)
-        port: Redis port (default: 6379)
+        host: Redis host (default: Redis VM IP)
+        port: Redis port (default: Redis port)
         db: Database number (default: 0)
         password: Redis password if required
         **kwargs: Additional Redis connection parameters
@@ -113,7 +113,7 @@ async def get_async_redis_connection(
 
 
 def get_redis_pool(
-    host: str = "172.16.168.23",
+    host: str = NetworkConstants.REDIS_VM_IP,
     port: int = NetworkConstants.REDIS_PORT,
     db: int = 0,
     password: Optional[str] = None,
@@ -124,8 +124,8 @@ def get_redis_pool(
     Get a standardized Redis connection pool
 
     Args:
-        host: Redis host (default: 172.16.168.23)
-        port: Redis port (default: 6379)
+        host: Redis host (default: Redis VM IP)
+        port: Redis port (default: Redis port)
         db: Database number (default: 0)
         password: Redis password if required
         max_connections: Maximum connections in pool (default: 20)

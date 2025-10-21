@@ -83,8 +83,8 @@ def get_redis_client(
                 return None
 
             # Extract connection parameters using centralized config
-            host = config_manager.get("redis.host", "172.16.168.23")
-            port = config_manager.get("redis.port", 6379)
+            host = config_manager.get("redis.host", NetworkConstants.REDIS_VM_IP)
+            port = config_manager.get("redis.port", NetworkConstants.REDIS_PORT)
             password = config_manager.get("redis.password", None)
             db = config_manager.get("redis.db", 0)
 

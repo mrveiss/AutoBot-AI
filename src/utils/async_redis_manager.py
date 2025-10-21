@@ -270,7 +270,7 @@ async def initialize_default_redis() -> None:
         # Check if Redis is in Docker - use localhost since backend runs on host
         import os
 
-        redis_host = os.getenv("REDIS_HOST", "172.16.168.23")  # Remote Redis host
+        redis_host = os.getenv("REDIS_HOST", NetworkConstants.REDIS_VM_IP)  # Remote Redis host
 
         config = RedisConfig(
             host=redis_host,
