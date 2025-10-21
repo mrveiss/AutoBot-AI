@@ -306,7 +306,8 @@ import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import appConfig from '../config/AppConfig.js'
 
 // Reactive data
-const rootPath = ref('/home/kali/Desktop/AutoBot')
+// FIXED: Remove hardcoded path - will be provided by backend or user input
+const rootPath = ref('')
 const analyzing = ref(false)
 const progressPercent = ref(0)
 const progressStatus = ref('Ready')
@@ -443,7 +444,7 @@ const getProblemsReport = async () => {
 // Get declarations data with improved error handling
 const getDeclarationsData = async () => {
   const startTime = Date.now()
-  loadingProgress.value.declarations = true
+  loadingProgress.declarations = true  // FIXED: reactive() doesn't use .value
   progressStatus.value = 'Processing declarations...'
 
   try {
@@ -477,14 +478,14 @@ const getDeclarationsData = async () => {
     console.error(`❌ Declarations error (${responseTime}ms):`, error)
     alert(`Declarations Test Error:\nMessage: ${error.message}\nResponse Time: ${responseTime}ms`)
   } finally {
-    loadingProgress.value.declarations = false
+    loadingProgress.declarations = false  // FIXED: reactive() doesn't use .value
     progressStatus.value = 'Ready'
   }
 }
 
 // Get duplicates data
 const getDuplicatesData = async () => {
-  loadingProgress.value.duplicates = true
+  loadingProgress.duplicates = true  // FIXED: reactive() doesn't use .value
   progressStatus.value = 'Finding duplicate code...'
 
   try {
@@ -517,14 +518,14 @@ const getDuplicatesData = async () => {
     console.error('❌ Duplicates error:', error)
     alert(`Duplicates Test Error:\nMessage: ${error.message}`)
   } finally {
-    loadingProgress.value.duplicates = false
+    loadingProgress.duplicates = false  // FIXED: reactive() doesn't use .value
     progressStatus.value = 'Ready'
   }
 }
 
 // Get hardcodes data
 const getHardcodesData = async () => {
-  loadingProgress.value.hardcodes = true
+  loadingProgress.hardcodes = true  // FIXED: reactive() doesn't use .value
   progressStatus.value = 'Detecting hardcoded values...'
 
   try {
@@ -560,7 +561,7 @@ const getHardcodesData = async () => {
     console.error('❌ Hardcodes error:', error)
     alert(`Hardcodes Test Error:\nMessage: ${error.message}`)
   } finally {
-    loadingProgress.value.hardcodes = false
+    loadingProgress.hardcodes = false  // FIXED: reactive() doesn't use .value
     progressStatus.value = 'Ready'
   }
 }
@@ -584,16 +585,16 @@ const testDataState = () => {
   alert(`Data State Debug:\nProblems: ${summary.problems}\nDeclarations: ${summary.declarations}\nDuplicates: ${summary.duplicates}\nStats: ${summary.stats}`)
 }
 
-// FIXED: Check NPU worker endpoint availability with correct path
+// FIXED: Check NPU worker endpoint directly (not via backend proxy)
 const testNpuConnection = async () => {
-  console.log('🔍 Testing NPU hardware via backend...')
+  console.log('🔍 Testing NPU worker directly...')
 
   try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    // FIXED: Use correct endpoint path with phase9 prefix
-    const npuEndpoint = `${backendUrl}/api/monitoring/phase9/hardware/npu`
+    // FIXED: Get NPU worker URL from config instead of hardcoding
+    const npuWorkerUrl = await appConfig.getServiceUrl('npu_worker')
+    const npuEndpoint = `${npuWorkerUrl}/health`
 
-    console.log(`📡 NPU Endpoint (corrected): ${npuEndpoint}`)
+    console.log(`📡 NPU Worker Endpoint: ${npuEndpoint}`)
 
     try {
       const startTime = Date.now()
