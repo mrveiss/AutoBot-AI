@@ -1,4 +1,5 @@
 import appConfig from '@/config/AppConfig.js';
+import { NetworkConstants } from '@/constants/network-constants.js';
 
 // Type definitions for API client
 export interface RequestOptions {
@@ -36,8 +37,9 @@ export class ApiClient {
     try {
       this.baseUrl = await appConfig.getApiUrl('');
     } catch (error) {
-      console.warn('Using fallback base URL');
-      this.baseUrl = 'http://172.16.168.20:8001';
+      console.warn('[ApiClient.ts] AppConfig initialization failed, using NetworkConstants fallback');
+      // Use NetworkConstants instead of hardcoded IP
+      this.baseUrl = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;
     }
   }
 

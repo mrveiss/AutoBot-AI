@@ -67,9 +67,11 @@ export class ConfigService {
       fallbackDefaults.api.backend_url = await appConfig.getApiUrl('');
       fallbackDefaults.api.ollama_url = await appConfig.getServiceUrl('ollama');
     } catch (error) {
-      console.warn('Using hardcoded fallback URLs');
-      fallbackDefaults.api.backend_url = 'http://172.16.168.20:8001';
-      fallbackDefaults.api.ollama_url = 'http://172.16.168.24:11434';
+      console.warn('[ConfigService] AppConfig URL loading failed, using defaults from appConfig:', error.message);
+      // Use appConfig defaults instead of hardcoded IPs
+      const defaults = appConfig.get('defaults', {});
+      fallbackDefaults.api.backend_url = defaults.backendUrl || '';
+      fallbackDefaults.api.ollama_url = defaults.ollamaUrl || '';
     }
 
     // Start with fallback defaults
@@ -94,7 +96,7 @@ export class ConfigService {
       if (response && response.status === 'success' && response.config) {
         // The backend provides a complete config structure
         const backendConfig = response.config;
-        
+
         // Transform backend config to match our expected structure
         const externalConfig = {
           api: {
@@ -112,7 +114,7 @@ export class ConfigService {
           features: backendConfig.features,
           services: backendConfig.services, // Keep full service config for reference
         };
-        
+
         this.config = this.mergeDeep(this.config, externalConfig);
         console.log('Loaded dynamic configuration from backend:', externalConfig);
       }
