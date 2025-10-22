@@ -77,6 +77,7 @@ import BaseXTerminal from '@/components/terminal/BaseXTerminal.vue'
 import { useTerminalStore } from '@/composables/useTerminalStore'
 import { useTerminalService } from '@/services/TerminalService'
 import type { Terminal } from '@xterm/xterm'
+import appConfig from '@/config/AppConfig.js'
 
 // Props
 interface Props {
@@ -317,9 +318,12 @@ const connectTerminal = async () => {
 
     if (props.chatSessionId) {
       console.log(`[ChatTerminal] Checking for existing agent terminal session for chat ${props.chatSessionId}`)
-      const queryResponse = await fetch(
-        `http://172.16.168.20:8001/api/agent-terminal/sessions?conversation_id=${props.chatSessionId}`
+
+      // REFACTORED: Use AppConfig for dynamic API URL resolution
+      const queryUrl = await appConfig.getApiUrl(
+        `/api/agent-terminal/sessions?conversation_id=${props.chatSessionId}`
       )
+      const queryResponse = await fetch(queryUrl)
       const queryData = await queryResponse.json()
 
       if (queryData.sessions && queryData.sessions.length > 0) {
@@ -339,8 +343,11 @@ const connectTerminal = async () => {
     // Create new session if not found
     if (!backendSession) {
       console.log(`[ChatTerminal] Creating new agent terminal session for chat ${props.chatSessionId || 'system'}`)
+
+      // REFACTORED: Use AppConfig for dynamic API URL resolution
+      const createUrl = await appConfig.getApiUrl('/api/agent-terminal/sessions')
       const createResponse = await fetch(
-        'http://172.16.168.20:8001/api/agent-terminal/sessions',
+        createUrl,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

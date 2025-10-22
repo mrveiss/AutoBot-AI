@@ -375,6 +375,7 @@ import type { ChatMessage } from '@/stores/useChatStore'
 import MessageStatus from '@/components/ui/MessageStatus.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
+import appConfig from '@/config/AppConfig.js'
 
 // Disable automatic attribute inheritance
 defineOptions({
@@ -701,7 +702,7 @@ const detectToolCalls = (message: ChatMessage) => {
   }
 }
 
-// Command Approval - Use HTTP POST to agent-terminal API
+// Command Approval - Use HTTP POST to agent-terminal API with dynamic URL
 const approveCommand = async (terminal_session_id: string, approved: boolean, comment?: string) => {
   if (!terminal_session_id) {
     console.error('No terminal_session_id provided for approval')
@@ -718,8 +719,8 @@ const approveCommand = async (terminal_session_id: string, approved: boolean, co
   }
 
   try {
-    // Use HTTP POST to agent-terminal approval endpoint
-    const backendUrl = `http://172.16.168.20:8001/api/agent-terminal/sessions/${terminal_session_id}/approve`
+    // Get backend URL from appConfig
+    const backendUrl = await appConfig.getApiUrl(`/api/agent-terminal/sessions/${terminal_session_id}/approve`)
 
     const response = await fetch(backendUrl, {
       method: 'POST',

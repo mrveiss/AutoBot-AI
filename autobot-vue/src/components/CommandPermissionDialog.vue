@@ -131,6 +131,7 @@
 <script>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { apiService } from '../services/api';
+import appConfig from '@/config/AppConfig.js';
 
 export default {
   name: 'CommandPermissionDialog',
@@ -198,11 +199,16 @@ export default {
         console.log('[CommandPermissionDialog] Sending approval request:');
         console.log('  Terminal Session ID:', props.terminalSessionId);
         console.log('  Command:', props.command);
-        console.log('  URL:', `http://172.16.168.20:8001/api/agent-terminal/sessions/${props.terminalSessionId}/approve`);
 
-        // Send approval using direct fetch (bypasses buggy API service)
+        // REFACTORED: Use AppConfig for dynamic API URL resolution
+        const approvalUrl = await appConfig.getApiUrl(
+          `/api/agent-terminal/sessions/${props.terminalSessionId}/approve`
+        );
+        console.log('  URL:', approvalUrl);
+
+        // Send approval using direct fetch
         const fetchResponse = await fetch(
-          `http://172.16.168.20:8001/api/agent-terminal/sessions/${props.terminalSessionId}/approve`,
+          approvalUrl,
           {
             method: 'POST',
             headers: {
