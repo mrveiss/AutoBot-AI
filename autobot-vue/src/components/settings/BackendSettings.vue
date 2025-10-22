@@ -750,6 +750,7 @@
 import type { HealthStatus } from "@/types/settings"
 
 import { computed, ref, reactive, onMounted } from 'vue'
+import { NetworkConstants } from '@/constants/network-constants.js'
 
 
 interface EmbeddingSettings {
@@ -999,7 +1000,7 @@ const testConnection = async () => {
   connectionStatus.message = 'Testing connection...'
 
   try {
-    const endpoint = props.backendSettings?.api_endpoint || 'http://172.16.168.20:8001'
+    const endpoint = props.backendSettings?.api_endpoint || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`
     const startTime = Date.now()
 
     const response = await fetch(`${endpoint}/health`, {
@@ -1126,7 +1127,7 @@ const testNPU = async () => {
   hardwareStatus.npu.message = 'Testing NPU...'
 
   try {
-    const endpoint = props.backendSettings?.api_endpoint || 'http://172.16.168.20:8001'
+    const endpoint = props.backendSettings?.api_endpoint || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`
     const response = await fetch(`${endpoint}/api/monitoring/phase9/hardware/npu`)
 
     if (response.ok) {
