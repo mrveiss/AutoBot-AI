@@ -127,6 +127,8 @@ import ApiClient from '@/utils/ApiClient.js'
 import batchApiService from '@/services/BatchApiService'
 // MIGRATED: Using AppConfig.js for better configuration management
 import appConfig from '@/config/AppConfig.js'
+// FIXED: Import NetworkConstants for IP fallback values
+import { NetworkConstants } from '@/constants/network-constants.js'
 
 // Components
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
@@ -189,14 +191,16 @@ const loadNovncUrl = async () => {
       novncUrl.value = await appConfig.getVncUrl('playwright')
     } catch (error: any) {
       console.warn('[ChatInterface] Failed to get VNC URL from AppConfig:', error.message)
-      novncUrl.value = import.meta.env.VITE_PLAYWRIGHT_VNC_URL || 'http://172.16.168.25:6080/vnc.html'
+      // FIXED: Use NetworkConstants for fallback IP
+      novncUrl.value = import.meta.env.VITE_PLAYWRIGHT_VNC_URL || `http://${NetworkConstants.BROWSER_VM_IP}:${NetworkConstants.VNC_PORT}/vnc.html`
     }
     return
   }
 
   // Get session without side effects to prevent reactive loops
   const session = store.sessions.find(s => s.id === store.currentSessionId)
-  const baseUrl = import.meta.env.VITE_DESKTOP_VNC_URL || 'http://172.16.168.20:6080/vnc.html'
+  // FIXED: Use NetworkConstants for fallback IP
+  const baseUrl = import.meta.env.VITE_DESKTOP_VNC_URL || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.VNC_DESKTOP_PORT}/vnc.html`
 
   if (!session?.desktopSession) {
     // Return base URL without creating session to prevent reactive side effects
