@@ -2,6 +2,7 @@
 // This test suite validates all core MCP server functionality
 
 import { createClient } from 'redis';
+import { NetworkConstants } from '../constants/network.js';
 
 interface TestResult {
   name: string;
@@ -18,7 +19,7 @@ class MCPServerTestSuite {
     console.log('🧪 Initializing MCP Server Test Suite...');
     
     this.redis = createClient({
-      socket: { host: '172.16.168.23', port: 6379 },
+      socket: { host: NetworkConstants.REDIS_VM_IP, port: NetworkConstants.REDIS_PORT },
       database: 10
     });
     
@@ -306,7 +307,7 @@ class MCPServerTestSuite {
     try {
       // Test knowledge base connection (Redis DB 1)
       const kbRedis = createClient({
-        socket: { host: '172.16.168.23', port: 6379 },
+        socket: { host: NetworkConstants.REDIS_VM_IP, port: NetworkConstants.REDIS_PORT },
         database: 1
       });
       
@@ -418,7 +419,7 @@ class MCPServerTestSuite {
   }
 
   private generateInsightsFromErrors(errors: any[]) {
-    const insights = [];
+    const insights: any[] = [];
     
     // Group by component
     const componentGroups = errors.reduce((acc, error) => {
@@ -428,7 +429,7 @@ class MCPServerTestSuite {
 
     // Generate insights for components with multiple errors
     Object.entries(componentGroups).forEach(([component, count]) => {
-      if (count > 1) {
+      if ((count as number) > 1) {
         insights.push({
           id: `insight_${Date.now()}_${component}`,
           description: `Recurring ${component} errors detected (${count} occurrences)`,

@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Tail } from 'tail';
+import { NetworkConstants } from './constants/network.js';
+import { PathConstants } from './constants/paths.js';
 
 interface ConversationMessage {
   role: 'user' | 'assistant' | 'system';
@@ -19,25 +21,25 @@ export class RealTimeIngestion {
 
   async initialize() {
     this.redis = createClient({
-      socket: { host: '172.16.168.23', port: 6379 },
+      socket: { host: NetworkConstants.REDIS_VM_IP, port: NetworkConstants.REDIS_PORT },
       database: 10
     });
-    
+
     await this.redis.connect();
     console.log('[RealTimeIngestion] Connected to Redis DB 10');
-    
+
     this.isRunning = true;
     this.startConversationWatching();
   }
 
   private async startConversationWatching() {
     console.log('[RealTimeIngestion] Starting real-time conversation monitoring...');
-    
+
     // Watch for new conversation files in AutoBot's chat history
     const chatHistoryPaths = [
-      '/home/kali/Desktop/AutoBot/data/conversations',
-      '/home/kali/Desktop/AutoBot/data/chat_history',
-      '/home/kali/Desktop/AutoBot/data/logs/chat.log'
+      PathConstants.CONVERSATIONS_DIR,
+      PathConstants.CHAT_HISTORY_DIR,
+      PathConstants.CHAT_LOG
     ];
 
     for (const chatPath of chatHistoryPaths) {
@@ -62,7 +64,7 @@ export class RealTimeIngestion {
 
   private async watchDirectory(dirPath: string) {
     console.log(`[RealTimeIngestion] Watching directory: ${dirPath}`);
-    
+
     // Initial scan for existing files
     try {
       const files = await fs.readdir(dirPath);
@@ -82,7 +84,7 @@ export class RealTimeIngestion {
     }
 
     console.log(`[RealTimeIngestion] Watching file: ${filePath}`);
-    
+
     try {
       const tail = new Tail(filePath, {
         fromBeginning: false,
@@ -110,7 +112,7 @@ export class RealTimeIngestion {
     try {
       // Try to parse as JSON conversation message
       const data = JSON.parse(line);
-      
+
       if (this.isConversationMessage(data)) {
         await this.bufferMessage(data, filePath);
       }
@@ -121,7 +123,7 @@ export class RealTimeIngestion {
   }
 
   private isConversationMessage(data: any): data is ConversationMessage {
-    return data && 
+    return data &&
            typeof data === 'object' &&
            ['user', 'assistant', 'system'].includes(data.role) &&
            typeof data.content === 'string';
@@ -146,7 +148,7 @@ export class RealTimeIngestion {
           content: match[3] || match[2],
           timestamp: match[1] || new Date().toISOString()
         };
-        
+
         await this.bufferMessage(message, filePath);
         break;
       }
@@ -155,11 +157,11 @@ export class RealTimeIngestion {
 
   private async bufferMessage(message: ConversationMessage, source: string) {
     const sessionKey = `${source}-${new Date(message.timestamp).toDateString()}`;
-    
+
     if (!this.conversationBuffer.has(sessionKey)) {
       this.conversationBuffer.set(sessionKey, []);
     }
-    
+
     this.conversationBuffer.get(sessionKey)!.push(message);
     console.log(`[RealTimeIngestion] Buffered message from ${source}: ${message.content.substring(0, 50)}...`);
   }
@@ -168,7 +170,7 @@ export class RealTimeIngestion {
     // Process buffered conversations every 30 seconds
     setInterval(async () => {
       if (!this.isRunning) return;
-      
+
       for (const [sessionKey, messages] of this.conversationBuffer) {
         if (messages.length >= 2) { // At least user + assistant exchange
           await this.processBufferedConversation(sessionKey, messages);
@@ -227,7 +229,7 @@ export class RealTimeIngestion {
 
   private extractTasks(messages: ConversationMessage[], sessionId: string): any[] {
     const tasks: any[] = [];
-    
+
     messages.forEach((message, index) => {
       if (message.role === 'assistant') {
         // Look for TODO, FIXME, task indicators
@@ -267,7 +269,7 @@ export class RealTimeIngestion {
 
   private extractErrors(messages: ConversationMessage[], sessionId: string): any[] {
     const errors: any[] = [];
-    
+
     messages.forEach((message, index) => {
       // Look for error indicators
       const errorPatterns = [
@@ -305,20 +307,20 @@ export class RealTimeIngestion {
     // Try to determine conversation topic from first few messages
     const firstMessages = messages.slice(0, 3);
     const content = firstMessages.map(m => m.content).join(' ');
-    
+
     // Simple topic extraction based on common words
     const words = content.toLowerCase().match(/\b\w+\b/g) || [];
     const commonTechWords = [
-      'autobot', 'mcp', 'redis', 'docker', 'typescript', 'server', 'api', 
+      'autobot', 'mcp', 'redis', 'docker', 'typescript', 'server', 'api',
       'frontend', 'backend', 'database', 'monitoring', 'error', 'fix', 'build'
     ];
-    
+
     const topicWords = words.filter(word => commonTechWords.includes(word));
-    
+
     if (topicWords.length > 0) {
       return `Real-time conversation about ${topicWords.slice(0, 3).join(', ')}`;
     }
-    
+
     return `Real-time conversation (${new Date().toLocaleDateString()})`;
   }
 
@@ -330,7 +332,7 @@ export class RealTimeIngestion {
   async shutdown() {
     console.log('[RealTimeIngestion] Shutting down real-time ingestion...');
     this.isRunning = false;
-    
+
     // Stop watching files
     for (const [filePath, tail] of this.watchedFiles) {
       try {
@@ -340,16 +342,16 @@ export class RealTimeIngestion {
         console.log(`[RealTimeIngestion] Error stopping watch for ${filePath}:`, (error as Error).message);
       }
     }
-    
+
     this.watchedFiles.clear();
-    
+
     // Process any remaining buffered conversations
     for (const [sessionKey, messages] of this.conversationBuffer) {
       if (messages.length > 0) {
         await this.processBufferedConversation(sessionKey, messages);
       }
     }
-    
+
     if (this.redis) {
       await this.redis.quit();
       this.redis = null;

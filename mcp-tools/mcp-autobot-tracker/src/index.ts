@@ -16,12 +16,13 @@ import { z } from 'zod';
 import { BackgroundMonitor } from './background-monitor.js';
 import { KnowledgeIntegration } from './knowledge-integration.js';
 import { RealTimeIngestion } from './real-time-ingestion.js';
+import { NetworkConstants } from './constants/network.js';
 
 // Redis configuration - using AutoBot's Redis instance
 const REDIS_CONFIG = {
   socket: {
-    host: '172.16.168.23',
-    port: 6379,
+    host: NetworkConstants.REDIS_VM_IP,
+    port: NetworkConstants.REDIS_PORT,
   },
   database: 10, // Using DB 10 for MCP tracking
 };

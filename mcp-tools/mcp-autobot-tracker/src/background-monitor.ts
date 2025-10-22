@@ -5,6 +5,8 @@ import * as path from 'path';
 import { Tail } from 'tail';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { NetworkConstants, HealthCheckEndpoints } from './constants/network.js';
+import { PathConstants } from './constants/paths.js';
 
 const execAsync = promisify(exec);
 
@@ -25,12 +27,12 @@ export class BackgroundMonitor {
   private logWatchers: Map<string, any> = new Map();
   private dockerLogProcesses: Map<string, any> = new Map();
   private isRunning = false;
-  
+
   // AutoBot log configurations
   private logConfigs: LogConfig[] = [
     {
       name: 'backend',
-      path: '/home/kali/Desktop/AutoBot/data/logs/backend.log',
+      path: PathConstants.BACKEND_LOG,
       component: 'backend',
       patterns: {
         error: [
@@ -62,7 +64,7 @@ export class BackgroundMonitor {
     },
     {
       name: 'frontend',
-      path: '/home/kali/Desktop/AutoBot/data/logs/frontend.log',
+      path: PathConstants.FRONTEND_LOG,
       component: 'frontend',
       patterns: {
         error: [
@@ -88,7 +90,7 @@ export class BackgroundMonitor {
     },
     {
       name: 'redis',
-      path: '/home/kali/Desktop/AutoBot/data/logs/redis.log',
+      path: PathConstants.REDIS_LOG,
       component: 'redis',
       patterns: {
         error: [
@@ -111,7 +113,7 @@ export class BackgroundMonitor {
   // Docker services to monitor
   private dockerServices = [
     'autobot-backend',
-    'autobot-frontend', 
+    'autobot-frontend',
     'autobot-redis',
     'autobot-ai-stack',
     'autobot-npu-worker',
@@ -122,42 +124,42 @@ export class BackgroundMonitor {
 
   async start() {
     console.error('[BackgroundMonitor] Starting background monitoring...');
-    
+
     // Connect to Redis
     this.redis = createClient(this.redisConfig);
     this.redis.on('error', (err) => console.error('Redis Error:', err));
     await this.redis.connect();
-    
+
     this.isRunning = true;
-    
+
     // Start log file monitoring
     await this.startLogFileMonitoring();
-    
+
     // Start Docker log monitoring
     await this.startVMHealthMonitoring();
-    
+
     // Start periodic system checks
     this.startPeriodicChecks();
-    
+
     console.error('[BackgroundMonitor] All monitoring systems active');
   }
 
   async stop() {
     console.error('[BackgroundMonitor] Stopping monitoring...');
     this.isRunning = false;
-    
+
     // Stop log watchers
     for (const [name, watcher] of this.logWatchers) {
       watcher.unwatch();
     }
     this.logWatchers.clear();
-    
+
     // Stop Docker processes
     for (const [name, process] of this.dockerLogProcesses) {
       process.kill();
     }
     this.dockerLogProcesses.clear();
-    
+
     if (this.redis) {
       await this.redis.quit();
     }
@@ -168,34 +170,34 @@ export class BackgroundMonitor {
       try {
         // Check if log file exists
         await fs.access(config.path);
-        
+
         console.error(`[BackgroundMonitor] Monitoring ${config.name} at ${config.path}`);
-        
+
         const watcher = new Tail(config.path, {
           fromBeginning: false,
           follow: true,
           logger: console,
         });
-        
+
         watcher.on('line', (line: string) => {
           this.processLogLine(config, line);
         });
-        
+
         watcher.on('error', (error: any) => {
           console.error(`[BackgroundMonitor] Error watching ${config.name}:`, error);
         });
-        
+
         this.logWatchers.set(config.name, watcher);
-        
+
       } catch (error) {
         console.error(`[BackgroundMonitor] Cannot access log file ${config.path}:`, error);
-        
+
         // Try to create parent directory
         try {
           await fs.mkdir(path.dirname(config.path), { recursive: true });
           await fs.writeFile(config.path, `# Log file created by BackgroundMonitor\n`);
           console.error(`[BackgroundMonitor] Created log file ${config.path}`);
-          
+
           // Retry monitoring after creation
           setTimeout(() => this.startLogFileMonitoring(), 5000);
         } catch (createError) {
@@ -207,29 +209,29 @@ export class BackgroundMonitor {
 
   private async startVMHealthMonitoring() {
     console.error('[BackgroundMonitor] Starting VM health monitoring for distributed architecture...');
-    
+
     // VM health endpoints for distributed AutoBot architecture
     const vmHealthChecks = [
-      { name: 'frontend', url: 'http://172.16.168.21:5173/health', component: 'frontend' },
-      { name: 'npu-worker', url: 'http://172.16.168.22:8081/health', component: 'npu-worker' },
-      { name: 'redis', url: 'redis://172.16.168.23:6379', component: 'redis', type: 'redis' },
-      { name: 'ai-stack', url: 'http://172.16.168.24:8080/health', component: 'ai-stack' },
-      { name: 'browser', url: 'http://172.16.168.25:3000/health', component: 'browser' },
-      { name: 'backend', url: 'http://172.16.168.20:8001/api/system/health', component: 'backend' }
+      { name: 'frontend', url: HealthCheckEndpoints.FRONTEND, component: 'frontend' },
+      { name: 'npu-worker', url: HealthCheckEndpoints.NPU_WORKER, component: 'npu-worker' },
+      { name: 'redis', url: HealthCheckEndpoints.REDIS, component: 'redis', type: 'redis' },
+      { name: 'ai-stack', url: HealthCheckEndpoints.AI_STACK, component: 'ai-stack' },
+      { name: 'browser', url: HealthCheckEndpoints.BROWSER, component: 'browser' },
+      { name: 'backend', url: HealthCheckEndpoints.BACKEND, component: 'backend' }
     ];
-    
+
     for (const vm of vmHealthChecks) {
       try {
         if (vm.type === 'redis') {
           // Special Redis health check using Redis PING
           const { createClient } = await import('redis');
           const testRedis = createClient({
-            socket: { host: '172.16.168.23', port: 6379, connectTimeout: 3000 },
+            socket: { host: NetworkConstants.REDIS_VM_IP, port: NetworkConstants.REDIS_PORT, connectTimeout: 3000 },
           });
           await testRedis.connect();
           const pong = await testRedis.ping();
           await testRedis.quit();
-          
+
           if (pong === 'PONG') {
             console.error(`[BackgroundMonitor] VM ${vm.name} (${vm.url}): HEALTHY`);
           } else {
@@ -241,7 +243,7 @@ export class BackgroundMonitor {
           const curlCommand = `timeout 5 curl -s -o /dev/null -w "%{http_code}" ${vm.url}`;
           const { stdout } = await execAsync(curlCommand);
           const statusCode = stdout.trim();
-          
+
           if (statusCode === '200') {
             console.error(`[BackgroundMonitor] VM ${vm.name} (${vm.url}): HEALTHY`);
           } else {
@@ -255,7 +257,7 @@ export class BackgroundMonitor {
       }
     }
   }
-  
+
   private async recordVMHealthIssue(vmName: string, component: string, status: string) {
     if (this.redis) {
       const errorEntry = {
@@ -268,7 +270,7 @@ export class BackgroundMonitor {
         vm_name: vmName,
         status: status
       };
-      
+
       await this.redis.hSet('errors:all', errorEntry.id, JSON.stringify(errorEntry));
       await this.redis.lPush('errors:recent', errorEntry.id);
       await this.redis.lTrim('errors:recent', 0, 999);
@@ -282,7 +284,7 @@ export class BackgroundMonitor {
         clearInterval(interval);
         return;
       }
-      
+
       await this.performSystemHealthCheck();
       await this.cleanupOldData();
       await this.generatePeriodicReport();
@@ -291,9 +293,9 @@ export class BackgroundMonitor {
 
   private async processLogLine(config: LogConfig, line: string) {
     if (!this.redis) return;
-    
+
     const timestamp = new Date().toISOString();
-    
+
     // Check for errors
     for (const pattern of config.patterns.error) {
       const match = pattern.exec(line);
@@ -308,16 +310,16 @@ export class BackgroundMonitor {
           source: 'log_file',
           log_file: config.path,
         };
-        
+
         await this.redis.hSet('errors:all', error.id, JSON.stringify(error));
         await this.redis.lPush('errors:recent', error.id);
         await this.redis.lTrim('errors:recent', 0, 999); // Keep last 1000 errors
-        
+
         console.error(`[BackgroundMonitor] Error detected in ${config.name}: ${error.error_message}`);
         break;
       }
     }
-    
+
     // Check for warnings
     for (const pattern of config.patterns.warning) {
       const match = pattern.exec(line);
@@ -331,14 +333,14 @@ export class BackgroundMonitor {
           source: 'log_file',
           log_file: config.path,
         };
-        
+
         await this.redis.hSet('warnings:all', warning.id, JSON.stringify(warning));
         await this.redis.lPush('warnings:recent', warning.id);
         await this.redis.lTrim('warnings:recent', 0, 499); // Keep last 500 warnings
         break;
       }
     }
-    
+
     // Check for task indicators
     for (const pattern of config.patterns.task) {
       const match = pattern.exec(line);
@@ -354,14 +356,14 @@ export class BackgroundMonitor {
           log_file: config.path,
           full_log_line: line,
         };
-        
+
         await this.redis.hSet('tasks:all', task.id, JSON.stringify(task));
         await this.redis.lPush('tasks:from_logs', task.id);
         console.error(`[BackgroundMonitor] Task detected in ${config.name}: ${task.description}`);
         break;
       }
     }
-    
+
     // Check for completion indicators
     for (const pattern of config.patterns.completion) {
       const match = pattern.exec(line);
@@ -374,11 +376,11 @@ export class BackgroundMonitor {
 
   private async processDockerLogLine(service: string, line: string) {
     if (!this.redis) return;
-    
+
     // Similar processing to log files but with Docker context
     const component = service.replace('autobot-', '');
     const timestamp = new Date().toISOString();
-    
+
     // Docker-specific error patterns
     const errorPatterns = [
       /ERROR\s*(.+)/gi,
@@ -387,7 +389,7 @@ export class BackgroundMonitor {
       /Critical\s*(.+)/gi,
       /failed\s*(.+)/gi,
     ];
-    
+
     for (const pattern of errorPatterns) {
       const match = pattern.exec(line);
       if (match) {
@@ -401,16 +403,16 @@ export class BackgroundMonitor {
           source: 'docker_logs',
           service_name: service,
         };
-        
+
         await this.redis.hSet('errors:all', error.id, JSON.stringify(error));
         await this.redis.lPush('errors:recent', error.id);
         await this.redis.lTrim('errors:recent', 0, 999);
-        
+
         console.error(`[BackgroundMonitor] Docker error in ${service}: ${error.error_message}`);
         break;
       }
     }
-    
+
     // Store raw docker logs for analysis
     await this.redis.lPush(`docker_logs:${service}`, JSON.stringify({
       timestamp,
@@ -424,7 +426,7 @@ export class BackgroundMonitor {
     const criticalKeywords = /critical|fatal|emergency|panic/i;
     const highKeywords = /error|exception|failed|failure/i;
     const mediumKeywords = /warning|warn|deprecated/i;
-    
+
     if (criticalKeywords.test(line)) return 'critical';
     if (highKeywords.test(line)) return 'high';
     if (mediumKeywords.test(line)) return 'medium';
@@ -433,22 +435,22 @@ export class BackgroundMonitor {
 
   private async markRelatedTasksComplete(completionMessage: string, component: string) {
     if (!this.redis) return;
-    
+
     // Get all pending/in-progress tasks for this component
     const allTasks = await this.redis.hGetAll('tasks:all');
-    
+
     for (const [taskId, taskData] of Object.entries(allTasks)) {
       const task = JSON.parse(taskData);
-      
-      if (task.component === component && 
+
+      if (task.component === component &&
           (task.status === 'pending' || task.status === 'in_progress')) {
-        
+
         // Use basic string similarity to match tasks with completion messages
         if (this.isRelatedMessage(task.description, completionMessage)) {
           task.status = 'completed';
           task.updated_at = new Date().toISOString();
           task.completion_message = completionMessage;
-          
+
           await this.redis.hSet('tasks:all', taskId, JSON.stringify(task));
           console.error(`[BackgroundMonitor] Marked task as completed: ${task.description}`);
         }
@@ -460,50 +462,50 @@ export class BackgroundMonitor {
     // Simple keyword matching - could be enhanced with NLP
     const taskWords = taskDescription.toLowerCase().split(/\s+/);
     const completionWords = completionMessage.toLowerCase().split(/\s+/);
-    
+
     let matches = 0;
     for (const word of taskWords) {
       if (word.length > 3 && completionWords.includes(word)) {
         matches++;
       }
     }
-    
+
     return matches >= 2; // Require at least 2 matching words
   }
 
   private async performSystemHealthCheck() {
     if (!this.redis) return;
-    
+
     console.error('[BackgroundMonitor] Performing system health check...');
-    
+
     const healthData = {
       timestamp: new Date().toISOString(),
       services: {} as Record<string, any>,
       system: {} as Record<string, any>,
     };
-    
+
     // Check VM services for distributed architecture
     const vmServices = [
-      { name: 'frontend', url: 'http://172.16.168.21:5173/health' },
-      { name: 'npu-worker', url: 'http://172.16.168.22:8081/health' },
-      { name: 'redis', url: 'redis://172.16.168.23:6379', type: 'redis' },
-      { name: 'ai-stack', url: 'http://172.16.168.24:8080/health' },
-      { name: 'browser', url: 'http://172.16.168.25:3000/health' },
-      { name: 'backend', url: 'http://172.16.168.20:8001/api/system/health' }
+      { name: 'frontend', url: HealthCheckEndpoints.FRONTEND },
+      { name: 'npu-worker', url: HealthCheckEndpoints.NPU_WORKER },
+      { name: 'redis', url: HealthCheckEndpoints.REDIS, type: 'redis' },
+      { name: 'ai-stack', url: HealthCheckEndpoints.AI_STACK },
+      { name: 'browser', url: HealthCheckEndpoints.BROWSER },
+      { name: 'backend', url: HealthCheckEndpoints.BACKEND }
     ];
-    
+
     for (const vm of vmServices) {
       try {
         if (vm.type === 'redis') {
           // Redis health check using PING
           const { createClient } = await import('redis');
           const testRedis = createClient({
-            socket: { host: '172.16.168.23', port: 6379, connectTimeout: 3000 },
+            socket: { host: NetworkConstants.REDIS_VM_IP, port: NetworkConstants.REDIS_PORT, connectTimeout: 3000 },
           });
           await testRedis.connect();
           const pong = await testRedis.ping();
           await testRedis.quit();
-          
+
           healthData.services[vm.name] = {
             status: pong === 'PONG' ? 'healthy' : 'unhealthy',
             healthy: pong === 'PONG',
@@ -531,10 +533,10 @@ export class BackgroundMonitor {
         };
       }
     }
-    
+
     // Check disk space
     try {
-      const { stdout } = await execAsync('df -h /home/kali/Desktop/AutoBot');
+      const { stdout } = await execAsync(`df -h ${PathConstants.PROJECT_ROOT}`);
       const diskInfo = stdout.split('\n')[1].split(/\s+/);
       healthData.system.disk = {
         usage: diskInfo[4],
@@ -543,7 +545,7 @@ export class BackgroundMonitor {
     } catch (error) {
       healthData.system.disk = { error: (error as Error).message };
     }
-    
+
     // Check memory usage
     try {
       const { stdout } = await execAsync('free -m');
@@ -556,13 +558,13 @@ export class BackgroundMonitor {
     } catch (error) {
       healthData.system.memory = { error: (error as Error).message };
     }
-    
+
     await this.redis.hSet('system:health_checks', healthData.timestamp, JSON.stringify(healthData));
-    
+
     // Alert on critical issues
     const unhealthyServices = Object.entries(healthData.services)
       .filter(([name, data]: [string, any]) => !data.healthy);
-    
+
     if (unhealthyServices.length > 0) {
       const alert = {
         id: uuidv4(),
@@ -572,7 +574,7 @@ export class BackgroundMonitor {
         timestamp: healthData.timestamp,
         details: unhealthyServices,
       };
-      
+
       await this.redis.hSet('alerts:all', alert.id, JSON.stringify(alert));
       await this.redis.lPush('alerts:recent', alert.id);
       console.error(`[BackgroundMonitor] ALERT: ${alert.message}`);
@@ -581,10 +583,10 @@ export class BackgroundMonitor {
 
   private async cleanupOldData() {
     if (!this.redis) return;
-    
+
     // Clean up old errors (keep last 30 days)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    
+
     const allErrors = await this.redis.hGetAll('errors:all');
     for (const [errorId, errorData] of Object.entries(allErrors)) {
       const error = JSON.parse(errorData);
@@ -592,10 +594,10 @@ export class BackgroundMonitor {
         await this.redis.hDel('errors:all', errorId);
       }
     }
-    
+
     // Clean up old warnings (keep last 7 days)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    
+
     const allWarnings = await this.redis.hGetAll('warnings:all');
     for (const [warningId, warningData] of Object.entries(allWarnings)) {
       const warning = JSON.parse(warningData);
@@ -603,36 +605,36 @@ export class BackgroundMonitor {
         await this.redis.hDel('warnings:all', warningId);
       }
     }
-    
+
     console.error('[BackgroundMonitor] Cleaned up old monitoring data');
   }
 
   private async generatePeriodicReport() {
     if (!this.redis) return;
-    
+
     const report = {
       timestamp: new Date().toISOString(),
       period: 'last_5_minutes',
       summary: {} as Record<string, any>,
     };
-    
+
     // Get recent errors
     const recentErrors = await this.redis.lRange('errors:recent', 0, 49); // Last 50
     report.summary.recent_errors = recentErrors.length;
-    
+
     // Get recent warnings
     const recentWarnings = await this.redis.lRange('warnings:recent', 0, 49);
     report.summary.recent_warnings = recentWarnings.length;
-    
+
     // Get unfinished tasks
     const allTasks = await this.redis.hGetAll('tasks:all');
     const unfinishedTasks = Object.values(allTasks)
       .map(data => JSON.parse(data))
       .filter(task => task.status !== 'completed').length;
     report.summary.unfinished_tasks = unfinishedTasks;
-    
+
     await this.redis.hSet('reports:periodic', report.timestamp, JSON.stringify(report));
-    
+
     // Keep only last 100 reports
     const reportKeys = await this.redis.hKeys('reports:periodic');
     if (reportKeys.length > 100) {
@@ -641,20 +643,20 @@ export class BackgroundMonitor {
         await this.redis.hDel('reports:periodic', sortedKeys[i]);
       }
     }
-    
+
     console.error(`[BackgroundMonitor] Periodic report: ${recentErrors.length} errors, ${recentWarnings.length} warnings, ${unfinishedTasks} unfinished tasks`);
   }
 
   // Public API for external queries
   async getRecentActivity(minutes: number = 60) {
     if (!this.redis) return null;
-    
+
     const cutoff = new Date(Date.now() - minutes * 60 * 1000).toISOString();
-    
+
     const recentErrors: any[] = [];
     const recentWarnings: any[] = [];
     const recentTasks: any[] = [];
-    
+
     // Get recent errors
     const errorIds = await this.redis.lRange('errors:recent', 0, -1);
     for (const id of errorIds) {
@@ -666,7 +668,7 @@ export class BackgroundMonitor {
         }
       }
     }
-    
+
     // Get recent warnings
     const warningIds = await this.redis.lRange('warnings:recent', 0, -1);
     for (const id of warningIds) {
@@ -678,7 +680,7 @@ export class BackgroundMonitor {
         }
       }
     }
-    
+
     // Get recent tasks
     const taskIds = await this.redis.lRange('tasks:from_logs', 0, -1);
     for (const id of taskIds) {
@@ -690,7 +692,7 @@ export class BackgroundMonitor {
         }
       }
     }
-    
+
     return {
       period_minutes: minutes,
       errors: recentErrors,
