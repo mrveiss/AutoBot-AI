@@ -42,6 +42,7 @@
 <script>
 import { ref, onMounted, onUnmounted } from 'vue';
 import appConfig from '@/config/AppConfig.js';
+import { NetworkConstants } from '@/constants/network-constants.js';
 
 export default {
   name: 'PlaywrightDesktopViewer',
@@ -139,13 +140,13 @@ export default {
         // Try to get configuration from backend as fallback
         try {
           const backendConfig = await appConfig.getBackendConfig();
-          const playwrightHost = backendConfig?.playwright?.host || '172.16.168.25';
+          const playwrightHost = backendConfig?.playwright?.host || NetworkConstants.BROWSER_VM_IP;
           const playwrightVncPort = backendConfig?.playwright?.vnc_port || 6081;
           vncUrl.value = `http://${playwrightHost}:${playwrightVncPort}/vnc.html?autoconnect=true&resize=scale&password=playwright`;
           console.log('Using backend fallback configuration for Playwright VNC');
         } catch (backendError) {
-          console.warn('Backend config also failed, using hardcoded fallback');
-          vncUrl.value = 'http://172.16.168.25:6081/vnc.html?autoconnect=true&resize=scale&password=playwright';
+          console.warn('Backend config also failed, using NetworkConstants fallback');
+          vncUrl.value = `http://${NetworkConstants.BROWSER_VM_IP}:6081/vnc.html?autoconnect=true&resize=scale&password=playwright`;
         }
       }
 

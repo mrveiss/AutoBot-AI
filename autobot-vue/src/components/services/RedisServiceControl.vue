@@ -6,7 +6,7 @@
         <i class="fas fa-database text-2xl text-red-600"></i>
         <div>
           <h3 class="text-lg font-semibold text-gray-900">Redis Service</h3>
-          <p class="text-sm text-gray-600">VM3: {{ serviceStatus.vm_info?.host || '172.16.168.23' }}</p>
+          <p class="text-sm text-gray-600">VM3: {{ serviceStatus.vm_info?.host || NetworkConstants.REDIS_VM_IP }}</p>
         </div>
       </div>
 
@@ -238,6 +238,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useServiceManagement } from '@/composables/useServiceManagement'
+import { NetworkConstants } from '@/constants/network-constants.js'
 
 // Service management composable
 const {
