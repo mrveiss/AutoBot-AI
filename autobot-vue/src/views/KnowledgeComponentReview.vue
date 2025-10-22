@@ -228,7 +228,7 @@ const deleteComponent = (name: string) => {
 
 const confirmDelete = () => {
   if (viewingComponent.value) {
-    alert(`To delete ${viewingComponent.value}.vue, run:\nrm /home/kali/Desktop/AutoBot/autobot-vue/src/components/knowledge/${viewingComponent.value}.vue`)
+    alert(`To delete ${viewingComponent.value}.vue, run:\nrm autobot-vue/src/components/knowledge/${viewingComponent.value}.vue`)
     closeViewer()
   }
 }
