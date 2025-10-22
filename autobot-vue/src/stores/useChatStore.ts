@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { generateChatId, generateMessageId } from '@/utils/ChatIdGenerator.js'
+import { NetworkConstants } from '@/constants/network-constants.js'
 
 export interface ChatMessage {
   id: string
@@ -270,7 +271,7 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     // Generate per-chat desktop URL with session context
-    const baseUrl = import.meta.env.VITE_DESKTOP_VNC_URL || 'http://172.16.168.20:6080/vnc.html'
+    const baseUrl = import.meta.env.VITE_DESKTOP_VNC_URL || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.VNC_DESKTOP_PORT}/vnc.html`
     const params = new URLSearchParams({
       autoconnect: 'true',
       password: import.meta.env.VITE_DESKTOP_VNC_PASSWORD || 'autobot',

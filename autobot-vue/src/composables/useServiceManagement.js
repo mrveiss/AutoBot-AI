@@ -6,6 +6,7 @@
  */
 
 import { ref, onMounted, onUnmounted } from 'vue'
+import { NetworkConstants } from '@/constants/network-constants.js'
 import redisServiceAPI from '@/services/RedisServiceAPI'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 
@@ -25,7 +26,7 @@ export function useServiceManagement(serviceName = 'redis') {
     commands_processed: null,
     last_check: null,
     vm_info: {
-      host: '172.16.168.23',
+      host: NetworkConstants.REDIS_VM_IP,
       name: 'Redis VM',
       ssh_accessible: null
     }

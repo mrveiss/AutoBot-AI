@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import appConfig from '@/config/AppConfig.js'
+// FIXED: Import NetworkConstants for default host IPs
+import { NetworkConstants } from '@/constants/network-constants.js'
 
 // Host configuration interface
 export interface HostConfig {
@@ -30,48 +32,48 @@ export interface TerminalTab {
   isActive: boolean
 }
 
-// Default fallback hosts (used only if backend config fails)
+// FIXED: Default fallback hosts (used only if backend config fails) - Use NetworkConstants
 const DEFAULT_HOSTS: HostConfig[] = [
   {
     id: 'main',
     name: 'Main (WSL Backend)',
-    ip: '172.16.168.20',
-    port: 8001,
+    ip: NetworkConstants.MAIN_MACHINE_IP,
+    port: NetworkConstants.BACKEND_PORT,
     description: 'Main backend server on WSL'
   },
   {
     id: 'frontend',
     name: 'VM1 (Frontend)',
-    ip: '172.16.168.21',
-    port: 8001,
+    ip: NetworkConstants.FRONTEND_VM_IP,
+    port: NetworkConstants.FRONTEND_PORT,
     description: 'Frontend web interface server'
   },
   {
     id: 'npu-worker',
     name: 'VM2 (NPU Worker)',
-    ip: '172.16.168.22',
-    port: 8001,
+    ip: NetworkConstants.NPU_WORKER_VM_IP,
+    port: NetworkConstants.NPU_WORKER_PORT,
     description: 'Hardware AI acceleration worker'
   },
   {
     id: 'redis',
     name: 'VM3 (Redis)',
-    ip: '172.16.168.23',
-    port: 8001,
+    ip: NetworkConstants.REDIS_VM_IP,
+    port: NetworkConstants.REDIS_PORT,
     description: 'Redis data layer server'
   },
   {
     id: 'ai-stack',
     name: 'VM4 (AI Stack)',
-    ip: '172.16.168.24',
-    port: 8001,
+    ip: NetworkConstants.AI_STACK_VM_IP,
+    port: NetworkConstants.AI_STACK_PORT,
     description: 'AI processing stack server'
   },
   {
     id: 'browser',
     name: 'VM5 (Browser)',
-    ip: '172.16.168.25',
-    port: 8001,
+    ip: NetworkConstants.BROWSER_VM_IP,
+    port: NetworkConstants.BROWSER_SERVICE_PORT,
     description: 'Web automation browser server'
   }
 ]
