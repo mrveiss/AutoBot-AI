@@ -28,6 +28,7 @@ from cryptography.hazmat.primitives.serialization import (
 )
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -89,15 +90,13 @@ class SSOIntegrationFramework:
 
     def __init__(
         self,
-        config_path: str = "/home/kali/Desktop/AutoBot/config/security/sso_config.yaml",
+        config_path: str = str(PATH.get_config_path("security", "sso_config.yaml")),
     ):
         self.config_path = config_path
         self.config = self._load_config()
 
         # Provider storage
-        self.providers_path = Path(
-            "/home/kali/Desktop/AutoBot/data/security/sso_providers"
-        )
+        self.providers_path = PATH.get_data_path("security", "sso_providers")
         self.providers_path.mkdir(parents=True, exist_ok=True)
 
         # Active providers and sessions
@@ -263,7 +262,7 @@ class SSOIntegrationFramework:
     def _initialize_crypto_keys(self):
         """Initialize cryptographic keys for SAML and JWT signing"""
         try:
-            keys_path = Path("/home/kali/Desktop/AutoBot/data/security/sso_keys")
+            keys_path = PATH.get_data_path("security", "sso_keys")
             keys_path.mkdir(parents=True, exist_ok=True)
 
             private_key_path = keys_path / "private_key.pem"
