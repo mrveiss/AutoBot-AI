@@ -20,6 +20,7 @@ from aiohttp import web, WSMsgType
 import plotly.graph_objects as go
 import plotly.utils
 from plotly.subplots import make_subplots
+from src.constants.network_constants import NetworkConstants
 
 from performance_monitor import PerformanceMonitor, VMS, SERVICE_ENDPOINTS
 
@@ -412,13 +413,14 @@ class PerformanceDashboard:
 
             updateVMStatus(data) {
                 const vmGrid = document.getElementById('vm-status-grid');
+                // VM IPs are managed by network_constants.py
                 const vms = {
-                    'main': '172.16.168.20',
-                    'frontend': '172.16.168.21',
-                    'npu-worker': '172.16.168.22',
-                    'redis': '172.16.168.23',
-                    'ai-stack': '172.16.168.24',
-                    'browser': '172.16.168.25'
+                    'main': '{{ main_ip }}',
+                    'frontend': '{{ frontend_ip }}',
+                    'npu-worker': '{{ npu_worker_ip }}',
+                    'redis': '{{ redis_ip }}',
+                    'ai-stack': '{{ ai_stack_ip }}',
+                    'browser': '{{ browser_ip }}'
                 };
 
                 let vmHtml = '';
@@ -567,7 +569,14 @@ class PerformanceDashboard:
     @aiohttp_jinja2.template('dashboard.html')
     async def dashboard_home(self, request):
         """Serve the main dashboard page."""
-        return {}
+        return {
+            'main_ip': NetworkConstants.MAIN_MACHINE_IP,
+            'frontend_ip': NetworkConstants.FRONTEND_VM_IP,
+            'npu_worker_ip': NetworkConstants.NPU_WORKER_VM_IP,
+            'redis_ip': NetworkConstants.REDIS_VM_IP,
+            'ai_stack_ip': NetworkConstants.AI_STACK_VM_IP,
+            'browser_ip': NetworkConstants.BROWSER_VM_IP
+        }
     
     async def get_current_metrics(self, request):
         """Get current performance metrics."""

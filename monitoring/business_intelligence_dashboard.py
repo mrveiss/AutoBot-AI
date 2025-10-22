@@ -22,6 +22,7 @@ import seaborn as sns
 import pandas as pd
 import numpy as np
 from jinja2 import Template
+from src.constants.network_constants import NetworkConstants
 
 
 @dataclass
@@ -78,7 +79,7 @@ class SystemHealthScore:
 class BusinessIntelligenceDashboard:
     """Business Intelligence and Analytics Dashboard for AutoBot."""
 
-    def __init__(self, redis_host: str = "172.16.168.23", redis_port: int = 6379):
+    def __init__(self, redis_host: str = NetworkConstants.REDIS_VM_IP, redis_port: int = 6379):
         self.logger = logging.getLogger(__name__)
         self.redis_host = redis_host
         self.redis_port = redis_port

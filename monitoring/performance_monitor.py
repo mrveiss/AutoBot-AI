@@ -20,6 +20,7 @@ import redis
 import aiohttp
 import aiofiles
 from pathlib import Path
+from src.constants.network_constants import NetworkConstants, ServiceURLs
 
 # Performance monitoring configuration
 MONITORING_INTERVAL = 30  # seconds
@@ -34,23 +35,23 @@ ALERT_THRESHOLDS = {
 
 # Distributed VM configuration
 VMS = {
-    'main': '172.16.168.20',        # Main machine (WSL) - Backend API
-    'frontend': '172.16.168.21',    # VM1 Frontend
-    'npu-worker': '172.16.168.22',  # VM2 NPU Worker
-    'redis': '172.16.168.23',       # VM3 Redis
-    'ai-stack': '172.16.168.24',    # VM4 AI Stack
-    'browser': '172.16.168.25'      # VM5 Browser
+    'main': NetworkConstants.MAIN_MACHINE_IP,        # Main machine (WSL) - Backend API
+    'frontend': NetworkConstants.FRONTEND_VM_IP,    # VM1 Frontend
+    'npu-worker': NetworkConstants.NPU_WORKER_VM_IP,  # VM2 NPU Worker
+    'redis': NetworkConstants.REDIS_VM_IP,       # VM3 Redis
+    'ai-stack': NetworkConstants.AI_STACK_VM_IP,    # VM4 AI Stack
+    'browser': NetworkConstants.BROWSER_VM_IP      # VM5 Browser
 }
 
 # Service endpoints for monitoring
 SERVICE_ENDPOINTS = {
-    'backend': 'http://172.16.168.20:8001/api/health',
-    'frontend': 'http://172.16.168.21:5173/',
-    'npu-worker': 'http://172.16.168.22:8081/health',
-    'ai-stack': 'http://172.16.168.24:8080/health',
-    'browser': 'http://172.16.168.25:3000/health',
-    'ollama': 'http://172.16.168.20:11434/api/version',
-    'redis': '172.16.168.23:6379'
+    'backend': f'http://{NetworkConstants.MAIN_MACHINE_IP}:8001/api/health',
+    'frontend': f'http://{NetworkConstants.FRONTEND_VM_IP}:5173/',
+    'npu-worker': f'http://{NetworkConstants.NPU_WORKER_VM_IP}:8081/health',
+    'ai-stack': f'http://{NetworkConstants.AI_STACK_VM_IP}:8080/health',
+    'browser': f'http://{NetworkConstants.BROWSER_VM_IP}:3000/health',
+    'ollama': f'http://{NetworkConstants.MAIN_MACHINE_IP}:11434/api/version',
+    'redis': f'{NetworkConstants.REDIS_VM_IP}:6379'
 }
 
 @dataclass
@@ -329,7 +330,7 @@ class PerformanceMonitor:
         inter_vm_metrics = []
         
         # Test communication between main machine and all VMs
-        main_vm = '172.16.168.20'
+        main_vm = NetworkConstants.MAIN_MACHINE_IP
         
         for vm_name, vm_ip in VMS.items():
             if vm_name == 'main':

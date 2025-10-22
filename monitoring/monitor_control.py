@@ -18,6 +18,7 @@ from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 import subprocess
 import yaml
+from src.constants.network_constants import NetworkConstants
 
 from performance_monitor import PerformanceMonitor
 from performance_optimizer import PerformanceOptimizer
@@ -437,12 +438,12 @@ class MonitorControl:
             print(f"   📋 Optimization Opportunities: {recs['total_count']} (Critical: {recs['critical']}, High: {recs['high']})")
         
         print("\n🎯 Monitoring AutoBot distributed system:")
-        print("   • Main (WSL): 172.16.168.20 - Backend API")
-        print("   • Frontend VM: 172.16.168.21 - Web Interface")
-        print("   • NPU Worker VM: 172.16.168.22 - AI Acceleration")
-        print("   • Redis VM: 172.16.168.23 - Data Layer")
-        print("   • AI Stack VM: 172.16.168.24 - AI Processing")
-        print("   • Browser VM: 172.16.168.25 - Web Automation")
+        print(f"   • Main (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API")
+        print(f"   • Frontend VM: {NetworkConstants.FRONTEND_VM_IP} - Web Interface")
+        print(f"   • NPU Worker VM: {NetworkConstants.NPU_WORKER_VM_IP} - AI Acceleration")
+        print(f"   • Redis VM: {NetworkConstants.REDIS_VM_IP} - Data Layer")
+        print(f"   • AI Stack VM: {NetworkConstants.AI_STACK_VM_IP} - AI Processing")
+        print(f"   • Browser VM: {NetworkConstants.BROWSER_VM_IP} - Web Automation")
         
         print(f"\n💾 Logs: /home/kali/Desktop/AutoBot/logs/")
         print(f"📊 Results: /home/kali/Desktop/AutoBot/logs/benchmarks/")
