@@ -12,6 +12,7 @@ from backend.services.config_service import ConfigService
 from backend.utils.cache_manager import cache_response
 from backend.utils.connection_utils import ModelManager
 from src.constants.network_constants import NetworkConstants
+from src.constants.model_constants import ModelConstants as ModelConsts
 from src.unified_config import config
 
 router = APIRouter()
@@ -85,7 +86,7 @@ async def get_frontend_config():
                 ),
                 "model_name": config.get(
                     "backend.llm.local.providers.ollama.selected_model",
-                    "deepseek-r1:14b",
+                    ModelConsts.DEFAULT_OLLAMA_MODEL,
                 ),
                 "max_chat_messages": config.get("chat.max_messages", 100),
             },

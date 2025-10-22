@@ -13,6 +13,7 @@ from typing import Any, Dict
 import requests
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.model_constants import ModelConstants
 from src.unified_config_manager import (
     HTTP_PROTOCOL,
     OLLAMA_HOST_IP,
@@ -128,8 +129,8 @@ class ConnectionTester:
                 ollama_model = global_config_manager.get_nested(
                     "backend.ollama_model",
                     os.getenv(
-                        "AUTOBOT_OLLAMA_MODEL", "artifish/llama3.2-uncensored:latest"
-                    ),  # Changed from deepseek-r1:14b
+                        "AUTOBOT_OLLAMA_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
+                    ),
                 )
 
             # Default fallbacks with environment variable support
@@ -139,8 +140,8 @@ class ConnectionTester:
                 ollama_endpoint = f"{OLLAMA_URL}/api/generate"
             if not ollama_model:
                 ollama_model = os.getenv(
-                    "AUTOBOT_OLLAMA_MODEL", "artifish/llama3.2-uncensored:latest"
-                )  # Changed from deepseek-r1:14b
+                    "AUTOBOT_OLLAMA_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
+                )
 
             # Test Ollama connection
             ollama_check_url = ollama_endpoint.replace("/api/generate", "/api/tags")
