@@ -115,9 +115,9 @@ async def get_redis_connection():
         fallback_hosts = [
             (redis_config.get("host"), redis_config.get("port")),  # Redis from config
             (
-                redis_config.get("fallback_host", "127.0.0.1"),
+                redis_config.get("fallback_host", NetworkConstants.LOCALHOST_IP),
                 redis_config.get("port"),
-            ),  # Fallback host from config
+            ),  # Fallback host from config (use NetworkConstants for default)
         ]
 
         for host, port in fallback_hosts:
@@ -251,7 +251,7 @@ def analyze_python_file(file_path: str) -> Dict[str, Any]:
             ip_matches = re.findall(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b", line)
             for ip in ip_matches:
                 if (
-                    ip.startswith("172.16.168.")
+                    ip.startswith(NetworkConstants.VM_IP_PREFIX)
                     or ip.startswith("127.0.0.")
                     or ip.startswith("192.168.")
                 ):
@@ -365,7 +365,7 @@ def analyze_javascript_vue_file(file_path: str) -> Dict[str, Any]:
             ip_matches = ip_pattern.findall(line)
             for ip in ip_matches:
                 if (
-                    ip.startswith("172.16.168.")
+                    ip.startswith(NetworkConstants.VM_IP_PREFIX)
                     or ip.startswith("127.0.0.")
                     or ip.startswith("192.168.")
                 ):
@@ -591,7 +591,9 @@ async def index_codebase(root_path: Optional[str] = None):
                 )
 
             # Set expiration for cached data (from config, default 24 hours)
-            cache_expiration = redis_config.get("codebase_cache_ttl", 86400)
+            from src.unified_config_manager import unified_config_manager
+            redis_cfg = unified_config_manager.get_redis_config()
+            cache_expiration = redis_cfg.get("codebase_cache_ttl", 86400)
             for key in redis_client.scan_iter(match="codebase:*"):
                 redis_client.expire(key, cache_expiration)
         else:

@@ -16,6 +16,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.model_constants import ModelConstants
 
 # Conditional imports for optional dependencies
 try:
@@ -498,7 +499,7 @@ class UnifiedLLMInterface:
         ollama_base_url = config_manager.get(
             "llm.ollama.base_url", get_service_url("ollama")
         )
-        ollama_model = config_manager.get("llm.ollama.default_model", "deepseek-r1:14b")
+        ollama_model = config_manager.get("llm.ollama.default_model", ModelConstants.DEFAULT_OLLAMA_MODEL)
 
         configs[ProviderType.OLLAMA] = ProviderConfig(
             provider_type=ProviderType.OLLAMA,
