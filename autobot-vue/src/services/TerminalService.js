@@ -6,6 +6,7 @@
 import { reactive, ref } from 'vue';
 import appConfig from '@/config/AppConfig.js';
 import apiClient from '@/utils/ApiClient.js';
+import { NetworkConstants } from '@/constants/network-constants.js';
 
 // Use singleton ApiClient instance for terminal operations
 
@@ -40,7 +41,7 @@ class TerminalService {
       this.baseUrl = `${wsUrl.replace('/ws', '')}/api/terminal/ws`;
     } catch (error) {
       console.warn('Using fallback WebSocket URL');
-      this.baseUrl = 'ws://172.16.168.20:8001/api/terminal/ws';
+      this.baseUrl = `ws://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}/api/terminal/ws`;
     }
   }
 
@@ -142,8 +143,8 @@ class TerminalService {
         user_id: 'default',
         security_level: 'standard',
         enable_logging: false,
-        enable_workflow_control: true,
-        initial_directory: '/home/kali'
+        enable_workflow_control: true
+        // initial_directory removed - let backend determine the initial directory
       });
 
       if (!result) {

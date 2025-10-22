@@ -3,11 +3,14 @@
  * Provides graceful fallback handling and caching for API endpoint calls
  */
 
+import { NetworkConstants } from '@/constants/network-constants.js';
+
 class ApiEndpointMapper {
   constructor() {
     this.cache = new Map()
     this.fallbackData = new Map()
-    this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://172.16.168.20:8001'
+    // Use NetworkConstants instead of hardcoded IP
+    this.baseUrl = import.meta.env.VITE_API_BASE_URL || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`
   }
 
   /**

@@ -6,6 +6,7 @@
 import appConfig from '@/config/AppConfig.js';
 import errorHandler from '@/utils/ErrorHandler.js';
 import { EnhancedFetch } from '@/utils/ApiCircuitBreaker.js';
+import { NetworkConstants } from '@/constants/network-constants.js';
 
 class ApiClient {
   constructor() {
@@ -104,8 +105,10 @@ class ApiClient {
       return directUrl;
     }
 
-    // Final fallback
-    return 'http://172.16.168.20:8001';
+    // Final fallback - use NetworkConstants instead of hardcoded IP
+    const fallbackUrl = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;
+    console.log('[ApiClient] FALLBACK: Using NetworkConstants:', fallbackUrl);
+    return fallbackUrl;
   }
 
   loadSettings() {
