@@ -68,6 +68,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import appConfig from '@/config/AppConfig.js'
 
 // Props
 interface Props {
@@ -138,9 +139,10 @@ const initializeSession = async (): Promise<string> => {
       // Chat terminal - check if session already exists
       console.log(`[Terminal] Checking for existing terminal session for chat ${props.chatSessionId}`)
 
-      const response = await fetch(
-        `http://172.16.168.20:8001/api/agent-terminal/sessions?conversation_id=${props.chatSessionId}`
+      const sessionsUrl = await appConfig.getApiUrl(
+        `/api/agent-terminal/sessions?conversation_id=${props.chatSessionId}`
       )
+      const response = await fetch(sessionsUrl)
       const data = await response.json()
 
       if (data.sessions && data.sessions.length > 0) {
@@ -153,20 +155,18 @@ const initializeSession = async (): Promise<string> => {
         // Create new session via AgentTerminalService
         console.log(`[Terminal] Creating new terminal session for chat ${props.chatSessionId}`)
 
-        const createResponse = await fetch(
-          'http://172.16.168.20:8001/api/agent-terminal/sessions',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              agent_id: `chat_agent_${props.chatSessionId}`,
-              agent_role: 'chat_agent',
-              conversation_id: props.chatSessionId,
-              host: 'main',
-              metadata: { created_by: 'frontend_terminal' }
-            })
-          }
-        )
+        const createUrl = await appConfig.getApiUrl('/api/agent-terminal/sessions')
+        const createResponse = await fetch(createUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agent_id: `chat_agent_${props.chatSessionId}`,
+            agent_role: 'chat_agent',
+            conversation_id: props.chatSessionId,
+            host: 'main',
+            metadata: { created_by: 'frontend_terminal' }
+          })
+        })
 
         const createData = await createResponse.json()
         sessionId.value = createData.session_id
@@ -194,17 +194,16 @@ const initializeSession = async (): Promise<string> => {
   }
 }
 
-const getWebSocketUrl = () => {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const host = '172.16.168.20:8001' // Backend VM
+const getWebSocketUrl = async () => {
+  const wsBaseUrl = await appConfig.getWebSocketUrl()
 
   switch (props.sessionType) {
     case 'secure':
-      return `${protocol}//${host}/api/ws/secure/${sessionId.value}`
+      return `${wsBaseUrl}/secure/${sessionId.value}`
     case 'main':
-      return `${protocol}//${host}/api/ws/terminal/${sessionId.value}`
+      return `${wsBaseUrl}/terminal/${sessionId.value}`
     default:
-      return `${protocol}//${host}/api/ws/simple/${sessionId.value}`
+      return `${wsBaseUrl}/simple/${sessionId.value}`
   }
 }
 
@@ -219,7 +218,7 @@ const connectTerminal = async () => {
     await initializeSession()
 
     statusMessage.value = 'Connecting to terminal...'
-    const wsUrl = getWebSocketUrl()
+    const wsUrl = await getWebSocketUrl()
     console.log('[WorkingTerminal] Connecting to:', wsUrl, 'Session:', sessionId.value)
 
     websocket.value = new WebSocket(wsUrl)
