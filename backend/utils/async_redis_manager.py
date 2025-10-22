@@ -104,7 +104,7 @@ class AsyncRedisDatabase:
         self.host = (
             host
             if host is not None
-            else os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")
+            else os.getenv("AUTOBOT_REDIS_HOST", NetworkConstants.REDIS_VM_IP)
         )
         self.port = (
             port
@@ -426,7 +426,7 @@ class AsyncRedisManager:
         self.host = (
             host
             if host is not None
-            else os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")
+            else os.getenv("AUTOBOT_REDIS_HOST", NetworkConstants.REDIS_VM_IP)
         )
         self.port = (
             port
@@ -740,7 +740,7 @@ async def get_redis_manager(host: str = None, port: int = None) -> AsyncRedisMan
         if _redis_manager_instance is None:
             # Get host and port from environment variables if not provided
             if host is None:
-                host = os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")
+                host = os.getenv("AUTOBOT_REDIS_HOST", NetworkConstants.REDIS_VM_IP)
             if port is None:
                 port = int(
                     os.getenv("AUTOBOT_REDIS_PORT", str(NetworkConstants.REDIS_PORT))

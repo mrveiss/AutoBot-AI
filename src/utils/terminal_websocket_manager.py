@@ -15,6 +15,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, Optional
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ class TerminalWebSocketManager:
         self.output_sender_task: Optional[asyncio.Task] = None
 
         # Configuration
-        self.current_dir = "/home/kali"
+        self.current_dir = str(PATH.USER_HOME)
         self.env = os.environ.copy()
 
         # Message processing hooks

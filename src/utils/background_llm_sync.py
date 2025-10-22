@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
+from src.constants.network_constants import NetworkConstants, ServiceURLs
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +64,15 @@ class BackgroundLLMSync:
         """Initialize known LLM services for monitoring."""
         # Add known LLM services
         known_services = [
-            ("ollama", "http://172.16.168.24:11434"),
+            (
+                "ollama",
+                f"http://{NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.OLLAMA_PORT}",
+            ),
             ("openai", "https://api.openai.com/v1"),
-            ("local_llm", "http://localhost:8080"),
+            (
+                "local_llm",
+                f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.AI_STACK_PORT}",
+            ),
         ]
 
         for name, endpoint in known_services:
