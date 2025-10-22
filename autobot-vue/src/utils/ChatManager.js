@@ -1,6 +1,7 @@
 // ChatManager.js - Centralized chat management utility
 import appConfig from '@/config/AppConfig.js';
 import apiClient from '@/utils/ApiClient.js';
+import { NetworkConstants } from '@/constants/network-constants.js';
 
 class ChatManager {
   constructor() {
@@ -23,7 +24,7 @@ class ChatManager {
       this.settings.backend.api_endpoint = this.apiEndpoint;
     } catch (error) {
       console.warn('Using fallback API endpoint');
-      this.apiEndpoint = 'http://172.16.168.20:8001';
+      this.apiEndpoint = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;
       this.settings.backend.api_endpoint = this.apiEndpoint;
     }
   }
