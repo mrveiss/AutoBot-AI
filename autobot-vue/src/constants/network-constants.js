@@ -42,6 +42,7 @@ export const NetworkConstants = Object.freeze({
   REDIS_PORT: parseInt(DEFAULT_CONFIG.network.redis.port),
   OLLAMA_PORT: parseInt(DEFAULT_CONFIG.network.ollama.port),
   VNC_PORT: parseInt(DEFAULT_CONFIG.vnc.desktop.port),
+  VNC_DESKTOP_PORT: parseInt(DEFAULT_CONFIG.vnc.desktop.port), // Alias for clarity
   BROWSER_SERVICE_PORT: parseInt(DEFAULT_CONFIG.network.browser.port),
   AI_STACK_PORT: parseInt(DEFAULT_CONFIG.network.ai_stack.port),
   NPU_WORKER_PORT: parseInt(DEFAULT_CONFIG.network.npu_worker.port),

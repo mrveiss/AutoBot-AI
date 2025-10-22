@@ -22,6 +22,7 @@ class PathConstants:
     SRC_DIR: Path = PROJECT_ROOT / "src"
     TESTS_DIR: Path = PROJECT_ROOT / "tests"
     BACKEND_DIR: Path = PROJECT_ROOT / "backend"
+    DATABASE_DIR: Path = PROJECT_ROOT / "database"
     FRONTEND_DIR: Path = PROJECT_ROOT / "autobot-vue"
     SCRIPTS_DIR: Path = PROJECT_ROOT / "scripts"
     UTILITIES_DIR: Path = SCRIPTS_DIR / "utilities"

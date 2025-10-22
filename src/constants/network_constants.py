@@ -40,6 +40,9 @@ class NetworkConstants:
     LOCALHOST_IP: str = "127.0.0.1"
     LOCALHOST_NAME: str = "localhost"
 
+    # Network prefixes for IP validation
+    VM_IP_PREFIX: str = "172.16.168."  # AutoBot VM network prefix
+
     # Standard ports
     BACKEND_PORT: int = 8001
     FRONTEND_PORT: int = 5173
