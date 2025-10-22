@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from src.constants.path_constants import PATH
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,12 +36,12 @@ class ConversationFilesMigration:
         Initialize migration with configurable paths.
 
         Args:
-            data_dir: Directory for database files (default: /home/kali/Desktop/AutoBot/data/)
-            schema_dir: Directory containing schema files (default: /home/kali/Desktop/AutoBot/database/schemas/)
+            data_dir: Directory for database files (default: PATH.DATA_DIR)
+            schema_dir: Directory containing schema files (default: PATH.DATABASE_DIR / "schemas")
             db_path: Full path to database file (optional, overrides data_dir/conversation_files.db)
         """
-        self.data_dir = data_dir or Path("/home/kali/Desktop/AutoBot/data")
-        self.schema_dir = schema_dir or Path("/home/kali/Desktop/AutoBot/database/schemas")
+        self.data_dir = data_dir or PATH.DATA_DIR
+        self.schema_dir = schema_dir or PATH.DATABASE_DIR / "schemas"
 
         # Allow custom database path OR use default in data_dir
         if db_path:
