@@ -57,9 +57,11 @@ export class SettingsService {
         this.defaultSettings.backend.api_endpoint = backendUrl.replace(/\/$/, '');
         this.defaultSettings.backend.ollama_endpoint = ollamaUrl;
       } catch (configError) {
-        console.warn('Using fallback configuration URLs');
-        this.defaultSettings.backend.api_endpoint = 'http://172.16.168.20:8001';
-        this.defaultSettings.backend.ollama_endpoint = 'http://172.16.168.24:11434';
+        console.warn('[SettingsService] AppConfig loading failed, using appConfig defaults');
+        // Use appConfig defaults instead of hardcoded IPs
+        const defaults = appConfig.get('defaults', {});
+        this.defaultSettings.backend.api_endpoint = defaults.backendUrl || '';
+        this.defaultSettings.backend.ollama_endpoint = defaults.ollamaUrl || '';
       }
 
       // First, try to load from localStorage for immediate UI update
@@ -76,7 +78,7 @@ export class SettingsService {
         // Check cache first
         const cacheKey = cacheService.createKey('/api/settings');
         let backendSettings = cacheService.get(cacheKey);
-        
+
         if (!backendSettings) {
           backendSettings = await apiClient.getSettings();
           if (backendSettings) {
@@ -115,7 +117,7 @@ export class SettingsService {
 
       // Save to backend for server-side persistence
       await apiClient.saveSettings(this.settings);
-      
+
       // Invalidate cache since settings changed
       cacheService.invalidateCategory('settings');
     } catch (error) {
