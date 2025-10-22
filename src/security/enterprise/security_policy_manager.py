@@ -17,6 +17,7 @@ from uuid import uuid4
 import yaml
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -99,13 +100,13 @@ class SecurityPolicyManager:
 
     def __init__(
         self,
-        config_path: str = "/home/kali/Desktop/AutoBot/config/security/security_policies.yaml",
+        config_path: str = str(PATH.get_config_path("security", "security_policies.yaml")),
     ):
         self.config_path = config_path
         self.config = self._load_config()
 
         # Policy storage
-        self.policies_path = Path("/home/kali/Desktop/AutoBot/data/security/policies")
+        self.policies_path = PATH.get_data_path("security", "policies")
         self.policies_path.mkdir(parents=True, exist_ok=True)
 
         # Load policies

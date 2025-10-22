@@ -16,6 +16,7 @@ import yaml
 from cachetools import TTLCache
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class DomainReputationService:
 
     def __init__(
         self,
-        config_path: str = "/home/kali/Desktop/AutoBot/config/security/domain_security.yaml",
+        config_path: str = str(PATH.get_config_path("security", "domain_security.yaml")),
     ):
         self.config_path = config_path
         self.config = self._load_config()

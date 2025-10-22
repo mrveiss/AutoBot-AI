@@ -18,6 +18,7 @@ import yaml
 from cryptography.fernet import Fernet
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ class ComplianceManager:
 
     def __init__(
         self,
-        config_path: str = "/home/kali/Desktop/AutoBot/config/security/compliance.yaml",
+        config_path: str = str(PATH.get_config_path("security", "compliance.yaml")),
     ):
         self.config_path = config_path
         self.config = self._load_config()
@@ -73,7 +74,7 @@ class ComplianceManager:
         # Initialize audit storage
         self.audit_base_path = Path(
             self.config.get("audit_storage", {}).get(
-                "base_path", "/home/kali/Desktop/AutoBot/logs/audit"
+                "base_path", str(PATH.get_log_path("audit"))
             )
         )
         self.audit_base_path.mkdir(parents=True, exist_ok=True)
@@ -120,7 +121,7 @@ class ComplianceManager:
         return {
             "enabled_frameworks": ["soc2", "gdpr", "iso27001"],
             "audit_storage": {
-                "base_path": "/home/kali/Desktop/AutoBot/logs/audit",
+                "base_path": str(PATH.get_log_path("audit")),
                 "encrypt_sensitive": True,
                 "max_file_size_mb": 100,
                 "compression_enabled": True,

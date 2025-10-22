@@ -23,6 +23,7 @@ from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class ThreatDetectionEngine:
 
     def __init__(
         self,
-        config_path: str = "/home/kali/Desktop/AutoBot/config/security/threat_detection.yaml",
+        config_path: str = str(PATH.get_config_path("security", "threat_detection.yaml")),
     ):
         self.config_path = config_path
         self.config = self._load_config()
@@ -103,9 +104,7 @@ class ThreatDetectionEngine:
 
         # User behavioral profiles
         self.user_profiles: Dict[str, UserProfile] = {}
-        self.profile_storage_path = Path(
-            "/home/kali/Desktop/AutoBot/data/security/user_profiles.pkl"
-        )
+        self.profile_storage_path = PATH.get_data_path("security", "user_profiles.pkl")
         self.profile_storage_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Threat intelligence and patterns
