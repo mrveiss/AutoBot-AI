@@ -71,37 +71,37 @@ class SSHManager:
     # Default host configurations
     DEFAULT_HOSTS = {
         "main": {
-            "ip": "172.16.168.20",
+            "ip": NetworkConstants.MAIN_MACHINE_IP,
             "port": 22,
             "user": "autobot",
             "description": "Main machine - Backend API + VNC Desktop",
         },
         "frontend": {
-            "ip": "172.16.168.21",
+            "ip": NetworkConstants.FRONTEND_VM_IP,
             "port": 22,
             "user": "autobot",
             "description": "Frontend VM - Web interface",
         },
         "npu-worker": {
-            "ip": "172.16.168.22",
+            "ip": NetworkConstants.NPU_WORKER_VM_IP,
             "port": 22,
             "user": "autobot",
             "description": "NPU Worker VM - Hardware AI acceleration",
         },
         "redis": {
-            "ip": "172.16.168.23",
+            "ip": NetworkConstants.REDIS_VM_IP,
             "port": 22,
             "user": "autobot",
             "description": "Redis VM - Data layer",
         },
         "ai-stack": {
-            "ip": "172.16.168.24",
+            "ip": NetworkConstants.AI_STACK_VM_IP,
             "port": 22,
             "user": "autobot",
             "description": "AI Stack VM - AI processing",
         },
         "browser": {
-            "ip": "172.16.168.25",
+            "ip": NetworkConstants.BROWSER_VM_IP,
             "port": 22,
             "user": "autobot",
             "description": "Browser VM - Web automation (Playwright)",
