@@ -228,7 +228,7 @@
                 v-model="workerForm.ip_address"
                 type="text"
                 class="form-input"
-                placeholder="172.16.168.22"
+                :placeholder="NetworkConstants.NPU_WORKER_VM_IP"
                 required
               />
             </div>
@@ -379,6 +379,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+import { NetworkConstants } from '@/constants/network-constants.js'
 
 // ===== TYPE DEFINITIONS =====
 
