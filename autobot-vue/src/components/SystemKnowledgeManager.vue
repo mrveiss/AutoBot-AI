@@ -9,12 +9,9 @@
       <label for="host-select">Target Host for Man Pages:</label>
       <select id="host-select" v-model="selectedHost" class="host-select">
         <option value="all">All Hosts</option>
-        <option value="172.16.168.20">Main (172.16.168.20)</option>
-        <option value="172.16.168.21">Frontend (172.16.168.21)</option>
-        <option value="172.16.168.22">NPU Worker (172.16.168.22)</option>
-        <option value="172.16.168.23">Redis (172.16.168.23)</option>
-        <option value="172.16.168.24">AI Stack (172.16.168.24)</option>
-        <option value="172.16.168.25">Browser (172.16.168.25)</option>
+        <option v-for="machine in machines" :key="machine.id" :value="machine.ip">
+          {{ machine.name }} ({{ machine.ip }})
+        </option>
       </select>
     </div>
 
@@ -197,6 +194,7 @@
 <script>
 import { ref, onMounted } from 'vue';
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase';
+import appConfig from '@/config/AppConfig.js';
 
 export default {
   name: 'SystemKnowledgeManager',
@@ -217,6 +215,7 @@ export default {
     const commandsIndexed = ref(0);
     const docsIndexed = ref(0);
     const selectedHost = ref('all');
+    const machines = ref([]);  // Will be loaded from appConfig
     const isLoading = ref(false);
     const isInitializing = ref(false);
     const isReindexing = ref(false);
@@ -311,7 +310,7 @@ export default {
           errorMessage = error.message;
         }
         console.error('[SystemKnowledgeManager] Initialization error:', error);
-        
+
         lastResult.value = {
           status: 'error',
           message: errorMessage
@@ -369,7 +368,7 @@ export default {
           errorMessage = error.message;
         }
         console.error('[SystemKnowledgeManager] Reindexing error:', error);
-        
+
         lastResult.value = {
           status: 'error',
           message: errorMessage
@@ -440,7 +439,7 @@ export default {
           errorMessage = error.message;
         }
         console.error('[SystemKnowledgeManager] Refresh error:', error);
-        
+
         lastResult.value = {
           status: 'error',
           message: errorMessage
@@ -485,7 +484,7 @@ export default {
           errorMessage = error.message;
         }
         console.error('[SystemKnowledgeManager] Man pages error:', error);
-        
+
         lastResult.value = {
           status: 'error',
           message: errorMessage
@@ -533,7 +532,7 @@ export default {
           errorMessage = error.message;
         }
         console.error('[SystemKnowledgeManager] Documentation indexing error:', error);
-        
+
         lastResult.value = {
           status: 'error',
           message: errorMessage
@@ -613,15 +612,15 @@ export default {
       } catch (error) {
         // Enhanced error handling for fetch-style errors (not axios)
         let errorMessage = 'Failed to generate vector embeddings';
-        
+
         if (error instanceof Error) {
           errorMessage = error.message;
         } else if (typeof error === 'string') {
           errorMessage = error;
         }
-        
+
         console.error('[SystemKnowledgeManager] Vectorization error:', error);
-        
+
         lastResult.value = {
           status: 'error',
           message: errorMessage
@@ -636,7 +635,16 @@ export default {
       }
     };
 
-    onMounted(() => {
+    onMounted(async () => {
+      // Load infrastructure machines from appConfig
+      try {
+        machines.value = appConfig.getMachinesArray();
+        console.log('[SystemKnowledgeManager] Loaded machines from appConfig:', machines.value);
+      } catch (error) {
+        console.warn('[SystemKnowledgeManager] Failed to load machines from appConfig:', error);
+        // No fallback - component will just show "All Hosts" option
+      }
+
       fetchStats();
     });
 
@@ -645,6 +653,7 @@ export default {
       commandsIndexed,
       docsIndexed,
       selectedHost,
+      machines,
       isLoading,
       isInitializing,
       isReindexing,

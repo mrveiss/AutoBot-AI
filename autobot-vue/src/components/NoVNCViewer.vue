@@ -11,7 +11,7 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <button 
+        <button
           @click="checkVNCService"
           class="text-gray-300 hover:text-white px-2 py-1 rounded hover:bg-gray-700 transition-colors"
           title="Check VNC service status"
@@ -20,16 +20,16 @@
           <i :class="isChecking ? 'fas fa-spinner fa-spin' : 'fas fa-heartbeat'"></i>
           Service Check
         </button>
-        <a 
-          :href="novncUrl" 
-          target="_blank" 
+        <a
+          :href="novncUrl"
+          target="_blank"
           class="text-indigo-300 hover:text-indigo-100 underline flex items-center gap-1"
           title="Open noVNC in new window"
         >
           <i class="fas fa-external-link-alt"></i>
           New Window
         </a>
-        <button 
+        <button
           @click="refreshViewer"
           class="text-gray-300 hover:text-white px-2 py-1 rounded hover:bg-gray-700 transition-colors"
           title="Refresh connection"
@@ -38,7 +38,7 @@
           <i class="fas fa-sync-alt" :class="{ 'animate-spin': isRefreshing }"></i>
           Refresh
         </button>
-        <button 
+        <button
           @click="toggleFullscreen"
           class="text-gray-300 hover:text-white px-2 py-1 rounded hover:bg-gray-700 transition-colors"
           title="Toggle fullscreen"
@@ -65,16 +65,16 @@
         </div>
       </div>
       <div class="flex gap-2">
-        <button 
-          @click="retryConnection" 
+        <button
+          @click="retryConnection"
           class="px-3 py-1 bg-red-700 hover:bg-red-800 rounded text-sm transition-colors flex items-center gap-1"
           :disabled="isRetrying"
         >
           <i :class="isRetrying ? 'fas fa-spinner fa-spin' : 'fas fa-redo'"></i>
           {{ isRetrying ? 'Retrying...' : 'Retry' }}
         </button>
-        <button 
-          @click="checkVNCService" 
+        <button
+          @click="checkVNCService"
           class="px-3 py-1 bg-red-700 hover:bg-red-800 rounded text-sm transition-colors flex items-center gap-1"
           :disabled="isChecking"
         >
@@ -196,34 +196,13 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted } from 'vue'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
-import apiClient from '@/utils/ApiClient'
-
-// Configuration - Get from backend config
-const getVNCConfig = async () => {
-  try {
-    // Backend exposes VNC configuration through its config endpoint
-    // Use appConfig to get VNC settings
-    const config: any = { vnc: { host: '172.16.168.20', port: 6080 } }
-    return {
-      host: config?.vnc?.host || '172.16.168.20',
-      port: config?.vnc?.port || 6080
-    }
-  } catch (error) {
-    console.warn('Failed to get VNC config from backend, using defaults:', error)
-    return {
-      host: '172.16.168.20',
-      port: 6080
-    }
-  }
-}
-
-const vncHost = ref('172.16.168.20')  // Will be updated from config
-const vncPort = ref(6080)  // Will be updated from config
-const novncUrl = computed(() => 
-  `http://${vncHost.value}:${vncPort.value}/vnc.html?autoconnect=true&resize=scale&reconnect=true&password=''`
-)
+import appConfig from '@/config/AppConfig.js'
+import { NetworkConstants } from '@/constants/network-constants.js'
 
 // Component state
+const vncHost = ref('')  // Will be loaded from appConfig
+const vncPort = ref(0)   // Will be loaded from appConfig
+const novncUrl = ref('')  // Will be loaded from appConfig.getVncUrl()
 const isLoading = ref(true)
 const isRefreshing = ref(false)
 const isRetrying = ref(false)
@@ -259,16 +238,16 @@ const connectionStatusText = computed(() => {
 // Methods
 const onIframeLoad = async () => {
   console.log('NoVNC iframe loaded successfully')
-  
+
   // Small delay to ensure VNC has time to establish connection
   setTimeout(async () => {
     isLoading.value = false
     connectionError.value = false
     errorDetails.value = ''
-    
+
     // Measure connection latency
     await measureLatency()
-    
+
     loadingMessage.value = 'Connected successfully!'
   }, 2000)
 }
@@ -285,7 +264,8 @@ const onIframeError = (event: Event) => {
 const measureLatency = async () => {
   try {
     const start = performance.now()
-    const response = await fetch(`http://${vncHost.value}:${vncPort.value}/`, { 
+    const testUrl = `${vncHost.value}:${vncPort.value}`
+    await fetch(`http://${testUrl}/`, {
       method: 'HEAD',
       mode: 'no-cors'
     })
@@ -299,28 +279,29 @@ const measureLatency = async () => {
 const checkVNCService = async () => {
   isChecking.value = true
   lastServiceCheck.value = new Date().toLocaleTimeString()
-  
+
   try {
     // Try to reach the VNC service
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
-    
-    const response = await fetch(`http://${vncHost.value}:${vncPort.value}/`, {
+
+    const testUrl = `${vncHost.value}:${vncPort.value}`
+    await fetch(`http://${testUrl}/`, {
       method: 'HEAD',
       signal: controller.signal,
       mode: 'no-cors'
     })
-    
+
     clearTimeout(timeoutId)
     serviceStatus.value = `Service responding (${new Date().toLocaleTimeString()})`
-    
+
     // If we can reach the service but iframe is broken, try refresh
     if (connectionError.value) {
       setTimeout(() => {
         refreshViewer()
       }, 1000)
     }
-    
+
   } catch (error: any) {
     console.warn('VNC service check failed:', error.message)
     if (error.name === 'AbortError') {
@@ -328,40 +309,40 @@ const checkVNCService = async () => {
     } else {
       errorDetails.value = `Service check failed: ${error.message}`
     }
-    
+
     // Try alternative ports
     await checkAlternativePorts()
   }
-  
+
   isChecking.value = false
 }
 
 const checkAlternativePorts = async () => {
   const alternatePorts = [5901, 5902, 6080, 8080]
-  
+
   for (const port of alternatePorts) {
     if (port === vncPort.value) continue
-    
+
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 2000)
-      
+
       await fetch(`http://${vncHost.value}:${port}/`, {
         method: 'HEAD',
         signal: controller.signal,
         mode: 'no-cors'
       })
-      
+
       clearTimeout(timeoutId)
-      
+
       // Found service on alternative port
       serviceStatus.value = `Found VNC service on port ${port}! Switching...`
       vncPort.value = port
-      
+
       setTimeout(() => {
         refreshViewer()
       }, 1500)
-      
+
       break
     } catch (error) {
       // Port not available, continue checking
@@ -373,7 +354,7 @@ const clearServiceStatus = () => {
   serviceStatus.value = null
 }
 
-const refreshViewer = () => {
+const refreshViewer = async () => {
   console.log('Refreshing NoVNC viewer...')
   isRefreshing.value = true
   isLoading.value = true
@@ -381,14 +362,25 @@ const refreshViewer = () => {
   errorDetails.value = ''
   lastConnectionAttempt.value = new Date()
   loadingMessage.value = 'Refreshing connection...'
-  
+
+  // Reload VNC URL from appConfig
+  try {
+    novncUrl.value = await appConfig.getVncUrl('desktop', {
+      autoconnect: true,
+      resize: 'scale',
+      reconnect: true
+    })
+  } catch (error) {
+    console.error('Failed to reload VNC URL:', error)
+  }
+
   // Force iframe refresh
   iframeKey.value += 1
-  
+
   setTimeout(() => {
     isRefreshing.value = false
   }, 1000)
-  
+
   // Set loading timeout
   setTimeout(() => {
     if (isLoading.value) {
@@ -405,7 +397,7 @@ const retryConnection = () => {
   console.log('Retrying NoVNC connection...')
   isRetrying.value = true
   loadingMessage.value = 'Attempting to reconnect...'
-  
+
   setTimeout(() => {
     refreshViewer()
     isRetrying.value = false
@@ -476,14 +468,28 @@ const handleVNCTimeout = () => {
 onMounted(async () => {
   lastConnectionAttempt.value = new Date()
 
-  // Load VNC configuration from backend
+  // Load VNC configuration from appConfig
   try {
-    const config = await getVNCConfig()
-    vncHost.value = config.host
-    vncPort.value = config.port
-    console.log(`VNC configuration loaded: ${config.host}:${config.port}`)
+    // Get VNC URL with standard options
+    novncUrl.value = await appConfig.getVncUrl('desktop', {
+      autoconnect: true,
+      resize: 'scale',
+      reconnect: true
+    })
+
+    // Extract host and port for display (parse from generated URL)
+    const backendConfig = await appConfig.getBackendConfig()
+    vncHost.value = backendConfig?.services?.vnc?.desktop?.host || backendConfig?.vnc?.host || NetworkConstants.MAIN_MACHINE_IP
+    vncPort.value = backendConfig?.services?.vnc?.desktop?.port || backendConfig?.vnc?.port || NetworkConstants.VNC_DESKTOP_PORT
+
+    console.log(`VNC configuration loaded: ${vncHost.value}:${vncPort.value}`)
+    console.log(`VNC URL: ${novncUrl.value}`)
   } catch (error) {
-    console.warn('Using default VNC configuration')
+    console.warn('Failed to load VNC configuration from appConfig:', error)
+    // Fallback values will be used
+    vncHost.value = NetworkConstants.MAIN_MACHINE_IP
+    vncPort.value = NetworkConstants.VNC_DESKTOP_PORT
+    novncUrl.value = `http://${vncHost.value}:${vncPort.value}/vnc.html?autoconnect=true&resize=scale&reconnect=true`
   }
 
   // Set initial loading timeout
@@ -554,12 +560,12 @@ onUnmounted(() => {
 }
 
 @keyframes pulse {
-  0%, 100% { 
-    opacity: 1; 
+  0%, 100% {
+    opacity: 1;
     transform: scale(1);
   }
-  50% { 
-    opacity: 0.5; 
+  50% {
+    opacity: 0.5;
     transform: scale(1.1);
   }
 }
