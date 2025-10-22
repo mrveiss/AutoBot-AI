@@ -187,7 +187,7 @@ class AuditLogger:
         self.batch_timeout_seconds = batch_timeout_seconds
 
         # Get VM identification
-        self.vm_source = os.getenv("AUTOBOT_BACKEND_HOST", "172.16.168.20")
+        self.vm_source = os.getenv("AUTOBOT_BACKEND_HOST", NetworkConstants.MAIN_MACHINE_IP)
         self.vm_name = self._get_vm_name()
 
         # Batch processing
@@ -211,12 +211,12 @@ class AuditLogger:
     def _get_vm_name(self) -> str:
         """Determine VM name from IP address"""
         vm_mapping = {
-            "172.16.168.20": "backend",
-            "172.16.168.21": "frontend",
-            "172.16.168.22": "npu-worker",
-            "172.16.168.23": "redis",
-            "172.16.168.24": "ai-stack",
-            "172.16.168.25": "browser",
+            NetworkConstants.MAIN_MACHINE_IP: "backend",
+            NetworkConstants.FRONTEND_VM_IP: "frontend",
+            NetworkConstants.NPU_WORKER_VM_IP: "npu-worker",
+            NetworkConstants.REDIS_VM_IP: "redis",
+            NetworkConstants.AI_STACK_VM_IP: "ai-stack",
+            NetworkConstants.BROWSER_VM_IP: "browser",
         }
         return vm_mapping.get(self.vm_source, socket.gethostname())
 
