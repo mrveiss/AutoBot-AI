@@ -42,6 +42,7 @@ import redis.asyncio as redis
 
 # Import existing timeout framework
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 from .performance_optimized_timeouts import (
     OptimizedTimeoutConfig,
@@ -247,7 +248,7 @@ class OperationCheckpointManager:
 
     def __init__(self, redis_client: Optional[redis.Redis] = None):
         self.redis_client = redis_client
-        self.checkpoint_dir = Path("/home/kali/Desktop/AutoBot/data/checkpoints")
+        self.checkpoint_dir = PATH.get_data_path("checkpoints")
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     async def save_checkpoint(
@@ -1032,12 +1033,12 @@ if __name__ == "__main__":
         try:
             # Start codebase indexing
             indexing_op_id = await execute_codebase_indexing(
-                "/home/kali/Desktop/AutoBot/src", manager, ["*.py"]
+                str(PATH.PROJECT_ROOT / "src"), manager, ["*.py"]
             )
 
             # Start test suite
             test_op_id = await execute_comprehensive_test_suite(
-                "/home/kali/Desktop/AutoBot/tests", manager, ["test_*.py"]
+                str(PATH.TESTS_DIR), manager, ["test_*.py"]
             )
 
             # Monitor operations

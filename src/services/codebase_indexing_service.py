@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 from src.knowledge_base_factory import get_knowledge_base
 
 logger = logging.getLogger(__name__)
@@ -391,7 +392,7 @@ class CodeChunker:
 class CodebaseIndexingService:
     """Main service for comprehensive codebase indexing"""
 
-    def __init__(self, root_path: str = "/home/kali/Desktop/AutoBot"):
+    def __init__(self, root_path: str = str(PATH.PROJECT_ROOT)):
         self.root_path = Path(root_path)
         self.chunker = CodeChunker()
         self.progress = IndexingProgress()
