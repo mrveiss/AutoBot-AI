@@ -127,7 +127,7 @@ setup_ssh_keys() {
     log "INFO" "Installing SSH keys on all VMs (automated after this)..."
     for ip in 172.16.168.21 172.16.168.22 172.16.168.23 172.16.168.24 172.16.168.25; do
         log "INFO" "Setting up SSH key for $ip..."
-        sshpass -p "$VM_PASSWORD" ssh-copy-id -o StrictHostKeyChecking=no -i ~/.ssh/autobot_key autobot@$ip &>/dev/null
+        sshpass -p "$VM_PASSWORD" ssh-copy-id -i ~/.ssh/autobot_key autobot@$ip &>/dev/null
     done
     
     log "SUCCESS" "SSH keys installed - remaining deployment is fully automated"
