@@ -176,14 +176,16 @@ class VisionProcessor(BaseModalProcessor):
                     "openai/clip-vit-base-patch32"
                 ).to(self.device)
                 self.clip_processor = CLIPProcessor.from_pretrained(
-                    "openai/clip-vit-base-patch32"
+                    "openai/clip-vit-base-patch32",
+                    use_fast=True
                 )
 
                 # Load BLIP-2 model for image captioning and VQA
                 # Using smaller model for memory efficiency
                 self.logger.info("Loading BLIP-2 model...")
                 self.blip_processor = Blip2Processor.from_pretrained(
-                    "Salesforce/blip2-opt-2.7b"
+                    "Salesforce/blip2-opt-2.7b",
+                    use_fast=True
                 )
 
                 # Check if accelerate is available for device_map
@@ -493,7 +495,8 @@ class VoiceProcessor(BaseModalProcessor):
                 # Load Wav2Vec2 model for audio embeddings and feature extraction
                 self.logger.info("Loading Wav2Vec2 model...")
                 self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(
-                    "facebook/wav2vec2-base-960h"
+                    "facebook/wav2vec2-base-960h",
+                    use_fast=True
                 )
                 self.wav2vec_model = Wav2Vec2ForCTC.from_pretrained(
                     "facebook/wav2vec2-base-960h",

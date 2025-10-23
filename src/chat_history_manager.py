@@ -234,6 +234,9 @@ class ChatHistoryManager:
                 "topics": [],
                 "entity_mentions": [],
                 "summary": "Metadata extraction failed",
+                "message_count": len(messages) if messages else 0,
+                "user_message_count": 0,
+                "bot_message_count": 0,
             }
 
     def _extract_topics(self, text_list: List[str]) -> List[str]:
@@ -667,6 +670,35 @@ class ChatHistoryManager:
         """
         messages = await self.load_session(session_id)
         return len(messages)
+
+    async def get_session_owner(self, session_id: str) -> Optional[str]:
+        """
+        Gets the owner/creator of a specific session.
+
+        Args:
+            session_id (str): The session identifier.
+
+        Returns:
+            Optional[str]: Username of session owner, or None if not found/set.
+        """
+        try:
+            chats_directory = self._get_chats_directory()
+            chat_file = f"{chats_directory}/{session_id}_chat.json"
+
+            # Try new format first
+            if os.path.exists(chat_file):
+                async with aiofiles.open(chat_file, "r") as f:
+                    file_content = await f.read()
+                chat_data = self._decrypt_data(file_content)
+
+                # Check metadata for owner field
+                metadata = chat_data.get("metadata", {})
+                return metadata.get("owner") or metadata.get("username")
+
+        except Exception as e:
+            logger.warning(f"Failed to get session owner for {session_id}: {e}")
+
+        return None
 
     async def update_session(self, session_id: str, updates: Dict[str, Any]) -> bool:
         """

@@ -1,1 +1,5 @@
 paramiko>=4.0.0
+
+# TensorFlow compatibility - protobuf 4.x required for TensorFlow 2.19.1
+# Protobuf 5.x/6.x causes MessageFactory.GetPrototype AttributeError
+protobuf>=4.23.0,<5.0.0

@@ -22,9 +22,10 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 # Add AutoBot paths
-sys.path.append("/home/kali/Desktop/AutoBot")
+sys.path.append(str(PATH.PROJECT_ROOT))
 
 from .long_running_operations_framework import (
     LongRunningOperationManager,
@@ -77,7 +78,7 @@ class ExistingOperationMigrator:
         async def enhanced_indexing_operation(context: OperationExecutionContext):
             """Enhanced indexing with proper progress tracking and checkpoints"""
 
-            codebase_path = Path("/home/kali/Desktop/AutoBot")
+            codebase_path = Path(PATH.PROJECT_ROOT)
             file_patterns = ["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"]
 
             # Count files first for accurate progress
@@ -164,7 +165,7 @@ class ExistingOperationMigrator:
             description="Migrate from simple timeout to checkpoint-based indexing",
             operation_function=enhanced_indexing_operation,
             priority=OperationPriority.NORMAL,
-            estimated_items=len(list(Path("/home/kali/Desktop/AutoBot").rglob("*.py"))),
+            estimated_items=len(list(Path(PATH.PROJECT_ROOT).rglob("*.py"))),
             execute_immediately=False,
         )
 
@@ -191,7 +192,7 @@ class ExistingOperationMigrator:
         async def enhanced_test_suite_operation(context: OperationExecutionContext):
             """Enhanced test suite with checkpoint/resume and parallel execution"""
 
-            test_path = Path("/home/kali/Desktop/AutoBot/tests")
+            test_path = Path(f"{PATH.PROJECT_ROOT}/tests")
             test_patterns = ["test_*.py", "*_test.py"]
 
             # Discover all test files
@@ -296,7 +297,7 @@ class ExistingOperationMigrator:
             operation_function=enhanced_test_suite_operation,
             priority=OperationPriority.HIGH,
             estimated_items=len(
-                list(Path("/home/kali/Desktop/AutoBot/tests").rglob("test_*.py"))
+                list(Path(f"{PATH.PROJECT_ROOT}/tests").rglob("test_*.py"))
             ),
             execute_immediately=False,
         )
@@ -324,7 +325,7 @@ class ExistingOperationMigrator:
         async def enhanced_security_scan_operation(context: OperationExecutionContext):
             """Enhanced security scan with checkpointing and progress tracking"""
 
-            scan_paths = [Path("/home/kali/Desktop/AutoBot")]
+            scan_paths = [Path(PATH.PROJECT_ROOT)]
             scan_types = ["vulnerability", "dependency", "secrets"]
 
             # Collect files to scan
@@ -459,7 +460,7 @@ class ExistingOperationMigrator:
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5 minute timeout per test
-                cwd="/home/kali/Desktop/AutoBot",
+                cwd=str(PATH.PROJECT_ROOT),
             )
 
             duration = time.time() - start_time
@@ -686,7 +687,7 @@ if __name__ == "__main__":
                 return {"analyzed_files": 100, "path": path, "patterns": patterns}
 
             # Call the migrated function
-            result = await analyze_codebase("/home/kali/Desktop/AutoBot/src", ["*.py"])
+            result = await analyze_codebase(f"{PATH.PROJECT_ROOT}/src", ["*.py"])
             print(f"Analysis result: {result}")
 
             await operation_integration_manager.shutdown()
