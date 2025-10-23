@@ -64,7 +64,7 @@ SSH_USER="autobot"
 
 if [ -f "$SSH_KEY" ]; then
     echo -n "Checking for Nginx on frontend VM... "
-    nginx_status=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@172.16.168.21" "systemctl is-active nginx 2>/dev/null || echo 'inactive'" 2>/dev/null || echo "unknown")
+    nginx_status=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@172.16.168.21" "systemctl is-active nginx 2>/dev/null || echo 'inactive'" 2>/dev/null || echo "unknown")
 
     if [ "$nginx_status" = "active" ]; then
         warning "Nginx is running on frontend VM - may conflict with dev server"

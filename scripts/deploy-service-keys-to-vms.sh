@@ -41,7 +41,7 @@ deploy_to_vm() {
     fi
 
     # Create directory on VM
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no autobot@${vm_ip} \
+    ssh -i "$SSH_KEY" autobot@${vm_ip} \
         "sudo mkdir -p /etc/autobot/service-keys && \
          sudo chown autobot:autobot /etc/autobot/service-keys && \
          sudo chmod 700 /etc/autobot/service-keys" 2>/dev/null
@@ -52,7 +52,7 @@ deploy_to_vm() {
     fi
 
     # Copy file to temp location then move to final location
-    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no "$key_file" autobot@${vm_ip}:/tmp/${service_id}.env 2>/dev/null
+    scp -i "$SSH_KEY" "$key_file" autobot@${vm_ip}:/tmp/${service_id}.env 2>/dev/null
 
     if [ $? -ne 0 ]; then
         echo -e "${RED}  ❌ Failed to copy file to ${vm_ip}${NC}"
@@ -60,7 +60,7 @@ deploy_to_vm() {
     fi
 
     # Move to final location and set permissions
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no autobot@${vm_ip} \
+    ssh -i "$SSH_KEY" autobot@${vm_ip} \
         "sudo mv /tmp/${service_id}.env /etc/autobot/service-keys/${service_id}.env && \
          sudo chown autobot:autobot /etc/autobot/service-keys/${service_id}.env && \
          sudo chmod 600 /etc/autobot/service-keys/${service_id}.env" 2>/dev/null
@@ -71,7 +71,7 @@ deploy_to_vm() {
     fi
 
     # Verify deployment
-    local file_check=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no autobot@${vm_ip} \
+    local file_check=$(ssh -i "$SSH_KEY" autobot@${vm_ip} \
         "test -f /etc/autobot/service-keys/${service_id}.env && echo 'exists'" 2>/dev/null)
 
     if [ "$file_check" = "exists" ]; then

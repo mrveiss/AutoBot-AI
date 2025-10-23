@@ -90,7 +90,7 @@ check_vm_connectivity() {
     local vm_name=$1
     local vm_ip=$2
     
-    if timeout 3 ssh -i "$SSH_KEY" -o ConnectTimeout=2 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
+    if timeout 3 ssh -i "$SSH_KEY" -o ConnectTimeout=2 "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
         return 0
     else
         return 1
@@ -107,7 +107,7 @@ get_service_status() {
         return 1
     fi
     
-    local status_output=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
+    local status_output=$(ssh -i "$SSH_KEY" "$SSH_USER@$vm_ip" \
         "sudo systemctl is-active $service_name 2>/dev/null" || echo "unknown")
     
     case "$status_output" in
@@ -142,7 +142,7 @@ get_detailed_service_info() {
     
     echo "    Service: $service_name"
     
-    local status_info=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
+    local status_info=$(ssh -i "$SSH_KEY" "$SSH_USER@$vm_ip" \
         "sudo systemctl status $service_name --no-pager -l -n 3" 2>/dev/null || echo "Status unavailable")
     
     if [[ "$status_info" == "Status unavailable" ]]; then

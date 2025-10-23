@@ -88,7 +88,7 @@ start_enhanced_npu_worker() {
     log_info "Deploying enhanced NPU worker to VM2..."
 
     # Use SSH key authentication
-    scp -i ~/.ssh/autobot_key -o StrictHostKeyChecking=no \
+    scp -i ~/.ssh/autobot_key \
         "$AUTOBOT_ROOT/scripts/utilities/npu_worker_enhanced.py" \
         "autobot@$NPU_WORKER_VM:/tmp/npu_worker_enhanced.py"
 
@@ -102,7 +102,7 @@ start_enhanced_npu_worker() {
     # Install dependencies on NPU Worker VM
     log_info "Installing dependencies on NPU Worker VM..."
 
-    ssh -i ~/.ssh/autobot_key -o StrictHostKeyChecking=no "autobot@$NPU_WORKER_VM" << 'EOF'
+    ssh -i ~/.ssh/autobot_key "autobot@$NPU_WORKER_VM" << 'EOF'
         # Install required Python packages
         pip install fastapi uvicorn aiohttp pydantic numpy scikit-learn
 
@@ -127,7 +127,7 @@ EOF
     # Start the enhanced NPU worker service
     log_info "Starting enhanced NPU worker service..."
 
-    ssh -i ~/.ssh/autobot_key -o StrictHostKeyChecking=no "autobot@$NPU_WORKER_VM" << EOF
+    ssh -i ~/.ssh/autobot_key "autobot@$NPU_WORKER_VM" << EOF
         # Kill any existing NPU worker processes
         pkill -f "npu_worker_enhanced.py" || true
         pkill -f "npu_worker.py" || true
@@ -163,7 +163,7 @@ EOF
 
         # Show logs for debugging
         log_info "NPU Worker logs:"
-        ssh -i ~/.ssh/autobot_key -o StrictHostKeyChecking=no "autobot@$NPU_WORKER_VM" \
+        ssh -i ~/.ssh/autobot_key "autobot@$NPU_WORKER_VM" \
             "tail -20 /tmp/npu_worker.log" || true
 
         return 1

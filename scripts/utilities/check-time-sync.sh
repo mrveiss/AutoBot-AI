@@ -60,7 +60,7 @@ check_vm_connectivity() {
     local vm_name="$1"
     local vm_ip="$2"
 
-    if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes \
+    if ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o BatchMode=yes \
            "autobot@$vm_ip" "echo 'Connection test successful'" >/dev/null 2>&1; then
         return 0
     else
@@ -72,7 +72,7 @@ check_vm_connectivity() {
 get_vm_time_status() {
     local vm_ip="$1"
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o BatchMode=yes \
+    ssh -i "$SSH_KEY" -o BatchMode=yes \
         "autobot@$vm_ip" "timedatectl status 2>/dev/null || echo 'timedatectl not available'"
 }
 
@@ -80,7 +80,7 @@ get_vm_time_status() {
 get_vm_current_time() {
     local vm_ip="$1"
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o BatchMode=yes \
+    ssh -i "$SSH_KEY" -o BatchMode=yes \
         "autobot@$vm_ip" "date '+%Y-%m-%d %H:%M:%S %Z (UTC%z)' 2>/dev/null || echo 'date command failed'"
 }
 
@@ -88,7 +88,7 @@ get_vm_current_time() {
 check_vm_sync_status() {
     local vm_ip="$1"
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o BatchMode=yes \
+    ssh -i "$SSH_KEY" -o BatchMode=yes \
         "autobot@$vm_ip" "timedatectl status | grep 'System clock synchronized' | grep -q 'yes'" 2>/dev/null
 }
 
@@ -96,7 +96,7 @@ check_vm_sync_status() {
 get_vm_timezone() {
     local vm_ip="$1"
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o BatchMode=yes \
+    ssh -i "$SSH_KEY" -o BatchMode=yes \
         "autobot@$vm_ip" "timedatectl show --property=Timezone --value 2>/dev/null || echo 'unknown'"
 }
 
@@ -235,7 +235,7 @@ force_sync_all() {
         fi
 
         # Try to force sync
-        if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o BatchMode=yes \
+        if ssh -i "$SSH_KEY" -o BatchMode=yes \
                "autobot@$vm_ip" "sudo systemctl restart systemd-timesyncd && sleep 5" 2>/dev/null; then
             log_info "Restarted time sync service on $vm_name"
         else

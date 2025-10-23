@@ -153,7 +153,7 @@ check_prerequisites() {
     local vm_fail=0
     for vm_name in "${!VMS[@]}"; do
         vm_ip="${VMS[$vm_name]}"
-        if ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no \
+        if ssh -i "$SSH_KEY" -o ConnectTimeout=3 \
             "$REMOTE_USER@$vm_ip" "echo ok" > /dev/null 2>&1; then
             ((vm_ok++))
         else

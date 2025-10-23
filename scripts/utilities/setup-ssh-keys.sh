@@ -71,7 +71,7 @@ deploy_key_to_host() {
     log_info "Attempting SSH key deployment (may require interactive password entry)..."
     
     # Check if key-based auth already works
-    if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+    if ssh -i "$SSH_KEY" -o ConnectTimeout=10 \
         -o PasswordAuthentication=no "$REMOTE_USER@$host_ip" "echo 'Key auth test successful'" 2>/dev/null; then
         log_info "SSH key authentication already working for $host_name"
         return 0
@@ -80,10 +80,10 @@ deploy_key_to_host() {
     log_info "Deploying SSH key to $host_name (password required interactively)..."
     
     # Copy SSH key to remote host - will prompt for password if needed
-    if ssh-copy-id -i "$SSH_PUB_KEY" -o StrictHostKeyChecking=no "$REMOTE_USER@$host_ip"; then
+    if ssh-copy-id -i "$SSH_PUB_KEY" "$REMOTE_USER@$host_ip"; then
         
         # Test key-based authentication
-        if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+        if ssh -i "$SSH_KEY" -o ConnectTimeout=5 \
             "$REMOTE_USER@$host_ip" "echo 'SSH key authentication successful'" 2>/dev/null; then
             log_info "$host_name: SSH key deployment successful ✓"
             return 0
@@ -95,7 +95,7 @@ deploy_key_to_host() {
         log_warn "$host_name: Cannot connect with password authentication"
         
         # Try key-based auth in case it's already set up
-        if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+        if ssh -i "$SSH_KEY" -o ConnectTimeout=5 \
             "$REMOTE_USER@$host_ip" "echo 'SSH key authentication successful'" 2>/dev/null; then
             log_info "$host_name: SSH key already configured ✓"
             return 0
@@ -149,7 +149,7 @@ echo "=========================================="
 
 for host_name in "${successful_hosts[@]}"; do
     host_ip="${VMS[$host_name]}"
-    if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+    if ssh -i "$SSH_KEY" -o ConnectTimeout=5 \
         "$REMOTE_USER@$host_ip" "hostname && uptime" 2>/dev/null; then
         log_info "$host_name: Connection test successful ✓"
     else

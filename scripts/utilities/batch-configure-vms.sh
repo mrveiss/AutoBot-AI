@@ -66,14 +66,14 @@ batch_configure_passwordless_sudo() {
         log "Configuring passwordless sudo on $vm_name ($vm_ip)..."
         
         # Check if already configured
-        if ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "sudo -n true" 2>/dev/null; then
+        if ssh -i "$SSH_KEY" -o ConnectTimeout=5 "$SSH_USER@$vm_ip" "sudo -n true" 2>/dev/null; then
             success "Passwordless sudo already configured on $vm_name"
             ((success_count++))
             continue
         fi
         
         # Configure passwordless sudo
-        if echo "$password" | ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "sudo -S bash -c 'echo \"autobot ALL=(ALL) NOPASSWD:ALL\" > /etc/sudoers.d/autobot-nopasswd && chmod 440 /etc/sudoers.d/autobot-nopasswd && echo \"✅ Configured\"'" 2>/dev/null | grep -q "✅ Configured"; then
+        if echo "$password" | ssh -i "$SSH_KEY" -o ConnectTimeout=5 "$SSH_USER@$vm_ip" "sudo -S bash -c 'echo \"autobot ALL=(ALL) NOPASSWD:ALL\" > /etc/sudoers.d/autobot-nopasswd && chmod 440 /etc/sudoers.d/autobot-nopasswd && echo \"✅ Configured\"'" 2>/dev/null | grep -q "✅ Configured"; then
             success "Passwordless sudo configured on $vm_name"
             ((success_count++))
         else
@@ -119,7 +119,7 @@ batch_install_packages() {
         log "Installing packages on $vm_name ($vm_ip): $packages"
         
         # Try to install packages
-        if echo "$password" | ssh -i "$SSH_KEY" -o ConnectTimeout=15 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "sudo -S apt update > /dev/null 2>&1 && sudo -S apt install -y $packages > /dev/null 2>&1" 2>/dev/null; then
+        if echo "$password" | ssh -i "$SSH_KEY" -o ConnectTimeout=15 "$SSH_USER@$vm_ip" "sudo -S apt update > /dev/null 2>&1 && sudo -S apt install -y $packages > /dev/null 2>&1" 2>/dev/null; then
             success "Packages installed on $vm_name"
         else
             error "Failed to install packages on $vm_name"
@@ -139,18 +139,18 @@ show_vm_status() {
         echo -e "${CYAN}📦 $vm_name ($vm_ip):${NC}"
         
         # Check SSH connectivity
-        if ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'Connected'" 2>/dev/null | grep -q "Connected"; then
+        if ssh -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "echo 'Connected'" 2>/dev/null | grep -q "Connected"; then
             echo "  SSH: ✅ Connected"
             
             # Check passwordless sudo
-            if ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "sudo -n true" 2>/dev/null; then
+            if ssh -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "sudo -n true" 2>/dev/null; then
                 echo "  Sudo: ✅ Passwordless"
             else
                 echo "  Sudo: ⚠️  Requires password"
             fi
             
             # Check uptime
-            local uptime=$(ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "uptime -p" 2>/dev/null | sed 's/up //' || echo "Unknown")
+            local uptime=$(ssh -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "uptime -p" 2>/dev/null | sed 's/up //' || echo "Unknown")
             echo "  Uptime: $uptime"
         else
             echo "  SSH: ❌ Not connected"

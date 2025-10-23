@@ -51,7 +51,7 @@ execute_on_vm() {
     else
         # Remote VM
         echo "  → Executing on $vm_ip"
-        ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "kali@$vm_ip" "$command" 2>/dev/null || {
+        ssh -o ConnectTimeout=5 "kali@$vm_ip" "$command" 2>/dev/null || {
             echo -e "${RED}  → Failed to connect to $vm_name ($vm_ip)${NC}"
             return 1
         }
@@ -88,7 +88,7 @@ get_time_info() {
         echo "Time: $(date '+%Y-%m-%d %H:%M:%S %Z')"
         timedatectl status | grep -E "(System clock|NTP service)" | sed 's/^/  /'
     else
-        ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "kali@$vm_ip" "$time_cmd" 2>/dev/null | sed 's/^/  /' || {
+        ssh -o ConnectTimeout=5 "kali@$vm_ip" "$time_cmd" 2>/dev/null | sed 's/^/  /' || {
             echo -e "${RED}  → Failed to get time info${NC}"
         }
     fi

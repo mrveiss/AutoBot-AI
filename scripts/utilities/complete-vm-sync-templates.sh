@@ -9,7 +9,7 @@ set -e  # Exit on error
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 AUTOBOT_ROOT="/home/kali/Desktop/AutoBot"
 SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+SSH_OPTS="-i $SSH_KEY"
 
 # VM Configuration
 declare -A VM_IPS=(

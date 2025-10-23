@@ -50,7 +50,7 @@ setup_passwordless_sudo() {
     log "Setting up passwordless sudo for autobot user on $vm_name ($vm_ip)..."
     
     # Check if autobot already has passwordless sudo
-    if ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "sudo -n true 2>/dev/null"; then
+    if ssh -i "$SSH_KEY" -o ConnectTimeout=5 "$SSH_USER@$vm_ip" "sudo -n true 2>/dev/null"; then
         success "Passwordless sudo already configured on $vm_name"
         return 0
     fi
@@ -58,7 +58,7 @@ setup_passwordless_sudo() {
     # Setup passwordless sudo with user-provided password
     echo "Enter password for autobot user on $vm_name:"
     read -s password
-    echo "$password" | ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "sudo -S bash -c 'echo \"autobot ALL=(ALL) NOPASSWD:ALL\" > /etc/sudoers.d/autobot-nopasswd && chmod 440 /etc/sudoers.d/autobot-nopasswd && echo \"✅ Passwordless sudo configured successfully\"'" 2>/dev/null
+    echo "$password" | ssh -i "$SSH_KEY" -o ConnectTimeout=5 "$SSH_USER@$vm_ip" "sudo -S bash -c 'echo \"autobot ALL=(ALL) NOPASSWD:ALL\" > /etc/sudoers.d/autobot-nopasswd && chmod 440 /etc/sudoers.d/autobot-nopasswd && echo \"✅ Passwordless sudo configured successfully\"'" 2>/dev/null
     
     if [ $? -eq 0 ]; then
         success "Passwordless sudo configured on $vm_name"

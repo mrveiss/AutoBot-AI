@@ -119,15 +119,15 @@ stop_vm_service() {
     echo -e "${CYAN}🛑 Stopping $vm_name service...${NC}"
     
     # Check if service is running first
-    if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
+    if ssh -i "$SSH_KEY" "$SSH_USER@$vm_ip" \
         "sudo systemctl is-active $service_name" >/dev/null 2>&1; then
         
         # Stop the service
         if [ "$FORCE_STOP" = true ]; then
-            ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
+            ssh -i "$SSH_KEY" "$SSH_USER@$vm_ip" \
                 "sudo systemctl kill $service_name && sudo systemctl stop $service_name" 2>/dev/null || true
         else
-            ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
+            ssh -i "$SSH_KEY" "$SSH_USER@$vm_ip" \
                 "sudo systemctl stop $service_name" 2>/dev/null || true
         fi
         
@@ -135,7 +135,7 @@ stop_vm_service() {
         sleep 2
         
         # Verify service is stopped
-        if ! ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
+        if ! ssh -i "$SSH_KEY" "$SSH_USER@$vm_ip" \
             "sudo systemctl is-active $service_name" >/dev/null 2>&1; then
             echo -e "${GREEN}✅ $vm_name service stopped${NC}"
             return 0
@@ -191,7 +191,7 @@ verify_services_stopped() {
         
         echo -n "  Checking $vm_name... "
         
-        if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
+        if ssh -i "$SSH_KEY" "$SSH_USER@$vm_ip" \
             "sudo systemctl is-active $service_name" >/dev/null 2>&1; then
             echo -e "${RED}❌ Still running${NC}"
             all_stopped=false

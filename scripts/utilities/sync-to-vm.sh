@@ -112,7 +112,7 @@ test_connection() {
     local vm_name=$1
     local vm_ip=$2
     
-    if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+    if ssh -i "$SSH_KEY" -o ConnectTimeout=5 \
         "$REMOTE_USER@$vm_ip" "echo 'Connection successful'" > /dev/null 2>&1; then
         log_info "$vm_name ($vm_ip): Connection successful ✓"
         return 0
@@ -148,26 +148,26 @@ sync_to_vm() {
     fi
     
     # Ensure remote directory exists
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$REMOTE_USER@$vm_ip" \
+    ssh -i "$SSH_KEY" "$REMOTE_USER@$vm_ip" \
         "mkdir -p $(dirname "$remote_path")" 2>/dev/null
     
     # Sync files
     if [ -d "$local_path" ]; then
         log_info "Syncing directory: $local_path -> $vm_name:$remote_path"
-        scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r \
+        scp -i "$SSH_KEY" -r \
             "$local_path" "$REMOTE_USER@$vm_ip:$(dirname "$remote_path")/"
     else
         log_info "Syncing file: $local_path -> $vm_name:$remote_path"
-        scp -i "$SSH_KEY" -o StrictHostKeyChecking=no \
+        scp -i "$SSH_KEY" \
             "$local_path" "$REMOTE_USER@$vm_ip:$remote_path"
     fi
     
     # Restart service if requested
     if [ -n "$RESTART_SERVICE" ]; then
         log_info "Restarting service: $RESTART_SERVICE"
-        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$REMOTE_USER@$vm_ip" \
+        ssh -i "$SSH_KEY" "$REMOTE_USER@$vm_ip" \
             "sudo systemctl restart $RESTART_SERVICE" 2>/dev/null || \
-        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$REMOTE_USER@$vm_ip" \
+        ssh -i "$SSH_KEY" "$REMOTE_USER@$vm_ip" \
             "pkill -f '$RESTART_SERVICE' && sleep 2" 2>/dev/null || true
     fi
     

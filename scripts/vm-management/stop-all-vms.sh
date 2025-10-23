@@ -205,7 +205,7 @@ check_ssh_connectivity() {
         vm_ip=${VMS[$vm_name]}
         echo -n "  Testing $vm_name ($vm_ip)... "
         
-        if timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
+        if timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
             echo -e "${GREEN}✅ Connected${NC}"
             accessible_vms+=("$vm_name")
         else
