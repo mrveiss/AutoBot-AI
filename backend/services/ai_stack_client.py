@@ -47,8 +47,14 @@ class AIStackClient:
         # Get configuration
         from src.unified_config_manager import unified_config_manager
 
-        services_config = unified_config_manager.get_distributed_services_config()
-        ai_stack_config = services_config.get("ai_stack", {})
+        # Use NetworkConstants for AI Stack configuration
+        ai_stack_config = {
+            "host": str(NetworkConstants.AI_STACK_HOST),
+            "port": NetworkConstants.AI_STACK_PORT,
+            "timeout": 60,
+            "retry_attempts": 3,
+            "retry_delay": 1.0
+        }
 
         # Get base_url from configuration if not provided
         if base_url is None:

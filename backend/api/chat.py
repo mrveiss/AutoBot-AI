@@ -30,6 +30,7 @@ from backend.dependencies import get_config, get_knowledge_base
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from backend.security.session_ownership import validate_session_ownership
+from src.auth_middleware import auth_middleware
 from src.constants.network_constants import NetworkConstants
 from src.utils.redis_database_manager import get_redis_client
 
@@ -865,11 +866,19 @@ async def create_session(session_data: SessionCreate, request: Request):
         session_id = generate_chat_session_id()
         session_title = session_data.title or DEFAULT_SESSION_TITLE
 
+        # SECURITY: Extract authenticated user and add to metadata as owner
+        user_data = auth_middleware.get_user_from_request(request)
+        metadata = session_data.metadata or {}
+        if user_data and user_data.get("username"):
+            metadata["owner"] = user_data["username"]
+            metadata["username"] = user_data["username"]  # For backward compatibility
+            logger.info(f"Session {session_id} created with owner: {user_data['username']}")
+
         # Create session
         session = await chat_history_manager.create_session(
             session_id=session_id,
             title=session_title,
-            metadata=session_data.metadata or {},
+            metadata=metadata,
         )
 
         await log_chat_event(

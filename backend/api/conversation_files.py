@@ -182,25 +182,38 @@ async def validate_session_ownership(
     try:
         chat_history_manager = get_chat_history_manager(request)
 
-        # Get session metadata to verify ownership
-        # TODO: Implement session ownership check in chat_history_manager
-        # For now, admin users can access all sessions, others need verification
-
+        # Admin users can access all sessions
         user_role = user_data.get("role", "guest")
         if user_role == "admin":
+            logger.debug(f"Admin user {user_data.get('username')} accessing session {session_id}")
             return True
 
-        # TODO: Implement proper ownership validation
-        # session_owner = await chat_history_manager.get_session_owner(session_id)
-        # if session_owner != user_data.get("username"):
-        #     raise HTTPException(status_code=403, detail="Access denied: not session owner")
+        # Validate session ownership
+        session_owner = await chat_history_manager.get_session_owner(session_id)
+        current_user = user_data.get("username")
 
-        logger.warning(
-            f"Session ownership validation not fully implemented. "
-            f"User {user_data.get('username')} accessing session {session_id}"
-        )
+        # If session has no owner set, allow access (legacy sessions)
+        if session_owner is None:
+            logger.info(f"Session {session_id} has no owner - allowing access (legacy session)")
+            return True
+
+        # Verify current user matches session owner
+        if session_owner != current_user:
+            logger.warning(
+                f"Access denied: User {current_user} attempted to access "
+                f"session {session_id} owned by {session_owner}"
+            )
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access denied: You do not own this session"
+            )
+
+        logger.debug(f"User {current_user} validated as owner of session {session_id}")
         return True
 
+    except HTTPException:
+        # Re-raise HTTP exceptions (403 Forbidden)
+        raise
     except Exception as e:
         logger.error(f"Session ownership validation error: {e}")
         raise HTTPException(

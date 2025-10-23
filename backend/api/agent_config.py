@@ -47,7 +47,7 @@ DEFAULT_AGENT_CONFIGS = {
     "orchestrator": {
         "name": "Orchestrator Agent",
         "description": "Main workflow coordination and task classification",
-        "default_model": "llama3.2:1b-instruct-q4_K_M",
+        "default_model": "llama3.2:1b",
         "provider": "ollama",
         "enabled": True,
         "priority": 1,
@@ -56,7 +56,7 @@ DEFAULT_AGENT_CONFIGS = {
     "chat": {
         "name": "Chat Agent",
         "description": "Conversational responses and user interaction",
-        "default_model": "llama3.2:1b-instruct-q4_K_M",
+        "default_model": "llama3.2:1b",
         "provider": "ollama",
         "enabled": True,
         "priority": 1,
@@ -65,7 +65,7 @@ DEFAULT_AGENT_CONFIGS = {
     "kb_librarian": {
         "name": "Knowledge Base Librarian",
         "description": "Knowledge base search and document retrieval",
-        "default_model": "llama3.2:1b-instruct-q4_K_M",
+        "default_model": "llama3.2:1b",
         "provider": "ollama",
         "enabled": True,
         "priority": 2,
@@ -74,7 +74,7 @@ DEFAULT_AGENT_CONFIGS = {
     "research": {
         "name": "Research Agent",
         "description": "Web research and information gathering",
-        "default_model": "llama3.2:1b-instruct-q4_K_M",
+        "default_model": "llama3.2:1b",
         "provider": "ollama",
         "enabled": True,
         "priority": 2,
@@ -83,7 +83,7 @@ DEFAULT_AGENT_CONFIGS = {
     "system_commands": {
         "name": "System Commands Agent",
         "description": "Command execution and system operations",
-        "default_model": "llama3.2:1b-instruct-q4_K_M",
+        "default_model": "llama3.2:1b",
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
@@ -92,7 +92,7 @@ DEFAULT_AGENT_CONFIGS = {
     "security_scanner": {
         "name": "Security Scanner Agent",
         "description": "Security analysis and vulnerability assessment",
-        "default_model": "llama3.2:1b-instruct-q4_K_M",
+        "default_model": "llama3.2:1b",
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
@@ -101,7 +101,7 @@ DEFAULT_AGENT_CONFIGS = {
     "code_analysis": {
         "name": "Code Analysis Agent",
         "description": "Code review and analysis tasks",
-        "default_model": "llama3.2:1b-instruct-q4_K_M",
+        "default_model": "llama3.2:1b",
         "provider": "ollama",
         "enabled": True,
         "priority": 2,

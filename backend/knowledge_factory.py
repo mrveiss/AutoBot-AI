@@ -48,42 +48,34 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
                     )
                     # Fall through to create new instance
 
-        # Try using KnowledgeBaseV2 first (preferred async implementation)
+        # MANDATORY: Use KnowledgeBaseV2 (ChromaDB-based implementation)
+        # No fallback to old KnowledgeBase class - V2 is required for vector store migration
         try:
             from src.knowledge_base_v2 import KnowledgeBaseV2
 
+            logger.info("Creating KnowledgeBaseV2 with ChromaDB vector store...")
             kb = KnowledgeBaseV2()
-            await kb.initialize()
-            app.state.knowledge_base = kb
-            logger.info("✅ Knowledge base created and initialized (KnowledgeBaseV2)")
-            return kb
-        except ImportError:
-            logger.info("KnowledgeBaseV2 not available, using standard KnowledgeBase")
+
+            logger.info("Initializing KnowledgeBaseV2...")
+            result = await kb.initialize()
+
+            if result:
+                app.state.knowledge_base = kb
+                logger.info("✅ Knowledge base created and initialized (KnowledgeBaseV2 with ChromaDB)")
+                return kb
+            else:
+                logger.error("❌ KnowledgeBaseV2 initialization returned False")
+                return None
+
+        except ImportError as import_error:
+            logger.error(f"❌ CRITICAL: KnowledgeBaseV2 not available: {import_error}")
+            import traceback
+            logger.error(f"Import traceback:\n{traceback.format_exc()}")
+            return None
         except Exception as v2_error:
-            logger.warning(
-                f"KnowledgeBaseV2 initialization failed: {v2_error}, trying standard KnowledgeBase"
-            )
-
-        # Final fallback: Use standard KnowledgeBase with manual async initialization
-        from src.knowledge_base import KnowledgeBase
-
-        logger.info("Creating standard KnowledgeBase with async initialization...")
-        kb = KnowledgeBase()
-
-        # CRITICAL: Manually call the async initialization that the constructor skips
-        await kb._ensure_redis_initialized()
-
-        # Verify initialization worked
-        if hasattr(kb, "redis_client") and kb.redis_client is not None:
-            app.state.knowledge_base = kb
-            logger.info(
-                "✅ Knowledge base created and initialized (standard KnowledgeBase)"
-            )
-            return kb
-        else:
-            logger.error(
-                "❌ Knowledge base initialization failed - Redis client is None"
-            )
+            logger.error(f"❌ CRITICAL: KnowledgeBaseV2 initialization failed: {v2_error}")
+            import traceback
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
             return None
 
     except Exception as e:
