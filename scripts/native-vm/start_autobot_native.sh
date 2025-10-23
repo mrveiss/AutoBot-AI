@@ -152,7 +152,7 @@ test_vm_connectivity() {
     
     echo -n "  Testing $vm_name ($vm_ip)... "
     
-    if timeout 5 ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
+    if timeout 5 ssh -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
         echo -e "${GREEN}✅ Connected${NC}"
         return 0
     else
@@ -169,7 +169,7 @@ start_vm_service() {
     echo -e "${CYAN}🚀 Starting $vm_name service...${NC}"
     
     # Start the service
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
+    ssh -i "$SSH_KEY" "$SSH_USER@$vm_ip" \
         "sudo systemctl start $service_name && sudo systemctl enable $service_name" 2>/dev/null || {
         echo -e "${YELLOW}⚠️  Service may already be running or needs manual attention${NC}"
     }
@@ -178,7 +178,7 @@ start_vm_service() {
     sleep 2
     
     # Check service status
-    if ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" \
+    if ssh -i "$SSH_KEY" "$SSH_USER@$vm_ip" \
         "sudo systemctl is-active $service_name" >/dev/null 2>&1; then
         echo -e "${GREEN}✅ $vm_name service started successfully${NC}"
         return 0

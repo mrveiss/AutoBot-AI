@@ -124,7 +124,7 @@ distribute_to_vm() {
     fi
 
     # Test SSH connectivity
-    if ! ssh -i "${SSH_KEY}" -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
+    if ! ssh -i "${SSH_KEY}" -o ConnectTimeout=5 \
          "${REMOTE_USER}@${ip_address}" "echo 'SSH connection test'" > /dev/null 2>&1; then
         log_error "Cannot connect to ${ip_address} via SSH"
         log_error "Please ensure VM is running and SSH key is authorized"

@@ -40,7 +40,7 @@ secure_vm_exec() {
     fi
     
     # First try without password (in case passwordless sudo is configured)
-    if ssh -T -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "$command" 2>/dev/null; then
+    if ssh -T -i "$SSH_KEY" -o ConnectTimeout=5 "$SSH_USER@$vm_ip" "$command" 2>/dev/null; then
         return 0
     fi
     
@@ -53,7 +53,7 @@ secure_vm_exec() {
         
         if [ -n "$password" ]; then
             # Try with password
-            echo "$password" | ssh -T -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "sudo -S $command" 2>/dev/null
+            echo "$password" | ssh -T -i "$SSH_KEY" -o ConnectTimeout=5 "$SSH_USER@$vm_ip" "sudo -S $command" 2>/dev/null
             return $?
         else
             warning "Skipping command that requires sudo privileges"
@@ -61,7 +61,7 @@ secure_vm_exec() {
         fi
     else
         # Re-run the failed command to show the actual error
-        ssh -T -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "$command"
+        ssh -T -i "$SSH_KEY" -o ConnectTimeout=5 "$SSH_USER@$vm_ip" "$command"
         return $?
     fi
 }
@@ -71,7 +71,7 @@ check_passwordless_sudo() {
     local vm_ip="$1"
     local vm_name="${2:-VM}"
     
-    if ssh -T -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "sudo -n true" 2>/dev/null; then
+    if ssh -T -i "$SSH_KEY" -o ConnectTimeout=5 "$SSH_USER@$vm_ip" "sudo -n true" 2>/dev/null; then
         success "Passwordless sudo configured on $vm_name"
         return 0
     else
@@ -92,7 +92,7 @@ secure_package_install() {
     # Check if packages are already installed
     local missing_packages=""
     for pkg in $packages; do
-        if ! ssh -T -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "dpkg -l | grep -q '^ii.*$pkg '" 2>/dev/null; then
+        if ! ssh -T -i "$SSH_KEY" -o ConnectTimeout=5 "$SSH_USER@$vm_ip" "dpkg -l | grep -q '^ii.*$pkg '" 2>/dev/null; then
             missing_packages="$missing_packages $pkg"
         fi
     done
@@ -112,13 +112,13 @@ secure_package_install() {
         echo ""
         
         if [ -n "$password" ]; then
-            echo "$password" | ssh -T -i "$SSH_KEY" -o ConnectTimeout=10 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "sudo -S apt update && sudo -S apt install -y$missing_packages" 2>/dev/null
+            echo "$password" | ssh -T -i "$SSH_KEY" -o ConnectTimeout=10 "$SSH_USER@$vm_ip" "sudo -S apt update && sudo -S apt install -y$missing_packages" 2>/dev/null
         else
             warning "Skipping package installation on $vm_name"
             return 1
         fi
     else
-        ssh -T -i "$SSH_KEY" -o ConnectTimeout=10 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "sudo apt update && sudo apt install -y$missing_packages"
+        ssh -T -i "$SSH_KEY" -o ConnectTimeout=10 "$SSH_USER@$vm_ip" "sudo apt update && sudo apt install -y$missing_packages"
     fi
 }
 

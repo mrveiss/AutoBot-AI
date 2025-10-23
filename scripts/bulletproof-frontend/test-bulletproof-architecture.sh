@@ -110,7 +110,7 @@ test_basic_connectivity() {
 test_deployment_architecture() {
     log_debug "Testing deployment directory architecture..."
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         # Check if service directory exists and is correct
         if [ ! -d "/opt/autobot/src/autobot-vue" ]; then
             echo "ERROR: Service directory missing"
@@ -203,7 +203,7 @@ test_websocket_proxy() {
 test_service_process() {
     log_debug "Testing service process health..."
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         # Check if frontend process is running
         if pgrep -f "vite.*5173" >/dev/null; then
             echo "Frontend process is running"
@@ -252,7 +252,7 @@ test_service_restart_recovery() {
     log_debug "Testing service restart recovery..."
 
     # Kill the service and check if it recovers
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         echo "Killing frontend service for restart test..."
         pkill -f "vite.*5173" || true
         sleep 3
@@ -341,7 +341,7 @@ test_file_sync_integrity() {
         local_hash=$(sha256sum "/home/kali/Desktop/AutoBot/autobot-vue/src/App.vue" | cut -d' ' -f1)
     fi
 
-    remote_hash=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" \
+    remote_hash=$(ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" \
         "sha256sum /opt/autobot/src/autobot-vue/src/App.vue 2>/dev/null | cut -d' ' -f1" || echo "")
 
     if [ -n "$local_hash" ] && [ -n "$remote_hash" ] && [ "$local_hash" = "$remote_hash" ]; then
@@ -358,7 +358,7 @@ test_file_sync_integrity() {
 test_zero_downtime_readiness() {
     log_debug "Testing zero-downtime deployment readiness..."
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         # Check if blue-green directories can be created
         if [ ! -w "/opt/autobot/src" ]; then
             echo "ERROR: Cannot write to deployment directory"

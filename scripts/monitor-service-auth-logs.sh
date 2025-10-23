@@ -30,7 +30,7 @@ for vm in frontend:172.16.168.21 npu:172.16.168.22 redis:172.16.168.23 aiml:172.
     IFS=':' read -r name ip <<< "$vm"
     echo -e "${BLUE}=== ${name^} ($ip) ===${NC}"
 
-    ssh -i ~/.ssh/autobot_key -o StrictHostKeyChecking=no autobot@$ip \
+    ssh -i ~/.ssh/autobot_key autobot@$ip \
         "tail -20 /var/log/autobot/*.log 2>/dev/null | grep -i auth || echo 'No auth logs yet'" 2>/dev/null || echo "Cannot connect to $name"
 
     echo ""

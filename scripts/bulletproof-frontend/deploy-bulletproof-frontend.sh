@@ -35,7 +35,7 @@ log_debug() { echo -e "${BLUE}[DEBUG]${NC} $1"; }
 # Deployment verification functions
 verify_ssh_connection() {
     log_info "Verifying SSH connection to frontend VM..."
-    if ! ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+    if ! ssh -i "$SSH_KEY" -o ConnectTimeout=5 \
          "$FRONTEND_USER@$FRONTEND_VM" "echo 'SSH connection verified'" &>/dev/null; then
         log_error "Cannot connect to frontend VM at $FRONTEND_VM"
         return 1
@@ -120,11 +120,11 @@ deploy_with_atomic_swap() {
     log_info "Deploying package with atomic swap: $package_name"
 
     # Upload deployment package
-    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no \
+    scp -i "$SSH_KEY" \
         "$package_path" "$FRONTEND_USER@$FRONTEND_VM:/tmp/"
 
     # Execute atomic deployment on remote
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << EOF
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << EOF
         set -euo pipefail
 
         # Create directories
@@ -186,7 +186,7 @@ EOF
 restart_frontend_service() {
     log_info "Restarting frontend service..."
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         set -euo pipefail
 
         # Kill existing Vite processes
@@ -272,7 +272,7 @@ verify_deployment() {
 cleanup_old_backups() {
     log_info "Cleaning up old backups..."
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         # Keep only last 5 backups
         if [ -d "/opt/autobot/backups/autobot-vue" ]; then
             cd /opt/autobot/backups/autobot-vue
@@ -285,7 +285,7 @@ EOF
 rollback_deployment() {
     log_error "Rolling back to previous deployment..."
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         set -euo pipefail
 
         if [ -d "/opt/autobot/backups/autobot-vue" ]; then

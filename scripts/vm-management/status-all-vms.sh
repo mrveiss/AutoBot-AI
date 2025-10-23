@@ -54,7 +54,7 @@ check_vm_connectivity() {
         return 1
     fi
 
-    if timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
+    if timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
         echo -e "${GREEN}✅ Connected${NC}"
         return 0
     else
@@ -98,7 +98,7 @@ get_vm_uptime() {
         return
     fi
 
-    local uptime=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "uptime -p" 2>/dev/null | sed 's/up //' || echo "Unknown")
+    local uptime=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "uptime -p" 2>/dev/null | sed 's/up //' || echo "Unknown")
     echo "$uptime"
 }
 
@@ -110,7 +110,7 @@ get_vm_load() {
         return
     fi
 
-    local load=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "uptime | awk -F'load average:' '{print \$2}' | sed 's/^ *//'" 2>/dev/null || echo "Unknown")
+    local load=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "uptime | awk -F'load average:' '{print \$2}' | sed 's/^ *//'" 2>/dev/null || echo "Unknown")
     echo "$load"
 }
 
@@ -128,23 +128,23 @@ get_service_processes() {
     case "$vm_name" in
         "frontend")
             # FIXED: Check for both npm dev and nginx processes
-            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "pgrep -f 'npm.*dev\|vite.*5173' | wc -l" 2>/dev/null || echo "0")
+            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'npm.*dev\|vite.*5173' | wc -l" 2>/dev/null || echo "0")
             ;;
         "redis")
             # FIXED: Check for redis-stack-server service specifically
-            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "systemctl is-active redis-stack-server >/dev/null && echo '1' || echo '0'" 2>/dev/null || echo "0")
+            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "systemctl is-active redis-stack-server >/dev/null && echo '1' || echo '0'" 2>/dev/null || echo "0")
             ;;
         "npu-worker")
             # FIXED: Check for NPU worker service or Python server on 8081
-            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "systemctl is-active autobot-npu-worker >/dev/null && echo '1' || pgrep -f 'python.*8081' | wc -l" 2>/dev/null || echo "0")
+            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "systemctl is-active autobot-npu-worker >/dev/null && echo '1' || pgrep -f 'python.*8081' | wc -l" 2>/dev/null || echo "0")
             ;;
         "ai-stack")
             # FIXED: Check for AI stack service on 8080 (not Ollama on 11434)
-            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "pgrep -f 'python.*8080' | wc -l" 2>/dev/null || echo "0")
+            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'python.*8080' | wc -l" 2>/dev/null || echo "0")
             ;;
         "browser")
             # FIXED: Check for browser service on 3000
-            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "pgrep -f 'python.*3000' | wc -l" 2>/dev/null || echo "0")
+            process_count=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "pgrep -f 'python.*3000' | wc -l" 2>/dev/null || echo "0")
             ;;
     esac
 

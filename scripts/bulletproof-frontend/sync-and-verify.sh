@@ -125,12 +125,12 @@ perform_intelligent_sync() {
 
     # Upload to remote
     log_info "Uploading to remote system..."
-    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no \
+    scp -i "$SSH_KEY" \
         frontend-sync.tar.gz checksums.txt deployment-manifest.json \
         "$FRONTEND_USER@$FRONTEND_VM:/tmp/"
 
     # Execute remote sync with verification
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         set -euo pipefail
 
         # Verify checksums
@@ -219,7 +219,7 @@ verify_deployment_integrity() {
     fi
 
     # Check each verification point
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << EOF
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << EOF
         set -euo pipefail
 
         target_dir="$SERVICE_DIR"
@@ -274,7 +274,7 @@ EOF
 restart_and_verify_service() {
     log_info "Restarting and verifying frontend service..."
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         set -euo pipefail
 
         # Stop existing processes
@@ -463,7 +463,7 @@ cleanup_deployment_artifacts() {
     rm -f /tmp/deployment-manifest.json
 
     # Clean up remote temp files
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" \
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" \
         "rm -f /tmp/frontend-sync.tar.gz /tmp/checksums.txt /tmp/deployment-manifest.json" 2>/dev/null || true
 
     log_debug "✓ Cleanup completed"

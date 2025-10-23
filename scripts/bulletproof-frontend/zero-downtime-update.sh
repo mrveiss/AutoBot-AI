@@ -47,14 +47,14 @@ validate_prerequisites() {
     log_info "Validating zero-downtime deployment prerequisites..."
 
     # Check SSH connection
-    if ! ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+    if ! ssh -i "$SSH_KEY" -o ConnectTimeout=5 \
          "$FRONTEND_USER@$FRONTEND_VM" "echo 'SSH OK'" &>/dev/null; then
         log_error "Cannot connect to frontend VM"
         return 1
     fi
 
     # Verify current service is running
-    if ! ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" \
+    if ! ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" \
          "curl -s -f http://localhost:5173 >/dev/null"; then
         log_warn "Current service is not responding - zero-downtime not possible"
         read -p "Continue with standard deployment? (y/N): " -n 1 -r
@@ -79,7 +79,7 @@ validate_prerequisites() {
 setup_blue_green_environment() {
     log_info "Setting up blue-green deployment environment..."
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         set -euo pipefail
 
         # Create directory structure
@@ -135,11 +135,11 @@ deploy_to_staging() {
         .
 
     # Upload to remote
-    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no \
+    scp -i "$SSH_KEY" \
         "/tmp/$package_name" "$FRONTEND_USER@$FRONTEND_VM:/tmp/"
 
     # Deploy to staging directory
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << EOF
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << EOF
         set -euo pipefail
 
         next_dir=\$(cat /tmp/next-deployment-dir)
@@ -170,7 +170,7 @@ EOF
 start_staging_service() {
     log_info "Starting staging service on alternate port..."
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         set -euo pipefail
 
         next_dir=$(cat /tmp/next-deployment-dir)
@@ -228,7 +228,7 @@ EOF
 test_staging_service() {
     log_info "Testing staging service thoroughly..."
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         set -euo pipefail
 
         staging_port=5174
@@ -293,7 +293,7 @@ EOF
 perform_zero_downtime_swap() {
     log_info "Performing zero-downtime service swap..."
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         set -euo pipefail
 
         next_dir=$(cat /tmp/next-deployment-dir)
@@ -432,7 +432,7 @@ verify_production_service() {
 rollback_deployment() {
     log_error "Rolling back zero-downtime deployment..."
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         set -euo pipefail
 
         echo "Performing rollback..."
@@ -482,7 +482,7 @@ EOF
 cleanup_staging() {
     log_info "Cleaning up staging environment..."
 
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         # Kill any remaining staging processes
         pkill -f "vite.*5174" || true
 
