@@ -170,6 +170,9 @@ export const useChatStore = defineStore('chat', () => {
     // Remove session from array
     sessions.value.splice(sessionIndex, 1)
 
+    // CRITICAL FIX: Reset typing indicator to prevent stuck "AI is typing..." state
+    isTyping.value = false
+
     // Verify deletion occurred
     const afterCount = sessions.value.length
     const deletionSucceeded = afterCount === beforeCount - 1
@@ -212,6 +215,7 @@ export const useChatStore = defineStore('chat', () => {
     console.log(`🗑️ Clearing all ${sessions.value.length} sessions`)
     sessions.value = []
     currentSessionId.value = null
+    isTyping.value = false // Reset typing indicator
     console.log(`✅ All sessions cleared`)
   }
 

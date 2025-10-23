@@ -21,7 +21,7 @@
         </div>
 
         <div class="text-xs text-gray-500">
-          Chat: {{ chatSessionId || 'None' }} | Terminal: {{ backendSessionId || 'Not Connected' }}
+          Chat: {{ chatSessionId || 'None' }} | PTY Session: {{ ptySessionId || backendSessionId || 'Not Connected' }}
         </div>
       </div>
 

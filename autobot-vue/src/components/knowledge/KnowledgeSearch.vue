@@ -127,6 +127,7 @@
           v-for="(result, index) in searchResults"
           :key="result?.document?.id || `result-${index}`"
           class="result-item"
+          @click="openDocument(result.document)"
         >
           <div v-if="result && result.document" class="result-header">
             <h5 class="result-title">{{ result.document.title || 'Knowledge Document' }}</h5>
@@ -143,6 +144,62 @@
           </div>
           <div v-if="result && result.document" class="result-content">
             <p>{{ result.highlights?.[0] || (result.document.content ? result.document.content.substring(0, 200) + '...' : 'No content') }}</p>
+          </div>
+          <div class="result-footer">
+            <span class="click-hint">
+              <i class="fas fa-hand-pointer"></i>
+              Click to view full document
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Document Viewer Modal -->
+      <div v-if="showDocumentModal" class="document-modal-overlay" @click="closeDocument">
+        <div class="document-modal" @click.stop>
+          <div class="document-modal-header">
+            <div>
+              <h3 class="document-modal-title">{{ selectedDocument?.title || 'Document' }}</h3>
+              <div class="document-modal-meta">
+                <span class="modal-meta-item">
+                  <i class="fas fa-file-text"></i>
+                  {{ selectedDocument?.type || 'text' }}
+                </span>
+                <span class="modal-meta-item">
+                  <i class="fas fa-folder"></i>
+                  {{ selectedDocument?.category || 'general' }}
+                </span>
+                <span v-if="selectedDocument?.updatedAt" class="modal-meta-item">
+                  <i class="fas fa-clock"></i>
+                  {{ new Date(selectedDocument.updatedAt).toLocaleDateString() }}
+                </span>
+              </div>
+            </div>
+            <button @click="closeDocument" class="modal-close-button">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="document-modal-content">
+            <div v-if="loadingDocument" class="modal-loading">
+              <i class="fas fa-spinner fa-spin"></i>
+              Loading document...
+            </div>
+            <div v-else-if="selectedDocument?.content" class="document-text">
+              {{ selectedDocument.content }}
+            </div>
+            <div v-else class="modal-no-content">
+              <i class="fas fa-file-excel"></i>
+              <p>No content available for this document</p>
+            </div>
+          </div>
+          <div class="document-modal-footer">
+            <button @click="copyDocument" class="modal-action-button">
+              <i class="fas fa-copy"></i>
+              Copy Content
+            </button>
+            <button @click="closeDocument" class="modal-action-button modal-close-action">
+              Close
+            </button>
           </div>
         </div>
       </div>
@@ -209,6 +266,11 @@ const isSearching = ref(false)
 const searchPerformed = ref(false)
 const lastSearchQuery = ref('')
 const useRagSearch = ref(false)
+
+// Document viewer state
+const showDocumentModal = ref(false)
+const selectedDocument = ref<KnowledgeDocument | null>(null)
+const loadingDocument = ref(false)
 
 // RAG Options
 const ragOptions = ref({
@@ -283,6 +345,46 @@ const getConfidenceBadgeClass = (confidence: number) => {
   if (confidence >= 0.8) return 'confidence-high'
   if (confidence >= 0.6) return 'confidence-medium'
   return 'confidence-low'
+}
+
+// Document viewer methods
+const openDocument = async (document: KnowledgeDocument) => {
+  if (!document || !document.id) return
+
+  showDocumentModal.value = true
+  loadingDocument.value = true
+
+  try {
+    // Fetch full document if content is not available or truncated
+    if (!document.content || document.content.length < 300) {
+      const fullDocument = await knowledgeRepo.getDocument(document.id)
+      selectedDocument.value = fullDocument
+    } else {
+      selectedDocument.value = document
+    }
+  } catch (error) {
+    console.error('Failed to load document:', error)
+    selectedDocument.value = document // Show what we have
+  } finally {
+    loadingDocument.value = false
+  }
+}
+
+const closeDocument = () => {
+  showDocumentModal.value = false
+  selectedDocument.value = null
+}
+
+const copyDocument = async () => {
+  if (!selectedDocument.value?.content) return
+
+  try {
+    await navigator.clipboard.writeText(selectedDocument.value.content)
+    // Could add a toast notification here
+    console.log('Document content copied to clipboard')
+  } catch (error) {
+    console.error('Failed to copy document:', error)
+  }
 }
 </script>
 
@@ -528,5 +630,121 @@ const getConfidenceBadgeClass = (confidence: number) => {
 
 .fallback-note {
   @apply mt-2 text-orange-600 text-xs font-medium;
+}
+
+/* Result Footer with Click Hint */
+.result-footer {
+  @apply mt-3 pt-2 border-t border-gray-100;
+}
+
+.click-hint {
+  @apply text-xs text-blue-600 flex items-center gap-1 font-medium;
+}
+
+.click-hint i {
+  @apply text-blue-500;
+}
+
+/* Document Viewer Modal */
+.document-modal-overlay {
+  @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.document-modal {
+  @apply bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.document-modal-header {
+  @apply flex justify-between items-start p-6 border-b border-gray-200;
+}
+
+.document-modal-title {
+  @apply text-xl font-semibold text-gray-900 mb-2;
+}
+
+.document-modal-meta {
+  @apply flex gap-4 text-sm text-gray-600;
+}
+
+.modal-meta-item {
+  @apply flex items-center gap-1;
+}
+
+.modal-meta-item i {
+  @apply text-gray-400;
+}
+
+.modal-close-button {
+  @apply p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 hover:text-gray-700;
+}
+
+.document-modal-content {
+  @apply flex-1 overflow-y-auto p-6;
+}
+
+.modal-loading {
+  @apply flex flex-col items-center justify-center py-12 text-gray-500;
+}
+
+.modal-loading i {
+  @apply text-3xl mb-3 text-blue-500;
+}
+
+.document-text {
+  @apply prose prose-sm max-w-none text-gray-800 whitespace-pre-wrap;
+}
+
+.modal-no-content {
+  @apply flex flex-col items-center justify-center py-12 text-gray-400;
+}
+
+.modal-no-content i {
+  @apply text-4xl mb-3;
+}
+
+.modal-no-content p {
+  @apply text-gray-500;
+}
+
+.document-modal-footer {
+  @apply flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50;
+}
+
+.modal-action-button {
+  @apply px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2;
+}
+
+.modal-action-button:not(.modal-close-action) {
+  @apply bg-blue-600 text-white hover:bg-blue-700;
+}
+
+.modal-close-action {
+  @apply bg-gray-200 text-gray-700 hover:bg-gray-300;
+}
+
+.modal-action-button i {
+  @apply text-sm;
 }
 </style>
