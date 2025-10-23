@@ -1,0 +1,207 @@
+# AutoBot Hybrid Deployment Configuration
+# Defines which agents run locally vs in containers
+
+deployment:
+  mode: "hybrid"  # hybrid, local, distributed
+
+  # Default settings
+  defaults:
+    request_timeout: 30.0
+    retry_attempts: 3
+    health_check_interval: 60.0
+
+  # Container settings
+  containers:
+    ai_stack:
+      enabled: true
+      url: "http://localhost:8080"
+      health_endpoint: "/health"
+      discovery_endpoint: "/agents"
+
+    npu_worker:
+      enabled: true  # NPU worker now available
+      url: "http://localhost:8081"
+      health_endpoint: "/health"
+      discovery_endpoint: "/models"
+
+# Agent deployment configuration
+agents:
+  # AI Processing Agents (Container)
+  chat:
+    mode: "container"
+    container: "ai_stack"
+    replicas: 1
+    enabled: true
+    fallback_to_local: true
+
+  rag:
+    mode: "container"
+    container: "ai_stack"
+    replicas: 1
+    enabled: true
+    fallback_to_local: false  # RAG requires full AI stack
+
+  classification:
+    mode: "container"
+    container: "npu_worker"
+    replicas: 1
+    enabled: true
+    fallback_to_local: true
+    fallback_container: "ai_stack"
+
+  research:
+    mode: "local"  # Needs direct web access
+    enabled: true
+
+  # System Agents (Local - need OS access)
+  system_commands:
+    mode: "local"
+    enabled: true
+
+  enhanced_system_commands:
+    mode: "local"
+    enabled: true
+
+  security_scanner:
+    mode: "local"
+    enabled: true
+
+  interactive_terminal:
+    mode: "local"
+    enabled: true
+
+  # Orchestration (Local - coordinates everything)
+  orchestrator:
+    mode: "local"
+    enabled: true
+
+  agent_orchestrator:
+    mode: "local"
+    enabled: true
+
+  # Knowledge Base (Hybrid - can use both)
+  kb_librarian:
+    mode: "local"
+    enabled: true
+    fallback_to_container: true
+
+  enhanced_kb_librarian:
+    mode: "local"
+    enabled: true
+
+  # High-Performance NPU Agents
+  npu_inference:
+    mode: "container"
+    container: "npu_worker"
+    replicas: 1
+    enabled: true
+    fallback_to_local: false
+
+# Model routing configuration
+models:
+  # LLM Provider Configuration
+  providers:
+    ollama:
+      enabled: true
+      host: "http://localhost:11434"
+      models:
+        - "dolphin-llama3:8b"
+        - "llama3.2:1b"
+        - "llama3.2:3b"
+
+    vllm:
+      enabled: true
+      gpu_memory_utilization: 0.9
+      tensor_parallel_size: 1
+      models:
+        phi-3-mini:
+          model: "microsoft/Phi-3-mini-4k-instruct"
+          use_case: ["chat", "classification"]
+          max_model_len: 4096
+        llama-3.2-3b:
+          model: "meta-llama/Llama-3.2-3B-Instruct"
+          use_case: ["rag", "orchestrator"]
+          max_model_len: 8192
+        codellama-7b:
+          model: "codellama/CodeLlama-7b-Instruct-hf"
+          use_case: ["system_commands"]
+          max_model_len: 4096
+
+    openai:
+      enabled: false  # Disabled for privacy-first deployment
+
+    npu_openvino:
+      enabled: true
+      device: "NPU"
+      models:
+        phi-3-mini-npu:
+          model: "microsoft/Phi-3-mini-4k-instruct"
+          use_case: ["classification", "chat"]
+          device: "NPU"
+          precision: "INT8"
+        llama-3.2-1b-npu:
+          model: "meta-llama/Llama-3.2-1B-Instruct"
+          use_case: ["fast_inference"]
+          device: "NPU"
+          precision: "INT8"
+
+  # Route models based on task requirements
+  routing:
+    small_models:  # < 3B parameters
+      target: "vllm"
+      fallback: "ollama"
+
+    large_models:  # >= 3B parameters
+      target: "vllm"
+      fallback: "ollama"
+
+    embedding_models:
+      target: "container"
+      fallback: "local"
+
+  # Task-specific model assignments
+  task_mapping:
+    chat:
+      provider: "vllm"
+      model: "phi-3-mini"
+    rag:
+      provider: "vllm"
+      model: "llama-3.2-3b"
+    classification:
+      provider: "vllm"
+      model: "phi-3-mini"
+    system_commands:
+      provider: "vllm"
+      model: "codellama-7b"
+    orchestrator:
+      provider: "ollama"  # Use existing stable models
+      model: "dolphin-llama3:8b"
+
+# Resource limits and scaling
+resources:
+  local:
+    max_concurrent_requests: 5
+    memory_limit_mb: 2048
+
+  containers:
+    ai_stack:
+      memory_limit: "4g"
+      cpu_limit: "2"
+      scale_up_threshold: 80  # CPU %
+      scale_down_threshold: 20  # CPU %
+      min_replicas: 1
+      max_replicas: 3
+
+# Health monitoring
+monitoring:
+  enabled: true
+  check_interval: 30
+  unhealthy_threshold: 3
+  degraded_threshold: 1000  # Response time in ms
+
+# Logging configuration
+logging:
+  level: "INFO"
+  container_logs: true
+  performance_metrics: true
+  trace_requests: false  # Enable for debugging
