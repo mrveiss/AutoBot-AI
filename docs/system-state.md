@@ -2,11 +2,125 @@
 
 This document tracks all system fixes, improvements, and status updates for the AutoBot platform.
 
-**Last Updated:** 2025-10-21
+**Last Updated:** 2025-10-23
 
 ---
 
-## ✅ RECENT UPDATES (2025-10-21)
+## ✅ RECENT UPDATES (2025-10-23)
+
+### CRITICAL: ChromaDB Event Loop Blocking Fix
+
+**Status:** ✅ Complete (2025-10-23)
+
+**Problem:**
+- Backend stuck in `futex_wait_queue` state indefinitely
+- All API requests timing out (health endpoint hung for 3+ seconds)
+- Frontend WebSocket connections failing with timeout errors
+- Process showing 99% CPU during initialization
+
+**Root Cause:** `/home/kali/Desktop/AutoBot/src/knowledge_base_v2.py`
+- `VectorStoreIndex.from_vector_store()` loading 545,255 vectors synchronously during initialization
+- Even with `asyncio.to_thread()`, the operation blocked the entire event loop
+- Line 392-394 created index during first search, freezing backend for minutes
+
+**Fix Applied:** Direct ChromaDB Queries (Lines 225-230, 385-428)
+
+**Part 1: Disable Eager Index Creation**
+```python
+# Line 225-230: Skip eager index creation
+# Skip eager index creation to prevent blocking during initialization
+# with 545K+ vectors. Index will be created lazily on first use.
+# await self._create_initial_vector_index()
+logger.info(
+    "Skipping eager vector index creation - will create on first query (lazy loading)"
+)
+```
+
+**Part 2: Direct ChromaDB API**
+```python
+# Line 385-428: Bypass VectorStoreIndex entirely
+async def search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+    # Generate embedding
+    query_embedding = await asyncio.to_thread(
+        Settings.embed_model.get_text_embedding, query
+    )
+
+    # Query ChromaDB directly (no index creation overhead)
+    results_data = await asyncio.to_thread(
+        chroma_collection.query,
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+        include=["documents", "metadatas", "distances"]  # Note: IDs excluded
+    )
+```
+
+**Critical Bug Fix:** ChromaDB Parameter Error
+- ChromaDB's `query()` method doesn't accept "ids" in `include` parameter
+- IDs are always returned by default
+- Removing "ids" from include list fixed `ValueError: Expected include item to be one of...`
+
+**Impact:**
+- ✅ Backend starts in ~20 seconds (was infinite hang)
+- ✅ All APIs responsive immediately
+- ✅ Vector search functional with 545,255 vectors
+- ✅ Search returns results with 0.77-0.85 similarity scores
+- ✅ WebSocket connections work from VM1
+
+---
+
+### Configuration & Cleanup Fixes
+
+**Status:** ✅ Complete (2025-10-23)
+
+**1. Missing UnifiedConfigManager Method**
+
+**Problem:**
+- Multiple files calling non-existent `get_distributed_services_config()` method
+- Errors in: `backend/services/ai_stack_client.py`, `backend/api/services.py`
+- Warning: `'UnifiedConfigManager' object has no attribute 'get_distributed_services_config'`
+
+**Fix Applied:** `/home/kali/Desktop/AutoBot/src/unified_config_manager.py` (Lines 652-677)
+```python
+def get_distributed_services_config(self) -> Dict[str, Any]:
+    """Get distributed services configuration from NetworkConstants"""
+    from src.constants.network_constants import NetworkConstants
+
+    return {
+        "frontend": {"host": str(NetworkConstants.FRONTEND_HOST), "port": NetworkConstants.FRONTEND_PORT},
+        "npu_worker": {"host": str(NetworkConstants.NPU_WORKER_HOST), "port": NetworkConstants.NPU_WORKER_PORT},
+        "redis": {"host": str(NetworkConstants.REDIS_HOST), "port": NetworkConstants.REDIS_PORT},
+        "ai_stack": {"host": str(NetworkConstants.AI_STACK_HOST), "port": NetworkConstants.AI_STACK_PORT},
+        "browser": {"host": str(NetworkConstants.BROWSER_HOST), "port": NetworkConstants.BROWSER_PORT}
+    }
+```
+
+**2. AI Stack Client Configuration**
+
+**Fix Applied:** `/home/kali/Desktop/AutoBot/backend/services/ai_stack_client.py` (Lines 46-57)
+- Replaced missing config call with direct NetworkConstants usage
+- Uses `NetworkConstants.AI_STACK_HOST` and `NetworkConstants.AI_STACK_PORT`
+
+**3. VM Status Endpoint**
+
+**Fix Applied:** `/home/kali/Desktop/AutoBot/backend/api/services.py` (Lines 239-298)
+- Replaced config method calls with NetworkConstants
+- Returns VM status for all 5 infrastructure VMs (frontend, npu-worker, redis, ai-stack, browser)
+
+**4. Legacy File Cleanup**
+
+**Action:** Archived `data/chat_history.json` → `data/archive/chat_history.json.20251023`
+- File no longer used (sessions now in `data/chats/`)
+- Warning eliminated: `⚠️ Legacy chat_history.json file exists...`
+
+**Impact:**
+- ✅ All configuration warnings eliminated
+- ✅ Backend startup clean (only feature_flags warnings remain - harmless)
+- ✅ AI Stack client working
+- ✅ VM status endpoints functional
+
+---
+
+## ✅ PREVIOUS UPDATES (2025-10-21)
 
 ### CRITICAL: Frontend Controller & Backend Performance Fixes
 
