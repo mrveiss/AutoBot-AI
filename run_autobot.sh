@@ -531,6 +531,18 @@ start_backend_optimized() {
     # Ensure logs directory exists
     mkdir -p logs
 
+    # Set TensorFlow environment variables to suppress warnings (PRODUCTION MODE ONLY)
+    # In dev mode, show all warnings/errors for debugging
+    if [ "$DEV_MODE" = false ]; then
+        export TF_CPP_MIN_LOG_LEVEL=2              # Suppress INFO and WARNING logs
+        export TF_ENABLE_ONEDNN_OPTS=0             # Disable oneDNN custom operations message
+        export GRPC_VERBOSITY=ERROR                # Reduce gRPC logging
+        log "TensorFlow warnings suppressed (production mode)"
+    else
+        export TF_CPP_MIN_LOG_LEVEL=0              # Show all logs in dev mode
+        log "TensorFlow warnings enabled (development mode)"
+    fi
+
     # Start backend with proper error handling
     if [ "$DEV_MODE" = true ]; then
         log "Starting backend in development mode..."
@@ -721,7 +733,7 @@ check_vm_connectivity() {
         vm_ip=${VMS[$vm_name]}
         echo -n "  Testing $vm_name ($vm_ip)... "
 
-        if timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
+        if timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@$vm_ip" "echo 'ok'" >/dev/null 2>&1; then
             echo -e "${GREEN}✅ Connected${NC}"
         else
             echo -e "${RED}❌ Failed${NC}"

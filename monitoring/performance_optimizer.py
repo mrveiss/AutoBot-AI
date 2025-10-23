@@ -21,6 +21,7 @@ import psutil
 import yaml
 
 from performance_monitor import PerformanceMonitor, VMS, ALERT_THRESHOLDS
+from src.constants.path_constants import PATH
 
 @dataclass
 class OptimizationRecommendation:
@@ -160,7 +161,7 @@ class PerformanceOptimizer:
                 description=f"High CPU usage detected: {cpu_percent:.1f}%",
                 impact_estimate="10-30% CPU reduction",
                 auto_applicable=True,
-                command="python3 /home/kali/Desktop/AutoBot/monitoring/cpu_optimizer.py --optimize",
+                command=f"python3 {PATH.PROJECT_ROOT}/monitoring/cpu_optimizer.py --optimize",
                 affected_services=["backend", "ai-stack", "npu-worker"]
             ))
         
@@ -173,7 +174,7 @@ class PerformanceOptimizer:
                 description=f"High memory usage detected: {memory_percent:.1f}%",
                 impact_estimate="15-25% memory reduction",
                 auto_applicable=True,
-                command="python3 /home/kali/Desktop/AutoBot/monitoring/memory_optimizer.py --cleanup",
+                command="python3 {PATH.PROJECT_ROOT}/monitoring/memory_optimizer.py --cleanup",
                 affected_services=["backend", "frontend", "ai-stack"]
             ))
         
@@ -186,7 +187,7 @@ class PerformanceOptimizer:
                 description=f"High disk usage detected: {disk_percent:.1f}%",
                 impact_estimate="5-15% disk space recovery",
                 auto_applicable=True,
-                command="python3 /home/kali/Desktop/AutoBot/monitoring/disk_optimizer.py --cleanup",
+                command="python3 {PATH.PROJECT_ROOT}/monitoring/disk_optimizer.py --cleanup",
                 affected_services=["all"]
             ))
         
@@ -199,7 +200,7 @@ class PerformanceOptimizer:
                 description=f"High system load average: {max(load_avg):.2f} (cores: {cpu_cores})",
                 impact_estimate="10-20% load reduction",
                 auto_applicable=True,
-                command="python3 /home/kali/Desktop/AutoBot/monitoring/load_optimizer.py --balance",
+                command="python3 {PATH.PROJECT_ROOT}/monitoring/load_optimizer.py --balance",
                 affected_services=["all"]
             ))
         
@@ -220,7 +221,7 @@ class PerformanceOptimizer:
                     description=f"Service {service_name} is unhealthy: {service.error_message}",
                     impact_estimate="100% service availability restoration",
                     auto_applicable=True,
-                    command=f"bash /home/kali/Desktop/AutoBot/scripts/restart_service.sh {service_name}",
+                    command=f"bash {PATH.PROJECT_ROOT}/scripts/restart_service.sh {service_name}",
                     affected_services=[service_name]
                 ))
             
@@ -233,7 +234,7 @@ class PerformanceOptimizer:
                     description=f"Slow response time for {service_name}: {service.response_time:.2f}s",
                     impact_estimate="30-50% response time improvement",
                     auto_applicable=True,
-                    command=f"python3 /home/kali/Desktop/AutoBot/monitoring/service_optimizer.py --service {service_name}",
+                    command=f"python3 {PATH.PROJECT_ROOT}/monitoring/service_optimizer.py --service {service_name}",
                     affected_services=[service_name]
                 ))
         
@@ -254,7 +255,7 @@ class PerformanceOptimizer:
                     description=f"Database {db_type} has {db.error_count} errors",
                     impact_estimate="100% error elimination",
                     auto_applicable=True,
-                    command=f"python3 /home/kali/Desktop/AutoBot/monitoring/database_optimizer.py --db {db_type} --fix-errors",
+                    command=f"python3 {PATH.PROJECT_ROOT}/monitoring/database_optimizer.py --db {db_type} --fix-errors",
                     affected_services=["backend", "ai-stack"]
                 ))
             
@@ -266,7 +267,7 @@ class PerformanceOptimizer:
                     description=f"Slow connection to {db_type}: {db.connection_time:.3f}s",
                     impact_estimate="40-60% connection speed improvement",
                     auto_applicable=True,
-                    command=f"python3 /home/kali/Desktop/AutoBot/monitoring/database_optimizer.py --db {db_type} --optimize-connections",
+                    command=f"python3 {PATH.PROJECT_ROOT}/monitoring/database_optimizer.py --db {db_type} --optimize-connections",
                     affected_services=["backend"]
                 ))
             
@@ -278,7 +279,7 @@ class PerformanceOptimizer:
                     description=f"High memory usage for {db_type}: {db.memory_usage_mb:.1f}MB",
                     impact_estimate="20-40% memory optimization",
                     auto_applicable=True,
-                    command=f"python3 /home/kali/Desktop/AutoBot/monitoring/database_optimizer.py --db {db_type} --optimize-memory",
+                    command=f"python3 {PATH.PROJECT_ROOT}/monitoring/database_optimizer.py --db {db_type} --optimize-memory",
                     affected_services=["redis"]
                 ))
         
@@ -301,7 +302,7 @@ class PerformanceOptimizer:
                     description=f"High latency {source_vm} → {target_vm}: {vm_metric.latency_ms:.1f}ms",
                     impact_estimate="20-40% latency reduction",
                     auto_applicable=True,
-                    command=f"python3 /home/kali/Desktop/AutoBot/monitoring/network_optimizer.py --optimize-route {target_vm}",
+                    command=f"python3 {PATH.PROJECT_ROOT}/monitoring/network_optimizer.py --optimize-route {target_vm}",
                     affected_services=[target_vm]
                 ))
             
@@ -314,7 +315,7 @@ class PerformanceOptimizer:
                     description=f"Packet loss {source_vm} → {target_vm}: {vm_metric.packet_loss_percent:.1f}%",
                     impact_estimate="90-100% packet loss elimination",
                     auto_applicable=True,
-                    command=f"python3 /home/kali/Desktop/AutoBot/monitoring/network_optimizer.py --fix-connectivity {target_vm}",
+                    command=f"python3 {PATH.PROJECT_ROOT}/monitoring/network_optimizer.py --fix-connectivity {target_vm}",
                     affected_services=[target_vm]
                 ))
             
@@ -326,7 +327,7 @@ class PerformanceOptimizer:
                     description=f"High network jitter {source_vm} → {target_vm}: {vm_metric.jitter_ms:.1f}ms",
                     impact_estimate="30-50% jitter reduction",
                     auto_applicable=True,
-                    command=f"python3 /home/kali/Desktop/AutoBot/monitoring/network_optimizer.py --stabilize-connection {target_vm}",
+                    command=f"python3 {PATH.PROJECT_ROOT}/monitoring/network_optimizer.py --stabilize-connection {target_vm}",
                     affected_services=[target_vm]
                 ))
         
@@ -345,7 +346,7 @@ class PerformanceOptimizer:
                 description="GPU acceleration can be optimized for AI workloads",
                 impact_estimate="20-50% AI processing speed improvement",
                 auto_applicable=True,
-                command="python3 /home/kali/Desktop/AutoBot/monitoring/gpu_optimizer.py --optimize-ai-stack",
+                command="python3 {PATH.PROJECT_ROOT}/monitoring/gpu_optimizer.py --optimize-ai-stack",
                 affected_services=["ai-stack", "npu-worker"]
             ))
         
@@ -357,7 +358,7 @@ class PerformanceOptimizer:
                 description="Intel NPU can be better utilized for AI inference",
                 impact_estimate="15-30% AI inference speed improvement",
                 auto_applicable=True,
-                command="python3 /home/kali/Desktop/AutoBot/monitoring/npu_optimizer.py --enable-optimization",
+                command="python3 {PATH.PROJECT_ROOT}/monitoring/npu_optimizer.py --enable-optimization",
                 affected_services=["npu-worker"]
             ))
         

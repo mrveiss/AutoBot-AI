@@ -426,7 +426,8 @@ class ConfigManager:
         )
 
         # Fallback to environment or config default
-        return os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:1b-instruct-q4_K_M")
+        # Updated to use available model (llama3.2:1b) instead of unavailable llama3.2:1b-instruct-q4_K_M
+        return os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:1b")
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value by key"""

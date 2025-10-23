@@ -14,6 +14,7 @@ import tempfile
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -692,7 +693,7 @@ class MCPManualService:
             "/usr/share/doc",
             "/usr/local/share/doc",
             "/opt/autobot/docs",
-            "/home/kali/Desktop/AutoBot/docs",
+            f"{PATH.PROJECT_ROOT}/docs",
             "/usr/share/man",
             "/usr/local/share/man",
         ]
@@ -713,12 +714,12 @@ class MCPManualService:
         # Add AutoBot specific documentation
         autobot_docs = [
             {
-                "name": "/home/kali/Desktop/AutoBot/docs",
+                "name": f"{PATH.PROJECT_ROOT}/docs",
                 "type": "autobot_docs",
                 "searchable": True,
             },
             {
-                "name": "/home/kali/Desktop/AutoBot/README.md",
+                "name": f"{PATH.PROJECT_ROOT}/README.md",
                 "type": "readme",
                 "searchable": True,
             },

@@ -9,6 +9,7 @@ import logging
 from typing import Any, Dict, List
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 from src.unified_config_manager import config
@@ -123,10 +124,10 @@ class KBLibrarianAgent:
             import os
 
             docs_dirs = [
-                "/home/kali/Desktop/AutoBot/docs",
-                "/home/kali/Desktop/AutoBot",
-                "/home/kali/Desktop/AutoBot/config",
-                "/home/kali/Desktop/AutoBot/scripts",
+                f"{PATH.PROJECT_ROOT}/docs",
+                f"{PATH.PROJECT_ROOT}",
+                f"{PATH.PROJECT_ROOT}/config",
+                f"{PATH.PROJECT_ROOT}/scripts",
             ]
 
             for docs_dir in docs_dirs:

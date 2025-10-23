@@ -649,6 +649,33 @@ class UnifiedConfigManager:
         port = self.get_nested("memory.redis.port", 6379)
         return f"redis://{host}:{port}"
 
+    def get_distributed_services_config(self) -> Dict[str, Any]:
+        """Get distributed services configuration from NetworkConstants"""
+        from src.constants.network_constants import NetworkConstants
+
+        return {
+            "frontend": {
+                "host": str(NetworkConstants.FRONTEND_HOST),
+                "port": NetworkConstants.FRONTEND_PORT
+            },
+            "npu_worker": {
+                "host": str(NetworkConstants.NPU_WORKER_HOST),
+                "port": NetworkConstants.NPU_WORKER_PORT
+            },
+            "redis": {
+                "host": str(NetworkConstants.REDIS_HOST),
+                "port": NetworkConstants.REDIS_PORT
+            },
+            "ai_stack": {
+                "host": str(NetworkConstants.AI_STACK_HOST),
+                "port": NetworkConstants.AI_STACK_PORT
+            },
+            "browser": {
+                "host": str(NetworkConstants.BROWSER_HOST),
+                "port": NetworkConstants.BROWSER_PORT
+            }
+        }
+
     # ASYNC METHODS (from AsyncConfigManager)
 
     async def _get_async_lock(self):

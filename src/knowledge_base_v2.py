@@ -21,6 +21,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import aioredis
+import chromadb
 import redis
 from llama_index.core import Document, Settings, VectorStoreIndex
 from llama_index.core.storage.storage_context import StorageContext
@@ -28,8 +29,7 @@ from llama_index.embeddings.ollama import (
     OllamaEmbedding as LlamaIndexOllamaEmbedding,
 )
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
-from llama_index.vector_stores.redis import RedisVectorStore
-from redisvl.schema import IndexSchema
+from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from src.constants.network_constants import NetworkConstants
 from src.unified_config import config
@@ -49,10 +49,13 @@ class KnowledgeBaseV2:
         self.redis_host = config.get_host("redis")
         self.redis_port = config.get_port("redis")
         self.redis_password = config.get("redis.password")
-        # CRITICAL: Knowledge base MUST use DB 0 for RedisSearch compatibility
+        # Redis still used for metadata/cache operations
         self.redis_db = config.get("redis.databases.knowledge", 0)
-        self.redis_index_name = config.get(
-            "redis.indexes.knowledge_base", "llama_index"
+
+        # ChromaDB configuration
+        self.chromadb_path = config.get("memory.chromadb.path", "data/chromadb")
+        self.chromadb_collection = config.get(
+            "memory.chromadb.collection_name", "autobot_memory"
         )
 
         # Connection clients (initialized in async method)
@@ -60,7 +63,7 @@ class KnowledgeBaseV2:
         self.aioredis_client: Optional[aioredis.Redis] = None
 
         # Vector store components (initialized in async method)
-        self.vector_store: Optional[RedisVectorStore] = None
+        self.vector_store: Optional[ChromaVectorStore] = None
         self.vector_index: Optional[VectorStoreIndex] = None
 
         # Configuration flags
@@ -118,24 +121,19 @@ class KnowledgeBaseV2:
             )
 
             # Check what embedding model was used for existing data
-            detected_dim = await self._detect_embedding_dimensions()
             stored_model = await self._detect_stored_embedding_model()
 
             if stored_model:
                 embed_model_name = stored_model
-                logger.info(
-                    f"Using stored embedding model: {embed_model_name} (dimensions: {detected_dim})"
-                )
-            elif detected_dim == 768:
-                embed_model_name = "nomic-embed-text"
-                logger.info("Using nomic-embed-text for 768-dimensional vectors")
+                logger.info(f"Using stored embedding model: {embed_model_name}")
             else:
-                embed_model_name = "all-MiniLM-L6-v2"
-                logger.info("Using all-MiniLM-L6-v2 for 384-dimensional vectors")
+                # Default to nomic-embed-text (768 dimensions)
+                embed_model_name = "nomic-embed-text"
+                logger.info("Using nomic-embed-text embedding model (768 dimensions)")
 
             # Store model configuration in instance variables
             self.embedding_model_name = embed_model_name
-            self.embedding_dimensions = detected_dim
+            self.embedding_dimensions = 768  # nomic-embed-text dimensions
 
             Settings.embed_model = LlamaIndexOllamaEmbedding(
                 model_name=embed_model_name,
@@ -194,127 +192,53 @@ class KnowledgeBaseV2:
             raise
 
     async def _init_vector_store(self):
-        """Initialize LlamaIndex vector store with Redis backend - FIXED for dimension mismatch"""
-        if not self.redis_client:
-            logger.warning(
-                "Redis client not available, skipping vector store initialization"
-            )
-            return
-
+        """Initialize LlamaIndex vector store with ChromaDB backend"""
         try:
-            # Detect embedding dimensions from existing index or use default
-            embedding_dim = await self._detect_embedding_dimensions()
-            logger.info(f"Using {embedding_dim} dimensions for vector embeddings")
+            from pathlib import Path
 
-            # CRITICAL FIX: Use IndexSchema.from_dict() with explicit dimension configuration
-            # This ensures the Redis vector index is created with the correct dimensions
-            custom_schema = IndexSchema.from_dict(
-                {
-                    "index": {"name": self.redis_index_name, "prefix": "doc"},
-                    "fields": [
-                        # Required fields for LlamaIndex
-                        {"type": "tag", "name": "id"},
-                        {"type": "tag", "name": "doc_id"},
-                        {"type": "text", "name": "text"},
-                        # Vector field with EXPLICIT dimension configuration
-                        {
-                            "type": "vector",
-                            "name": "vector",
-                            "attrs": {
-                                "dims": embedding_dim,  # CRITICAL: Match embedding model output
-                                "algorithm": "hnsw",
-                                "distance_metric": "cosine",
-                            },
-                        },
-                    ],
-                }
+            # Create ChromaDB directory if it doesn't exist
+            chroma_path = Path(self.chromadb_path)
+            chroma_path.mkdir(parents=True, exist_ok=True)
+
+            logger.info(f"Initializing ChromaDB at path: {chroma_path}")
+
+            # Create ChromaDB persistent client
+            chroma_client = chromadb.PersistentClient(path=str(chroma_path))
+
+            # Get or create collection (ChromaDB handles dimensions automatically)
+            chroma_collection = chroma_client.get_or_create_collection(
+                name=self.chromadb_collection,
+                metadata={"hnsw:space": "cosine"},  # Use cosine similarity
             )
+
+            # Create ChromaVectorStore for LlamaIndex
+            self.vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 
             logger.info(
-                f"Created Redis schema with explicit {embedding_dim} vector dimensions"
+                f"ChromaDB vector store initialized: collection='{self.chromadb_collection}'"
             )
 
-            # Create vector store with properly configured schema
-            redis_url = f"redis://{self.redis_host}:{self.redis_port}"
+            # Get collection stats
+            collection_count = chroma_collection.count()
+            logger.info(f"ChromaDB collection contains {collection_count} vectors")
 
-            self.vector_store = RedisVectorStore(
-                schema=custom_schema,
-                redis_url=redis_url,
-                password=self.redis_password,
-                redis_kwargs={"db": self.redis_db},
-            )
-
+            # Skip eager index creation to prevent blocking during initialization
+            # with 545K+ vectors. Index will be created lazily on first use.
+            # await self._create_initial_vector_index()
             logger.info(
-                f"LlamaIndex RedisVectorStore initialized with index: {self.redis_index_name}"
-            )
-            logger.info(
-                f"✅ Vector dimension mismatch FIXED - using {embedding_dim} dimensions"
+                "Skipping eager vector index creation - will create on first query (lazy loading)"
             )
 
-            # CRITICAL FIX: Create vector index immediately during initialization
-            # This ensures the index exists even before any facts are stored
-            await self._create_initial_vector_index()
-
-        except ImportError as e:
-            logger.error(f"Could not import required modules: {e}")
-            logger.error("Please ensure redisvl is installed: pip install redisvl")
-            self.vector_store = None
         except Exception as e:
-            logger.error(f"Failed to initialize vector store: {e}")
+            logger.error(f"Failed to initialize ChromaDB vector store: {e}")
             import traceback
 
             logger.error(traceback.format_exc())
             self.vector_store = None
 
-    async def _detect_embedding_dimensions(self) -> int:
-        """Detect embedding dimensions from existing index or return default"""
-        default_dim = 768  # Default for nomic-embed-text (match existing data)
-
-        try:
-            # Check if index exists and get its dimensions
-            index_info = await asyncio.to_thread(
-                self.redis_client.execute_command, "FT.INFO", self.redis_index_name
-            )
-
-            # Parse dimension from index info
-            for i, item in enumerate(index_info):
-                if isinstance(item, bytes):
-                    item = item.decode()
-                if item == "dim" and i + 1 < len(index_info):
-                    detected_dim = int(index_info[i + 1])
-                    logger.info(f"Detected existing index dimension: {detected_dim}")
-
-                    # If there's a mismatch, we need to recreate the index
-                    if detected_dim != default_dim:
-                        logger.warning(
-                            f"Index dimension mismatch: existing={detected_dim}, expected={default_dim}"
-                        )
-                        logger.info("Will recreate index with correct dimensions...")
-
-                        # Drop the existing index
-                        try:
-                            await asyncio.to_thread(
-                                self.redis_client.execute_command,
-                                "FT.DROPINDEX",
-                                self.redis_index_name,
-                            )
-                            logger.info(
-                                f"Dropped existing index {self.redis_index_name}"
-                            )
-                        except Exception as drop_error:
-                            logger.warning(f"Could not drop index: {drop_error}")
-
-                    return default_dim  # Always return the expected dimension
-
-        except Exception as e:
-            logger.info(
-                f"No existing index found or could not detect dimension, using default {default_dim}: {e}"
-            )
-
-        return default_dim
 
     async def _create_initial_vector_index(self):
-        """Create the vector index immediately during initialization (CRITICAL FIX)
+        """Create the vector index immediately during initialization
 
         This ensures the index exists before any facts are stored, allowing all facts
         to be properly indexed for vector search.
@@ -326,24 +250,26 @@ class KnowledgeBaseV2:
                 )
                 return
 
-            logger.info("Creating initial vector index...")
+            logger.info("Creating initial vector index with ChromaDB...")
 
-            # Create empty index with storage context
+            # Create storage context with ChromaDB vector store
             storage_context = StorageContext.from_defaults(
                 vector_store=self.vector_store
             )
 
-            # Create index with empty document list (index will exist for future inserts)
+            # Create index from existing vector store (connects to existing collection)
             self.vector_index = await asyncio.to_thread(
-                VectorStoreIndex.from_documents,
-                [],  # Empty list - just creates the index structure
+                VectorStoreIndex.from_vector_store,
+                self.vector_store,
                 storage_context=storage_context,
             )
 
-            logger.info("✅ Vector index created successfully - ready to index facts")
+            logger.info(
+                "✅ Vector index connected to ChromaDB collection - ready for queries"
+            )
 
-            # Now re-index any existing facts that don't have vectors
-            await self._reindex_existing_facts()
+            # Note: No need to re-index existing facts - they're already in ChromaDB
+            # from the migration process
 
         except Exception as e:
             logger.error(f"Failed to create initial vector index: {e}")
@@ -353,130 +279,6 @@ class KnowledgeBaseV2:
             # Don't fail initialization - just log the error
             self.vector_index = None
 
-    async def _reindex_existing_facts(self):
-        """Re-index any existing facts that don't have corresponding vectors
-
-        This handles the scenario where facts were stored before the vector store
-        was properly initialized, ensuring all content is searchable.
-        """
-        try:
-            if not self.aioredis_client or not self.vector_index:
-                logger.debug("Skipping re-indexing - prerequisites not met")
-                return
-
-            # Get all fact keys
-            fact_keys = []
-            async for key in self.aioredis_client.scan_iter(match="fact:*"):
-                fact_keys.append(key)
-
-            if not fact_keys:
-                logger.info("No existing facts to re-index")
-                return
-
-            logger.info(
-                f"Found {len(fact_keys)} existing facts - checking which need indexing..."
-            )
-
-            # Get all existing vector doc keys to see what's already indexed
-            # LlamaIndex uses llama_index/vector_* pattern for vector documents
-            vector_doc_keys = set()
-            async for key in self.aioredis_client.scan_iter(
-                match="llama_index/vector_*"
-            ):
-                vector_doc_keys.add(key)
-
-            logger.info(f"Found {len(vector_doc_keys)} existing vector documents")
-
-            # Re-index facts that don't have vectors
-            reindexed_count = 0
-            skipped_count = 0
-
-            for fact_key in fact_keys:
-                try:
-                    # Extract fact_id from key (format: "fact:uuid")
-                    fact_id = (
-                        fact_key.split(b":")[1].decode()
-                        if isinstance(fact_key, bytes)
-                        else fact_key.split(":")[1]
-                    )
-
-                    # Check if this fact already has a vector document
-                    # LlamaIndex creates keys like "llama_index/vector_{doc_id}"
-                    # Simple check: if any vector key contains this fact_id, skip it
-                    already_indexed = any(
-                        (
-                            fact_id.encode() in doc_key
-                            if isinstance(doc_key, bytes)
-                            else fact_id in doc_key
-                        )
-                        for doc_key in vector_doc_keys
-                    )
-
-                    if already_indexed:
-                        skipped_count += 1
-                        continue
-
-                    # Get fact data
-                    fact_data = await self.aioredis_client.hgetall(fact_key)
-                    if not fact_data:
-                        continue
-
-                    content = fact_data.get(
-                        b"content" if isinstance(fact_key, bytes) else "content"
-                    )
-                    metadata_str = fact_data.get(
-                        b"metadata" if isinstance(fact_key, bytes) else "metadata"
-                    )
-
-                    if content:
-                        if isinstance(content, bytes):
-                            content = content.decode()
-
-                        # Parse metadata
-                        metadata = {}
-                        if metadata_str:
-                            try:
-                                if isinstance(metadata_str, bytes):
-                                    metadata_str = metadata_str.decode()
-                                metadata = json.loads(metadata_str)
-                            except (
-                                json.JSONDecodeError,
-                                TypeError,
-                                UnicodeDecodeError,
-                            ) as e:
-                                logger.warning(
-                                    f"Invalid metadata for fact {fact_id}: {e}"
-                                )
-                                metadata = {}
-
-                        # Create document and index it
-                        document = Document(
-                            text=content, metadata=metadata, doc_id=fact_id
-                        )
-
-                        # Insert into vector index
-                        await asyncio.to_thread(self.vector_index.insert, document)
-                        reindexed_count += 1
-
-                        if reindexed_count % 10 == 0:
-                            logger.info(
-                                f"Re-indexed {reindexed_count}/{len(fact_keys)} facts..."
-                            )
-
-                except Exception as fact_error:
-                    logger.warning(f"Failed to re-index fact {fact_key}: {fact_error}")
-                    continue
-
-            logger.info(
-                f"✅ Re-indexing complete: {reindexed_count} facts indexed, {skipped_count} already had vectors"
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to re-index existing facts: {e}")
-            import traceback
-
-            logger.error(traceback.format_exc())
-            # Don't fail initialization - just log the error
 
     async def _cleanup_on_failure(self):
         """Cleanup resources on initialization failure"""
@@ -581,38 +383,69 @@ class KnowledgeBaseV2:
             return []
 
         try:
-            # Use retriever for search to avoid LLM timeout issues
-            if not self.vector_index:
-                # Create index from vector store
-                storage_context = StorageContext.from_defaults(
-                    vector_store=self.vector_store
-                )
-                self.vector_index = VectorStoreIndex.from_vector_store(
-                    vector_store=self.vector_store, storage_context=storage_context
-                )
+            # Use direct ChromaDB queries to avoid VectorStoreIndex blocking with 545K vectors
+            chroma_collection = self.vector_store._collection
 
-            # Get retriever and search
-            retriever = self.vector_index.as_retriever(similarity_top_k=top_k)
-            nodes = await asyncio.to_thread(retriever.retrieve, query)
+            # Generate embedding for query using the same model
+            from llama_index.core import Settings
+            query_embedding = await asyncio.to_thread(
+                Settings.embed_model.get_text_embedding, query
+            )
+
+            # Query ChromaDB directly (avoids index creation overhead)
+            # Note: IDs are always returned by default, don't include in 'include' parameter
+            results_data = await asyncio.to_thread(
+                chroma_collection.query,
+                query_embeddings=[query_embedding],
+                n_results=top_k,
+                include=["documents", "metadatas", "distances"]
+            )
 
             # Format results
             results = []
-            for node in nodes:
-                result = {
-                    "content": node.text,
-                    "score": getattr(node, "score", 0.0),
-                    "metadata": node.metadata or {},
-                    "node_id": node.node_id,
-                }
-                results.append(result)
+            seen_documents = {}  # Track unique documents by metadata to prevent duplicates
+
+            if results_data and 'documents' in results_data and results_data['documents'][0]:
+                for i, doc in enumerate(results_data['documents'][0]):
+                    # Convert distance to similarity score (cosine: 0=identical, 2=opposite)
+                    distance = results_data['distances'][0][i] if 'distances' in results_data else 1.0
+                    score = max(0.0, 1.0 - (distance / 2.0))  # Convert to 0-1 similarity
+
+                    metadata = results_data['metadatas'][0][i] if 'metadatas' in results_data else {}
+
+                    # Create unique document key to deduplicate chunks from same source
+                    # Use fact_id first (most reliable), fallback to title+category
+                    doc_key = metadata.get('fact_id')
+                    if not doc_key:
+                        title = metadata.get('title', '')
+                        category = metadata.get('category', '')
+                        doc_key = f"{category}:{title}" if (title or category) else f"doc_{i}"
+
+                    # Keep only highest-scoring result per unique document
+                    if doc_key not in seen_documents or score > seen_documents[doc_key]['score']:
+                        result = {
+                            "content": doc,
+                            "score": score,
+                            "metadata": metadata,
+                            "node_id": results_data['ids'][0][i] if 'ids' in results_data else f"result_{i}",
+                        }
+                        seen_documents[doc_key] = result
+
+            # Convert to list and sort by score descending
+            results = sorted(seen_documents.values(), key=lambda x: x['score'], reverse=True)
+
+            # Limit to top_k after deduplication
+            results = results[:top_k]
 
             logger.info(
-                f"Knowledge base search returned {len(results)} results for query: {query[:50]}..."
+                f"ChromaDB direct search returned {len(results)} unique documents (deduplicated) for query: {query[:50]}..."
             )
             return results
 
         except Exception as e:
             logger.error(f"Knowledge base search failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
 
     async def _find_fact_by_unique_key(
@@ -1014,7 +847,8 @@ class KnowledgeBaseV2:
                 "status": "online",
                 "last_updated": datetime.now().isoformat(),
                 "redis_db": self.redis_db,
-                "index_name": self.redis_index_name,
+                "vector_store": "chromadb",
+                "chromadb_collection": self.chromadb_collection,
                 "initialized": self.initialized,
                 "llama_index_configured": self.llama_index_configured,
                 "embedding_model": self.embedding_model_name,
@@ -1027,28 +861,18 @@ class KnowledgeBaseV2:
                 # Use pre-computed counts stored in Redis for instant lookups
 
                 try:
-                    # Try to get cached counts first (instant lookup)
+                    # Try to get cached fact count first (instant lookup)
                     cached_fact_count = await self.aioredis_client.get(
                         "kb:stats:fact_count"
                     )
-                    cached_vector_count = await self.aioredis_client.get(
-                        "kb:stats:vector_count"
-                    )
 
-                    if (
-                        cached_fact_count is not None
-                        and cached_vector_count is not None
-                    ):
-                        # Use cached values
+                    if cached_fact_count is not None:
+                        # Use cached value
                         fact_count = int(cached_fact_count)
-                        vector_count = int(cached_vector_count)
-                        logger.debug(
-                            f"Using cached counts: {fact_count} facts, {vector_count} vectors"
-                        )
+                        logger.debug(f"Using cached fact count: {fact_count} facts")
                     else:
                         # Cache miss - count using native async Redis
                         fact_count = 0
-                        vector_count = 0
 
                         # Count facts using async scan_iter (efficient cursor-based)
                         try:
@@ -1060,31 +884,23 @@ class KnowledgeBaseV2:
                             logger.error(f"Error counting facts: {e}")
                             fact_count = 0
 
-                        # Count vectors using async scan_iter
-                        try:
-                            async for _ in self.aioredis_client.scan_iter(
-                                match="llama_index/vector_*", count=1000
-                            ):
-                                vector_count += 1
-                        except Exception as e:
-                            logger.error(f"Error counting vectors: {e}")
-                            vector_count = 0
-
-                        # Cache the counts for 60 seconds
+                        # Cache the fact count for 60 seconds
                         await self.aioredis_client.set(
                             "kb:stats:fact_count", fact_count, ex=60
                         )
-                        await self.aioredis_client.set(
-                            "kb:stats:vector_count", vector_count, ex=60
-                        )
-                        logger.info(
-                            f"Counted and cached: {fact_count} facts, {vector_count} vectors"
-                        )
+                        logger.info(f"Counted and cached: {fact_count} facts")
 
-                except subprocess.TimeoutExpired:
-                    logger.warning("Redis count timed out, using fallback")
-                    fact_count = 0
+                    # Get vector count from ChromaDB (fast O(1) operation)
                     vector_count = 0
+                    if self.vector_store:
+                        try:
+                            chroma_collection = self.vector_store._collection
+                            vector_count = chroma_collection.count()
+                            logger.debug(f"ChromaDB vector count: {vector_count}")
+                        except Exception as e:
+                            logger.error(f"Error getting ChromaDB count: {e}")
+                            vector_count = 0
+
                 except Exception as count_error:
                     logger.warning(
                         f"Error counting keys, using fallback: {count_error}"
@@ -1136,26 +952,21 @@ class KnowledgeBaseV2:
                     logger.warning(f"Could not extract categories: {e}")
                     stats["categories"] = ["general"]
 
-            # Get index information if available
-            if self.redis_client:
+            # Get ChromaDB collection information if available
+            if self.vector_store:
                 try:
-                    index_info = await asyncio.to_thread(
-                        self.redis_client.execute_command,
-                        "FT.INFO",
-                        self.redis_index_name,
+                    # Access ChromaDB collection to get vector count
+                    chroma_collection = self.vector_store._collection
+                    vector_count = chroma_collection.count()
+                    stats["index_available"] = True
+                    stats["indexed_documents"] = vector_count
+                    stats["chromadb_collection"] = self.chromadb_collection
+                    stats["chromadb_path"] = self.chromadb_path
+                    logger.debug(
+                        f"ChromaDB stats: {vector_count} vectors in collection '{self.chromadb_collection}'"
                     )
-                    if index_info:
-                        stats["index_available"] = True
-                        # Parse index info for additional stats
-                        for i in range(0, len(index_info) - 1, 2):
-                            key = (
-                                index_info[i].decode()
-                                if isinstance(index_info[i], bytes)
-                                else str(index_info[i])
-                            )
-                            if key == "num_docs":
-                                stats["indexed_documents"] = int(index_info[i + 1])
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Could not get ChromaDB stats: {e}")
                     stats["index_available"] = False
 
             return stats
