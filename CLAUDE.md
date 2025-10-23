@@ -69,6 +69,80 @@ This document contains development guidelines, project setup instructions, and a
 
 ---
 
+## 🚫 HARDCODING PREVENTION (AUTOMATED ENFORCEMENT)
+
+**⚠️ MANDATORY RULE: NO HARDCODED VALUES**
+
+### **What Constitutes Hardcoding:**
+
+- IP addresses (use `NetworkConstants` or `.env`)
+- Port numbers (use `NetworkConstants` or `.env`)
+- LLM model names (use `config.get_default_llm_model()` or `AUTOBOT_DEFAULT_LLM_MODEL`)
+- URLs (use environment variables)
+- API keys, passwords, secrets (use environment variables, NEVER commit)
+
+### **Automated Detection:**
+
+**Pre-Commit Hook**: Automatically scans staged files before every commit
+```bash
+# Runs automatically on git commit
+./scripts/detect-hardcoded-values.sh
+```
+
+**Manual Scan**:
+```bash
+# Scan entire codebase for violations
+./scripts/detect-hardcoded-values.sh
+
+# Get detailed report
+./scripts/detect-hardcoded-values.sh | less
+```
+
+### **How to Fix Violations:**
+
+1. **For IPs/Ports**: Use `NetworkConstants` class
+   ```python
+   # ❌ BAD
+   url = "http://172.16.168.20:8001/api/chat"
+
+   # ✅ GOOD
+   from src.constants.network_constants import NetworkConstants
+   url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/api/chat"
+   ```
+
+2. **For LLM Models**: Use config methods
+   ```python
+   # ❌ BAD
+   model = "llama3.2:1b-instruct-q4_K_M"
+
+   # ✅ GOOD
+   model = config.get_default_llm_model()
+   # OR
+   model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:1b")
+   ```
+
+3. **For Other Values**: Use `.env` file
+   ```bash
+   # Add to .env
+   AUTOBOT_MY_SETTING=value
+
+   # Use in code
+   setting = os.getenv("AUTOBOT_MY_SETTING")
+   ```
+
+### **Override (Emergency Only):**
+
+If hardcoding is ABSOLUTELY necessary (rare):
+1. Document WHY in code comments
+2. Add entry to `.hardcode-exceptions` file
+3. Get approval in code review
+4. Bypass pre-commit: `git commit --no-verify` (NOT RECOMMENDED)
+
+**Detection script location**: `scripts/detect-hardcoded-values.sh`
+**Pre-commit hook**: `.git/hooks/pre-commit-hardcode-check`
+
+---
+
 ## 🚨 STANDARDIZED PROCEDURES
 
 ### Setup (Required First Time)
