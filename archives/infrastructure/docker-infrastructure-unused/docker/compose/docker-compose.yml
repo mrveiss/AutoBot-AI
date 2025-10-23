@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # Redis Stack - Data persistence and caching
+  redis:
+    image: redis/redis-stack:latest
+    container_name: autobot-redis
+    user: "1000:1000"  # Use autobot user/group
+    ports:
+      - "${AUTOBOT_REDIS_PORT:-6379}:6379"
+      - "8080:8001"  # RedisInsight web UI (avoid conflict with backend port 8001)
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    restart: unless-stopped
+    networks:
+      - autobot-network
+
+  # Frontend - Vue 3 application
+  frontend:
+    build:
+      context: ./autobot-vue
+      dockerfile: ../docker/Dockerfile.frontend
+    container_name: autobot-frontend
+    user: "1000:1000"  # Use autobot user/group
+    ports:
+      - "${AUTOBOT_FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./autobot-vue/src:/app/src:ro
+      - ./autobot-vue/public:/app/public:ro
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:8001
+    networks:
+      - autobot-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  autobot-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
