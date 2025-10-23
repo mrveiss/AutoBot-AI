@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 from src.logging.terminal_logger import TerminalLogger
+from src.chat_history_manager import ChatHistoryManager  # CRITICAL FIX: Chat integration
 from src.secure_command_executor import (
     CommandRisk,
     SecureCommandExecutor,
@@ -95,6 +96,9 @@ class AgentTerminalService:
         self.terminal_logger = TerminalLogger(
             redis_client=redis_client, data_dir="data/chats"
         )
+
+        # CRITICAL FIX: Initialize ChatHistoryManager for chat integration
+        self.chat_history_manager = ChatHistoryManager()
 
         # Auto-approve rules storage
         # Format: {user_id: [{command_pattern, risk_level, created_at}, ...]}
@@ -645,6 +649,32 @@ class AgentTerminalService:
                     user_id=None,
                 )
 
+            # CRITICAL FIX: Save command and output to chat messages
+            logger.warning(f"[DEBUG] About to save to chat - conversation_id: {session.conversation_id}, chat_history_manager: {self.chat_history_manager is not None}")
+            if session.conversation_id:
+                try:
+                    logger.info(f"[CHAT INTEGRATION] Saving agent command to chat: {command[:50]}")
+                    # Save command
+                    await self.chat_history_manager.add_message(
+                        sender="agent_terminal",
+                        text=f"$ {command}",
+                        message_type="terminal_command",
+                        session_id=session.conversation_id,
+                    )
+                    # Save output (if any)
+                    if result.get("stdout") or result.get("stderr"):
+                        output_text = (result.get("stdout", "") + result.get("stderr", "")).strip()
+                        if output_text:
+                            await self.chat_history_manager.add_message(
+                                sender="agent_terminal",
+                                text=output_text,
+                                message_type="terminal_output",
+                                session_id=session.conversation_id,
+                            )
+                    logger.info(f"[CHAT INTEGRATION] Agent command saved to chat successfully")
+                except Exception as e:
+                    logger.error(f"Failed to save agent command to chat: {e}")
+
             # Add to command history
             session.command_history.append(
                 {
@@ -785,6 +815,31 @@ class AgentTerminalService:
                         result=result,
                         user_id=user_id,
                     )
+
+                # CRITICAL FIX: Save command and output to chat messages
+                if session.conversation_id:
+                    try:
+                        logger.info(f"[CHAT INTEGRATION] Saving approved command to chat: {command[:50]}")
+                        # Save command
+                        await self.chat_history_manager.add_message(
+                            sender="agent_terminal",
+                            text=f"$ {command}",
+                            message_type="terminal_command",
+                            session_id=session.conversation_id,
+                        )
+                        # Save output (if any)
+                        if result.get("stdout") or result.get("stderr"):
+                            output_text = (result.get("stdout", "") + result.get("stderr", "")).strip()
+                            if output_text:
+                                await self.chat_history_manager.add_message(
+                                    sender="agent_terminal",
+                                    text=output_text,
+                                    message_type="terminal_output",
+                                    session_id=session.conversation_id,
+                                )
+                        logger.info(f"[CHAT INTEGRATION] Approved command saved to chat successfully")
+                    except Exception as e:
+                        logger.error(f"Failed to save approved command to chat: {e}")
 
                 # Add to command history
                 session.command_history.append(
