@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
+from src.chat_history_manager import ChatHistoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +171,10 @@ class ConsolidatedTerminalWebSocket:
         self.active = False
         self.terminal_adapter = None
 
+        # CRITICAL FIX: Output buffer for chat integration
+        self._output_buffer = ""
+        self._last_output_save_time = time.time()
+
         # Initialize TerminalLogger for persistent command logging
         if conversation_id:
             from src.logging.terminal_logger import TerminalLogger
@@ -177,8 +182,11 @@ class ConsolidatedTerminalWebSocket:
             self.terminal_logger = TerminalLogger(
                 redis_client=redis_client, data_dir="data/chats"
             )
+            # CRITICAL FIX: Initialize ChatHistoryManager for chat integration
+            self.chat_history_manager = ChatHistoryManager()
         else:
             self.terminal_logger = None
+            self.chat_history_manager = None
 
         # Initialize PTY process if security level allows
         if security_level != SecurityLevel.RESTRICTED:
@@ -297,6 +305,21 @@ class ConsolidatedTerminalWebSocket:
     async def cleanup(self):
         """Clean up terminal resources"""
         self.active = False
+
+        # CRITICAL FIX: Flush any remaining buffered output to chat before cleanup
+        if self.chat_history_manager and self.conversation_id and self._output_buffer.strip():
+            try:
+                logger.info(f"[CHAT INTEGRATION] Flushing remaining output buffer on cleanup: {len(self._output_buffer)} chars")
+                await self.chat_history_manager.add_message(
+                    sender="terminal",
+                    text=self._output_buffer,
+                    message_type="terminal_output",
+                    session_id=self.conversation_id,
+                )
+                self._output_buffer = ""
+                logger.info(f"[CHAT INTEGRATION] Buffer flushed successfully")
+            except Exception as e:
+                logger.error(f"Failed to flush output buffer: {e}")
 
         # Cancel output reader task if running
         if hasattr(self, "pty_output_task") and self.pty_output_task:
@@ -457,6 +480,21 @@ class ConsolidatedTerminalWebSocket:
                 f"[MANUAL CMD] Skipping log - terminal_logger={self.terminal_logger is not None}, "
                 f"conversation_id={self.conversation_id}"
             )
+
+        # CRITICAL FIX: Save command as terminal message to chat
+        # Use sender="terminal" instead of "user" to prevent triggering AI responses
+        if self.chat_history_manager and self.conversation_id:
+            try:
+                logger.info(f"[CHAT INTEGRATION] Saving command to chat: {command[:50]}")
+                await self.chat_history_manager.add_message(
+                    sender="terminal",
+                    text=f"$ {command}",
+                    message_type="terminal_command",
+                    session_id=self.conversation_id,
+                )
+                logger.info(f"[CHAT INTEGRATION] Command saved successfully")
+            except Exception as e:
+                logger.error(f"Failed to save command to chat: {e}")
 
         # Add to command history
         self.command_history.append(
@@ -628,6 +666,38 @@ class ConsolidatedTerminalWebSocket:
                     await f.write(content)
             except Exception as e:
                 logger.error(f"Failed to write terminal transcript: {e}")
+
+        # CRITICAL FIX: Save output to chat (buffered to avoid too many messages)
+        if self.chat_history_manager and self.conversation_id and content:
+            # Accumulate output in buffer
+            self._output_buffer += content
+            current_time = time.time()
+
+            # Save to chat when:
+            # 1. Buffer is large enough (>500 chars) OR
+            # 2. Enough time has passed (>2 seconds) OR
+            # 3. Output contains a newline (command completed)
+            should_save = (
+                len(self._output_buffer) > 500
+                or (current_time - self._last_output_save_time) > 2.0
+                or '\n' in content
+            )
+
+            if should_save and self._output_buffer.strip():
+                try:
+                    logger.info(f"[CHAT INTEGRATION] Saving output to chat: {len(self._output_buffer)} chars")
+                    await self.chat_history_manager.add_message(
+                        sender="terminal",
+                        text=self._output_buffer,
+                        message_type="terminal_output",
+                        session_id=self.conversation_id,
+                    )
+                    # Reset buffer after saving
+                    self._output_buffer = ""
+                    self._last_output_save_time = current_time
+                    logger.info(f"[CHAT INTEGRATION] Output saved successfully")
+                except Exception as e:
+                    logger.error(f"Failed to save output to chat: {e}")
 
         # Log output if security logging enabled
         if self.enable_logging and len(content.strip()) > 0:

@@ -236,79 +236,66 @@ async def get_services_health():
 async def get_vms_status():
     """Get VM status for distributed infrastructure"""
     try:
-        # Get VM infrastructure from configuration
-        from src.unified_config_manager import unified_config_manager
+        # Get VM infrastructure from NetworkConstants
+        from src.constants.network_constants import NetworkConstants
 
-        # Get distributed services configuration
-        services_config = unified_config_manager.get_distributed_services_config()
-
-        # Build VM status from configuration
+        # Build VM status from NetworkConstants
         vms = []
 
         # Frontend VM
-        frontend_config = services_config.get("frontend", {})
-        if frontend_config and frontend_config.get("host"):
-            vms.append(
-                VMStatus(
-                    name="Frontend VM",
-                    ip=frontend_config.get("host"),
-                    status="online",
-                    services=["frontend", "web-interface"],
-                    last_check=datetime.now(),
-                )
+        vms.append(
+            VMStatus(
+                name="Frontend VM",
+                ip=str(NetworkConstants.FRONTEND_HOST),
+                status="online",
+                services=["frontend", "web-interface"],
+                last_check=datetime.now(),
             )
+        )
 
         # NPU Worker VM
-        npu_config = services_config.get("npu_worker", {})
-        if npu_config and npu_config.get("host"):
-            vms.append(
-                VMStatus(
-                    name="NPU Worker VM",
-                    ip=npu_config.get("host"),
-                    status="online",
-                    services=["npu-worker", "hardware-acceleration"],
-                    last_check=datetime.now(),
-                )
+        vms.append(
+            VMStatus(
+                name="NPU Worker VM",
+                ip=str(NetworkConstants.NPU_WORKER_HOST),
+                status="online",
+                services=["npu-worker", "hardware-acceleration"],
+                last_check=datetime.now(),
             )
+        )
 
         # Redis VM
-        redis_config = unified_config_manager.get_redis_config()
-        if redis_config and redis_config.get("host"):
-            vms.append(
-                VMStatus(
-                    name="Redis VM",
-                    ip=redis_config.get("host"),
-                    status="online",
-                    services=["redis", "database", "cache"],
-                    last_check=datetime.now(),
-                )
+        vms.append(
+            VMStatus(
+                name="Redis VM",
+                ip=str(NetworkConstants.REDIS_HOST),
+                status="online",
+                services=["redis", "database", "cache"],
+                last_check=datetime.now(),
             )
+        )
 
         # AI Stack VM
-        ai_stack_config = services_config.get("ai_stack", {})
-        if ai_stack_config and ai_stack_config.get("host"):
-            vms.append(
-                VMStatus(
-                    name="AI Stack VM",
-                    ip=ai_stack_config.get("host"),
-                    status="online",
-                    services=["ai-processing", "llm", "inference"],
-                    last_check=datetime.now(),
-                )
+        vms.append(
+            VMStatus(
+                name="AI Stack VM",
+                ip=str(NetworkConstants.AI_STACK_HOST),
+                status="online",
+                services=["ai-processing", "llm", "inference"],
+                last_check=datetime.now(),
             )
+        )
 
         # Browser VM
-        browser_config = services_config.get("browser", {})
-        if browser_config and browser_config.get("host"):
-            vms.append(
-                VMStatus(
-                    name="Browser VM",
-                    ip=browser_config.get("host"),
-                    status="online",
-                    services=["browser-automation", "playwright"],
-                    last_check=datetime.now(),
-                )
+        vms.append(
+            VMStatus(
+                name="Browser VM",
+                ip=str(NetworkConstants.BROWSER_HOST),
+                status="online",
+                services=["browser-automation", "playwright"],
+                last_check=datetime.now(),
             )
+        )
 
         # Count statuses
         online_count = sum(1 for vm in vms if vm.status == "online")
