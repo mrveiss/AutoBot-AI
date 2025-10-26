@@ -245,7 +245,7 @@ class AutoBotFunctionalityTest:
 
             # Check if key processes are running
             import subprocess
-from src.constants import NetworkConstants, ServiceURLs
+            from src.constants import NetworkConstants, ServiceURLs
 
             result = subprocess.run(
                 ["ps", "aux"], capture_output=True, text=True, timeout=5

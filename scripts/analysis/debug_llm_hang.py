@@ -156,7 +156,7 @@ async def test_ollama_direct():
     except Exception as e:
         print(f"❌ Direct Ollama test failed: {e}")
         import traceback
-from src.constants import NetworkConstants, ServiceURLs
+        from src.constants import NetworkConstants, ServiceURLs
         traceback.print_exc()
         return False
 

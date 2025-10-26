@@ -28,6 +28,7 @@ from src.ai_hardware_accelerator import (
 from src.constants.network_constants import NetworkConstants
 from src.knowledge_base import KnowledgeBase
 from src.unified_config_manager import cfg
+from src.utils.chromadb_client import get_chromadb_client
 from src.utils.logging_manager import get_llm_logger
 
 # Import ChromaDB for multi-modal vector storage
@@ -580,13 +581,11 @@ class NPUSemanticSearch:
             return
 
         try:
-            # Create data directory if it doesn't exist
-            self.chroma_db_path.mkdir(parents=True, exist_ok=True)
-
-            # Initialize ChromaDB client
-            self.chroma_client = chromadb.PersistentClient(
-                path=str(self.chroma_db_path),
-                settings=ChromaSettings(allow_reset=True, anonymized_telemetry=False),
+            # Initialize ChromaDB client using shared utility function
+            self.chroma_client = get_chromadb_client(
+                db_path=str(self.chroma_db_path),
+                allow_reset=True,
+                anonymized_telemetry=False
             )
 
             # Initialize collections for each modality

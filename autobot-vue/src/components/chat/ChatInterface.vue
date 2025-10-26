@@ -43,6 +43,13 @@
           </template>
         </ChatHeader>
 
+        <!-- Chat/Tools Tabs (FIXED: outside scrollable container so sticky works) -->
+        <ChatTabs
+          :active-tab="activeTab"
+          @tab-change="handleTabChange"
+          class="flex-shrink-0"
+        />
+
         <!-- Scrollable Content Area (Header scrolls away, input stays) -->
         <UnifiedLoadingView
           loading-key="chat-content"
@@ -53,13 +60,6 @@
           @loading-timeout="handleContentLoadingTimeout"
           class="flex-1 min-h-0 flex flex-col overflow-y-auto"
         >
-          <!-- Chat/Tools Tabs (scrolls with content) -->
-          <ChatTabs
-            :active-tab="activeTab"
-            @tab-change="handleTabChange"
-            class="flex-shrink-0"
-          />
-
           <ChatTabContent
             :active-tab="activeTab"
             :current-session-id="store.currentSessionId"

@@ -33,10 +33,10 @@ async def test_single_man_page(command="ls", section="1"):
 
     try:
         # Initialize Knowledge Base V2
-        from src.knowledge_base_v2 import KnowledgeBaseV2
+        from src.knowledge_base import KnowledgeBase
 
         logger.info("\n1. Initializing Knowledge Base V2...")
-        kb_v2 = KnowledgeBaseV2()
+        kb_v2 = KnowledgeBase()
         await kb_v2.initialize()
 
         if not kb_v2.initialized:

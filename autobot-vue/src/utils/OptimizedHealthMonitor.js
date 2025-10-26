@@ -1,6 +1,6 @@
 /**
  * Optimized Frontend Health Monitor
- * Performance-aware monitoring with <50ms budget per minute
+ * Performance-aware monitoring with realistic network timeouts (30s budget per minute)
  * Event-driven architecture with intelligent adaptive intervals
  */
 
@@ -10,7 +10,7 @@ class OptimizedHealthMonitor {
     constructor() {
         this.isMonitoring = false;
         this.performanceBudget = {
-            maxOverheadPerMinute: 50, // Maximum 50ms monitoring overhead per minute
+            maxOverheadPerMinute: 30000, // Maximum 30s monitoring overhead per minute (realistic for network requests)
             currentOverhead: 0,
             lastReset: Date.now()
         };
@@ -34,9 +34,9 @@ class OptimizedHealthMonitor {
                 userActive: 10000   // 10 seconds when user viewing dashboard
             },
             performanceThresholds: {
-                maxCheckDuration: 10,  // 10ms max per health check
-                degradeThreshold: 25,   // 25ms triggers interval increase
-                criticalThreshold: 50   // 50ms triggers monitoring reduction
+                maxCheckDuration: 3000,  // 3s max per health check (realistic for network requests)
+                degradeThreshold: 5000,   // 5s triggers interval increase
+                criticalThreshold: 10000   // 10s triggers monitoring reduction (CRITICAL FIX: was 50ms)
             }
         };
 
@@ -63,7 +63,6 @@ class OptimizedHealthMonitor {
      * Initialize optimized monitoring system
      */
     initialize() {
-        console.log('[OptimizedHealthMonitor] Initializing performance-aware monitoring...');
 
         // Set up event-driven monitoring
         this.setupEventListeners();
@@ -75,7 +74,6 @@ class OptimizedHealthMonitor {
         this.scheduleNextCheck('healthy');
 
         this.isMonitoring = true;
-        console.log('[OptimizedHealthMonitor] Event-driven monitoring initialized with 2-minute healthy intervals');
     }
 
     /**
@@ -86,10 +84,8 @@ class OptimizedHealthMonitor {
         this.addEventListenerWithTracking('visibilitychange', () => {
             if (document.hidden) {
                 this.pauseMonitoring();
-                console.log('[OptimizedHealthMonitor] Monitoring paused - tab not visible');
             } else {
                 this.resumeMonitoring();
-                console.log('[OptimizedHealthMonitor] Monitoring resumed - tab visible');
             }
         });
 
@@ -140,7 +136,6 @@ class OptimizedHealthMonitor {
 
             // Log performance stats
             if (this.performanceMetrics.checksPerformed > 0) {
-                console.log(`[OptimizedHealthMonitor] Performance: ${this.performanceMetrics.checksPerformed} checks, avg ${this.performanceMetrics.averageCheckTime.toFixed(1)}ms`);
             }
         }, 60000);
     }
@@ -165,7 +160,6 @@ class OptimizedHealthMonitor {
         // Adjust for performance budget
         if (this.isPerformanceBudgetExceeded()) {
             interval = Math.max(interval * 2, this.config.intervals.healthy);
-            console.log(`[OptimizedHealthMonitor] Performance budget exceeded, increasing interval to ${interval/1000}s`);
         }
 
         this.healthCheckTimer = setTimeout(() => {
@@ -360,14 +354,12 @@ class OptimizedHealthMonitor {
      * Event handlers
      */
     onErrorDetected(event) {
-        console.log('[OptimizedHealthMonitor] Error detected, updating frontend health');
         this.healthStatus.frontend = 'degraded';
         this.updateOverallHealth();
         this.notifyHealthChange();
     }
 
     onNetworkStatusChange(status) {
-        console.log(`[OptimizedHealthMonitor] Network status: ${status}`);
         if (status === 'offline') {
             this.healthStatus.backend = 'critical';
         }
@@ -385,7 +377,6 @@ class OptimizedHealthMonitor {
      */
     setUserViewing(isViewing) {
         this.isUserViewing = isViewing;
-        console.log(`[OptimizedHealthMonitor] User viewing dashboard: ${isViewing}`);
 
         // Reschedule with appropriate interval
         this.scheduleNextCheck();
@@ -407,7 +398,6 @@ class OptimizedHealthMonitor {
      * Manual health check for user-triggered refresh
      */
     async performManualHealthCheck() {
-        console.log('[OptimizedHealthMonitor] Manual health check requested');
         return this.performHealthCheck();
     }
 
@@ -456,7 +446,6 @@ class OptimizedHealthMonitor {
      * Cleanup resources
      */
     destroy() {
-        console.log('[OptimizedHealthMonitor] Cleaning up resources...');
 
         this.pauseMonitoring();
 

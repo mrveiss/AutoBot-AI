@@ -28,7 +28,6 @@ class ApiEndpointMapper {
     const cachedData = this.cache.get(cacheKey)
 
     if (cachedData && Date.now() - cachedData.timestamp < 30000) {
-      console.log(`[ApiEndpointMapper] Using cached data for ${endpoint}`)
       return this._createFallbackResponse(cachedData.data, false)
     }
 
@@ -119,7 +118,6 @@ class ApiEndpointMapper {
    * Clear all cached data
    */
   clearCache() {
-    console.log('[ApiEndpointMapper] Clearing cache')
     this.cache.clear()
   }
 

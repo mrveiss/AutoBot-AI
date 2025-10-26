@@ -42,7 +42,6 @@ class ApiCircuitBreaker {
       case 'OPEN':
         // Check if recovery time has elapsed
         if (this.lastFailureTime && (now - this.lastFailureTime) >= this.recoveryTime) {
-          console.log('[ApiCircuitBreaker] Moving to HALF_OPEN state for recovery test');
           this.state = 'HALF_OPEN';
           return true;
         }
@@ -73,7 +72,6 @@ class ApiCircuitBreaker {
     
     // Reset failure tracking on success
     if (this.state === 'HALF_OPEN') {
-      console.log('[ApiCircuitBreaker] Recovery successful - closing circuit');
       this.state = 'CLOSED';
       this.failureCount = 0;
     } else if (this.state === 'CLOSED') {
@@ -101,14 +99,12 @@ class ApiCircuitBreaker {
     // Open circuit if threshold exceeded
     if (this.failureCount >= this.failureThreshold) {
       if (this.state !== 'OPEN') {
-        console.log('[ApiCircuitBreaker] 🚫 CIRCUIT OPENED - too many failures');
         this.state = 'OPEN';
       }
     }
     
     // In HALF_OPEN state, any failure immediately opens circuit
     if (this.state === 'HALF_OPEN') {
-      console.log('[ApiCircuitBreaker] Recovery attempt failed - opening circuit again');
       this.state = 'OPEN';
     }
   }
@@ -159,7 +155,6 @@ class ApiCircuitBreaker {
       
       // Try fallback if available
       if (fallbackHandler && typeof fallbackHandler === 'function') {
-        console.log('[ApiCircuitBreaker] Executing fallback handler');
         try {
           return await fallbackHandler();
         } catch (fallbackError) {
@@ -204,7 +199,6 @@ class ApiCircuitBreaker {
    * Reset circuit breaker to initial state
    */
   reset() {
-    console.log('[ApiCircuitBreaker] Manually resetting circuit breaker');
     this.state = 'CLOSED';
     this.failureCount = 0;
     this.requestCount = 0;
@@ -270,7 +264,6 @@ class EnhancedFetch {
       const cached = this.getFromCache(cacheKey);
       
       if (cached) {
-        console.log('[EnhancedFetch] Using cached response as fallback');
         return Promise.resolve(cached);
       }
       
@@ -391,7 +384,6 @@ class EnhancedFetch {
    * Update base URL for requests
    */
   updateBaseUrl(newBaseUrl) {
-    console.log(`[EnhancedFetch] Updating base URL from ${this.baseUrl} to ${newBaseUrl}`);
     this.baseUrl = newBaseUrl || '';
   }
 }

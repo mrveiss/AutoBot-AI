@@ -12,18 +12,27 @@ This document contains development guidelines, project setup instructions, and a
 
 1. **Create TodoWrite** to track progress (MANDATORY)
 2. **Search Memory MCP** for similar past work: `mcp__memory__search_nodes`
-3. **Use specialized agents** for complex tasks
-4. **Code review is mandatory** for ALL code changes (use `code-reviewer` agent)
+3. **Break down into subtasks** - Execute every task as smaller, manageable subtasks (MANDATORY)
+4. **Use specialized agents** for complex tasks
+5. **Code review is mandatory** for ALL code changes (use `code-reviewer` agent)
+6. **Store in Memory MCP** - At session end, store conversation/decisions/findings (MANDATORY)
 
 ### **Workflow Violation Self-Check**
 
 **Before proceeding, verify:**
 
 - ❓ **Did I create TodoWrite?** → If NO: Create it now
+- ❓ **Did I break down the task into subtasks?** → If NO: Break it down now
 - ❓ **Am I working alone on complex tasks?** → If YES: Delegate to agents
 - ❓ **Will I modify code without review?** → If YES: Plan code-reviewer agent
 - ❓ **Did I search Memory MCP?** → If NO: Search now
 - ❓ **Am I considering a "quick fix"?** → If YES: STOP - Fix root cause instead
+
+**At session end, verify:**
+
+- ❓ **Did I store conversation in Memory MCP?** → If NO: Store it now before ending
+- ❓ **Did I document decisions with rationale?** → If NO: Create decision entities
+- ❓ **Did I link problems to solutions?** → If NO: Create relationships
 
 **If ANY answer reveals violation → STOP and correct immediately**
 
@@ -143,6 +152,92 @@ If hardcoding is ABSOLUTELY necessary (rare):
 
 ---
 
+## 🔴 REDIS CLIENT USAGE (MANDATORY PATTERN)
+
+**⚠️ MANDATORY RULE: ALWAYS USE CANONICAL REDIS UTILITY**
+
+### **Canonical Redis Client**
+
+**ALWAYS use**: `src/utils/redis_client.py::get_redis_client()`
+
+```python
+# ✅ CORRECT - Use canonical utility
+from src.utils.redis_client import get_redis_client
+
+# Get synchronous client for 'main' database
+redis_client = get_redis_client(async_client=False, database="main")
+
+# Get async client for 'knowledge' database
+async_redis = await get_redis_client(async_client=True, database="knowledge")
+```
+
+### **❌ FORBIDDEN PATTERNS**
+
+**NEVER instantiate Redis directly** - This violates the DRY principle and causes configuration drift:
+
+```python
+# ❌ WRONG - Direct instantiation (67 files still violate this!)
+import redis
+client = redis.Redis(host="172.16.168.23", port=6379, db=0)
+
+# ❌ WRONG - Custom connection pooling
+pool = redis.ConnectionPool(host=..., port=...)
+client = redis.Redis(connection_pool=pool)
+
+# ❌ WRONG - Using deprecated utilities
+from src.utils.redis_consolidated import ...  # Archived 2025-10-26
+from src.utils.redis_database_manager_fixed import ...  # Archived 2025-10-26
+```
+
+### **Database Separation**
+
+**Use named databases** instead of DB numbers:
+
+```python
+# ✅ CORRECT - Named databases (self-documenting)
+main_db = get_redis_client(database="main")          # General cache/queues
+knowledge_db = get_redis_client(database="knowledge")  # Knowledge base vectors
+prompts_db = get_redis_client(database="prompts")     # LLM prompts/templates
+analytics_db = get_redis_client(database="analytics")  # Analytics data
+
+# ❌ WRONG - Database numbers (unclear purpose)
+db0 = redis.Redis(host=..., db=0)
+db1 = redis.Redis(host=..., db=1)
+```
+
+### **Backend Infrastructure**
+
+- **`redis_client.py`**: High-level API for getting Redis connections (66 files use this)
+- **`redis_database_manager.py`**: Backend connection pooling manager (28 files use this)
+- **NetworkConstants**: Provides `REDIS_VM_IP` and `REDIS_PORT` configuration
+
+### **Deprecated Utilities (DO NOT USE)**
+
+The following utilities were archived on **2025-10-26** and must NOT be used:
+
+| File | Status | Reason |
+|------|--------|--------|
+| `redis_consolidated.py` | ❌ ARCHIVED | 521 lines, 0 users, failed consolidation attempt |
+| `redis_database_manager_fixed.py` | ❌ ARCHIVED | "Temporary patch" violating NO TEMP FIXES policy |
+| `redis_helper.py` | ⚠️ LOW PRIORITY | Only 1 test file uses it, migrate later |
+
+**Archive location**: `archives/code/redis-utilities-2025-10-26/`
+
+### **Migration Status**
+
+**Current state** (as of 2025-10-26):
+- ✅ **66 files** correctly use `get_redis_client()`
+- ❌ **67 files** still use direct `redis.Redis()` instantiation (MUST MIGRATE)
+- 📋 **5-phase migration plan** stored in Memory MCP entity "Redis Utilities Audit 2025-10-26"
+
+**When refactoring Redis code:**
+1. Search Memory MCP for "Redis Utilities Audit" before starting
+2. Use `get_redis_client()` for all new Redis connections
+3. Replace direct instantiation patterns during code changes
+4. Reference archived utilities README for migration guidance
+
+---
+
 ## 🚨 STANDARDIZED PROCEDURES
 
 ### Setup (Required First Time)
@@ -212,6 +307,77 @@ mcp__memory__create_relations --relations '[{"from": "Task B", "to": "Task A", "
 ```
 
 **Use TodoWrite for immediate/short-term tracking during active work**
+
+👉 **Complete Memory Storage Guide**: [`docs/developer/MEMORY_STORAGE_ROUTINE.md`](docs/developer/MEMORY_STORAGE_ROUTINE.md)
+
+---
+
+## 🔄 SUBTASK EXECUTION (MANDATORY)
+
+**⚠️ MANDATORY RULE: EVERY TASK MUST BE EXECUTED AS SUBTASKS**
+
+### **The Subtask Principle:**
+
+- **All tasks MUST be broken down** into smaller, atomic subtasks
+- **Execute ONE subtask at a time** - Complete fully before moving to next
+- **Track each subtask** in TodoWrite with clear status
+- **Never execute monolithic tasks** - Always decompose first
+
+### **✅ How to Execute Tasks as Subtasks:**
+
+1. **Receive Task** - Understand the overall goal
+2. **Break Down** - Decompose into 3-10 smaller subtasks
+3. **Create TodoWrite** - List all subtasks with clear descriptions
+4. **Execute Sequentially** - Complete one subtask fully before next
+5. **Mark Progress** - Update TodoWrite after each subtask completion
+6. **Verify Completion** - Ensure each subtask is truly done
+
+### **📋 Subtask Breakdown Guidelines:**
+
+**Each subtask should be:**
+- **Atomic** - Single, well-defined action
+- **Testable** - Clear success criteria
+- **Independent** - Can be executed without waiting on other tasks (when possible)
+- **Trackable** - Can mark as in_progress/completed in TodoWrite
+
+**Examples of proper subtask breakdown:**
+
+**❌ BAD (Monolithic):**
+```
+Task: "Fix the authentication system"
+```
+
+**✅ GOOD (Subtasks):**
+```
+1. Research: Identify authentication bug in codebase
+2. Analysis: Determine root cause of authentication failure
+3. Implementation: Fix authentication logic in backend/auth.py
+4. Testing: Verify authentication works with test users
+5. Review: Run code-reviewer agent on changes
+6. Documentation: Update API docs with authentication changes
+```
+
+### **🎯 Subtask Execution Workflow:**
+
+```
+1. Break down main task → Create subtasks in TodoWrite
+2. Mark subtask #1 as in_progress
+3. Execute subtask #1 completely
+4. Mark subtask #1 as completed
+5. Mark subtask #2 as in_progress
+6. Execute subtask #2 completely
+7. Mark subtask #2 as completed
+... (continue until all subtasks done)
+```
+
+### **⚠️ When Tasks Seem Simple:**
+
+Even "simple" tasks should be broken down:
+- **Minimum 2-3 subtasks** for any task
+- Common subtasks: research, implement, test, review
+- If task truly is single-step, create subtasks for verification and documentation
+
+**THIS POLICY ENSURES QUALITY, TRACKING, AND PREVENTS SKIPPED STEPS - NO EXCEPTIONS**
 
 ---
 
@@ -371,8 +537,9 @@ When you see these system reminders, they indicate **workflow violations**:
 
 **Check these patterns before proceeding:**
 
-- [ ] Am I working alone on complex tasks? → Delegate to agents
 - [ ] Did I start without TodoWrite? → Create it now
+- [ ] Did I break down task into subtasks? → Break it down now
+- [ ] Am I working alone on complex tasks? → Delegate to agents
 - [ ] Am I about to modify code? → Plan code-reviewer agent
 - [ ] Have I searched Memory MCP? → Search before proceeding
 - [ ] Am I considering a "quick fix"? → STOP - Fix root cause
@@ -488,6 +655,8 @@ Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
 | Policy | Rule |
 |--------|------|
 | **Temporary Fixes** | ❌ NEVER - Always fix root causes (NO EXCEPTIONS) |
+| **Subtask Execution** | ✅ MANDATORY - Break down every task into subtasks |
+| **Memory Storage** | ✅ MANDATORY - Store conversations/decisions at session end |
 | **Process Control** | ⚠️ ALWAYS ask user approval before start/stop/restart |
 | **TodoWrite** | ✅ MANDATORY for all tasks |
 | **Code Review** | ✅ MANDATORY for all code changes |
@@ -498,11 +667,18 @@ Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
 
 ### **Workflow Violations - Self Check**
 
+**During work:**
 - Did I create TodoWrite? ✓
+- Did I break down task into subtasks? ✓
 - Did I search Memory MCP? ✓
 - Am I using agents for complex tasks? ✓
 - Will code be reviewed? ✓
 - Am I fixing root cause (not workaround)? ✓
+
+**At session end:**
+- Did I store conversation in Memory MCP? ✓
+- Did I document decisions with rationale? ✓
+- Did I link problems to solutions? ✓
 
 **If ANY unchecked → STOP and correct immediately**
 

@@ -67,7 +67,6 @@ export function useSystemStatus() {
   }
 
   const refreshSystemStatus = async () => {
-    console.log('[useSystemStatus] Starting graceful system status refresh...')
     
     try {
       const updatedServices = []
@@ -76,12 +75,10 @@ export function useSystemStatus() {
       // FIXED: Use correct endpoint with graceful fallback
       // Correct endpoint: '/api/service-monitor/vms/status'
       try {
-        console.log('[useSystemStatus] Fetching infrastructure status...')
         const vmResponse = await apiEndpointMapper.fetchWithFallback('/api/service-monitor/vms/status', { timeout: 5000 })
         const vmData = await vmResponse.json()
 
         if (vmResponse.fallback) {
-          console.log('[useSystemStatus] Using fallback data for infrastructure')
           hasApiErrors = true
         }
 
@@ -110,12 +107,10 @@ export function useSystemStatus() {
       // FIXED: Use correct services endpoint with graceful fallback
       // Correct endpoint: '/api/service-monitor/services'
       try {
-        console.log('[useSystemStatus] Fetching service health status...')
         const servicesResponse = await apiEndpointMapper.fetchWithFallback('/api/service-monitor/services', { timeout: 5000 })
         const servicesData = await servicesResponse.json()
 
         if (servicesResponse.fallback) {
-          console.log('[useSystemStatus] Using fallback data for services')
           hasApiErrors = true
         }
 
@@ -181,7 +176,6 @@ export function useSystemStatus() {
         apiErrors: hasApiErrors // Track if we had to use fallbacks
       }
 
-      console.log(`[useSystemStatus] Status refresh complete. Services: ${uniqueServices.length}, Errors: ${hasErrors}, Warnings: ${hasWarnings}, API Errors: ${hasApiErrors}`)
       
     } catch (error) {
       console.error('[useSystemStatus] Critical error during status refresh:', error)

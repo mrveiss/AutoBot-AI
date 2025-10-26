@@ -570,7 +570,7 @@ async def main():
     
     # Write recommendation to file
     import os
-from src.constants import NetworkConstants, ServiceURLs
+    from src.constants import NetworkConstants, ServiceURLs
     output_file = '/home/kali/Desktop/AutoBot/reports/redis_vector_recommendation.json'
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, 'w') as f:

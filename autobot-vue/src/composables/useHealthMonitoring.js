@@ -20,7 +20,6 @@ export function useHealthMonitoring() {
 
   // OPTIMIZED: Intelligent system health monitoring
   const startOptimizedHealthCheck = () => {
-    console.log('[App] Starting optimized health monitoring system...')
 
     // Listen for health changes from optimized monitor
     optimizedHealthMonitor.onHealthChange((healthData) => {
@@ -39,7 +38,6 @@ export function useHealthMonitoring() {
       smartMonitoringController.setSystemHealth(healthData.status.overall)
     })
 
-    console.log('[App] Optimized health monitoring initialized')
   }
 
   // OPTIMIZED: Smart notification cleanup with adaptive intervals
@@ -53,14 +51,12 @@ export function useHealthMonitoring() {
 
     notificationCleanup = setInterval(() => {
       if (appStore && appStore.systemNotifications && appStore.systemNotifications.length > 5) {
-        console.log('[App] Cleaning up excessive notifications:', appStore.systemNotifications.length)
         // Keep only the last 5 notifications
         const recentNotifications = appStore.systemNotifications.slice(-5)
         appStore.systemNotifications.splice(0, appStore.systemNotifications.length, ...recentNotifications)
       }
     }, cleanupInterval)
 
-    console.log(`[App] Notification cleanup scheduled every ${Math.round(cleanupInterval/60000)} minutes`)
   }
 
   const stopOptimizedNotificationCleanup = () => {
@@ -74,7 +70,6 @@ export function useHealthMonitoring() {
   const setupRouterMonitoring = () => {
     // Monitor router navigation events
     router.afterEach((to, from) => {
-      console.log(`[App] Navigation: ${from.path} → ${to.path}`)
 
       // Update user activity in smart monitoring controller
       smartMonitoringController.userActivity.lastActivity = Date.now()
@@ -89,10 +84,8 @@ export function useHealthMonitoring() {
   }
 
   const initializeHealthMonitoring = async () => {
-    console.log('[App] Initializing optimized AutoBot health monitoring...')
 
     // CRITICAL FIX: Clear any stuck system notifications on startup
-    console.log('[App] Clearing stuck system notifications on startup...')
     clearAllSystemNotifications()
     resetHealthMonitor()
 
@@ -109,7 +102,6 @@ export function useHealthMonitoring() {
       // OPTIMIZED: Setup router monitoring (event-driven)
       setupRouterMonitoring()
 
-      console.log('[App] Optimized monitoring systems initialized successfully')
 
     } catch (error) {
       console.error('[App] Error initializing optimized systems:', error)
@@ -123,11 +115,9 @@ export function useHealthMonitoring() {
       appStore.setLoading(false)
     }
 
-    console.log('[App] ✅ Optimized AutoBot initialized - monitoring restored with <50ms performance budget')
   }
 
   const cleanupHealthMonitoring = () => {
-    console.log('[App] Cleaning up optimized monitoring systems...')
 
     stopOptimizedNotificationCleanup()
 

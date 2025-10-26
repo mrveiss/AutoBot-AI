@@ -20,7 +20,6 @@ export function createMonitoredApiClient(originalApiClient) {
         const method = prop.toUpperCase()
         const url = this.getUrlFromArgs(prop, args)
         
-        console.log(`🌐 API Call Starting: ${method} ${url}`)
         rumAgent.trackUserInteraction('api_call_initiated', null, { method, url })
         
         const result = original.apply(this, args)

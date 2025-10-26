@@ -56,7 +56,6 @@ window.rumHelp = () => {
 
 window.rumStats = () => {
   if (!window.rum) {
-    console.log('❌ RUM not available')
     return
   }
   
@@ -82,21 +81,17 @@ window.rumStats = () => {
 window.rumIssues = () => {
   const issues = JSON.parse(localStorage.getItem('rum_critical_issues') || '[]')
   if (issues.length === 0) {
-    console.log('✅ No critical issues found')
     return
   }
   
-  console.log('🚨 Critical Issues:')
   issues.forEach((issue: any, index: number) => {
     console.group(`${index + 1}. ${issue.type} (${new Date(issue.timestamp).toLocaleTimeString()})`)
-    console.log(issue.data)
     console.groupEnd()
   })
 }
 
 window.rumApiStats = () => {
   if (!window.rum) {
-    console.log('❌ RUM not available')
     return
   }
   
@@ -125,7 +120,6 @@ window.rumApiStats = () => {
     if (call.isSlow) stats.slowCalls++
   })
   
-  console.log('📡 API Endpoint Performance:')
   Object.entries(endpointStats).forEach(([endpoint, stats]: [string, any]) => {
     const avgDuration = Math.round(stats.totalDuration / stats.count)
     const hasIssues = stats.timeouts > 0 || stats.errors > 0 || stats.slowCalls > 0
@@ -142,59 +136,48 @@ window.rumApiStats = () => {
 
 window.rumDebug = () => {
   if (!window.rum) {
-    console.log('❌ RUM not available')
     return
   }
   
   // Enable verbose logging
   const originalTrackApiCall = window.rum.trackApiCall
   window.rum.trackApiCall = function(this: any, ...args: any[]) {
-    console.log('🌐 API Call Tracked:', args)
     return originalTrackApiCall.apply(this, args)
   }
   
   const originalTrackError = window.rum.trackError
   window.rum.trackError = function(this: any, ...args: any[]) {
-    console.log('💥 Error Tracked:', args)
     return originalTrackError.apply(this, args)
   }
   
-  console.log('🛠️ RUM Debug mode enabled - verbose logging activated')
 }
 
 window.rumTestApi = () => {
   if (!window.rum) {
-    console.log('❌ RUM not available')
     return
   }
   
-  console.log('🧪 Testing API call tracking...')
   const start = performance.now()
   setTimeout(() => {
     const end = performance.now()
     window.rum.trackApiCall('GET', '/test/endpoint', start, end, 200)
-    console.log('✅ Test API call tracked')
   }, 100)
 }
 
 window.rumTestError = () => {
   if (!window.rum) {
-    console.log('❌ RUM not available')
     return
   }
   
-  console.log('🧪 Testing error tracking...')
   window.rum.trackError('test_error', {
     message: 'This is a test error',
     source: 'RUM console helper'
   })
-  console.log('✅ Test error tracked')
 }
 
 // Auto-display help on first load
 if (import.meta.env.DEV) {
   setTimeout(() => {
-    console.log('🔍 RUM Console Helper loaded! Type rumHelp() for available commands')
   }, 1000)
 }
 

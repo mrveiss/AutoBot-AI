@@ -135,7 +135,6 @@ const retry = async () => {
   }
 
   // Log retry attempt
-  console.log(`[AsyncErrorFallback] Retrying component: ${props.componentName}, attempt ${props.retryCount + 1}`)
 
   try {
     // Wait a moment before retrying (exponential backoff)
@@ -178,7 +177,6 @@ const reload = () => {
     })
   }
 
-  console.log(`[AsyncErrorFallback] Reloading page due to ${props.componentName} failure`)
 
   // Clear any cached chunks and reload
   if ('serviceWorker' in navigator) {
@@ -201,7 +199,6 @@ const goHome = () => {
     })
   }
 
-  console.log(`[AsyncErrorFallback] Navigating to home due to ${props.componentName} failure`)
   router.push('/chat').catch(err => {
     console.error('Failed to navigate to home:', err)
     // Last resort - hard navigation

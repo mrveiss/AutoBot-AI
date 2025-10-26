@@ -1,23 +1,12 @@
 <template>
   <div class="file-browser">
-    <!-- Header -->
+    <!-- Header (with integrated path navigation) -->
     <FileBrowserHeader
       :view-mode="viewMode"
-      @refresh="refreshFiles"
-      @upload="triggerFileUpload"
-      @toggle-view="toggleView"
-    />
-
-    <!-- Path Navigation -->
-    <FilePathNavigation
       :current-path="currentPath"
+      @upload="triggerFileUpload"
+      @new-folder="createNewFolder"
       @navigate-to-path="navigateToPath"
-    />
-
-    <!-- File Upload -->
-    <FileUpload
-      ref="fileUploadRef"
-      @files-selected="handleFileSelected"
     />
 
     <!-- File Preview Modal -->
@@ -44,6 +33,23 @@
         <div class="files-panel">
           <div class="files-header">
             <h3><i class="fas fa-files"></i> {{ selectedPath || '/' }} Contents</h3>
+
+            <!-- File Upload (Inline) -->
+            <FileUpload
+              ref="fileUploadRef"
+              @files-selected="handleFileSelected"
+              class="file-upload-inline"
+            />
+
+            <div class="file-actions-inline">
+              <button @click="refreshFiles" aria-label="Refresh files">
+                <i class="fas fa-sync-alt"></i> Refresh
+              </button>
+              <button @click="toggleView" aria-label="Toggle view mode">
+                <i :class="viewMode === 'tree' ? 'fas fa-list' : 'fas fa-tree'"></i>
+                {{ viewMode === 'tree' ? 'List View' : 'Tree View' }}
+              </button>
+            </div>
           </div>
           <FileListTable
             :files="sortedFiles"
@@ -53,6 +59,7 @@
             @sort="sortBy"
             @navigate="navigateToPath"
             @view-file="viewFile"
+            @rename-file="renameFile"
             @delete-file="deleteFile"
           />
         </div>
@@ -68,6 +75,7 @@
           @sort="sortBy"
           @navigate="navigateToPath"
           @view-file="viewFile"
+          @rename-file="renameFile"
           @delete-file="deleteFile"
         />
       </div>
@@ -82,7 +90,6 @@ import { useUserStore } from '@/stores/useUserStore'
 
 // Import components
 import FileBrowserHeader from './file-browser/FileBrowserHeader.vue'
-import FilePathNavigation from './file-browser/FilePathNavigation.vue'
 import FileUpload from './file-browser/FileUpload.vue'
 import FilePreview from './file-browser/FilePreview.vue'
 import FileTreeView from './file-browser/FileTreeView.vue'
@@ -147,8 +154,7 @@ const sortedFiles = computed(() => {
 // Methods
 const refreshFiles = async () => {
   try {
-    const response = await apiClient.get(`/api/files/list?path=${encodeURIComponent(currentPath.value)}`)
-    const data = await response.json()
+    const data = await apiClient.get(`/api/files/list?path=${encodeURIComponent(currentPath.value)}`)
     files.value = data.files || []
 
     if (viewMode.value === 'tree') {
@@ -162,8 +168,7 @@ const refreshFiles = async () => {
 
 const loadDirectoryTree = async () => {
   try {
-    const response = await apiClient.get('/api/files/tree')
-    const data = await response.json()
+    const data = await apiClient.get('/api/files/tree')
     directoryTree.value = data.tree || []
   } catch (error) {
     console.error('Failed to load directory tree:', error)
@@ -216,8 +221,7 @@ const handleFileSelected = async (fileList: FileList) => {
 
 const viewFile = async (file: any) => {
   try {
-    const response = await apiClient.get(`/api/files/preview?path=${encodeURIComponent(file.path)}`)
-    const data = await response.json()
+    const data = await apiClient.get(`/api/files/preview?path=${encodeURIComponent(file.path)}`)
     previewFile.value = {
       name: file.name,
       type: data.type,
@@ -233,12 +237,55 @@ const viewFile = async (file: any) => {
 }
 
 const deleteFile = async (file: any) => {
-  if (confirm(`Are you sure you want to delete "${file.name}"?`)) {
+  const itemType = file.is_dir ? 'folder' : 'file'
+  const message = file.is_dir
+    ? `Are you sure you want to delete the folder "${file.name}" and all its contents?`
+    : `Are you sure you want to delete "${file.name}"?`
+
+  if (confirm(message)) {
     try {
       await apiClient.delete(`/api/files/delete?path=${encodeURIComponent(file.path)}`)
       await refreshFiles()
     } catch (error) {
-      console.error('Failed to delete file:', error)
+      console.error(`Failed to delete ${itemType}:`, error)
+      alert(`Failed to delete ${itemType}. Please try again.`)
+    }
+  }
+}
+
+const renameFile = async (file: any) => {
+  const itemType = file.is_dir ? 'folder' : 'file'
+  const newName = prompt(`Enter new name for ${itemType} "${file.name}":`, file.name)
+
+  if (newName && newName !== file.name) {
+    try {
+      const formData = new FormData()
+      formData.append('path', file.path)
+      formData.append('new_name', newName)
+
+      await apiClient.post('/api/files/rename', formData)
+      await refreshFiles()
+    } catch (error) {
+      console.error(`Failed to rename ${itemType}:`, error)
+      alert(`Failed to rename ${itemType}. Please try again.`)
+    }
+  }
+}
+
+const createNewFolder = async () => {
+  const folderName = prompt('Enter new folder name:')
+
+  if (folderName) {
+    try {
+      const formData = new FormData()
+      formData.append('path', currentPath.value)
+      formData.append('name', folderName)
+
+      await apiClient.post('/api/files/create_directory', formData)
+      await refreshFiles()
+    } catch (error) {
+      console.error('Failed to create folder:', error)
+      alert('Failed to create folder. Please try again.')
     }
   }
 }
@@ -345,11 +392,48 @@ onMounted(() => {
 }
 
 .files-header {
-  @apply p-4 border-b border-gray-200 bg-gray-50;
+  @apply p-4 border-b border-gray-200 bg-gray-50 flex flex-wrap items-center gap-4;
 }
 
 .files-header h3 {
-  @apply text-lg font-semibold text-gray-900 flex items-center gap-2;
+  @apply text-lg font-semibold text-gray-900 flex items-center gap-2 flex-shrink-0;
+}
+
+.file-upload-inline {
+  @apply flex-1 min-w-0;
+}
+
+/* Style FileUpload component when used inline */
+.file-upload-inline :deep(.file-upload-section) {
+  @apply mb-0 p-0 border border-gray-300 rounded-md bg-white hover:border-gray-400;
+}
+
+.file-upload-inline :deep(.file-upload-inline-wrapper) {
+  @apply gap-1;
+}
+
+.file-upload-inline :deep(.file-input-label) {
+  @apply text-sm gap-1;
+}
+
+.file-upload-inline :deep(.visible-file-input) {
+  @apply text-sm min-w-[150px] py-0;
+}
+
+.file-actions-inline {
+  @apply flex gap-2 flex-shrink-0 ml-auto;
+}
+
+.file-actions-inline button {
+  @apply px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-2;
+}
+
+.file-actions-inline button:hover {
+  @apply shadow-sm;
+}
+
+.file-actions-inline button i {
+  @apply text-sm;
 }
 
 .list-view {

@@ -133,7 +133,6 @@ export default {
           resize: 'scale'
         });
         vncUrl.value = dynamicVncUrl;
-        console.log('Playwright VNC URL loaded from configuration:', dynamicVncUrl);
       } catch (error) {
         console.warn('Failed to load dynamic VNC URL from config, attempting backend fallback:', error);
 
@@ -143,7 +142,6 @@ export default {
           const playwrightHost = backendConfig?.playwright?.host || NetworkConstants.BROWSER_VM_IP;
           const playwrightVncPort = backendConfig?.playwright?.vnc_port || 6081;
           vncUrl.value = `http://${playwrightHost}:${playwrightVncPort}/vnc.html?autoconnect=true&resize=scale&password=playwright`;
-          console.log('Using backend fallback configuration for Playwright VNC');
         } catch (backendError) {
           console.warn('Backend config also failed, using NetworkConstants fallback');
           vncUrl.value = `http://${NetworkConstants.BROWSER_VM_IP}:6081/vnc.html?autoconnect=true&resize=scale&password=playwright`;

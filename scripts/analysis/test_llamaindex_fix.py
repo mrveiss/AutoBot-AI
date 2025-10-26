@@ -108,7 +108,7 @@ async def test_minimal_llamaindex_fix():
     except Exception as e:
         logger.error(f"❌ LlamaIndex fix test failed: {e}")
         import traceback
-from src.constants import NetworkConstants, ServiceURLs
+        from src.constants import NetworkConstants, ServiceURLs
         logger.error(traceback.format_exc())
         return False, 0
 

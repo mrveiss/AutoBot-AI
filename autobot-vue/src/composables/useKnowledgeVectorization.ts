@@ -241,7 +241,6 @@ export function useKnowledgeVectorization() {
       // })
       // const data = await response.json()
 
-      console.log(`[PLACEHOLDER] Vectorizing batch of ${documentIds.length} documents`)
 
       // Simulate batch processing
       for (const docId of documentIds) {
@@ -281,7 +280,6 @@ export function useKnowledgeVectorization() {
   const startBackgroundVectorize = async () => {
     try {
       const result = await vectorizeFacts()
-      console.log('Background vectorization started:', result)
 
       // Start polling for status updates
       startPolling()

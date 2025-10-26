@@ -55,15 +55,14 @@ class ServiceMonitor:
         self._initialize_clients()
 
     def _initialize_clients(self):
-        """Initialize monitoring clients"""
+        """Initialize monitoring clients using canonical Redis utility"""
         try:
-            self.redis_client = redis.Redis(
-                host=cfg.get_host("redis"),
-                port=cfg.get_port("redis"),
-                password=cfg.get("redis.password"),
-                decode_responses=True,
-                socket_timeout=cfg.get("redis.connection.socket_timeout", 2),
-            )
+            # Use canonical Redis utility following CLAUDE.md "🔴 REDIS CLIENT USAGE" policy
+            from src.utils.redis_client import get_redis_client
+
+            self.redis_client = get_redis_client(database="monitoring")
+            if self.redis_client is None:
+                logger.warning("Redis client initialization returned None (Redis disabled?)")
         except Exception as e:
             logger.warning(f"Could not initialize Redis client: {e}")
 
@@ -801,16 +800,13 @@ async def get_all_services():
             },
         }
 
-        # Quick Redis check
+        # Quick Redis check using canonical utility
         try:
-            import redis
+            from src.utils.redis_client import get_redis_client
 
-            r = redis.Redis(
-                host=redis_host,
-                port=int(redis_port),
-                decode_responses=True,
-                socket_timeout=2,
-            )
+            r = get_redis_client(database="main")
+            if r is None:
+                raise Exception("Redis client initialization returned None")
             r.ping()
             services["redis"]["status"] = "online"
             services["redis"]["health"] = "✅"

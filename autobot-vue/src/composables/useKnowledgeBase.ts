@@ -310,8 +310,6 @@ export function useKnowledgeBase() {
     skipExisting: boolean = true
   ): Promise<VectorizationResponse> => {
     try {
-      console.log('[vectorizeFacts] Starting vectorization request...')
-      console.log('[vectorizeFacts] Parameters:', { batchSize, batchDelay, skipExisting })
 
       const response = await apiClient.post('/api/knowledge_base/vectorize_facts', {
         batch_size: batchSize,
@@ -331,9 +329,7 @@ export function useKnowledgeBase() {
       }
 
       // Parse successful response
-      console.log('[vectorizeFacts] Parsing successful response...')
       const data = await parseResponse<VectorizationResponse>(response)
-      console.log('[vectorizeFacts] Parsed response data:', data)
 
       return data
     } catch (error) {
@@ -354,8 +350,6 @@ export function useKnowledgeBase() {
    */
   const initializeMachineKnowledge = async (machineId: string): Promise<MachineKnowledgeResponse> => {
     try {
-      console.log('[initializeMachineKnowledge] Starting initialization request...')
-      console.log('[initializeMachineKnowledge] Machine ID:', machineId)
 
       const response = await apiClient.post('/api/knowledge_base/machine_knowledge/initialize', {
         machine_id: machineId
@@ -372,7 +366,6 @@ export function useKnowledgeBase() {
       }
 
       const data = await parseResponse<MachineKnowledgeResponse>(response)
-      console.log('[initializeMachineKnowledge] Success:', data)
       return data
     } catch (error) {
       console.error('[initializeMachineKnowledge] Error:', error)
@@ -386,7 +379,6 @@ export function useKnowledgeBase() {
    */
   const refreshSystemKnowledge = async (): Promise<SystemKnowledgeResponse> => {
     try {
-      console.log('[refreshSystemKnowledge] Starting refresh request...')
 
       const response = await apiClient.post('/api/knowledge_base/refresh_system_knowledge', {})
 
@@ -401,7 +393,6 @@ export function useKnowledgeBase() {
       }
 
       const data = await parseResponse<SystemKnowledgeResponse>(response)
-      console.log('[refreshSystemKnowledge] Success:', data)
       return data
     } catch (error) {
       console.error('[refreshSystemKnowledge] Error:', error)
@@ -415,8 +406,6 @@ export function useKnowledgeBase() {
    */
   const populateManPages = async (machineId: string): Promise<ManPagesPopulateResponse> => {
     try {
-      console.log('[populateManPages] Starting population request...')
-      console.log('[populateManPages] Machine ID:', machineId)
 
       const response = await apiClient.post('/api/knowledge_base/populate_man_pages', {
         machine_id: machineId
@@ -433,7 +422,6 @@ export function useKnowledgeBase() {
       }
 
       const data = await parseResponse<ManPagesPopulateResponse>(response)
-      console.log('[populateManPages] Success:', data)
       return data
     } catch (error) {
       console.error('[populateManPages] Error:', error)
@@ -447,7 +435,6 @@ export function useKnowledgeBase() {
    */
   const populateAutoBotDocs = async (): Promise<AutoBotDocsResponse> => {
     try {
-      console.log('[populateAutoBotDocs] Starting documentation population request...')
 
       const response = await apiClient.post('/api/knowledge_base/populate_autobot_docs', {})
 
@@ -462,7 +449,6 @@ export function useKnowledgeBase() {
       }
 
       const data = await parseResponse<AutoBotDocsResponse>(response)
-      console.log('[populateAutoBotDocs] Success:', data)
       return data
     } catch (error) {
       console.error('[populateAutoBotDocs] Error:', error)
@@ -476,7 +462,6 @@ export function useKnowledgeBase() {
    */
   const fetchMachineProfile = async (machineId: string): Promise<MachineProfile | null> => {
     try {
-      console.log('[fetchMachineProfile] Fetching profile for machine:', machineId)
 
       const response = await apiClient.get(
         `/api/knowledge_base/machine_profile?machine_id=${encodeURIComponent(machineId)}`
@@ -493,7 +478,6 @@ export function useKnowledgeBase() {
       }
 
       const data = await parseResponse<MachineProfileResponse>(response)
-      console.log('[fetchMachineProfile] Success:', data)
       return data as MachineProfile
     } catch (error) {
       console.error('[fetchMachineProfile] Error:', error)
@@ -507,7 +491,6 @@ export function useKnowledgeBase() {
    */
   const fetchBasicStats = async (): Promise<KnowledgeStats | null> => {
     try {
-      console.log('[fetchBasicStats] Fetching basic stats...')
 
       const response = await apiClient.get('/api/knowledge_base/stats/basic')
 
@@ -522,7 +505,6 @@ export function useKnowledgeBase() {
       }
 
       const data = await parseResponse<BasicStatsResponse>(response)
-      console.log('[fetchBasicStats] Success:', data)
       return data as KnowledgeStats
     } catch (error) {
       console.error('[fetchBasicStats] Error:', error)

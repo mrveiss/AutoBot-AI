@@ -18,10 +18,16 @@ import sys
 from backend.app_factory import create_app
 
 # Configure logging for main entry point
+# Get log level from environment variable (defaults to INFO)
+LOG_LEVEL = os.getenv("AUTOBOT_LOG_LEVEL", "INFO").upper()
+LOG_LEVEL_VALUE = getattr(logging, LOG_LEVEL, logging.INFO)
+
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=LOG_LEVEL_VALUE,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+logger.info(f"📊 Log level set to: {LOG_LEVEL}")
 
 # Create the consolidated FastAPI application instance
 logger.info("🚀 Initializing AutoBot Backend with consolidated factory...")

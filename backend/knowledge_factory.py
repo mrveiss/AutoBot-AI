@@ -48,32 +48,32 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
                     )
                     # Fall through to create new instance
 
-        # MANDATORY: Use KnowledgeBaseV2 (ChromaDB-based implementation)
-        # No fallback to old KnowledgeBase class - V2 is required for vector store migration
+        # Use unified KnowledgeBase class (ChromaDB-based implementation)
+        # This is the merged implementation combining V1 and V2 functionality
         try:
-            from src.knowledge_base_v2 import KnowledgeBaseV2
+            from src.knowledge_base import KnowledgeBase
 
-            logger.info("Creating KnowledgeBaseV2 with ChromaDB vector store...")
-            kb = KnowledgeBaseV2()
+            logger.info("Creating KnowledgeBase with ChromaDB vector store...")
+            kb = KnowledgeBase()
 
-            logger.info("Initializing KnowledgeBaseV2...")
+            logger.info("Initializing KnowledgeBase...")
             result = await kb.initialize()
 
             if result:
                 app.state.knowledge_base = kb
-                logger.info("✅ Knowledge base created and initialized (KnowledgeBaseV2 with ChromaDB)")
+                logger.info("✅ Knowledge base created and initialized (unified KnowledgeBase with ChromaDB)")
                 return kb
             else:
-                logger.error("❌ KnowledgeBaseV2 initialization returned False")
+                logger.error("❌ KnowledgeBase initialization returned False")
                 return None
 
         except ImportError as import_error:
-            logger.error(f"❌ CRITICAL: KnowledgeBaseV2 not available: {import_error}")
+            logger.error(f"❌ CRITICAL: KnowledgeBase not available: {import_error}")
             import traceback
             logger.error(f"Import traceback:\n{traceback.format_exc()}")
             return None
-        except Exception as v2_error:
-            logger.error(f"❌ CRITICAL: KnowledgeBaseV2 initialization failed: {v2_error}")
+        except Exception as init_error:
+            logger.error(f"❌ CRITICAL: KnowledgeBase initialization failed: {init_error}")
             import traceback
             logger.error(f"Full traceback:\n{traceback.format_exc()}")
             return None

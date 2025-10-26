@@ -184,7 +184,7 @@ async def check_existing_data_accessibility():
     logger.info("\n=== Checking Direct Data Access ===")
     try:
         import redis
-from src.constants import NetworkConstants, ServiceURLs
+        from src.constants import NetworkConstants, ServiceURLs
         client = redis.Redis(host='localhost', port=6379, db=2, decode_responses=True)
         
         # Count documents in existing index

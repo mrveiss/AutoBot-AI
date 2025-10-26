@@ -68,14 +68,12 @@ class FrontendHealthMonitor {
      * Initialize health monitoring system - LIGHTWEIGHT VERSION
      */
     initialize() {
-        console.log('[HealthMonitor] PERFORMANCE MODE - Lightweight monitoring initialized');
 
         // PERFORMANCE: Only initialize minimal error handling, no continuous monitoring
         this.setupErrorHandling();
         this.measureInitialMetrics();
 
         // DISABLE aggressive monitoring that was causing 5-second intervals
-        console.log('[HealthMonitor] Aggressive monitoring DISABLED for performance');
     }
 
     /**
@@ -83,11 +81,9 @@ class FrontendHealthMonitor {
      */
     startMonitoring() {
         if (this.monitoringEnabled) {
-            console.log('[HealthMonitor] Monitoring disabled for performance - use manual health checks');
             return;
         }
 
-        console.log('[HealthMonitor] Continuous monitoring DISABLED - performance mode active');
     }
 
     /**
@@ -123,7 +119,6 @@ class FrontendHealthMonitor {
      */
     async performHealthCheck() {
         if (!this.monitoringEnabled) {
-            console.log('[HealthMonitor] Health check skipped - monitoring disabled for performance');
             return;
         }
 
@@ -172,7 +167,6 @@ class FrontendHealthMonitor {
      * Perform immediate health check - LIGHTWEIGHT VERSION
      */
     async performImmediateHealthCheck() {
-        console.log('[HealthMonitor] Immediate health check requested - performing lightweight check');
 
         // PERFORMANCE: Only do basic backend check, not full health check
         try {
@@ -181,7 +175,6 @@ class FrontendHealthMonitor {
             this.healthStatus.overall = this.healthStatus.backend;
             this.notifyHealthChange();
         } catch (error) {
-            console.log('[HealthMonitor] Lightweight health check completed');
         }
     }
 
@@ -228,7 +221,6 @@ class FrontendHealthMonitor {
      * Check WebSocket connection health - DISABLED FOR PERFORMANCE
      */
     async checkWebSocketHealth() {
-        console.log('[HealthMonitor] WebSocket health check DISABLED - was creating connections every 5 seconds');
 
         // PERFORMANCE: Don't create WebSocket connections for health checks
         this.healthStatus.websocket = 'unknown';
@@ -239,7 +231,6 @@ class FrontendHealthMonitor {
      * Check router health - DISABLED FOR PERFORMANCE
      */
     async checkRouterHealth() {
-        console.log('[HealthMonitor] Router health check DISABLED - was doing expensive DOM queries');
 
         // PERFORMANCE: Don't run expensive router health checks
         this.healthStatus.router = 'healthy';
@@ -250,7 +241,6 @@ class FrontendHealthMonitor {
      * Check cache system health - DISABLED FOR PERFORMANCE
      */
     async checkCacheHealth() {
-        console.log('[HealthMonitor] Cache health check DISABLED for performance');
 
         this.healthStatus.cache = 'healthy';
         return { status: 'healthy', reason: 'disabled_for_performance' };
@@ -260,7 +250,6 @@ class FrontendHealthMonitor {
      * Check performance health - DISABLED FOR PERFORMANCE
      */
     async checkPerformanceHealth() {
-        console.log('[HealthMonitor] Performance health check DISABLED to improve performance');
 
         return { status: 'healthy', reason: 'disabled_for_performance' };
     }
@@ -304,7 +293,6 @@ class FrontendHealthMonitor {
      * Trigger automatic recovery - DISABLED FOR PERFORMANCE
      */
     async triggerAutoRecovery() {
-        console.log('[HealthMonitor] Auto-recovery DISABLED for performance - manual intervention recommended');
         return;
     }
 
@@ -312,7 +300,6 @@ class FrontendHealthMonitor {
      * Execute specific recovery strategy - DISABLED
      */
     async executeRecoveryStrategy(strategy) {
-        console.log(`[HealthMonitor] Recovery strategy "${strategy}" DISABLED for performance`);
         return;
     }
 
@@ -320,7 +307,6 @@ class FrontendHealthMonitor {
      * Restart critical frontend services - DISABLED
      */
     async restartCriticalServices() {
-        console.log('[HealthMonitor] Service restart DISABLED for performance');
         return;
     }
 
@@ -329,7 +315,6 @@ class FrontendHealthMonitor {
      */
     setupPerformanceMonitoring() {
         // PERFORMANCE: Disable PerformanceObserver that was consuming resources
-        console.log('[HealthMonitor] Performance monitoring DISABLED for better performance');
     }
 
     /**
@@ -344,7 +329,6 @@ class FrontendHealthMonitor {
             if (event.error && event.error.message) {
                 const criticalErrors = ['ChunkLoadError', 'Loading chunk', 'Loading CSS chunk'];
                 if (criticalErrors.some(error => event.error.message.includes(error))) {
-                    console.log('[HealthMonitor] Critical error detected but health check skipped for performance');
                 }
             }
         });
@@ -414,7 +398,6 @@ class FrontendHealthMonitor {
     enableMonitoring() {
         this.monitoringEnabled = true;
         this.startMonitoring();
-        console.log('[HealthMonitor] Monitoring enabled manually');
     }
 
     /**
@@ -423,7 +406,6 @@ class FrontendHealthMonitor {
     disableMonitoring() {
         this.monitoringEnabled = false;
         this.stopMonitoring();
-        console.log('[HealthMonitor] Monitoring disabled for performance');
     }
 
     /**

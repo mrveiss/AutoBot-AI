@@ -4,7 +4,6 @@ export function quickChunkValidation() {
 }
 
 export function runComprehensive() {
-  console.log('Running comprehensive chunk tests...');
   return Promise.resolve(true);
 }
 

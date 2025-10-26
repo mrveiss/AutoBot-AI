@@ -65,6 +65,10 @@ class PathConstants:
     # User home directory (from environment)
     USER_HOME: Path = Path.home()
 
+    # SSH keys for VM access
+    SSH_DIR: Path = USER_HOME / ".ssh"
+    SSH_AUTOBOT_KEY: Path = SSH_DIR / "autobot_key"
+
     @classmethod
     def get_config_path(cls, *parts: str) -> Path:
         """Get configuration file path"""

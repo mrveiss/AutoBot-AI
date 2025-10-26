@@ -240,7 +240,6 @@ export default {
       isLoading.value = true;
       try {
         const response = await fetchStatsAPI();
-        console.log('[SystemKnowledgeManager] fetchStats response:', response);
 
         if (response) {
           // Ensure we're not storing a Promise
@@ -639,7 +638,6 @@ export default {
       // Load infrastructure machines from appConfig
       try {
         machines.value = appConfig.getMachinesArray();
-        console.log('[SystemKnowledgeManager] Loaded machines from appConfig:', machines.value);
       } catch (error) {
         console.warn('[SystemKnowledgeManager] Failed to load machines from appConfig:', error);
         // No fallback - component will just show "All Hosts" option

@@ -1471,6 +1471,57 @@ async def send_chat_message_by_id(
         )
 
 
+async def merge_messages(
+    existing: List[Dict], new: List[Dict]
+) -> List[Dict]:
+    """
+    Merge message lists with deduplication to prevent race conditions.
+
+    This function prevents the race condition where frontend saves overwrite
+    backend-added messages (terminal_command, terminal_output). It preserves
+    backend-added messages that don't exist in the new message set.
+
+    Args:
+        existing: Existing messages from file/cache (may include backend-added messages)
+        new: New messages from frontend save request
+
+    Returns:
+        Merged message list, sorted by timestamp, with duplicates removed
+    """
+
+    def msg_signature(msg: Dict) -> tuple:
+        """
+        Create a unique signature for message deduplication.
+
+        Uses timestamp, sender, and first 100 chars of text to identify messages.
+        This allows backend-added messages (with same timestamp) to be preserved.
+        """
+        return (
+            msg.get("timestamp", ""),
+            msg.get("sender", ""),
+            msg.get("text", "")[:100],  # First 100 chars to handle long outputs
+        )
+
+    # Build set of new message signatures
+    new_sigs = {msg_signature(msg) for msg in new}
+
+    # Keep existing messages not in new set (e.g., terminal messages added by backend)
+    preserved = [msg for msg in existing if msg_signature(msg) not in new_sigs]
+
+    # Combine: preserved messages + new messages
+    merged = preserved + new
+
+    # Sort by timestamp to maintain chronological order
+    merged.sort(key=lambda m: m.get("timestamp", ""))
+
+    logger.debug(
+        f"Merged messages: {len(existing)} existing + {len(new)} new = "
+        f"{len(merged)} total ({len(preserved)} preserved from existing)"
+    )
+
+    return merged
+
+
 @router.post("/chats/{chat_id}/save")
 async def save_chat_by_id(
     chat_id: str,
@@ -1495,11 +1546,31 @@ async def save_chat_by_id(
                 status_code=503,
             )
 
-        # Save the chat session
+        # CRITICAL FIX: Merge messages to prevent race condition
+        # Load existing messages from file/cache to preserve backend-added messages
         save_data = request_data.get("data", {})
+        new_messages = save_data.get("messages", [])
+
+        try:
+            # Load existing messages to check for backend-added terminal messages
+            existing_messages = await chat_history_manager.load_session(chat_id)
+
+            # Merge with deduplication to preserve backend-added messages
+            merged_messages = await merge_messages(existing_messages, new_messages)
+
+            logger.info(
+                f"[{request_id}] Merged {len(existing_messages)} existing + "
+                f"{len(new_messages)} new = {len(merged_messages)} total messages"
+            )
+        except Exception as merge_error:
+            # Fallback to new messages only if merge fails
+            logger.warning(f"[{request_id}] Message merge failed, using new messages only: {merge_error}")
+            merged_messages = new_messages
+
+        # Save the merged chat session
         result = await chat_history_manager.save_session(
             session_id=chat_id,
-            messages=save_data.get("messages"),
+            messages=merged_messages,
             name=save_data.get("name", ""),
         )
 

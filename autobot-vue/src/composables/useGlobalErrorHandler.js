@@ -66,7 +66,6 @@ export function useGlobalErrorHandler() {
 
   // Unified loading event handlers
   const handleLoadingComplete = () => {
-    console.log('[App] Loading completed successfully')
     if (appStore && typeof appStore.setLoading === 'function') {
       appStore.setLoading(false)
     }

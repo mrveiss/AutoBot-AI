@@ -21,7 +21,6 @@ class EventObserver {
     const observerSet = this.observers.get(eventType);
     observerSet.add(callback);
     
-    console.log(`[EventObserver] Subscribed to '${eventType}', total observers: ${observerSet.size}`);
     
     // Return unsubscribe function
     return () => {
@@ -29,7 +28,6 @@ class EventObserver {
       if (observerSet.size === 0) {
         this.observers.delete(eventType);
       }
-      console.log(`[EventObserver] Unsubscribed from '${eventType}'`);
     };
   }
 
@@ -42,7 +40,6 @@ class EventObserver {
       return;
     }
 
-    console.log(`[EventObserver] Emitting '${eventType}' to ${observers.size} observers`);
 
     // Execute callbacks immediately for synchronous events
     for (const callback of observers) {
@@ -81,7 +78,6 @@ class StateObserver {
       this.state.set(key, value);
       this.notifyWatchers(key, value, oldValue);
       
-      console.log(`[StateObserver] State '${key}' changed:`, oldValue, '->', value);
     }
   }
 
@@ -103,7 +99,6 @@ class StateObserver {
     const watcherSet = this.watchers.get(key);
     watcherSet.add(callback);
     
-    console.log(`[StateObserver] Watching '${key}', total watchers: ${watcherSet.size}`);
     
     // Return unwatch function
     return () => {
@@ -111,7 +106,6 @@ class StateObserver {
       if (watcherSet.size === 0) {
         this.watchers.delete(key);
       }
-      console.log(`[StateObserver] Stopped watching '${key}'`);
     };
   }
 
@@ -152,7 +146,6 @@ class StateObserver {
       });
     });
 
-    console.log(`[StateObserver] Computed property '${computedKey}' defined with dependencies: [${dependencies.join(', ')}]`);
   }
 
   /**
@@ -168,7 +161,6 @@ class StateObserver {
       computed.cachedValue = computed.computeFn(...dependencyValues);
       computed.isValid = true;
       
-      console.log(`[StateObserver] Recomputed '${computedKey}':`, computed.cachedValue);
     }
 
     return computed.cachedValue;
@@ -225,7 +217,6 @@ class ConditionWaiter {
 
       this.conditions.set(conditionName, conditionData);
       
-      console.log(`[ConditionWaiter] Waiting for condition '${conditionName}'`);
 
       // Check immediately if requested
       if (immediate) {
@@ -256,7 +247,6 @@ class ConditionWaiter {
       }
 
       if (result) {
-        console.log(`[ConditionWaiter] ✅ Condition '${conditionName}' met`);
         
         if (condition.onConditionMet) {
           condition.onConditionMet();
@@ -287,7 +277,6 @@ class ConditionWaiter {
   startChecking(interval) {
     if (this.checkInterval) return;
 
-    console.log(`[ConditionWaiter] Starting condition checker (${interval}ms interval)`);
     
     this.checkInterval = setInterval(() => {
       for (const conditionName of this.conditions.keys()) {
@@ -303,7 +292,6 @@ class ConditionWaiter {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
-      console.log(`[ConditionWaiter] Stopped condition checker`);
     }
   }
 
@@ -367,7 +355,6 @@ class ResourceMonitor {
     // Start monitoring
     this.startMonitoring(resourceName);
 
-    console.log(`[ResourceMonitor] Monitoring resource '${resourceName}'`);
 
     return () => this.stopMonitoring(resourceName);
   }
@@ -400,7 +387,6 @@ class ResourceMonitor {
     }
     
     this.resources.delete(resourceName);
-    console.log(`[ResourceMonitor] Stopped monitoring '${resourceName}'`);
   }
 
   /**
@@ -418,7 +404,6 @@ class ResourceMonitor {
         resource.lastState = isAvailable;
         resource.isAvailable = isAvailable;
 
-        console.log(`[ResourceMonitor] Resource '${resourceName}' state changed: ${isAvailable ? 'available' : 'unavailable'}`);
 
         if (resource.onStateChange) {
           resource.onStateChange(isAvailable);

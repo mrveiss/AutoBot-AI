@@ -555,7 +555,7 @@ class AutoBotVectorStoreAnalysis:
                 fixes_attempted.append("Using modern langchain-ollama package")
             except ImportError:
                 from langchain_community.embeddings import OllamaEmbeddings  
-from src.constants import NetworkConstants, ServiceURLs
+                from src.constants import NetworkConstants, ServiceURLs
                 fixes_attempted.append("Using langchain-community embeddings")
             
             embeddings = OllamaEmbeddings(

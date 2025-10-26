@@ -97,7 +97,7 @@ class ComprehensiveUITester:
             
             # Use MCP Puppeteer tools to navigate
             from src.security import conduct_secure_research  # Test if our imports work
-from src.constants import NetworkConstants, ServiceURLs
+            from src.constants import NetworkConstants, ServiceURLs
             
             # Simulate navigation (would use actual Puppeteer MCP in real implementation)
             print(f"  📍 Navigating to {url}")

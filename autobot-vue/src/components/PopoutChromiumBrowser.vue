@@ -722,7 +722,6 @@ export default {
           compression: '9'
         });
         vncUrl.value = dynamicVncUrl;
-        console.log('Playwright VNC URL loaded from configuration:', dynamicVncUrl);
       } catch (error) {
         console.warn('Failed to load dynamic VNC URL from config, attempting backend fallback:', error);
 
@@ -732,7 +731,6 @@ export default {
           const playwrightHost = backendConfig?.playwright?.host || NetworkConstants.BROWSER_VM_IP;
           const playwrightVncPort = backendConfig?.playwright?.vnc_port || 6081;
           vncUrl.value = `http://${playwrightHost}:${playwrightVncPort}/vnc.html?autoconnect=true&resize=remote&reconnect=true&quality=9&compression=9&password=playwright`;
-          console.log('Using backend fallback configuration for Playwright VNC');
         } catch (backendError) {
           console.warn('Backend config also failed, using hardcoded fallback');
           vncUrl.value = `http://${NetworkConstants.BROWSER_VM_IP}:6081/vnc.html?autoconnect=true&resize=remote&reconnect=true&quality=9&compression=9&password=` + 'playwright';
@@ -765,7 +763,6 @@ export default {
 
     // UnifiedLoadingView event handlers
     const handlePlaywrightConnected = () => {
-      console.log('[PopoutChromiumBrowser] Playwright connection established')
       browserStatus.value = 'connected'
     }
 
@@ -782,7 +779,6 @@ export default {
     }
 
     const handleSessionInitialized = () => {
-      console.log('[PopoutChromiumBrowser] Browser session initialized')
       loading.value = false
       browserStatus.value = 'ready'
     }

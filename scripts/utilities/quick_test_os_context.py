@@ -40,9 +40,9 @@ async def main():
     # Store a simple test fact with OS context
     logger.info("\n3. Testing Fact Storage with OS Context...")
 
-    from src.knowledge_base_v2 import KnowledgeBaseV2
+    from src.knowledge_base import KnowledgeBase
 
-    kb = KnowledgeBaseV2()
+    kb = KnowledgeBase()
     await kb.initialize()
 
     if not kb.initialized:

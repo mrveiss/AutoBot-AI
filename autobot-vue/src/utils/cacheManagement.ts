@@ -28,16 +28,13 @@ export async function clearApplicationCache(options: CacheManagementOptions = {}
     showNotification = true
   } = options
 
-  console.log('[CacheManagement] Starting cache clearing process...', options)
 
   try {
     // Clear service worker cache
     if (clearServiceWorker && 'serviceWorker' in navigator) {
-      console.log('[CacheManagement] Clearing service worker cache...')
 
       const registrations = await navigator.serviceWorker.getRegistrations()
       await Promise.all(registrations.map(registration => {
-        console.log('[CacheManagement] Unregistering service worker:', registration.scope)
         return registration.unregister()
       }))
 
@@ -45,7 +42,6 @@ export async function clearApplicationCache(options: CacheManagementOptions = {}
       if ('caches' in window) {
         const cacheNames = await caches.keys()
         await Promise.all(cacheNames.map(name => {
-          console.log('[CacheManagement] Deleting cache:', name)
           return caches.delete(name)
         }))
       }
@@ -53,13 +49,11 @@ export async function clearApplicationCache(options: CacheManagementOptions = {}
 
     // Clear localStorage
     if (clearLocalStorage) {
-      console.log('[CacheManagement] Clearing localStorage...')
       localStorage.clear()
     }
 
     // Clear sessionStorage
     if (clearSessionStorage) {
-      console.log('[CacheManagement] Clearing sessionStorage...')
       sessionStorage.clear()
     }
 
@@ -68,7 +62,6 @@ export async function clearApplicationCache(options: CacheManagementOptions = {}
       showCacheUpdateNotification('Cache cleared successfully. Reloading page...')
     }
 
-    console.log('[CacheManagement] Cache clearing completed')
 
     // Reload page
     if (hardReload) {
@@ -110,7 +103,6 @@ export async function handleChunkLoadingError(error: Error, componentName?: stri
                        error.message?.includes('Failed to fetch')
 
   if (isChunkError) {
-    console.log('[CacheManagement] Handling chunk loading error...')
 
     showCacheUpdateNotification(
       'Application files need to be updated. Refreshing page...',
@@ -140,11 +132,9 @@ export async function checkForUpdates(): Promise<boolean> {
     const reloadCooldown = 30000 // 30 seconds minimum between auto-reloads
 
     if (lastReloadTime && (now - parseInt(lastReloadTime)) < reloadCooldown) {
-      console.log('[CacheManagement] Skipping update check - recent reload detected')
       return false
     }
 
-    console.log('[CacheManagement] Checking for updates...')
 
     // Check if build hash has changed
     const response = await fetch('/api/version', {
@@ -159,7 +149,6 @@ export async function checkForUpdates(): Promise<boolean> {
       const currentBuildHash = localStorage.getItem('app-build-hash')
 
       if (currentBuildHash && currentBuildHash !== buildHash) {
-        console.log('[CacheManagement] New version detected:', { version, buildHash })
 
         // Check for unsaved changes before showing notification
         const hasUnsavedChanges = checkForUnsavedChanges()
@@ -309,7 +298,6 @@ export function showSubtleUpdateNotification(version: string, buildHash: string,
       clearInterval(parseInt(intervalId))
     }
     notification.remove()
-    console.log('[CacheManagement] Auto-reload cancelled by user')
   }
 
   // Add CSS animation if not already present
@@ -332,7 +320,6 @@ export function showSubtleUpdateNotification(version: string, buildHash: string,
     document.body.insertBefore(notification, document.body.firstChild)
   }
 
-  console.log('[CacheManagement] Subtle update notification displayed')
 }
 
 /**
@@ -537,7 +524,6 @@ export function showSubtleErrorNotification(title: string, message: string, seve
     }
   }, autoHideDelay)
 
-  console.log(`[CacheManagement] Subtle ${severity} notification displayed:`, title)
 }
 
 /**
@@ -581,7 +567,6 @@ export function setupGlobalChunkErrorHandlers() {
       // Check if this looks like a chunk loading error
       const url = target.href || (target as HTMLScriptElement).src
       if (url?.includes('/js/') || url?.includes('chunk')) {
-        console.log('[CacheManagement] Chunk resource loading failure, clearing cache...')
 
         try {
           await handleChunkLoadingError(new Error(`Failed to load resource: ${url}`))
@@ -593,7 +578,6 @@ export function setupGlobalChunkErrorHandlers() {
     }
   }, true)
 
-  console.log('[CacheManagement] Global chunk error handlers initialized')
 }
 
 /**
@@ -607,7 +591,5 @@ export function initializeCacheManagement() {
     checkForUpdates()
   }, 2000)
 
-  console.log('[CacheManagement] Update checking enabled with subtle notifications')
 
-  console.log('[CacheManagement] Cache management initialized')
 }

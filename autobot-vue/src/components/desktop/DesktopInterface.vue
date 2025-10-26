@@ -86,7 +86,6 @@ const loadVncUrl = async () => {
   try {
     const dynamicVncUrl = await appConfig.getVncUrl('desktop');
     vncUrl.value = dynamicVncUrl;
-    console.log('[DesktopInterface] Loaded dynamic VNC URL:', dynamicVncUrl);
     // Clear any previous errors and update status
     error.value = null;
     loading.value = false;
@@ -203,7 +202,6 @@ const checkConnection = async () => {
 
 // UnifiedLoadingView event handlers
 const handleDesktopConnected = () => {
-  console.log('[DesktopInterface] Desktop connection established')
   loading.value = false
   connectionStatus.value = 'Connected'
 }

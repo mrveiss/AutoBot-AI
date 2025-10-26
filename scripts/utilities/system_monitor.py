@@ -324,7 +324,7 @@ class AutoBotMonitor:
         try:
             import openvino
             from openvino.runtime import Core
-from src.constants import NetworkConstants, ServiceURLs
+            from src.constants import NetworkConstants, ServiceURLs
 
             core = Core()
             services["openvino"] = {

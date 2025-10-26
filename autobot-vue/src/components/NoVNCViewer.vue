@@ -237,7 +237,6 @@ const connectionStatusText = computed(() => {
 
 // Methods
 const onIframeLoad = async () => {
-  console.log('NoVNC iframe loaded successfully')
 
   // Small delay to ensure VNC has time to establish connection
   setTimeout(async () => {
@@ -355,7 +354,6 @@ const clearServiceStatus = () => {
 }
 
 const refreshViewer = async () => {
-  console.log('Refreshing NoVNC viewer...')
   isRefreshing.value = true
   isLoading.value = true
   connectionError.value = false
@@ -394,7 +392,6 @@ const refreshViewer = async () => {
 }
 
 const retryConnection = () => {
-  console.log('Retrying NoVNC connection...')
   isRetrying.value = true
   loadingMessage.value = 'Attempting to reconnect...'
 
@@ -440,7 +437,6 @@ const handleFullscreenChange = () => {
 
 // UnifiedLoadingView event handlers
 const handleVNCConnected = () => {
-  console.log('[NoVNCViewer] VNC connection established')
   isLoading.value = false
   connectionError.value = false
   errorDetails.value = ''
@@ -482,8 +478,6 @@ onMounted(async () => {
     vncHost.value = backendConfig?.services?.vnc?.desktop?.host || backendConfig?.vnc?.host || NetworkConstants.MAIN_MACHINE_IP
     vncPort.value = backendConfig?.services?.vnc?.desktop?.port || backendConfig?.vnc?.port || NetworkConstants.VNC_DESKTOP_PORT
 
-    console.log(`VNC configuration loaded: ${vncHost.value}:${vncPort.value}`)
-    console.log(`VNC URL: ${novncUrl.value}`)
   } catch (error) {
     console.warn('Failed to load VNC configuration from appConfig:', error)
     // Fallback values will be used
