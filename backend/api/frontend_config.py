@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 from backend.services.config_service import ConfigService
 from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PathConstants
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -23,6 +24,11 @@ async def get_frontend_config():
 
         # Extract frontend-relevant configuration
         frontend_config = {
+            "project": {
+                "root_path": str(PathConstants.PROJECT_ROOT),
+                "name": "AutoBot",
+                "version": "1.5.0"
+            },
             "api": {
                 "base_url": full_config.get("backend", {}).get(
                     "host", backend_config.get("host")
@@ -76,6 +82,50 @@ async def get_frontend_config():
                     "chunk_loading", True
                 ),
             },
+            "hosts": [
+                {
+                    "id": "main",
+                    "name": "Main (WSL Backend)",
+                    "ip": NetworkConstants.MAIN_MACHINE_IP,
+                    "port": NetworkConstants.BACKEND_PORT,
+                    "description": "Main backend server on WSL"
+                },
+                {
+                    "id": "frontend",
+                    "name": "VM1 (Frontend)",
+                    "ip": NetworkConstants.FRONTEND_VM_IP,
+                    "port": NetworkConstants.FRONTEND_PORT,
+                    "description": "Frontend web interface server"
+                },
+                {
+                    "id": "npu-worker",
+                    "name": "VM2 (NPU Worker)",
+                    "ip": NetworkConstants.NPU_WORKER_VM_IP,
+                    "port": NetworkConstants.NPU_WORKER_PORT,
+                    "description": "Hardware AI acceleration worker"
+                },
+                {
+                    "id": "redis",
+                    "name": "VM3 (Redis)",
+                    "ip": NetworkConstants.REDIS_VM_IP,
+                    "port": NetworkConstants.REDIS_PORT,
+                    "description": "Redis data layer server"
+                },
+                {
+                    "id": "ai-stack",
+                    "name": "VM4 (AI Stack)",
+                    "ip": NetworkConstants.AI_STACK_VM_IP,
+                    "port": NetworkConstants.AI_STACK_PORT,
+                    "description": "AI processing stack server"
+                },
+                {
+                    "id": "browser",
+                    "name": "VM5 (Browser)",
+                    "ip": NetworkConstants.BROWSER_VM_IP,
+                    "port": NetworkConstants.BROWSER_SERVICE_PORT,
+                    "description": "Web automation browser server"
+                }
+            ],
         }
 
         logger.info("Frontend configuration provided successfully")
@@ -98,6 +148,11 @@ async def get_frontend_config():
         )
 
         default_config = {
+            "project": {
+                "root_path": str(PathConstants.PROJECT_ROOT),
+                "name": "AutoBot",
+                "version": "1.5.0"
+            },
             "api": {
                 "base_url": backend_config.get("host"),
                 "port": backend_config.get("port"),
@@ -131,6 +186,50 @@ async def get_frontend_config():
                 "lazy_loading": performance_config.get("lazy_loading", True),
                 "chunk_loading": performance_config.get("chunk_loading", True),
             },
+            "hosts": [
+                {
+                    "id": "main",
+                    "name": "Main (WSL Backend)",
+                    "ip": NetworkConstants.MAIN_MACHINE_IP,
+                    "port": NetworkConstants.BACKEND_PORT,
+                    "description": "Main backend server on WSL"
+                },
+                {
+                    "id": "frontend",
+                    "name": "VM1 (Frontend)",
+                    "ip": NetworkConstants.FRONTEND_VM_IP,
+                    "port": NetworkConstants.FRONTEND_PORT,
+                    "description": "Frontend web interface server"
+                },
+                {
+                    "id": "npu-worker",
+                    "name": "VM2 (NPU Worker)",
+                    "ip": NetworkConstants.NPU_WORKER_VM_IP,
+                    "port": NetworkConstants.NPU_WORKER_PORT,
+                    "description": "Hardware AI acceleration worker"
+                },
+                {
+                    "id": "redis",
+                    "name": "VM3 (Redis)",
+                    "ip": NetworkConstants.REDIS_VM_IP,
+                    "port": NetworkConstants.REDIS_PORT,
+                    "description": "Redis data layer server"
+                },
+                {
+                    "id": "ai-stack",
+                    "name": "VM4 (AI Stack)",
+                    "ip": NetworkConstants.AI_STACK_VM_IP,
+                    "port": NetworkConstants.AI_STACK_PORT,
+                    "description": "AI processing stack server"
+                },
+                {
+                    "id": "browser",
+                    "name": "VM5 (Browser)",
+                    "ip": NetworkConstants.BROWSER_VM_IP,
+                    "port": NetworkConstants.BROWSER_SERVICE_PORT,
+                    "description": "Web automation browser server"
+                }
+            ],
         }
         logger.warning(f"Returning default frontend config due to error: {str(e)}")
         return default_config

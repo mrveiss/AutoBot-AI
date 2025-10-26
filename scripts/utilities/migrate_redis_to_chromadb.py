@@ -40,7 +40,7 @@ from chromadb.config import Settings as ChromaSettings
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.knowledge_base_v2 import KnowledgeBaseV2
+from src.knowledge_base import KnowledgeBase
 
 # Configure logging
 logging.basicConfig(
@@ -90,7 +90,7 @@ class RedisToChromaDBMigration:
 
         # Initialize Redis knowledge base (source)
         logger.info("Connecting to Redis...")
-        self.redis_kb = KnowledgeBaseV2()
+        self.redis_kb = KnowledgeBase()
         success = await self.redis_kb.initialize()
         if not success:
             raise RuntimeError("Failed to initialize Redis knowledge base")

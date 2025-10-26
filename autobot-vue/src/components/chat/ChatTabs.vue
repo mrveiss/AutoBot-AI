@@ -1,5 +1,5 @@
 <template>
-  <div class="sticky top-0 z-10 flex border-b border-gray-200 bg-white flex-shrink-0 overflow-x-auto">
+  <div class="z-10 flex border-b border-gray-200 bg-white flex-shrink-0 overflow-x-auto">
     <button
       v-for="tab in tabs"
       :key="tab.key"

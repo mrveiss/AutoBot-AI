@@ -877,6 +877,6 @@ async def main():
 
 if __name__ == "__main__":
     import sys
-from src.constants import NetworkConstants, ServiceURLs
+    from src.constants import NetworkConstants, ServiceURLs
 
     sys.exit(asyncio.run(main()))

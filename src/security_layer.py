@@ -15,7 +15,17 @@ class SecurityLayer:
     def __init__(self):
         # Use centralized config manager instead of direct file loading
         self.security_config = global_config_manager.get("security_config", {})
-        self.enable_auth = self.security_config.get("enable_auth", False)
+
+        # Check for single-user mode (development/personal use)
+        self.single_user_mode = os.getenv("AUTOBOT_SINGLE_USER_MODE", "true").lower() in ["true", "1", "yes"]
+
+        # If single-user mode is enabled, disable all authentication
+        if self.single_user_mode:
+            self.enable_auth = False
+            print("🔓 Single-user mode enabled - authentication disabled")
+        else:
+            self.enable_auth = self.security_config.get("enable_auth", False)
+
         self.audit_log_file = self.security_config.get(
             "audit_log_file", os.getenv("AUTOBOT_AUDIT_LOG_FILE", "data/audit.log")
         )
@@ -135,7 +145,15 @@ class SecurityLayer:
                 "allow_kb_read",
                 "allow_kb_write",
             ],
-            "guest": ["files.view"],  # Very limited access
+            "guest": [
+                "files.view",
+                "files.download",
+                "files.upload",
+                "files.create",
+                "files.delete",
+                "allow_goal_submission",
+                "allow_kb_read",
+            ],  # Development mode - permissive guest access
         }
 
         return default_role_permissions.get(user_role, [])

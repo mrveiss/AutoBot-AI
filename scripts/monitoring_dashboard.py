@@ -129,7 +129,7 @@ class AutoBotMonitor:
         # Test command validator if available
         try:
             from src.security.command_validator import get_command_validator
-from src.constants import NetworkConstants, ServiceURLs
+            from src.constants import NetworkConstants, ServiceURLs
             validator = get_command_validator()
             
             # Quick functionality test

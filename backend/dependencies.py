@@ -51,7 +51,7 @@ def get_knowledge_base(config: UnifiedConfigManager = Depends(get_config)):
     Returns:
         KnowledgeBase: Knowledge base instance configured with the provided config
     """
-    from src.knowledge_base_v2 import KnowledgeBaseV2 as KnowledgeBase
+    from src.knowledge_base import KnowledgeBase as KnowledgeBase
 
     return KnowledgeBase()
 
@@ -159,7 +159,7 @@ def get_cached_knowledge_base(config: UnifiedConfigManager = Depends(get_config)
     Returns:
         KnowledgeBase: Cached knowledge base instance
     """
-    from src.knowledge_base_v2 import KnowledgeBaseV2 as KnowledgeBase
+    from src.knowledge_base import KnowledgeBase as KnowledgeBase
 
     return dependency_cache.get_or_create("knowledge_base", lambda: KnowledgeBase())
 

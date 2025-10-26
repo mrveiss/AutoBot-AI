@@ -87,10 +87,8 @@ onMounted(async () => {
 const testSettingsPanel = async () => {
   try {
     settingsPanelError.value = null
-    console.log('Testing SettingsPanel import...')
     
     const SettingsPanel = await import('@/components/SettingsPanel.vue')
-    console.log('✅ SettingsPanel imported successfully:', SettingsPanel)
     
   } catch (error) {
     console.error('❌ SettingsPanel import failed:', error)

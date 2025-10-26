@@ -29,7 +29,6 @@ export class CacheManager {
    * Clear all browser caches comprehensively
    */
   public async clearAllCaches(): Promise<void> {
-    console.log('[AutoBot CacheManager] Starting comprehensive cache clear...');
     
     const clearPromises: Promise<void>[] = [];
     
@@ -58,13 +57,11 @@ export class CacheManager {
         await Promise.all(
           cacheNames.map(name => caches.delete(name))
         );
-        console.log('[AutoBot CacheManager] Browser caches cleared');
       } catch (error) {
         console.warn('[AutoBot CacheManager] Failed to clear browser caches:', error);
       }
     }
     
-    console.log('[AutoBot CacheManager] Comprehensive cache clear completed');
   }
   
   /**
@@ -93,7 +90,6 @@ export class CacheManager {
         localStorage.setItem(key, value);
       });
       
-      console.log('[AutoBot CacheManager] localStorage cleared (with preservation)');
     } catch (error) {
       console.warn('[AutoBot CacheManager] Failed to clear localStorage:', error);
     }
@@ -105,7 +101,6 @@ export class CacheManager {
   public async clearSessionStorage(): Promise<void> {
     try {
       sessionStorage.clear();
-      console.log('[AutoBot CacheManager] sessionStorage cleared');
     } catch (error) {
       console.warn('[AutoBot CacheManager] Failed to clear sessionStorage:', error);
     }
@@ -133,7 +128,6 @@ export class CacheManager {
         });
       
       await Promise.all(deletePromises);
-      console.log('[AutoBot CacheManager] IndexedDB cleared');
     } catch (error) {
       console.warn('[AutoBot CacheManager] Failed to clear IndexedDB:', error);
     }
@@ -162,7 +156,6 @@ export class CacheManager {
         );
         
         await clearPromise;
-        console.log('[AutoBot CacheManager] Service worker caches cleared');
       }
     } catch (error) {
       console.warn('[AutoBot CacheManager] Failed to clear service worker caches:', error);
@@ -190,7 +183,6 @@ export class CacheManager {
         }
       });
       
-      console.log('[AutoBot CacheManager] API caches cleared');
     } catch (error) {
       console.warn('[AutoBot CacheManager] Failed to clear API caches:', error);
     }
@@ -269,7 +261,6 @@ export class CacheManager {
    * Force hard refresh of the page
    */
   public forceHardRefresh(): void {
-    console.log('[AutoBot CacheManager] Forcing hard refresh...');
     
     // Clear caches before refresh
     this.clearAllCaches().then(() => {
@@ -284,18 +275,15 @@ export class CacheManager {
    * Initialize cache management on app startup
    */
   public async initialize(): Promise<void> {
-    console.log('[AutoBot CacheManager] Initializing cache management...');
     
     // Check if cache clearing is needed
     if (this.needsCacheClearing()) {
-      console.log('[AutoBot CacheManager] Cache clearing needed due to version change');
       await this.clearAllCaches();
       this.updateBuildVersion();
     }
     
     // Log cache stats
     const stats = await this.getCacheStats();
-    console.log('[AutoBot CacheManager] Cache stats:', stats);
   }
 }
 

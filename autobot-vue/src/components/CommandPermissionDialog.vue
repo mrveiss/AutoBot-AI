@@ -196,15 +196,11 @@ export default {
           return;
         }
 
-        console.log('[CommandPermissionDialog] Sending approval request:');
-        console.log('  Terminal Session ID:', props.terminalSessionId);
-        console.log('  Command:', props.command);
 
         // REFACTORED: Use AppConfig for dynamic API URL resolution
         const approvalUrl = await appConfig.getApiUrl(
           `/api/agent-terminal/sessions/${props.terminalSessionId}/approve`
         );
-        console.log('  URL:', approvalUrl);
 
         // Send approval using direct fetch
         const fetchResponse = await fetch(
@@ -224,8 +220,6 @@ export default {
         const data = await fetchResponse.json();
 
         // DEBUG: Log exact response to understand what we're getting
-        console.log('[CommandPermissionDialog] Approval API response:', JSON.stringify(data, null, 2));
-        console.log('[CommandPermissionDialog] Response status:', data.status);
         console.log('[CommandPermissionDialog] Status check result:', {
           isApproved: data.status === 'approved',
           isSuccess: data.status === 'success',
@@ -234,7 +228,6 @@ export default {
 
         // CRITICAL FIX: Backend returns "approved" status, not "success"
         if (data.status === 'approved' || data.status === 'success') {
-          console.log('[CommandPermissionDialog] ✅ Status matched - closing dialog');
           emit('approved', {
             command: props.command,
             result: data,

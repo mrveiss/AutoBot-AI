@@ -36,7 +36,7 @@ from datetime import datetime
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.knowledge_base_v2 import KnowledgeBaseV2
+from src.knowledge_base import KnowledgeBase
 
 # Configure logging
 logging.basicConfig(
@@ -382,7 +382,7 @@ async def index_all_documentation(
     logger.info("Starting documentation indexing...")
 
     # Initialize knowledge base
-    kb = KnowledgeBaseV2()
+    kb = KnowledgeBase()
     await kb.initialize()
 
     if not kb.initialized:

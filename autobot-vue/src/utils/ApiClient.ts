@@ -102,7 +102,6 @@ export class ApiClient {
   // POST request
   async post(endpoint: string, data?: any, options: RequestOptions = {}): Promise<ApiResponse> {
     const result = await this.request(endpoint, { method: 'POST', body: data, ...options });
-    console.log('[ApiClient.post] Returning:', typeof result, 'Has json?:', typeof result.json, 'Result:', result);
     return result;
   }
 

@@ -64,11 +64,11 @@ const getPathUpTo = (index: number): string => {
 
 <style scoped>
 .path-navigation {
-  @apply bg-gray-50 border rounded-lg p-4 mb-4;
+  @apply bg-gray-50 border rounded-lg p-4 mb-4 flex flex-wrap items-center gap-4;
 }
 
 .breadcrumb {
-  @apply flex items-center flex-wrap gap-1 mb-3;
+  @apply flex items-center flex-wrap gap-1 flex-1 min-w-0;
 }
 
 .breadcrumb-item {
@@ -84,7 +84,7 @@ const getPathUpTo = (index: number): string => {
 }
 
 .path-input {
-  @apply flex gap-2;
+  @apply flex gap-2 flex-shrink-0;
 }
 
 .path-field {

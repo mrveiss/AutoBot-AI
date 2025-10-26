@@ -102,7 +102,6 @@ class RumAgent {
   }
 
   private initialize(): void {
-    console.log('🔍 RUM Agent initialized for session:', this.sessionId)
     
     this.monitorPagePerformance()
     this.monitorResourceTimings()
@@ -148,7 +147,6 @@ class RumAgent {
     } else if (isSlow) {
       console.warn('⚠️ SLOW API:', apiCall)
     } else {
-      console.log('✅ API Call:', `${method} ${url} - ${duration}ms`)
     }
     
     return apiCall
@@ -168,7 +166,6 @@ class RumAgent {
     if (event === 'error' || event === 'close') {
       console.warn('🔌 WebSocket Issue:', wsEvent)
     } else {
-      console.log('🔌 WebSocket:', event, data)
     }
   }
 
@@ -185,7 +182,6 @@ class RumAgent {
     }
     
     this.metrics.userInteractions.push(interaction)
-    console.log('👆 User Interaction:', interaction)
   }
 
   // Error Monitoring
@@ -243,7 +239,6 @@ class RumAgent {
             firstPaint: this.getFirstPaint(),
             timestamp: new Date().toISOString()
           }
-          console.log('📊 Page Performance:', this.metrics.pageMetrics)
         }
       }, 0)
     })
@@ -281,7 +276,6 @@ class RumAgent {
       ...data
     }
     
-    console.log('📈 Metric:', metric)
     return metric
   }
 
@@ -335,7 +329,6 @@ class RumAgent {
       ]
     }
     
-    console.log('📊 RUM Report:', report)
     
     const reports = JSON.parse(localStorage.getItem('rum_reports') || '[]')
     reports.push(report)
@@ -376,13 +369,11 @@ class RumAgent {
   enable(): void {
     this.isEnabled = true
     localStorage.setItem('rum_enabled', 'true')
-    console.log('🔍 RUM Agent enabled')
   }
 
   disable(): void {
     this.isEnabled = false
     localStorage.removeItem('rum_enabled')
-    console.log('🔍 RUM Agent disabled')
   }
 
   clear(): void {
@@ -397,7 +388,6 @@ class RumAgent {
     }
     localStorage.removeItem('rum_reports')
     localStorage.removeItem('rum_critical_issues')
-    console.log('🧹 RUM data cleared')
   }
 }
 

@@ -317,7 +317,6 @@ const connectTerminal = async () => {
     let backendSession = null
 
     if (props.chatSessionId) {
-      console.log(`[ChatTerminal] Checking for existing agent terminal session for chat ${props.chatSessionId}`)
 
       // REFACTORED: Use AppConfig for dynamic API URL resolution
       const queryUrl = await appConfig.getApiUrl(
@@ -331,7 +330,6 @@ const connectTerminal = async () => {
         const existingSession = queryData.sessions[0]
         backendSession = existingSession.session_id
         const ptySession = existingSession.pty_session_id
-        console.log(`[ChatTerminal] Using existing agent terminal session: ${backendSession}, PTY: ${ptySession}`)
         if (terminal.value) {
           terminal.value.writeln(`\x1b[1;36mConnected to existing terminal session ${backendSession}\x1b[0m`)
         }
@@ -342,7 +340,6 @@ const connectTerminal = async () => {
 
     // Create new session if not found
     if (!backendSession) {
-      console.log(`[ChatTerminal] Creating new agent terminal session for chat ${props.chatSessionId || 'system'}`)
 
       // REFACTORED: Use AppConfig for dynamic API URL resolution
       const createUrl = await appConfig.getApiUrl('/api/agent-terminal/sessions')
@@ -363,7 +360,6 @@ const connectTerminal = async () => {
       const createData = await createResponse.json()
       backendSession = createData.session_id
       const ptySession = createData.pty_session_id
-      console.log(`[ChatTerminal] Created new agent terminal session: ${backendSession}, PTY: ${ptySession}`)
       if (terminal.value) {
         terminal.value.writeln(`\x1b[1;32mCreated new terminal session ${backendSession}\x1b[0m`)
       }
@@ -375,7 +371,6 @@ const connectTerminal = async () => {
 
     // CRITICAL: Use PTY session ID for WebSocket, NOT agent terminal session ID
     const wsSessionId = ptySessionId.value || backendSession
-    console.log('[ChatTerminal] WebSocket will connect to:', wsSessionId)
 
     console.log('[ChatTerminal] Session IDs:', {
       frontend: sessionId.value,
@@ -396,7 +391,6 @@ const connectTerminal = async () => {
         }
       },
       onPromptChange: (prompt: string) => {
-        console.log('[ChatTerminal] Prompt changed:', prompt)
       },
       onStatusChange: (status: string) => {
         terminalStore.updateSessionStatus(sessionId.value, status as any)

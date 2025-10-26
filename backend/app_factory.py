@@ -45,6 +45,7 @@ from backend.dependencies import get_config, get_knowledge_base
 from backend.knowledge_factory import get_or_create_knowledge_base
 from src.chat_history_manager import ChatHistoryManager
 from src.chat_workflow_manager import ChatWorkflowManager
+from src.security_layer import SecurityLayer
 from src.unified_config_manager import UnifiedConfigManager
 from src.utils.background_llm_sync import BackgroundLLMSync
 
@@ -710,6 +711,17 @@ class AppFactory:
         @asynccontextmanager
         async def lifespan(app: FastAPI):
             """Application lifespan manager with critical and background initialization"""
+
+            # Configure logging level from environment variable
+            LOG_LEVEL = os.getenv("AUTOBOT_LOG_LEVEL", "INFO").upper()
+            LOG_LEVEL_VALUE = getattr(logging, LOG_LEVEL, logging.INFO)
+            logging.root.setLevel(LOG_LEVEL_VALUE)
+
+            # Set level for all backend loggers
+            for logger_name in ["backend", "backend.api", "backend.api.codebase_analytics"]:
+                logging.getLogger(logger_name).setLevel(LOG_LEVEL_VALUE)
+
+            logger.info(f"📊 Logging level set to: {LOG_LEVEL} ({LOG_LEVEL_VALUE})")
             logger.info("🚀 AutoBot Backend starting up...")
 
             # ================================================================
@@ -724,6 +736,13 @@ class AppFactory:
                 app.state.config = config
                 app_state["config"] = config
                 logger.info("✅ [ 10%] Config: Configuration loaded successfully")
+
+                # Initialize Security Layer - CRITICAL
+                logger.info("✅ [ 15%] Security: Initializing security layer...")
+                security_layer = SecurityLayer()
+                app.state.security_layer = security_layer
+                app_state["security_layer"] = security_layer
+                logger.info("✅ [ 15%] Security: Security layer initialized successfully")
 
                 # Initialize Redis Stack - CRITICAL (but with graceful degradation)
                 logger.info(

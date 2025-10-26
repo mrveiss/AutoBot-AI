@@ -250,6 +250,7 @@ class AgentTerminalService:
                 "created_at": session.created_at,
                 "last_activity": session.last_activity,
                 "metadata": session.metadata,
+                "pty_session_id": session.pty_session_id,  # CRITICAL: Store PTY session ID
             }
 
             import json
@@ -258,9 +259,52 @@ class AgentTerminalService:
         except Exception as e:
             logger.error(f"Failed to persist session to Redis: {e}")
 
+    async def _save_command_to_chat(
+        self, conversation_id: str, command: str, result: dict, command_type: str = "agent"
+    ):
+        """
+        Save command and output to chat history.
+
+        Args:
+            conversation_id: Chat session ID
+            command: Command that was executed
+            result: Command execution result with stdout/stderr
+            command_type: Type of command ("agent" or "approved")
+        """
+        if not conversation_id:
+            return
+
+        try:
+            logger.warning(f"[CHAT INTEGRATION] Saving {command_type} command to chat: {command[:50]}")
+
+            # Save command
+            await self.chat_history_manager.add_message(
+                sender="agent_terminal",
+                text=f"$ {command}",
+                message_type="terminal_command",
+                session_id=conversation_id,
+            )
+
+            # Save output (if any)
+            if result.get("stdout") or result.get("stderr"):
+                output_text = (result.get("stdout", "") + result.get("stderr", "")).strip()
+                if output_text:
+                    await self.chat_history_manager.add_message(
+                        sender="agent_terminal",
+                        text=output_text,
+                        message_type="terminal_output",
+                        session_id=conversation_id,
+                    )
+
+            logger.warning(f"[CHAT INTEGRATION] {command_type.capitalize()} command saved to chat successfully")
+        except Exception as e:
+            logger.error(f"[EXCEPTION] Failed to save {command_type} command to chat: {e}")
+            import traceback
+            logger.error(f"[EXCEPTION] Traceback: {traceback.format_exc()}")
+
     async def get_session(self, session_id: str) -> Optional[AgentTerminalSession]:
         """
-        Get session by ID.
+        Get session by ID. Checks memory first, then loads from Redis if needed.
 
         Args:
             session_id: Session identifier
@@ -268,7 +312,55 @@ class AgentTerminalService:
         Returns:
             Session if found, None otherwise
         """
-        return self.sessions.get(session_id)
+        # Fast path: check in-memory sessions first
+        session = self.sessions.get(session_id)
+        if session:
+            return session
+
+        # Slow path: try loading from Redis if available
+        if self.redis_client:
+            try:
+                import json
+
+                key = f"agent_terminal:session:{session_id}"
+                session_json = await asyncio.wait_for(
+                    self.redis_client.get(key), timeout=2.0
+                )
+
+                if session_json:
+                    session_data = json.loads(session_json)
+
+                    # Reconstruct session object from Redis data
+                    from .agent_terminal_session import AgentRole, SessionState
+
+                    session = AgentTerminalSession(
+                        session_id=session_data["session_id"],
+                        agent_id=session_data["agent_id"],
+                        agent_role=AgentRole(session_data["agent_role"]),
+                        conversation_id=session_data.get("conversation_id"),
+                        host=session_data.get("host"),
+                        metadata=session_data.get("metadata", {}),
+                        pty_session_id=session_data.get("pty_session_id"),
+                    )
+
+                    # Restore session state
+                    session.state = SessionState(session_data["state"])
+                    session.created_at = session_data["created_at"]
+                    session.last_activity = session_data["last_activity"]
+
+                    # Add back to memory cache
+                    self.sessions[session_id] = session
+
+                    logger.info(f"Loaded session {session_id} from Redis persistence")
+                    return session
+
+            except asyncio.TimeoutError:
+                logger.warning(f"Redis timeout loading session {session_id}")
+            except Exception as e:
+                logger.error(f"Failed to load session from Redis: {e}")
+
+        # Session not found in memory or Redis
+        return None
 
     async def list_sessions(
         self,
@@ -649,31 +741,13 @@ class AgentTerminalService:
                     user_id=None,
                 )
 
-            # CRITICAL FIX: Save command and output to chat messages
-            logger.warning(f"[DEBUG] About to save to chat - conversation_id: {session.conversation_id}, chat_history_manager: {self.chat_history_manager is not None}")
-            if session.conversation_id:
-                try:
-                    logger.info(f"[CHAT INTEGRATION] Saving agent command to chat: {command[:50]}")
-                    # Save command
-                    await self.chat_history_manager.add_message(
-                        sender="agent_terminal",
-                        text=f"$ {command}",
-                        message_type="terminal_command",
-                        session_id=session.conversation_id,
-                    )
-                    # Save output (if any)
-                    if result.get("stdout") or result.get("stderr"):
-                        output_text = (result.get("stdout", "") + result.get("stderr", "")).strip()
-                        if output_text:
-                            await self.chat_history_manager.add_message(
-                                sender="agent_terminal",
-                                text=output_text,
-                                message_type="terminal_output",
-                                session_id=session.conversation_id,
-                            )
-                    logger.info(f"[CHAT INTEGRATION] Agent command saved to chat successfully")
-                except Exception as e:
-                    logger.error(f"Failed to save agent command to chat: {e}")
+            # Save command and output to chat history
+            await self._save_command_to_chat(
+                session.conversation_id, command, result, command_type="agent"
+            )
+
+            # NOTE: PTY session automatically sends output to terminal WebSocket via _read_pty_output()
+            # No manual send needed - PTY handles it!
 
             # Add to command history
             session.command_history.append(
@@ -816,30 +890,13 @@ class AgentTerminalService:
                         user_id=user_id,
                     )
 
-                # CRITICAL FIX: Save command and output to chat messages
-                if session.conversation_id:
-                    try:
-                        logger.info(f"[CHAT INTEGRATION] Saving approved command to chat: {command[:50]}")
-                        # Save command
-                        await self.chat_history_manager.add_message(
-                            sender="agent_terminal",
-                            text=f"$ {command}",
-                            message_type="terminal_command",
-                            session_id=session.conversation_id,
-                        )
-                        # Save output (if any)
-                        if result.get("stdout") or result.get("stderr"):
-                            output_text = (result.get("stdout", "") + result.get("stderr", "")).strip()
-                            if output_text:
-                                await self.chat_history_manager.add_message(
-                                    sender="agent_terminal",
-                                    text=output_text,
-                                    message_type="terminal_output",
-                                    session_id=session.conversation_id,
-                                )
-                        logger.info(f"[CHAT INTEGRATION] Approved command saved to chat successfully")
-                    except Exception as e:
-                        logger.error(f"Failed to save approved command to chat: {e}")
+                # Save command and output to chat history
+                await self._save_command_to_chat(
+                    session.conversation_id, command, result, command_type="approved"
+                )
+
+                # NOTE: PTY session automatically sends output to terminal WebSocket via _read_pty_output()
+                # No manual send needed - PTY handles it!
 
                 # Add to command history
                 session.command_history.append(

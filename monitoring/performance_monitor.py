@@ -131,16 +131,15 @@ class PerformanceMonitor:
         )
     
     async def initialize_redis_connection(self):
-        """Initialize Redis connection for metrics storage."""
+        """Initialize Redis connection for metrics storage using canonical utility."""
         try:
-            self.redis_client = redis.Redis(
-                host=VMS['redis'], 
-                port=6379, 
-                db=4,  # Metrics database
-                decode_responses=True,
-                socket_timeout=5.0,
-                socket_connect_timeout=5.0
-            )
+            # Use canonical Redis utility following CLAUDE.md "🔴 REDIS CLIENT USAGE" policy
+            from src.utils.redis_client import get_redis_client
+
+            self.redis_client = get_redis_client(database="metrics")
+            if self.redis_client is None:
+                raise Exception("Redis client initialization returned None")
+
             # Test connection
             self.redis_client.ping()
             self.logger.info("✅ Redis connection established for metrics storage")

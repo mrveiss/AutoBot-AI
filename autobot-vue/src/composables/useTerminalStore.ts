@@ -89,7 +89,6 @@ async function loadHostsFromBackend(): Promise<void> {
     if (config?.hosts && Array.isArray(config.hosts)) {
       // Backend provided host configuration
       AVAILABLE_HOSTS = config.hosts
-      console.log('Loaded host configuration from backend:', AVAILABLE_HOSTS.length, 'hosts')
     } else {
       console.warn('Backend config does not contain hosts array, using defaults')
     }

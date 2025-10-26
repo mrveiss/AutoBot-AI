@@ -1033,7 +1033,6 @@ const refreshConnectionStatus = async () => {
 
 const validatePath = async (pathKey: string) => {
   // Placeholder for path validation
-  console.log(`Validating path for ${pathKey}`)
 }
 
 const testLLMConnection = async () => {
@@ -1042,7 +1041,6 @@ const testLLMConnection = async () => {
   isTestingLLM.value = true
   try {
     // Test LLM connection based on current provider
-    console.log('Testing LLM connection...')
     // Implement actual LLM testing logic
   } finally {
     isTestingLLM.value = false
@@ -1054,7 +1052,6 @@ const refreshLLMModels = async () => {
 
   isRefreshingLLMModels.value = true
   try {
-    console.log('Refreshing LLM models...')
     // Implement model refresh logic
   } finally {
     setTimeout(() => {
@@ -1064,19 +1061,15 @@ const refreshLLMModels = async () => {
 }
 
 const testOllamaConnection = async () => {
-  console.log('Testing Ollama connection...')
 }
 
 const testLMStudioConnection = async () => {
-  console.log('Testing LM Studio connection...')
 }
 
 const testOpenAIConnection = async () => {
-  console.log('Testing OpenAI connection...')
 }
 
 const testAnthropicConnection = async () => {
-  console.log('Testing Anthropic connection...')
 }
 
 const testEmbeddingConnection = async () => {
@@ -1084,14 +1077,12 @@ const testEmbeddingConnection = async () => {
 
   isTestingEmbedding.value = true
   try {
-    console.log('Testing embedding connection...')
   } finally {
     isTestingEmbedding.value = false
   }
 }
 
 const testEmbeddingEndpoint = async () => {
-  console.log('Testing embedding endpoint...')
 }
 
 // NEW: Hardware testing methods

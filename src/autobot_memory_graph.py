@@ -260,9 +260,9 @@ class AutoBotMemoryGraph:
     async def _init_knowledge_base(self):
         """Initialize Knowledge Base for embedding generation"""
         try:
-            from src.knowledge_base_v2 import KnowledgeBaseV2
+            from src.knowledge_base import KnowledgeBase
 
-            self.knowledge_base = KnowledgeBaseV2()
+            self.knowledge_base = KnowledgeBase()
             await self.knowledge_base.initialize()
 
             logger.info("Knowledge Base initialized for embedding generation")

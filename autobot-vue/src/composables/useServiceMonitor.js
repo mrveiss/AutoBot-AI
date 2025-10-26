@@ -98,11 +98,9 @@ export function useServiceMonitor() {
       isLoading.value = true
       error.value = null
 
-      console.log('[useServiceMonitor] Fetching service status from correct endpoint...')
-      // FIXED: Use correct endpoint /api/service-monitor/services/status
-      const data = await apiService.get('/api/service-monitor/services/status')
-      console.log('[useServiceMonitor] Service status response:', data)
-      console.log('[useServiceMonitor] Response type:', typeof data)
+      // FIXED: Use correct endpoint /api/service-monitor/services/status with increased timeout
+      // VM SSH checks can take 10-15 seconds, so we need a longer timeout
+      const data = await apiService.get('/api/service-monitor/services/status', { timeout: 30000 })
 
       // Backend returns data directly, not wrapped in success/data structure
       if (data && typeof data === 'object') {
@@ -114,7 +112,6 @@ export function useServiceMonitor() {
         lastCheck.value = new Date()
 
         // Log status for debugging
-        console.log(`[useServiceMonitor] ${serviceSummary.value.online}/${serviceSummary.value.total} services online`)
 
       } else {
         console.error('[useServiceMonitor] Invalid response data:', data)
@@ -147,15 +144,13 @@ export function useServiceMonitor() {
   // Quick health check (lighter weight) with graceful fallbacks
   const fetchHealthCheck = async () => {
     try {
-      console.log('[useServiceMonitor] Performing graceful health check...')
 
-      // FIXED: Use correct endpoint with graceful fallback
+      // FIXED: Use correct endpoint with graceful fallback and increased timeout
       // Old: '/api/services/health' -> New: '/api/service-monitor/services/health'
-      const response = await apiEndpointMapper.fetchWithFallback('/api/service-monitor/services/health', { timeout: 8000 })
+      const response = await apiEndpointMapper.fetchWithFallback('/api/service-monitor/services/health', { timeout: 15000 })
       const data = await response.json()
 
       if (response.fallback) {
-        console.log('[useServiceMonitor] Using fallback data for health check')
       }
 
       if (data && typeof data === 'object') {
@@ -169,7 +164,6 @@ export function useServiceMonitor() {
         serviceSummary.value.error = healthData.errors || 0
         lastCheck.value = new Date()
 
-        console.log(`[useServiceMonitor] Health check complete: ${serviceSummary.value.online}/${serviceSummary.value.total} online, fallback: ${response.fallback}`)
       }
     } catch (err) {
       console.warn('[useServiceMonitor] Health check failed, using minimal fallback:', err.message)

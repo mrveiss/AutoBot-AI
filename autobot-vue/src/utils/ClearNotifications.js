@@ -10,12 +10,10 @@ export function clearAllSystemNotifications() {
   try {
     const appStore = useAppStore()
 
-    console.log('[ClearNotifications] Current notifications:', appStore.systemNotifications?.length || 0)
 
     // Clear all notifications
     if (appStore && typeof appStore.clearAllNotifications === 'function') {
       appStore.clearAllNotifications()
-      console.log('[ClearNotifications] All system notifications cleared')
     }
 
     // Reset backend status to healthy to prevent recreation
@@ -24,7 +22,6 @@ export function clearAllSystemNotifications() {
         text: 'Connected',
         class: 'success'
       })
-      console.log('[ClearNotifications] Backend status reset to healthy')
     }
 
     return true
@@ -44,7 +41,6 @@ export function resetHealthMonitor() {
           websocket: 0,
           router: 0
         }
-        console.log('[ClearNotifications] Health monitor consecutive failures reset')
       }
 
       if (window.frontendHealthMonitor.healthStatus) {
@@ -56,7 +52,6 @@ export function resetHealthMonitor() {
           cache: 'healthy',
           websocket: 'healthy'
         }
-        console.log('[ClearNotifications] Health monitor status reset to healthy')
       }
     }
 
@@ -74,10 +69,6 @@ if (typeof window !== 'undefined') {
 
   // Auto-execute on import in development
   if (import.meta.env.DEV) {
-    console.log('[ClearNotifications] Notification clearing utilities loaded')
-    console.log('Available commands:')
-    console.log('- window.clearAllSystemNotifications()')
-    console.log('- window.resetHealthMonitor()')
   }
 }
 

@@ -174,6 +174,7 @@ class ConsolidatedTerminalWebSocket:
         # CRITICAL FIX: Output buffer for chat integration
         self._output_buffer = ""
         self._last_output_save_time = time.time()
+        self._output_lock = asyncio.Lock()  # Protect concurrent buffer access
 
         # Initialize TerminalLogger for persistent command logging
         if conversation_id:
@@ -369,6 +370,8 @@ class ConsolidatedTerminalWebSocket:
                 await self.send_message({"type": "pong", "timestamp": time.time()})
             elif message_type == "resize":
                 await self._handle_resize(message)
+            elif message_type == "signal":
+                await self._handle_signal_message(message)
             else:
                 logger.warning(f"Unknown message type: {message_type}")
 
@@ -589,6 +592,73 @@ class ConsolidatedTerminalWebSocket:
         except Exception as e:
             logger.error(f"Error resizing terminal: {e}")
 
+    async def _handle_signal_message(self, message: dict):
+        """Handle signal requests (SIGINT, SIGTERM, etc.)"""
+        signal_name = message.get("signal", "SIGINT")
+
+        try:
+            # Map signal names to signal numbers
+            import signal
+            signal_map = {
+                "SIGINT": signal.SIGINT,
+                "SIGTERM": signal.SIGTERM,
+                "SIGKILL": signal.SIGKILL,
+                "SIGHUP": signal.SIGHUP,
+            }
+
+            sig = signal_map.get(signal_name)
+            if not sig:
+                logger.warning(f"Unknown signal: {signal_name}")
+                await self.send_message({
+                    "type": "error",
+                    "content": f"Unknown signal: {signal_name}",
+                    "timestamp": time.time(),
+                })
+                return
+
+            # Send signal to PTY process
+            if self.pty_process:
+                success = self.pty_process.send_signal(sig)
+                if success:
+                    logger.info(f"Sent {signal_name} to PTY process")
+                    await self.send_message({
+                        "type": "signal_sent",
+                        "signal": signal_name,
+                        "timestamp": time.time(),
+                    })
+                else:
+                    logger.error(f"Failed to send {signal_name}")
+                    await self.send_message({
+                        "type": "error",
+                        "content": f"Failed to send signal: {signal_name}",
+                        "timestamp": time.time(),
+                    })
+            else:
+                logger.warning("No PTY process to send signal to")
+                await self.send_message({
+                    "type": "error",
+                    "content": "No active process to interrupt",
+                    "timestamp": time.time(),
+                })
+
+            if self.enable_logging:
+                self._log_command_activity(
+                    "signal_sent",
+                    {
+                        "signal": signal_name,
+                        "timestamp": datetime.now().isoformat(),
+                        "success": success if self.pty_process else False,
+                    },
+                )
+
+        except Exception as e:
+            logger.error(f"Error sending signal: {e}")
+            await self.send_message({
+                "type": "error",
+                "content": f"Error sending signal: {str(e)}",
+                "timestamp": time.time(),
+            })
+
     def _assess_command_risk(self, command: str) -> CommandRiskLevel:
         """Assess the security risk level of a command"""
         command_lower = command.lower().strip()
@@ -668,36 +738,39 @@ class ConsolidatedTerminalWebSocket:
                 logger.error(f"Failed to write terminal transcript: {e}")
 
         # CRITICAL FIX: Save output to chat (buffered to avoid too many messages)
+        # Protected by asyncio.Lock to prevent race conditions in concurrent scenarios
         if self.chat_history_manager and self.conversation_id and content:
-            # Accumulate output in buffer
-            self._output_buffer += content
-            current_time = time.time()
+            async with self._output_lock:
+                # Accumulate output in buffer
+                self._output_buffer += content
+                current_time = time.time()
 
-            # Save to chat when:
-            # 1. Buffer is large enough (>500 chars) OR
-            # 2. Enough time has passed (>2 seconds) OR
-            # 3. Output contains a newline (command completed)
-            should_save = (
-                len(self._output_buffer) > 500
-                or (current_time - self._last_output_save_time) > 2.0
-                or '\n' in content
-            )
+                # Save to chat when:
+                # 1. Buffer is large enough (>500 chars) OR
+                # 2. Enough time has passed (>2 seconds) OR
+                # 3. Output contains a newline (command completed)
+                should_save = (
+                    len(self._output_buffer) > 500
+                    or (current_time - self._last_output_save_time) > 2.0
+                    or '\n' in content
+                )
 
-            if should_save and self._output_buffer.strip():
-                try:
-                    logger.info(f"[CHAT INTEGRATION] Saving output to chat: {len(self._output_buffer)} chars")
-                    await self.chat_history_manager.add_message(
-                        sender="terminal",
-                        text=self._output_buffer,
-                        message_type="terminal_output",
-                        session_id=self.conversation_id,
-                    )
-                    # Reset buffer after saving
-                    self._output_buffer = ""
-                    self._last_output_save_time = current_time
-                    logger.info(f"[CHAT INTEGRATION] Output saved successfully")
-                except Exception as e:
-                    logger.error(f"Failed to save output to chat: {e}")
+                if should_save and self._output_buffer.strip():
+                    try:
+                        buffer_to_save = self._output_buffer
+                        logger.info(f"[CHAT INTEGRATION] Saving output to chat: {len(buffer_to_save)} chars")
+                        await self.chat_history_manager.add_message(
+                            sender="terminal",
+                            text=buffer_to_save,
+                            message_type="terminal_output",
+                            session_id=self.conversation_id,
+                        )
+                        # Reset buffer after saving
+                        self._output_buffer = ""
+                        self._last_output_save_time = current_time
+                        logger.info(f"[CHAT INTEGRATION] Output saved successfully")
+                    except Exception as e:
+                        logger.error(f"Failed to save output to chat: {e}")
 
         # Log output if security logging enabled
         if self.enable_logging and len(content.strip()) > 0:
@@ -749,10 +822,18 @@ class ConsolidatedTerminalManager:
         return False
 
     async def send_signal(self, session_id: str, sig: int) -> bool:
-        """Send signal to a session"""
+        """Send signal to a session's PTY process"""
         if session_id in self.active_connections:
-            # Implementation would depend on PTY process handling
-            return True
+            terminal = self.active_connections[session_id]
+            if terminal.pty_process:
+                try:
+                    success = terminal.pty_process.send_signal(sig)
+                    if success:
+                        logger.info(f"Sent signal {sig} to terminal session {session_id}")
+                    return success
+                except Exception as e:
+                    logger.error(f"Failed to send signal to session {session_id}: {e}")
+                    return False
         return False
 
     async def close_connection(self, session_id: str):
@@ -779,6 +860,33 @@ class ConsolidatedTerminalManager:
                 for entry in terminal.command_history
             ]
         return []
+
+    async def send_output_to_conversation(self, conversation_id: str, content: str) -> int:
+        """
+        Send output to all terminal WebSockets linked to a conversation.
+
+        Args:
+            conversation_id: The conversation ID to send output to
+            content: The output content to send
+
+        Returns:
+            Number of terminals that received the output
+
+        Note: This method is currently unused - PTY sessions handle terminal output automatically.
+        Kept for potential future use cases where manual output routing may be needed.
+        """
+        count = 0
+        for session_id, config in self.session_configs.items():
+            if config.get("conversation_id") == conversation_id:
+                if session_id in self.active_connections:
+                    terminal = self.active_connections[session_id]
+                    try:
+                        await terminal.send_output(content)
+                        count += 1
+                        logger.debug(f"Sent output to terminal {session_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to send output to terminal {session_id}: {e}")
+        return count
 
 
 # Global session manager

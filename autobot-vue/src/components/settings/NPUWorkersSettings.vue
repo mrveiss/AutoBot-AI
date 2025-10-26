@@ -753,7 +753,6 @@ const testWorker = async (worker: NPUWorker) => {
     const response = await axios.post(`/api/npu/workers/${worker.id}/test`)
 
     if (response.data.success) {
-      console.log(`Worker ${worker.name} test successful:`, response.data)
     } else {
       console.error(`Worker ${worker.name} test failed:`, response.data)
     }
@@ -875,7 +874,6 @@ const setupWebSocket = () => {
   }
 
   wsConnection.onclose = () => {
-    console.log('WebSocket connection closed, attempting to reconnect...')
     reconnectTimer = window.setTimeout(() => {
       setupWebSocket()
     }, 5000)

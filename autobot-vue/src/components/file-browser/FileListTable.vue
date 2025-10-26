@@ -58,9 +58,17 @@
                 <i class="fas fa-folder-open"></i>
               </button>
               <button
+                @click="$emit('rename-file', file)"
+                class="action-btn rename-btn"
+                aria-label="Rename"
+                title="Rename"
+              >
+                <i class="fas fa-edit"></i>
+              </button>
+              <button
                 @click="$emit('delete-file', file)"
                 class="action-btn delete-btn"
-                aria-label="Delete file"
+                aria-label="Delete"
                 title="Delete"
               >
                 <i class="fas fa-trash"></i>
@@ -102,6 +110,7 @@ interface Emits {
   (e: 'sort', field: string): void
   (e: 'navigate', path: string): void
   (e: 'view-file', file: FileItem): void
+  (e: 'rename-file', file: FileItem): void
   (e: 'delete-file', file: FileItem): void
 }
 
@@ -267,6 +276,10 @@ const formatDate = (dateString?: string): string => {
 
 .open-btn:hover {
   @apply text-green-600;
+}
+
+.rename-btn:hover {
+  @apply text-yellow-600;
 }
 
 .delete-btn:hover {

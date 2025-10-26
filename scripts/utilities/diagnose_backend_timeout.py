@@ -50,7 +50,7 @@ class BackendDiagnostic:
         try:
             logger.info("🌐 Testing TCP connection with telnet-like approach...")
             import socket
-from src.constants import NetworkConstants, ServiceURLs
+            from src.constants import NetworkConstants, ServiceURLs
 
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(5)

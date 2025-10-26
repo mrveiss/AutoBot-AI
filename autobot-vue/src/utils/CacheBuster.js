@@ -92,7 +92,6 @@ class CacheBuster {
                 await Promise.all(
                     cacheNames.map(cacheName => caches.delete(cacheName))
                 );
-                console.log('[CacheBuster] Cleared Cache API');
             }
 
             // Clear localStorage
@@ -111,7 +110,6 @@ class CacheBuster {
                 });
             }
 
-            console.log('[CacheBuster] All caches cleared');
         } catch (error) {
             console.error('[CacheBuster] Error clearing caches:', error);
         }
@@ -170,7 +168,6 @@ class CacheBuster {
     }
 
     async handleCachePoisoning() {
-        console.log('[CacheBuster] Handling cache poisoning...');
 
         // Clear all caches
         await this.clearAllCaches();
@@ -209,12 +206,10 @@ class CacheBuster {
 
                 // Check for stale responses
                 if (response.status === 304 || response.headers.get('x-cache') === 'HIT') {
-                    console.debug('[CacheBuster] Potential cached response detected');
                 }
 
                 // Reset connection error counter on successful response
                 if (this.connectionErrorCount > 0) {
-                    console.log(`[CacheBuster] Connection restored after ${this.connectionErrorCount} failed requests`);
                     this.connectionErrorCount = 0;
                 }
 
@@ -264,7 +259,6 @@ class CacheBuster {
         // Periodic cache health checks
         setInterval(() => this.detectCachePoisoning(), 60000); // Every minute
 
-        console.log('[CacheBuster] Initialized with build ID:', this.buildId);
     }
 }
 

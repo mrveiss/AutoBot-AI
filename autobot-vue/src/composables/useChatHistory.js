@@ -51,7 +51,6 @@ export function useChatHistory() {
     error.value = null;
 
     try {
-      console.log('Loading chat list from backend...');
       const data = await apiClient.getChatList();
 
       // Handle different response structures
@@ -65,7 +64,6 @@ export function useChatHistory() {
         date: chat.created_at || chat.date || new Date().toISOString()
       }));
 
-      console.log(`Loaded ${chatList.value.length} chats from backend`);
     } catch (error) {
       console.error('Failed to load chat list from backend:', error);
       error.value = error.message;
@@ -79,7 +77,6 @@ export function useChatHistory() {
 
   // Fallback: Load chat list from localStorage
   const loadChatListFromLocalStorage = () => {
-    console.log('Loading chat list from localStorage fallback...');
 
     const localChats = [];
     for (let i = 0; i < localStorage.length; i++) {
@@ -99,7 +96,6 @@ export function useChatHistory() {
     }
 
     chatList.value = localChats;
-    console.log(`Loaded ${chatList.value.length} chats from localStorage`);
   };
 
   // Get chat preview from localStorage
@@ -131,7 +127,6 @@ export function useChatHistory() {
     error.value = null;
 
     try {
-      console.log(`Loading messages for chat ${chatId}...`);
       const data = await apiClient.getChatMessages(chatId);
 
       // Handle different response structures
@@ -145,7 +140,6 @@ export function useChatHistory() {
       }));
 
       messages.value = normalizedMessages;
-      console.log(`Loaded ${messages.value.length} messages for chat ${chatId}`);
 
       return normalizedMessages;
     } catch (error) {
@@ -169,7 +163,6 @@ export function useChatHistory() {
 
       if (persistedMessages) {
         const localMessages = JSON.parse(persistedMessages);
-        console.log(`Loaded ${localMessages.length} messages from localStorage for chat ${chatId}`);
 
         // Normalize localStorage messages
         return localMessages.map(msg => ({
@@ -210,7 +203,6 @@ export function useChatHistory() {
       currentChatId.value = newChatId;
       window.location.hash = `chatId=${newChatId}`;
 
-      console.log(`Created new chat with ID: ${newChatId}`);
       return newChatId;
     } catch (error) {
       console.error('Failed to create new chat:', error);
@@ -241,7 +233,6 @@ export function useChatHistory() {
         window.location.hash = '';
       }
 
-      console.log(`Deleted chat ${chatId}`);
       return true;
     } catch (error) {
       console.error('Error deleting chat:', error);
@@ -267,7 +258,6 @@ export function useChatHistory() {
       messages.value = messageList;
     }
 
-    console.log(`Saved ${messageList.length} messages to localStorage for chat ${chatId}`);
   };
 
   // Function to send a message

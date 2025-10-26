@@ -224,7 +224,6 @@ const connectTerminal = async () => {
         }
       },
       onPromptChange: (prompt: string) => {
-        console.log('[ToolsTerminal] Prompt changed:', prompt)
       },
       onStatusChange: (status: string) => {
         terminalStore.updateSessionStatus(currentSessionId.value, status as any)
@@ -280,7 +279,6 @@ const clearTerminal = () => {
 }
 
 const handleHostChange = (host: HostConfig) => {
-  console.log('[ToolsTerminal] Host changed to:', host.name)
 
   // Disconnect current session
   if (isConnected.value) {

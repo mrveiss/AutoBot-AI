@@ -44,17 +44,6 @@ async def get_batch_status():
     }
 
 
-@router.post("/chat-init")
-async def chat_init():
-    """Initialize chat system - required by frontend"""
-    return {
-        "status": "success",
-        "message": "Chat system initialized",
-        "sessions": [],
-        "timestamp": datetime.now().isoformat(),
-    }
-
-
 @router.post("/load")
 async def batch_load(batch_request: BatchRequest):
     """
@@ -118,29 +107,40 @@ async def batch_load(batch_request: BatchRequest):
     return BatchResponse(responses=responses, errors=errors, timing=timing)
 
 
+@router.get("/chat-init")
 @router.post("/chat-init")
 async def batch_chat_initialization():
     """
     Optimized endpoint for chat interface initialization.
     Returns all data needed to start the chat in one request.
+    Supports both GET and POST methods for frontend compatibility.
     """
-    import asyncio
     import time
 
     start_time = time.time()
     logger.info("Starting batch chat initialization...")
 
     try:
-        # Minimal response to avoid any blocking operations
+        # Gather all data in parallel
+        results = await asyncio.gather(
+            get_chat_sessions(),
+            get_system_health(),
+            get_service_health(),
+            get_settings(),
+            return_exceptions=True
+        )
+
+        # Unpack results with error handling
+        chat_sessions = results[0] if not isinstance(results[0], Exception) else {"sessions": []}
+        system_health = results[1] if not isinstance(results[1], Exception) else {"status": "unknown"}
+        service_health = results[2] if not isinstance(results[2], Exception) else {"status": "unknown"}
+        settings = results[3] if not isinstance(results[3], Exception) else {}
+
         response = {
-            "chat_sessions": [],
-            "system_health": {
-                "status": "healthy",
-                "backend": "connected",
-                "mode": "batch_fast",
-            },
-            "kb_stats": {"total_documents": 0, "total_chunks": 0, "status": "ready"},
-            "service_health": {"status": "online", "healthy": 1, "total": 1},
+            "chat_sessions": chat_sessions,
+            "system_health": system_health,
+            "service_health": service_health,
+            "settings": settings,
             "timing": {"total_ms": (time.time() - start_time) * 1000},
         }
 
@@ -157,7 +157,6 @@ async def batch_chat_initialization():
 # Helper functions for batch initialization
 async def get_chat_sessions():
     """Get chat sessions list using async file operations"""
-    import asyncio
     import os
     from datetime import datetime
 
@@ -169,11 +168,11 @@ async def get_chat_sessions():
             sessions = await asyncio.to_thread(
                 _get_sessions_sync, app.state.chat_history_manager
             )
-            return sessions
+            return {"sessions": sessions}
         except Exception as e:
             logger.warning(f"Failed to get chat sessions: {e}")
-            return []
-    return []
+            return {"sessions": []}
+    return {"sessions": []}
 
 
 def _get_sessions_sync(chat_history_manager):
@@ -239,3 +238,24 @@ async def get_kb_stats():
 async def get_service_health():
     """Get service health status"""
     return {"status": "online", "healthy": 1, "total": 1, "warnings": 0, "errors": 0}
+
+
+async def get_settings():
+    """Get user settings"""
+    try:
+        from backend.fast_app_factory_fix import app
+
+        # Try to get settings from app state or return defaults
+        if hasattr(app.state, 'settings'):
+            return app.state.settings
+
+        # Return default settings structure
+        return {
+            "theme": "light",
+            "language": "en",
+            "notifications": True,
+            "auto_scroll": True
+        }
+    except Exception as e:
+        logger.warning(f"Failed to get settings: {e}")
+        return {}

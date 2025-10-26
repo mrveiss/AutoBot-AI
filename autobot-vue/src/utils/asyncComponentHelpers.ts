@@ -83,7 +83,6 @@ export function createAsyncComponent(
           onError?.(error)
         },
         onRetry: (attempt: number) => {
-          console.log(`[AsyncComponent] Retrying ${name}, attempt ${attempt}`)
           onRetry?.(attempt)
         }
       }, slots)
@@ -115,13 +114,11 @@ export function defineRobustAsyncComponent(
 
   const enhancedLoader = async () => {
     try {
-      console.log(`[RobustAsyncComponent] Loading ${name}...`)
       const startTime = Date.now()
 
       const component = await loader()
 
       const loadTime = Date.now() - startTime
-      console.log(`[RobustAsyncComponent] Successfully loaded ${name} in ${loadTime}ms`)
 
       // Reset retry count on success
       retryCount = 0
@@ -151,7 +148,6 @@ export function defineRobustAsyncComponent(
 
       if (retryCount < maxRetries) {
         retryCount++
-        console.log(`[RobustAsyncComponent] Retrying ${name}, attempt ${retryCount}/${maxRetries}`)
 
         onRetry?.(retryCount)
 
@@ -209,7 +205,6 @@ export function createRouteComponent(
       }
     },
     onRetry: (attempt) => {
-      console.log(`[RouteComponent] Retrying route: ${routeName}, attempt ${attempt}`)
 
       // Track retry attempts
       if (window.rum) {
@@ -307,7 +302,6 @@ export class AsyncComponentErrorRecovery {
 
   static markAsFailed(componentName: string) {
     this.failedComponents.add(componentName)
-    console.log(`[ErrorRecovery] Marked component as failed: ${componentName}`)
   }
 
   static hasFailed(componentName: string): boolean {
@@ -328,13 +322,11 @@ export class AsyncComponentErrorRecovery {
   static reset(componentName: string) {
     this.failedComponents.delete(componentName)
     this.retryAttempts.delete(componentName)
-    console.log(`[ErrorRecovery] Reset recovery state for: ${componentName}`)
   }
 
   static resetAll() {
     this.failedComponents.clear()
     this.retryAttempts.clear()
-    console.log(`[ErrorRecovery] Reset all recovery state`)
   }
 
   static getFailedComponents(): string[] {
@@ -430,5 +422,4 @@ export function setupAsyncComponentErrorHandler() {
     }
   })
 
-  console.log('[AsyncErrorHandler] Global async component error handler initialized')
 }

@@ -75,10 +75,10 @@ class KnowledgeBaseInitializer:
                 logger.info("Initializing knowledge base with async factory pattern...")
 
                 # Import here to avoid circular dependencies
-                from src.knowledge_base_v2 import KnowledgeBaseV2
+                from src.knowledge_base import KnowledgeBase
 
                 # Create instance with async initialization
-                cls._instance = KnowledgeBaseV2()
+                cls._instance = KnowledgeBase()
                 await cls._instance.initialize()
 
                 cls._initialization_complete.set()

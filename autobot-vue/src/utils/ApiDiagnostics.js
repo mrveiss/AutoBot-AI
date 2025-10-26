@@ -24,7 +24,6 @@ class ApiDiagnostics {
    * Run comprehensive API diagnostics
    */
   async runComprehensiveDiagnostics() {
-    console.log('🔍 Starting comprehensive API diagnostics...');
 
     const results = {
       timestamp: new Date().toISOString(),
@@ -37,7 +36,6 @@ class ApiDiagnostics {
     // Generate recommendations based on results
     results.recommendations = this.generateRecommendations(results);
 
-    console.log('📊 Diagnostics completed:', results);
     return results;
   }
 
@@ -45,7 +43,6 @@ class ApiDiagnostics {
    * Check basic backend connectivity
    */
   async checkBackendConnectivity() {
-    console.log('🔗 Checking backend connectivity...');
 
     const connectivity = {
       baseUrl: apiClient.getBaseUrl(),
@@ -69,7 +66,6 @@ class ApiDiagnostics {
         }
       } catch (helloError) {
         // Fallback to health endpoint
-        console.log('🔄 Trying alternative health endpoint...');
         const healthResponse = await apiClient.getSystemHealth();
         connectivity.responseTime = Math.round(performance.now() - startTime);
         connectivity.reachable = true;
@@ -91,12 +87,10 @@ class ApiDiagnostics {
    * Test critical API endpoints
    */
   async testCriticalEndpoints() {
-    console.log('🧪 Testing critical API endpoints...');
 
     const endpointResults = [];
 
     for (const endpoint of this.criticalEndpoints) {
-      console.log(`  Testing ${endpoint}...`);
 
       const testResult = {
         endpoint,
@@ -151,7 +145,6 @@ class ApiDiagnostics {
    * Validate API mappings against actual endpoints
    */
   validateApiMappings() {
-    console.log('🗺️ Validating API mappings...');
 
     const validation = {
       totalMappings: 0,
@@ -306,7 +299,6 @@ class ApiDiagnostics {
    * Test a specific component's API integration
    */
   async testComponentIntegration(componentName) {
-    console.log(`🧩 Testing ${componentName} API integration...`);
 
     const endpoints = apiMapper.getEndpointsForComponent(componentName);
     const functions = apiMapper.getFunctionsForComponent(componentName);
@@ -350,7 +342,6 @@ class ApiDiagnostics {
    * Generate a quick health report
    */
   async quickHealthCheck() {
-    console.log('⚡ Running quick health check...');
 
     const health = {
       overall: 'unknown',

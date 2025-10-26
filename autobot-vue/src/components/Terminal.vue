@@ -137,7 +137,6 @@ const initializeSession = async (): Promise<string> => {
   try {
     if (props.chatSessionId) {
       // Chat terminal - check if session already exists
-      console.log(`[Terminal] Checking for existing terminal session for chat ${props.chatSessionId}`)
 
       const sessionsUrl = await appConfig.getApiUrl(
         `/api/agent-terminal/sessions?conversation_id=${props.chatSessionId}`
@@ -149,11 +148,9 @@ const initializeSession = async (): Promise<string> => {
         // Use existing session
         const existingSession = data.sessions[0]
         sessionId.value = existingSession.session_id
-        console.log(`[Terminal] Using existing terminal session: ${sessionId.value}`)
         addTerminalLine('system', `Connected to existing terminal session ${sessionId.value?.slice(-8) || 'unknown'}`, 'info')
       } else {
         // Create new session via AgentTerminalService
-        console.log(`[Terminal] Creating new terminal session for chat ${props.chatSessionId}`)
 
         const createUrl = await appConfig.getApiUrl('/api/agent-terminal/sessions')
         const createResponse = await fetch(createUrl, {
@@ -170,13 +167,11 @@ const initializeSession = async (): Promise<string> => {
 
         const createData = await createResponse.json()
         sessionId.value = createData.session_id
-        console.log(`[Terminal] Created new terminal session: ${sessionId.value}`)
         addTerminalLine('system', `Created new terminal session ${sessionId.value?.slice(-8) || 'unknown'}`, 'success')
       }
     } else {
       // System terminal - generate local ID
       sessionId.value = `system_terminal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      console.log(`[Terminal] Created system terminal session: ${sessionId.value}`)
       addTerminalLine('system', `System terminal session ${sessionId.value?.slice(-8) || 'unknown'}`, 'info')
     }
 
@@ -219,7 +214,6 @@ const connectTerminal = async () => {
 
     statusMessage.value = 'Connecting to terminal...'
     const wsUrl = await getWebSocketUrl()
-    console.log('[WorkingTerminal] Connecting to:', wsUrl, 'Session:', sessionId.value)
 
     websocket.value = new WebSocket(wsUrl)
 

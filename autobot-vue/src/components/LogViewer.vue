@@ -114,7 +114,6 @@ export default {
         error.value = ''
         const response = await apiService.get('/api/logs/sources')
         logSources.value = response
-        console.log('Log sources loaded:', response)
       } catch (err) {
         error.value = 'Failed to load log sources'
         console.error(err)
@@ -249,7 +248,6 @@ export default {
       }
       
       websocket.onclose = () => {
-        console.log('WebSocket closed')
       }
     }
 

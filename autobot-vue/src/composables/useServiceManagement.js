@@ -199,13 +199,11 @@ export function useServiceManagement(serviceName = 'redis') {
               }
             } else if (message.type === 'service_event') {
               // Service operation event (start, stop, restart)
-              console.log('[useServiceManagement] Service event:', message)
 
               // Refresh status after operation
               refreshStatus()
             } else if (message.type === 'auto_recovery') {
               // Auto-recovery event
-              console.log('[useServiceManagement] Auto-recovery event:', message)
 
               showSubtleErrorNotification(
                 'Auto-Recovery',

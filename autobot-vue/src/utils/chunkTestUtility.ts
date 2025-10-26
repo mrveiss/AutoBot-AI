@@ -23,12 +23,10 @@ export interface ChunkTestSummary {
  * Test chunk loading for specific Vue components
  */
 export async function testComponentChunkLoading(components: string[]): Promise<ChunkTestSummary> {
-  console.log('[ChunkTest] Starting component chunk loading tests...')
 
   const results: ChunkTestResult[] = []
 
   for (const component of components) {
-    console.log(`[ChunkTest] Testing ${component}...`)
 
     try {
       const startTime = Date.now()
@@ -55,7 +53,6 @@ export async function testComponentChunkLoading(components: string[]): Promise<C
         loadTime,
       })
 
-      console.log(`[ChunkTest] ✅ ${component} loaded in ${loadTime}ms`)
 
     } catch (error) {
       console.error(`[ChunkTest] ❌ ${component} failed:`, error)
@@ -83,7 +80,6 @@ export async function testComponentChunkLoading(components: string[]): Promise<C
     averageLoadTime
   }
 
-  console.log('[ChunkTest] Test Summary:', summary)
 
   return summary
 }
@@ -92,7 +88,6 @@ export async function testComponentChunkLoading(components: string[]): Promise<C
  * Test async component error recovery
  */
 export async function testAsyncComponentErrorRecovery(): Promise<boolean> {
-  console.log('[ChunkTest] Testing async component error recovery...')
 
   try {
     // Import the async component helpers
@@ -100,7 +95,6 @@ export async function testAsyncComponentErrorRecovery(): Promise<boolean> {
 
     // Test error recovery statistics
     const stats = AsyncComponentErrorRecovery.getStats()
-    console.log('[ChunkTest] Error recovery stats:', stats)
 
     // Test marking components as failed and recovering
     AsyncComponentErrorRecovery.markAsFailed('TestComponent')
@@ -109,7 +103,6 @@ export async function testAsyncComponentErrorRecovery(): Promise<boolean> {
     const hasFailed = AsyncComponentErrorRecovery.hasFailed('TestComponent')
     const retryCount = AsyncComponentErrorRecovery.getRetryCount('TestComponent')
 
-    console.log('[ChunkTest] Test component failure tracking:', { hasFailed, retryCount })
 
     // Reset test state
     AsyncComponentErrorRecovery.reset('TestComponent')
@@ -125,7 +118,6 @@ export async function testAsyncComponentErrorRecovery(): Promise<boolean> {
  * Test cache management functionality
  */
 export async function testCacheManagement(): Promise<boolean> {
-  console.log('[ChunkTest] Testing cache management...')
 
   try {
     // Import cache management utilities
@@ -144,7 +136,6 @@ export async function testCacheManagement(): Promise<boolean> {
       })
     }, 2000)
 
-    console.log('[ChunkTest] ✅ Cache management system is functional')
     return true
   } catch (error) {
     console.error('[ChunkTest] ❌ Cache management test failed:', error)
@@ -156,7 +147,6 @@ export async function testCacheManagement(): Promise<boolean> {
  * Comprehensive chunk loading test suite
  */
 export async function runComprehensiveChunkTests(): Promise<void> {
-  console.log('[ChunkTest] Starting comprehensive chunk loading tests...')
 
   // Test common Vue view components
   const viewComponents = [
@@ -186,11 +176,9 @@ export async function runComprehensiveChunkTests(): Promise<void> {
       overallSuccess: chunkResults.failed === 0 && errorRecoveryWorks && cacheManagementWorks
     }
 
-    console.log('[ChunkTest] Comprehensive test report:', report)
 
     // Show user-friendly summary
     if (report.overallSuccess) {
-      console.log('[ChunkTest] 🎉 All chunk loading tests passed!')
 
       if (typeof window !== 'undefined' && window.confirm) {
         const shouldShowDetails = confirm('All chunk loading tests passed! Would you like to see detailed results?')
@@ -206,7 +194,6 @@ export async function runComprehensiveChunkTests(): Promise<void> {
     // Store test results for debugging
     if (typeof window !== 'undefined') {
       (window as any).__chunkTestResults = report
-      console.log('[ChunkTest] Test results stored in window.__chunkTestResults')
     }
 
   } catch (error) {
@@ -218,7 +205,6 @@ export async function runComprehensiveChunkTests(): Promise<void> {
  * Quick validation that chunk loading fixes are working
  */
 export async function quickChunkValidation(): Promise<boolean> {
-  console.log('[ChunkTest] Running quick chunk validation...')
 
   try {
     // Test importing a few key components
@@ -233,7 +219,6 @@ export async function quickChunkValidation(): Promise<boolean> {
     const failures = results.filter(r => r.status === 'rejected')
 
     if (failures.length === 0) {
-      console.log('[ChunkTest] ✅ Quick validation passed - all key modules loaded successfully')
       return true
     } else {
       console.error('[ChunkTest] ❌ Quick validation failed:', failures)
@@ -256,5 +241,4 @@ if (typeof window !== 'undefined') {
     testCacheManagement: testCacheManagement
   }
 
-  console.log('[ChunkTest] Test utilities available in window.chunkTest')
 }

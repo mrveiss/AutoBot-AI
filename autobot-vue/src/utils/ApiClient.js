@@ -32,35 +32,24 @@ class ApiClient {
     });
 
     // Extensive logging for debugging proxy issues
-    console.log('[ApiClient] Constructor initialization:');
-    console.log('[ApiClient] - Initial baseUrl from AppConfig:', this.baseUrl);
-    console.log('[ApiClient] - Development mode:', this.isDevMode);
-    console.log('[ApiClient] - window.location.port:', window.location.port);
-    console.log('[ApiClient] - Settings loaded:', this.settings);
 
     // CRITICAL: Proxy mode detection for Vite dev server
     const isViteDevMode = window.location.port === '5173' && this.isDevMode;
 
     if (isViteDevMode) {
-      console.log('[ApiClient] PROXY MODE: Running on port 5173, forcing proxy usage');
-      console.log('[ApiClient] PROXY MODE: Ignoring any localStorage settings');
       // Force empty baseUrl to ensure relative URLs trigger Vite proxy
       this.baseUrl = '';
     } else {
       // Only in production mode, consider localStorage settings override
       if (this.settings?.backend?.api_endpoint && !this.isDevMode) {
-        console.log('[ApiClient] PRODUCTION MODE: Overriding baseUrl with settings:', this.settings.backend.api_endpoint);
         this.baseUrl = this.settings.backend.api_endpoint;
       } else {
-        console.log('[ApiClient] PRODUCTION MODE: Using AppConfig baseUrl:', this.baseUrl);
       }
     }
 
     // Update circuit breaker with final baseUrl
     this.enhancedFetch.updateBaseUrl(this.baseUrl);
 
-    console.log('[ApiClient] - Final baseUrl after proxy detection:', this.baseUrl);
-    console.log('[ApiClient] - Proxy mode active:', !this.baseUrl);
   }
 
   // MIGRATED: Initialize configuration from AppConfig.js
@@ -72,7 +61,6 @@ class ApiClient {
       this.isDevMode = appConfig.get('environment.isDev', false);
       this.enableDebug = appConfig.get('features.enableDebug', false);
 
-      console.log('[ApiClient] Configuration initialized from AppConfig');
     } catch (error) {
       console.warn('[ApiClient] Failed to initialize from AppConfig, using fallback:', error.message);
 
@@ -94,20 +82,17 @@ class ApiClient {
     const isViteDevServer = window.location.port === '5173';
 
     if (isViteDevServer && import.meta.env.DEV) {
-      console.log('[ApiClient] FALLBACK PROXY MODE: Using Vite proxy (empty baseUrl)');
       return ''; // Empty string forces relative URLs which go through Vite proxy
     }
 
     // DIRECT MODE: Use actual backend IP for production or non-proxy environments
     if (backendHost && backendPort && protocol) {
       const directUrl = `${protocol}://${backendHost}:${backendPort}`;
-      console.log('[ApiClient] FALLBACK DIRECT MODE: Using backend URL:', directUrl);
       return directUrl;
     }
 
     // Final fallback - use NetworkConstants instead of hardcoded IP
     const fallbackUrl = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;
-    console.log('[ApiClient] FALLBACK: Using NetworkConstants:', fallbackUrl);
     return fallbackUrl;
   }
 
@@ -213,12 +198,9 @@ class ApiClient {
 
   // GET request with enhanced error handling and retries
   async get(endpoint, options = {}) {
-    console.log(`[ApiClient] GET Request: ${endpoint}`);
 
     // Log the full URL being accessed for debugging
     const fullUrl = await this.getApiUrl(endpoint, options);
-    console.log(`[ApiClient] - Full URL: ${fullUrl}`);
-    console.log(`[ApiClient] - Proxy mode: ${!this.baseUrl}`);
 
     let lastError;
     const maxRetries = 3;
@@ -236,11 +218,9 @@ class ApiClient {
         }
 
         const data = await response.json();
-        console.log(`[ApiClient] GET Success: ${endpoint} (attempt ${attempt})`);
 
         // Log successful response for debugging
         if (this.enableDebug) {
-          console.log(`[ApiClient] Response data:`, data);
         }
 
         return data;
@@ -257,7 +237,6 @@ class ApiClient {
         // Wait before retrying (exponential backoff)
         if (attempt < maxRetries) {
           const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-          console.log(`[ApiClient] Retrying ${endpoint} in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
@@ -270,18 +249,30 @@ class ApiClient {
 
   // POST request with retry logic
   async post(endpoint, data = {}, options = {}) {
-    console.log(`[ApiClient] POST Request: ${endpoint}`);
 
     try {
-      const response = await this.fetchWithConfig(endpoint, {
+      // Check if data is FormData (for file uploads and form submissions)
+      const isFormData = data instanceof FormData;
+
+      const fetchOptions = {
         ...options,
         method: 'POST',
-        body: JSON.stringify(data),
-        headers: {
+        body: isFormData ? data : JSON.stringify(data)
+      };
+
+      // Only set Content-Type for JSON, let browser set it for FormData
+      if (!isFormData) {
+        fetchOptions.headers = {
           'Content-Type': 'application/json',
           ...options.headers
-        }
-      });
+        };
+      } else {
+        fetchOptions.headers = {
+          ...options.headers
+        };
+      }
+
+      const response = await this.fetchWithConfig(endpoint, fetchOptions);
 
       if (!response.ok) {
         const errorData = await this.extractErrorInfo(response);
@@ -289,7 +280,6 @@ class ApiClient {
       }
 
       const responseData = await response.json();
-      console.log(`[ApiClient] POST Success: ${endpoint}`);
       return responseData;
 
     } catch (error) {
@@ -300,7 +290,6 @@ class ApiClient {
 
   // PUT request
   async put(endpoint, data = {}, options = {}) {
-    console.log(`[ApiClient] PUT Request: ${endpoint}`);
 
     try {
       const response = await this.fetchWithConfig(endpoint, {
@@ -319,7 +308,6 @@ class ApiClient {
       }
 
       const responseData = await response.json();
-      console.log(`[ApiClient] PUT Success: ${endpoint}`);
       return responseData;
 
     } catch (error) {
@@ -330,7 +318,6 @@ class ApiClient {
 
   // DELETE request
   async delete(endpoint, options = {}) {
-    console.log(`[ApiClient] DELETE Request: ${endpoint}`);
 
     try {
       const response = await this.fetchWithConfig(endpoint, {
@@ -351,7 +338,6 @@ class ApiClient {
         responseData = await response.json();
       }
 
-      console.log(`[ApiClient] DELETE Success: ${endpoint}`);
       return responseData;
 
     } catch (error) {
@@ -419,7 +405,6 @@ class ApiClient {
       });
 
       const result = await uploadPromise;
-      console.log(`[ApiClient] File Upload Success: ${endpoint}`);
       return result;
 
     } catch (error) {
@@ -577,7 +562,6 @@ class ApiClient {
 
   // Update base URL (useful for settings changes)
   updateBaseUrl(newBaseUrl) {
-    console.log(`[ApiClient] Updating base URL from ${this.baseUrl} to ${newBaseUrl}`);
     this.baseUrl = newBaseUrl;
     this.enhancedFetch.updateBaseUrl(newBaseUrl);
   }

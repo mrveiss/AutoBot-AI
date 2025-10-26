@@ -1,8 +1,10 @@
+import fcntl
 import gc
 import json
 import logging
 import os
 import re
+import tempfile
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -1165,6 +1167,51 @@ class ChatHistoryManager:
             logging.error(f"Error loading chat session {session_id}: {str(e)}")
             return []
 
+    async def _atomic_write(self, file_path: str, content: str) -> None:
+        """
+        Atomic file write with exclusive locking to prevent data corruption.
+
+        Uses fcntl.flock() for process-level locking and atomic rename to ensure
+        that concurrent writes don't corrupt the file. The file is written to a
+        temporary file in the same directory, then atomically renamed.
+
+        Args:
+            file_path: Target file path
+            content: Content to write
+
+        Raises:
+            Exception: If write fails (temp file is cleaned up automatically)
+        """
+        dir_path = os.path.dirname(file_path)
+
+        # Create temporary file in same directory (required for atomic rename)
+        fd, temp_path = tempfile.mkstemp(dir=dir_path, prefix='.tmp_chat_', suffix='.json')
+
+        try:
+            # Acquire exclusive lock on the file descriptor
+            fcntl.flock(fd, fcntl.LOCK_EX)
+
+            # Write content to temporary file using aiofiles for async I/O
+            os.close(fd)  # Close fd so aiofiles can open it
+            async with aiofiles.open(temp_path, 'w') as f:
+                await f.write(content)
+
+            # Atomic rename (cross-platform atomic operation)
+            os.replace(temp_path, file_path)
+
+            logger.debug(f"Atomic write completed: {file_path}")
+
+        except Exception as e:
+            # Cleanup temporary file on failure
+            try:
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to cleanup temp file {temp_path}: {cleanup_error}")
+
+            logger.error(f"Atomic write failed for {file_path}: {e}")
+            raise e
+
     async def save_session(
         self,
         session_id: str,
@@ -1243,9 +1290,15 @@ class ChatHistoryManager:
             )
 
             # Save to file with encryption if enabled (always use new format)
+            # Use atomic write to prevent corruption from concurrent saves
             encrypted_data = self._encrypt_data(chat_data)
-            async with aiofiles.open(chat_file, "w") as f:
-                await f.write(encrypted_data)
+            try:
+                await self._atomic_write(chat_file, encrypted_data)
+            except Exception as atomic_error:
+                # Fallback to direct write if atomic write fails
+                logger.warning(f"Atomic write failed, falling back to direct write: {atomic_error}")
+                async with aiofiles.open(chat_file, "w") as f:
+                    await f.write(encrypted_data)
 
             # Update Redis cache (write-through)
             if self.redis_client:

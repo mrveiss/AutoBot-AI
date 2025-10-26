@@ -219,7 +219,7 @@ class TimeoutAnalyzer:
             start_time = time.time()
             
             from src.simple_chat_workflow import SimpleChatWorkflow
-from src.constants import NetworkConstants, ServiceURLs
+            from src.constants import NetworkConstants, ServiceURLs
             
             # Create workflow instance
             workflow_create_start = time.time()

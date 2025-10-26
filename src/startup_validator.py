@@ -82,7 +82,7 @@ class StartupValidator:
             "src.auth_middleware",
             "src.security_layer",
             "src.knowledge_base_factory",
-            "src.knowledge_base_v2",
+            "src.knowledge_base",
         ]
 
         # Optional modules (warnings only if missing)
@@ -240,26 +240,25 @@ class StartupValidator:
                 )
 
     async def _validate_redis_connectivity(self):
-        """Test Redis connectivity"""
+        """Test Redis connectivity using canonical Redis utility"""
         try:
             redis_config = config.get_redis_config()
             if not redis_config["enabled"]:
                 self.result.add_warning("Redis is disabled in configuration")
                 return
 
-            import redis
+            # Use canonical Redis utility instead of direct instantiation
+            # This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy
+            from src.utils.redis_client import get_redis_client
 
-            client = redis.Redis(
-                host=redis_config["host"],
-                port=redis_config["port"],
-                db=redis_config["db"],
-                socket_timeout=5,
-                socket_connect_timeout=5,
-            )
+            client = get_redis_client(database="main")
+            if client is None:
+                raise Exception("Redis client initialization returned None")
 
             # Test connection
             await asyncio.to_thread(client.ping)
-            await asyncio.to_thread(client.close)
+            # Note: Connection pooling means we don't close individual clients
+            # The redis_database_manager handles connection lifecycle
 
         except Exception as e:
             raise Exception(f"Redis connection test failed: {e}")

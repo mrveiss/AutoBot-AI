@@ -348,7 +348,6 @@ export default {
         stopAutoRefresh()
       }
 
-      console.log(`[OptimizedRumDashboard] Live mode: ${isLiveMode.value}`)
     }
 
     const setRefreshInterval = (interval) => {
@@ -367,7 +366,6 @@ export default {
       stopAutoRefresh()
 
       if (currentRefreshInterval.value > 0) {
-        console.log(`[OptimizedRumDashboard] Starting auto-refresh every ${currentRefreshInterval.value / 1000}s`)
 
         const refresh = () => {
           if (isLiveMode.value && isVisible.value) {
@@ -534,7 +532,6 @@ export default {
     // Lifecycle
     onMounted(() => {
       if (isDev) {
-        console.log('[OptimizedRumDashboard] Initializing optimized dashboard')
 
         // Listen for health changes from the optimized monitor
         optimizedHealthMonitor.onHealthChange((healthData) => {

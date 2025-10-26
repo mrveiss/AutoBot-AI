@@ -118,7 +118,6 @@ async function loadComponent(attempt = 1): Promise<void> {
     startLoadingTimer()
     startProgressAnimation()
 
-    console.log(`[AsyncWrapper] Loading ${props.componentName}, attempt ${attempt}`)
 
     const component = await props.componentLoader()
 
@@ -130,7 +129,6 @@ async function loadComponent(attempt = 1): Promise<void> {
       }
 
       const loadTime = Date.now() - loadingStartTime
-      console.log(`[AsyncWrapper] Successfully loaded ${props.componentName} in ${loadTime}ms`)
 
       // Reset error state on success
       asyncError.value = null
@@ -154,7 +152,6 @@ async function loadComponent(attempt = 1): Promise<void> {
 
     if (attempt < props.maxRetries) {
       retryCount.value = attempt
-      console.log(`[AsyncWrapper] Retrying ${props.componentName}, attempt ${attempt + 1}/${props.maxRetries}`)
 
       emit('retry', attempt + 1)
 
@@ -189,7 +186,6 @@ function handleComponentError(error: Error) {
 }
 
 function retryAsyncLoad() {
-  console.log(`[AsyncWrapper] Manual retry for ${props.componentName}`)
   asyncError.value = null
   showAsyncError.value = false
   retryCount.value = 0

@@ -126,7 +126,7 @@ async def test_api_integration():
 
     try:
         import aiohttp
-from src.constants import NetworkConstants, ServiceURLs
+        from src.constants import NetworkConstants, ServiceURLs
 
         # Test awareness endpoints
         endpoints_to_test = [

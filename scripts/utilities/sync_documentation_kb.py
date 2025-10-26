@@ -29,7 +29,7 @@ from datetime import datetime
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.knowledge_base_v2 import KnowledgeBaseV2
+from src.knowledge_base import KnowledgeBase
 
 # Configure logging
 logging.basicConfig(
@@ -52,7 +52,7 @@ class DocumentationSyncManager:
 
     async def initialize(self):
         """Initialize knowledge base connection"""
-        self.kb = KnowledgeBaseV2()
+        self.kb = KnowledgeBase()
         await self.kb.initialize()
         logger.info("Knowledge base initialized")
 

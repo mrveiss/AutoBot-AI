@@ -233,7 +233,6 @@ const updateChatSetting = (key: string, value: any) => {
 
 const updateUserSetting = (key: string, value: any) => {
   // Handle user management settings
-  console.log('User setting updated:', key, value)
   markAsChanged()
 }
 
@@ -386,7 +385,6 @@ let isLoadingSettings = false
 const loadSettings = async () => {
   // Prevent concurrent loading calls that cause infinite loops
   if (isLoadingSettings) {
-    console.log('Settings loading already in progress, skipping duplicate call')
     return
   }
 
@@ -447,10 +445,8 @@ const checkCacheApiAvailability = async () => {
     // Test if cache API is available by checking a simple endpoint
     await axios.get('/api/cache/stats', { timeout: 3000 })
     cacheApiAvailable.value = true
-    console.log('Cache API is available')
   } catch (error) {
     cacheApiAvailable.value = false
-    console.log('Cache API not available, disabling cache features:', (error as any)?.message || 'Unknown error')
   }
 }
 
@@ -473,14 +469,12 @@ const saveCacheConfig = async () => {
 
 const refreshCacheActivity = async () => {
   if (!cacheApiAvailable.value) {
-    console.log('Cache API not available, skipping cache activity refresh')
     cacheActivity.value = []
     return
   }
 
   try {
     // Note: There's no /api/cache/activity endpoint, creating fallback data
-    console.log('Cache activity endpoint not available, using fallback data')
     cacheActivity.value = [
       createCacheActivityItem({
         timestamp: new Date().toISOString(),
@@ -498,7 +492,6 @@ const refreshCacheActivity = async () => {
 
 const refreshCacheStats = async () => {
   if (!cacheApiAvailable.value) {
-    console.log('Cache API not available, skipping cache stats refresh')
     cacheStats.value = {
       status: 'unavailable',
       message: 'Cache API not available in fast backend'
@@ -672,7 +665,6 @@ const loadHealthStatus = async () => {
     // Try the correct detailed health endpoint first
     const response = await axios.get('/api/system/health/detailed')
     healthStatus.value = response.data
-    console.log('Loaded detailed health status successfully')
   } catch (error) {
     console.error('Failed to load detailed health status:', error)
 
@@ -683,7 +675,6 @@ const loadHealthStatus = async () => {
         basic_health: fallbackResponse.data,
         detailed_available: false
       } as HealthStatus
-      console.log('Loaded basic health status as fallback')
     } catch (fallbackError) {
       console.error('Failed to load any health status:', fallbackError)
       healthStatus.value = {
@@ -709,7 +700,6 @@ onMounted(async () => {
     refreshCacheStats()
     refreshCacheActivity()
   } else {
-    console.log('Skipping cache data loading - API not available')
   }
 })
 </script>

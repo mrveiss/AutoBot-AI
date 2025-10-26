@@ -268,7 +268,6 @@ const confirmDialog = ref({
  */
 onMounted(() => {
   subscribeToStatusUpdates((message) => {
-    console.log('[RedisServiceControl] WebSocket update:', message)
   })
 })
 
@@ -278,7 +277,6 @@ onMounted(() => {
 const handleStartService = async () => {
   try {
     await startService()
-    console.log('[RedisServiceControl] Service started successfully')
   } catch (err) {
     console.error('[RedisServiceControl] Failed to start service:', err)
   }
@@ -298,7 +296,6 @@ const handleRestartService = () => {
       showConfirmDialog.value = false
       try {
         await restartService()
-        console.log('[RedisServiceControl] Service restarted successfully')
       } catch (err) {
         console.error('[RedisServiceControl] Failed to restart service:', err)
       }
@@ -320,7 +317,6 @@ const handleStopService = () => {
       showConfirmDialog.value = false
       try {
         await stopService(true)
-        console.log('[RedisServiceControl] Service stopped successfully')
       } catch (err) {
         console.error('[RedisServiceControl] Failed to stop service:', err)
       }

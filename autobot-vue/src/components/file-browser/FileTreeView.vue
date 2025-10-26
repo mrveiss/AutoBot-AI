@@ -113,11 +113,11 @@ const getFileIcon = (item: TreeItem): string => {
 
 <style scoped>
 .tree-panel {
-  @apply bg-white border border-gray-200 rounded-lg;
+  @apply bg-white border border-gray-200 rounded-lg flex flex-col h-full;
 }
 
 .tree-header {
-  @apply flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50;
+  @apply flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50 flex-shrink-0;
 }
 
 .tree-header h3 {
@@ -133,7 +133,7 @@ const getFileIcon = (item: TreeItem): string => {
 }
 
 .tree-content {
-  @apply max-h-96 overflow-y-auto p-2;
+  @apply flex-1 overflow-y-auto p-2 min-h-0;
 }
 
 .tree-node {

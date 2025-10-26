@@ -656,7 +656,6 @@ const cancelCommandEdit = () => {
 // Advanced options
 const onAutoExecutionChange = () => {
   // Handle auto execution change
-  console.log('Auto execution:', enableAutoExecution.value)
 }
 
 // Event handlers for keyboard navigation

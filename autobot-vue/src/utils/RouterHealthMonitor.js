@@ -42,7 +42,6 @@ class RouterHealthMonitor {
         this.setupRouterHooks();
         this.startHealthChecks();
 
-        console.log('[RouterHealth] Router health monitoring ENABLED with minimal settings - recovery disabled');
     }
 
     /**
@@ -97,7 +96,6 @@ class RouterHealthMonitor {
      */
     async verifyRouteLoaded(route, retries = 1) {
         if (retries <= 0) {
-            console.debug('[RouterHealth] Route verification completed, assuming success:', route.path);
             return true;
         }
 
@@ -107,19 +105,16 @@ class RouterHealthMonitor {
         const indicators = this.checkRouteLoadIndicators(route);
 
         if (indicators.loaded) {
-            console.debug('[RouterHealth] Route verified successfully:', route.path);
             return true;
         }
 
         // Retry with longer wait time
         if (retries > 1) {
-            console.debug(`[RouterHealth] Route verification pending, retrying... ${route.path} (${retries - 1} retries left)`);
             await new Promise(resolve => setTimeout(resolve, 500));
             return this.verifyRouteLoaded(route, retries - 1);
         }
 
         // On final retry, always assume success - route verification is informational only
-        console.debug('[RouterHealth] Route verification inconclusive, assuming success:', route.path);
         return true;
     }
 
@@ -187,7 +182,6 @@ class RouterHealthMonitor {
      */
     handleNavigationFailure(error) {
         this.failureCount++;
-        console.log('[RouterHealth] Navigation failure recorded:', error.message, 'Total failures:', this.failureCount);
 
         // Only set as unhealthy if we have multiple failures
         if (this.failureCount >= this.maxFailures) {
@@ -202,9 +196,7 @@ class RouterHealthMonitor {
                     timestamp: now
                 });
                 this.lastFailureEmitTime = now;
-                console.log('[RouterHealth] Failure event emitted (cooldown respected)');
             } else {
-                console.log('[RouterHealth] Skipping failure event (cooldown active)');
             }
 
             // Trigger recovery after multiple failures
@@ -229,7 +221,6 @@ class RouterHealthMonitor {
         if (this.navigationTimeout >= 8000) {
             this.handleNavigationFailure(new Error(`Navigation timeout: ${to.path} (${this.navigationTimeout}ms)`));
         } else {
-            console.debug('[RouterHealth] Navigation timeout ignored - below threshold');
         }
     }
 
@@ -239,7 +230,6 @@ class RouterHealthMonitor {
     handleRouteVerificationFailure(route) {
         // Route verification failures are now handled more gracefully
         // Only log debug info instead of triggering cascade failures
-        console.debug('[RouterHealth] Route verification failed (non-critical):', route.path);
 
         // Don't trigger navigation failure for route verification issues
         // This was causing the cascade of 180+ errors
@@ -268,7 +258,6 @@ class RouterHealthMonitor {
         }
 
         // Disable periodic health checks - they were causing false recovery attempts
-        console.debug('[RouterHealth] Periodic health checks disabled to prevent false positives');
 
         // this.healthCheckTimer = setInterval(() => {
         //     this.performHealthCheck();
@@ -285,7 +274,6 @@ class RouterHealthMonitor {
 
         // Check if navigation is stale (disabled - too aggressive)
         if (timeSinceLastSuccess > maxStaleTime && this.failureCount > 0) {
-            console.debug('[RouterHealth] Stale navigation detected (non-critical)');
             // this.triggerRecovery('stale_navigation');
         }
 
@@ -294,7 +282,6 @@ class RouterHealthMonitor {
             this.verifyRouteLoaded(this.router.currentRoute.value)
                 .then(verified => {
                     if (!verified) {
-                        console.debug('[RouterHealth] Health check route verification failed (non-critical)');
                         // this.handleNavigationFailure(new Error('Health check route verification failed'));
                     }
                 });
@@ -303,7 +290,6 @@ class RouterHealthMonitor {
         // Check for broken router-view (disabled - too aggressive)
         const routerView = document.querySelector('router-view');
         if (!routerView || routerView.children.length === 0) {
-            console.debug('[RouterHealth] Router-view check (non-critical)');
             // this.triggerRecovery('broken_router_view');
         }
     }
@@ -339,8 +325,6 @@ class RouterHealthMonitor {
      * Trigger recovery procedures - DISABLED to prevent _recovery URL parameters
      */
     async triggerRecovery(reason) {
-        console.log(`[RouterHealth] Recovery requested for "${reason}" but disabled to prevent _recovery URL parameters`);
-        console.log('[RouterHealth] Manual browser refresh recommended if navigation issues persist');
 
         // All recovery procedures disabled to prevent _recovery parameters
         // this.recoveryAttempts++;
@@ -352,7 +336,6 @@ class RouterHealthMonitor {
      * Recover broken router-view
      */
     async recoverRouterView() {
-        console.log('[RouterHealth] Recovering router-view...');
 
         // Try to reinitialize Vue app components
         const app = document.getElementById('app');
@@ -374,7 +357,6 @@ class RouterHealthMonitor {
      * Recover navigation issues
      */
     async recoverNavigation() {
-        console.log('[RouterHealth] Recovering navigation...');
 
         if (this.router) {
             try {
@@ -411,7 +393,6 @@ class RouterHealthMonitor {
      * General recovery procedures
      */
     async recoverGeneral() {
-        console.log('[RouterHealth] Performing general recovery...');
 
         // Clear caches
         if (window.cacheBuster) {
@@ -431,8 +412,6 @@ class RouterHealthMonitor {
      * Trigger full page reload as last resort - DISABLED to prevent _recovery parameters
      */
     triggerFullReload() {
-        console.log('[RouterHealth] Full page reload requested but disabled to prevent _recovery URL parameters');
-        console.log('[RouterHealth] Please manually refresh the page if needed');
 
         // Clean reload without adding recovery parameters
         // window.location.reload();
@@ -486,7 +465,6 @@ class RouterHealthMonitor {
                 delete cleanQuery._recovery;
                 delete cleanQuery._router_recovery;
 
-                console.log('[RouterHealth] Cleaning up recovery parameters from URL');
                 this.router.replace({ path: currentRoute.path, query: cleanQuery }).catch(() => {
                     // If replace fails, try push instead
                     this.router.push({ path: currentRoute.path, query: cleanQuery }).catch(() => {});
@@ -506,7 +484,6 @@ class RouterHealthMonitor {
                 delete cleanQuery._recovery;
                 delete cleanQuery._router_recovery;
 
-                console.log('[RouterHealth] Cleaning up recovery parameters from URL');
                 this.router.replace({
                     path: currentRoute.path,
                     query: cleanQuery,

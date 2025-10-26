@@ -670,30 +670,589 @@ class ChatWorkflowManager:
             messages.append(msg)
         return messages
 
+    async def _initialize_chat_session(
+        self, session_id: str, message: str
+    ) -> tuple:
+        """
+        Initialize session and terminal, detect exit intent.
+
+        Args:
+            session_id: Session identifier
+            message: User message to check for exit intent
+
+        Returns:
+            Tuple of (session, terminal_session_id, should_exit)
+        """
+        logger.debug(
+            f"[ChatWorkflowManager] Starting process_message_stream for session={session_id}"
+        )
+        logger.debug(f"[ChatWorkflowManager] Message: {message[:100]}...")
+
+        session = await self.get_or_create_session(session_id)
+        session.message_count += 1
+        logger.debug(
+            f"[ChatWorkflowManager] Session message_count: {session.message_count}"
+        )
+
+        # Check for explicit exit intent before processing
+        user_wants_exit = detect_exit_intent(message)
+
+        # Get or create terminal session for this conversation
+        terminal_session_id = None
+        if self.terminal_tool and session_id:
+            if session_id not in self.terminal_tool.active_sessions:
+                # Create terminal session proactively
+                session_result = await self.terminal_tool.create_session(
+                    agent_id=f"chat_agent_{session_id}",
+                    conversation_id=session_id,
+                    agent_role="chat_agent",
+                    host="main",
+                )
+                if session_result.get("status") == "success":
+                    terminal_session_id = self.terminal_tool.active_sessions.get(
+                        session_id
+                    )
+            else:
+                terminal_session_id = self.terminal_tool.active_sessions.get(
+                    session_id
+                )
+
+            logger.info(
+                f"Terminal session ID for conversation {session_id}: {terminal_session_id}"
+            )
+
+        return session, terminal_session_id, user_wants_exit
+
+    async def _prepare_llm_request_params(
+        self, session: WorkflowSession, message: str
+    ) -> Dict[str, Any]:
+        """
+        Prepare LLM request parameters including endpoint, model, and prompt.
+
+        Args:
+            session: Current workflow session
+            message: User message
+
+        Returns:
+            Dictionary with 'endpoint', 'model', and 'prompt' keys
+        """
+        import httpx
+
+        # Get Ollama endpoint from config
+        try:
+            ollama_endpoint = global_config_manager.get_nested(
+                "backend.llm.ollama.endpoint", None
+            )
+
+            if not ollama_endpoint:
+                from src.unified_config import config
+                ollama_host = config.get_host("ollama")
+                ollama_port = config.get_port("ollama")
+                ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
+
+            # Validate endpoint format
+            if not ollama_endpoint or not ollama_endpoint.startswith(
+                ("http://", "https://")
+            ):
+                logger.error(
+                    f"Invalid endpoint URL: {ollama_endpoint}, using config-based default"
+                )
+                from src.unified_config import config
+                ollama_host = config.get_host("ollama")
+                ollama_port = config.get_port("ollama")
+                ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
+
+        except Exception as config_error:
+            logger.error(
+                f"Failed to load Ollama endpoint from config: {config_error}"
+            )
+            from src.unified_config import config
+            ollama_host = config.get_host("ollama")
+            ollama_port = config.get_port("ollama")
+            ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
+
+        # Load system prompt
+        try:
+            system_prompt = get_prompt("chat.system_prompt_simple")
+            logger.debug(
+                "[ChatWorkflowManager] Loaded simplified system prompt"
+            )
+        except Exception as prompt_error:
+            logger.error(
+                f"Failed to load system prompt from file: {prompt_error}"
+            )
+            system_prompt = """You are AutoBot. Execute commands using:
+<TOOL_CALL name="execute_command" params='{"command":"cmd"}'>desc</TOOL_CALL>
+
+NEVER teach commands - ALWAYS execute them."""
+
+        # Add minimal conversation history (last 2 messages only)
+        conversation_context = ""
+        if session.conversation_history:
+            conversation_context = "\n**Recent Context:**\n"
+            for msg in session.conversation_history[-2:]:
+                conversation_context += (
+                    f"User: {msg['user']}\nYou: {msg['assistant']}\n\n"
+                )
+
+        # Build complete prompt
+        full_prompt = (
+            system_prompt
+            + conversation_context
+            + f"\n**Current user message:** {message}\n\nAssistant:"
+        )
+
+        # Get selected model from config
+        try:
+            selected_model = global_config_manager.get_nested(
+                "backend.llm.ollama.selected_model", "mistral:7b-instruct"
+            )
+
+            if not selected_model or not isinstance(selected_model, str):
+                logger.error(
+                    f"Invalid model selection: {selected_model}, using default"
+                )
+                selected_model = "mistral:7b-instruct"
+
+            logger.info(f"Using LLM model from config: {selected_model}")
+
+        except Exception as config_error:
+            logger.error(f"Failed to load model from config: {config_error}")
+            selected_model = "mistral:7b-instruct"
+
+        logger.info(f"[ChatWorkflowManager] Making Ollama request to: {ollama_endpoint}")
+        logger.info(f"[ChatWorkflowManager] Using model: {selected_model}")
+
+        return {
+            "endpoint": ollama_endpoint,
+            "model": selected_model,
+            "prompt": full_prompt,
+        }
+
+    async def _interpret_command_results(
+        self,
+        command: str,
+        stdout: str,
+        stderr: str,
+        return_code: int,
+        ollama_endpoint: str,
+        selected_model: str,
+        streaming: bool = True,
+    ):
+        """
+        Send command results to LLM for interpretation.
+
+        Args:
+            command: The executed command
+            stdout: Standard output
+            stderr: Standard error
+            return_code: Command return code
+            ollama_endpoint: Ollama API endpoint
+            selected_model: Model to use
+            streaming: Whether to stream the response
+
+        Yields:
+            WorkflowMessage chunks if streaming=True
+        Returns:
+            Full interpretation text
+        """
+        import httpx
+
+        interpretation_prompt = f"""The command `{command}` was executed successfully.
+
+Output:
+```
+{stdout}
+{stderr if stderr else ''}
+```
+Return code: {return_code}
+
+Please interpret this output for the user in a clear, helpful way. Explain what it means and answer their original question."""
+
+        interpretation = ""
+
+        async with httpx.AsyncClient(timeout=60.0) as interp_client:
+            if streaming:
+                interp_response = await interp_client.post(
+                    ollama_endpoint,
+                    json={
+                        "model": selected_model,
+                        "prompt": interpretation_prompt,
+                        "stream": True,
+                        "options": {
+                            "temperature": 0.7,
+                            "top_p": 0.9,
+                            "num_ctx": 2048,
+                        },
+                    },
+                )
+
+                async for line in interp_response.aiter_lines():
+                    if line:
+                        try:
+                            data = json.loads(line)
+                            chunk = data.get("response", "")
+                            if chunk:
+                                interpretation += chunk
+                                yield WorkflowMessage(
+                                    type="stream",
+                                    content=chunk,
+                                    metadata={
+                                        "message_type": "command_interpretation",
+                                        "streaming": True,
+                                    },
+                                )
+                            if data.get("done"):
+                                break
+                        except json.JSONDecodeError:
+                            continue
+            else:
+                interp_response = await interp_client.post(
+                    ollama_endpoint,
+                    json={
+                        "model": selected_model,
+                        "prompt": interpretation_prompt,
+                        "stream": False,
+                        "options": {
+                            "temperature": 0.7,
+                            "top_p": 0.9,
+                            "num_ctx": 2048,
+                        },
+                    },
+                )
+
+                if interp_response.status_code == 200:
+                    interp_data = interp_response.json()
+                    interpretation = interp_data.get("response", "")
+
+        # For non-streaming, yield the complete interpretation at once
+        if not streaming and interpretation:
+            yield WorkflowMessage(
+                type="response",
+                content=interpretation,
+                metadata={
+                    "message_type": "command_interpretation",
+                    "streaming": False,
+                },
+            )
+
+    async def _handle_pending_approval(
+        self,
+        session_id: str,
+        command: str,
+        result: Dict[str, Any],
+        terminal_session_id: str,
+        description: str,
+    ):
+        """
+        Handle command approval workflow with polling.
+
+        Args:
+            session_id: Chat session ID
+            command: Command requiring approval
+            result: Result from terminal tool (contains approval request info)
+            terminal_session_id: Terminal session ID for approval API
+            description: Command description
+
+        Yields:
+            WorkflowMessage for approval request and status updates
+        Returns:
+            Approval result dict or None if timeout
+        """
+        # Send approval request to frontend
+        yield WorkflowMessage(
+            type="command_approval_request",
+            content=result.get(
+                "approval_ui_message",
+                "Command requires approval",
+            ),
+            metadata={
+                "command": command,
+                "risk_level": result.get("risk"),
+                "reasons": result.get("reasons", []),
+                "description": description,
+                "requires_approval": True,
+                "terminal_session_id": terminal_session_id,
+                "conversation_id": session_id,
+            },
+        )
+
+        # Yield waiting message
+        yield WorkflowMessage(
+            type="response",
+            content=f"\n\n⏳ Waiting for your approval to execute: `{command}`\nRisk level: {result.get('risk')}\nReasons: {', '.join(result.get('reasons', []))}\n",
+            metadata={
+                "message_type": "approval_waiting",
+                "command": command,
+            },
+        )
+
+        # Wait for approval with timeout (poll terminal session)
+        logger.info(
+            f"Waiting for approval of command: {command} (terminal_session: {terminal_session_id})"
+        )
+
+        max_wait_time = 3600  # 1 hour timeout
+        poll_interval = 0.5  # Poll every 500ms
+        elapsed_time = 0
+
+        approval_result = None
+        while elapsed_time < max_wait_time:
+            await asyncio.sleep(poll_interval)
+            elapsed_time += poll_interval
+
+            # Check if approval has been processed
+            try:
+                session_info = await self.terminal_tool.agent_terminal_service.get_session_info(
+                    terminal_session_id
+                )
+
+                # If pending_approval is None, command was either approved or denied
+                if (
+                    session_info
+                    and session_info.get("pending_approval") is None
+                ):
+                    # Check session history for execution result
+                    command_history = session_info.get("command_history", [])
+                    if command_history:
+                        last_command = command_history[-1]
+                        if last_command.get("command") == command:
+                            # Found the execution result
+                            approval_result = last_command.get("result", {})
+                            logger.info(
+                                f"Command approval completed: {approval_result.get('status')}"
+                            )
+
+                            # Send approval status update to frontend
+                            approval_status = (
+                                "approved"
+                                if last_command.get("approved_by")
+                                else "denied"
+                            )
+                            comment = last_command.get(
+                                "approval_comment"
+                            ) or last_command.get("denial_reason")
+
+                            yield WorkflowMessage(
+                                type="metadata_update",
+                                content="",
+                                metadata={
+                                    "message_type": "approval_status_update",
+                                    "terminal_session_id": terminal_session_id,
+                                    "approval_status": approval_status,
+                                    "approval_comment": comment,
+                                    "command": command,
+                                },
+                            )
+                            break
+            except Exception as check_error:
+                logger.error(
+                    f"Error checking approval status: {check_error}"
+                )
+
+        # Yield final result as a dict (not WorkflowMessage) for caller to process
+        yield approval_result
+
+    async def _persist_conversation(
+        self,
+        session_id: str,
+        session: WorkflowSession,
+        message: str,
+        llm_response: str,
+    ):
+        """
+        Persist conversation to Redis cache and file storage.
+
+        Args:
+            session_id: Session identifier
+            session: Workflow session object
+            message: User message
+            llm_response: LLM response
+        """
+        # Store complete exchange in conversation history
+        session.conversation_history.append(
+            {"user": message, "assistant": llm_response}
+        )
+
+        # Keep history manageable (max 10 exchanges)
+        if len(session.conversation_history) > 10:
+            session.conversation_history = session.conversation_history[-10:]
+
+        # Persist to both Redis (short-term cache) and file (long-term storage)
+        await self._save_conversation_history(
+            session_id, session.conversation_history
+        )
+        await self._append_to_transcript(session_id, message, llm_response)
+
+    async def _process_tool_calls(
+        self,
+        tool_calls: List[Dict[str, Any]],
+        session_id: str,
+        terminal_session_id: str,
+        ollama_endpoint: str,
+        selected_model: str,
+    ):
+        """
+        Process all tool calls from LLM response.
+
+        Args:
+            tool_calls: List of parsed tool calls
+            session_id: Chat session ID
+            terminal_session_id: Terminal session ID
+            ollama_endpoint: Ollama API endpoint
+            selected_model: LLM model name
+
+        Yields:
+            WorkflowMessage for each stage of execution
+        Returns:
+            Additional text to append to llm_response
+        """
+        additional_response = ""
+
+        for tool_call in tool_calls:
+            if tool_call["name"] == "execute_command":
+                command = tool_call["params"].get("command")
+                host = tool_call["params"].get("host", "main")
+                description = tool_call.get("description", "")
+
+                logger.info(
+                    f"[ChatWorkflowManager] Executing command: {command} on {host}"
+                )
+
+                # Execute command
+                result = await self._execute_terminal_command(
+                    session_id=session_id,
+                    command=command,
+                    host=host,
+                    description=description,
+                )
+
+                # Handle different result statuses
+                if result.get("status") == "pending_approval":
+                    # Ensure terminal session ID is available
+                    if not terminal_session_id:
+                        logger.error(
+                            f"No terminal session found for conversation {session_id}"
+                        )
+                        yield WorkflowMessage(
+                            type="error",
+                            content="Terminal session error - cannot request approval",
+                            metadata={"error": True},
+                        )
+                        continue
+
+                    # Handle approval workflow - yields messages and returns result
+                    approval_result = None
+                    async for approval_msg in self._handle_pending_approval(
+                        session_id, command, result, terminal_session_id, description
+                    ):
+                        # Check if this is the final result (not a WorkflowMessage)
+                        if isinstance(approval_msg, dict):
+                            approval_result = approval_msg
+                        else:
+                            yield approval_msg
+
+                    # Process approval result
+                    if approval_result and approval_result.get("status") == "success":
+                        # Yield execution confirmation
+                        yield WorkflowMessage(
+                            type="response",
+                            content="\n\n✅ Command approved and executed! Interpreting results...\n\n",
+                            metadata={
+                                "message_type": "command_executed",
+                                "command": command,
+                                "executed": True,
+                                "approved": True,
+                            },
+                        )
+
+                        # Stream interpretation
+                        async for interp_chunk in self._interpret_command_results(
+                            command,
+                            approval_result.get("stdout", ""),
+                            approval_result.get("stderr", ""),
+                            approval_result.get("return_code", 0),
+                            ollama_endpoint,
+                            selected_model,
+                            streaming=True,
+                        ):
+                            yield interp_chunk
+                            if hasattr(interp_chunk, 'content'):
+                                additional_response += interp_chunk.content
+
+                    elif approval_result:
+                        # Command failed or denied
+                        error = approval_result.get("error", "Command was denied or failed")
+                        additional_response += f"\n\n❌ {error}"
+                        yield WorkflowMessage(
+                            type="error",
+                            content=f"Command execution failed: {error}",
+                            metadata={"command": command, "error": True},
+                        )
+                    else:
+                        # Timeout
+                        additional_response += f"\n\n⏱️ Approval timeout for command: {command}"
+                        yield WorkflowMessage(
+                            type="error",
+                            content=f"Approval timeout for command: {command}",
+                            metadata={"command": command, "timeout": True},
+                        )
+
+                elif result.get("status") == "success":
+                    # Command executed without approval
+                    interpretation = await self._interpret_command_results(
+                        command,
+                        result.get("stdout", ""),
+                        result.get("stderr", ""),
+                        result.get("return_code", 0),
+                        ollama_endpoint,
+                        selected_model,
+                        streaming=False,
+                    )
+
+                    yield WorkflowMessage(
+                        type="response",
+                        content=f"\n\n{interpretation}",
+                        metadata={
+                            "message_type": "command_result_interpretation",
+                            "command": command,
+                            "executed": True,
+                        },
+                    )
+                    additional_response += f"\n\n{interpretation}"
+
+                elif result.get("status") == "error":
+                    # Command failed
+                    error = result.get("error", "Unknown error")
+                    additional_response += f"\n\n❌ Command execution failed: {error}"
+                    yield WorkflowMessage(
+                        type="error",
+                        content=f"Command failed: {error}",
+                        metadata={"command": command, "error": True},
+                    )
+
+        # Can't use return in generator - caller will aggregate chunks instead
+        # Return value would be: additional_response
+
     async def process_message_stream(
         self, session_id: str, message: str, context: Optional[Dict[str, Any]] = None
     ):
-        """Process a message through the workflow system as an async generator (for streaming)."""
+        """
+        Process a message through the workflow system as an async generator (for streaming).
+
+        This refactored version delegates to specialized helper methods for each stage
+        of the workflow, improving maintainability and testability.
+        """
         try:
-            logger.debug(
-                f"[ChatWorkflowManager] Starting process_message_stream for session={session_id}"
+            # Stage 1: Initialize session and check for exit intent
+            session, terminal_session_id, user_wants_exit = await self._initialize_chat_session(
+                session_id, message
             )
-            logger.debug(f"[ChatWorkflowManager] Message: {message[:100]}...")
-
-            session = await self.get_or_create_session(session_id)
-            session.message_count += 1
-            logger.debug(
-                f"[ChatWorkflowManager] Session message_count: {session.message_count}"
-            )
-
-            # CRITICAL: Check for explicit exit intent before processing
-            user_wants_exit = detect_exit_intent(message)
 
             if user_wants_exit:
                 logger.info(
                     f"[ChatWorkflowManager] User explicitly requested to exit conversation: {session_id}"
                 )
-                # Provide polite goodbye message
                 yield WorkflowMessage(
                     type="response",
                     content="Goodbye! Feel free to return anytime if you need assistance. Take care!",
@@ -702,168 +1261,37 @@ class ChatWorkflowManager:
                         "exit_detected": True,
                     },
                 )
-                return  # End conversation only when user explicitly wants to exit
+                return
 
-            # Get or create terminal session for this conversation BEFORE LLM call
-            # This ensures terminal_session_id is available in all response chunks
-            terminal_session_id = None
-            if self.terminal_tool and session_id:
-                if session_id not in self.terminal_tool.active_sessions:
-                    # Create terminal session proactively
-                    session_result = await self.terminal_tool.create_session(
-                        agent_id=f"chat_agent_{session_id}",
-                        conversation_id=session_id,
-                        agent_role="chat_agent",
-                        host="main",
-                    )
-                    if session_result.get("status") == "success":
-                        terminal_session_id = self.terminal_tool.active_sessions.get(
-                            session_id
-                        )
-                else:
-                    terminal_session_id = self.terminal_tool.active_sessions.get(
-                        session_id
-                    )
+            # Stage 2: Prepare LLM request parameters
+            llm_params = await self._prepare_llm_request_params(session, message)
+            ollama_endpoint = llm_params["endpoint"]
+            selected_model = llm_params["model"]
+            full_prompt = llm_params["prompt"]
 
-                logger.info(
-                    f"Terminal session ID for conversation {session_id}: {terminal_session_id}"
-                )
-
-            # ENHANCED LLM CALL with system prompt and context
-            logger.debug(
-                f"[ChatWorkflowManager] Using enhanced Ollama call with system prompt from prompt file"
+            # Debug logging
+            logger.info(
+                f"[ChatWorkflowManager] Prompt length: {len(full_prompt)} characters"
             )
+            print("\n" + "=" * 80, flush=True)
+            print("=== OLLAMA REQUEST DEBUG ===", flush=True)
+            print(f"Endpoint: {ollama_endpoint}", flush=True)
+            print(f"Model: {selected_model}", flush=True)
+            print(f"Prompt length: {len(full_prompt)} characters", flush=True)
+            print("=" * 80 + "\n", flush=True)
 
+            # Stage 3: Stream LLM response and handle tool calls
             try:
                 import httpx
 
-                # Get Ollama endpoint from config (use config-based construction, not hardcoded localhost)
-                try:
-                    ollama_endpoint = global_config_manager.get_nested(
-                        "backend.llm.ollama.endpoint",
-                        None,  # No hardcoded fallback - will construct from config below
-                    )
-
-                    # If not in config, construct from infrastructure config
-                    if not ollama_endpoint:
-                        from src.unified_config import config
-                        ollama_host = config.get_host("ollama")
-                        ollama_port = config.get_port("ollama")
-                        ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
-
-                    # Validate endpoint format
-                    if not ollama_endpoint or not ollama_endpoint.startswith(
-                        ("http://", "https://")
-                    ):
-                        logger.error(
-                            f"Invalid endpoint URL: {ollama_endpoint}, using config-based default"
-                        )
-                        from src.unified_config import config
-                        ollama_host = config.get_host("ollama")
-                        ollama_port = config.get_port("ollama")
-                        ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
-
-                except Exception as config_error:
-                    logger.error(
-                        f"Failed to load Ollama endpoint from config: {config_error}"
-                    )
-                    # Fallback to config-based construction instead of hardcoded localhost
-                    from src.unified_config import config
-                    ollama_host = config.get_host("ollama")
-                    ollama_port = config.get_port("ollama")
-                    ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
-
-                # Load SIMPLIFIED AutoBot system prompt (executor-focused, no bloat)
-                try:
-                    system_prompt = get_prompt("chat.system_prompt_simple")
-                    logger.debug(
-                        "[ChatWorkflowManager] Loaded simplified system prompt from prompts/chat/system_prompt_simple.md"
-                    )
-                except Exception as prompt_error:
-                    logger.error(
-                        f"Failed to load system prompt from file: {prompt_error}"
-                    )
-                    # Fallback to ultra-minimal executor prompt if file loading fails
-                    system_prompt = """You are AutoBot. Execute commands using:
-<TOOL_CALL name="execute_command" params='{"command":"cmd"}'>desc</TOOL_CALL>
-
-NEVER teach commands - ALWAYS execute them."""
-
-                # Add minimal conversation history (last 2 messages only to avoid prompt bloat)
-                conversation_context = ""
-                if session.conversation_history:
-                    conversation_context = "\n**Recent Context:**\n"
-                    for msg in session.conversation_history[
-                        -2:
-                    ]:  # Last 2 exchanges ONLY
-                        conversation_context += (
-                            f"User: {msg['user']}\nYou: {msg['assistant']}\n\n"
-                        )
-
-                # Build complete prompt with system context and history
-                full_prompt = (
-                    system_prompt
-                    + conversation_context
-                    + f"\n**Current user message:** {message}\n\nAssistant:"
-                )
-
-                # Get selected model from config
-                try:
-                    selected_model = global_config_manager.get_nested(
-                        "backend.llm.ollama.selected_model", "mistral:7b-instruct"
-                    )
-
-                    # Validate model is non-empty string
-                    if not selected_model or not isinstance(selected_model, str):
-                        logger.error(
-                            f"Invalid model selection: {selected_model}, using default"
-                        )
-                        selected_model = "mistral:7b-instruct"
-
-                    logger.info(f"Using LLM model from config: {selected_model}")
-
-                except Exception as config_error:
-                    logger.error(f"Failed to load model from config: {config_error}")
-                    selected_model = "mistral:7b-instruct"
-
-                # DEBUG: Log exact request details
-                logger.info(
-                    f"[ChatWorkflowManager] Making Ollama request to: {ollama_endpoint}"
-                )
-                logger.info(f"[ChatWorkflowManager] Using model: {selected_model}")
-                logger.info(
-                    f"[ChatWorkflowManager] Prompt length: {len(full_prompt)} characters"
-                )
-                logger.info(
-                    f"[ChatWorkflowManager] First 500 chars of prompt: {full_prompt[:500]}"
-                )
-                logger.info(
-                    f"[ChatWorkflowManager] Last 500 chars of prompt: {full_prompt[-500:]}"
-                )
-
-                # DEBUG: Print statements to bypass logging config
-                print("\n" + "=" * 80, flush=True)
-                print("=== OLLAMA REQUEST DEBUG ===", flush=True)
-                print(f"Endpoint: {ollama_endpoint}", flush=True)
-                print(f"Model: {selected_model}", flush=True)
-                print(f"Prompt length: {len(full_prompt)} characters", flush=True)
-                print(
-                    f"\nFirst 1000 chars of prompt:\n{full_prompt[:1000]}", flush=True
-                )
-                print(
-                    f"\nLast 1000 chars of prompt:\n{full_prompt[-1000:]}", flush=True
-                )
-                print("=" * 80 + "\n", flush=True)
-
                 async with httpx.AsyncClient(timeout=60.0) as client:
-                    # Stream the response from Ollama
                     async with client.stream(
                         "POST",
                         ollama_endpoint,
                         json={
                             "model": selected_model,
                             "prompt": full_prompt,
-                            "stream": True,  # Enable streaming for real-time response
+                            "stream": True,
                             "options": {
                                 "temperature": 0.7,
                                 "top_p": 0.9,
@@ -877,34 +1305,23 @@ NEVER teach commands - ALWAYS execute them."""
                         if response.status_code == 200:
                             llm_response = ""
 
-                            # Stream response chunks as they arrive
+                            # Stream response chunks
                             async for line in response.aiter_lines():
                                 if line:
                                     try:
-                                        import json
-
                                         chunk_data = json.loads(line)
                                         chunk_text = chunk_data.get("response", "")
 
                                         if chunk_text:
-                                            # Normalize TOOL_CALL spacing (models may generate TOOL_ CALL with space)
+                                            # Normalize TOOL_CALL spacing
                                             chunk_text = re.sub(
-                                                r"<TOOL_\s+CALL",
-                                                "<TOOL_CALL",
-                                                chunk_text,
+                                                r"<TOOL_\s+CALL", "<TOOL_CALL", chunk_text
                                             )
                                             chunk_text = re.sub(
-                                                r"</TOOL_\s+CALL>",
-                                                "</TOOL_CALL>",
-                                                chunk_text,
+                                                r"</TOOL_\s+CALL>", "</TOOL_CALL>", chunk_text
                                             )
 
                                             llm_response += chunk_text
-
-                                            # Yield streaming chunks in real-time
-                                            from src.async_chat_workflow import (
-                                                WorkflowMessage,
-                                            )
 
                                             yield WorkflowMessage(
                                                 type="response",
@@ -913,416 +1330,46 @@ NEVER teach commands - ALWAYS execute them."""
                                                     "message_type": "llm_response_chunk",
                                                     "model": selected_model,
                                                     "streaming": True,
-                                                    "terminal_session_id": terminal_session_id,  # CRITICAL: Include for TOOL_CALL detection
+                                                    "terminal_session_id": terminal_session_id,
                                                 },
                                             )
 
-                                        # Check if this is the final chunk
                                         if chunk_data.get("done", False):
                                             break
 
                                     except json.JSONDecodeError as e:
-                                        logger.error(
-                                            f"Failed to parse stream chunk: {e}"
-                                        )
+                                        logger.error(f"Failed to parse stream chunk: {e}")
                                         continue
 
-                            logger.debug(
-                                f"[ChatWorkflowManager] Completed streaming response: {llm_response[:100]}..."
-                            )
                             logger.info(
                                 f"[ChatWorkflowManager] Full LLM response length: {len(llm_response)} characters"
                             )
-                            logger.info(
-                                f"[ChatWorkflowManager] Complete LLM response: {llm_response}"
-                            )
 
-                            # DEBUG: Print statements to bypass logging config
-                            print("\n" + "=" * 80, flush=True)
-                            print("=== LLM RESPONSE DEBUG ===", flush=True)
-                            print(
-                                f"Response length: {len(llm_response)} characters",
-                                flush=True,
-                            )
-                            print(
-                                f"Contains '<TOOL_CALL': {'<TOOL_CALL' in llm_response}",
-                                flush=True,
-                            )
-                            print(f"\nFull LLM response:\n{llm_response}", flush=True)
-                            print("=" * 80 + "\n", flush=True)
-
-                            # Check for tool calls in response
+                            # Stage 4: Process tool calls if present
                             tool_calls = self._parse_tool_calls(llm_response)
                             logger.info(
                                 f"[ChatWorkflowManager] Parsed {len(tool_calls)} tool calls from response"
                             )
 
                             if tool_calls:
-                                logger.info(
-                                    f"[ChatWorkflowManager] Detected {len(tool_calls)} tool call(s) in LLM response"
-                                )
+                                # Delegate all tool call processing to helper method
+                                async for tool_msg in self._process_tool_calls(
+                                    tool_calls,
+                                    session_id,
+                                    terminal_session_id,
+                                    ollama_endpoint,
+                                    selected_model,
+                                ):
+                                    yield tool_msg
 
-                                for tool_call in tool_calls:
-                                    if tool_call["name"] == "execute_command":
-                                        # Execute terminal command
-                                        command = tool_call["params"].get("command")
-                                        host = tool_call["params"].get("host", "main")
-                                        description = tool_call.get("description", "")
-
-                                        logger.info(
-                                            f"[ChatWorkflowManager] Executing command: {command} on {host}"
-                                        )
-
-                                        # Execute command
-                                        result = await self._execute_terminal_command(
-                                            session_id=session_id,
-                                            command=command,
-                                            host=host,
-                                            description=description,
-                                        )
-
-                                        # Handle result
-                                        if result.get("status") == "pending_approval":
-                                            # Get terminal session ID for approval API
-                                            terminal_session_id = (
-                                                self.terminal_tool.active_sessions.get(
-                                                    session_id
-                                                )
-                                            )
-
-                                            if not terminal_session_id:
-                                                logger.error(
-                                                    f"No terminal session found for conversation {session_id}"
-                                                )
-                                                yield WorkflowMessage(
-                                                    type="error",
-                                                    content="Terminal session error - cannot request approval",
-                                                    metadata={"error": True},
-                                                )
-                                                continue
-
-                                            # Command needs approval - send to frontend WITH terminal_session_id
-                                            yield WorkflowMessage(
-                                                type="command_approval_request",
-                                                content=result.get(
-                                                    "approval_ui_message",
-                                                    "Command requires approval",
-                                                ),
-                                                metadata={
-                                                    "command": command,
-                                                    "risk_level": result.get("risk"),
-                                                    "reasons": result.get(
-                                                        "reasons", []
-                                                    ),
-                                                    "description": description,
-                                                    "requires_approval": True,
-                                                    "terminal_session_id": terminal_session_id,  # CRITICAL: Frontend needs this to call approval API
-                                                    "conversation_id": session_id,
-                                                },
-                                            )
-
-                                            # Yield waiting message
-                                            yield WorkflowMessage(
-                                                type="response",
-                                                content=f"\n\n⏳ Waiting for your approval to execute: `{command}`\nRisk level: {result.get('risk')}\nReasons: {', '.join(result.get('reasons', []))}\n",
-                                                metadata={
-                                                    "message_type": "approval_waiting",
-                                                    "command": command,
-                                                },
-                                            )
-
-                                            # Wait for approval with timeout (poll terminal session)
-                                            logger.info(
-                                                f"Waiting for approval of command: {command} (terminal_session: {terminal_session_id})"
-                                            )
-
-                                            max_wait_time = 3600  # 1 hour timeout (effectively infinite for user approval)
-                                            poll_interval = 0.5  # Poll every 500ms
-                                            elapsed_time = 0
-
-                                            approval_result = None
-                                            while elapsed_time < max_wait_time:
-                                                await asyncio.sleep(poll_interval)
-                                                elapsed_time += poll_interval
-
-                                                # Check if approval has been processed by calling get_session_info
-                                                try:
-                                                    session_info = await self.terminal_tool.agent_terminal_service.get_session_info(
-                                                        terminal_session_id
-                                                    )
-
-                                                    # If pending_approval is None, command was either approved or denied
-                                                    if (
-                                                        session_info
-                                                        and session_info.get(
-                                                            "pending_approval"
-                                                        )
-                                                        is None
-                                                    ):
-                                                        # Check session history for execution result
-                                                        command_history = (
-                                                            session_info.get(
-                                                                "command_history", []
-                                                            )
-                                                        )
-                                                        if command_history:
-                                                            last_command = (
-                                                                command_history[-1]
-                                                            )
-                                                            if (
-                                                                last_command.get(
-                                                                    "command"
-                                                                )
-                                                                == command
-                                                            ):
-                                                                # Found the execution result
-                                                                approval_result = (
-                                                                    last_command.get(
-                                                                        "result", {}
-                                                                    )
-                                                                )
-                                                                logger.info(
-                                                                    f"Command approval completed: {approval_result.get('status')}"
-                                                                )
-
-                                                                # Send approval status update to frontend
-                                                                approval_status = (
-                                                                    "approved"
-                                                                    if last_command.get(
-                                                                        "approved_by"
-                                                                    )
-                                                                    else "denied"
-                                                                )
-                                                                comment = last_command.get(
-                                                                    "approval_comment"
-                                                                ) or last_command.get(
-                                                                    "denial_reason"
-                                                                )
-
-                                                                yield WorkflowMessage(
-                                                                    type="metadata_update",
-                                                                    content="",
-                                                                    metadata={
-                                                                        "message_type": "approval_status_update",
-                                                                        "terminal_session_id": terminal_session_id,
-                                                                        "approval_status": approval_status,
-                                                                        "approval_comment": comment,
-                                                                        "command": command,
-                                                                    },
-                                                                )
-                                                                break
-                                                except Exception as check_error:
-                                                    logger.error(
-                                                        f"Error checking approval status: {check_error}"
-                                                    )
-
-                                            # Handle approval result
-                                            if approval_result:
-                                                # Command was approved and executed
-                                                if (
-                                                    approval_result.get("status")
-                                                    == "success"
-                                                ):
-                                                    stdout = approval_result.get(
-                                                        "stdout", ""
-                                                    )
-                                                    stderr = approval_result.get(
-                                                        "stderr", ""
-                                                    )
-                                                    return_code = approval_result.get(
-                                                        "return_code", 0
-                                                    )
-
-                                                    # Feed result back to LLM for interpretation (STREAMING)
-                                                    interpretation_prompt = f"""The command `{command}` was approved and executed successfully.
-
-Output:
-```
-{stdout}
-{stderr if stderr else ''}
-```
-Return code: {return_code}
-
-Please interpret this output for the user in a clear, helpful way. Explain what it means and answer their original question."""
-
-                                                    # Yield execution confirmation first
-                                                    yield WorkflowMessage(
-                                                        type="response",
-                                                        content="\n\n✅ Command approved and executed! Interpreting results...\n\n",
-                                                        metadata={
-                                                            "message_type": "command_executed",
-                                                            "command": command,
-                                                            "executed": True,
-                                                            "approved": True,
-                                                        },
-                                                    )
-
-                                                    # Stream LLM interpretation of results
-                                                    async with httpx.AsyncClient(
-                                                        timeout=60.0
-                                                    ) as interp_client:
-                                                        interp_response = await interp_client.post(
-                                                            ollama_endpoint,
-                                                            json={
-                                                                "model": selected_model,
-                                                                "prompt": interpretation_prompt,
-                                                                "stream": True,  # STREAMING enabled!
-                                                                "options": {
-                                                                    "temperature": 0.7,
-                                                                    "top_p": 0.9,
-                                                                    "num_ctx": 2048,
-                                                                },
-                                                            },
-                                                        )
-
-                                                        interpretation = ""
-                                                        async for line in interp_response.aiter_lines():
-                                                            if line:
-                                                                try:
-                                                                    data = json.loads(line)
-                                                                    chunk = data.get("response", "")
-                                                                    if chunk:
-                                                                        interpretation += chunk
-                                                                        # Stream each chunk
-                                                                        yield WorkflowMessage(
-                                                                            type="stream",
-                                                                            content=chunk,
-                                                                            metadata={
-                                                                                "message_type": "command_interpretation",
-                                                                                "streaming": True,
-                                                                            },
-                                                                        )
-                                                                    if data.get("done"):
-                                                                        break
-                                                                except json.JSONDecodeError:
-                                                                    continue
-
-                                                        # Update llm_response with interpretation
-                                                        llm_response += f"\n\n✅ Command approved and executed!\n\n{interpretation}"
-                                                else:
-                                                    # Command failed or was denied
-                                                    error = approval_result.get(
-                                                        "error",
-                                                        "Command was denied or failed",
-                                                    )
-                                                    llm_response += f"\n\n❌ {error}"
-                                                    yield WorkflowMessage(
-                                                        type="error",
-                                                        content=f"Command execution failed: {error}",
-                                                        metadata={
-                                                            "command": command,
-                                                            "error": True,
-                                                        },
-                                                    )
-                                            else:
-                                                # Timeout - no approval received
-                                                logger.warning(
-                                                    f"Approval timeout for command: {command}"
-                                                )
-                                                llm_response += f"\n\n⏱️ Approval timeout - command `{command}` was not approved within {max_wait_time} seconds."
-                                                yield WorkflowMessage(
-                                                    type="error",
-                                                    content=f"Approval timeout for command: {command}",
-                                                    metadata={
-                                                        "command": command,
-                                                        "timeout": True,
-                                                    },
-                                                )
-
-                                        elif result.get("status") == "success":
-                                            # Command executed successfully
-                                            stdout = result.get("stdout", "")
-                                            stderr = result.get("stderr", "")
-                                            return_code = result.get("return_code", 0)
-
-                                            # Feed result back to LLM for interpretation
-                                            interpretation_prompt = f"""The command `{command}` was executed successfully.
-
-Output:
-```
-{stdout}
-{stderr if stderr else ''}
-```
-Return code: {return_code}
-
-Please interpret this output for the user in a clear, helpful way. Explain what it means and answer their original question."""
-
-                                            # Get LLM interpretation of results
-                                            async with httpx.AsyncClient(
-                                                timeout=30.0
-                                            ) as interp_client:
-                                                interp_response = await interp_client.post(
-                                                    ollama_endpoint,
-                                                    json={
-                                                        "model": selected_model,
-                                                        "prompt": interpretation_prompt,
-                                                        "stream": False,
-                                                        "options": {
-                                                            "temperature": 0.7,
-                                                            "top_p": 0.9,
-                                                            "num_ctx": 2048,
-                                                        },
-                                                    },
-                                                )
-
-                                                if interp_response.status_code == 200:
-                                                    interp_data = interp_response.json()
-                                                    interpretation = interp_data.get(
-                                                        "response", ""
-                                                    )
-
-                                                    # Yield interpretation as final response
-                                                    yield WorkflowMessage(
-                                                        type="response",
-                                                        content=f"\n\n{interpretation}",
-                                                        metadata={
-                                                            "message_type": "command_result_interpretation",
-                                                            "command": command,
-                                                            "executed": True,
-                                                        },
-                                                    )
-
-                                                    # Update llm_response with interpretation
-                                                    llm_response += (
-                                                        f"\n\n{interpretation}"
-                                                    )
-
-                                        elif result.get("status") == "error":
-                                            # Command failed
-                                            error = result.get("error", "Unknown error")
-                                            llm_response += f"\n\n❌ Command execution failed: {error}"
-                                            yield WorkflowMessage(
-                                                type="error",
-                                                content=f"Command failed: {error}",
-                                                metadata={
-                                                    "command": command,
-                                                    "error": True,
-                                                },
-                                            )
-
-                            # Store complete exchange in conversation history
-                            session.conversation_history.append(
-                                {"user": message, "assistant": llm_response}
-                            )
-
-                            # Keep history manageable (max 10 exchanges)
-                            if len(session.conversation_history) > 10:
-                                session.conversation_history = (
-                                    session.conversation_history[-10:]
-                                )
-
-                            # Persist to both Redis (short-term cache) and file (long-term storage)
-                            await self._save_conversation_history(
-                                session_id, session.conversation_history
-                            )
-                            await self._append_to_transcript(
-                                session_id, message, llm_response
+                            # Stage 5: Persist conversation
+                            await self._persist_conversation(
+                                session_id, session, message, llm_response
                             )
                         else:
                             logger.error(
                                 f"[ChatWorkflowManager] Ollama request failed: {response.status_code}"
                             )
-                            from src.async_chat_workflow import WorkflowMessage
 
                             yield WorkflowMessage(
                                 type="error",
@@ -1334,7 +1381,6 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                 logger.error(
                     f"[ChatWorkflowManager] Direct LLM call failed: {llm_error}"
                 )
-                from src.async_chat_workflow import WorkflowMessage
 
                 yield WorkflowMessage(
                     type="error",
@@ -1348,7 +1394,6 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                 exc_info=True,
             )
             # Yield error message
-            from src.async_chat_workflow import WorkflowMessage
 
             yield WorkflowMessage(
                 type="error",

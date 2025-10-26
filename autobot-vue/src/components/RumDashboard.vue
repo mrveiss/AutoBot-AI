@@ -370,9 +370,7 @@ export default {
 
         // PERFORMANCE: Use performance-aware refresh interval
         if (isPerformanceModeEnabled()) {
-          console.log(`[RumDashboard] Performance mode: refresh interval set to ${refreshInterval / 60000} minutes`)
         } else {
-          console.log(`[RumDashboard] Normal mode: refresh interval set to ${refreshInterval / 1000} seconds`)
         }
 
         refreshIntervalId = setInterval(refreshData, refreshInterval)

@@ -138,7 +138,6 @@ const initTerminal = async () => {
       if (!props.readOnly) {
         emit('data', data)
       } else {
-        console.log('[BaseXTerminal] Data blocked - terminal is read-only')
       }
     })
 
@@ -168,7 +167,6 @@ const disposeTerminal = () => {
       terminal.value = undefined
       fitAddon.value = undefined
       emit('disposed')
-      console.log('[BaseXTerminal] Terminal disposed', { sessionId: props.sessionId })
     } catch (error) {
       console.error('[BaseXTerminal] Error disposing terminal:', error)
     }
@@ -242,7 +240,6 @@ watch(() => props.theme, (newTheme) => {
 // Watch for readOnly changes
 watch(() => props.readOnly, (readOnly) => {
   if (terminal.value) {
-    console.log('[BaseXTerminal] ReadOnly changed:', { readOnly, sessionId: props.sessionId })
 
     // Update disableStdin option
     terminal.value.options.disableStdin = readOnly
@@ -251,11 +248,9 @@ watch(() => props.readOnly, (readOnly) => {
     if (!readOnly) {
       nextTick(() => {
         terminal.value?.focus()
-        console.log('[BaseXTerminal] Input enabled and focused')
       })
     } else {
       terminal.value.blur()
-      console.log('[BaseXTerminal] Input disabled and blurred')
     }
   }
 })

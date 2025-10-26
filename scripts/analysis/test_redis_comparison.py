@@ -235,7 +235,7 @@ async def analyze_existing_data():
     logger.info("\n=== Analyzing Existing Redis Data ===")
     try:
         import redis
-from src.constants import NetworkConstants, ServiceURLs
+        from src.constants import NetworkConstants, ServiceURLs
         client = redis.Redis(host='localhost', port=6379, db=2, decode_responses=True)
         
         # Get sample documents
