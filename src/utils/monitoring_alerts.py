@@ -13,8 +13,6 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import redis
-
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
 
@@ -138,17 +136,14 @@ class RedisNotificationChannel(AlertNotificationChannel):
         self._initialize_redis()
 
     def _initialize_redis(self):
-        """Initialize Redis connection"""
+        """Initialize Redis connection using canonical utility"""
         try:
-            self.redis_client = redis.Redis(
-                host=cfg.get("redis.host"),
-                port=cfg.get("redis.port"),
-                password=cfg.get("redis.password"),
-                db=cfg.get("redis.databases.metrics", 4),
-                decode_responses=True,
-                socket_timeout=2,
-                socket_connect_timeout=1,
-            )
+            # Use canonical Redis utility following CLAUDE.md "🔴 REDIS CLIENT USAGE" policy
+            from src.utils.redis_client import get_redis_client
+
+            self.redis_client = get_redis_client(database="metrics")
+            if self.redis_client is None:
+                logger.warning("Redis client initialization returned None (Redis disabled?)")
         except Exception as e:
             logger.warning(f"Could not initialize Redis for alerts: {e}")
 
@@ -296,17 +291,14 @@ class MonitoringAlertsManager:
         self._setup_default_channels()
 
     def _initialize_redis(self):
-        """Initialize Redis connection for alert storage"""
+        """Initialize Redis connection for alert storage using canonical utility"""
         try:
-            self.redis_client = redis.Redis(
-                host=cfg.get("redis.host"),
-                port=cfg.get("redis.port"),
-                password=cfg.get("redis.password"),
-                db=cfg.get("redis.databases.metrics", 4),
-                decode_responses=True,
-                socket_timeout=2,
-                socket_connect_timeout=1,
-            )
+            # Use canonical Redis utility following CLAUDE.md "🔴 REDIS CLIENT USAGE" policy
+            from src.utils.redis_client import get_redis_client
+
+            self.redis_client = get_redis_client(database="metrics")
+            if self.redis_client is None:
+                logger.warning("Redis client initialization returned None (Redis disabled?)")
         except Exception as e:
             logger.warning(f"Could not initialize Redis for alert storage: {e}")
 

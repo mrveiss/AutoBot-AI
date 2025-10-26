@@ -21,7 +21,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import aiofiles
 import aiohttp
 import psutil
-import redis
 
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
@@ -212,16 +211,19 @@ class Phase9PerformanceMonitor:
         self.logger.info(f"NPU Available: {self.npu_available}")
 
     def _initialize_redis(self):
-        """Initialize Redis client for metrics storage"""
+        """Initialize Redis client for metrics storage using canonical utility.
+
+        This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
+        Uses DB 4 (metrics) for performance metrics storage.
+        """
         try:
-            self.redis_client = redis.Redis(
-                host=cfg.get_host("redis"),
-                port=cfg.get_port("redis"),
-                db=cfg.get("redis.databases.metrics.db", 4),
-                decode_responses=True,
-                socket_timeout=5.0,
-                socket_connect_timeout=2.0,
-            )
+            # Use canonical Redis utility instead of direct instantiation
+            from src.utils.redis_client import get_redis_client
+
+            self.redis_client = get_redis_client(database="metrics")
+            if self.redis_client is None:
+                raise Exception("Redis client initialization returned None")
+
             self.redis_client.ping()
             self.logger.info("Redis client initialized for performance metrics")
         except Exception as e:

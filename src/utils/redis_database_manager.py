@@ -125,6 +125,10 @@ class RedisDatabaseManager:
                     "db": cfg.get("redis.databases.workflows", 7),
                     "description": "Workflow state",
                 },
+                "monitoring": {
+                    "db": cfg.get("redis.databases.monitoring", 7),
+                    "description": "Infrastructure monitoring data",
+                },
                 "vectors": {
                     "db": cfg.get("redis.databases.vectors", 8),
                     "description": "Vector embeddings",
@@ -132,6 +136,10 @@ class RedisDatabaseManager:
                 "models": {
                     "db": cfg.get("redis.databases.models", 9),
                     "description": "Model metadata",
+                },
+                "analytics": {
+                    "db": cfg.get("redis.databases.analytics", 11),
+                    "description": "Codebase analytics and indexing",
                 },
                 "testing": {
                     "db": cfg.get("redis.databases.testing", 15),

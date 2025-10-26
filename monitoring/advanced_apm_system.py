@@ -14,7 +14,6 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any, Set, Callable
 from collections import defaultdict, deque
 import statistics
-import redis
 import aiohttp
 import aiofiles
 from pathlib import Path
@@ -214,16 +213,14 @@ class AdvancedAPMSystem:
         self._initialize_default_alert_rules()
 
     async def initialize_redis_connection(self):
-        """Initialize Redis connection for APM data."""
+        """Initialize Redis connection for APM data using canonical utility."""
         try:
-            self.redis_client = redis.Redis(
-                host=self.redis_host,
-                port=self.redis_port,
-                db=4,  # Metrics database
-                decode_responses=True,
-                socket_timeout=5.0,
-                socket_connect_timeout=5.0
-            )
+            from src.utils.redis_client import get_redis_client
+
+            self.redis_client = get_redis_client(database="metrics")
+            if self.redis_client is None:
+                raise Exception("Redis client initialization returned None")
+
             self.redis_client.ping()
             self.logger.info("✅ Redis connection established for APM")
         except Exception as e:

@@ -18,7 +18,6 @@ import concurrent.futures
 import os
 
 import aiohttp
-import redis
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -179,24 +178,37 @@ class PerformanceBenchmark:
         return results
     
     async def _benchmark_redis_connections(self, db_num: int, duration_seconds: int) -> BenchmarkResult:
-        """Benchmark Redis connection performance."""
+        """Benchmark Redis connection performance using canonical utility.
+
+        This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
+        Maps DB numbers to named databases for benchmarking.
+        """
+        from src.utils.redis_client import get_redis_client
+
+        # Map DB numbers to database names for canonical utility
+        db_name_map = {
+            0: "main",
+            1: "knowledge",
+            4: "metrics",
+            7: "workflows",
+            8: "vectors"
+        }
+
         latencies = []
         success_count = 0
         error_count = 0
         start_time = time.time()
-        
+
         while time.time() - start_time < duration_seconds:
             conn_start = time.time()
-            
+
             try:
-                client = redis.Redis(
-                    host=VMS['redis'],
-                    port=6379,
-                    db=db_num,
-                    socket_timeout=5.0,
-                    socket_connect_timeout=5.0
-                )
-                
+                # Get client using canonical utility with named database
+                db_name = db_name_map.get(db_num, "main")
+                client = get_redis_client(database=db_name)
+                if client is None:
+                    raise Exception(f"Redis client initialization returned None for DB {db_num}")
+
                 # Test connection with ping
                 client.ping()
                 client.close()
@@ -237,19 +249,33 @@ class PerformanceBenchmark:
         )
     
     async def _benchmark_redis_operations(self, db_num: int, duration_seconds: int) -> BenchmarkResult:
-        """Benchmark Redis read/write operations."""
+        """Benchmark Redis read/write operations using canonical utility.
+
+        This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
+        Maps DB numbers to named databases for benchmarking.
+        """
+        from src.utils.redis_client import get_redis_client
+
+        # Map DB numbers to database names for canonical utility
+        db_name_map = {
+            0: "main",
+            1: "knowledge",
+            4: "metrics",
+            7: "workflows",
+            8: "vectors"
+        }
+
         latencies = []
         success_count = 0
         error_count = 0
         start_time = time.time()
-        
+
         try:
-            client = redis.Redis(
-                host=VMS['redis'],
-                port=6379,
-                db=db_num,
-                socket_timeout=5.0
-            )
+            # Get client using canonical utility with named database
+            db_name = db_name_map.get(db_num, "main")
+            client = get_redis_client(database=db_name)
+            if client is None:
+                raise Exception(f"Redis client initialization returned None for DB {db_num}")
             
             operation_counter = 0
             

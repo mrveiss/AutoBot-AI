@@ -23,9 +23,12 @@ redis_databases:
   sessions:
     db: 6
     description: "User sessions and authentication"
-  tasks:
+  workflows:
     db: 7
-    description: "Task management and queues"
+    description: "Workflow state and execution"
+  monitoring:
+    db: 7
+    description: "Infrastructure monitoring data (alias for workflows DB)"
   logs:
     db: 8
     description: "Log data and history"
@@ -37,9 +40,12 @@ redis_databases:
     description: "Security audit logging and compliance (OWASP/NIST compliant)"
     max_connections: 15
     timeout_seconds: 3.0
-  codebase:
+  analytics:
     db: 11
     description: "Codebase analytics and code analysis results"
+  codebase:
+    db: 11
+    description: "Codebase analytics (alias for analytics DB)"
 
 # Connection settings
 host: localhost
