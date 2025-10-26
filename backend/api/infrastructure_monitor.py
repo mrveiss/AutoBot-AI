@@ -13,14 +13,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import aiohttp
-import redis
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 # Import unified configuration system - NO HARDCODED VALUES
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
-from src.utils.distributed_service_discovery import get_redis_connection_params_sync
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -115,48 +113,20 @@ class InfrastructureMonitor:
 
     def _initialize_clients(self):
         """
-        Initialize monitoring clients using service discovery
+        Initialize monitoring clients using canonical utility
 
-        ELIMINATES DNS RESOLUTION DELAYS BY:
-        - Using cached service discovery endpoints
-        - Direct IP addressing instead of DNS lookups
+        This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
+        Uses DB 7 (monitoring) for infrastructure monitoring data.
         """
         try:
-            # Get Redis connection parameters from service discovery
-            params = get_redis_connection_params_sync()
-            password = (
-                cfg.get("redis.password")
-                if cfg.get("redis.password")
-                else params.get("password")
-            )
+            # Use canonical Redis utility instead of service discovery
+            from src.utils.redis_client import get_redis_client
 
-            self.redis_client = redis.Redis(
-                host=params["host"],  # Direct IP from service discovery
-                port=params["port"],
-                password=password,
-                decode_responses=params.get("decode_responses", True),
-                socket_timeout=params.get("socket_timeout", 1.0),
-                socket_connect_timeout=params.get("socket_connect_timeout", 0.5),
-                retry_on_timeout=params.get("retry_on_timeout", False),
-            )
+            self.redis_client = get_redis_client(database="monitoring")
+            if self.redis_client is None:
+                logger.warning("Redis client initialization returned None (Redis disabled?)")
         except Exception as e:
-            logger.warning(
-                f"Could not initialize Redis client with service discovery: {e}"
-            )
-            # Fallback to config-based connection
-            try:
-                self.redis_client = redis.Redis(
-                    host=cfg.get("redis.host"),
-                    port=cfg.get("redis.port"),
-                    password=cfg.get("redis.password"),
-                    decode_responses=True,
-                    socket_timeout=cfg.get("redis.connection.socket_timeout"),
-                    socket_connect_timeout=cfg.get(
-                        "redis.connection.socket_connect_timeout"
-                    ),
-                )
-            except Exception as fallback_error:
-                logger.error(f"Config fallback also failed: {fallback_error}")
+            logger.error(f"Could not initialize Redis client: {e}")
 
     async def check_service_health(
         self, url: str, name: str, timeout: int = None

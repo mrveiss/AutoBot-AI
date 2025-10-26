@@ -82,28 +82,18 @@ async def get_fresh_knowledge_stats(request: Request = None):
 
 @router.get("/debug_redis")
 async def debug_redis_connection():
-    """Debug Redis connection and vector counts"""
+    """Debug Redis connection and vector counts using canonical utility.
+
+    This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
+    Uses DB 1 (knowledge) for knowledge base debugging.
+    """
     try:
-        import aioredis
-        import redis
+        # Use canonical Redis utility instead of direct instantiation
+        from src.utils.redis_client import get_redis_client
 
-        # Test direct Redis connection to the knowledge base
-        redis_host = os.getenv("AUTOBOT_REDIS_HOST")
-        redis_port = os.getenv("AUTOBOT_REDIS_PORT")
-        redis_db = os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE")
-
-        if not all([redis_host, redis_port, redis_db]):
-            raise ValueError(
-                "Redis configuration missing: AUTOBOT_REDIS_HOST, AUTOBOT_REDIS_PORT, and AUTOBOT_REDIS_DB_KNOWLEDGE must be set"
-            )
-
-        redis_client = redis.Redis(
-            host=redis_host,
-            port=int(redis_port),
-            db=int(redis_db),  # Knowledge base database
-            decode_responses=False,
-            socket_timeout=5,
-        )
+        redis_client = get_redis_client(database="knowledge")
+        if redis_client is None:
+            raise ValueError("Redis client initialization returned None - check Redis configuration")
 
         # Test connection
         redis_client.ping()

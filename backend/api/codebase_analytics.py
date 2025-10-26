@@ -10,24 +10,31 @@ import logging
 import os
 import re
 import time
+import uuid
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-import redis
-from fastapi import APIRouter, HTTPException, Query
+from src.utils.chromadb_client import get_chromadb_client
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
-from src.utils.distributed_service_discovery import get_redis_connection_params_sync
+from src.llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/codebase", tags=["codebase-analytics"])
 
 # In-memory storage fallback when Redis is unavailable
 _in_memory_storage = {}
+
+# Global storage for indexing task progress (thread-safe with asyncio)
+indexing_tasks: Dict[str, Dict[str, Any]] = {}
+
+# Store active task references to prevent garbage collection
+_active_tasks: Dict[str, asyncio.Task] = {}
 
 
 class CodebaseStats(BaseModel):
@@ -72,72 +79,47 @@ class DeclarationItem(BaseModel):
 
 async def get_redis_connection():
     """
-    Get Redis connection using service discovery
+    Get Redis connection for codebase analytics using canonical utility
 
-    ELIMINATES DNS RESOLUTION DELAYS BY:
-    - Using service discovery cached endpoints
-    - Direct IP addressing (172.16.168.23)
-    - Fast connection timeouts (0.5s vs 3s)
+    This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
+    Uses DB 11 (analytics) for codebase indexing and analysis.
     """
-    # Get configuration for Redis database and fallback settings
-    from src.unified_config_manager import unified_config_manager
+    # Use canonical Redis utility instead of direct instantiation
+    from src.utils.redis_client import get_redis_client
 
-    redis_config = unified_config_manager.get_redis_config()
+    redis_client = get_redis_client(database="analytics")
+    if redis_client is None:
+        logger.warning("Redis client initialization returned None, using in-memory storage")
+        return None
 
-    # Get database number from config (default to 11 for codebase analytics)
-    codebase_db = redis_config.get("codebase_db", 11)
+    return redis_client
 
+
+def get_code_collection():
+    """Get ChromaDB client and autobot_code collection"""
     try:
-        # Get Redis connection parameters from service discovery
-        params = get_redis_connection_params_sync()
+        # Get project root
+        project_root = Path(__file__).parent.parent.parent
+        chroma_path = project_root / "data" / "chromadb"
 
-        redis_client = redis.Redis(
-            host=params["host"],  # Direct IP from service discovery
-            port=params["port"],
-            db=codebase_db,  # DB from config (default 11 for codebase analytics)
-            decode_responses=params.get("decode_responses", True),
-            socket_timeout=params.get("socket_timeout", 1.0),
-            socket_connect_timeout=params.get("socket_connect_timeout", 0.5),
-            retry_on_timeout=params.get("retry_on_timeout", False),
+        # Create persistent client with telemetry disabled using shared utility
+        chroma_client = get_chromadb_client(
+            db_path=str(chroma_path),
+            allow_reset=False,
+            anonymized_telemetry=False
         )
 
-        # Test connection
-        redis_client.ping()
-        logger.info(
-            f"Connected to Redis at {params['host']}:{params['port']} via service discovery"
+        # Get or create the code collection
+        code_collection = chroma_client.get_or_create_collection(
+            name="autobot_code",
+            metadata={"description": "Codebase analytics: functions, classes, problems, duplicates"}
         )
-        return redis_client
+
+        logger.info(f"ChromaDB autobot_code collection ready ({code_collection.count()} items)")
+        return code_collection
 
     except Exception as e:
-        logger.warning(f"Service discovery Redis connection failed: {e}")
-
-        # Fallback: Try configured Redis hosts
-        fallback_hosts = [
-            (redis_config.get("host"), redis_config.get("port")),  # Redis from config
-            (
-                redis_config.get("fallback_host", NetworkConstants.LOCALHOST_IP),
-                redis_config.get("port"),
-            ),  # Fallback host from config (use NetworkConstants for default)
-        ]
-
-        for host, port in fallback_hosts:
-            try:
-                redis_client = redis.Redis(
-                    host=host,
-                    port=port,
-                    db=codebase_db,
-                    decode_responses=True,
-                    socket_timeout=1.0,
-                    socket_connect_timeout=0.5,
-                )
-                redis_client.ping()
-                logger.info(f"Connected to Redis at fallback {host}:{port}")
-                return redis_client
-            except Exception as fallback_error:
-                logger.debug(f"Fallback to {host}:{port} failed: {fallback_error}")
-                continue
-
-        logger.warning("No Redis connection available, using in-memory storage")
+        logger.error(f"ChromaDB connection failed: {e}")
         return None
 
 
@@ -186,7 +168,89 @@ class InMemoryStorage:
         return key in self.data
 
 
-def analyze_python_file(file_path: str) -> Dict[str, Any]:
+async def detect_hardcodes_and_debt_with_llm(
+    code_snippet: str, file_path: str, language: str = "python"
+) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Use LLM to detect semantic hardcodes and technical debt that regex patterns might miss.
+
+    Detects:
+    - Obfuscated API keys/secrets
+    - Magic numbers that should be constants
+    - Configuration values that should be externalized
+    - Business logic hardcodes
+    - Technical debt patterns (TODO comments, deprecated patterns, code smells)
+    - Semantic patterns beyond simple regex
+
+    Returns:
+        Dictionary with 'hardcodes' and 'technical_debt' keys
+    """
+    try:
+        llm = LLMInterface()
+
+        prompt = f"""Analyze this {language} code and identify:
+1. **Hardcoded values** that should be externalized
+2. **Technical debt** patterns
+
+HARDCODES to find:
+- API keys, tokens, secrets (even if obfuscated)
+- IP addresses, URLs, endpoints
+- Magic numbers (numeric constants without clear meaning)
+- Configuration values (timeouts, limits, thresholds)
+- File paths, database names
+- Business logic constants
+
+TECHNICAL DEBT to find:
+- TODO/FIXME/HACK comments indicating incomplete work
+- Deprecated patterns or anti-patterns
+- Code duplication or copy-paste code
+- Overly complex functions (cognitive complexity)
+- Missing error handling
+- Temporary workarounds or commented-out code
+- Hard-to-maintain patterns
+
+Code snippet (from {file_path}):
+```{language}
+{code_snippet[:800]}
+```
+
+Return ONLY valid JSON with this EXACT format:
+{{
+  "hardcodes": [
+    {{"type": "api_key|ip|url|magic_number|config|path", "value": "actual value", "line": 0, "reason": "explanation", "severity": "high|medium|low"}}
+  ],
+  "technical_debt": [
+    {{"type": "todo|deprecated|duplication|complexity|error_handling|workaround", "line": 0, "description": "what's wrong", "impact": "high|medium|low", "suggestion": "how to fix"}}
+  ]
+}}
+
+If none found, return: {{"hardcodes": [], "technical_debt": []}}
+IMPORTANT: Return ONLY the JSON object, no other text."""
+
+        messages = [{"role": "user", "content": prompt}]
+        response = await llm.chat_completion(messages, llm_type="task")
+        result_text = response.content.strip()
+
+        # Extract JSON from response
+        if result_text.startswith('{') and result_text.endswith('}'):
+            result = json.loads(result_text)
+            return result
+        else:
+            # Try to find JSON object in response
+            import re
+            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                return result
+
+        return {"hardcodes": [], "technical_debt": []}
+
+    except Exception as e:
+        logger.debug(f"LLM analysis failed for {file_path}: {e}")
+        return {"hardcodes": [], "technical_debt": []}
+
+
+async def analyze_python_file(file_path: str, use_llm: bool = False) -> Dict[str, Any]:
     """Analyze a Python file for functions, classes, and potential issues"""
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -199,6 +263,7 @@ def analyze_python_file(file_path: str) -> Dict[str, Any]:
         imports = []
         hardcodes = []
         problems = []
+        technical_debt = []
 
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
@@ -286,12 +351,32 @@ def analyze_python_file(file_path: str) -> Dict[str, Any]:
                         }
                     )
 
+        # Use LLM for semantic analysis if enabled
+        if use_llm:
+            try:
+                llm_results = await detect_hardcodes_and_debt_with_llm(
+                    content, file_path, language="python"
+                )
+
+                # Merge LLM hardcodes with regex hardcodes (avoid duplicates)
+                existing_hardcode_values = {h.get("value") for h in hardcodes}
+                for llm_hardcode in llm_results.get("hardcodes", []):
+                    if llm_hardcode.get("value") not in existing_hardcode_values:
+                        hardcodes.append(llm_hardcode)
+
+                # Add technical debt from LLM
+                technical_debt.extend(llm_results.get("technical_debt", []))
+
+            except Exception as e:
+                logger.debug(f"LLM analysis skipped for {file_path}: {e}")
+
         return {
             "functions": functions,
             "classes": classes,
             "imports": imports,
             "hardcodes": hardcodes,
             "problems": problems,
+            "technical_debt": technical_debt,
             "line_count": len(content.splitlines()),
         }
 
@@ -311,6 +396,7 @@ def analyze_python_file(file_path: str) -> Dict[str, Any]:
                     "suggestion": "Check syntax errors",
                 }
             ],
+            "technical_debt": [],
             "line_count": 0,
         }
 
@@ -406,7 +492,10 @@ def analyze_javascript_vue_file(file_path: str) -> Dict[str, Any]:
         }
 
 
-async def scan_codebase(root_path: Optional[str] = None) -> Dict[str, Any]:
+async def scan_codebase(
+    root_path: Optional[str] = None,
+    progress_callback: Optional[callable] = None
+) -> Dict[str, Any]:
     """Scan the entire codebase using MCP-like file operations"""
     # Use project-relative path if not specified
     if root_path is None:
@@ -451,12 +540,30 @@ async def scan_codebase(root_path: Optional[str] = None) -> Dict[str, Any]:
         ".DS_Store",
         "logs",
         "temp",
+        "archives",  # Exclude archived/old code
     }
 
     try:
         root_path_obj = Path(root_path)
 
+        # First pass: count total files for progress tracking
+        total_files = 0
+        if progress_callback:
+            for file_path in root_path_obj.rglob("*"):
+                if file_path.is_file():
+                    if not any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
+                        total_files += 1
+
+            # Report total files discovered
+            await progress_callback(
+                operation="Scanning files",
+                current=0,
+                total=total_files,
+                current_file="Initializing..."
+            )
+
         # Walk through all files
+        files_processed = 0
         for file_path in root_path_obj.rglob("*"):
             if file_path.is_file():
                 # Skip if in excluded directory
@@ -467,12 +574,22 @@ async def scan_codebase(root_path: Optional[str] = None) -> Dict[str, Any]:
                 relative_path = str(file_path.relative_to(root_path_obj))
 
                 analysis_results["stats"]["total_files"] += 1
+                files_processed += 1
+
+                # Update progress every 10 files or if callback provided
+                if progress_callback and files_processed % 10 == 0:
+                    await progress_callback(
+                        operation="Scanning files",
+                        current=files_processed,
+                        total=total_files,
+                        current_file=relative_path
+                    )
 
                 file_analysis = None
 
                 if extension in PYTHON_EXTENSIONS:
                     analysis_results["stats"]["python_files"] += 1
-                    file_analysis = analyze_python_file(str(file_path))
+                    file_analysis = await analyze_python_file(str(file_path))
 
                 elif extension in JS_EXTENSIONS:
                     analysis_results["stats"]["javascript_files"] += 1
@@ -535,142 +652,439 @@ async def scan_codebase(root_path: Optional[str] = None) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Codebase scan failed: {str(e)}")
 
 
-@router.post("/index")
-async def index_codebase(root_path: Optional[str] = None):
-    """Index the AutoBot codebase and store results (Redis or in-memory)"""
-    # Use project-relative path if not specified
-    if root_path is None:
-        project_root = Path(__file__).parent.parent.parent
-        root_path = str(project_root)
+async def do_indexing_with_progress(task_id: str, root_path: str):
+    """
+    Background task: Index codebase with real-time progress updates
+
+    Updates indexing_tasks[task_id] with progress information:
+    - status: "running" | "completed" | "failed"
+    - progress: {current, total, percent, current_file, operation}
+    - result: final results when completed
+    - error: error message if failed
+    """
+    global indexing_tasks
+
     try:
-        logger.info(f"Starting codebase indexing for: {root_path}")
+        logger.info(f"[Task {task_id}] Starting background codebase indexing for: {root_path}")
 
-        # Scan the codebase
-        analysis_results = await scan_codebase(root_path)
+        # Initialize task status
+        indexing_tasks[task_id] = {
+            "status": "running",
+            "progress": {
+                "current": 0,
+                "total": 0,
+                "percent": 0,
+                "current_file": "Initializing...",
+                "operation": "Starting indexing"
+            },
+            "result": None,
+            "error": None,
+            "started_at": datetime.now().isoformat()
+        }
 
-        # Try to get Redis connection
-        redis_client = await get_redis_connection()
+        # Progress callback function
+        async def update_progress(operation: str, current: int, total: int, current_file: str):
+            percent = int((current / total * 100)) if total > 0 else 0
+            indexing_tasks[task_id]["progress"] = {
+                "current": current,
+                "total": total,
+                "percent": percent,
+                "current_file": current_file,
+                "operation": operation
+            }
+            logger.debug(f"[Task {task_id}] Progress: {operation} - {current}/{total} ({percent}%)")
 
-        if redis_client:
-            storage_type = "redis"
-            # Store in Redis DB 11
-            redis_client.set("codebase:analysis:full", json.dumps(analysis_results))
-            redis_client.set("codebase:analysis:timestamp", datetime.now().isoformat())
+        # Scan the codebase with progress tracking
+        analysis_results = await scan_codebase(root_path, progress_callback=update_progress)
 
-            # Store aggregated stats
-            redis_client.hset("codebase:stats", mapping=analysis_results["stats"])
-
-            # Store function index
-            for func in analysis_results["all_functions"]:
-                func_key = f"codebase:functions:{func['name']}"
-                redis_client.sadd(func_key, json.dumps(func))
-
-            # Store class index
-            for cls in analysis_results["all_classes"]:
-                cls_key = f"codebase:classes:{cls['name']}"
-                redis_client.sadd(cls_key, json.dumps(cls))
-
-            # Store problems by type
-            problems_by_type = defaultdict(list)
-            for problem in analysis_results["all_problems"]:
-                problems_by_type[problem["type"]].append(problem)
-
-            for problem_type, problems in problems_by_type.items():
-                redis_client.set(
-                    f"codebase:problems:{problem_type}", json.dumps(problems)
-                )
-
-            # Store hardcodes by type
-            hardcodes_by_type = defaultdict(list)
-            for hardcode in analysis_results["all_hardcodes"]:
-                hardcodes_by_type[hardcode["type"]].append(hardcode)
-
-            for hardcode_type, hardcodes in hardcodes_by_type.items():
-                redis_client.set(
-                    f"codebase:hardcodes:{hardcode_type}", json.dumps(hardcodes)
-                )
-
-            # Set expiration for cached data (from config, default 24 hours)
-            from src.unified_config_manager import unified_config_manager
-            redis_cfg = unified_config_manager.get_redis_config()
-            cache_expiration = redis_cfg.get("codebase_cache_ttl", 86400)
-            for key in redis_client.scan_iter(match="codebase:*"):
-                redis_client.expire(key, cache_expiration)
-        else:
-            # Use in-memory storage
-            storage_type = "memory"
-            global _in_memory_storage
-            storage = InMemoryStorage()
-            _in_memory_storage = storage
-
-            # Store main analysis data
-            storage.set("codebase:analysis:full", json.dumps(analysis_results))
-            storage.set("codebase:analysis:timestamp", datetime.now().isoformat())
-
-            # Store aggregated stats
-            storage.hset("codebase:stats", analysis_results["stats"])
-
-            # Store function index
-            for func in analysis_results["all_functions"]:
-                func_key = f"codebase:functions:{func['name']}"
-                storage.sadd(func_key, json.dumps(func))
-
-            # Store class index
-            for cls in analysis_results["all_classes"]:
-                cls_key = f"codebase:classes:{cls['name']}"
-                storage.sadd(cls_key, json.dumps(cls))
-
-            # Store problems and hardcodes
-            problems_by_type = defaultdict(list)
-            for problem in analysis_results["all_problems"]:
-                problems_by_type[problem["type"]].append(problem)
-
-            for problem_type, problems in problems_by_type.items():
-                storage.set(f"codebase:problems:{problem_type}", json.dumps(problems))
-
-            hardcodes_by_type = defaultdict(list)
-            for hardcode in analysis_results["all_hardcodes"]:
-                hardcodes_by_type[hardcode["type"]].append(hardcode)
-
-            for hardcode_type, hardcodes in hardcodes_by_type.items():
-                storage.set(
-                    f"codebase:hardcodes:{hardcode_type}", json.dumps(hardcodes)
-                )
-
-        logger.info(
-            f"Codebase indexing completed using {storage_type}. Analyzed {analysis_results['stats']['total_files']} files"
+        # Update progress for ChromaDB storage phase
+        await update_progress(
+            operation="Preparing ChromaDB storage",
+            current=0,
+            total=1,
+            current_file="Connecting to ChromaDB..."
         )
 
+        # Store in ChromaDB (run in thread to avoid blocking event loop)
+        code_collection = await asyncio.to_thread(get_code_collection)
+
+        if code_collection:
+            storage_type = "chromadb"
+
+            # Clear existing data in collection
+            await update_progress(
+                operation="Clearing old ChromaDB data",
+                current=0,
+                total=1,
+                current_file="Removing existing entries..."
+            )
+
+            try:
+                # Run blocking ChromaDB operations in thread pool
+                existing_data = await asyncio.to_thread(code_collection.get)
+                existing_ids = existing_data["ids"]
+                if existing_ids:
+                    await asyncio.to_thread(code_collection.delete, ids=existing_ids)
+                    logger.info(f"[Task {task_id}] Cleared {len(existing_ids)} existing items from ChromaDB")
+            except Exception as e:
+                logger.warning(f"[Task {task_id}] Error clearing collection: {e}")
+
+            # Prepare batch data for ChromaDB
+            batch_ids = []
+            batch_documents = []
+            batch_metadatas = []
+
+            # Store functions
+            total_items_to_store = (
+                len(analysis_results["all_functions"]) +
+                len(analysis_results["all_classes"]) +
+                len(analysis_results["all_problems"]) +
+                1  # stats
+            )
+            items_prepared = 0
+
+            await update_progress(
+                operation="Storing functions",
+                current=0,
+                total=total_items_to_store,
+                current_file="Processing functions..."
+            )
+
+            for idx, func in enumerate(analysis_results["all_functions"]):
+                doc_text = f"""
+Function: {func['name']}
+File: {func.get('file_path', 'unknown')}
+Line: {func.get('line', 0)}
+Parameters: {', '.join(func.get('args', []))}
+Docstring: {func.get('docstring', 'No documentation')}
+                """.strip()
+
+                batch_ids.append(f"function_{idx}_{func['name']}")
+                batch_documents.append(doc_text)
+                batch_metadatas.append({
+                    "type": "function",
+                    "name": func['name'],
+                    "file_path": func.get('file_path', ''),
+                    "start_line": str(func.get('line', 0)),
+                    "parameters": ','.join(func.get('args', [])),
+                    "language": "python" if func.get('file_path', '').endswith('.py') else "javascript"
+                })
+
+                items_prepared += 1
+                if items_prepared % 100 == 0:
+                    await update_progress(
+                        operation="Storing functions",
+                        current=items_prepared,
+                        total=total_items_to_store,
+                        current_file=f"Function {idx+1}/{len(analysis_results['all_functions'])}"
+                    )
+
+            # Store classes
+            await update_progress(
+                operation="Storing classes",
+                current=items_prepared,
+                total=total_items_to_store,
+                current_file="Processing classes..."
+            )
+
+            for idx, cls in enumerate(analysis_results["all_classes"]):
+                doc_text = f"""
+Class: {cls['name']}
+File: {cls.get('file_path', 'unknown')}
+Line: {cls.get('line', 0)}
+Methods: {', '.join(cls.get('methods', []))}
+Docstring: {cls.get('docstring', 'No documentation')}
+                """.strip()
+
+                batch_ids.append(f"class_{idx}_{cls['name']}")
+                batch_documents.append(doc_text)
+                batch_metadatas.append({
+                    "type": "class",
+                    "name": cls['name'],
+                    "file_path": cls.get('file_path', ''),
+                    "start_line": str(cls.get('line', 0)),
+                    "methods": ','.join(cls.get('methods', [])),
+                    "language": "python"
+                })
+
+                items_prepared += 1
+                if items_prepared % 50 == 0:
+                    await update_progress(
+                        operation="Storing classes",
+                        current=items_prepared,
+                        total=total_items_to_store,
+                        current_file=f"Class {idx+1}/{len(analysis_results['all_classes'])}"
+                    )
+
+            # Store problems
+            await update_progress(
+                operation="Storing problems",
+                current=items_prepared,
+                total=total_items_to_store,
+                current_file="Processing code problems..."
+            )
+
+            for idx, problem in enumerate(analysis_results["all_problems"]):
+                doc_text = f"""
+Problem: {problem.get('type', 'unknown')}
+Severity: {problem.get('severity', 'unknown')}
+File: {problem.get('file_path', 'unknown')}
+Line: {problem.get('line', 0)}
+Description: {problem.get('description', 'No description')}
+Suggestion: {problem.get('suggestion', 'No suggestion')}
+                """.strip()
+
+                batch_ids.append(f"problem_{idx}")
+                batch_documents.append(doc_text)
+                batch_metadatas.append({
+                    "type": "problem",
+                    "problem_type": problem.get('type', ''),
+                    "severity": problem.get('severity', ''),
+                    "file_path": problem.get('file_path', ''),
+                    "line_number": str(problem.get('line', 0)),
+                    "description": problem.get('description', ''),
+                    "suggestion": problem.get('suggestion', '')
+                })
+
+                items_prepared += 1
+                if items_prepared % 50 == 0:
+                    await update_progress(
+                        operation="Storing problems",
+                        current=items_prepared,
+                        total=total_items_to_store,
+                        current_file=f"Problem {idx+1}/{len(analysis_results['all_problems'])}"
+                    )
+
+            # Store stats as a special document
+            stats_doc = f"""
+Codebase Statistics:
+Total Files: {analysis_results['stats']['total_files']}
+Total Lines: {analysis_results['stats']['total_lines']}
+Python Files: {analysis_results['stats']['python_files']}
+JavaScript Files: {analysis_results['stats']['javascript_files']}
+Vue Files: {analysis_results['stats']['vue_files']}
+Total Functions: {analysis_results['stats']['total_functions']}
+Total Classes: {analysis_results['stats']['total_classes']}
+Last Indexed: {analysis_results['stats']['last_indexed']}
+            """.strip()
+
+            batch_ids.append("codebase_stats")
+            batch_documents.append(stats_doc)
+            batch_metadatas.append({
+                "type": "stats",
+                **{k: str(v) for k, v in analysis_results["stats"].items()}
+            })
+
+            items_prepared += 1
+
+            # Add all to ChromaDB in batches (ChromaDB has max batch size limit)
+            if batch_ids:
+                BATCH_SIZE = 5000  # ChromaDB max batch size is ~5461, use 5000 for safety
+                total_items = len(batch_ids)
+                items_stored = 0
+
+                await update_progress(
+                    operation="Writing to ChromaDB",
+                    current=0,
+                    total=total_items,
+                    current_file="Batch storage in progress..."
+                )
+
+                for i in range(0, total_items, BATCH_SIZE):
+                    batch_slice_ids = batch_ids[i:i + BATCH_SIZE]
+                    batch_slice_docs = batch_documents[i:i + BATCH_SIZE]
+                    batch_slice_metas = batch_metadatas[i:i + BATCH_SIZE]
+
+                    # Run blocking ChromaDB add in thread pool
+                    await asyncio.to_thread(
+                        code_collection.add,
+                        ids=batch_slice_ids,
+                        documents=batch_slice_docs,
+                        metadatas=batch_slice_metas
+                    )
+                    items_stored += len(batch_slice_ids)
+
+                    await update_progress(
+                        operation="Writing to ChromaDB",
+                        current=items_stored,
+                        total=total_items,
+                        current_file=f"Batch {i//BATCH_SIZE + 1}/{(total_items + BATCH_SIZE - 1) // BATCH_SIZE}"
+                    )
+
+                    logger.info(f"[Task {task_id}] Stored batch {i//BATCH_SIZE + 1}: {len(batch_slice_ids)} items ({items_stored}/{total_items})")
+
+                logger.info(f"[Task {task_id}] ✅ Stored total of {items_stored} items in ChromaDB")
+        else:
+            storage_type = "failed"
+            raise Exception("ChromaDB connection failed")
+
+        # Mark task as completed
+        indexing_tasks[task_id]["status"] = "completed"
+        indexing_tasks[task_id]["result"] = {
+            "status": "success",
+            "message": f"Indexed {analysis_results['stats']['total_files']} files using {storage_type} storage",
+            "stats": analysis_results["stats"],
+            "storage_type": storage_type,
+            "timestamp": datetime.now().isoformat(),
+        }
+        indexing_tasks[task_id]["completed_at"] = datetime.now().isoformat()
+
+        logger.info(f"[Task {task_id}] ✅ Indexing completed successfully")
+
+    except Exception as e:
+        logger.error(f"[Task {task_id}] ❌ Indexing failed: {e}", exc_info=True)
+        indexing_tasks[task_id]["status"] = "failed"
+        indexing_tasks[task_id]["error"] = str(e)
+        indexing_tasks[task_id]["failed_at"] = datetime.now().isoformat()
+
+
+@router.post("/index")
+async def index_codebase():
+    """
+    Start background indexing of the AutoBot codebase
+
+    Returns immediately with a task_id that can be used to poll progress
+    via GET /api/analytics/codebase/index/status/{task_id}
+    """
+    logger.info("✅ ENTRY: index_codebase endpoint called!")
+    # Always use project root
+    project_root = Path(__file__).parent.parent.parent
+    root_path = str(project_root)
+    logger.info(f"📁 project_root = {root_path}")
+
+    try:
+        # Generate unique task ID
+        task_id = str(uuid.uuid4())
+        logger.info(f"🆔 Generated task_id = {task_id}")
+
+        # Add async background task using asyncio and store reference
+        logger.info(f"🔄 About to create_task")
+        task = asyncio.create_task(do_indexing_with_progress(task_id, root_path))
+        logger.info(f"✅ Task created: {task}")
+        _active_tasks[task_id] = task
+        logger.info(f"💾 Task stored in _active_tasks")
+
+        # Clean up task reference when done
+        def cleanup_task(t):
+            _active_tasks.pop(task_id, None)
+        task.add_done_callback(cleanup_task)
+        logger.info(f"🧹 Cleanup callback added")
+
+        logger.info(f"📤 About to return JSONResponse")
+        return JSONResponse({
+            "task_id": task_id,
+            "status": "started",
+            "message": "Indexing started in background. Poll /api/analytics/codebase/index/status/{task_id} for progress."
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Failed to start indexing task: {e}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to start indexing: {str(e)}")
+
+
+@router.get("/index/status/{task_id}")
+async def get_indexing_status(task_id: str):
+    """
+    Get the status of a background indexing task
+
+    Returns:
+    - task_id: The unique task identifier
+    - status: "running" | "completed" | "failed" | "not_found"
+    - progress: {current, total, percent, current_file, operation} (if running)
+    - result: Final indexing results (if completed)
+    - error: Error message (if failed)
+    """
+    global indexing_tasks
+
+    if task_id not in indexing_tasks:
         return JSONResponse(
-            {
-                "status": "success",
-                "message": f"Indexed {analysis_results['stats']['total_files']} files using {storage_type} storage",
-                "stats": analysis_results["stats"],
-                "storage_type": storage_type,
-                "timestamp": datetime.now().isoformat(),
+            status_code=404,
+            content={
+                "task_id": task_id,
+                "status": "not_found",
+                "error": "Task not found. It may have expired or never existed."
             }
         )
 
-    except Exception as e:
-        logger.error(f"Codebase indexing failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
+    task_data = indexing_tasks[task_id]
+
+    response = {
+        "task_id": task_id,
+        "status": task_data["status"],
+        "progress": task_data.get("progress"),
+        "result": task_data.get("result"),
+        "error": task_data.get("error"),
+        "started_at": task_data.get("started_at"),
+        "completed_at": task_data.get("completed_at"),
+        "failed_at": task_data.get("failed_at")
+    }
+
+    return JSONResponse(response)
 
 
 @router.get("/stats")
 async def get_codebase_stats():
     """Get real codebase statistics from storage"""
     try:
-        redis_client = await get_redis_connection()
+        # Try ChromaDB first
+        code_collection = get_code_collection()
 
-        if redis_client:
-            # Get stats from Redis
-            stats = redis_client.hgetall("codebase:stats")
-            timestamp = redis_client.get("codebase:analysis:timestamp") or "Never"
-            storage_type = "redis"
-        else:
-            # Get stats from in-memory storage
-            global _in_memory_storage
-            if not _in_memory_storage:
+        if code_collection:
+            try:
+                # Query ChromaDB for stats
+                results = code_collection.get(
+                    ids=["codebase_stats"],
+                    include=["metadatas"]
+                )
+
+                if results.get("metadatas") and len(results["metadatas"]) > 0:
+                    stats_metadata = results["metadatas"][0]
+
+                    # Extract stats from metadata
+                    stats = {}
+                    numeric_fields = [
+                        "total_files",
+                        "python_files",
+                        "javascript_files",
+                        "vue_files",
+                        "config_files",
+                        "other_files",
+                        "total_lines",
+                        "total_functions",
+                        "total_classes",
+                    ]
+
+                    for field in numeric_fields:
+                        if field in stats_metadata:
+                            stats[field] = int(stats_metadata[field])
+
+                    if "average_file_size" in stats_metadata:
+                        stats["average_file_size"] = float(stats_metadata["average_file_size"])
+
+                    timestamp = stats_metadata.get("last_indexed", "Never")
+                    storage_type = "chromadb"
+
+                    return JSONResponse(
+                        {
+                            "status": "success",
+                            "stats": stats,
+                            "last_indexed": timestamp,
+                            "storage_type": storage_type,
+                        }
+                    )
+                else:
+                    return JSONResponse(
+                        {
+                            "status": "no_data",
+                            "message": "No codebase data found. Run indexing first.",
+                            "stats": None,
+                        }
+                    )
+
+            except Exception as chroma_error:
+                logger.warning(f"ChromaDB stats query failed: {chroma_error}")
                 return JSONResponse(
                     {
                         "status": "no_data",
@@ -678,48 +1092,14 @@ async def get_codebase_stats():
                         "stats": None,
                     }
                 )
-
-            storage = _in_memory_storage
-            stats = storage.hgetall("codebase:stats")
-            timestamp = storage.get("codebase:analysis:timestamp") or "Never"
-            storage_type = "memory"
-
-        if not stats:
+        else:
             return JSONResponse(
                 {
                     "status": "no_data",
-                    "message": "No codebase data found. Run indexing first.",
+                    "message": "ChromaDB connection failed.",
                     "stats": None,
                 }
             )
-
-        # Convert string values back to appropriate types
-        numeric_fields = [
-            "total_files",
-            "python_files",
-            "javascript_files",
-            "vue_files",
-            "config_files",
-            "other_files",
-            "total_lines",
-            "total_functions",
-            "total_classes",
-        ]
-        for field in numeric_fields:
-            if field in stats:
-                stats[field] = int(stats[field])
-
-        if "average_file_size" in stats:
-            stats["average_file_size"] = float(stats["average_file_size"])
-
-        return JSONResponse(
-            {
-                "status": "success",
-                "stats": stats,
-                "last_indexed": timestamp,
-                "storage_type": storage_type,
-            }
-        )
 
     except Exception as e:
         logger.error(f"Failed to get codebase stats: {e}")
@@ -794,24 +1174,57 @@ async def get_hardcoded_values(hardcode_type: Optional[str] = None):
 async def get_codebase_problems(problem_type: Optional[str] = None):
     """Get real code problems detected during analysis"""
     try:
-        redis_client = await get_redis_connection()
+        # Try ChromaDB first
+        code_collection = get_code_collection()
 
         all_problems = []
 
-        if redis_client:
-            if problem_type:
-                problems_data = redis_client.get(f"codebase:problems:{problem_type}")
-                if problems_data:
-                    all_problems = json.loads(problems_data)
-            else:
-                for key in redis_client.scan_iter(match="codebase:problems:*"):
-                    problems_data = redis_client.get(key)
+        if code_collection:
+            try:
+                # Query ChromaDB for problems
+                where_filter = {"type": "problem"}
+                if problem_type:
+                    where_filter["problem_type"] = problem_type
+
+                results = code_collection.get(
+                    where=where_filter,
+                    include=["metadatas"]
+                )
+
+                # Extract problems from metadata
+                for metadata in results.get("metadatas", []):
+                    all_problems.append({
+                        "type": metadata.get("problem_type", ""),
+                        "severity": metadata.get("severity", ""),
+                        "file_path": metadata.get("file_path", ""),
+                        "line_number": int(metadata.get("line_number", 0)) if metadata.get("line_number") else None,
+                        "description": metadata.get("description", ""),
+                        "suggestion": metadata.get("suggestion", "")
+                    })
+
+                storage_type = "chromadb"
+                logger.info(f"Retrieved {len(all_problems)} problems from ChromaDB")
+
+            except Exception as chroma_error:
+                logger.warning(f"ChromaDB query failed: {chroma_error}, falling back to Redis")
+                code_collection = None
+
+        # Fallback to Redis if ChromaDB fails
+        if not code_collection:
+            redis_client = await get_redis_connection()
+
+            if redis_client:
+                if problem_type:
+                    problems_data = redis_client.get(f"codebase:problems:{problem_type}")
                     if problems_data:
-                        all_problems.extend(json.loads(problems_data))
-            storage_type = "redis"
-        else:
-            global _in_memory_storage
-            if not _in_memory_storage:
+                        all_problems = json.loads(problems_data)
+                else:
+                    for key in redis_client.scan_iter(match="codebase:problems:*"):
+                        problems_data = redis_client.get(key)
+                        if problems_data:
+                            all_problems.extend(json.loads(problems_data))
+                storage_type = "redis"
+            else:
                 return JSONResponse(
                     {
                         "status": "no_data",
@@ -819,18 +1232,6 @@ async def get_codebase_problems(problem_type: Optional[str] = None):
                         "problems": [],
                     }
                 )
-
-            storage = _in_memory_storage
-            if problem_type:
-                problems_data = storage.get(f"codebase:problems:{problem_type}")
-                if problems_data:
-                    all_problems = json.loads(problems_data)
-            else:
-                for key in storage.scan_iter("codebase:problems:*"):
-                    problems_data = storage.get(key)
-                    if problems_data:
-                        all_problems.extend(json.loads(problems_data))
-            storage_type = "memory"
 
         # Sort by severity (high, medium, low)
         severity_order = {"high": 0, "medium": 1, "low": 2}
@@ -864,44 +1265,50 @@ async def get_codebase_problems(problem_type: Optional[str] = None):
 async def get_code_declarations(declaration_type: Optional[str] = None):
     """Get code declarations (functions, classes, variables) detected during analysis"""
     try:
-        redis_client = await get_redis_connection()
+        # Try ChromaDB first
+        code_collection = get_code_collection()
 
         all_declarations = []
 
-        if redis_client:
-            if declaration_type:
-                declarations_data = redis_client.get(f"codebase:declarations:{declaration_type}")
-                if declarations_data:
-                    all_declarations = json.loads(declarations_data)
-            else:
-                for key in redis_client.scan_iter(match="codebase:declarations:*"):
-                    declarations_data = redis_client.get(key)
-                    if declarations_data:
-                        all_declarations.extend(json.loads(declarations_data))
-            storage_type = "redis"
-        else:
-            global _in_memory_storage
-            if not _in_memory_storage:
-                return JSONResponse(
-                    {
-                        "status": "no_data",
-                        "message": "No codebase data found. Run indexing first.",
-                        "declarations": [],
-                    }
+        if code_collection:
+            try:
+                # Query ChromaDB for functions and classes
+                where_filter = {"type": {"$in": ["function", "class"]}}
+
+                results = code_collection.get(
+                    where=where_filter,
+                    include=["metadatas"]
                 )
 
-            storage = _in_memory_storage
-            if declaration_type:
-                declarations_data = storage.get(f"codebase:declarations:{declaration_type}")
-                if declarations_data:
-                    all_declarations = json.loads(declarations_data)
-            else:
-                for key in storage.keys():
-                    if key.startswith("codebase:declarations:"):
-                        declarations_data = storage.get(key)
-                        if declarations_data:
-                            all_declarations.extend(json.loads(declarations_data))
-            storage_type = "memory"
+                # Extract declarations from metadata
+                for metadata in results.get("metadatas", []):
+                    decl = {
+                        "name": metadata.get("name", ""),
+                        "type": metadata.get("type", ""),
+                        "file_path": metadata.get("file_path", ""),
+                        "line_number": int(metadata.get("start_line", 0)) if metadata.get("start_line") else 0,
+                        "usage_count": 1,  # Default, can be calculated later
+                        "is_exported": True,  # Default
+                        "parameters": metadata.get("parameters", "").split(",") if metadata.get("parameters") else []
+                    }
+                    all_declarations.append(decl)
+
+                storage_type = "chromadb"
+                logger.info(f"Retrieved {len(all_declarations)} declarations from ChromaDB")
+
+            except Exception as chroma_error:
+                logger.warning(f"ChromaDB query failed: {chroma_error}, returning empty declarations")
+                # Declarations don't exist in old Redis structure, so just return empty
+                storage_type = "chromadb"
+
+        else:
+            return JSONResponse(
+                {
+                    "status": "no_data",
+                    "message": "No codebase data found. Run indexing first.",
+                    "declarations": [],
+                }
+            )
 
         # Count by type
         functions = sum(1 for d in all_declarations if d.get("type") == "function")
@@ -932,36 +1339,48 @@ async def get_code_declarations(declaration_type: Optional[str] = None):
 
 @router.get("/duplicates")
 async def get_duplicate_code():
-    """Get duplicate code detected during analysis"""
+    """Get duplicate code detected during analysis (using semantic similarity in ChromaDB)"""
     try:
-        redis_client = await get_redis_connection()
+        # Try ChromaDB first
+        code_collection = get_code_collection()
 
         all_duplicates = []
 
-        if redis_client:
-            for key in redis_client.scan_iter(match="codebase:duplicates:*"):
-                duplicates_data = redis_client.get(key)
-                if duplicates_data:
-                    all_duplicates.extend(json.loads(duplicates_data))
-            storage_type = "redis"
-        else:
-            global _in_memory_storage
-            if not _in_memory_storage:
-                return JSONResponse(
-                    {
-                        "status": "no_data",
-                        "message": "No codebase data found. Run indexing first.",
-                        "duplicates": [],
-                    }
+        if code_collection:
+            try:
+                # Query ChromaDB for duplicate markers
+                # Note: Duplicates will be detected via semantic similarity when we regenerate
+                results = code_collection.get(
+                    where={"type": "duplicate"},
+                    include=["metadatas"]
                 )
 
-            storage = _in_memory_storage
-            for key in storage.keys():
-                if key.startswith("codebase:duplicates:"):
-                    duplicates_data = storage.get(key)
-                    if duplicates_data:
-                        all_duplicates.extend(json.loads(duplicates_data))
-            storage_type = "memory"
+                # Extract duplicates from metadata
+                for metadata in results.get("metadatas", []):
+                    duplicate = {
+                        "code_snippet": metadata.get("code_snippet", ""),
+                        "files": metadata.get("files", "").split(",") if metadata.get("files") else [],
+                        "similarity_score": float(metadata.get("similarity_score", 0.0)) if metadata.get("similarity_score") else 0.0,
+                        "line_numbers": metadata.get("line_numbers", "")
+                    }
+                    all_duplicates.append(duplicate)
+
+                storage_type = "chromadb"
+                logger.info(f"Retrieved {len(all_duplicates)} duplicates from ChromaDB")
+
+            except Exception as chroma_error:
+                logger.warning(f"ChromaDB query failed: {chroma_error}, returning empty duplicates")
+                # Duplicates don't exist yet, will be generated during reindexing
+                storage_type = "chromadb"
+
+        else:
+            return JSONResponse(
+                {
+                    "status": "no_data",
+                    "message": "No codebase data found. Run indexing first.",
+                    "duplicates": [],
+                }
+            )
 
         # Sort by number of files affected (most duplicated first)
         all_duplicates.sort(

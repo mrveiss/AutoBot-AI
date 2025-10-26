@@ -15,7 +15,6 @@ from pathlib import Path
 import aiohttp
 import aiohttp_jinja2
 import jinja2
-import redis
 from aiohttp import web, WSMsgType
 import plotly.graph_objects as go
 import plotly.utils
@@ -589,15 +588,18 @@ class PerformanceDashboard:
     async def get_metrics_history(self, request):
         """Get historical performance metrics."""
         try:
-            # Connect to Redis for historical data
+            # Connect to Redis for historical data using canonical utility
+            # This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy
             if not self.redis_client:
-                self.redis_client = redis.Redis(
-                    host=VMS['redis'], 
-                    port=6379, 
-                    db=4,  # Metrics database
-                    decode_responses=True
-                )
-            
+                from src.utils.redis_client import get_redis_client
+
+                self.redis_client = get_redis_client(database="metrics")
+                if self.redis_client is None:
+                    return web.json_response(
+                        {'error': 'Redis not available', 'history': []},
+                        status=503
+                    )
+
             # Get last 100 metrics entries
             history = self.redis_client.lrange("autobot:performance:history", 0, 99)
             parsed_history = []
