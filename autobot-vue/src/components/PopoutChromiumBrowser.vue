@@ -249,7 +249,7 @@
           <p class="text-gray-600 mb-6">Direct control via VNC interface</p>
           <div class="space-y-3">
             <button @click="initializeBrowser" :disabled="isInitializingBrowser" class="btn btn-primary">
-              <i class="fas" :class="isInitializingBrowser ? \'fa-spinner fa-spin\' : \'fa-rocket\'" class="mr-2"></i>
+              <i class="fas mr-2" :class="isInitializingBrowser ? \'fa-spinner fa-spin\' : \'fa-rocket\'"></i>
               {{ isInitializingBrowser ? \'Launching...\' : \'Launch Browser Session\' }}
             </button>
             <p class="text-sm text-gray-500">
