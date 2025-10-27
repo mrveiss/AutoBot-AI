@@ -33,6 +33,7 @@ USAGE:
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -725,8 +726,10 @@ class ConsolidatedChatWorkflow:
     async def _generate_fallback_response(self, context: Dict[str, Any]) -> str:
         """Generate response using fallback LLM interface"""
         try:
+            # Get model from environment variable (zero hardcode policy)
+            fallback_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:1b")
             response = await self.llm_interface.make_llm_request(
-                context["prompt"], model_name="llama3.2:latest", temperature=0.7
+                context["prompt"], model_name=fallback_model, temperature=0.7
             )
             return response if isinstance(response, str) else str(response)
         except Exception as e:

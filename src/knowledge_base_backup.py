@@ -178,8 +178,10 @@ class AutoBotKnowledgeBase:
                 request_timeout=30.0,
             )
 
+            # Get model from environment variable (zero hardcode policy)
+            llm_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:1b")
             Settings.llm = LlamaIndexOllamaLLM(
-                model="llama3.2:latest", base_url=ollama_base_url, request_timeout=30.0
+                model=llm_model, base_url=ollama_base_url, request_timeout=30.0
             )
 
             # GPU OPTIMIZATION: Disable default node parser - use GPU-optimized semantic chunker
