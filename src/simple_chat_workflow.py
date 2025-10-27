@@ -52,6 +52,7 @@ class SimpleChatWorkflow:
 
     def __init__(self):
         self.chat_id = None
+        self.llm = None  # Store LLM instance for model info
 
     async def send_workflow_message(
         self, message_type: str, content: str, metadata: Dict = None
@@ -159,8 +160,16 @@ class SimpleChatWorkflow:
                 }
             )
 
-            # Show sources if any
-            sources = [{"source": "LLM", "type": "ollama", "model": "llama3.2:1b"}]
+            # Show sources if any - get actual model from LLM instance
+            provider, model_name = "ollama", "unknown"
+            if self.llm:
+                try:
+                    provider, model_name = self.llm._determine_provider_and_model("orchestrator")
+                except Exception as e:
+                    logger.warning(f"Could not determine model: {e}")
+                    model_name = self.llm.settings.default_model if hasattr(self.llm, 'settings') else "unknown"
+
+            sources = [{"source": "LLM", "type": provider, "model": model_name}]
             await self.send_workflow_message(
                 "sources", f"📖 Sources used: {len(sources)}"
             )
@@ -208,10 +217,10 @@ class SimpleChatWorkflow:
                 return LLMInterface()
 
             llm = await asyncio.to_thread(create_llm)
+            self.llm = llm  # Store for model info access
 
             # Show LLM request details
             logger.info(f"DEBUG: Preparing LLM request for: {user_message[:50]}...")
-            # await self.send_workflow_message("json", f"LLM Request: {{'message': '{user_message[:50]}...', 'model': 'llama3.2:1b'}}")
 
             # CRITICAL FIX: Add timeout protection for LLM call
             llm_task = llm.chat_completion(
