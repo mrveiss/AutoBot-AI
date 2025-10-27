@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -270,28 +271,46 @@ STREAMING_CHUNK_SIZE = 1024
 
 
 def validate_chat_session_id(session_id: str) -> bool:
-    """Validate chat session ID format"""
-    if not session_id:
+    """
+    Validate chat session ID format.
+
+    Accepts:
+    - Valid UUIDs
+    - UUIDs with suffixes (e.g., "uuid-imported-123")
+    - Legacy/test IDs (alphanumeric with underscores/hyphens)
+
+    Ensures backward compatibility with existing sessions while maintaining security.
+    """
+    if not session_id or len(session_id) > 255:
         return False
 
-    # Allow UUIDs with optional suffixes (e.g., "uuid-imported-timestamp")
-    # Check if it starts with a valid UUID pattern
+    # Security: reject path traversal and null bytes
+    if any(char in session_id for char in ['/', '\\', '..', '\0']):
+        return False
+
+    # Accept if it's a valid UUID
     try:
-        # Try to parse as pure UUID first
         uuid.UUID(session_id)
         return True
     except ValueError:
-        # If that fails, check if it starts with a UUID followed by additional text
-        parts = session_id.split("-")
-        if len(parts) >= 5:  # UUID has 5 parts separated by hyphens
-            # Try to reconstruct and validate first 5 parts as UUID
-            try:
-                uuid_part = "-".join(parts[:5])
-                uuid.UUID(uuid_part)
-                return True  # Valid UUID prefix with additional suffix
-            except ValueError:
-                pass
-        return False
+        pass
+
+    # Accept if starts with UUID (with suffix)
+    parts = session_id.split("-")
+    if len(parts) >= 5:
+        try:
+            uuid_part = "-".join(parts[:5])
+            uuid.UUID(uuid_part)
+            return True
+        except ValueError:
+            pass
+
+    # Accept legacy/test session IDs (alphanumeric + underscore + hyphen)
+    # This allows "test_conv" while rejecting malicious inputs
+    if re.match(r'^[a-zA-Z0-9_-]+$', session_id):
+        return True
+
+    return False
 
 
 def generate_chat_session_id() -> str:

@@ -945,7 +945,10 @@ class AutoBotMemoryGraph:
     # ==================== INTEGRATION METHODS ====================
 
     async def create_conversation_entity(
-        self, session_id: str, metadata: Optional[Dict[str, Any]] = None
+        self,
+        session_id: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        observations: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Automatically create entity from chat session.
@@ -953,6 +956,7 @@ class AutoBotMemoryGraph:
         Args:
             session_id: Chat session identifier
             metadata: Optional additional metadata
+            observations: Optional list of observations to add immediately (prevents race condition)
 
         Returns:
             Created conversation entity
@@ -961,13 +965,16 @@ class AutoBotMemoryGraph:
 
         try:
             # Get session data from chat history manager
-            observations = []
+            entity_observations = []
             tags = []
 
-            if self.chat_history_manager:
+            # Use provided observations if available (prevents race condition with add_observations)
+            if observations:
+                entity_observations = observations
+            elif self.chat_history_manager:
                 # Extract observations from session messages
                 # This is a placeholder - actual implementation would extract from messages
-                observations = [f"Conversation session: {session_id}"]
+                entity_observations = [f"Conversation session: {session_id}"]
                 tags = ["conversation"]
 
             # Create conversation metadata
@@ -976,11 +983,11 @@ class AutoBotMemoryGraph:
                 {"session_id": session_id, "priority": "low", "status": "active"}
             )
 
-            # Create entity
+            # Create entity with observations included (avoids race condition)
             entity = await self.create_entity(
                 entity_type="conversation",
                 name=f"Conversation {session_id[:8]}",
-                observations=observations,
+                observations=entity_observations,
                 metadata=conv_metadata,
                 tags=tags,
             )

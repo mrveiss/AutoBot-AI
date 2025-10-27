@@ -87,6 +87,7 @@
 import { ref, computed, onMounted } from 'vue'
 import apiClient from '@/utils/ApiClient.js'
 import { useUserStore } from '@/stores/useUserStore'
+import { useAsyncHandler } from '@/composables/useErrorHandler'
 
 // Import components
 import FileBrowserHeader from './file-browser/FileBrowserHeader.vue'
@@ -152,29 +153,37 @@ const sortedFiles = computed(() => {
 })
 
 // Methods
-const refreshFiles = async () => {
-  try {
+const { execute: refreshFiles, loading: isRefreshingFiles } = useAsyncHandler(
+  async () => {
     const data = await apiClient.get(`/api/files/list?path=${encodeURIComponent(currentPath.value)}`)
     files.value = data.files || []
 
     if (viewMode.value === 'tree') {
       await loadDirectoryTree()
     }
-  } catch (error) {
-    console.error('Failed to load files:', error)
-    files.value = []
+  },
+  {
+    onError: () => {
+      files.value = []
+    },
+    logErrors: true,
+    errorPrefix: '[FileBrowser]'
   }
-}
+)
 
-const loadDirectoryTree = async () => {
-  try {
+const { execute: loadDirectoryTree, loading: isLoadingTree } = useAsyncHandler(
+  async () => {
     const data = await apiClient.get('/api/files/tree')
     directoryTree.value = data.tree || []
-  } catch (error) {
-    console.error('Failed to load directory tree:', error)
-    directoryTree.value = []
+  },
+  {
+    onError: () => {
+      directoryTree.value = []
+    },
+    logErrors: true,
+    errorPrefix: '[FileBrowser]'
   }
-}
+)
 
 const navigateToPath = (path: string) => {
   currentPath.value = path
@@ -202,25 +211,34 @@ const triggerFileUpload = () => {
   fileUploadRef.value?.triggerFileSelect()
 }
 
-const handleFileSelected = async (fileList: FileList) => {
-  const formData = new FormData()
+const { execute: uploadFiles, loading: isUploadingFiles } = useAsyncHandler(
+  async (fileList: FileList) => {
+    const formData = new FormData()
 
-  Array.from(fileList).forEach((file) => {
-    formData.append('files', file)
-  })
+    Array.from(fileList).forEach((file) => {
+      formData.append('files', file)
+    })
 
-  formData.append('path', currentPath.value)
+    formData.append('path', currentPath.value)
 
-  try {
     await apiClient.post('/api/files/upload', formData)
     await refreshFiles()
-  } catch (error) {
-    console.error('Failed to upload files:', error)
+  },
+  {
+    onError: () => {
+      alert('Failed to upload files. Please check file size limits and format requirements, then try again.')
+    },
+    logErrors: true,
+    errorPrefix: '[FileBrowser]'
   }
+)
+
+const handleFileSelected = async (fileList: FileList) => {
+  await uploadFiles(fileList)
 }
 
-const viewFile = async (file: any) => {
-  try {
+const { execute: viewFile, loading: isViewingFile } = useAsyncHandler(
+  async (file: any) => {
     const data = await apiClient.get(`/api/files/preview?path=${encodeURIComponent(file.path)}`)
     previewFile.value = {
       name: file.name,
@@ -231,62 +249,89 @@ const viewFile = async (file: any) => {
       size: file.size
     }
     showPreview.value = true
-  } catch (error) {
-    console.error('Failed to preview file:', error)
+  },
+  {
+    logErrors: true,
+    errorPrefix: '[FileBrowser]'
   }
-}
+)
+
+const { execute: performDelete, loading: isDeletingFile } = useAsyncHandler(
+  async (file: any) => {
+    const itemType = file.is_dir ? 'folder' : 'file'
+    await apiClient.delete(`/api/files/delete?path=${encodeURIComponent(file.path)}`)
+    await refreshFiles()
+    return itemType
+  },
+  {
+    onError: () => {
+      alert(`Failed to delete item. Please try again.`)
+    },
+    logErrors: true,
+    errorPrefix: '[FileBrowser]'
+  }
+)
 
 const deleteFile = async (file: any) => {
-  const itemType = file.is_dir ? 'folder' : 'file'
   const message = file.is_dir
     ? `Are you sure you want to delete the folder "${file.name}" and all its contents?`
     : `Are you sure you want to delete "${file.name}"?`
 
   if (confirm(message)) {
-    try {
-      await apiClient.delete(`/api/files/delete?path=${encodeURIComponent(file.path)}`)
-      await refreshFiles()
-    } catch (error) {
-      console.error(`Failed to delete ${itemType}:`, error)
-      alert(`Failed to delete ${itemType}. Please try again.`)
-    }
+    await performDelete(file)
   }
 }
+
+const { execute: performRename, loading: isRenamingFile } = useAsyncHandler(
+  async (file: any, newName: string) => {
+    const formData = new FormData()
+    formData.append('path', file.path)
+    formData.append('new_name', newName)
+
+    await apiClient.post('/api/files/rename', formData)
+    await refreshFiles()
+  },
+  {
+    onError: () => {
+      alert(`Failed to rename item. Please try again.`)
+    },
+    logErrors: true,
+    errorPrefix: '[FileBrowser]'
+  }
+)
 
 const renameFile = async (file: any) => {
   const itemType = file.is_dir ? 'folder' : 'file'
   const newName = prompt(`Enter new name for ${itemType} "${file.name}":`, file.name)
 
   if (newName && newName !== file.name) {
-    try {
-      const formData = new FormData()
-      formData.append('path', file.path)
-      formData.append('new_name', newName)
-
-      await apiClient.post('/api/files/rename', formData)
-      await refreshFiles()
-    } catch (error) {
-      console.error(`Failed to rename ${itemType}:`, error)
-      alert(`Failed to rename ${itemType}. Please try again.`)
-    }
+    await performRename(file, newName)
   }
 }
+
+const { execute: performCreateFolder, loading: isCreatingFolder } = useAsyncHandler(
+  async (folderName: string) => {
+    const formData = new FormData()
+    formData.append('path', currentPath.value)
+    formData.append('name', folderName)
+
+    await apiClient.post('/api/files/create_directory', formData)
+    await refreshFiles()
+  },
+  {
+    onError: () => {
+      alert('Failed to create folder. Please try again.')
+    },
+    logErrors: true,
+    errorPrefix: '[FileBrowser]'
+  }
+)
 
 const createNewFolder = async () => {
   const folderName = prompt('Enter new folder name:')
 
   if (folderName) {
-    try {
-      const formData = new FormData()
-      formData.append('path', currentPath.value)
-      formData.append('name', folderName)
-
-      await apiClient.post('/api/files/create_directory', formData)
-      await refreshFiles()
-    } catch (error) {
-      console.error('Failed to create folder:', error)
-      alert('Failed to create folder. Please try again.')
-    }
+    await performCreateFolder(folderName)
   }
 }
 

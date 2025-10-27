@@ -151,15 +151,34 @@ sync_to_vm() {
     ssh -i "$SSH_KEY" "$REMOTE_USER@$vm_ip" \
         "mkdir -p $(dirname "$remote_path")" 2>/dev/null
     
-    # Sync files
-    if [ -d "$local_path" ]; then
-        log_info "Syncing directory: $local_path -> $vm_name:$remote_path"
-        scp -i "$SSH_KEY" -r \
-            "$local_path" "$REMOTE_USER@$vm_ip:$(dirname "$remote_path")/"
+    # Check if rsync is available
+    if command -v rsync >/dev/null 2>&1; then
+        # Use rsync with --delete to remove extraneous files
+        if [ -d "$local_path" ]; then
+            log_info "Syncing directory (rsync with --delete): $local_path -> $vm_name:$remote_path"
+            rsync -avz --delete --progress \
+                -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+                "$local_path/" "$REMOTE_USER@$vm_ip:$remote_path/"
+        else
+            log_info "Syncing file (rsync): $local_path -> $vm_name:$remote_path"
+            rsync -avz --progress \
+                -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+                "$local_path" "$REMOTE_USER@$vm_ip:$remote_path"
+        fi
     else
-        log_info "Syncing file: $local_path -> $vm_name:$remote_path"
-        scp -i "$SSH_KEY" \
-            "$local_path" "$REMOTE_USER@$vm_ip:$remote_path"
+        # Fallback to scp (no --delete support)
+        log_warn "rsync not found, using scp (files on remote will NOT be deleted)"
+        log_warn "Install rsync for full sync functionality: sudo apt-get install rsync"
+
+        if [ -d "$local_path" ]; then
+            log_info "Syncing directory (scp): $local_path -> $vm_name:$remote_path"
+            scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r \
+                "$local_path" "$REMOTE_USER@$vm_ip:$(dirname "$remote_path")/"
+        else
+            log_info "Syncing file (scp): $local_path -> $vm_name:$remote_path"
+            scp -i "$SSH_KEY" -o StrictHostKeyChecking=no \
+                "$local_path" "$REMOTE_USER@$vm_ip:$remote_path"
+        fi
     fi
     
     # Restart service if requested
