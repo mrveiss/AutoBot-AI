@@ -7,13 +7,16 @@ performance requirements, and system resources.
 import asyncio
 import json
 import logging
+import os
 import time
 from dataclasses import asdict, dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 import psutil
+import yaml
 
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
@@ -70,6 +73,55 @@ class TaskRequest:
 class ModelOptimizer:
     """Intelligent model selection and performance optimization"""
 
+    @staticmethod
+    def _load_model_classifications() -> Dict[ModelPerformanceLevel, List[str]]:
+        """
+        Load model classifications from config file.
+        Implements zero hardcode policy by reading from config/llm_models.yaml.
+
+        Returns:
+            Dict mapping ModelPerformanceLevel to list of model names
+
+        Fallback behavior:
+            If config file not found or invalid, returns minimal defaults
+        """
+        try:
+            # Get config file path (project root / config / llm_models.yaml)
+            config_path = Path(__file__).parent.parent.parent / "config" / "llm_models.yaml"
+
+            if config_path.exists():
+                with open(config_path, "r") as f:
+                    config_data = yaml.safe_load(f)
+
+                performance_data = config_data.get("performance_classification", {})
+
+                return {
+                    ModelPerformanceLevel.LIGHTWEIGHT: performance_data.get("lightweight", []),
+                    ModelPerformanceLevel.STANDARD: performance_data.get("standard", []),
+                    ModelPerformanceLevel.ADVANCED: performance_data.get("advanced", []),
+                }
+
+            # Fallback to environment variable if config not found
+            default_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:1b")
+            logging.warning(
+                f"Model classifications config not found, using default model: {default_model}"
+            )
+            return {
+                ModelPerformanceLevel.LIGHTWEIGHT: [default_model],
+                ModelPerformanceLevel.STANDARD: [default_model],
+                ModelPerformanceLevel.ADVANCED: [default_model],
+            }
+
+        except Exception as e:
+            # Final fallback
+            default_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:1b")
+            logging.error(f"Error loading model classifications: {e}, using default: {default_model}")
+            return {
+                ModelPerformanceLevel.LIGHTWEIGHT: [default_model],
+                ModelPerformanceLevel.STANDARD: [default_model],
+                ModelPerformanceLevel.ADVANCED: [default_model],
+            }
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self._redis_client = None
@@ -86,28 +138,8 @@ class ModelOptimizer:
         self._cache_ttl = cfg.get("llm.optimization.cache_ttl", 3600)  # 1 hour
         self._min_samples = cfg.get("llm.optimization.min_samples", 5)
 
-        # Model classification rules
-        self.model_classifications = {
-            # Lightweight models (< 2B parameters)
-            ModelPerformanceLevel.LIGHTWEIGHT: [
-                "llama3.2:1b",
-                "gemma3:270m",
-                "gemma3:1b",
-                "nomic-embed-text",
-            ],
-            # Standard models (2-8B parameters)
-            ModelPerformanceLevel.STANDARD: [
-                "llama3.2:3b",
-                "gemma2:2b",
-                "gemma3:latest",
-                "artifish/llama3.2-uncensored",
-            ],
-            # Advanced models (8B+ parameters)
-            ModelPerformanceLevel.ADVANCED: [
-                "dolphin-llama3:8b",
-                "wizard-vicuna-uncensored:13b",
-            ],
-        }
+        # Model classification rules - loaded from config (zero hardcode policy)
+        self.model_classifications = self._load_model_classifications()
 
         # Task complexity mapping
         self.complexity_keywords = {
