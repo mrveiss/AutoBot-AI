@@ -22,6 +22,7 @@ from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 from src.logging.terminal_logger import TerminalLogger
 from src.chat_history_manager import ChatHistoryManager  # CRITICAL FIX: Chat integration
+from src.chat_workflow_manager import ChatWorkflowManager  # For LLM interpretation
 from src.secure_command_executor import (
     CommandRisk,
     SecureCommandExecutor,
@@ -99,6 +100,9 @@ class AgentTerminalService:
 
         # CRITICAL FIX: Initialize ChatHistoryManager for chat integration
         self.chat_history_manager = ChatHistoryManager()
+
+        # CRITICAL FIX: Initialize ChatWorkflowManager for LLM interpretation
+        self.chat_workflow_manager = ChatWorkflowManager()
 
         # Auto-approve rules storage
         # Format: {user_id: [{command_pattern, risk_level, created_at}, ...]}
@@ -746,6 +750,21 @@ class AgentTerminalService:
                 session.conversation_id, command, result, command_type="agent"
             )
 
+            # CRITICAL FIX: Call LLM to interpret command results
+            if session.conversation_id:
+                try:
+                    logger.info(f"[INTERPRETATION] Starting LLM interpretation for command: {command}")
+                    interpretation = await self.chat_workflow_manager.interpret_terminal_command(
+                        command=command,
+                        stdout=result.get("stdout", ""),
+                        stderr=result.get("stderr", ""),
+                        return_code=result.get("return_code", 0),
+                        session_id=session.conversation_id,
+                    )
+                    logger.info(f"[INTERPRETATION] LLM interpretation complete, length: {len(interpretation)}")
+                except Exception as e:
+                    logger.error(f"[INTERPRETATION] Failed to interpret command results: {e}")
+
             # NOTE: PTY session automatically sends output to terminal WebSocket via _read_pty_output()
             # No manual send needed - PTY handles it!
 
@@ -894,6 +913,21 @@ class AgentTerminalService:
                 await self._save_command_to_chat(
                     session.conversation_id, command, result, command_type="approved"
                 )
+
+                # CRITICAL FIX: Call LLM to interpret command results
+                if session.conversation_id:
+                    try:
+                        logger.info(f"[INTERPRETATION] Starting LLM interpretation for approved command: {command}")
+                        interpretation = await self.chat_workflow_manager.interpret_terminal_command(
+                            command=command,
+                            stdout=result.get("stdout", ""),
+                            stderr=result.get("stderr", ""),
+                            return_code=result.get("return_code", 0),
+                            session_id=session.conversation_id,
+                        )
+                        logger.info(f"[INTERPRETATION] LLM interpretation complete, length: {len(interpretation)}")
+                    except Exception as e:
+                        logger.error(f"[INTERPRETATION] Failed to interpret approved command results: {e}")
 
                 # NOTE: PTY session automatically sends output to terminal WebSocket via _read_pty_output()
                 # No manual send needed - PTY handles it!

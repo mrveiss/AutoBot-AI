@@ -236,27 +236,27 @@
   </div>
 </template>
 
-<script>
-import { ref, reactive, onMounted, watch } from 'vue'
+<script lang="ts">
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useApiClient } from '../utils/ApiClient'
+import { useAsyncHandler } from '@/composables/useErrorHandler'
 
 export default {
   name: 'WebResearchSettings',
   setup() {
     const apiClient = useApiClient()
-    
+
     // Reactive state
-    const isUpdating = ref(false)
     const updateMessage = ref(null)
     const testResult = ref(null)
-    
+
     const researchStatus = reactive({
       enabled: false,
       preferred_method: 'basic',
       cache_stats: null,
       circuit_breakers: null
     })
-    
+
     const researchSettings = reactive({
       enabled: false,
       require_user_confirmation: true,
@@ -271,148 +271,7 @@ export default {
       filter_adult_content: true
     })
 
-    // Load current settings
-    const loadSettings = async () => {
-      try {
-        isUpdating.value = true
-        
-        // Load status
-        const statusResponse = await apiClient.get('/web-research/status')
-        if (statusResponse.status === 'success') {
-          Object.assign(researchStatus, statusResponse)
-        }
-        
-        // Load settings
-        const settingsResponse = await apiClient.get('/web-research/settings')
-        if (settingsResponse.status === 'success') {
-          Object.assign(researchSettings, settingsResponse.settings)
-        }
-        
-      } catch (error) {
-        console.error('Failed to load web research settings:', error)
-        showMessage('Failed to load settings', 'error')
-      } finally {
-        isUpdating.value = false
-      }
-    }
-
-    // Toggle web research on/off
-    const toggleWebResearch = async () => {
-      try {
-        isUpdating.value = true
-        
-        const endpoint = researchSettings.enabled ? '/web-research/enable' : '/web-research/disable'
-        const response = await apiClient.post(endpoint)
-        
-        if (response.status === 'success') {
-          showMessage(response.message, 'success')
-          await loadSettings() // Reload to get updated status
-        } else {
-          showMessage(response.message || 'Failed to update web research status', 'error')
-          // Revert the toggle if failed
-          researchSettings.enabled = !researchSettings.enabled
-        }
-        
-      } catch (error) {
-        console.error('Failed to toggle web research:', error)
-        showMessage('Failed to update web research status', 'error')
-        // Revert the toggle if failed
-        researchSettings.enabled = !researchSettings.enabled
-      } finally {
-        isUpdating.value = false
-      }
-    }
-
-    // Update settings
-    const updateSettings = async () => {
-      try {
-        isUpdating.value = true
-        
-        const response = await apiClient.put('/web-research/settings', researchSettings)
-        
-        if (response.status === 'success') {
-          showMessage('Settings updated successfully', 'success')
-          await loadSettings() // Reload to confirm changes
-        } else {
-          showMessage(response.message || 'Failed to update settings', 'error')
-        }
-        
-      } catch (error) {
-        console.error('Failed to update settings:', error)
-        showMessage('Failed to update settings', 'error')
-      } finally {
-        isUpdating.value = false
-      }
-    }
-
-    // Test web research
-    const testWebResearch = async () => {
-      try {
-        isUpdating.value = true
-        testResult.value = null
-        
-        const response = await apiClient.post('/web-research/test', { query: 'test web research functionality' })
-        testResult.value = response
-        
-        showMessage('Test completed', response.status === 'success' ? 'success' : 'error')
-        
-      } catch (error) {
-        console.error('Web research test failed:', error)
-        testResult.value = {
-          status: 'error',
-          error: error.message
-        }
-        showMessage('Test failed', 'error')
-      } finally {
-        isUpdating.value = false
-      }
-    }
-
-    // Clear cache
-    const clearCache = async () => {
-      try {
-        isUpdating.value = true
-        
-        const response = await apiClient.post('/web-research/clear-cache')
-        
-        if (response.status === 'success') {
-          showMessage('Cache cleared successfully', 'success')
-          await loadSettings() // Reload to show updated cache stats
-        } else {
-          showMessage('Failed to clear cache', 'error')
-        }
-        
-      } catch (error) {
-        console.error('Failed to clear cache:', error)
-        showMessage('Failed to clear cache', 'error')
-      } finally {
-        isUpdating.value = false
-      }
-    }
-
-    // Reset circuit breakers
-    const resetCircuitBreakers = async () => {
-      try {
-        isUpdating.value = true
-        
-        const response = await apiClient.post('/web-research/reset-circuit-breakers')
-        
-        if (response.status === 'success') {
-          showMessage('Circuit breakers reset successfully', 'success')
-          await loadSettings() // Reload to show updated status
-        } else {
-          showMessage('Failed to reset circuit breakers', 'error')
-        }
-        
-      } catch (error) {
-        console.error('Failed to reset circuit breakers:', error)
-        showMessage('Failed to reset circuit breakers', 'error')
-      } finally {
-        isUpdating.value = false
-      }
-    }
-
-    // Show message
+    // Show message utility
     const showMessage = (text, type = 'info') => {
       updateMessage.value = { text, type }
       setTimeout(() => {
@@ -420,14 +279,140 @@ export default {
       }, 3000)
     }
 
+    // Load current settings
+    const { execute: loadSettings, loading: isLoadingSettings } = useAsyncHandler(
+      async () => {
+        // Load status
+        const statusResponse = await apiClient.get('/web-research/status')
+        if (statusResponse.status === 'success') {
+          Object.assign(researchStatus, statusResponse)
+        }
+
+        // Load settings
+        const settingsResponse = await apiClient.get('/web-research/settings')
+        if (settingsResponse.status === 'success') {
+          Object.assign(researchSettings, settingsResponse.settings)
+        }
+      },
+      {
+        errorMessage: 'Failed to load settings',
+        notify: showMessage
+      }
+    )
+
+    // Toggle web research on/off
+    const { execute: toggleWebResearch, loading: isTogglingResearch } = useAsyncHandler(
+      async () => {
+        const endpoint = researchSettings.enabled ? '/web-research/enable' : '/web-research/disable'
+        return await apiClient.post(endpoint)
+      },
+      {
+        onSuccess: async (response) => {
+          if (response.status === 'success') {
+            showMessage(response.message, 'success')
+            await loadSettings() // Reload to get updated status
+          }
+        },
+        onRollback: () => {
+          // Revert toggle on error
+          researchSettings.enabled = !researchSettings.enabled
+        },
+        errorMessage: 'Failed to update web research status',
+        notify: showMessage
+      }
+    )
+
+    // Update settings (with debounce for auto-save)
+    const { execute: updateSettings, loading: isUpdatingSettings } = useAsyncHandler(
+      async () => {
+        return await apiClient.put('/web-research/settings', researchSettings)
+      },
+      {
+        debounce: 1000, // Built-in debounce
+        onSuccess: async (response) => {
+          if (response.status === 'success') {
+            showMessage('Settings updated successfully', 'success')
+            await loadSettings() // Reload to confirm changes
+          }
+        },
+        errorMessage: 'Failed to update settings',
+        notify: showMessage
+      }
+    )
+
+    // Test web research
+    const { execute: testWebResearch, loading: isTestingResearch } = useAsyncHandler(
+      async () => {
+        testResult.value = null
+
+        const response = await apiClient.post('/web-research/test', { query: 'test web research functionality' })
+        testResult.value = response
+
+        showMessage('Test completed', response.status === 'success' ? 'success' : 'error')
+        return response
+      },
+      {
+        onError: (error) => {
+          testResult.value = {
+            status: 'error',
+            error: error.message
+          }
+        },
+        errorMessage: 'Test failed',
+        notify: showMessage
+      }
+    )
+
+    // Clear cache
+    const { execute: clearCache, loading: isClearingCache } = useAsyncHandler(
+      async () => {
+        return await apiClient.post('/web-research/clear-cache')
+      },
+      {
+        onSuccess: async (response) => {
+          if (response.status === 'success') {
+            showMessage('Cache cleared successfully', 'success')
+            await loadSettings() // Reload to show updated cache stats
+          }
+        },
+        errorMessage: 'Failed to clear cache',
+        notify: showMessage
+      }
+    )
+
+    // Reset circuit breakers
+    const { execute: resetCircuitBreakers, loading: isResettingCircuitBreakers } = useAsyncHandler(
+      async () => {
+        return await apiClient.post('/web-research/reset-circuit-breakers')
+      },
+      {
+        onSuccess: async (response) => {
+          if (response.status === 'success') {
+            showMessage('Circuit breakers reset successfully', 'success')
+            await loadSettings() // Reload to show updated status
+          }
+        },
+        errorMessage: 'Failed to reset circuit breakers',
+        notify: showMessage
+      }
+    )
+
+    // Computed: Combined loading state
+    const isUpdating = computed(() =>
+      isLoadingSettings.value ||
+      isTogglingResearch.value ||
+      isUpdatingSettings.value ||
+      isTestingResearch.value ||
+      isClearingCache.value ||
+      isResettingCircuitBreakers.value
+    )
+
     // Load settings on mount
     onMounted(() => {
       loadSettings()
     })
 
     // Watch for auto-save on certain settings changes
-    const debouncedUpdate = debounce(updateSettings, 1000)
-    
     watch([
       () => researchSettings.max_results,
       () => researchSettings.timeout_seconds,
@@ -435,23 +420,12 @@ export default {
       () => researchSettings.rate_limit_requests,
       () => researchSettings.rate_limit_window
     ], () => {
-      if (!isUpdating.value) {
-        debouncedUpdate()
+      // Debounce is built into updateSettings, just call it
+      // Only guard against settings update in progress, allow other operations
+      if (!isUpdatingSettings.value) {
+        updateSettings()
       }
     })
-
-    // Debounce utility
-    function debounce(func, wait) {
-      let timeout
-      return function executedFunction(...args) {
-        const later = () => {
-          clearTimeout(timeout)
-          func(...args)
-        }
-        clearTimeout(timeout)
-        timeout = setTimeout(later, wait)
-      }
-    }
 
     return {
       // State
@@ -460,7 +434,7 @@ export default {
       testResult,
       researchStatus,
       researchSettings,
-      
+
       // Methods
       loadSettings,
       toggleWebResearch,

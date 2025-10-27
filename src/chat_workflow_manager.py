@@ -936,6 +936,87 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                 },
             )
 
+    async def interpret_terminal_command(
+        self,
+        command: str,
+        stdout: str,
+        stderr: str,
+        return_code: int,
+        session_id: str,
+    ) -> str:
+        """
+        Public method to interpret terminal command results.
+
+        This method is called by agent_terminal_service after command execution
+        to get LLM interpretation of the command output.
+
+        Args:
+            command: The executed command
+            stdout: Standard output
+            stderr: Standard error
+            return_code: Command return code
+            session_id: Chat session ID for saving interpretation
+
+        Returns:
+            Full interpretation text from LLM
+        """
+        try:
+            # Get Ollama configuration
+            config = global_config_manager.get_config()
+            ollama_endpoint = config.get_ollama_endpoint()
+            selected_model = config.get_default_llm_model()
+
+            logger.info(
+                f"[interpret_terminal_command] Starting interpretation for command: {command[:50]}..."
+            )
+
+            # Call the interpretation generator (non-streaming for terminal)
+            interpretation = ""
+            async for msg in self._interpret_command_results(
+                command=command,
+                stdout=stdout,
+                stderr=stderr,
+                return_code=return_code,
+                ollama_endpoint=ollama_endpoint,
+                selected_model=selected_model,
+                streaming=False,  # Non-streaming for terminal
+            ):
+                if hasattr(msg, 'content'):
+                    interpretation += msg.content
+
+            logger.info(
+                f"[interpret_terminal_command] Interpretation complete, length: {len(interpretation)}"
+            )
+
+            # Save interpretation to chat history
+            if session_id and interpretation:
+                try:
+                    from src.chat_history_manager import ChatHistoryManager
+                    chat_mgr = ChatHistoryManager()
+                    await chat_mgr.add_message(
+                        sender="assistant",
+                        text=interpretation,
+                        message_type="terminal_interpretation",
+                        session_id=session_id,
+                    )
+                    logger.info(
+                        f"[interpret_terminal_command] Saved interpretation to chat session {session_id}"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"[interpret_terminal_command] Failed to save interpretation: {e}"
+                    )
+
+            return interpretation
+
+        except Exception as e:
+            logger.error(
+                f"[interpret_terminal_command] Error interpreting command: {e}",
+                exc_info=True,
+            )
+            # Security: Don't expose internal error details to frontend
+            return "Unable to interpret command results. Please check logs for details."
+
     async def _handle_pending_approval(
         self,
         session_id: str,
@@ -1200,7 +1281,9 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
 
                 elif result.get("status") == "success":
                     # Command executed without approval
-                    interpretation = await self._interpret_command_results(
+                    # _interpret_command_results is an async generator, must iterate it
+                    interpretation = ""
+                    async for msg in self._interpret_command_results(
                         command,
                         result.get("stdout", ""),
                         result.get("stderr", ""),
@@ -1208,15 +1291,21 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                         ollama_endpoint,
                         selected_model,
                         streaming=False,
-                    )
+                    ):
+                        if hasattr(msg, 'content'):
+                            interpretation += msg.content
+                        # Yield the interpretation message to the caller
+                        yield msg
 
-                    yield WorkflowMessage(
-                        type="response",
-                        content=f"\n\n{interpretation}",
-                        metadata={
-                            "message_type": "command_result_interpretation",
-                            "command": command,
-                            "executed": True,
+                    # Also yield a summary message with all content
+                    if interpretation:
+                        yield WorkflowMessage(
+                            type="response",
+                            content=f"\n\n{interpretation}",
+                            metadata={
+                                "message_type": "command_result_interpretation",
+                                "command": command,
+                                "executed": True,
                         },
                     )
                     additional_response += f"\n\n{interpretation}"

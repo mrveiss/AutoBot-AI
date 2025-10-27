@@ -531,6 +531,72 @@ def get_prompt(prompt_key: str, **kwargs) -> str:
     return prompt_manager.get(prompt_key, **kwargs)
 
 
+def get_optimized_prompt(
+    base_prompt_key: str,
+    session_id: Optional[str] = None,
+    user_name: Optional[str] = None,
+    user_role: Optional[str] = None,
+    available_tools: Optional[List[str]] = None,
+    recent_context: Optional[str] = None,
+    additional_params: Optional[Dict] = None,
+) -> str:
+    """
+    Get a prompt optimized for vLLM prefix caching.
+
+    This function returns a prompt structured for maximum cache efficiency:
+    1. Static base prompt FIRST (will be cached by vLLM)
+    2. Dynamic context LAST (NOT cached, but minimal tokens)
+
+    Args:
+        base_prompt_key: The static base prompt key (e.g., 'default.agent.system.main')
+        session_id: Current session identifier
+        user_name: User's display name
+        user_role: User's role/permissions
+        available_tools: List of available tool names
+        recent_context: Recent conversation context or task history
+        additional_params: Additional dynamic parameters
+
+    Returns:
+        Combined prompt with static prefix + dynamic suffix
+
+    Example:
+        >>> prompt = get_optimized_prompt(
+        ...     base_prompt_key='default.agent.system.main',
+        ...     session_id='abc123',
+        ...     user_name='Alice',
+        ...     available_tools=['file_read', 'file_write']
+        ... )
+        # Returns: [Static 12,800 tokens] + [Dynamic 200 tokens]
+        # vLLM will cache the first 12,800 tokens for 3-4x speedup!
+    """
+    # Get static base prompt with includes rendered (will be cached by vLLM)
+    # Use get() without kwargs to render Jinja2 includes but no dynamic variables
+    base_prompt = prompt_manager.get(base_prompt_key)
+
+    # Get dynamic context template
+    try:
+        dynamic_template_key = "default.agent.system.dynamic_context"
+        dynamic_context = prompt_manager.get(
+            dynamic_template_key,
+            session_id=session_id or "N/A",
+            current_date=datetime.now().strftime("%Y-%m-%d"),
+            current_time=datetime.now().strftime("%H:%M:%S"),
+            user_name=user_name,
+            user_role=user_role,
+            available_tools=available_tools or [],
+            recent_context=recent_context or "",
+            additional_params=additional_params or {},
+        )
+    except KeyError:
+        # Fallback if dynamic template not found
+        logger.warning("Dynamic context template not found, using minimal dynamic section")
+        dynamic_context = f"\n\n## Session Context\nSession ID: {session_id or 'N/A'}\nDate: {datetime.now().strftime('%Y-%m-%d')}"
+
+    # Combine: static prefix + dynamic suffix
+    # This ordering is CRITICAL for vLLM prefix caching
+    return f"{base_prompt}\n\n{dynamic_context}"
+
+
 def list_available_prompts(filter_pattern: Optional[str] = None) -> List[str]:
     """
     Convenience function to list available prompts.

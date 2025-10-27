@@ -32,14 +32,18 @@
           class="voice-btn primary"
           @click="toggleListening"
           :disabled="isProcessing"
-         aria-label="{{ islistening ? 'stop listening' : 'start listening' }}">
+          :class="{ 'disabled': isProcessing }"
+          :aria-label="isListening ? 'Stop listening' : 'Start listening'">
+          <i v-if="isProcessing" class="fas fa-spinner fa-spin mr-2"></i>
           {{ isListening ? 'Stop Listening' : 'Start Listening' }}
         </button>
         <button
           class="voice-btn secondary"
           @click="testTTS"
           :disabled="isListening || isProcessing"
-         aria-label="Test voice">
+          :class="{ 'disabled': isListening || isProcessing }"
+          aria-label="Test voice">
+          <i class="fas" :class="isProcessing ? 'fa-spinner fa-spin' : 'fa-volume-up'" class="mr-2"></i>
           Test Voice
         </button>
       </div>
@@ -104,12 +108,13 @@
       </div>
 
       <!-- Voice Status Display -->
-      <div class="voice-status-display" v-if="currentTranscription || statusMessage">
+      <div class="voice-status-display" v-if="currentTranscription || statusMessage || isProcessing">
         <div class="transcription" v-if="currentTranscription">
           <strong>Transcription:</strong> {{ currentTranscription }}
         </div>
-        <div class="status-message" v-if="statusMessage">
-          {{ statusMessage }}
+        <div class="status-message" v-if="statusMessage || isProcessing">
+          <i v-if="isProcessing" class="fas fa-spinner fa-spin mr-2"></i>
+          {{ statusMessage || (isProcessing ? 'Processing command...' : '') }}
         </div>
       </div>
     </div>
@@ -119,12 +124,12 @@
 <script>
 import { ref, onMounted, onUnmounted } from 'vue';
 import apiClient from '@/utils/ApiClient.js';
+import { useAsyncHandler } from '@/composables/useErrorHandler';
 
 export default {
   name: 'VoiceInterface',
   setup() {
     const isListening = ref(false);
-    const isProcessing = ref(false);
     const isSpeaking = ref(false);
     const currentTranscription = ref('');
     const statusMessage = ref('');
@@ -215,10 +220,8 @@ export default {
       }
     };
 
-    const processVoiceCommand = async (text, confidence) => {
-      isProcessing.value = true;
-
-      try {
+    const { execute: processVoiceCommandInternal, loading: isProcessing } = useAsyncHandler(
+      async (text, confidence) => {
         // Add to history
         voiceHistory.value.unshift({
           text,
@@ -237,28 +240,38 @@ export default {
           confidence: confidence
         });
 
-        if (response.response) {
-          // Speak the response
-          await speakText(response.response);
-          statusMessage.value = 'Response completed';
-        }
+        return response;
+      },
+      {
+        onSuccess: async (response) => {
+          if (response.response) {
+            // Speak the response
+            await speakText(response.response);
+            statusMessage.value = 'Response completed';
+          }
 
-        // Auto-listen if enabled
-        if (settings.value.auto_listen && !isListening.value) {
-          setTimeout(() => {
-            if (recognition && !isListening.value) {
-              recognition.start();
-            }
-          }, 1000);
-        }
-
-      } catch (error) {
-        console.error('Error processing voice command:', error);
-        statusMessage.value = 'Error processing command';
-      } finally {
-        isProcessing.value = false;
-        currentTranscription.value = '';
+          // Auto-listen if enabled
+          if (settings.value.auto_listen && !isListening.value) {
+            setTimeout(() => {
+              if (recognition && !isListening.value) {
+                recognition.start();
+              }
+            }, 1000);
+          }
+        },
+        onError: () => {
+          statusMessage.value = 'Error processing command';
+        },
+        onFinally: () => {
+          currentTranscription.value = '';
+        },
+        logErrors: true,
+        errorPrefix: '[VoiceInterface]'
       }
+    );
+
+    const processVoiceCommand = (text, confidence) => {
+      processVoiceCommandInternal(text, confidence);
     };
 
     const speakText = async (text) => {
@@ -482,6 +495,10 @@ export default {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .voice-btn.primary {
@@ -500,7 +517,8 @@ export default {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
 }
 
-.voice-btn:disabled {
+.voice-btn:disabled,
+.voice-btn.disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
@@ -611,13 +629,16 @@ export default {
 .transcription {
   margin-bottom: 12px;
   font-size: 16px;
-  color: rgba(255, 255, 255, 0.9);
+  color: #374151;
 }
 
 .status-message {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
+  color: #6b7280;
   font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 @media (max-width: 768px) {

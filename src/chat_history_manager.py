@@ -1362,17 +1362,15 @@ class ChatHistoryManager:
                             "entity_mentions": metadata["entity_mentions"],
                         }
 
+                        # Create entity with observations included (prevents race condition)
                         await self.memory_graph.create_conversation_entity(
-                            session_id=session_id, metadata=entity_metadata
-                        )
-
-                        # Add observations to newly created entity
-                        await self.memory_graph.add_observations(
-                            entity_name=entity_name, observations=observations
+                            session_id=session_id,
+                            metadata=entity_metadata,
+                            observations=observations,
                         )
 
                         logger.info(
-                            f"✅ Created and updated Memory Graph entity for session: {session_id}"
+                            f"✅ Created Memory Graph entity for session: {session_id}"
                         )
 
                 except Exception as mg_error:

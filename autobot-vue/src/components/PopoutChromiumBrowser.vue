@@ -18,8 +18,8 @@
       <div class="flex items-center space-x-2">
         <!-- Browser Controls -->
         <div class="flex items-center space-x-1">
-          <button @click="refreshBrowser" class="browser-btn" :disabled="loading" title="Refresh">
-            <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+          <button @click="refreshBrowser" class="browser-btn" :disabled="isRefreshing" title="Refresh">
+            <i class="fas fa-sync-alt" :class="{ 'fa-spin': isRefreshing }"></i>
           </button>
 
           <button @click="navigateHome" class="browser-btn" title="Home">
@@ -40,17 +40,17 @@
           <button @click="showPlaywrightPanel = !showPlaywrightPanel" class="browser-btn" title="Playwright Automation">
             <i class="fas fa-robot" :class="{ 'text-blue-600': showPlaywrightPanel }"></i>
           </button>
-          
-          <button @click="runFrontendTest" class="browser-btn" :disabled="playwrightLoading" title="Test Frontend">
-            <i class="fas fa-vials" :class="{ 'fa-spin': playwrightLoading }"></i>
-          </button>
-          
-          <button @click="performWebSearch" class="browser-btn" :disabled="playwrightLoading" title="Web Search">
-            <i class="fas fa-search" :class="{ 'fa-spin': playwrightLoading }"></i>
+
+          <button @click="runFrontendTest" class="browser-btn" :disabled="isTestingFrontend" title="Test Frontend">
+            <i class="fas fa-vials" :class="{ 'fa-spin': isTestingFrontend }"></i>
           </button>
 
-          <button @click="sendTestMessage" class="browser-btn" :disabled="playwrightLoading" title="Test Message">
-            <i class="fas fa-paper-plane" :class="{ 'fa-spin': playwrightLoading }"></i>
+          <button @click="performWebSearch" class="browser-btn" :disabled="isSearching" title="Web Search">
+            <i class="fas fa-search" :class="{ 'fa-spin': isSearching }"></i>
+          </button>
+
+          <button @click="sendTestMessage" class="browser-btn" :disabled="isSendingMessage" title="Test Message">
+            <i class="fas fa-paper-plane" :class="{ 'fa-spin': isSendingMessage }"></i>
           </button>
         </div>
 
@@ -64,13 +64,13 @@
 
     <!-- Address Bar -->
     <div class="address-bar bg-white border-b border-gray-200 p-3 flex items-center space-x-3">
-      <button @click="goBack" :disabled="!canGoBack" class="nav-btn" title="Back">
-        <i class="fas fa-arrow-left"></i>
+      <button @click="goBack" :disabled="!canGoBack || isGoingBack" class="nav-btn" title="Back">
+        <i class="fas fa-arrow-left" :class="{ 'fa-pulse': isGoingBack }"></i>
       </button>
-      <button @click="goForward" :disabled="!canGoForward" class="nav-btn" title="Forward">
-        <i class="fas fa-arrow-right"></i>
+      <button @click="goForward" :disabled="!canGoForward || isGoingForward" class="nav-btn" title="Forward">
+        <i class="fas fa-arrow-right" :class="{ 'fa-pulse': isGoingForward }"></i>
       </button>
-      <div class="flex-1 flex items-center bg-gray-50 rounded-lg px-3 py-2">
+      <div class="flex-1 flex items-center bg-gray-50 rounded-lg px-3 py-2" :class="{ 'opacity-50': isNavigating }">
         <i class="fas fa-lock text-green-500 text-sm mr-2" v-if="isSecure"></i>
         <input
           v-model="addressBarUrl"
@@ -78,7 +78,7 @@
           class="flex-1 bg-transparent text-sm outline-none"
           placeholder="Enter URL or search..."
         />
-        <button @click="navigateToUrl(addressBarUrl)" class="text-blue-600 hover:text-blue-800 ml-2">
+        <button @click="navigateToUrl(addressBarUrl)" :disabled="isNavigating" class="text-blue-600 hover:text-blue-800 ml-2">
           <i class="fas fa-search"></i>
         </button>
       </div>
@@ -99,7 +99,7 @@
           <i class="fas fa-times"></i>
         </button>
       </div>
-      
+
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <!-- Web Search -->
         <div class="automation-card">
@@ -114,9 +114,9 @@
               class="w-full px-3 py-1 text-sm border border-gray-300 rounded"
               placeholder="Search the web..."
             />
-            <button @click="performWebSearch" :disabled="playwrightLoading" class="w-full btn-sm btn-primary">
-              <i class="fas fa-search mr-1"></i>
-              Search
+            <button @click="performWebSearch" :disabled="isSearching" class="w-full btn-sm btn-primary">
+              <i class="fas mr-1" :class="isSearching ? \'fa-spinner fa-spin\' : \'fa-search\'"></i>
+              {{ isSearching ? \'Searching...\' : \'Search\' }}
             </button>
           </div>
         </div>
@@ -127,9 +127,9 @@
             <i class="fas fa-vials text-blue-500"></i>
             <span class="text-sm font-medium">Frontend Test</span>
           </div>
-          <button @click="runFrontendTest" :disabled="playwrightLoading" class="w-full btn-sm btn-primary">
-            <i class="fas fa-play mr-1"></i>
-            Run Tests
+          <button @click="runFrontendTest" :disabled="isTestingFrontend" class="w-full btn-sm btn-primary">
+              <i class="fas mr-1" :class="isTestingFrontend ? \'fa-spinner fa-spin\' : \'fa-play\'"></i>
+              {{ isTestingFrontend ? \'Running...\' : \'Run Tests\' }}
           </button>
         </div>
 
@@ -146,7 +146,7 @@
             <div v-if="automationResults.lastTest">
               Tests: {{ (automationResults.lastTest as TestData).passed || 0 }}/{{ (automationResults.lastTest as TestData).total || 0 }} passed
             </div>
-            <div v-if="playwrightLoading" class="text-blue-600">
+            <div v-if="isSearching || isTestingFrontend || isSendingMessage" class="text-blue-600">
               <i class="fas fa-spinner fa-spin mr-1"></i>Running...
             </div>
           </div>
@@ -179,7 +179,7 @@
           <div class="text-center p-4">
             <i class="fas fa-exclamation-triangle text-red-500 text-2xl mb-2"></i>
             <p class="text-sm text-red-600 mb-2">Playwright service connection failed</p>
-            <button @click="initializeBrowser" class="btn btn-primary btn-sm">
+            <button @click="initializeBrowser" :disabled="isInitializingBrowser" class="btn btn-primary btn-sm">
               <i class="fas fa-retry mr-1"></i>
               Retry Connection
             </button>
@@ -215,7 +215,7 @@
           <!-- Recent results -->
           <div v-if="automationResults.lastSearch || automationResults.lastTest" class="bg-white rounded-lg p-4 shadow-sm border">
             <h4 class="text-sm font-medium text-gray-700 mb-3">Recent Automation Results</h4>
-            
+
             <div v-if="automationResults.lastSearch" class="mb-3 p-3 bg-blue-50 rounded">
               <div class="flex items-center space-x-2 mb-1">
                 <i class="fas fa-search text-blue-500"></i>
@@ -248,9 +248,9 @@
           <h2 class="text-xl font-semibold text-gray-700 mb-2">Manual Browser Mode</h2>
           <p class="text-gray-600 mb-6">Direct control via VNC interface</p>
           <div class="space-y-3">
-            <button @click="initializeBrowser" class="btn btn-primary">
-              <i class="fas fa-rocket mr-2"></i>
-              Launch Browser Session
+            <button @click="initializeBrowser" :disabled="isInitializingBrowser" class="btn btn-primary">
+              <i class="fas" :class="isInitializingBrowser ? \'fa-spinner fa-spin\' : \'fa-rocket\'" class="mr-2"></i>
+              {{ isInitializingBrowser ? \'Launching...\' : \'Launch Browser Session\' }}
             </button>
             <p class="text-sm text-gray-500">
               This will open a live browser that you can control directly
@@ -329,6 +329,7 @@ import appConfig from '@/config/AppConfig.js'
 import apiClient from '@/utils/ApiClient.ts'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import { NetworkConstants } from '@/constants/network-constants.js'
+import { useAsyncHandler } from '@/composables/useErrorHandler'
 
 interface ConsoleLogEntry {
   timestamp: string
@@ -371,10 +372,9 @@ export default {
     const showDevTools = ref(false)
     const showInteractionOverlay = ref(false)
     const interactionMessage = ref('')
-    
+
     // Playwright API integration state with proper typing
     const showPlaywrightPanel = ref(false)
-    const playwrightLoading = ref(false)
     const playwrightStatus = ref('checking')
     const searchQuery = ref('')
     const automationResults = ref<AutomationResults>({
@@ -421,191 +421,339 @@ export default {
         level,
         message
       })
-      
+
       // Keep only last 100 logs
       if (consoleLogs.value.length > 100) {
         consoleLogs.value.shift()
       }
     }
 
-    // Initialize browser session
-    const initializeBrowser = async () => {
-      try {
-        loading.value = true
+    // ========================================
+    // API Operations with useAsyncHandler
+    // ========================================
+
+    // 1. Initialize Browser (Sequential API calls)
+    const { execute: initializeBrowser, loading: isInitializingBrowser } = useAsyncHandler(
+      async () => {
         browserStatus.value = 'connecting'
 
-        // Only try to get session info if we have a real session ID
+        let sessionData = null
         if (props.sessionId &&
             props.sessionId !== 'manual-browser' &&
             props.sessionId !== 'unified-browser') {
           try {
-            // Get browser session info for real research sessions
             const response = await apiClient.get(`/api/research/browser/${props.sessionId}`)
             if (response.ok) {
-              const sessionData = await response.json()
-              currentUrl.value = sessionData.url || props.initialUrl
-              addressBarUrl.value = currentUrl.value
+              sessionData = await response.json()
             }
           } catch (sessionError) {
             console.warn('Could not get session info, using manual mode')
-            addConsoleLog('warn', 'Session info not available, using manual mode')
           }
         }
 
-        // Try to connect to Playwright service
+        // Second API call - try to connect to Playwright service
+        let healthResponse = null
         try {
-          const healthResponse = await fetch(`${playwrightApiUrl.value}/health`)
-          if (healthResponse.ok) {
+          healthResponse = await fetch(`${playwrightApiUrl.value}/health`)
+        } catch (playwrightError) {
+          // Will be handled in onSuccess
+        }
+
+        return { sessionData, healthResponse }
+      },
+      {
+        onSuccess: (result) => {
+          if (result.sessionData) {
+            currentUrl.value = result.sessionData.url || props.initialUrl
+            addressBarUrl.value = currentUrl.value
+          }
+
+          if (result.healthResponse && result.healthResponse.ok) {
             playwrightStatus.value = 'connected'
             browserStatus.value = 'connected'
             addConsoleLog('info', 'Connected to Playwright automation service')
           } else {
-            throw new Error('Playwright service not available')
+            console.warn('Playwright service not available, using VNC only')
+            playwrightStatus.value = 'unavailable'
+            browserStatus.value = 'connected' // Still connected via VNC
+            addConsoleLog('warn', 'Playwright automation not available')
           }
-        } catch (playwrightError) {
-          console.warn('Playwright service not available, using VNC only')
-          playwrightStatus.value = 'unavailable'
-          browserStatus.value = 'connected' // Still connected via VNC
-          addConsoleLog('warn', 'Playwright automation not available')
+
+          browserStatus.value = 'ready'
+          addConsoleLog('info', 'Browser session initialized successfully')
+        },
+        onError: (error) => {
+          browserStatus.value = 'error'
+          addConsoleLog('error', `Browser initialization failed: ${error.message}`)
+        },
+        logErrors: true,
+        errorPrefix: '[PopoutChromiumBrowser]'
+      }
+    )
+
+    // 2. Navigate to URL
+    const { execute: navigateToUrlHandler, loading: isNavigating } = useAsyncHandler(
+      async (url: string) => {
+        if (!url.trim()) return null
+
+        let targetUrl = url.trim()
+
+        // Handle search queries vs URLs
+        if (!targetUrl.includes('://') && !targetUrl.startsWith('localhost') && !targetUrl.includes('.')) {
+          targetUrl = `https://duckduckgo.com/?q=${encodeURIComponent(targetUrl)}`
+        } else if (!targetUrl.includes('://')) {
+          targetUrl = `https://${targetUrl}`
         }
 
-        // Always show VNC for visual control
-        browserStatus.value = 'ready'
-        addConsoleLog('info', 'Browser session initialized successfully')
-
-      } catch (error) {
-        console.error('Browser initialization failed:', error)
-        browserStatus.value = 'error'
-        addConsoleLog('error', `Browser initialization failed: ${error instanceof Error ? error.message : String(error)}`)
-      } finally {
-        loading.value = false
-      }
-    }
-
-    // Navigation function with API integration
-    const navigateToUrl = async (url: string) => {
-      if (!url.trim()) return
-
-      let targetUrl = url.trim()
-      
-      // Handle search queries vs URLs
-      if (!targetUrl.includes('://') && !targetUrl.startsWith('localhost') && !targetUrl.includes('.')) {
-        targetUrl = `https://duckduckgo.com/?q=${encodeURIComponent(targetUrl)}`
-      } else if (!targetUrl.includes('://')) {
-        targetUrl = `https://${targetUrl}`
-      }
-
-      try {
-        loading.value = true
         const startTime = Date.now()
-        
+
         // Update current URL immediately for UI
         currentUrl.value = targetUrl
         addressBarUrl.value = targetUrl
         isSecure.value = targetUrl.startsWith('https://')
-        
+
         // Try Playwright navigation if available
+        let playwrightResult = null
         if (playwrightStatus.value === 'connected') {
           try {
             const response = await apiClient.post(`${playwrightApiUrl.value}/navigate`, {
               url: targetUrl,
               session_id: props.sessionId
             })
-            
+
             if (response.ok) {
-              const result = await response.json()
-              currentUrl.value = result.final_url || targetUrl
-              addressBarUrl.value = result.final_url || targetUrl
-              addConsoleLog('info', `Navigation completed: ${result.final_url}`)
+              playwrightResult = await response.json()
             }
           } catch (navError) {
             console.warn('Playwright navigation failed, relying on VNC')
-            addConsoleLog('warn', 'API navigation failed, using manual control')
           }
         }
 
-        pageLoadTime.value = Date.now() - startTime
-        emit('navigate', { url: targetUrl, sessionId: props.sessionId })
+        return {
+          targetUrl,
+          playwrightResult,
+          loadTime: Date.now() - startTime
+        }
+      },
+      {
+        onSuccess: (result) => {
+          if (result && result.playwrightResult) {
+            currentUrl.value = result.playwrightResult.final_url || result.targetUrl
+            addressBarUrl.value = result.playwrightResult.final_url || result.targetUrl
+            addConsoleLog('info', `Navigation completed: ${result.playwrightResult.final_url}`)
+          } else if (result) {
+            addConsoleLog('info', `Navigated to: ${result.targetUrl}`)
+          }
 
-        addConsoleLog('info', `Navigated to: ${targetUrl}`)
-
-      } catch (error) {
-        console.error('Navigation failed:', error)
-        addConsoleLog('error', `Navigation failed: ${error instanceof Error ? error.message : String(error)}`)
-      } finally {
-        loading.value = false
+          if (result) {
+            pageLoadTime.value = result.loadTime
+            emit('navigate', { url: result.targetUrl, sessionId: props.sessionId })
+          }
+        },
+        onError: (error) => {
+          addConsoleLog('error', `Navigation failed: ${error.message}`)
+        },
+        logErrors: true,
+        errorPrefix: '[PopoutChromiumBrowser]'
       }
+    )
+
+    // Wrapper function to maintain API
+    const navigateToUrl = async (url: string) => {
+      await navigateToUrlHandler(url)
     }
 
-    const goBack = async () => {
-      if (browserMode.value === 'vnc') {
-        try {
-          loading.value = true
-          const response = await apiClient.post('/api/playwright/back')
-          if (response.ok) {
-            const result = await response.json()
+    // 3. Go Back
+    const { execute: goBack, loading: isGoingBack } = useAsyncHandler(
+      async () => {
+        if (browserMode.value !== 'vnc') {
+          if (webview.value && webview.value.canGoBack()) {
+            webview.value.goBack()
+            canGoBack.value = webview.value.canGoBack()
+            canGoForward.value = webview.value.canGoForward()
+            return null // No API call needed
+          }
+          return null
+        }
+
+        const response = await apiClient.post('/api/playwright/back')
+        return response.ok ? await response.json() : null
+      },
+      {
+        onSuccess: (result) => {
+          if (result && result.final_url) {
             currentUrl.value = result.final_url
             addressBarUrl.value = result.final_url
             addConsoleLog('info', `Navigated back to: ${result.final_url}`)
           }
-        } catch (error) {
-          addConsoleLog('error', `Back navigation failed: ${error instanceof Error ? error.message : String(error)}`)
-        } finally {
-          loading.value = false
-        }
-      } else if (webview.value && webview.value.canGoBack()) {
-        webview.value.goBack()
-        canGoBack.value = webview.value.canGoBack()
-        canGoForward.value = webview.value.canGoForward()
+        },
+        onError: (error) => {
+          addConsoleLog('error', `Back navigation failed: ${error.message}`)
+        },
+        logErrors: true,
+        errorPrefix: '[PopoutChromiumBrowser]'
       }
-    }
+    )
 
-    const goForward = async () => {
-      if (browserMode.value === 'vnc') {
-        try {
-          loading.value = true
-          const response = await apiClient.post('/api/playwright/forward')
-          if (response.ok) {
-            const result = await response.json()
+    // 4. Go Forward
+    const { execute: goForward, loading: isGoingForward } = useAsyncHandler(
+      async () => {
+        if (browserMode.value !== 'vnc') {
+          if (webview.value && webview.value.canGoForward()) {
+            webview.value.goForward()
+            canGoBack.value = webview.value.canGoBack()
+            canGoForward.value = webview.value.canGoForward()
+            return null // No API call needed
+          }
+          return null
+        }
+
+        const response = await apiClient.post('/api/playwright/forward')
+        return response.ok ? await response.json() : null
+      },
+      {
+        onSuccess: (result) => {
+          if (result && result.final_url) {
             currentUrl.value = result.final_url
             addressBarUrl.value = result.final_url
             addConsoleLog('info', `Navigated forward to: ${result.final_url}`)
           }
-        } catch (error) {
-          addConsoleLog('error', `Forward navigation failed: ${error instanceof Error ? error.message : String(error)}`)
-        } finally {
-          loading.value = false
-        }
-      } else if (webview.value && webview.value.canGoForward()) {
-        webview.value.goForward()
-        canGoBack.value = webview.value.canGoBack()
-        canGoForward.value = webview.value.canGoForward()
+        },
+        onError: (error) => {
+          addConsoleLog('error', `Forward navigation failed: ${error.message}`)
+        },
+        logErrors: true,
+        errorPrefix: '[PopoutChromiumBrowser]'
       }
-    }
+    )
 
-    const refreshBrowser = async () => {
-      if (browserMode.value === 'vnc') {
-        try {
-          loading.value = true
-          const response = await apiClient.post('/api/playwright/reload')
-          if (response.ok) {
-            const result = await response.json()
+    // 5. Refresh Browser
+    const { execute: refreshBrowser, loading: isRefreshing } = useAsyncHandler(
+      async () => {
+        if (browserMode.value !== 'vnc') {
+          if (webview.value) {
+            webview.value.reload()
+            return null // No API call needed
+          }
+          // Fallback to navigation
+          return 'navigate-fallback'
+        }
+
+        const response = await apiClient.post('/api/playwright/reload')
+        return response.ok ? await response.json() : null
+      },
+      {
+        onSuccess: async (result) => {
+          if (result === 'navigate-fallback') {
+            await navigateToUrl(currentUrl.value)
+            return
+          }
+
+          if (result && result.final_url) {
             currentUrl.value = result.final_url
             addressBarUrl.value = result.final_url
             addConsoleLog('info', `Page refreshed: ${result.final_url}`)
           }
-        } catch (error) {
-          addConsoleLog('error', `Refresh failed: ${error instanceof Error ? error.message : String(error)}`)
-        } finally {
-          loading.value = false
-        }
-      } else if (webview.value) {
-        webview.value.reload()
-      } else {
-        // Refresh VNC or remote session
-        await navigateToUrl(currentUrl.value)
+        },
+        onError: (error) => {
+          addConsoleLog('error', `Refresh failed: ${error.message}`)
+        },
+        logErrors: true,
+        errorPrefix: '[PopoutChromiumBrowser]'
       }
-    }
+    )
+
+    // 6. Perform Web Search
+    const { execute: performWebSearch, loading: isSearching } = useAsyncHandler(
+      async () => {
+        if (!searchQuery.value.trim()) return null
+
+        addConsoleLog('info', `Starting web search for: ${searchQuery.value}`)
+
+        const response = await apiClient.post(`${playwrightApiUrl.value}/search`, {
+          query: searchQuery.value,
+          search_engine: 'duckduckgo'
+        })
+
+        return response
+      },
+      {
+        onSuccess: (data) => {
+          if (data) {
+            automationResults.value.lastSearch = data as unknown as SearchData
+            addConsoleLog('info', `Search completed: ${(data as any).results?.length || 0} results found`)
+          }
+        },
+        onError: (error) => {
+          addConsoleLog('error', `Web search failed: ${error.message}`)
+        },
+        logErrors: true,
+        errorPrefix: '[PopoutChromiumBrowser]'
+      }
+    )
+
+    // 7. Run Frontend Test
+    const { execute: runFrontendTest, loading: isTestingFrontend } = useAsyncHandler(
+      async () => {
+        addConsoleLog('info', 'Starting frontend tests...')
+
+        const response = await apiClient.post(`${playwrightApiUrl.value}/test-frontend`, {
+          frontend_url: window.location.origin
+        })
+
+        return response
+      },
+      {
+        onSuccess: (data) => {
+          if (data) {
+            const tests = (data as any).tests
+            const passed = tests?.filter((t: any) => t.status === 'PASS').length || 0
+            const total = tests?.length || 0
+
+            automationResults.value.lastTest = { passed, total, data } as TestData
+            addConsoleLog('info', `Frontend test completed: ${passed}/${total} tests passed`)
+          }
+        },
+        onError: (error) => {
+          addConsoleLog('error', `Frontend test failed: ${error.message}`)
+        },
+        logErrors: true,
+        errorPrefix: '[PopoutChromiumBrowser]'
+      }
+    )
+
+    // 8. Send Test Message
+    const { execute: sendTestMessage, loading: isSendingMessage } = useAsyncHandler(
+      async () => {
+        addConsoleLog('info', 'Sending test message...')
+
+        const response = await apiClient.post(`${playwrightApiUrl.value}/send-test-message`, {
+          message: 'Test message from browser automation',
+          frontend_url: window.location.origin
+        })
+
+        return response
+      },
+      {
+        onSuccess: (data) => {
+          if (data) {
+            automationResults.value.lastMessage = data as unknown as MessageData
+            const steps = (data as any).steps
+            const successSteps = steps?.filter((s: any) => s.status === 'SUCCESS').length || 0
+            addConsoleLog('info', `Test message completed: ${successSteps} steps successful`)
+          }
+        },
+        onError: (error) => {
+          addConsoleLog('error', `Test message failed: ${error.message}`)
+        },
+        logErrors: true,
+        errorPrefix: '[PopoutChromiumBrowser]'
+      }
+    )
+
+    // ========================================
+    // Helper Functions
+    // ========================================
 
     const navigateHome = () => {
       navigateToUrl('about:blank')
@@ -618,74 +766,9 @@ export default {
         'autobot-vnc',
         'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no'
       )
-      
+
       if (vncWindow) {
         addConsoleLog('info', 'VNC browser opened in new window')
-      }
-    }
-
-    // Playwright automation methods
-    const performWebSearch = async () => {
-      if (!searchQuery.value.trim()) return
-      
-      try {
-        playwrightLoading.value = true
-        addConsoleLog('info', `Starting web search for: ${searchQuery.value}`)
-        
-        const data = await apiClient.post(`${playwrightApiUrl.value}/search`, {
-          query: searchQuery.value,
-          search_engine: 'duckduckgo'
-        })
-        
-        automationResults.value.lastSearch = data as unknown as SearchData
-        addConsoleLog('info', `Search completed: ${(data as any).results?.length || 0} results found`)
-      } catch (error) {
-        addConsoleLog('error', `Web search failed: ${error instanceof Error ? error.message : String(error)}`)
-      } finally {
-        playwrightLoading.value = false
-      }
-    }
-
-    const runFrontendTest = async () => {
-      try {
-        playwrightLoading.value = true
-        addConsoleLog('info', 'Starting frontend tests...')
-        
-        const data = await apiClient.post(`${playwrightApiUrl.value}/test-frontend`, {
-          frontend_url: window.location.origin
-        })
-        
-        const tests = (data as any).tests
-        const passed = tests?.filter((t: any) => t.status === 'PASS').length || 0
-        const total = tests?.length || 0
-        
-        automationResults.value.lastTest = { passed, total, data } as TestData
-        addConsoleLog('info', `Frontend test completed: ${passed}/${total} tests passed`)
-      } catch (error) {
-        addConsoleLog('error', `Frontend test failed: ${error instanceof Error ? error.message : String(error)}`)
-      } finally {
-        playwrightLoading.value = false
-      }
-    }
-
-    const sendTestMessage = async () => {
-      try {
-        playwrightLoading.value = true
-        addConsoleLog('info', 'Sending test message...')
-        
-        const data = await apiClient.post(`${playwrightApiUrl.value}/send-test-message`, {
-          message: 'Test message from browser automation',
-          frontend_url: window.location.origin
-        })
-        
-        automationResults.value.lastMessage = data as unknown as MessageData
-        const steps = (data as any).steps
-        const successSteps = steps?.filter((s: any) => s.status === 'SUCCESS').length || 0
-        addConsoleLog('info', `Test message completed: ${successSteps} steps successful`)
-      } catch (error) {
-        addConsoleLog('error', `Test message failed: ${error instanceof Error ? error.message : String(error)}`)
-      } finally {
-        playwrightLoading.value = false
       }
     }
 
@@ -710,7 +793,10 @@ export default {
       }
     }
 
+    // ========================================
     // Lifecycle
+    // ========================================
+
     onMounted(async () => {
       // Load VNC URL dynamically from backend configuration
       try {
@@ -818,13 +904,22 @@ export default {
       zoomLevel,
       pageLoadTime,
       consoleLogs,
-      
+
       // Playwright state
       showPlaywrightPanel,
-      playwrightLoading,
       playwrightStatus,
       searchQuery,
       automationResults,
+
+      // Loading states (NEW - expose for UI)
+      isInitializingBrowser,
+      isNavigating,
+      isGoingBack,
+      isGoingForward,
+      isRefreshing,
+      isSearching,
+      isTestingFrontend,
+      isSendingMessage,
 
       // Refs
       vncIframe,
