@@ -47,6 +47,40 @@ from src.utils.redis_database_manager import redis_db_manager
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_metadata_for_chromadb(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Sanitize metadata for ChromaDB compatibility.
+
+    ChromaDB only allows metadata values of type: str, int, float, None.
+    This function converts lists/arrays to comma-separated strings.
+
+    Args:
+        metadata: Original metadata dict that may contain arrays
+
+    Returns:
+        Sanitized metadata dict with all arrays converted to strings
+    """
+    if not metadata:
+        return {}
+
+    sanitized = {}
+    for key, value in metadata.items():
+        if isinstance(value, (list, tuple)):
+            # Convert arrays to comma-separated strings
+            sanitized[key] = ", ".join(str(v) for v in value)
+        elif isinstance(value, dict):
+            # Convert dicts to JSON strings
+            sanitized[key] = json.dumps(value)
+        elif isinstance(value, (str, int, float, type(None))):
+            # Allowed types - keep as is
+            sanitized[key] = value
+        else:
+            # Convert other types to string
+            sanitized[key] = str(value)
+
+    return sanitized
+
+
 class KnowledgeBase:
     """Unified knowledge base implementation with ChromaDB vector store support"""
 
@@ -772,9 +806,12 @@ class KnowledgeBase:
             vector_indexed = False
             if self.vector_store:
                 try:
+                    # Sanitize metadata for ChromaDB compatibility
+                    sanitized_metadata = _sanitize_metadata_for_chromadb(fact_metadata)
+
                     # Create LlamaIndex document
                     document = Document(
-                        text=content, metadata=fact_metadata, doc_id=fact_id
+                        text=content, metadata=sanitized_metadata, doc_id=fact_id
                     )
 
                     # Create or get vector index with proper async handling
@@ -868,15 +905,18 @@ class KnowledgeBase:
                     "vector_indexed": False,
                 }
 
-            # Prepare metadata
+            # Prepare metadata - sanitize for ChromaDB compatibility
             fact_metadata = metadata or {}
             if "fact_id" not in fact_metadata:
                 fact_metadata["fact_id"] = fact_id
 
+            # Sanitize metadata to convert arrays to strings (ChromaDB requirement)
+            sanitized_metadata = _sanitize_metadata_for_chromadb(fact_metadata)
+
             # Create LlamaIndex document with existing fact_id
             document = Document(
                 text=content,
-                metadata=fact_metadata,
+                metadata=sanitized_metadata,
                 doc_id=fact_id,  # Use existing ID to prevent duplication
             )
 
@@ -1568,9 +1608,12 @@ class KnowledgeBase:
                         delete_from_docstore=True,
                     )
 
+                    # Sanitize metadata for ChromaDB compatibility
+                    sanitized_new_metadata = _sanitize_metadata_for_chromadb(new_metadata)
+
                     # Create new vector document
                     document = Document(
-                        text=new_content, metadata=new_metadata, doc_id=fact_id
+                        text=new_content, metadata=sanitized_new_metadata, doc_id=fact_id
                     )
 
                     # Insert new vector
