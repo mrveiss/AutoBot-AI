@@ -7,6 +7,7 @@ Each agent can have its own LLM model configuration and status monitoring.
 """
 
 import logging
+import os
 from datetime import datetime
 from typing import Optional
 
@@ -19,6 +20,9 @@ from backend.utils.connection_utils import ConnectionTester
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
+
+# Get default LLM model from environment (NO HARDCODING)
+DEFAULT_LLM_MODEL = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", "llama3.2:1b"))
 
 router = APIRouter()
 
@@ -47,7 +51,7 @@ DEFAULT_AGENT_CONFIGS = {
     "orchestrator": {
         "name": "Orchestrator Agent",
         "description": "Main workflow coordination and task classification",
-        "default_model": "llama3.2:1b",
+        "default_model": DEFAULT_LLM_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 1,
@@ -56,7 +60,7 @@ DEFAULT_AGENT_CONFIGS = {
     "chat": {
         "name": "Chat Agent",
         "description": "Conversational responses and user interaction",
-        "default_model": "llama3.2:1b",
+        "default_model": DEFAULT_LLM_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 1,
@@ -65,7 +69,7 @@ DEFAULT_AGENT_CONFIGS = {
     "kb_librarian": {
         "name": "Knowledge Base Librarian",
         "description": "Knowledge base search and document retrieval",
-        "default_model": "llama3.2:1b",
+        "default_model": DEFAULT_LLM_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 2,
@@ -74,7 +78,7 @@ DEFAULT_AGENT_CONFIGS = {
     "research": {
         "name": "Research Agent",
         "description": "Web research and information gathering",
-        "default_model": "llama3.2:1b",
+        "default_model": DEFAULT_LLM_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 2,
@@ -83,7 +87,7 @@ DEFAULT_AGENT_CONFIGS = {
     "system_commands": {
         "name": "System Commands Agent",
         "description": "Command execution and system operations",
-        "default_model": "llama3.2:1b",
+        "default_model": DEFAULT_LLM_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
@@ -92,7 +96,7 @@ DEFAULT_AGENT_CONFIGS = {
     "security_scanner": {
         "name": "Security Scanner Agent",
         "description": "Security analysis and vulnerability assessment",
-        "default_model": "llama3.2:1b",
+        "default_model": DEFAULT_LLM_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
@@ -101,7 +105,7 @@ DEFAULT_AGENT_CONFIGS = {
     "code_analysis": {
         "name": "Code Analysis Agent",
         "description": "Code review and analysis tasks",
-        "default_model": "llama3.2:1b",
+        "default_model": DEFAULT_LLM_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 2,
