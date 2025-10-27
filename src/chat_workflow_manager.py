@@ -962,9 +962,8 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
         """
         try:
             # Get Ollama configuration
-            config = global_config_manager.get_config()
-            ollama_endpoint = config.get_ollama_endpoint()
-            selected_model = config.get_default_llm_model()
+            ollama_endpoint = global_config_manager.get_ollama_url()
+            selected_model = global_config_manager.get_selected_model()
 
             logger.info(
                 f"[interpret_terminal_command] Starting interpretation for command: {command[:50]}..."
