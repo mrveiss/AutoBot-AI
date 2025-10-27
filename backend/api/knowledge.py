@@ -2410,20 +2410,20 @@ async def get_facts_by_category(
                 if not fact_data:
                     continue
 
-                # Extract metadata
-                metadata_str = fact_data.get(b"metadata", b"{}")
+                # Extract metadata (handle both bytes and string keys from Redis)
+                metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
                 metadata = json.loads(
                     metadata_str.decode("utf-8")
                     if isinstance(metadata_str, bytes)
                     else metadata_str
                 )
 
-                # Extract content
-                content_bytes = fact_data.get(b"content", b"")
+                # Extract content (handle both bytes and string keys from Redis)
+                content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
                 content = (
-                    content_bytes.decode("utf-8")
-                    if isinstance(content_bytes, bytes)
-                    else str(content_bytes)
+                    content_raw.decode("utf-8")
+                    if isinstance(content_raw, bytes)
+                    else str(content_raw) if content_raw else ""
                 )
 
                 # Get category based on source field (not metadata.category)
@@ -2525,28 +2525,28 @@ async def get_fact_by_key(
         if not fact_data:
             raise HTTPException(status_code=404, detail=f"Fact not found: {fact_key}")
 
-        # Extract metadata
-        metadata_str = fact_data.get(b"metadata", b"{}")
+        # Extract metadata (handle both bytes and string keys from Redis)
+        metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
         metadata = json.loads(
             metadata_str.decode("utf-8")
             if isinstance(metadata_str, bytes)
             else metadata_str
         )
 
-        # Extract content
-        content_bytes = fact_data.get(b"content", b"")
+        # Extract content (handle both bytes and string keys from Redis)
+        content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
         content = (
-            content_bytes.decode("utf-8")
-            if isinstance(content_bytes, bytes)
-            else str(content_bytes)
+            content_raw.decode("utf-8")
+            if isinstance(content_raw, bytes)
+            else str(content_raw) if content_raw else ""
         )
 
-        # Extract created_at
-        created_at_bytes = fact_data.get(b"created_at", b"")
+        # Extract created_at (handle both bytes and string keys from Redis)
+        created_at_raw = fact_data.get("created_at") or fact_data.get(b"created_at", b"")
         created_at = (
-            created_at_bytes.decode("utf-8")
-            if isinstance(created_at_bytes, bytes)
-            else str(created_at_bytes)
+            created_at_raw.decode("utf-8")
+            if isinstance(created_at_raw, bytes)
+            else str(created_at_raw) if created_at_raw else ""
         )
 
         return {
@@ -2632,15 +2632,15 @@ async def vectorize_existing_facts(
                         failed_count += 1
                         continue
 
-                    # Extract content and metadata
-                    content_bytes = fact_data.get(b"content", b"")
+                    # Extract content and metadata (handle both bytes and string keys from Redis)
+                    content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
                     content = (
-                        content_bytes.decode("utf-8")
-                        if isinstance(content_bytes, bytes)
-                        else str(content_bytes)
+                        content_raw.decode("utf-8")
+                        if isinstance(content_raw, bytes)
+                        else str(content_raw) if content_raw else ""
                     )
 
-                    metadata_str = fact_data.get(b"metadata", b"{}")
+                    metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
                     metadata = json.loads(
                         metadata_str.decode("utf-8")
                         if isinstance(metadata_str, bytes)
