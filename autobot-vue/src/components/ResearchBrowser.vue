@@ -43,7 +43,7 @@
         </div>
         <div class="ml-4 flex space-x-2">
           <button @click="handleWaitForUser" class="btn btn-primary btn-sm" :disabled="isWaitingForUser" aria-label="Wait for user">
-            <i class="fas" :class="isWaitingForUser ? 'fa-spinner fa-spin' : 'fa-clock'" class="mr-1"></i>
+            <i class="fas mr-1" :class="isWaitingForUser ? 'fa-spinner fa-spin' : 'fa-clock'"></i>
             {{ isWaitingForUser ? 'Waiting...' : 'Wait' }}
           </button>
           <button @click="openBrowserSession" class="btn btn-secondary btn-sm">
@@ -108,25 +108,25 @@
       <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
         <button @click="() => handleSessionAction('extract_content')"
                 class="btn btn-outline btn-sm" :disabled="isPerformingAction" aria-label="Extract content">
-          <i class="fas" :class="isPerformingAction ? 'fa-spinner fa-spin' : 'fa-file-alt'" class="mr-1"></i>
+          <i class="fas mr-1" :class="isPerformingAction ? 'fa-spinner fa-spin' : 'fa-file-alt'"></i>
           Extract Content
         </button>
 
         <button @click="() => handleSessionAction('save_mhtml')"
                 class="btn btn-outline btn-sm" :disabled="isPerformingAction" aria-label="Save MHTML">
-          <i class="fas" :class="isPerformingAction ? 'fa-spinner fa-spin' : 'fa-save'" class="mr-1"></i>
+          <i class="fas mr-1" :class="isPerformingAction ? 'fa-spinner fa-spin' : 'fa-save'"></i>
           Save MHTML
         </button>
 
         <button @click="navigateToUrl"
                 class="btn btn-outline btn-sm" :disabled="isNavigating" aria-label="Navigate to URL">
-          <i class="fas" :class="isNavigating ? 'fa-spinner fa-spin' : 'fa-arrow-right'" class="mr-1"></i>
+          <i class="fas mr-1" :class="isNavigating ? 'fa-spinner fa-spin' : 'fa-arrow-right'"></i>
           {{ isNavigating ? 'Navigating...' : 'Navigate' }}
         </button>
 
         <button @click="closeSessionHandler"
                 class="btn btn-danger btn-sm" :disabled="isClosingSession" aria-label="Close session">
-          <i class="fas" :class="isClosingSession ? 'fa-spinner fa-spin' : 'fa-times'" class="mr-1"></i>
+          <i class="fas mr-1" :class="isClosingSession ? 'fa-spinner fa-spin' : 'fa-times'"></i>
           {{ isClosingSession ? 'Closing...' : 'Close Session' }}
         </button>
       </div>
@@ -191,7 +191,7 @@
               title="Pause agent and take control of browser"
               :disabled="isPausingAgent"
               aria-label="Pause agent">
-              <i class="fas" :class="isPausingAgent ? 'fa-spinner fa-spin' : 'fa-pause'" class="mr-1"></i>
+              <i class="fas mr-1" :class="isPausingAgent ? 'fa-spinner fa-spin' : 'fa-pause'"></i>
               {{ isPausingAgent ? 'Pausing...' : 'Take Control' }}
             </button>
             <button
@@ -201,7 +201,7 @@
               title="Resume agent research session"
               :disabled="isResumingAgent"
               aria-label="Resume agent">
-              <i class="fas" :class="isResumingAgent ? 'fa-spinner fa-spin' : 'fa-play'" class="mr-1"></i>
+              <i class="fas mr-1" :class="isResumingAgent ? 'fa-spinner fa-spin' : 'fa-play'"></i>
               {{ isResumingAgent ? 'Resuming...' : 'Resume Agent' }}
             </button>
           </div>

@@ -115,8 +115,8 @@
               placeholder="Search the web..."
             />
             <button @click="performWebSearch" :disabled="isSearching" class="w-full btn-sm btn-primary">
-              <i class="fas mr-1" :class="isSearching ? \'fa-spinner fa-spin\' : \'fa-search\'"></i>
-              {{ isSearching ? \'Searching...\' : \'Search\' }}
+              <i class="fas mr-1" :class="isSearching ? 'fa-spinner fa-spin' : 'fa-search'"></i>
+              {{ isSearching ? 'Searching...' : 'Search' }}
             </button>
           </div>
         </div>
@@ -128,8 +128,8 @@
             <span class="text-sm font-medium">Frontend Test</span>
           </div>
           <button @click="runFrontendTest" :disabled="isTestingFrontend" class="w-full btn-sm btn-primary">
-              <i class="fas mr-1" :class="isTestingFrontend ? \'fa-spinner fa-spin\' : \'fa-play\'"></i>
-              {{ isTestingFrontend ? \'Running...\' : \'Run Tests\' }}
+              <i class="fas mr-1" :class="isTestingFrontend ? 'fa-spinner fa-spin' : 'fa-play'"></i>
+              {{ isTestingFrontend ? 'Running...' : 'Run Tests' }}
           </button>
         </div>
 
@@ -249,8 +249,8 @@
           <p class="text-gray-600 mb-6">Direct control via VNC interface</p>
           <div class="space-y-3">
             <button @click="initializeBrowser" :disabled="isInitializingBrowser" class="btn btn-primary">
-              <i class="fas mr-2" :class="isInitializingBrowser ? \'fa-spinner fa-spin\' : \'fa-rocket\'"></i>
-              {{ isInitializingBrowser ? \'Launching...\' : \'Launch Browser Session\' }}
+              <i class="fas mr-2" :class="isInitializingBrowser ? 'fa-spinner fa-spin' : 'fa-rocket'"></i>
+              {{ isInitializingBrowser ? 'Launching...' : 'Launch Browser Session' }}
             </button>
             <p class="text-sm text-gray-500">
               This will open a live browser that you can control directly
