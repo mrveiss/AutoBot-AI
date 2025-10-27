@@ -42,6 +42,7 @@ from src.circuit_breaker import circuit_breaker_async
 from src.constants.network_constants import NetworkConstants
 from src.unified_config import config
 from src.utils.knowledge_base_timeouts import kb_timeouts
+from src.utils.redis_database_manager import redis_db_manager
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +59,8 @@ class KnowledgeBase:
         self.redis_host = config.get("redis.host")
         self.redis_port = config.get("redis.port")
         self.redis_password = config.get("redis.password")
-        # Knowledge base vectors are in database 0 (required for Redis search indexes)
-        self.redis_db = config.get("redis.databases.knowledge", 0)
+        # Knowledge base DB number from redis-databases.yaml (facts stored in DB 1)
+        self.redis_db = redis_db_manager.config.get('redis_databases', {}).get('knowledge', {}).get('db', 1)
 
         # ChromaDB configuration
         self.chromadb_path = config.get("memory.chromadb.path", "data/chromadb")
