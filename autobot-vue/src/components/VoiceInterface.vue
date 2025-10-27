@@ -43,7 +43,7 @@
           :disabled="isListening || isProcessing"
           :class="{ 'disabled': isListening || isProcessing }"
           aria-label="Test voice">
-          <i class="fas" :class="isProcessing ? 'fa-spinner fa-spin' : 'fa-volume-up'" class="mr-2"></i>
+          <i class="fas mr-2" :class="isProcessing ? 'fa-spinner fa-spin' : 'fa-volume-up'"></i>
           Test Voice
         </button>
       </div>
