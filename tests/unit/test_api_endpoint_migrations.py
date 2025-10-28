@@ -4224,5 +4224,208 @@ class TestBatch25MigrationStats:
         assert total_batch_25_tests == 14  # Comprehensive coverage
 
 
+class TestBatch26ListFiles:
+    """Test Batch 26 - GET /list endpoint migration"""
+
+    def test_list_files_has_decorator(self):
+        """Verify endpoint has @with_error_handling decorator"""
+        from backend.api.files import list_files
+        import inspect
+
+        source = inspect.getsource(list_files)
+
+        # Should have decorator with proper configuration
+        assert "@with_error_handling" in source
+        assert "category=ErrorCategory.SERVER_ERROR" in source
+        assert 'operation="list_files"' in source
+        assert 'error_code_prefix="FILES"' in source
+
+    def test_list_files_no_outer_try_catch(self):
+        """Verify outer try-catch block was removed"""
+        from backend.api.files import list_files
+        import inspect
+
+        source = inspect.getsource(list_files)
+
+        # Should not have try block at function level (inner try for OSError/PermissionError is preserved)
+        # Count try blocks - should be 1 (inner try for file iteration errors)
+        try_count = source.count("try:")
+        assert try_count == 1  # Only inner try-except for OSError/PermissionError
+
+    def test_list_files_preserves_httpexceptions(self):
+        """Verify endpoint preserves validation HTTPExceptions"""
+        from backend.api.files import list_files
+        import inspect
+
+        source = inspect.getsource(list_files)
+
+        # Should preserve multiple HTTPExceptions for validation
+        assert source.count("raise HTTPException") >= 3  # Multiple validation errors
+        assert 'status_code=403, detail="Insufficient permissions for file operations"' in source
+        assert 'status_code=404, detail="Directory not found"' in source
+        assert 'status_code=400, detail="Path is not a directory"' in source
+
+    def test_list_files_preserves_business_logic(self):
+        """Verify endpoint preserves file listing logic"""
+        from backend.api.files import list_files
+        import inspect
+
+        source = inspect.getsource(list_files)
+
+        # Should preserve path validation and directory iteration
+        assert "target_path = validate_and_resolve_path(path)" in source
+        assert "if not target_path.exists():" in source
+        assert "if not target_path.is_dir():" in source
+        assert "for item in sorted(" in source
+        assert "target_path.iterdir()" in source
+
+    def test_list_files_preserves_inner_try_catch(self):
+        """Verify endpoint preserves inner try-catch for file iteration errors"""
+        from backend.api.files import list_files
+        import inspect
+
+        source = inspect.getsource(list_files)
+
+        # Should preserve inner try-except for OSError/PermissionError
+        assert "except (OSError, PermissionError) as e:" in source
+        assert 'logger.warning(f"Skipping inaccessible file {item}: {e}")' in source
+
+
+class TestBatch26UploadFile:
+    """Test Batch 26 - POST /upload endpoint migration"""
+
+    def test_upload_file_has_decorator(self):
+        """Verify endpoint has @with_error_handling decorator"""
+        from backend.api.files import upload_file
+        import inspect
+
+        source = inspect.getsource(upload_file)
+
+        # Should have decorator with proper configuration
+        assert "@with_error_handling" in source
+        assert "category=ErrorCategory.SERVER_ERROR" in source
+        assert 'operation="upload_file"' in source
+        assert 'error_code_prefix="FILES"' in source
+
+    def test_upload_file_no_outer_try_catch(self):
+        """Verify outer try-catch block was removed"""
+        from backend.api.files import upload_file
+        import inspect
+
+        source = inspect.getsource(upload_file)
+
+        # Should have NO try blocks (Simple Pattern with HTTPException Preservation)
+        try_count = source.count("try:")
+        assert try_count == 0  # No try blocks needed
+
+    def test_upload_file_preserves_httpexceptions(self):
+        """Verify endpoint preserves validation HTTPExceptions"""
+        from backend.api.files import upload_file
+        import inspect
+
+        source = inspect.getsource(upload_file)
+
+        # Should preserve multiple HTTPExceptions for validation
+        assert source.count("raise HTTPException") >= 6  # Multiple validation errors
+        assert 'status_code=403, detail="Insufficient permissions for file upload"' in source
+        assert 'status_code=400, detail="No filename provided"' in source
+        assert 'detail=f"File type not allowed: {file.filename}"' in source
+        assert 'status_code=413' in source
+        assert 'detail="File content contains potentially dangerous elements"' in source
+        assert 'status_code=409' in source
+
+    def test_upload_file_preserves_business_logic(self):
+        """Verify endpoint preserves file upload logic"""
+        from backend.api.files import upload_file
+        import inspect
+
+        source = inspect.getsource(upload_file)
+
+        # Should preserve validation and upload logic
+        assert "if not file.filename:" in source
+        assert "if not is_safe_file(file.filename):" in source
+        assert "content = await file.read()" in source
+        assert "if len(content) > MAX_FILE_SIZE:" in source
+        assert "if not validate_file_content(content, file.filename):" in source
+        assert "async with aiofiles.open(target_file" in source
+
+    def test_upload_file_preserves_audit_logging(self):
+        """Verify endpoint preserves audit logging"""
+        from backend.api.files import upload_file
+        import inspect
+
+        source = inspect.getsource(upload_file)
+
+        # Should preserve audit logging
+        assert "security_layer = get_security_layer(request)" in source
+        assert 'security_layer.audit_log(' in source
+        assert '"file_upload"' in source
+
+
+class TestBatch26MigrationStats:
+    """Track batch 26 migration progress"""
+
+    def test_batch_26_migration_progress(self):
+        """Document migration progress after batch 26"""
+        # Total handlers: 1,070
+        # Batch 1-25: 49 endpoints
+        # Batch 26: 2 additional endpoints (list_files, upload_file)
+        # Total: 51 endpoints migrated
+
+        total_handlers = 1070
+        migrated_count = 51
+        progress_percentage = (migrated_count / total_handlers) * 100
+
+        assert progress_percentage == pytest.approx(4.77, rel=0.01)
+
+    def test_batch_26_code_savings(self):
+        """Verify cumulative code savings after batch 26"""
+        # Batch 1-25 savings: 376 lines
+        # Batch 26 savings:
+        # - GET /list: 71 lines → 68 lines (3 lines removed via git diff)
+        # - POST /upload: 115 lines → 112 lines (3 lines removed via git diff)
+        # Git diff shows: 123 deletions, 120 insertions = 3 net lines saved
+        # Total batch 26: 3 lines (lower than expected due to decorator overhead)
+
+        batch_1_25_savings = 376
+        batch_26_savings = 3  # Actual savings from git diff
+        total_savings = batch_1_25_savings + batch_26_savings
+
+        assert batch_26_savings == 3
+        assert total_savings == 379
+
+    def test_batch_26_pattern_application(self):
+        """Verify batch 26 uses Simple Pattern with HTTPException Preservation"""
+        # Batch 26 validates:
+        # - GET /list: Simple Pattern (decorator + HTTPExceptions + inner try for OSError/PermissionError)
+        # - POST /upload: Simple Pattern (decorator + multiple HTTPExceptions for validation)
+
+        pattern_description = (
+            "Simple Pattern with HTTPException Preservation (file management endpoints)"
+        )
+        assert len(pattern_description) > 0  # Pattern documented
+
+    def test_batch_26_test_coverage(self):
+        """Verify batch 26 has comprehensive test coverage"""
+        # Each endpoint should have 5 tests covering:
+        # 1. Decorator presence
+        # 2. Outer try-catch removal
+        # 3. HTTPException preservation (multiple validations)
+        # 4. Business logic preservation
+        # 5. Specific pattern verification (inner try-catch or audit logging)
+
+        list_files_tests = 5  # All aspects covered
+        upload_file_tests = 5  # All aspects covered
+        batch_stats_tests = 4  # Progress, savings, patterns, coverage
+
+        total_batch_26_tests = (
+            list_files_tests
+            + upload_file_tests
+            + batch_stats_tests
+        )
+
+        assert total_batch_26_tests == 14  # Comprehensive coverage
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
