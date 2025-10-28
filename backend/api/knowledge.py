@@ -2103,67 +2103,65 @@ async def get_man_pages_summary(req: Request):
 
 
 @router.post("/machine_knowledge/initialize")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="initialize_machine_knowledge",
+    error_code_prefix="KNOWLEDGE",
+)
 async def initialize_machine_knowledge(request: dict, req: Request):
     """Initialize machine-specific knowledge including man pages and system commands"""
-    try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb_to_use is None:
-            return {
-                "status": "error",
-                "message": "Knowledge base not initialized",
-                "items_added": 0,
-            }
-
-        logger.info("Initializing machine knowledge...")
-
-        # Initialize system commands first
-        commands_result = await populate_system_commands(request, req)
-        commands_added = commands_result.get("items_added", 0)
-
+    if kb_to_use is None:
         return {
-            "status": "success",
-            "message": f"Machine knowledge initialized. Added {commands_added} system commands.",
-            "items_added": commands_added,
-            "components": {
-                "system_commands": commands_added,
-                "man_pages": "background_task",  # Man pages run in background
-            },
+            "status": "error",
+            "message": "Knowledge base not initialized",
+            "items_added": 0,
         }
 
-    except Exception as e:
-        logger.error(f"Error initializing machine knowledge: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to initialize: {str(e)}")
+    logger.info("Initializing machine knowledge...")
+
+    # Initialize system commands first
+    commands_result = await populate_system_commands(request, req)
+    commands_added = commands_result.get("items_added", 0)
+
+    return {
+        "status": "success",
+        "message": f"Machine knowledge initialized. Added {commands_added} system commands.",
+        "items_added": commands_added,
+        "components": {
+            "system_commands": commands_added,
+            "man_pages": "background_task",  # Man pages run in background
+        },
+    }
 
 
 @router.post("/man_pages/integrate")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="integrate_man_pages",
+    error_code_prefix="KNOWLEDGE",
+)
 async def integrate_man_pages(req: Request, background_tasks: BackgroundTasks):
     """Integrate system man pages into knowledge base (background task)"""
-    try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb_to_use is None:
-            return {
-                "status": "error",
-                "message": "Knowledge base not initialized",
-                "integration_started": False,
-            }
-
-        # Start background task for man pages
-        background_tasks.add_task(_populate_man_pages_background, kb_to_use)
-
+    if kb_to_use is None:
         return {
-            "status": "success",
-            "message": "Man pages integration started in background",
-            "integration_started": True,
-            "background": True,
+            "status": "error",
+            "message": "Knowledge base not initialized",
+            "integration_started": False,
         }
 
-    except Exception as e:
-        logger.error(f"Error integrating man pages: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start integration: {str(e)}"
-        )
+    # Start background task for man pages
+    background_tasks.add_task(_populate_man_pages_background, kb_to_use)
+
+    return {
+        "status": "success",
+        "message": "Man pages integration started in background",
+        "integration_started": True,
+        "background": True,
+    }
 
 
 @router.get("/man_pages/search")
