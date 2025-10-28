@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from src.config_helper import cfg
 from src.constants import PATH
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_database_manager import RedisDatabase, RedisDatabaseManager
 from src.utils.system_metrics import get_metrics_collector
 
@@ -1477,65 +1478,65 @@ async def stop_analytics_collection():
 
 
 @router.get("/status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_analytics_status",
+    error_code_prefix="ANALYTICS",
+)
 async def get_analytics_status():
     """Get comprehensive analytics system status"""
-    try:
-        collector = analytics_controller.metrics_collector
+    collector = analytics_controller.metrics_collector
 
-        status = {
-            "analytics_system": "operational",
-            "timestamp": datetime.now().isoformat(),
-            "collection_status": {
-                "is_collecting": collector._is_collecting,
-                "buffer_size": len(collector._metrics_buffer),
-                "retention_hours": collector._retention_hours,
+    status = {
+        "analytics_system": "operational",
+        "timestamp": datetime.now().isoformat(),
+        "collection_status": {
+            "is_collecting": collector._is_collecting,
+            "buffer_size": len(collector._metrics_buffer),
+            "retention_hours": collector._retention_hours,
+        },
+        "websocket_status": {
+            "active_connections": len(analytics_state["websocket_connections"]),
+            "total_events_tracked": len(analytics_state["api_call_patterns"]),
+        },
+        "data_status": {
+            "api_patterns_tracked": len(analytics_state["api_call_patterns"]),
+            "performance_history_points": len(
+                analytics_state["performance_history"]
+            ),
+            "communication_chains": len(analytics_controller.communication_chains),
+            "cached_code_analysis": bool(
+                analytics_state.get("code_analysis_cache")
+            ),
+        },
+        "integration_status": {
+            "redis_connectivity": {},
+            "code_analysis_tools": {
+                "code_analysis_suite": analytics_controller.code_analysis_path.exists(),
+                "code_index_mcp": analytics_controller.code_index_path.exists(),
             },
-            "websocket_status": {
-                "active_connections": len(analytics_state["websocket_connections"]),
-                "total_events_tracked": len(analytics_state["api_call_patterns"]),
-            },
-            "data_status": {
-                "api_patterns_tracked": len(analytics_state["api_call_patterns"]),
-                "performance_history_points": len(
-                    analytics_state["performance_history"]
-                ),
-                "communication_chains": len(analytics_controller.communication_chains),
-                "cached_code_analysis": bool(
-                    analytics_state.get("code_analysis_cache")
-                ),
-            },
-            "integration_status": {
-                "redis_connectivity": {},
-                "code_analysis_tools": {
-                    "code_analysis_suite": analytics_controller.code_analysis_path.exists(),
-                    "code_index_mcp": analytics_controller.code_index_path.exists(),
-                },
-            },
-        }
+        },
+    }
 
-        # Check Redis connectivity
-        for db in [RedisDatabase.METRICS, RedisDatabase.KNOWLEDGE, RedisDatabase.MAIN]:
-            try:
-                redis_conn = await analytics_controller.get_redis_connection(db)
-                if redis_conn:
-                    await redis_conn.ping()
-                    status["integration_status"]["redis_connectivity"][
-                        db.name
-                    ] = "connected"
-                else:
-                    status["integration_status"]["redis_connectivity"][
-                        db.name
-                    ] = "failed"
-            except Exception as e:
+    # Check Redis connectivity
+    for db in [RedisDatabase.METRICS, RedisDatabase.KNOWLEDGE, RedisDatabase.MAIN]:
+        try:
+            redis_conn = await analytics_controller.get_redis_connection(db)
+            if redis_conn:
+                await redis_conn.ping()
                 status["integration_status"]["redis_connectivity"][
                     db.name
-                ] = f"error: {str(e)}"
+                ] = "connected"
+            else:
+                status["integration_status"]["redis_connectivity"][
+                    db.name
+                ] = "failed"
+        except Exception as e:
+            status["integration_status"]["redis_connectivity"][
+                db.name
+            ] = f"error: {str(e)}"
 
-        return status
-
-    except Exception as e:
-        logger.error(f"Failed to get analytics status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return status
 
 
 # ============================================================================
@@ -1544,33 +1545,34 @@ async def get_analytics_status():
 
 
 @router.get("/monitoring/phase9/status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_monitoring_status",
+    error_code_prefix="ANALYTICS",
+)
 async def get_monitoring_status():
     """Get Phase 9 monitoring status for dashboard"""
-    try:
-        collector = analytics_controller.metrics_collector
+    collector = analytics_controller.metrics_collector
 
-        status = {
-            "active": (
-                collector._is_collecting
-                if hasattr(collector, "_is_collecting")
-                else True
-            ),
-            "timestamp": datetime.now().isoformat(),
-            "components": {
-                "gpu_monitoring": True,
-                "npu_monitoring": True,
-                "analytics_collection": True,
-                "websocket_streaming": len(analytics_state["websocket_connections"])
-                > 0,
-            },
-            "version": "Phase9",
-            "uptime_seconds": time.time() - psutil.boot_time(),
-        }
+    status = {
+        "active": (
+            collector._is_collecting
+            if hasattr(collector, "_is_collecting")
+            else True
+        ),
+        "timestamp": datetime.now().isoformat(),
+        "components": {
+            "gpu_monitoring": True,
+            "npu_monitoring": True,
+            "analytics_collection": True,
+            "websocket_streaming": len(analytics_state["websocket_connections"])
+            > 0,
+        },
+        "version": "Phase9",
+        "uptime_seconds": time.time() - psutil.boot_time(),
+    }
 
-        return status
-    except Exception as e:
-        logger.error(f"Failed to get Phase 9 monitoring status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return status
 
 
 @router.get("/monitoring/phase9/dashboard")
