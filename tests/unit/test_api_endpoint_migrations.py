@@ -5920,3 +5920,177 @@ class TestBatch36AnalyticsMigrations:
         # All should use ANALYTICS prefix
         assert 'error_code_prefix="ANALYTICS"' in dashboard_source
         assert 'error_code_prefix="ANALYTICS"' in alerts_source
+
+
+# ============================================================================
+# Batch 37: analytics.py - Phase 9 monitoring endpoints (2 endpoints)
+# ============================================================================
+
+
+class TestBatch37AnalyticsMigrations:
+    """Test batch 37 analytics.py endpoint migrations"""
+
+    def test_get_phase9_optimization_recommendations_has_decorator(self):
+        """Test GET /monitoring/phase9/optimization/recommendations has @with_error_handling decorator"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_phase9_optimization_recommendations)
+        assert (
+            "@with_error_handling" in source
+        ), "Endpoint missing @with_error_handling decorator"
+        assert (
+            'category=ErrorCategory.SERVER_ERROR' in source
+        ), "Decorator should use SERVER_ERROR category"
+        assert (
+            'operation="get_phase9_optimization_recommendations"' in source
+        ), "Decorator should specify operation name"
+        assert (
+            'error_code_prefix="ANALYTICS"' in source
+        ), "Decorator should use ANALYTICS prefix"
+
+    def test_get_phase9_optimization_recommendations_no_outer_try_catch(self):
+        """Test GET /monitoring/phase9/optimization/recommendations has no outer try-catch block"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_phase9_optimization_recommendations)
+        lines = source.split("\n")
+
+        # Check that function body doesn't start with try
+        function_body_started = False
+        for line in lines:
+            if 'async def get_phase9_optimization_recommendations' in line:
+                function_body_started = True
+                continue
+            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+                assert not line.strip().startswith(
+                    "try:"
+                ), "Endpoint should not have outer try-catch block"
+                break
+
+    def test_get_phase9_optimization_recommendations_preserves_business_logic(self):
+        """Test GET /monitoring/phase9/optimization/recommendations preserves business logic"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_phase9_optimization_recommendations)
+        
+        # Check key business logic is preserved
+        assert "recommendations = []" in source
+        assert "performance_data = await analytics_controller.collect_performance_metrics()" in source
+        assert "communication_patterns =" in source
+        assert "await analytics_controller.analyze_communication_patterns()" in source
+        assert '# CPU optimization recommendations' in source
+        assert 'cpu_percent = performance_data.get("system_performance"' in source
+        assert 'if cpu_percent > 80:' in source
+        assert '"type": "cpu_optimization"' in source
+        assert '"title": "Optimize CPU Usage"' in source
+        assert '# Memory optimization recommendations' in source
+        assert 'memory_percent = performance_data.get("system_performance"' in source
+        assert 'if memory_percent > 80:' in source
+        assert '"type": "memory_optimization"' in source
+        assert '# API optimization recommendations' in source
+        assert 'if communication_patterns.get("avg_response_time", 0) > 2.0:' in source
+        assert '"type": "api_optimization"' in source
+        assert '# Code analysis recommendations' in source
+        assert 'cached_analysis = analytics_state.get("code_analysis_cache")' in source
+        assert 'if complexity > 7:' in source
+        assert '"type": "code_quality"' in source
+        assert "return recommendations" in source
+
+    def test_get_phase9_optimization_recommendations_no_manual_error_handling(self):
+        """Test GET /monitoring/phase9/optimization/recommendations has no manual error handling"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_phase9_optimization_recommendations)
+        
+        # Should not have except blocks
+        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert "HTTPException" not in source, "Should not raise HTTPException manually"
+
+    def test_start_monitoring_has_decorator(self):
+        """Test POST /monitoring/phase9/start has @with_error_handling decorator"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.start_monitoring)
+        assert (
+            "@with_error_handling" in source
+        ), "Endpoint missing @with_error_handling decorator"
+        assert (
+            'category=ErrorCategory.SERVER_ERROR' in source
+        ), "Decorator should use SERVER_ERROR category"
+        assert (
+            'operation="start_monitoring"' in source
+        ), "Decorator should specify operation name"
+        assert (
+            'error_code_prefix="ANALYTICS"' in source
+        ), "Decorator should use ANALYTICS prefix"
+
+    def test_start_monitoring_no_outer_try_catch(self):
+        """Test POST /monitoring/phase9/start has no outer try-catch block"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.start_monitoring)
+        lines = source.split("\n")
+
+        # Check that function body doesn't start with try
+        function_body_started = False
+        for line in lines:
+            if 'async def start_monitoring' in line:
+                function_body_started = True
+                continue
+            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+                assert not line.strip().startswith(
+                    "try:"
+                ), "Endpoint should not have outer try-catch block"
+                break
+
+    def test_start_monitoring_preserves_business_logic(self):
+        """Test POST /monitoring/phase9/start preserves business logic"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.start_monitoring)
+        
+        # Check key business logic is preserved
+        assert "collector = analytics_controller.metrics_collector" in source
+        assert 'if hasattr(collector, "_is_collecting") and not collector._is_collecting:' in source
+        assert "asyncio.create_task(collector.start_collection())" in source
+        assert 'analytics_state["session_start"] = datetime.now().isoformat()' in source
+        assert 'return {' in source
+        assert '"status": "started"' in source
+        assert '"message": "Phase 9 monitoring started successfully"' in source
+        assert '"timestamp": datetime.now().isoformat()' in source
+
+    def test_start_monitoring_no_manual_error_handling(self):
+        """Test POST /monitoring/phase9/start has no manual error handling"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.start_monitoring)
+        
+        # Should not have except blocks
+        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert "HTTPException" not in source, "Should not raise HTTPException manually"
+
+    def test_batch37_all_endpoints_migrated(self):
+        """Test all batch 37 endpoints have been migrated"""
+        from backend.api import analytics
+
+        # Check both endpoints have decorators
+        recommendations_source = inspect.getsource(analytics.get_phase9_optimization_recommendations)
+        start_source = inspect.getsource(analytics.start_monitoring)
+
+        assert "@with_error_handling" in recommendations_source, "Recommendations endpoint not migrated"
+        assert "@with_error_handling" in start_source, "Start monitoring endpoint not migrated"
+
+    def test_batch37_consistent_error_handling(self):
+        """Test batch 37 endpoints use consistent error handling configuration"""
+        from backend.api import analytics
+
+        recommendations_source = inspect.getsource(analytics.get_phase9_optimization_recommendations)
+        start_source = inspect.getsource(analytics.start_monitoring)
+
+        # All should use SERVER_ERROR category
+        assert 'category=ErrorCategory.SERVER_ERROR' in recommendations_source
+        assert 'category=ErrorCategory.SERVER_ERROR' in start_source
+
+        # All should use ANALYTICS prefix
+        assert 'error_code_prefix="ANALYTICS"' in recommendations_source
+        assert 'error_code_prefix="ANALYTICS"' in start_source
