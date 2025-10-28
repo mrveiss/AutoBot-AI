@@ -1879,72 +1879,74 @@ async def start_monitoring():
 
 
 @router.post("/monitoring/phase9/stop")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_monitoring",
+    error_code_prefix="ANALYTICS",
+)
 async def stop_monitoring():
     """Stop Phase 9 monitoring"""
-    try:
-        # Stop metrics collection
-        collector = analytics_controller.metrics_collector
-        if hasattr(collector, "_is_collecting") and collector._is_collecting:
-            await collector.stop_collection()
+    # Stop metrics collection
+    collector = analytics_controller.metrics_collector
+    if hasattr(collector, "_is_collecting") and collector._is_collecting:
+        await collector.stop_collection()
 
-        return {
-            "status": "stopped",
-            "message": "Phase 9 monitoring stopped successfully",
-            "timestamp": datetime.now().isoformat(),
-        }
-    except Exception as e:
-        logger.error(f"Failed to stop Phase 9 monitoring: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "stopped",
+        "message": "Phase 9 monitoring stopped successfully",
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.post("/monitoring/phase9/metrics/query")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="query_phase9_metrics",
+    error_code_prefix="ANALYTICS",
+)
 async def query_phase9_metrics(query_request: dict):
     """Query Phase 9 metrics with filtering"""
-    try:
-        metric_name = query_request.get("metric", "all")
-        time_range = query_request.get("time_range", 3600)  # 1 hour default
+    metric_name = query_request.get("metric", "all")
+    time_range = query_request.get("time_range", 3600)  # 1 hour default
 
-        # Get current metrics
-        current_metrics = (
-            await analytics_controller.metrics_collector.collect_all_metrics()
-        )
+    # Get current metrics
+    current_metrics = (
+        await analytics_controller.metrics_collector.collect_all_metrics()
+    )
 
-        # Filter by metric name if specified
-        if metric_name != "all" and metric_name in current_metrics:
-            filtered_metrics = {metric_name: current_metrics[metric_name]}
-        else:
-            filtered_metrics = current_metrics
+    # Filter by metric name if specified
+    if metric_name != "all" and metric_name in current_metrics:
+        filtered_metrics = {metric_name: current_metrics[metric_name]}
+    else:
+        filtered_metrics = current_metrics
 
-        # Add historical context from performance history
-        historical_data = []
-        cutoff_time = datetime.now() - timedelta(seconds=time_range)
+    # Add historical context from performance history
+    historical_data = []
+    cutoff_time = datetime.now() - timedelta(seconds=time_range)
 
-        for perf_point in analytics_state["performance_history"]:
-            point_time = datetime.fromisoformat(perf_point["timestamp"])
-            if point_time > cutoff_time:
-                historical_data.append(perf_point)
+    for perf_point in analytics_state["performance_history"]:
+        point_time = datetime.fromisoformat(perf_point["timestamp"])
+        if point_time > cutoff_time:
+            historical_data.append(perf_point)
 
-        return {
-            "current_metrics": {
-                name: {
-                    "value": metric.value,
-                    "unit": metric.unit,
-                    "category": metric.category,
-                    "timestamp": metric.timestamp,
-                }
-                for name, metric in filtered_metrics.items()
-            },
-            "historical_data": historical_data,
-            "query_info": {
-                "metric": metric_name,
-                "time_range_seconds": time_range,
-                "results_count": len(filtered_metrics),
-                "historical_points": len(historical_data),
-            },
-        }
-    except Exception as e:
-        logger.error(f"Failed to query Phase 9 metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "current_metrics": {
+            name: {
+                "value": metric.value,
+                "unit": metric.unit,
+                "category": metric.category,
+                "timestamp": metric.timestamp,
+            }
+            for name, metric in filtered_metrics.items()
+        },
+        "historical_data": historical_data,
+        "query_info": {
+            "metric": metric_name,
+            "time_range_seconds": time_range,
+            "results_count": len(filtered_metrics),
+            "historical_points": len(historical_data),
+        },
+    }
 
 
 # ============================================================================
