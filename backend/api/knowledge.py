@@ -207,44 +207,44 @@ async def _check_vectorization_batch_internal(
 
 
 @router.get("/stats")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_knowledge_stats",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_knowledge_stats(req: Request):
     """Get knowledge base statistics - FIXED to use proper instance"""
-    try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb_to_use is None:
-            return {
-                "total_documents": 0,
-                "total_chunks": 0,
+    if kb_to_use is None:
+        return {
+            "total_documents": 0,
+            "total_chunks": 0,
+            "total_facts": 0,
+            "total_vectors": 0,
+            "categories": [],
+            "db_size": 0,
+            "status": "offline",
+            "last_updated": None,
+            "redis_db": None,
+            "index_name": None,
+            "initialized": False,
+            "rag_available": RAG_AVAILABLE,
+            "vectorization_stats": {
                 "total_facts": 0,
-                "total_vectors": 0,
-                "categories": [],
-                "db_size": 0,
-                "status": "offline",
-                "last_updated": None,
-                "redis_db": None,
-                "index_name": None,
-                "initialized": False,
-                "rag_available": RAG_AVAILABLE,
-                "vectorization_stats": {
-                    "total_facts": 0,
-                    "vectorized_count": 0,
-                    "not_vectorized_count": 0,
-                    "vectorization_percentage": 0.0,
-                },
-            }
+                "vectorized_count": 0,
+                "not_vectorized_count": 0,
+                "vectorization_percentage": 0.0,
+            },
+        }
 
-        stats = await kb_to_use.get_stats()
-        stats["rag_available"] = RAG_AVAILABLE
+    stats = await kb_to_use.get_stats()
+    stats["rag_available"] = RAG_AVAILABLE
 
-        # Vectorization stats removed - get_stats() already provides fact counts using async operations
-        # The previous implementation used synchronous redis_client.hgetall() which blocked the event loop
+    # Vectorization stats removed - get_stats() already provides fact counts using async operations
+    # The previous implementation used synchronous redis_client.hgetall() which blocked the event loop
 
-        return stats
-
-    except Exception as e:
-        logger.error(f"Error getting knowledge stats: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Stats failed: {str(e)}")
+    return stats
 
 
 @router.get("/test_categories_main")
@@ -256,27 +256,27 @@ async def test_main_categories():
 
 
 @router.get("/stats/basic")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_knowledge_stats_basic",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_knowledge_stats_basic(req: Request):
     """Get basic knowledge base statistics for quick display"""
-    try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb_to_use is None:
-            return {"total_facts": 0, "total_vectors": 0, "status": "offline"}
+    if kb_to_use is None:
+        return {"total_facts": 0, "total_vectors": 0, "status": "offline"}
 
-        stats = await kb_to_use.get_stats()
+    stats = await kb_to_use.get_stats()
 
-        # Return lightweight basic stats
-        return {
-            "total_facts": stats.get("total_facts", 0),
-            "total_vectors": stats.get("total_vectors", 0),
-            "categories": stats.get("categories", []),
-            "status": "online" if stats.get("initialized", False) else "offline",
-        }
-
-    except Exception as e:
-        logger.error(f"Error getting basic knowledge stats: {str(e)}")
-        return {"total_facts": 0, "total_vectors": 0, "status": "error"}
+    # Return lightweight basic stats
+    return {
+        "total_facts": stats.get("total_facts", 0),
+        "total_vectors": stats.get("total_vectors", 0),
+        "categories": stats.get("categories", []),
+        "status": "online" if stats.get("initialized", False) else "offline",
+    }
 
 
 @router.get("/categories/main")
