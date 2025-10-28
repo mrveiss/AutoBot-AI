@@ -738,6 +738,11 @@ async def stream_message(message: ChatMessage, request: Request):
 
 
 @router.get("/chat/sessions/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_session_messages",
+    error_code_prefix="CHAT",
+)
 async def get_session_messages(
     session_id: str,
     request: Request,
@@ -749,75 +754,64 @@ async def get_session_messages(
 ):
     """Get messages for a specific chat session"""
     request_id = generate_request_id()
+    log_request_context(request, "get_session_messages", request_id)
 
-    try:
-        log_request_context(request, "get_session_messages", request_id)
+    # Validate session ID
+    if not validate_chat_session_id(session_id):
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Invalid session ID format")
 
-        # Validate session ID
-        if not validate_chat_session_id(session_id):
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise ValidationError("Invalid session ID format")
+    # Validate pagination parameters
+    if page < 1 or per_page < 1 or per_page > 100:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Invalid pagination parameters")
 
-        # Validate pagination parameters
-        if page < 1 or per_page < 1 or per_page > 100:
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise ValidationError("Invalid pagination parameters")
+    # Get dependencies from request state
+    chat_history_manager = get_chat_history_manager(request)
 
-        # Get dependencies from request state
-        chat_history_manager = get_chat_history_manager(request)
+    # Get session messages
+    # NOTE: get_session_messages doesn't support pagination yet - uses limit parameter
+    messages = await chat_history_manager.get_session_messages(
+        session_id, limit=per_page
+    )
 
-        # Get session messages
-        # NOTE: get_session_messages doesn't support pagination yet - uses limit parameter
-        messages = await chat_history_manager.get_session_messages(
-            session_id, limit=per_page
-        )
+    if messages is None:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ResourceNotFoundError(f"Session {session_id} not found")
 
-        if messages is None:
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise ResourceNotFoundError(f"Session {session_id} not found")
+    total_count = await chat_history_manager.get_session_message_count(session_id)
 
-        total_count = await chat_history_manager.get_session_message_count(session_id)
+    response_data = {
+        "messages": messages,
+        "session_id": session_id,
+        "total_count": total_count,
+        "page": page,
+        "per_page": per_page,
+    }
 
-        response_data = {
-            "messages": messages,
-            "session_id": session_id,
-            "total_count": total_count,
-            "page": page,
-            "per_page": per_page,
-        }
-
-        return create_success_response(
-            data=response_data,
-            message="Session messages retrieved successfully",
-            request_id=request_id,
-        )
-
-    except Exception as e:
-        logger.error(f"[{request_id}] get_session_messages error: {e}")
-        return create_error_response(
-            error_code="INTERNAL_ERROR",
-            message=str(e),
-            request_id=request_id,
-            status_code=500,
-        )
+    return create_success_response(
+        data=response_data,
+        message="Session messages retrieved successfully",
+        request_id=request_id,
+    )
 
 
 @router.get("/chat/sessions")
@@ -901,6 +895,11 @@ async def create_session(session_data: SessionCreate, request: Request):
 
 
 @router.put("/chat/sessions/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_session",
+    error_code_prefix="CHAT",
+)
 async def update_session(
     session_id: str,
     session_data: SessionUpdate,
@@ -911,64 +910,58 @@ async def update_session(
 ):
     """Update a chat session"""
     request_id = generate_request_id()
+    log_request_context(request, "update_session", request_id)
 
-    try:
-        log_request_context(request, "update_session", request_id)
+    # Validate session ID
+    if not validate_chat_session_id(session_id):
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Invalid session ID format")
 
-        # Validate session ID
-        if not validate_chat_session_id(session_id):
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise ValidationError("Invalid session ID format")
+    # Get dependencies from request state
+    chat_history_manager = get_chat_history_manager(request)
 
-        # Get dependencies from request state
-        chat_history_manager = get_chat_history_manager(request)
+    # Update session
+    updated_session = await chat_history_manager.update_session(
+        session_id=session_id,
+        title=session_data.title,
+        metadata=session_data.metadata,
+    )
 
-        # Update session
-        updated_session = await chat_history_manager.update_session(
-            session_id=session_id,
-            title=session_data.title,
-            metadata=session_data.metadata,
-        )
+    if updated_session is None:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ResourceNotFoundError(f"Session {session_id} not found")
 
-        if updated_session is None:
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise ResourceNotFoundError(f"Session {session_id} not found")
+    await log_chat_event(
+        "session_updated",
+        session_id,
+        {"title": session_data.title, "request_id": request_id},
+    )
 
-        await log_chat_event(
-            "session_updated",
-            session_id,
-            {"title": session_data.title, "request_id": request_id},
-        )
-
-        return create_success_response(
-            data=updated_session,
-            message="Session updated successfully",
-            request_id=request_id,
-        )
-
-    except Exception as e:
-        logger.error(f"[{request_id}] update_session error: {e}")
-        return create_error_response(
-            error_code="INTERNAL_ERROR",
-            message=str(e),
-            request_id=request_id,
-            status_code=500,
-        )
+    return create_success_response(
+        data=updated_session,
+        message="Session updated successfully",
+        request_id=request_id,
+    )
 
 
 @router.delete("/chat/sessions/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_session",
+    error_code_prefix="CHAT",
+)
 async def delete_session(
     session_id: str,
     request: Request,
@@ -990,179 +983,168 @@ async def delete_session(
         Success response with deletion details
     """
     request_id = generate_request_id()
+    log_request_context(request, "delete_session", request_id)
 
-    try:
-        log_request_context(request, "delete_session", request_id)
+    # Validate session ID
+    if not validate_chat_session_id(session_id):
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Invalid session ID format")
 
-        # Validate session ID
-        if not validate_chat_session_id(session_id):
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise ValidationError("Invalid session ID format")
-
-        # Validate file_action
-        valid_file_actions = ["delete", "transfer_kb", "transfer_shared"]
-        if file_action not in valid_file_actions:
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise ValidationError(
-                f"Invalid file_action. Must be one of: {valid_file_actions}"
-            )
-
-        # Parse file_options if provided
-        parsed_file_options = {}
-        if file_options:
-            try:
-                import json
-
-                parsed_file_options = json.loads(file_options)
-            except json.JSONDecodeError:
-                (
-                    AutoBotError,
-                    InternalError,
-                    ResourceNotFoundError,
-                    ValidationError,
-                    get_error_code,
-                ) = get_exceptions_lazy()
-                raise ValidationError("Invalid file_options JSON format")
-
-        # Get dependencies from request state
-        chat_history_manager = get_chat_history_manager(request)
-
-        # Handle conversation files if file manager is available
-        file_deletion_result = {"files_handled": False, "action_taken": file_action}
-        conversation_file_manager = getattr(
-            request.app.state, "conversation_file_manager", None
+    # Validate file_action
+    valid_file_actions = ["delete", "transfer_kb", "transfer_shared"]
+    if file_action not in valid_file_actions:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError(
+            f"Invalid file_action. Must be one of: {valid_file_actions}"
         )
 
-        if conversation_file_manager:
-            try:
-                if file_action == "delete":
-                    # Delete all files in conversation
-                    deleted_count = (
-                        await conversation_file_manager.delete_session_files(session_id)
-                    )
-                    file_deletion_result = {
-                        "files_handled": True,
-                        "action_taken": "delete",
-                        "files_deleted": deleted_count,
-                    }
-                    logger.info(
-                        f"Deleted {deleted_count} files for session {session_id}"
-                    )
+    # Parse file_options if provided
+    parsed_file_options = {}
+    if file_options:
+        try:
+            import json
 
-                elif file_action == "transfer_kb":
-                    # Transfer files to knowledge base
-                    transfer_result = (
-                        await conversation_file_manager.transfer_session_files(
-                            session_id=session_id,
-                            destination="kb",
-                            target_path=parsed_file_options.get("target_path"),
-                            tags=parsed_file_options.get(
-                                "tags", ["conversation_archive"]
-                            ),
-                            copy=False,  # Move, not copy
-                        )
-                    )
-                    file_deletion_result = {
-                        "files_handled": True,
-                        "action_taken": "transfer_kb",
-                        "files_transferred": transfer_result.get(
-                            "total_transferred", 0
-                        ),
-                        "files_failed": transfer_result.get("total_failed", 0),
-                    }
-                    logger.info(
-                        f"Transferred {transfer_result.get('total_transferred', 0)} files to KB for session {session_id}"
-                    )
+            parsed_file_options = json.loads(file_options)
+        except json.JSONDecodeError:
+            (
+                AutoBotError,
+                InternalError,
+                ResourceNotFoundError,
+                ValidationError,
+                get_error_code,
+            ) = get_exceptions_lazy()
+            raise ValidationError("Invalid file_options JSON format")
 
-                elif file_action == "transfer_shared":
-                    # Transfer files to shared storage
-                    transfer_result = (
-                        await conversation_file_manager.transfer_session_files(
-                            session_id=session_id,
-                            destination="shared",
-                            target_path=parsed_file_options.get("target_path"),
-                            copy=False,  # Move, not copy
-                        )
-                    )
-                    file_deletion_result = {
-                        "files_handled": True,
-                        "action_taken": "transfer_shared",
-                        "files_transferred": transfer_result.get(
-                            "total_transferred", 0
-                        ),
-                        "files_failed": transfer_result.get("total_failed", 0),
-                    }
-                    logger.info(
-                        f"Transferred {transfer_result.get('total_transferred', 0)} files to shared storage for session {session_id}"
-                    )
+    # Get dependencies from request state
+    chat_history_manager = get_chat_history_manager(request)
 
-            except Exception as file_error:
-                logger.error(
-                    f"Error handling files for session {session_id}: {file_error}"
+    # Handle conversation files if file manager is available
+    file_deletion_result = {"files_handled": False, "action_taken": file_action}
+    conversation_file_manager = getattr(
+        request.app.state, "conversation_file_manager", None
+    )
+
+    if conversation_file_manager:
+        try:
+            if file_action == "delete":
+                # Delete all files in conversation
+                deleted_count = (
+                    await conversation_file_manager.delete_session_files(session_id)
                 )
                 file_deletion_result = {
-                    "files_handled": False,
-                    "action_taken": file_action,
-                    "error": str(file_error),
+                    "files_handled": True,
+                    "action_taken": "delete",
+                    "files_deleted": deleted_count,
                 }
-        else:
-            logger.warning(
-                f"ConversationFileManager not available, skipping file handling for session {session_id}"
+                logger.info(
+                    f"Deleted {deleted_count} files for session {session_id}"
+                )
+
+            elif file_action == "transfer_kb":
+                # Transfer files to knowledge base
+                transfer_result = (
+                    await conversation_file_manager.transfer_session_files(
+                        session_id=session_id,
+                        destination="kb",
+                        target_path=parsed_file_options.get("target_path"),
+                        tags=parsed_file_options.get(
+                            "tags", ["conversation_archive"]
+                        ),
+                        copy=False,  # Move, not copy
+                    )
+                )
+                file_deletion_result = {
+                    "files_handled": True,
+                    "action_taken": "transfer_kb",
+                    "files_transferred": transfer_result.get(
+                        "total_transferred", 0
+                    ),
+                    "files_failed": transfer_result.get("total_failed", 0),
+                }
+                logger.info(
+                    f"Transferred {transfer_result.get('total_transferred', 0)} files to KB for session {session_id}"
+                )
+
+            elif file_action == "transfer_shared":
+                # Transfer files to shared storage
+                transfer_result = (
+                    await conversation_file_manager.transfer_session_files(
+                        session_id=session_id,
+                        destination="shared",
+                        target_path=parsed_file_options.get("target_path"),
+                        copy=False,  # Move, not copy
+                    )
+                )
+                file_deletion_result = {
+                    "files_handled": True,
+                    "action_taken": "transfer_shared",
+                    "files_transferred": transfer_result.get(
+                        "total_transferred", 0
+                    ),
+                    "files_failed": transfer_result.get("total_failed", 0),
+                }
+                logger.info(
+                    f"Transferred {transfer_result.get('total_transferred', 0)} files to shared storage for session {session_id}"
+                )
+
+        except Exception as file_error:
+            logger.error(
+                f"Error handling files for session {session_id}: {file_error}"
             )
-
-        # Delete session from chat history (synchronous method)
-        deleted = chat_history_manager.delete_session(session_id)
-
-        if not deleted:
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise ResourceNotFoundError(f"Session {session_id} not found")
-
-        await log_chat_event(
-            "session_deleted",
-            session_id,
-            {
-                "request_id": request_id,
-                "file_action": file_action,
-                "file_deletion_result": file_deletion_result,
-            },
+            file_deletion_result = {
+                "files_handled": False,
+                "action_taken": file_action,
+                "error": str(file_error),
+            }
+    else:
+        logger.warning(
+            f"ConversationFileManager not available, skipping file handling for session {session_id}"
         )
 
-        return create_success_response(
-            data={
-                "session_id": session_id,
-                "deleted": True,
-                "file_handling": file_deletion_result,
-            },
-            message="Session deleted successfully",
-            request_id=request_id,
-        )
+    # Delete session from chat history (synchronous method)
+    deleted = chat_history_manager.delete_session(session_id)
 
-    except Exception as e:
-        logger.error(f"[{request_id}] delete_session error: {e}")
-        return create_error_response(
-            error_code="INTERNAL_ERROR",
-            message=str(e),
-            request_id=request_id,
-            status_code=500,
-        )
+    if not deleted:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ResourceNotFoundError(f"Session {session_id} not found")
+
+    await log_chat_event(
+        "session_deleted",
+        session_id,
+        {
+            "request_id": request_id,
+            "file_action": file_action,
+            "file_deletion_result": file_deletion_result,
+        },
+    )
+
+    return create_success_response(
+        data={
+            "session_id": session_id,
+            "deleted": True,
+            "file_handling": file_deletion_result,
+        },
+        message="Session deleted successfully",
+        request_id=request_id,
+    )
 
 
 @router.get("/chat/sessions/{session_id}/export")
