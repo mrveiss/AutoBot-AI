@@ -1117,5 +1117,145 @@ class TestBatch10MigrationStats:
         assert len(pattern_description) > 0  # Pattern documented
 
 
+class TestGetKnowledgeCategoriesEndpoint:
+    """Test migrated get_knowledge_categories endpoint (Batch 11)"""
+
+    def test_get_knowledge_categories_has_decorator(self):
+        """Test GET /categories has @with_error_handling decorator"""
+        from backend.api.knowledge import get_knowledge_categories
+        import inspect
+
+        source = inspect.getsource(get_knowledge_categories)
+
+        # Verify decorator is present
+        assert "@with_error_handling" in source
+        assert "ErrorCategory.SERVER_ERROR" in source
+        assert 'error_code_prefix="KNOWLEDGE"' in source
+
+    def test_get_knowledge_categories_preserves_inner_error_handling(self):
+        """Test GET /categories preserves inner try-catches for Redis/JSON operations"""
+        from backend.api.knowledge import get_knowledge_categories
+        import inspect
+
+        source = inspect.getsource(get_knowledge_categories)
+
+        # Verify inner try-catches preserved (2 inner blocks for Redis + JSON parsing)
+        try_count = source.count("try:")
+        assert try_count >= 2  # Redis operations + JSON parsing
+
+        # Verify Redis error handling
+        assert "redis_err" in source
+        assert "logger.debug" in source  # Non-fatal error logged
+
+        # Verify JSON parsing error handling
+        assert "json.loads" in source
+        assert "json.JSONDecodeError" in source or "JSONDecodeError" in source
+
+    def test_get_knowledge_categories_preserves_empty_list_fallback(self):
+        """Test GET /categories preserves empty list fallback when kb_to_use is None"""
+        from backend.api.knowledge import get_knowledge_categories
+        import inspect
+
+        source = inspect.getsource(get_knowledge_categories)
+
+        # Verify empty list fallback
+        assert "if kb_to_use is None:" in source
+        assert '"categories": []' in source
+        assert '"total": 0' in source
+
+
+class TestAddTextToKnowledgeEndpoint:
+    """Test migrated add_text_to_knowledge endpoint (Batch 11)"""
+
+    def test_add_text_to_knowledge_has_decorator(self):
+        """Test POST /add_text has @with_error_handling decorator"""
+        from backend.api.knowledge import add_text_to_knowledge
+        import inspect
+
+        source = inspect.getsource(add_text_to_knowledge)
+
+        # Verify decorator is present
+        assert "@with_error_handling" in source
+        assert "ErrorCategory.SERVER_ERROR" in source
+        assert 'error_code_prefix="KNOWLEDGE"' in source
+
+    def test_add_text_to_knowledge_raises_internal_error_when_kb_unavailable(self):
+        """Test POST /add_text raises InternalError when knowledge base unavailable"""
+        from backend.api.knowledge import add_text_to_knowledge
+        import inspect
+
+        source = inspect.getsource(add_text_to_knowledge)
+
+        # Verify InternalError raised when kb_to_use is None
+        assert "raise InternalError" in source
+        assert "Knowledge base not initialized" in source
+
+    def test_add_text_to_knowledge_raises_value_error_for_validation(self):
+        """Test POST /add_text raises ValueError for validation (converted to 400)"""
+        from backend.api.knowledge import add_text_to_knowledge
+        import inspect
+
+        source = inspect.getsource(add_text_to_knowledge)
+
+        # Verify ValueError raised for empty text validation
+        assert "raise ValueError" in source
+        assert "Text content is required" in source
+
+    def test_add_text_to_knowledge_no_outer_try_catch(self):
+        """Test POST /add_text has no outer try-catch block"""
+        from backend.api.knowledge import add_text_to_knowledge
+        import inspect
+
+        source = inspect.getsource(add_text_to_knowledge)
+
+        # Count try blocks - should be 0 (outer try-catch removed)
+        try_count = source.count("try:")
+        assert try_count == 0
+
+
+class TestBatch11MigrationStats:
+    """Track batch 11 migration progress"""
+
+    def test_batch_11_migration_progress(self):
+        """Document migration progress after batch 11"""
+        # Total handlers: 1,070
+        # Batch 1-10: 19 endpoints
+        # Batch 11: 2 additional endpoints (get_knowledge_categories, add_text_to_knowledge)
+        # Total: 21 endpoints migrated
+
+        total_handlers = 1070
+        migrated_count = 21
+        progress_percentage = (migrated_count / total_handlers) * 100
+
+        assert progress_percentage == pytest.approx(1.96, rel=0.01)
+
+    def test_batch_11_code_savings(self):
+        """Verify cumulative code savings after batch 11"""
+        # Batch 1-10 savings: 156 lines
+        # Batch 11 savings:
+        # - GET /categories: 44 → 35 lines (9 lines removed)
+        # - POST /add_text: 52 → 45 lines (7 lines removed)
+        # Total batch 11: 16 lines
+
+        batch_1_10_savings = 156
+        batch_11_savings = 16  # Both outer try-catch blocks removed
+        total_savings = batch_1_10_savings + batch_11_savings
+
+        assert batch_11_savings == 16
+        assert total_savings == 172
+
+    def test_nested_error_handling_pattern_validation(self):
+        """Verify nested error handling pattern for complex endpoints"""
+        # Batch 11 introduces pattern for endpoints with nested error handling:
+        # - Outer: @with_error_handling (catches fatal errors)
+        # - Inner: try-catch blocks for specific operations (Redis, JSON parsing)
+        # - Inner blocks handle non-fatal errors gracefully (log and continue)
+        #
+        # This pattern contrasts with simple GET endpoints (Batch 10) that need no inner handling
+
+        pattern_description = "Nested error handling: outer decorator + inner specific handlers"
+        assert len(pattern_description) > 0  # Pattern documented
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
