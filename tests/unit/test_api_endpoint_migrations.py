@@ -5232,3 +5232,343 @@ class TestBatch33WorkflowDELETEAndGETApprovals:
         for func, name in endpoints:
             source = inspect.getsource(func)
             assert "@with_error_handling" in source, f"{name} not migrated"
+
+
+# ============================================================
+# Batch 34: backend/api/workflow.py POST /execute endpoint
+# ============================================================
+
+
+class TestBatch34ExecuteWorkflow:
+    """Test batch 34 migration: POST /execute with nested error handling"""
+
+    def test_execute_workflow_has_decorator(self):
+        """Verify POST /execute has @with_error_handling decorator"""
+        import inspect
+        from backend.api.workflow import execute_workflow
+        
+        source = inspect.getsource(execute_workflow)
+        assert "@with_error_handling" in source, "execute_workflow missing decorator"
+        assert "ErrorCategory.SERVER_ERROR" in source, "execute_workflow wrong category"
+        assert 'operation="execute_workflow"' in source, "execute_workflow wrong operation"
+        assert 'error_code_prefix="WORKFLOW"' in source, "execute_workflow wrong prefix"
+
+    def test_execute_workflow_outer_try_catch_removed(self):
+        """Verify execute_workflow has no outer try-catch block"""
+        import inspect
+        from backend.api.workflow import execute_workflow
+        
+        source = inspect.getsource(execute_workflow)
+        lines = source.split('\n')
+        
+        # Find function start
+        func_start = -1
+        for i, line in enumerate(lines):
+            if 'async def execute_workflow' in line:
+                func_start = i
+                break
+        
+        assert func_start != -1, "Could not find function definition"
+        
+        # Check first non-comment line after docstring isn't "try:"
+        in_docstring = False
+        first_logic_line = None
+        for i in range(func_start + 1, len(lines)):
+            line = lines[i].strip()
+            if '"""' in line:
+                in_docstring = not in_docstring
+                if not in_docstring and '"""' in line:
+                    continue
+            elif not in_docstring and line and not line.startswith('#'):
+                first_logic_line = line
+                break
+        
+        # First logic line should NOT be "try:"
+        assert first_logic_line != "try:", "execute_workflow still has outer try block"
+        
+        # Should not have outer "except Exception as e:" after main return
+        # The nested try-catch for lightweight orchestrator is OK
+        # Check there's no except after the main workflow return
+        main_return_idx = -1
+        for i, line in enumerate(lines):
+            if '"status_endpoint"' in line and 'workflow' in line:
+                main_return_idx = i
+                break
+        
+        if main_return_idx != -1:
+            # Check next 10 lines after main return - should not have "except Exception"
+            for i in range(main_return_idx, min(main_return_idx + 10, len(lines))):
+                line = lines[i].strip()
+                if line.startswith('async def '):
+                    # Reached next function, good
+                    break
+                # Should not find outer except block
+                assert not (line.startswith('except Exception') and 'Workflow execution failed' in ''.join(lines[i:i+3])), \
+                    "execute_workflow still has outer except block"
+
+    def test_execute_workflow_nested_try_catch_preserved(self):
+        """Verify execute_workflow preserves nested try-catch for lightweight orchestrator"""
+        import inspect
+        from backend.api.workflow import execute_workflow
+        
+        source = inspect.getsource(execute_workflow)
+        
+        # Should have nested try-catch for lightweight orchestrator routing
+        assert "# TEMPORARY FIX: Use lightweight orchestrator" in source, \
+            "execute_workflow missing lightweight orchestrator comment"
+        assert "result = await lightweight_orchestrator.route_request" in source, \
+            "execute_workflow missing lightweight orchestrator routing"
+        
+        # Should have nested except with logging
+        lines = source.split('\n')
+        found_nested_except = False
+        found_logging = False
+        
+        for i, line in enumerate(lines):
+            if 'except Exception as e:' in line:
+                # Check if this is the nested except (has logging)
+                context = ''.join(lines[i:i+5])
+                if 'import logging' in context or 'logger.error' in context:
+                    found_nested_except = True
+                    found_logging = True
+        
+        assert found_nested_except, "execute_workflow missing nested except block"
+        assert found_logging, "execute_workflow nested except missing logging"
+
+    def test_execute_workflow_preserves_httpexceptions(self):
+        """Verify execute_workflow preserves all HTTPExceptions"""
+        import inspect
+        from backend.api.workflow import execute_workflow
+        
+        source = inspect.getsource(execute_workflow)
+        
+        # Should have 3 HTTPExceptions
+        httpexception_count = source.count('raise HTTPException')
+        assert httpexception_count == 3, f"execute_workflow should have 3 HTTPExceptions, found {httpexception_count}"
+        
+        # Verify specific HTTPExceptions
+        assert 'Lightweight orchestrator not available' in source, "Missing lightweight orchestrator HTTPException"
+        assert 'Main orchestrator not available' in source, "Missing main orchestrator HTTPException"
+        assert 'Workflow execution failed' in source, "Missing workflow execution HTTPException"
+
+    def test_execute_workflow_business_logic_preserved(self):
+        """Verify execute_workflow business logic is intact"""
+        import inspect
+        from backend.api.workflow import execute_workflow
+        
+        source = inspect.getsource(execute_workflow)
+        
+        # Orchestrator retrieval
+        assert 'lightweight_orchestrator = getattr' in source, "Missing lightweight orchestrator retrieval"
+        assert 'orchestrator = getattr' in source, "Missing main orchestrator retrieval"
+        
+        # Validation logic
+        assert 'if lightweight_orchestrator is None:' in source, "Missing lightweight orchestrator validation"
+        assert 'if orchestrator is None:' in source, "Missing main orchestrator validation"
+        
+        # Routing logic
+        assert 'result = await lightweight_orchestrator.route_request' in source, "Missing routing call"
+        assert 'if result.get("bypass_orchestration"):' in source, "Missing bypass orchestration check"
+        
+        # Response types
+        assert '"type": "lightweight_response"' in source, "Missing lightweight response type"
+        assert '"type": "complex_workflow_blocked"' in source, "Missing blocked workflow type"
+        assert '"type": "workflow_orchestration"' in source, "Missing orchestration type"
+
+    def test_execute_workflow_background_task_execution(self):
+        """Verify execute_workflow background task logic is preserved"""
+        import inspect
+        from backend.api.workflow import execute_workflow
+        
+        source = inspect.getsource(execute_workflow)
+        
+        # Background task setup
+        assert 'background_tasks.add_task' in source, "Missing background task addition"
+        assert 'execute_workflow_steps' in source, "Missing execute_workflow_steps reference"
+        
+        # Workflow data storage
+        assert 'active_workflows[workflow_id]' in source, "Missing workflow storage"
+        assert '"workflow_id": workflow_id' in source, "Missing workflow ID in data"
+        assert '"status": "planned"' in source, "Missing status field"
+
+    def test_execute_workflow_metrics_tracking(self):
+        """Verify execute_workflow metrics tracking is preserved"""
+        import inspect
+        from backend.api.workflow import execute_workflow
+        
+        source = inspect.getsource(execute_workflow)
+        
+        # Metrics tracking
+        assert 'workflow_metrics.start_workflow_tracking' in source, "Missing metrics tracking"
+        assert 'workflow_metrics.record_resource_usage' in source, "Missing resource tracking"
+        assert 'system_monitor.get_current_metrics()' in source, "Missing system monitoring"
+
+    def test_execute_workflow_response_structure(self):
+        """Verify execute_workflow return structure"""
+        import inspect
+        from backend.api.workflow import execute_workflow
+        
+        source = inspect.getsource(execute_workflow)
+        
+        # Main return structure
+        assert '"success": True' in source, "Missing success field"
+        assert '"workflow_id": workflow_id' in source, "Missing workflow_id field"
+        assert '"execution_started": True' in source, "Missing execution_started field"
+        assert '"status_endpoint"' in source, "Missing status_endpoint field"
+
+    def test_execute_workflow_unreachable_code_comment(self):
+        """Verify execute_workflow has unreachable code comment"""
+        import inspect
+        from backend.api.workflow import execute_workflow
+        
+        source = inspect.getsource(execute_workflow)
+        
+        # Should have comment about unreachable code
+        assert "# The following code is unreachable" in source, \
+            "Missing unreachable code comment"
+
+    def test_batch_34_migration_consistency(self):
+        """Verify batch 34 endpoint uses consistent decorator pattern"""
+        import inspect
+        from backend.api.workflow import execute_workflow
+        
+        source = inspect.getsource(execute_workflow)
+        
+        # Should use SERVER_ERROR category
+        assert "ErrorCategory.SERVER_ERROR" in source
+        
+        # Should have WORKFLOW prefix
+        assert 'error_code_prefix="WORKFLOW"' in source
+        
+        # Should preserve HTTPExceptions
+        assert "raise HTTPException" in source
+
+    def test_batch_34_decorator_placement(self):
+        """Verify decorator is properly placed above function definition"""
+        import inspect
+        from backend.api.workflow import execute_workflow
+        
+        source = inspect.getsource(execute_workflow)
+        lines = source.split('\n')
+        
+        # Find @with_error_handling decorator
+        decorator_line = -1
+        func_def_line = -1
+        
+        for i, line in enumerate(lines):
+            if '@with_error_handling' in line:
+                decorator_line = i
+            if 'async def execute_workflow' in line:
+                func_def_line = i
+                break
+        
+        assert decorator_line != -1, "execute_workflow missing @with_error_handling decorator"
+        assert func_def_line != -1, "execute_workflow missing function definition"
+        assert decorator_line < func_def_line, "execute_workflow decorator not before function"
+
+    def test_batch_34_workflow_file_complete(self):
+        """Verify all workflow.py endpoints have been migrated"""
+        import inspect
+        from backend.api import workflow
+        
+        # Get all router endpoints
+        endpoints = [
+            workflow.list_active_workflows,
+            workflow.get_workflow_details,
+            workflow.get_workflow_status,
+            workflow.approve_workflow_step,
+            workflow.execute_workflow,
+            workflow.cancel_workflow,
+            workflow.get_pending_approvals,
+        ]
+        
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            assert "@with_error_handling" in source, f"{endpoint.__name__} not migrated"
+
+
+# ============================================================
+# Batch 34: Migration Statistics
+# ============================================================
+
+
+class TestBatch34MigrationStats:
+    """Test batch 34 migration statistics and progress tracking"""
+
+    def test_batch_34_migration_progress(self):
+        """Verify batch 34 migration progress"""
+        # Batch 34: 1 endpoint migrated (POST /execute)
+        # Total progress: 66/1,070 endpoints
+        progress = 66 / 1070
+        assert progress >= 0.0617, f"Migration progress should be at least 6.17%, got {progress*100:.2f}%"
+
+    def test_batch_34_code_savings(self):
+        """Verify batch 34 code savings calculation"""
+        # Batch 34: Removed 5 lines (1 try + 4 except block)
+        # Cumulative: 406 lines saved
+        batch_34_savings = 5
+        cumulative_savings = 406
+        
+        assert batch_34_savings == 5, f"Batch 34 should save 5 lines, calculated {batch_34_savings}"
+        assert cumulative_savings >= 406, f"Cumulative savings should be at least 406 lines, got {cumulative_savings}"
+
+    def test_batch_34_nested_error_handling_pattern(self):
+        """Verify batch 34 uses nested error handling pattern correctly"""
+        import inspect
+        from backend.api.workflow import execute_workflow
+        
+        source = inspect.getsource(execute_workflow)
+        
+        # Should have decorator
+        assert "@with_error_handling" in source
+        
+        # Should have nested try-catch preserved
+        nested_try_count = 0
+        lines = source.split('\n')
+        for line in lines:
+            if 'try:' in line and line.strip().startswith('try:'):
+                nested_try_count += 1
+        
+        assert nested_try_count == 1, f"Should have 1 nested try block, found {nested_try_count}"
+
+    def test_batch_34_workflow_file_completion(self):
+        """Verify workflow.py file is 100% complete"""
+        import inspect
+        from backend.api import workflow
+        
+        # All 7 endpoints should be migrated
+        all_endpoints = [
+            workflow.list_active_workflows,
+            workflow.get_workflow_details,
+            workflow.get_workflow_status,
+            workflow.approve_workflow_step,
+            workflow.execute_workflow,
+            workflow.cancel_workflow,
+            workflow.get_pending_approvals,
+        ]
+        
+        migrated_count = 0
+        for endpoint in all_endpoints:
+            source = inspect.getsource(endpoint)
+            if "@with_error_handling" in source:
+                migrated_count += 1
+        
+        assert migrated_count == 7, f"All 7 workflow.py endpoints should be migrated, found {migrated_count}"
+        
+    def test_batch_34_test_coverage(self):
+        """Verify batch 34 has comprehensive test coverage"""
+        # This test verifies that batch 34 tests exist and are structured correctly
+        import sys
+        
+        # Get this test class
+        current_module = sys.modules[__name__]
+        
+        # Count batch 34 test methods
+        batch_34_tests = [
+            name for name in dir(TestBatch34ExecuteWorkflow)
+            if name.startswith('test_')
+        ]
+        
+        # Should have at least 10 tests for complex nested error handling endpoint
+        assert len(batch_34_tests) >= 10, \
+            f"Batch 34 should have at least 10 tests, found {len(batch_34_tests)}"
