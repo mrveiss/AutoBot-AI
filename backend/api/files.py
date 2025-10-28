@@ -733,6 +733,11 @@ async def preview_file(request: Request, path: str):
 
 
 @router.delete("/delete")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_file",
+    error_code_prefix="FILES",
+)
 async def delete_file(request: Request, path: str):
     """
     Delete a file or directory within the sandbox.
@@ -752,82 +757,80 @@ async def delete_file(request: Request, path: str):
     # Store user data in request state for audit logging
     request.state.user = user_data
 
-    try:
-        target_path = validate_and_resolve_path(path)
+    target_path = validate_and_resolve_path(path)
 
-        if not target_path.exists():
-            raise HTTPException(status_code=404, detail="File or directory not found")
+    if not target_path.exists():
+        raise HTTPException(status_code=404, detail="File or directory not found")
 
-        # Log the deletion attempt
-        security_layer = get_security_layer(request)
+    # Log the deletion attempt
+    security_layer = get_security_layer(request)
 
-        if target_path.is_file():
-            file_size = target_path.stat().st_size
-            target_path.unlink()
+    if target_path.is_file():
+        file_size = target_path.stat().st_size
+        target_path.unlink()
+        security_layer.audit_log(
+            "file_delete",
+            user_data.get("username", "unknown"),
+            "success",
+            {
+                "path": path,
+                "type": "file",
+                "size": file_size,
+                "filename": target_path.name,
+                "user_role": user_data.get("role", "unknown"),
+                "ip": request.client.host if request.client else "unknown",
+            },
+        )
+        return {"message": f"File '{target_path.name}' deleted successfully"}
+    else:
+        # Delete directory (only if empty for safety)
+        try:
+            target_path.rmdir()
             security_layer.audit_log(
                 "file_delete",
                 user_data.get("username", "unknown"),
                 "success",
                 {
                     "path": path,
-                    "type": "file",
-                    "size": file_size,
-                    "filename": target_path.name,
+                    "type": "directory",
+                    "dirname": target_path.name,
                     "user_role": user_data.get("role", "unknown"),
                     "ip": request.client.host if request.client else "unknown",
                 },
             )
-            return {"message": f"File '{target_path.name}' deleted successfully"}
-        else:
-            # Delete directory (only if empty for safety)
-            try:
-                target_path.rmdir()
-                security_layer.audit_log(
-                    "file_delete",
-                    user_data.get("username", "unknown"),
-                    "success",
-                    {
-                        "path": path,
-                        "type": "directory",
-                        "dirname": target_path.name,
-                        "user_role": user_data.get("role", "unknown"),
-                        "ip": request.client.host if request.client else "unknown",
-                    },
+            return {
+                "message": f"Directory '{target_path.name}' deleted successfully"
+            }
+        except OSError:
+            # Directory not empty, use recursive delete with caution
+            shutil.rmtree(target_path)
+            security_layer.audit_log(
+                "file_delete",
+                user_data.get("username", "unknown"),
+                "success",
+                {
+                    "path": path,
+                    "type": "directory_recursive",
+                    "dirname": target_path.name,
+                    "user_role": user_data.get("role", "unknown"),
+                    "ip": request.client.host if request.client else "unknown",
+                    "warning": "recursive_delete_performed",
+                },
+            )
+            return {
+                "message": (
+                    f"Directory '{target_path.name}' and all contents "
+                    "deleted successfully"
                 )
-                return {
-                    "message": f"Directory '{target_path.name}' deleted successfully"
-                }
-            except OSError:
-                # Directory not empty, use recursive delete with caution
-                shutil.rmtree(target_path)
-                security_layer.audit_log(
-                    "file_delete",
-                    user_data.get("username", "unknown"),
-                    "success",
-                    {
-                        "path": path,
-                        "type": "directory_recursive",
-                        "dirname": target_path.name,
-                        "user_role": user_data.get("role", "unknown"),
-                        "ip": request.client.host if request.client else "unknown",
-                        "warning": "recursive_delete_performed",
-                    },
-                )
-                return {
-                    "message": (
-                        f"Directory '{target_path.name}' and all contents "
-                        "deleted successfully"
-                    )
-                }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting file: {e}")
-        raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
+            }
 
 
 @router.post("/create_directory")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_directory",
+    error_code_prefix="FILES",
+)
 async def create_directory(
     request: Request, path: str = Form(...), name: str = Form(...)
 ):
@@ -850,50 +853,41 @@ async def create_directory(
     # Store user data in request state for audit logging
     request.state.user = user_data
 
-    try:
-        # Validate directory name
-        if not name or "/" in name or "\\" in name or ".." in name:
-            raise HTTPException(status_code=400, detail="Invalid directory name")
+    # Validate directory name
+    if not name or "/" in name or "\\" in name or ".." in name:
+        raise HTTPException(status_code=400, detail="Invalid directory name")
 
-        parent_dir = validate_and_resolve_path(path)
-        new_dir = parent_dir / name
+    parent_dir = validate_and_resolve_path(path)
+    new_dir = parent_dir / name
 
-        if new_dir.exists():
-            raise HTTPException(status_code=409, detail="Directory already exists")
+    if new_dir.exists():
+        raise HTTPException(status_code=409, detail="Directory already exists")
 
-        new_dir.mkdir(parents=True, exist_ok=False)
+    new_dir.mkdir(parents=True, exist_ok=False)
 
-        # Get directory info
-        relative_path = str(new_dir.relative_to(SANDBOXED_ROOT))
-        dir_info = get_file_info(new_dir, relative_path)
+    # Get directory info
+    relative_path = str(new_dir.relative_to(SANDBOXED_ROOT))
+    dir_info = get_file_info(new_dir, relative_path)
 
-        # Enhanced audit logging with authenticated user
-        security_layer = get_security_layer(request)
-        security_layer.audit_log(
-            "directory_create",
-            user_data.get("username", "unknown"),
-            "success",
-            {
-                "path": relative_path,
-                "name": name,
-                "parent_path": path,
-                "user_role": user_data.get("role", "unknown"),
-                "ip": request.client.host if request.client else "unknown",
-            },
-        )
+    # Enhanced audit logging with authenticated user
+    security_layer = get_security_layer(request)
+    security_layer.audit_log(
+        "directory_create",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "path": relative_path,
+            "name": name,
+            "parent_path": path,
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+        },
+    )
 
-        return {
-            "message": f"Directory '{name}' created successfully",
-            "directory_info": dir_info,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating directory: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error creating directory: {str(e)}"
-        )
+    return {
+        "message": f"Directory '{name}' created successfully",
+        "directory_info": dir_info,
+    }
 
 
 @router.get("/tree")
