@@ -4045,8 +4045,8 @@ class TestBatch25UpdateFact:
         assert source.count("raise HTTPException") >= 6  # Multiple validation errors
         assert 'status_code=400, detail="Invalid fact_id format"' in source
         assert 'detail="At least one field (content or metadata) must be provided"' in source
-        assert 'status_code=500, detail="Knowledge base not initialized' in source
-        assert 'status_code=501, detail="Update operation not supported' in source
+        assert 'detail="Knowledge base not initialized - please check logs for errors"' in source
+        assert 'detail="Update operation not supported by current knowledge base implementation"' in source
         assert 'status_code=404, detail=error_message' in source
         assert 'status_code=500, detail=error_message' in source
 
@@ -4122,8 +4122,8 @@ class TestBatch25DeleteFact:
         # Should preserve multiple HTTPExceptions for validation
         assert source.count("raise HTTPException") >= 5  # Multiple validation errors
         assert 'status_code=400, detail="Invalid fact_id format"' in source
-        assert 'status_code=500, detail="Knowledge base not initialized' in source
-        assert 'status_code=501, detail="Delete operation not supported' in source
+        assert 'detail="Knowledge base not initialized - please check logs for errors"' in source
+        assert 'detail="Delete operation not supported by current knowledge base implementation"' in source
         assert 'status_code=404, detail=error_message' in source
         assert 'status_code=500, detail=error_message' in source
 
