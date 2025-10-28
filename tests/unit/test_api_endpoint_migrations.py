@@ -6583,3 +6583,145 @@ class TestBatch40AnalyticsMigrations(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ============================================================================
+# BATCH 41: Real-Time Analytics Endpoints (GET realtime/metrics + POST events/track)
+# ============================================================================
+
+
+class TestBatch41AnalyticsMigrations(unittest.TestCase):
+    """Test suite for Batch 41 real-time analytics endpoint migrations"""
+
+    def test_get_realtime_metrics_decorator_present(self):
+        """Verify @with_error_handling decorator on get_realtime_metrics"""
+        from backend.api.analytics import get_realtime_metrics
+        import inspect
+
+        source = inspect.getsource(get_realtime_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn("error_code_prefix", source)
+
+    def test_get_realtime_metrics_no_try_catch(self):
+        """Verify try-catch removed from get_realtime_metrics"""
+        from backend.api.analytics import get_realtime_metrics
+        import inspect
+
+        source = inspect.getsource(get_realtime_metrics)
+        # Should not have outer try-catch pattern
+        lines = source.split('\n')
+        # Check that function body doesn't start with try:
+        function_body_started = False
+        for line in lines:
+            if 'def get_realtime_metrics' in line:
+                function_body_started = True
+                continue
+            if function_body_started and line.strip() and not line.strip().startswith('"""') and not line.strip().startswith('#'):
+                self.assertNotIn('try:', line)
+                break
+
+    def test_get_realtime_metrics_business_logic_preserved(self):
+        """Verify business logic preserved in get_realtime_metrics"""
+        from backend.api.analytics import get_realtime_metrics
+        import inspect
+
+        source = inspect.getsource(get_realtime_metrics)
+        # Key business logic should be present
+        self.assertIn("collect_all_metrics", source)
+        self.assertIn("system_resources", source)
+        self.assertIn("realtime_data", source)
+        self.assertIn("performance_snapshot", source)
+
+    def test_get_realtime_metrics_error_handling(self):
+        """Test error handling configuration in get_realtime_metrics"""
+        from backend.api.analytics import get_realtime_metrics
+        import inspect
+
+        source = inspect.getsource(get_realtime_metrics)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_realtime_metrics"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_track_analytics_event_decorator_present(self):
+        """Verify @with_error_handling decorator on track_analytics_event"""
+        from backend.api.analytics import track_analytics_event
+        import inspect
+
+        source = inspect.getsource(track_analytics_event)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn("error_code_prefix", source)
+
+    def test_track_analytics_event_nested_try_preserved(self):
+        """Verify nested try-catch preserved in track_analytics_event for WebSocket handling"""
+        from backend.api.analytics import track_analytics_event
+        import inspect
+
+        source = inspect.getsource(track_analytics_event)
+        # Should have nested try-catch for WebSocket error handling
+        self.assertIn("try:", source)
+        self.assertIn("send_json", source)
+        # Verify it's specifically for WebSocket handling
+        self.assertIn("websocket", source)
+
+    def test_track_analytics_event_business_logic_preserved(self):
+        """Verify business logic preserved in track_analytics_event"""
+        from backend.api.analytics import track_analytics_event
+        import inspect
+
+        source = inspect.getsource(track_analytics_event)
+        # Key business logic should be present
+        self.assertIn("event_data", source)
+        self.assertIn("redis_conn", source)
+        self.assertIn("track_api_call", source)
+        self.assertIn("websocket_activity", source)
+        self.assertIn("broadcast_data", source)
+
+    def test_track_analytics_event_error_handling(self):
+        """Test error handling configuration in track_analytics_event"""
+        from backend.api.analytics import track_analytics_event
+        import inspect
+
+        source = inspect.getsource(track_analytics_event)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="track_analytics_event"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_batch41_all_endpoints_migrated(self):
+        """Verify all Batch 41 endpoints have been migrated"""
+        from backend.api.analytics import (
+            get_realtime_metrics,
+            track_analytics_event,
+        )
+        import inspect
+
+        endpoints = [get_realtime_metrics, track_analytics_event]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have decorator
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch41_consistent_error_category(self):
+        """Verify consistent error category across Batch 41"""
+        from backend.api.analytics import (
+            get_realtime_metrics,
+            track_analytics_event,
+        )
+        import inspect
+
+        endpoints = [get_realtime_metrics, track_analytics_event]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use ANALYTICS prefix
+            self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+
+if __name__ == "__main__":
+    unittest.main()
