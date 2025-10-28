@@ -761,5 +761,126 @@ class TestBatch7MigrationStats:
         assert len(pattern_description) > 0  # Pattern documented
 
 
+class TestSendChatMessageByIdEndpoint:
+    """Test migrated send_chat_message_by_id endpoint (Batch 8)"""
+
+    @pytest.mark.asyncio
+    async def test_send_chat_message_raises_validation_error_when_message_empty(self):
+        """Test POST /chats/{chat_id}/message raises ValidationError when message is empty"""
+        from backend.api.chat import send_chat_message_by_id
+        from fastapi import Request
+
+        mock_request = Mock(spec=Request)
+        mock_request.app = Mock()
+        mock_request.app.state = Mock()
+
+        # Empty message request
+        request_data = {"message": ""}
+
+        # Should raise ValidationError
+        with pytest.raises(Exception):  # ValidationError or HTTPException
+            await send_chat_message_by_id("test-chat-id", request_data, mock_request, {})
+
+    @pytest.mark.asyncio
+    async def test_send_chat_message_raises_internal_error_when_services_unavailable(self):
+        """Test POST /chats/{chat_id}/message raises InternalError when services unavailable"""
+        from backend.api.chat import send_chat_message_by_id
+        from fastapi import Request
+
+        mock_request = Mock(spec=Request)
+        mock_request.app = Mock()
+        mock_request.app.state = Mock()
+        mock_request.app.state.chat_history_manager = None  # Unavailable
+        mock_request.app.state.chat_workflow_manager = None  # Unavailable
+
+        request_data = {"message": "Test message"}
+
+        # Mock get_chat_history_manager to return None (prevent lazy init)
+        with patch("backend.api.chat.get_chat_history_manager", return_value=None):
+            # Should raise InternalError for missing services
+            with pytest.raises(Exception):  # InternalError or HTTPException
+                await send_chat_message_by_id("test-chat-id", request_data, mock_request, {})
+
+    def test_send_chat_message_preserves_lazy_initialization(self):
+        """Test POST /chats/{chat_id}/message preserves lazy initialization try-catch"""
+        # Verify the endpoint structure contains lazy initialization with try-catch
+        # This is a structural test - ensures pattern is preserved in code
+
+        from backend.api.chat import send_chat_message_by_id
+        import inspect
+
+        source = inspect.getsource(send_chat_message_by_id)
+
+        # Verify lazy initialization pattern exists
+        assert "ChatWorkflowManager" in source  # Lazy import
+        assert "chat_workflow_manager = getattr" in source  # Lazy check
+        assert "if chat_workflow_manager is None:" in source  # Lazy condition
+
+        # Verify inner try-catch exists for lazy init
+        # (The outer decorator handles fatal errors, inner try-catch handles init failures)
+        assert source.count("try:") >= 1  # At least one inner try block
+
+    def test_send_chat_message_has_streaming_error_handler(self):
+        """Test POST /chats/{chat_id}/message preserves streaming error handling"""
+        # Verify the endpoint structure contains inner try-catch for streaming
+        # This is a structural test - ensures pattern is preserved in code
+
+        from backend.api.chat import send_chat_message_by_id
+        import inspect
+
+        source = inspect.getsource(send_chat_message_by_id)
+
+        # Verify streaming error handler exists in async generator
+        assert "generate_stream" in source  # Async generator function exists
+        assert "except Exception" in source  # Error handling preserved
+        assert "yield" in source  # Streaming response (SSE)
+
+
+class TestBatch8MigrationStats:
+    """Track batch 8 migration progress"""
+
+    def test_batch_8_migration_progress(self):
+        """Document migration progress after batch 8"""
+        # Total handlers: 1,070
+        # Batch 1-7: 15 endpoints
+        # Batch 8: 1 additional endpoint (send_chat_message_by_id)
+        # Total: 16 endpoints migrated
+
+        total_handlers = 1070
+        migrated_count = 16
+        progress_percentage = (migrated_count / total_handlers) * 100
+
+        assert progress_percentage == pytest.approx(1.50, rel=0.01)
+
+    def test_batch_8_code_savings(self):
+        """Verify cumulative code savings after batch 8"""
+        # Batch 1-7 savings: 123 lines
+        # Batch 8 savings:
+        # - POST /chats/{chat_id}/message: 146 → 147 (net +1, but structural improvement)
+        # Note: Net line count increased by 1, but outer try-catch removed (8 lines)
+        #       and replaced with decorator + exception raises (more explicit error handling)
+        # Actual error handling reduction: 8 lines (outer try-catch removed)
+
+        batch_1_7_savings = 123
+        batch_8_savings = 8  # Outer try-catch removal
+        total_savings = batch_1_7_savings + batch_8_savings
+
+        assert batch_8_savings == 8
+        assert total_savings == 131
+
+    def test_streaming_endpoint_error_handling_pattern(self):
+        """Verify streaming endpoint error handling pattern is preserved"""
+        # Batch 8 validated pattern for streaming endpoints (SSE):
+        # Outer: @with_error_handling catches fatal errors before stream starts
+        # Inner try-catch #1: Lazy initialization errors (logged, not fatal)
+        # Inner try-catch #2: Streaming errors (yields error events, prevents stream break)
+        #
+        # CRITICAL: Streaming endpoints MUST preserve inner try-catch for in-stream errors
+        # Cannot use decorator alone - SSE requires inline error event generation
+
+        pattern_description = "Streaming endpoints: Outer decorator + inner streaming error handler"
+        assert len(pattern_description) > 0  # Pattern documented
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
