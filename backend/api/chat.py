@@ -581,56 +581,17 @@ async def stream_chat_response(
 
 @router.get("/chats")
 @router.get("/chat/chats")  # Frontend compatibility alias
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_chats",
+    error_code_prefix="CHAT",
+)
 async def list_chats(request: Request):
     """List all available chat sessions with improved error handling (consolidated)"""
     request_id = generate_request_id()
 
-    try:
-        chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
-        if chat_history_manager is None:
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise InternalError(
-                "Chat history manager not initialized",
-                details={"component": "chat_history_manager"},
-            )
-
-        try:
-            # CRITICAL FIX: Remove await - list_sessions_fast is synchronous
-            sessions = chat_history_manager.list_sessions_fast()
-            return JSONResponse(status_code=200, content=sessions)
-        except AttributeError as e:
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise InternalError(
-                "Chat history manager is misconfigured",
-                details={"missing_method": "list_sessions"},
-            )
-        except Exception as e:
-            logger.error(f"Failed to retrieve chat sessions: {e}")
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise InternalError(
-                "Failed to retrieve chat sessions",
-                details={"error": str(e)},
-            )
-
-    except Exception as e:
+    chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
+    if chat_history_manager is None:
         (
             AutoBotError,
             InternalError,
@@ -638,16 +599,39 @@ async def list_chats(request: Request):
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        logger.critical(
-            f"Unexpected error listing chat sessions: {e.__class__.__name__}"
+        raise InternalError(
+            "Chat history manager not initialized",
+            details={"component": "chat_history_manager"},
         )
-        logger.exception(e)
 
-        return create_error_response(
-            error_code=get_error_code("INTERNAL_ERROR"),
-            message="Failed to retrieve chat sessions",
-            request_id=request_id,
-            status_code=500,
+    try:
+        # CRITICAL FIX: Remove await - list_sessions_fast is synchronous
+        sessions = chat_history_manager.list_sessions_fast()
+        return JSONResponse(status_code=200, content=sessions)
+    except AttributeError as e:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise InternalError(
+            "Chat history manager is misconfigured",
+            details={"missing_method": "list_sessions"},
+        )
+    except Exception as e:
+        logger.error(f"Failed to retrieve chat sessions: {e}")
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise InternalError(
+            "Failed to retrieve chat sessions",
+            details={"error": str(e)},
         )
 
 
