@@ -3561,6 +3561,11 @@ class UpdateFactRequest(BaseModel):
 
 
 @router.put("/fact/{fact_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_fact",
+    error_code_prefix="KNOWLEDGE",
+)
 async def update_fact(
     fact_id: str = Path(..., description="Fact ID to update"),
     request: UpdateFactRequest = ...,
@@ -3580,70 +3585,65 @@ async def update_fact(
     - updated_fields: List of fields that were updated
     - message: Success or error message
     """
-    try:
-        # Validate fact_id format
-        if not fact_id or not isinstance(fact_id, str):
-            raise HTTPException(status_code=400, detail="Invalid fact_id format")
+    # Validate fact_id format
+    if not fact_id or not isinstance(fact_id, str):
+        raise HTTPException(status_code=400, detail="Invalid fact_id format")
 
-        # Validate at least one field is provided
-        if request.content is None and request.metadata is None:
-            raise HTTPException(
-                status_code=400,
-                detail="At least one field (content or metadata) must be provided",
-            )
-
-        # Get knowledge base instance
-        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-        if kb is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Knowledge base not initialized - please check logs for errors",
-            )
-
-        # Check if update_fact method exists (KnowledgeBaseV2)
-        if not hasattr(kb, "update_fact"):
-            raise HTTPException(
-                status_code=501,
-                detail="Update operation not supported by current knowledge base implementation",
-            )
-
-        logger.info(
-            f"Updating fact {fact_id}: content={'provided' if request.content else 'unchanged'}, metadata={'provided' if request.metadata else 'unchanged'}"
+    # Validate at least one field is provided
+    if request.content is None and request.metadata is None:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one field (content or metadata) must be provided",
         )
 
-        # Call update_fact method
-        result = await kb.update_fact(
-            fact_id=fact_id, content=request.content, metadata=request.metadata
+    # Get knowledge base instance
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized - please check logs for errors",
         )
 
-        # Check if update was successful
-        if result.get("success"):
-            return {
-                "status": "success",
-                "fact_id": fact_id,
-                "updated_fields": result.get("updated_fields", []),
-                "vector_updated": result.get("vector_updated", False),
-                "message": result.get("message", "Fact updated successfully"),
-            }
+    # Check if update_fact method exists (KnowledgeBaseV2)
+    if not hasattr(kb, "update_fact"):
+        raise HTTPException(
+            status_code=501,
+            detail="Update operation not supported by current knowledge base implementation",
+        )
+
+    logger.info(
+        f"Updating fact {fact_id}: content={'provided' if request.content else 'unchanged'}, metadata={'provided' if request.metadata else 'unchanged'}"
+    )
+
+    # Call update_fact method
+    result = await kb.update_fact(
+        fact_id=fact_id, content=request.content, metadata=request.metadata
+    )
+
+    # Check if update was successful
+    if result.get("success"):
+        return {
+            "status": "success",
+            "fact_id": fact_id,
+            "updated_fields": result.get("updated_fields", []),
+            "vector_updated": result.get("vector_updated", False),
+            "message": result.get("message", "Fact updated successfully"),
+        }
+    else:
+        # Update failed - return error
+        error_message = result.get("message", "Unknown error")
+        if "not found" in error_message.lower():
+            raise HTTPException(status_code=404, detail=error_message)
         else:
-            # Update failed - return error
-            error_message = result.get("message", "Unknown error")
-            if "not found" in error_message.lower():
-                raise HTTPException(status_code=404, detail=error_message)
-            else:
-                raise HTTPException(status_code=500, detail=error_message)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating fact {fact_id}: {str(e)}")
-        import traceback
-
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Update fact failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=error_message)
 
 
 @router.delete("/fact/{fact_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_fact",
+    error_code_prefix="KNOWLEDGE",
+)
 async def delete_fact(
     fact_id: str = Path(..., description="Fact ID to delete"), req: Request = None
 ):
@@ -3658,52 +3658,42 @@ async def delete_fact(
     - fact_id: ID of the deleted fact
     - message: Success or error message
     """
-    try:
-        # Validate fact_id format
-        if not fact_id or not isinstance(fact_id, str):
-            raise HTTPException(status_code=400, detail="Invalid fact_id format")
+    # Validate fact_id format
+    if not fact_id or not isinstance(fact_id, str):
+        raise HTTPException(status_code=400, detail="Invalid fact_id format")
 
-        # Get knowledge base instance
-        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-        if kb is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Knowledge base not initialized - please check logs for errors",
-            )
+    # Get knowledge base instance
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized - please check logs for errors",
+        )
 
-        # Check if delete_fact method exists (KnowledgeBaseV2)
-        if not hasattr(kb, "delete_fact"):
-            raise HTTPException(
-                status_code=501,
-                detail="Delete operation not supported by current knowledge base implementation",
-            )
+    # Check if delete_fact method exists (KnowledgeBaseV2)
+    if not hasattr(kb, "delete_fact"):
+        raise HTTPException(
+            status_code=501,
+            detail="Delete operation not supported by current knowledge base implementation",
+        )
 
-        logger.info(f"Deleting fact {fact_id}")
+    logger.info(f"Deleting fact {fact_id}")
 
-        # Call delete_fact method
-        result = await kb.delete_fact(fact_id=fact_id)
+    # Call delete_fact method
+    result = await kb.delete_fact(fact_id=fact_id)
 
-        # Check if deletion was successful
-        if result.get("success"):
-            return {
-                "status": "success",
-                "fact_id": fact_id,
-                "vector_deleted": result.get("vector_deleted", False),
-                "message": result.get("message", "Fact deleted successfully"),
-            }
+    # Check if deletion was successful
+    if result.get("success"):
+        return {
+            "status": "success",
+            "fact_id": fact_id,
+            "vector_deleted": result.get("vector_deleted", False),
+            "message": result.get("message", "Fact deleted successfully"),
+        }
+    else:
+        # Deletion failed - return error
+        error_message = result.get("message", "Unknown error")
+        if "not found" in error_message.lower():
+            raise HTTPException(status_code=404, detail=error_message)
         else:
-            # Deletion failed - return error
-            error_message = result.get("message", "Unknown error")
-            if "not found" in error_message.lower():
-                raise HTTPException(status_code=404, detail=error_message)
-            else:
-                raise HTTPException(status_code=500, detail=error_message)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting fact {fact_id}: {str(e)}")
-        import traceback
-
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Delete fact failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=error_message)
