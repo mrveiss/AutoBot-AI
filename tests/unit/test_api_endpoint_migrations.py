@@ -18,6 +18,7 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import Mock, AsyncMock, patch
 import time
+import inspect
 
 
 class TestChatHealthEndpoint:
@@ -5742,3 +5743,180 @@ class TestBatch35MigrationStats:
         
         # Should have at least 8 tests
         assert len(batch_35_tests) >= 8, f"Batch 35 should have at least 8 tests, found {len(batch_35_tests)}"
+
+
+# ============================================================================
+# Batch 36: analytics.py - Phase 9 monitoring endpoints (2 endpoints)
+# ============================================================================
+
+
+class TestBatch36AnalyticsMigrations:
+    """Test batch 36 analytics.py endpoint migrations"""
+
+    def test_get_phase9_dashboard_has_decorator(self):
+        """Test GET /monitoring/phase9/dashboard has @with_error_handling decorator"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_phase9_dashboard_data)
+        assert (
+            "@with_error_handling" in source
+        ), "Endpoint missing @with_error_handling decorator"
+        assert (
+            'category=ErrorCategory.SERVER_ERROR' in source
+        ), "Decorator should use SERVER_ERROR category"
+        assert (
+            'operation="get_phase9_dashboard_data"' in source
+        ), "Decorator should specify operation name"
+        assert (
+            'error_code_prefix="ANALYTICS"' in source
+        ), "Decorator should use ANALYTICS prefix"
+
+    def test_get_phase9_dashboard_no_outer_try_catch(self):
+        """Test GET /monitoring/phase9/dashboard has no outer try-catch block"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_phase9_dashboard_data)
+        lines = source.split("\n")
+
+        # Check that function body doesn't start with try
+        function_body_started = False
+        for line in lines:
+            if 'async def get_phase9_dashboard_data' in line:
+                function_body_started = True
+                continue
+            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+                assert not line.strip().startswith(
+                    "try:"
+                ), "Endpoint should not have outer try-catch block"
+                break
+
+    def test_get_phase9_dashboard_preserves_business_logic(self):
+        """Test GET /monitoring/phase9/dashboard preserves business logic"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_phase9_dashboard_data)
+        
+        # Check key business logic is preserved
+        assert "performance_data = await analytics_controller.collect_performance_metrics()" in source
+        assert "system_health = await hardware_monitor.get_system_health()" in source
+        assert 'cpu_health = 100 - performance_data.get("system_performance"' in source
+        assert 'memory_health = 100 - performance_data.get("system_performance"' in source
+        assert 'gpu_health = 100 - performance_data.get("hardware_performance"' in source
+        assert "overall_score = (cpu_health + memory_health + gpu_health) / 3" in source
+        assert "dashboard_data = {" in source
+        assert '"overall_health": {' in source
+        assert '"gpu_metrics":' in source
+        assert '"npu_metrics":' in source
+        assert '"api_performance":' in source
+        assert "return dashboard_data" in source
+
+    def test_get_phase9_dashboard_no_manual_error_handling(self):
+        """Test GET /monitoring/phase9/dashboard has no manual error handling"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_phase9_dashboard_data)
+        
+        # Should not have except blocks
+        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert "HTTPException" not in source, "Should not raise HTTPException manually"
+
+    def test_get_phase9_alerts_has_decorator(self):
+        """Test GET /monitoring/phase9/alerts has @with_error_handling decorator"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_phase9_alerts)
+        assert (
+            "@with_error_handling" in source
+        ), "Endpoint missing @with_error_handling decorator"
+        assert (
+            'category=ErrorCategory.SERVER_ERROR' in source
+        ), "Decorator should use SERVER_ERROR category"
+        assert (
+            'operation="get_phase9_alerts"' in source
+        ), "Decorator should specify operation name"
+        assert (
+            'error_code_prefix="ANALYTICS"' in source
+        ), "Decorator should use ANALYTICS prefix"
+
+    def test_get_phase9_alerts_no_outer_try_catch(self):
+        """Test GET /monitoring/phase9/alerts has no outer try-catch block"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_phase9_alerts)
+        lines = source.split("\n")
+
+        # Check that function body doesn't start with try
+        function_body_started = False
+        for line in lines:
+            if 'async def get_phase9_alerts' in line:
+                function_body_started = True
+                continue
+            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+                assert not line.strip().startswith(
+                    "try:"
+                ), "Endpoint should not have outer try-catch block"
+                break
+
+    def test_get_phase9_alerts_preserves_business_logic(self):
+        """Test GET /monitoring/phase9/alerts preserves business logic"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_phase9_alerts)
+        
+        # Check key business logic is preserved
+        assert "alerts = []" in source
+        assert "performance_data = await analytics_controller.collect_performance_metrics()" in source
+        assert '# CPU alerts' in source
+        assert 'cpu_percent = performance_data.get("system_performance"' in source
+        assert 'if cpu_percent > 90:' in source
+        assert '"severity": "critical"' in source
+        assert '"title": "High CPU Usage"' in source
+        assert '# Memory alerts' in source
+        assert 'memory_percent = performance_data.get("system_performance"' in source
+        assert 'if memory_percent > 90:' in source
+        assert '"title": "High Memory Usage"' in source
+        assert '# GPU alerts' in source
+        assert 'gpu_util = performance_data.get("hardware_performance"' in source
+        assert 'if gpu_util > 95:' in source
+        assert '"title": "High GPU Utilization"' in source
+        assert '# API performance alerts' in source
+        assert 'api_performance = performance_data.get("api_performance"' in source
+        assert "slow_endpoints = [" in source
+        assert '"title": "Slow API Endpoints"' in source
+        assert "return alerts" in source
+
+    def test_get_phase9_alerts_no_manual_error_handling(self):
+        """Test GET /monitoring/phase9/alerts has no manual error handling"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_phase9_alerts)
+        
+        # Should not have except blocks
+        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert "HTTPException" not in source, "Should not raise HTTPException manually"
+
+    def test_batch36_all_endpoints_migrated(self):
+        """Test all batch 36 endpoints have been migrated"""
+        from backend.api import analytics
+
+        # Check both endpoints have decorators
+        dashboard_source = inspect.getsource(analytics.get_phase9_dashboard_data)
+        alerts_source = inspect.getsource(analytics.get_phase9_alerts)
+
+        assert "@with_error_handling" in dashboard_source, "Dashboard endpoint not migrated"
+        assert "@with_error_handling" in alerts_source, "Alerts endpoint not migrated"
+
+    def test_batch36_consistent_error_handling(self):
+        """Test batch 36 endpoints use consistent error handling configuration"""
+        from backend.api import analytics
+
+        dashboard_source = inspect.getsource(analytics.get_phase9_dashboard_data)
+        alerts_source = inspect.getsource(analytics.get_phase9_alerts)
+
+        # All should use SERVER_ERROR category
+        assert 'category=ErrorCategory.SERVER_ERROR' in dashboard_source
+        assert 'category=ErrorCategory.SERVER_ERROR' in alerts_source
+
+        # All should use ANALYTICS prefix
+        assert 'error_code_prefix="ANALYTICS"' in dashboard_source
+        assert 'error_code_prefix="ANALYTICS"' in alerts_source
