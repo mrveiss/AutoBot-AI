@@ -707,40 +707,34 @@ async def send_message(
 
 
 @router.post("/chat/stream")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stream_message",
+    error_code_prefix="CHAT",
+)
 async def stream_message(message: ChatMessage, request: Request):
     """Stream chat response for real-time communication"""
     request_id = generate_request_id()
+    log_request_context(request, "stream_message", request_id)
 
-    try:
-        log_request_context(request, "stream_message", request_id)
-
-        # Validate message content
-        if not message.content or not message.content.strip():
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "error": "Message content cannot be empty",
-                    "request_id": request_id,
-                },
-            )
-
-        # Get dependencies from request state
-        chat_history_manager = get_chat_history_manager(request)
-        llm_service = get_llm_service(request)
-
-        # Return streaming response
-        return await stream_chat_response(
-            message, chat_history_manager, llm_service, request_id
+    # Validate message content
+    if not message.content or not message.content.strip():
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "Message content cannot be empty",
+                "request_id": request_id,
+            },
         )
 
-    except Exception as e:
-        logger.error(f"[{request_id}] stream_message error: {e}")
-        return create_error_response(
-            error_code="INTERNAL_ERROR",
-            message=str(e),
-            request_id=request_id,
-            status_code=500,
-        )
+    # Get dependencies from request state
+    chat_history_manager = get_chat_history_manager(request)
+    llm_service = get_llm_service(request)
+
+    # Return streaming response
+    return await stream_chat_response(
+        message, chat_history_manager, llm_service, request_id
+    )
 
 
 @router.get("/chat/sessions/{session_id}")
@@ -827,95 +821,83 @@ async def get_session_messages(
 
 
 @router.get("/chat/sessions")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_sessions",
+    error_code_prefix="CHAT",
+)
 async def list_sessions(request: Request):
     """List all available chat sessions (REST-compliant endpoint)"""
     request_id = generate_request_id()
+    chat_history_manager = get_chat_history_manager(request)
 
-    try:
-        chat_history_manager = get_chat_history_manager(request)
-
-        if chat_history_manager is None:
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise InternalError(
-                "Chat history manager not initialized",
-                details={"component": "chat_history_manager"},
-            )
-
-        # Use fast mode for listing (no decryption)
-        sessions = chat_history_manager.list_sessions_fast()
-
-        return JSONResponse(
-            status_code=200,
-            content={"success": True, "sessions": sessions, "count": len(sessions)},
+    if chat_history_manager is None:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise InternalError(
+            "Chat history manager not initialized",
+            details={"component": "chat_history_manager"},
         )
 
-    except Exception as e:
-        logger.error(f"[{request_id}] list_sessions error: {e}")
-        return create_error_response(
-            error_code="INTERNAL_ERROR",
-            message=str(e),
-            request_id=request_id,
-            status_code=500,
-        )
+    # Use fast mode for listing (no decryption)
+    sessions = chat_history_manager.list_sessions_fast()
+
+    return JSONResponse(
+        status_code=200,
+        content={"success": True, "sessions": sessions, "count": len(sessions)},
+    )
 
 
 @router.post("/chat/sessions")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_session",
+    error_code_prefix="CHAT",
+)
 async def create_session(session_data: SessionCreate, request: Request):
     """Create a new chat session"""
     request_id = generate_request_id()
+    log_request_context(request, "create_session", request_id)
 
-    try:
-        log_request_context(request, "create_session", request_id)
+    # Get dependencies from request state
+    chat_history_manager = get_chat_history_manager(request)
 
-        # Get dependencies from request state
-        chat_history_manager = get_chat_history_manager(request)
+    # Generate new session
+    session_id = generate_chat_session_id()
+    session_title = session_data.title or DEFAULT_SESSION_TITLE
 
-        # Generate new session
-        session_id = generate_chat_session_id()
-        session_title = session_data.title or DEFAULT_SESSION_TITLE
+    # SECURITY: Extract authenticated user and add to metadata as owner
+    user_data = auth_middleware.get_user_from_request(request)
+    metadata = session_data.metadata or {}
+    if user_data and user_data.get("username"):
+        metadata["owner"] = user_data["username"]
+        metadata["username"] = user_data["username"]  # For backward compatibility
+        logger.info(f"Session {session_id} created with owner: {user_data['username']}")
 
-        # SECURITY: Extract authenticated user and add to metadata as owner
-        user_data = auth_middleware.get_user_from_request(request)
-        metadata = session_data.metadata or {}
-        if user_data and user_data.get("username"):
-            metadata["owner"] = user_data["username"]
-            metadata["username"] = user_data["username"]  # For backward compatibility
-            logger.info(f"Session {session_id} created with owner: {user_data['username']}")
+    # Create session
+    session = await chat_history_manager.create_session(
+        session_id=session_id,
+        title=session_title,
+        metadata=metadata,
+    )
 
-        # Create session
-        session = await chat_history_manager.create_session(
-            session_id=session_id,
-            title=session_title,
-            metadata=metadata,
-        )
+    await log_chat_event(
+        "session_created",
+        session_id,
+        {"title": session_title, "request_id": request_id},
+    )
 
-        await log_chat_event(
-            "session_created",
-            session_id,
-            {"title": session_title, "request_id": request_id},
-        )
-
-        return create_success_response(
-            data=session,
-            message="Session created successfully",
-            request_id=request_id,
-            status_code=201,
-        )
-
-    except Exception as e:
-        logger.error(f"[{request_id}] create_session error: {e}")
-        return create_error_response(
-            error_code="INTERNAL_ERROR",
-            message=str(e),
-            request_id=request_id,
-            status_code=500,
-        )
+    return create_success_response(
+        data=session,
+        message="Session created successfully",
+        request_id=request_id,
+        status_code=201,
+    )
 
 
 @router.put("/chat/sessions/{session_id}")
