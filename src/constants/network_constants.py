@@ -36,6 +36,9 @@ class NetworkConstants:
     AI_STACK_VM_IP: str = "172.16.168.24"
     BROWSER_VM_IP: str = "172.16.168.25"
 
+    # Backward compatibility aliases
+    AI_STACK_HOST: str = "172.16.168.24"  # Alias for AI_STACK_VM_IP
+
     # Local/Localhost addresses
     LOCALHOST_IP: str = "127.0.0.1"
     LOCALHOST_NAME: str = "localhost"
