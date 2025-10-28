@@ -572,91 +572,89 @@ analytics_controller = AnalyticsController()
 
 
 @router.get("/dashboard/overview", response_model=AnalyticsOverview)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dashboard_overview",
+    error_code_prefix="ANALYTICS",
+)
 async def get_dashboard_overview():
     """Get comprehensive dashboard overview combining all analytics data"""
+    timestamp = datetime.now().isoformat()
+
+    # Collect all analytics data in parallel
+    system_health_task = hardware_monitor.get_system_health()
+    performance_task = analytics_controller.collect_performance_metrics()
+    communication_task = analytics_controller.analyze_communication_patterns()
+    usage_task = analytics_controller.get_usage_statistics()
+    trends_task = analytics_controller.detect_trends()
+
+    # Wait for all tasks to complete
+    (
+        system_health,
+        performance_metrics,
+        communication_patterns,
+        usage_statistics,
+        trends,
+    ) = await asyncio.gather(
+        system_health_task,
+        performance_task,
+        communication_task,
+        usage_task,
+        trends_task,
+        return_exceptions=True,
+    )
+
+    # Handle any exceptions
+    if isinstance(system_health, Exception):
+        system_health = {"error": str(system_health)}
+    if isinstance(performance_metrics, Exception):
+        performance_metrics = {"error": str(performance_metrics)}
+    if isinstance(communication_patterns, Exception):
+        communication_patterns = {"error": str(communication_patterns)}
+    if isinstance(usage_statistics, Exception):
+        usage_statistics = {"error": str(usage_statistics)}
+    if isinstance(trends, Exception):
+        trends = {"error": str(trends)}
+
+    # Get real-time metrics from existing monitoring
+    realtime_metrics = {}
     try:
-        timestamp = datetime.now().isoformat()
-
-        # Collect all analytics data in parallel
-        system_health_task = hardware_monitor.get_system_health()
-        performance_task = analytics_controller.collect_performance_metrics()
-        communication_task = analytics_controller.analyze_communication_patterns()
-        usage_task = analytics_controller.get_usage_statistics()
-        trends_task = analytics_controller.detect_trends()
-
-        # Wait for all tasks to complete
-        (
-            system_health,
-            performance_metrics,
-            communication_patterns,
-            usage_statistics,
-            trends,
-        ) = await asyncio.gather(
-            system_health_task,
-            performance_task,
-            communication_task,
-            usage_task,
-            trends_task,
-            return_exceptions=True,
+        current_metrics = (
+            await analytics_controller.metrics_collector.collect_all_metrics()
         )
-
-        # Handle any exceptions
-        if isinstance(system_health, Exception):
-            system_health = {"error": str(system_health)}
-        if isinstance(performance_metrics, Exception):
-            performance_metrics = {"error": str(performance_metrics)}
-        if isinstance(communication_patterns, Exception):
-            communication_patterns = {"error": str(communication_patterns)}
-        if isinstance(usage_statistics, Exception):
-            usage_statistics = {"error": str(usage_statistics)}
-        if isinstance(trends, Exception):
-            trends = {"error": str(trends)}
-
-        # Get real-time metrics from existing monitoring
-        realtime_metrics = {}
-        try:
-            current_metrics = (
-                await analytics_controller.metrics_collector.collect_all_metrics()
-            )
-            realtime_metrics = {
-                name: {
-                    "value": metric.value,
-                    "unit": metric.unit,
-                    "category": metric.category,
-                }
-                for name, metric in current_metrics.items()
+        realtime_metrics = {
+            name: {
+                "value": metric.value,
+                "unit": metric.unit,
+                "category": metric.category,
             }
-        except Exception as e:
-            realtime_metrics = {"error": str(e)}
-
-        # Code analysis status
-        code_analysis_status = {
-            "last_analysis": analytics_state.get("last_analysis_time"),
-            "cache_available": bool(analytics_state.get("code_analysis_cache")),
-            "tools_available": {
-                "code_analysis_suite": analytics_controller.code_analysis_path.exists(),
-                "code_index_mcp": analytics_controller.code_index_path.exists(),
-            },
+            for name, metric in current_metrics.items()
         }
-
-        overview = AnalyticsOverview(
-            timestamp=timestamp,
-            system_health=system_health,
-            performance_metrics=performance_metrics,
-            communication_patterns=communication_patterns,
-            code_analysis_status=code_analysis_status,
-            usage_statistics=usage_statistics,
-            realtime_metrics=realtime_metrics,
-            trends=trends,
-        )
-
-        return overview
-
     except Exception as e:
-        logger.error(f"Failed to get dashboard overview: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get dashboard overview: {str(e)}"
-        )
+        realtime_metrics = {"error": str(e)}
+
+    # Code analysis status
+    code_analysis_status = {
+        "last_analysis": analytics_state.get("last_analysis_time"),
+        "cache_available": bool(analytics_state.get("code_analysis_cache")),
+        "tools_available": {
+            "code_analysis_suite": analytics_controller.code_analysis_path.exists(),
+            "code_index_mcp": analytics_controller.code_index_path.exists(),
+        },
+    }
+
+    overview = AnalyticsOverview(
+        timestamp=timestamp,
+        system_health=system_health,
+        performance_metrics=performance_metrics,
+        communication_patterns=communication_patterns,
+        code_analysis_status=code_analysis_status,
+        usage_statistics=usage_statistics,
+        realtime_metrics=realtime_metrics,
+        trends=trends,
+    )
+
+    return overview
 
 
 @router.get("/system/health-detailed")
@@ -1249,71 +1247,71 @@ async def track_analytics_event(event: RealTimeEvent):
 
 
 @router.get("/trends/historical")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_historical_trends",
+    error_code_prefix="ANALYTICS",
+)
 async def get_historical_trends(
     hours: int = Query(24, description="Number of hours to analyze", ge=1, le=168)
 ):
     """Get historical trend analysis"""
-    try:
-        trends = await analytics_controller.detect_trends()
+    trends = await analytics_controller.detect_trends()
 
-        # Enhance with Redis historical data
-        redis_conn = await analytics_controller.get_redis_connection(
-            RedisDatabase.METRICS
-        )
-        historical_data = {"trends": trends}
+    # Enhance with Redis historical data
+    redis_conn = await analytics_controller.get_redis_connection(
+        RedisDatabase.METRICS
+    )
+    historical_data = {"trends": trends}
 
-        if redis_conn:
-            try:
-                # Get historical API calls
-                cutoff_time = datetime.now() - timedelta(hours=hours)
-                api_calls = await redis_conn.lrange("analytics:api_calls", 0, -1)
+    if redis_conn:
+        try:
+            # Get historical API calls
+            cutoff_time = datetime.now() - timedelta(hours=hours)
+            api_calls = await redis_conn.lrange("analytics:api_calls", 0, -1)
 
-                historical_calls = []
-                for call_json in api_calls:
-                    try:
-                        call_data = json.loads(call_json)
-                        call_time = datetime.fromisoformat(call_data["timestamp"])
-                        if call_time > cutoff_time:
-                            historical_calls.append(call_data)
-                    except Exception:
-                        continue
+            historical_calls = []
+            for call_json in api_calls:
+                try:
+                    call_data = json.loads(call_json)
+                    call_time = datetime.fromisoformat(call_data["timestamp"])
+                    if call_time > cutoff_time:
+                        historical_calls.append(call_data)
+                except Exception:
+                    continue
 
-                # Analyze historical patterns
-                if historical_calls:
-                    # Group by hour
-                    hourly_stats = defaultdict(
-                        lambda: {"calls": 0, "avg_response_time": 0, "errors": 0}
-                    )
+            # Analyze historical patterns
+            if historical_calls:
+                # Group by hour
+                hourly_stats = defaultdict(
+                    lambda: {"calls": 0, "avg_response_time": 0, "errors": 0}
+                )
 
-                    for call in historical_calls:
-                        hour_key = call["timestamp"][:13]  # YYYY-MM-DDTHH
-                        hourly_stats[hour_key]["calls"] += 1
-                        hourly_stats[hour_key]["avg_response_time"] += call[
-                            "response_time"
-                        ]
-                        if call["status_code"] >= 400:
-                            hourly_stats[hour_key]["errors"] += 1
+                for call in historical_calls:
+                    hour_key = call["timestamp"][:13]  # YYYY-MM-DDTHH
+                    hourly_stats[hour_key]["calls"] += 1
+                    hourly_stats[hour_key]["avg_response_time"] += call[
+                        "response_time"
+                    ]
+                    if call["status_code"] >= 400:
+                        hourly_stats[hour_key]["errors"] += 1
 
-                    # Calculate averages
-                    for hour_data in hourly_stats.values():
-                        if hour_data["calls"] > 0:
-                            hour_data["avg_response_time"] /= hour_data["calls"]
-                            hour_data["error_rate"] = (
-                                hour_data["errors"] / hour_data["calls"] * 100
-                            )
+                # Calculate averages
+                for hour_data in hourly_stats.values():
+                    if hour_data["calls"] > 0:
+                        hour_data["avg_response_time"] /= hour_data["calls"]
+                        hour_data["error_rate"] = (
+                            hour_data["errors"] / hour_data["calls"] * 100
+                        )
 
-                    historical_data["hourly_patterns"] = dict(hourly_stats)
-                    historical_data["analysis_period_hours"] = hours
-                    historical_data["total_historical_calls"] = len(historical_calls)
+                historical_data["hourly_patterns"] = dict(hourly_stats)
+                historical_data["analysis_period_hours"] = hours
+                historical_data["total_historical_calls"] = len(historical_calls)
 
-            except Exception as e:
-                historical_data["redis_error"] = str(e)
+        except Exception as e:
+            historical_data["redis_error"] = str(e)
 
-        return historical_data
-
-    except Exception as e:
-        logger.error(f"Failed to get historical trends: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return historical_data
 
 
 # ============================================================================
