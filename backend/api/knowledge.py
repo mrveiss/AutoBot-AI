@@ -3074,6 +3074,11 @@ async def retry_vectorization_job(
 
 
 @router.delete("/vectorize_jobs/{job_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_vectorization_job",
+    error_code_prefix="KNOWLEDGE",
+)
 async def delete_vectorization_job(job_id: str, req: Request):
     """
     Delete a vectorization job record from Redis.
@@ -3084,36 +3089,34 @@ async def delete_vectorization_job(job_id: str, req: Request):
     Returns:
         Deletion confirmation
     """
-    try:
-        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb is None:
-            raise HTTPException(
-                status_code=500, detail="Knowledge base not initialized"
-            )
+    if kb is None:
+        raise HTTPException(
+            status_code=500, detail="Knowledge base not initialized"
+        )
 
-        # Delete job from Redis
-        deleted = kb.redis_client.delete(f"vectorization_job:{job_id}")
+    # Delete job from Redis
+    deleted = kb.redis_client.delete(f"vectorization_job:{job_id}")
 
-        if deleted == 0:
-            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    if deleted == 0:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        logger.info(f"Deleted vectorization job {job_id}")
+    logger.info(f"Deleted vectorization job {job_id}")
 
-        return {
-            "status": "success",
-            "message": f"Job {job_id} deleted",
-            "job_id": job_id,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting vectorization job {job_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "success",
+        "message": f"Job {job_id} deleted",
+        "job_id": job_id,
+    }
 
 
 @router.delete("/vectorize_jobs/failed/clear")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_failed_vectorization_jobs",
+    error_code_prefix="KNOWLEDGE",
+)
 async def clear_failed_vectorization_jobs(req: Request):
     """
     Clear all failed vectorization jobs from Redis.
@@ -3121,57 +3124,52 @@ async def clear_failed_vectorization_jobs(req: Request):
     Returns:
         Number of jobs cleared
     """
-    try:
-        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb is None:
-            raise HTTPException(
-                status_code=500, detail="Knowledge base not initialized"
-            )
+    if kb is None:
+        raise HTTPException(
+            status_code=500, detail="Knowledge base not initialized"
+        )
 
-        # Use SCAN to iterate through keys efficiently (non-blocking)
-        deleted_count = 0
-        cursor = 0
+    # Use SCAN to iterate through keys efficiently (non-blocking)
+    deleted_count = 0
+    cursor = 0
 
-        while True:
-            cursor, keys = kb.redis_client.scan(
-                cursor, match="vectorization_job:*", count=100
-            )
+    while True:
+        cursor, keys = kb.redis_client.scan(
+            cursor, match="vectorization_job:*", count=100
+        )
 
-            # Use pipeline for batch operations
-            if keys:
-                pipe = kb.redis_client.pipeline()
-                for key in keys:
-                    pipe.get(key)
-                results = pipe.execute()
+        # Use pipeline for batch operations
+        if keys:
+            pipe = kb.redis_client.pipeline()
+            for key in keys:
+                pipe.get(key)
+            results = pipe.execute()
 
-                # Collect failed job keys
-                failed_keys = []
-                for key, job_json in zip(keys, results):
-                    if job_json:
-                        job_data = json.loads(job_json)
-                        if job_data.get("status") == "failed":
-                            failed_keys.append(key)
+            # Collect failed job keys
+            failed_keys = []
+            for key, job_json in zip(keys, results):
+                if job_json:
+                    job_data = json.loads(job_json)
+                    if job_data.get("status") == "failed":
+                        failed_keys.append(key)
 
-                # Delete failed jobs in batch
-                if failed_keys:
-                    kb.redis_client.delete(*failed_keys)
-                    deleted_count += len(failed_keys)
+            # Delete failed jobs in batch
+            if failed_keys:
+                kb.redis_client.delete(*failed_keys)
+                deleted_count += len(failed_keys)
 
-            if cursor == 0:
-                break
+        if cursor == 0:
+            break
 
-        logger.info(f"Cleared {deleted_count} failed vectorization jobs")
+    logger.info(f"Cleared {deleted_count} failed vectorization jobs")
 
-        return {
-            "status": "success",
-            "message": f"Cleared {deleted_count} failed jobs",
-            "deleted_count": deleted_count,
-        }
-
-    except Exception as e:
-        logger.error(f"Error clearing failed vectorization jobs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "success",
+        "message": f"Cleared {deleted_count} failed jobs",
+        "deleted_count": deleted_count,
+    }
 
 
 @router.post("/deduplicate")
