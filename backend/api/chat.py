@@ -1575,6 +1575,11 @@ async def delete_chat_by_id(
 
 
 @router.post("/chat/direct")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_direct_chat_response",
+    error_code_prefix="CHAT",
+)
 async def send_direct_chat_response(
     request: Request,
     message: str = Body(...),
@@ -1586,80 +1591,74 @@ async def send_direct_chat_response(
     This endpoint accepts 'yes' or 'no' responses to system prompts
     """
     request_id = generate_request_id()
+    log_request_context(request, "send_direct_response", request_id)
 
-    try:
-        log_request_context(request, "send_direct_response", request_id)
+    # Get ChatWorkflowManager from app state
+    chat_workflow_manager = getattr(
+        request.app.state, "chat_workflow_manager", None
+    )
 
-        # Get ChatWorkflowManager from app state
-        chat_workflow_manager = getattr(
-            request.app.state, "chat_workflow_manager", None
-        )
+    if chat_workflow_manager is None:
+        # Lazy initialize
+        try:
+            from src.chat_workflow_manager import ChatWorkflowManager
 
-        if chat_workflow_manager is None:
-            # Lazy initialize
-            try:
-                from src.chat_workflow_manager import ChatWorkflowManager
+            chat_workflow_manager = ChatWorkflowManager()
+            await chat_workflow_manager.initialize()
+            request.app.state.chat_workflow_manager = chat_workflow_manager
+            logger.info(
+                "✅ Lazy-initialized chat_workflow_manager for /chat/direct"
+            )
+        except Exception as e:
+            logger.error(f"Failed to lazy-initialize chat_workflow_manager: {e}")
+            (
+                AutoBotError,
+                InternalError,
+                ResourceNotFoundError,
+                ValidationError,
+                get_error_code,
+            ) = get_exceptions_lazy()
+            raise InternalError(
+                "Workflow manager not available",
+                details={"initialization_error": str(e)},
+            )
 
-                chat_workflow_manager = ChatWorkflowManager()
-                await chat_workflow_manager.initialize()
-                request.app.state.chat_workflow_manager = chat_workflow_manager
-                logger.info(
-                    "✅ Lazy-initialized chat_workflow_manager for /chat/direct"
-                )
-            except Exception as e:
-                logger.error(f"Failed to lazy-initialize chat_workflow_manager: {e}")
-                return create_error_response(
-                    error_code="SERVICE_UNAVAILABLE",
-                    message="Workflow manager not available",
-                    request_id=request_id,
-                    status_code=503,
-                )
+    # Stream the response (command approval/denial response)
+    async def generate_stream():
+        try:
+            # Send start event
+            yield f"data: {json.dumps({'type': 'start', 'session_id': chat_id, 'request_id': request_id})}\n\n"
 
-        # Stream the response (command approval/denial response)
-        async def generate_stream():
-            try:
-                # Send start event
-                yield f"data: {json.dumps({'type': 'start', 'session_id': chat_id, 'request_id': request_id})}\n\n"
+            # Process the approval/denial message through workflow
+            async for msg in chat_workflow_manager.process_message_stream(
+                session_id=chat_id,
+                message=message,  # "yes" or "no"
+                context={"remember_choice": remember_choice},
+            ):
+                msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
+                yield f"data: {json.dumps(msg_data)}\n\n"
 
-                # Process the approval/denial message through workflow
-                async for msg in chat_workflow_manager.process_message_stream(
-                    session_id=chat_id,
-                    message=message,  # "yes" or "no"
-                    context={"remember_choice": remember_choice},
-                ):
-                    msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
-                    yield f"data: {json.dumps(msg_data)}\n\n"
+            # Send completion
+            yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
 
-                # Send completion
-                yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
+        except Exception as e:
+            logger.error(
+                f"[{request_id}] Direct response streaming error: {e}",
+                exc_info=True,
+            )
+            error_data = {
+                "type": "error",
+                "content": f"Error processing command approval: {str(e)}",
+                "request_id": request_id,
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
 
-            except Exception as e:
-                logger.error(
-                    f"[{request_id}] Direct response streaming error: {e}",
-                    exc_info=True,
-                )
-                error_data = {
-                    "type": "error",
-                    "content": f"Error processing command approval: {str(e)}",
-                    "request_id": request_id,
-                }
-                yield f"data: {json.dumps(error_data)}\n\n"
-
-        return StreamingResponse(
-            generate_stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"[{request_id}] send_direct_response error: {e}")
-        return create_error_response(
-            error_code="INTERNAL_ERROR",
-            message=str(e),
-            request_id=request_id,
-            status_code=500,
-        )
+    return StreamingResponse(
+        generate_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
