@@ -2165,115 +2165,113 @@ async def integrate_man_pages(req: Request, background_tasks: BackgroundTasks):
 
 
 @router.get("/man_pages/search")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_man_pages",
+    error_code_prefix="KNOWLEDGE",
+)
 async def search_man_pages(req: Request, query: str, limit: int = 10):
     """Search specifically for man pages in knowledge base"""
-    try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb_to_use is None:
-            return {"results": [], "total_results": 0, "query": query}
+    if kb_to_use is None:
+        return {"results": [], "total_results": 0, "query": query}
 
-        logger.info(f"Searching man pages: '{query}' (limit={limit})")
+    logger.info(f"Searching man pages: '{query}' (limit={limit})")
 
-        # Perform search
-        kb_class_name = kb_to_use.__class__.__name__
+    # Perform search
+    kb_class_name = kb_to_use.__class__.__name__
 
-        if kb_class_name == "KnowledgeBaseV2":
-            results = await kb_to_use.search(query=query, top_k=limit)
-        else:
-            results = await kb_to_use.search(query=query, similarity_top_k=limit)
+    if kb_class_name == "KnowledgeBaseV2":
+        results = await kb_to_use.search(query=query, top_k=limit)
+    else:
+        results = await kb_to_use.search(query=query, similarity_top_k=limit)
 
-        # Filter for man pages only
-        man_page_results = []
-        for result in results:
-            metadata = result.get("metadata", {})
-            if metadata.get("type") in ["manual_page", "system_command"]:
-                man_page_results.append(result)
+    # Filter for man pages only
+    man_page_results = []
+    for result in results:
+        metadata = result.get("metadata", {})
+        if metadata.get("type") in ["manual_page", "system_command"]:
+            man_page_results.append(result)
 
-        return {
-            "results": man_page_results,
-            "total_results": len(man_page_results),
-            "query": query,
-            "limit": limit,
-        }
-
-    except Exception as e:
-        logger.error(f"Error searching man pages: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Man page search failed: {str(e)}")
+    return {
+        "results": man_page_results,
+        "total_results": len(man_page_results),
+        "query": query,
+        "limit": limit,
+    }
 
 
 @router.post("/clear_all")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_all_knowledge",
+    error_code_prefix="KNOWLEDGE",
+)
 async def clear_all_knowledge(request: dict, req: Request):
     """Clear all entries from the knowledge base - DESTRUCTIVE OPERATION"""
-    try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb_to_use is None:
-            return {
-                "status": "error",
-                "message": "Knowledge base not initialized - please check logs for errors",
-                "items_removed": 0,
-            }
-
-        logger.warning(
-            "Starting DESTRUCTIVE operation: clearing all knowledge base entries"
-        )
-
-        # Get current stats before clearing
-        try:
-            stats_before = await kb_to_use.get_stats()
-            items_before = stats_before.get("total_facts", 0)
-        except Exception:
-            items_before = 0
-
-        # Clear the knowledge base
-        if hasattr(kb_to_use, "clear_all"):
-            # Use specific clear_all method if available
-            result = await kb_to_use.clear_all()
-            items_removed = result.get("items_removed", items_before)
-        else:
-            # Fallback: try to clear via Redis if that's the implementation
-            try:
-                if hasattr(kb_to_use, "redis") and kb_to_use.redis:
-                    # For Redis-based implementations
-                    keys = await kb_to_use.redis.keys("fact:*")
-                    if keys:
-                        await kb_to_use.redis.delete(*keys)
-
-                    # Clear any indexes
-                    index_keys = await kb_to_use.redis.keys("index:*")
-                    if index_keys:
-                        await kb_to_use.redis.delete(*index_keys)
-
-                    items_removed = len(keys)
-                else:
-                    logger.error(
-                        "No clear method available for knowledge base implementation"
-                    )
-                    raise HTTPException(
-                        status_code=500, detail="Knowledge base clearing not supported"
-                    )
-
-            except Exception as e:
-                logger.error(f"Error during knowledge base clearing: {e}")
-                raise HTTPException(
-                    status_code=500, detail=f"Failed to clear knowledge base: {str(e)}"
-                )
-
-        logger.warning(f"Knowledge base cleared. Removed {items_removed} entries.")
-
+    if kb_to_use is None:
         return {
-            "status": "success",
-            "message": f"Successfully cleared knowledge base. Removed {items_removed} entries.",
-            "items_removed": items_removed,
-            "items_before": items_before,
+            "status": "error",
+            "message": "Knowledge base not initialized - please check logs for errors",
+            "items_removed": 0,
         }
 
-    except Exception as e:
-        logger.error(f"Error clearing knowledge base: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Knowledge base clearing failed: {str(e)}"
-        )
+    logger.warning(
+        "Starting DESTRUCTIVE operation: clearing all knowledge base entries"
+    )
+
+    # Get current stats before clearing
+    try:
+        stats_before = await kb_to_use.get_stats()
+        items_before = stats_before.get("total_facts", 0)
+    except Exception:
+        items_before = 0
+
+    # Clear the knowledge base
+    if hasattr(kb_to_use, "clear_all"):
+        # Use specific clear_all method if available
+        result = await kb_to_use.clear_all()
+        items_removed = result.get("items_removed", items_before)
+    else:
+        # Fallback: try to clear via Redis if that's the implementation
+        try:
+            if hasattr(kb_to_use, "redis") and kb_to_use.redis:
+                # For Redis-based implementations
+                keys = await kb_to_use.redis.keys("fact:*")
+                if keys:
+                    await kb_to_use.redis.delete(*keys)
+
+                # Clear any indexes
+                index_keys = await kb_to_use.redis.keys("index:*")
+                if index_keys:
+                    await kb_to_use.redis.delete(*index_keys)
+
+                items_removed = len(keys)
+            else:
+                logger.error(
+                    "No clear method available for knowledge base implementation"
+                )
+                raise HTTPException(
+                    status_code=500, detail="Knowledge base clearing not supported"
+                )
+
+        except Exception as e:
+            logger.error(f"Error during knowledge base clearing: {e}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to clear knowledge base: {str(e)}"
+            )
+
+    logger.warning(f"Knowledge base cleared. Removed {items_removed} entries.")
+
+    return {
+        "status": "success",
+        "message": f"Successfully cleared knowledge base. Removed {items_removed} entries.",
+        "items_removed": items_removed,
+        "items_before": items_before,
+    }
 
 
 # Legacy endpoints for backward compatibility
