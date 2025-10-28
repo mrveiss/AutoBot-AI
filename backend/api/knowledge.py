@@ -3393,6 +3393,11 @@ async def find_orphaned_facts(req: Request):
 
 
 @router.delete("/orphans")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cleanup_orphaned_facts",
+    error_code_prefix="KNOWLEDGE",
+)
 async def cleanup_orphaned_facts(req: Request, dry_run: bool = True):
     """
     Remove facts whose source files no longer exist.
@@ -3403,87 +3408,83 @@ async def cleanup_orphaned_facts(req: Request, dry_run: bool = True):
     Returns:
         Report of orphans found and removed
     """
-    try:
-        # First find orphans
-        orphans_response = await find_orphaned_facts(req)
-        orphaned_facts = orphans_response.get("orphaned_facts", [])
+    # First find orphans
+    orphans_response = await find_orphaned_facts(req)
+    orphaned_facts = orphans_response.get("orphaned_facts", [])
 
-        if not orphaned_facts:
-            return {
-                "status": "success",
-                "message": "No orphaned facts found",
-                "deleted_count": 0,
-            }
-
-        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
-        # Delete orphans if not dry run
-        deleted_count = 0
-        if not dry_run:
-            logger.info(f"Deleting {len(orphaned_facts)} orphaned facts...")
-
-            fact_keys = [f["fact_key"] for f in orphaned_facts]
-
-            # Delete in batches
-            batch_size = 100
-            for i in range(0, len(fact_keys), batch_size):
-                batch = fact_keys[i : i + batch_size]
-                kb.redis_client.delete(*batch)
-                deleted_count += len(batch)
-
-            logger.info(f"Deleted {deleted_count} orphaned facts")
-
+    if not orphaned_facts:
         return {
             "status": "success",
-            "dry_run": dry_run,
-            "orphaned_count": len(orphaned_facts),
-            "deleted_count": deleted_count,
-            "orphaned_facts": orphaned_facts[:20],  # Return first 20 for preview
+            "message": "No orphaned facts found",
+            "deleted_count": 0,
         }
 
-    except Exception as e:
-        logger.error(f"Error cleaning up orphaned facts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+    # Delete orphans if not dry run
+    deleted_count = 0
+    if not dry_run:
+        logger.info(f"Deleting {len(orphaned_facts)} orphaned facts...")
+
+        fact_keys = [f["fact_key"] for f in orphaned_facts]
+
+        # Delete in batches
+        batch_size = 100
+        for i in range(0, len(fact_keys), batch_size):
+            batch = fact_keys[i : i + batch_size]
+            kb.redis_client.delete(*batch)
+            deleted_count += len(batch)
+
+        logger.info(f"Deleted {deleted_count} orphaned facts")
+
+    return {
+        "status": "success",
+        "dry_run": dry_run,
+        "orphaned_count": len(orphaned_facts),
+        "deleted_count": deleted_count,
+        "orphaned_facts": orphaned_facts[:20],  # Return first 20 for preview
+    }
 
 
 @router.post("/import/scan")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="scan_for_unimported_files",
+    error_code_prefix="KNOWLEDGE",
+)
 async def scan_for_unimported_files(req: Request, directory: str = "docs"):
     """Scan directory for files that need to be imported"""
-    try:
-        from backend.models.knowledge_import_tracking import ImportTracker
+    from backend.models.knowledge_import_tracking import ImportTracker
 
-        tracker = ImportTracker()
-        # Use project-relative path instead of absolute path
-        base_path = PathLib(__file__).parent.parent.parent
-        scan_path = base_path / directory
+    tracker = ImportTracker()
+    # Use project-relative path instead of absolute path
+    base_path = PathLib(__file__).parent.parent.parent
+    scan_path = base_path / directory
 
-        if not scan_path.exists():
-            raise HTTPException(
-                status_code=404, detail=f"Directory not found: {directory}"
-            )
+    if not scan_path.exists():
+        raise HTTPException(
+            status_code=404, detail=f"Directory not found: {directory}"
+        )
 
-        unimported = []
-        needs_reimport = []
+    unimported = []
+    needs_reimport = []
 
-        # Scan for markdown files
-        for file_path in scan_path.rglob("*.md"):
-            if tracker.needs_reimport(str(file_path)):
-                if tracker.is_imported(str(file_path)):
-                    needs_reimport.append(str(file_path.relative_to(base_path)))
-                else:
-                    unimported.append(str(file_path.relative_to(base_path)))
+    # Scan for markdown files
+    for file_path in scan_path.rglob("*.md"):
+        if tracker.needs_reimport(str(file_path)):
+            if tracker.is_imported(str(file_path)):
+                needs_reimport.append(str(file_path.relative_to(base_path)))
+            else:
+                unimported.append(str(file_path.relative_to(base_path)))
 
-        return {
-            "status": "success",
-            "directory": directory,
-            "unimported_files": unimported,
-            "needs_reimport": needs_reimport,
-            "total_unimported": len(unimported),
-            "total_needs_reimport": len(needs_reimport),
-        }
-    except Exception as e:
-        logger.error(f"Error scanning for unimported files: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "success",
+        "directory": directory,
+        "unimported_files": unimported,
+        "needs_reimport": needs_reimport,
+        "total_unimported": len(unimported),
+        "total_needs_reimport": len(needs_reimport),
+    }
 
 
 @router.post("/vectorize_facts/background")
