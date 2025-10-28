@@ -15,6 +15,7 @@ from src.constants.network_constants import NetworkConstants
 from src.event_manager import event_manager
 from src.metrics.system_monitor import system_monitor
 from src.metrics.workflow_metrics import workflow_metrics
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 
@@ -58,6 +59,11 @@ pending_approvals: Dict[str, asyncio.Future] = {}
 
 
 @router.get("/workflows")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_active_workflows",
+    error_code_prefix="WORKFLOW",
+)
 async def list_active_workflows():
     """List all active workflows with their current status."""
     workflows_summary = []
@@ -84,6 +90,11 @@ async def list_active_workflows():
 
 
 @router.get("/workflow/{workflow_id}")
+@with_error_handling(
+    category=ErrorCategory.NOT_FOUND,
+    operation="get_workflow_details",
+    error_code_prefix="WORKFLOW",
+)
 async def get_workflow_details(workflow_id: str):
     """Get detailed information about a specific workflow."""
     if workflow_id not in active_workflows:
