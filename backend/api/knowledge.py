@@ -2843,6 +2843,11 @@ async def _vectorize_fact_background(
 
 
 @router.post("/vectorize_fact/{fact_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vectorize_individual_fact",
+    error_code_prefix="KNOWLEDGE",
+)
 async def vectorize_individual_fact(
     fact_id: str, req: Request, background_tasks: BackgroundTasks, force: bool = False
 ):
@@ -2856,66 +2861,64 @@ async def vectorize_individual_fact(
     Returns:
         Job tracking information with job_id for status monitoring
     """
-    try:
-        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb is None:
-            raise HTTPException(
-                status_code=500, detail="Knowledge base not initialized"
-            )
-
-        # Check if fact exists - facts are stored as individual Redis hashes with key "fact:{uuid}"
-        fact_key = f"fact:{fact_id}"
-        fact_data = kb.redis_client.hgetall(fact_key)
-        if not fact_data:
-            raise HTTPException(
-                status_code=404, detail=f"Fact {fact_id} not found in knowledge base"
-            )
-
-        # Generate job ID
-        job_id = str(uuid.uuid4())
-
-        # Create initial job record
-        job_data = {
-            "job_id": job_id,
-            "fact_id": fact_id,
-            "status": "pending",
-            "progress": 0,
-            "started_at": datetime.now().isoformat(),
-            "completed_at": None,
-            "error": None,
-            "result": None,
-        }
-
-        kb.redis_client.setex(
-            f"vectorization_job:{job_id}", 3600, json.dumps(job_data)  # 1 hour TTL
+    if kb is None:
+        raise HTTPException(
+            status_code=500, detail="Knowledge base not initialized"
         )
 
-        # Add background task
-        background_tasks.add_task(
-            _vectorize_fact_background, kb, fact_id, job_id, force
+    # Check if fact exists - facts are stored as individual Redis hashes with key "fact:{uuid}"
+    fact_key = f"fact:{fact_id}"
+    fact_data = kb.redis_client.hgetall(fact_key)
+    if not fact_data:
+        raise HTTPException(
+            status_code=404, detail=f"Fact {fact_id} not found in knowledge base"
         )
 
-        logger.info(
-            f"Created vectorization job {job_id} for fact {fact_id} (force={force})"
-        )
+    # Generate job ID
+    job_id = str(uuid.uuid4())
 
-        return {
-            "status": "success",
-            "message": "Vectorization job started",
-            "job_id": job_id,
-            "fact_id": fact_id,
-            "force": force,
-        }
+    # Create initial job record
+    job_data = {
+        "job_id": job_id,
+        "fact_id": fact_id,
+        "status": "pending",
+        "progress": 0,
+        "started_at": datetime.now().isoformat(),
+        "completed_at": None,
+        "error": None,
+        "result": None,
+    }
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error starting vectorization for fact {fact_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    kb.redis_client.setex(
+        f"vectorization_job:{job_id}", 3600, json.dumps(job_data)  # 1 hour TTL
+    )
+
+    # Add background task
+    background_tasks.add_task(
+        _vectorize_fact_background, kb, fact_id, job_id, force
+    )
+
+    logger.info(
+        f"Created vectorization job {job_id} for fact {fact_id} (force={force})"
+    )
+
+    return {
+        "status": "success",
+        "message": "Vectorization job started",
+        "job_id": job_id,
+        "fact_id": fact_id,
+        "force": force,
+    }
 
 
 @router.get("/vectorize_job/{job_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_vectorization_job_status",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_vectorization_job_status(job_id: str, req: Request):
     """
     Get the status of a vectorization job.
@@ -2926,31 +2929,24 @@ async def get_vectorization_job_status(job_id: str, req: Request):
     Returns:
         Job status information including progress and result
     """
-    try:
-        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb is None:
-            raise HTTPException(
-                status_code=500, detail="Knowledge base not initialized"
-            )
+    if kb is None:
+        raise HTTPException(
+            status_code=500, detail="Knowledge base not initialized"
+        )
 
-        # Get job data from Redis
-        job_json = kb.redis_client.get(f"vectorization_job:{job_id}")
+    # Get job data from Redis
+    job_json = kb.redis_client.get(f"vectorization_job:{job_id}")
 
-        if not job_json:
-            raise HTTPException(
-                status_code=404, detail=f"Vectorization job {job_id} not found"
-            )
+    if not job_json:
+        raise HTTPException(
+            status_code=404, detail=f"Vectorization job {job_id} not found"
+        )
 
-        job_data = json.loads(job_json)
+    job_data = json.loads(job_json)
 
-        return {"status": "success", "job": job_data}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting vectorization job status {job_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "success", "job": job_data}
 
 
 @router.get("/vectorize_jobs/failed")
