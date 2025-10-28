@@ -891,6 +891,11 @@ async def create_directory(
 
 
 @router.get("/tree")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_directory_tree",
+    error_code_prefix="FILES",
+)
 async def get_directory_tree(request: Request, path: str = ""):
     """Get directory tree structure for file browser"""
     # SECURITY FIX: Enable proper authentication and authorization
@@ -904,63 +909,59 @@ async def get_directory_tree(request: Request, path: str = ""):
     # Store user data in request state for audit logging
     request.state.user = user_data
 
-    try:
-        target_path = validate_and_resolve_path(path)
+    target_path = validate_and_resolve_path(path)
 
-        if not target_path.exists():
-            raise HTTPException(status_code=404, detail="Directory not found")
+    if not target_path.exists():
+        raise HTTPException(status_code=404, detail="Directory not found")
 
-        if not target_path.is_dir():
-            raise HTTPException(status_code=400, detail="Path is not a directory")
+    if not target_path.is_dir():
+        raise HTTPException(status_code=400, detail="Path is not a directory")
 
-        def build_tree(directory: Path, relative_base: Path) -> dict:
-            """Recursively build directory tree structure"""
-            try:
-                items = []
-                for item in sorted(
-                    directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())
-                ):
-                    try:
-                        relative_path = str(item.relative_to(SANDBOXED_ROOT))
-                        item_info = {
-                            "name": item.name,
-                            "path": relative_path,
-                            "type": "directory" if item.is_dir() else "file",
-                        }
+    def build_tree(directory: Path, relative_base: Path) -> dict:
+        """Recursively build directory tree structure"""
+        try:
+            items = []
+            for item in sorted(
+                directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())
+            ):
+                try:
+                    relative_path = str(item.relative_to(SANDBOXED_ROOT))
+                    item_info = {
+                        "name": item.name,
+                        "path": relative_path,
+                        "type": "directory" if item.is_dir() else "file",
+                    }
 
-                        if item.is_file():
-                            item_info["size"] = item.stat().st_size
-                            item_info["extension"] = (
-                                item.suffix.lower() if item.suffix else None
-                            )
-                        else:
-                            # Recursively add children for directories
-                            item_info["children"] = build_tree(item, SANDBOXED_ROOT)
+                    if item.is_file():
+                        item_info["size"] = item.stat().st_size
+                        item_info["extension"] = (
+                            item.suffix.lower() if item.suffix else None
+                        )
+                    else:
+                        # Recursively add children for directories
+                        item_info["children"] = build_tree(item, SANDBOXED_ROOT)
 
-                        items.append(item_info)
-                    except (OSError, PermissionError) as e:
-                        logger.warning(f"Skipping inaccessible item {item}: {e}")
-                        continue
+                    items.append(item_info)
+                except (OSError, PermissionError) as e:
+                    logger.warning(f"Skipping inaccessible item {item}: {e}")
+                    continue
 
-                return items
-            except Exception as e:
-                logger.error(f"Error building tree for {directory}: {e}")
-                return []
+            return items
+        except Exception as e:
+            logger.error(f"Error building tree for {directory}: {e}")
+            return []
 
-        tree_data = build_tree(target_path, SANDBOXED_ROOT)
+    tree_data = build_tree(target_path, SANDBOXED_ROOT)
 
-        return {"path": path, "tree": tree_data}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting directory tree: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting directory tree: {str(e)}"
-        )
+    return {"path": path, "tree": tree_data}
 
 
 @router.get("/stats")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_file_stats",
+    error_code_prefix="FILES",
+)
 async def get_file_stats(request: Request):
     """Get file system statistics for the sandbox"""
     # SECURITY FIX: Enable proper authentication and authorization
@@ -973,30 +974,23 @@ async def get_file_stats(request: Request):
     # Store user data in request state for audit logging
     request.state.user = user_data
 
-    try:
-        total_files = 0
-        total_directories = 0
-        total_size = 0
+    total_files = 0
+    total_directories = 0
+    total_size = 0
 
-        for item in SANDBOXED_ROOT.rglob("*"):
-            if item.is_file():
-                total_files += 1
-                total_size += item.stat().st_size
-            elif item.is_dir():
-                total_directories += 1
+    for item in SANDBOXED_ROOT.rglob("*"):
+        if item.is_file():
+            total_files += 1
+            total_size += item.stat().st_size
+        elif item.is_dir():
+            total_directories += 1
 
-        return {
-            "sandbox_root": str(SANDBOXED_ROOT),
-            "total_files": total_files,
-            "total_directories": total_directories,
-            "total_size": total_size,
-            "total_size_mb": round(total_size / (1024 * 1024), 2),
-            "max_file_size_mb": MAX_FILE_SIZE // (1024 * 1024),
-            "allowed_extensions": sorted(list(ALLOWED_EXTENSIONS)),
-        }
-
-    except Exception as e:
-        logger.error(f"Error getting file stats: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting file stats: {str(e)}"
-        )
+    return {
+        "sandbox_root": str(SANDBOXED_ROOT),
+        "total_files": total_files,
+        "total_directories": total_directories,
+        "total_size": total_size,
+        "total_size_mb": round(total_size / (1024 * 1024), 2),
+        "max_file_size_mb": MAX_FILE_SIZE // (1024 * 1024),
+        "allowed_extensions": sorted(list(ALLOWED_EXTENSIONS)),
+    }
