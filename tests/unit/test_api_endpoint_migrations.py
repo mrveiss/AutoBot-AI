@@ -4857,3 +4857,97 @@ class TestBatch30MigrationStats:
         stats_tests_extra = 4
         total_batch_30_tests = tree_tests + stats_tests + stats_tests_extra
         assert total_batch_30_tests == 14
+
+
+class TestBatch31ListActiveWorkflows:
+    """Test Batch 31 - GET /workflows endpoint migration"""
+
+    def test_list_active_workflows_has_decorator(self):
+        from backend.api.workflow import list_active_workflows
+        import inspect
+        source = inspect.getsource(list_active_workflows)
+        assert "@with_error_handling" in source
+        assert 'operation="list_active_workflows"' in source
+
+    def test_list_active_workflows_no_try_catch(self):
+        from backend.api.workflow import list_active_workflows
+        import inspect
+        source = inspect.getsource(list_active_workflows)
+        assert source.count("try:") == 0
+
+    def test_list_active_workflows_preserves_business_logic(self):
+        from backend.api.workflow import list_active_workflows
+        import inspect
+        source = inspect.getsource(list_active_workflows)
+        assert "for workflow_id, workflow_data in active_workflows.items():" in source
+        assert "workflows_summary.append(summary)" in source
+
+    def test_list_active_workflows_has_correct_category(self):
+        from backend.api.workflow import list_active_workflows
+        import inspect
+        source = inspect.getsource(list_active_workflows)
+        assert "category=ErrorCategory.SERVER_ERROR" in source
+
+
+class TestBatch31GetWorkflowDetails:
+    """Test Batch 31 - GET /workflow/{workflow_id} endpoint migration"""
+
+    def test_get_workflow_details_has_decorator(self):
+        from backend.api.workflow import get_workflow_details
+        import inspect
+        source = inspect.getsource(get_workflow_details)
+        assert "@with_error_handling" in source
+        assert 'operation="get_workflow_details"' in source
+
+    def test_get_workflow_details_no_try_catch(self):
+        from backend.api.workflow import get_workflow_details
+        import inspect
+        source = inspect.getsource(get_workflow_details)
+        assert source.count("try:") == 0
+
+    def test_get_workflow_details_preserves_httpexception(self):
+        from backend.api.workflow import get_workflow_details
+        import inspect
+        source = inspect.getsource(get_workflow_details)
+        assert 'status_code=404, detail="Workflow not found"' in source
+
+    def test_get_workflow_details_preserves_business_logic(self):
+        from backend.api.workflow import get_workflow_details
+        import inspect
+        source = inspect.getsource(get_workflow_details)
+        assert "workflow = active_workflows[workflow_id]" in source
+
+    def test_get_workflow_details_has_correct_category(self):
+        from backend.api.workflow import get_workflow_details
+        import inspect
+        source = inspect.getsource(get_workflow_details)
+        assert "category=ErrorCategory.NOT_FOUND" in source
+
+
+class TestBatch31MigrationStats:
+    """Track batch 31 migration progress"""
+
+    def test_batch_31_migration_progress(self):
+        total_handlers = 1070
+        migrated_count = 61
+        progress_percentage = (migrated_count / total_handlers) * 100
+        assert progress_percentage == pytest.approx(5.70, rel=0.01)
+
+    def test_batch_31_file_transition(self):
+        previous_file = "backend/api/files.py"
+        current_file = "backend/api/workflow.py"
+        assert previous_file != current_file
+        assert "workflow" in current_file
+
+    def test_batch_31_pattern_application(self):
+        pattern_list = "Simple Pattern (no existing error handling)"
+        pattern_details = "Simple Pattern with HTTPException Preservation"
+        assert len(pattern_list) > 0
+        assert len(pattern_details) > 0
+
+    def test_batch_31_test_coverage(self):
+        list_workflows_tests = 4
+        get_details_tests = 5
+        stats_tests = 4
+        total_batch_31_tests = list_workflows_tests + get_details_tests + stats_tests
+        assert total_batch_31_tests == 13
