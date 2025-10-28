@@ -6857,3 +6857,137 @@ class TestBatch42AnalyticsMigrations(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ============================================================================
+# BATCH 43: Analytics Endpoints with Nested Try-Catch (GET trends/historical + dashboard/overview)
+# ============================================================================
+
+
+class TestBatch43AnalyticsMigrations(unittest.TestCase):
+    """Test suite for Batch 43 analytics endpoints with nested try-catch blocks"""
+
+    def test_get_historical_trends_decorator_present(self):
+        """Verify @with_error_handling decorator on get_historical_trends"""
+        from backend.api.analytics import get_historical_trends
+        import inspect
+
+        source = inspect.getsource(get_historical_trends)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn("error_code_prefix", source)
+
+    def test_get_historical_trends_nested_try_preserved(self):
+        """Verify nested try-catch preserved in get_historical_trends for Redis operations"""
+        from backend.api.analytics import get_historical_trends
+        import inspect
+
+        source = inspect.getsource(get_historical_trends)
+        # Should have nested try-catch for Redis operations
+        self.assertIn("try:", source)
+        # Verify it's for Redis/JSON operations
+        self.assertTrue("redis_conn" in source or "json.loads" in source)
+
+    def test_get_historical_trends_business_logic_preserved(self):
+        """Verify business logic preserved in get_historical_trends"""
+        from backend.api.analytics import get_historical_trends
+        import inspect
+
+        source = inspect.getsource(get_historical_trends)
+        # Key business logic should be present
+        self.assertIn("detect_trends", source)
+        self.assertIn("redis_conn", source)
+        self.assertIn("historical_data", source)
+        self.assertIn("hourly_stats", source)
+
+    def test_get_historical_trends_error_handling(self):
+        """Test error handling configuration in get_historical_trends"""
+        from backend.api.analytics import get_historical_trends
+        import inspect
+
+        source = inspect.getsource(get_historical_trends)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_historical_trends"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_get_dashboard_overview_decorator_present(self):
+        """Verify @with_error_handling decorator on get_dashboard_overview"""
+        from backend.api.analytics import get_dashboard_overview
+        import inspect
+
+        source = inspect.getsource(get_dashboard_overview)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn("error_code_prefix", source)
+
+    def test_get_dashboard_overview_nested_try_preserved(self):
+        """Verify nested try-catch preserved in get_dashboard_overview for realtime metrics"""
+        from backend.api.analytics import get_dashboard_overview
+        import inspect
+
+        source = inspect.getsource(get_dashboard_overview)
+        # Should have nested try-catch for realtime metrics
+        self.assertIn("try:", source)
+        # Verify it's for metrics collection
+        self.assertIn("realtime_metrics", source)
+        self.assertIn("collect_all_metrics", source)
+
+    def test_get_dashboard_overview_business_logic_preserved(self):
+        """Verify business logic preserved in get_dashboard_overview"""
+        from backend.api.analytics import get_dashboard_overview
+        import inspect
+
+        source = inspect.getsource(get_dashboard_overview)
+        # Key business logic should be present
+        self.assertIn("asyncio.gather", source)
+        self.assertIn("system_health", source)
+        self.assertIn("performance_metrics", source)
+        self.assertIn("AnalyticsOverview", source)
+
+    def test_get_dashboard_overview_error_handling(self):
+        """Test error handling configuration in get_dashboard_overview"""
+        from backend.api.analytics import get_dashboard_overview
+        import inspect
+
+        source = inspect.getsource(get_dashboard_overview)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_dashboard_overview"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_batch43_all_endpoints_migrated(self):
+        """Verify all Batch 43 endpoints have been migrated"""
+        from backend.api.analytics import (
+            get_historical_trends,
+            get_dashboard_overview,
+        )
+        import inspect
+
+        endpoints = [get_historical_trends, get_dashboard_overview]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have decorator
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch43_consistent_error_category(self):
+        """Verify consistent error category across Batch 43"""
+        from backend.api.analytics import (
+            get_historical_trends,
+            get_dashboard_overview,
+        )
+        import inspect
+
+        endpoints = [get_historical_trends, get_dashboard_overview]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use ANALYTICS prefix
+            self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+
+if __name__ == "__main__":
+    unittest.main()
