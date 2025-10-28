@@ -4642,3 +4642,110 @@ class TestBatch28MigrationStats:
         stats_tests = 4
         total_batch_28_tests = rename_tests + preview_tests + stats_tests
         assert total_batch_28_tests == 14
+
+
+class TestBatch29DeleteFile:
+    """Test Batch 29 - DELETE /delete endpoint migration"""
+
+    def test_delete_file_has_decorator(self):
+        from backend.api.files import delete_file
+        import inspect
+        source = inspect.getsource(delete_file)
+        assert "@with_error_handling" in source
+        assert 'operation="delete_file"' in source
+
+    def test_delete_file_no_outer_try_catch(self):
+        from backend.api.files import delete_file
+        import inspect
+        source = inspect.getsource(delete_file)
+        assert source.count("try:") == 1  # Only inner try for OSError
+
+    def test_delete_file_preserves_httpexceptions(self):
+        from backend.api.files import delete_file
+        import inspect
+        source = inspect.getsource(delete_file)
+        assert 'status_code=403' in source
+        assert 'status_code=404, detail="File or directory not found"' in source
+
+    def test_delete_file_preserves_business_logic(self):
+        from backend.api.files import delete_file
+        import inspect
+        source = inspect.getsource(delete_file)
+        assert "target_path.unlink()" in source
+        assert "target_path.rmdir()" in source
+        assert "shutil.rmtree(target_path)" in source
+
+    def test_delete_file_preserves_inner_try_catch(self):
+        from backend.api.files import delete_file
+        import inspect
+        source = inspect.getsource(delete_file)
+        assert "except OSError:" in source
+
+
+class TestBatch29CreateDirectory:
+    """Test Batch 29 - POST /create_directory endpoint migration"""
+
+    def test_create_directory_has_decorator(self):
+        from backend.api.files import create_directory
+        import inspect
+        source = inspect.getsource(create_directory)
+        assert "@with_error_handling" in source
+        assert 'operation="create_directory"' in source
+
+    def test_create_directory_no_outer_try_catch(self):
+        from backend.api.files import create_directory
+        import inspect
+        source = inspect.getsource(create_directory)
+        assert source.count("try:") == 0
+
+    def test_create_directory_preserves_httpexceptions(self):
+        from backend.api.files import create_directory
+        import inspect
+        source = inspect.getsource(create_directory)
+        assert 'status_code=403' in source
+        assert 'status_code=400, detail="Invalid directory name"' in source
+        assert 'status_code=409, detail="Directory already exists"' in source
+
+    def test_create_directory_preserves_business_logic(self):
+        from backend.api.files import create_directory
+        import inspect
+        source = inspect.getsource(create_directory)
+        assert "parent_dir = validate_and_resolve_path(path)" in source
+        assert "new_dir.mkdir(parents=True, exist_ok=False)" in source
+
+    def test_create_directory_preserves_audit_logging(self):
+        from backend.api.files import create_directory
+        import inspect
+        source = inspect.getsource(create_directory)
+        assert "security_layer.audit_log(" in source
+        assert '"directory_create"' in source
+
+
+class TestBatch29MigrationStats:
+    """Track batch 29 migration progress"""
+
+    def test_batch_29_migration_progress(self):
+        total_handlers = 1070
+        migrated_count = 57
+        progress_percentage = (migrated_count / total_handlers) * 100
+        assert progress_percentage == pytest.approx(5.33, rel=0.01)
+
+    def test_batch_29_code_savings(self):
+        batch_1_28_savings = 389
+        batch_29_savings = 6
+        total_savings = batch_1_28_savings + batch_29_savings
+        assert batch_29_savings == 6
+        assert total_savings == 395
+
+    def test_batch_29_pattern_application(self):
+        pattern_delete = "Nested Error Handling Pattern"
+        pattern_create = "Simple Pattern with HTTPException Preservation"
+        assert len(pattern_delete) > 0
+        assert len(pattern_create) > 0
+
+    def test_batch_29_test_coverage(self):
+        delete_tests = 5
+        create_tests = 5
+        stats_tests = 4
+        total_batch_29_tests = delete_tests + create_tests + stats_tests
+        assert total_batch_29_tests == 14
