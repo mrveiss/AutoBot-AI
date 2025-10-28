@@ -3173,6 +3173,11 @@ async def clear_failed_vectorization_jobs(req: Request):
 
 
 @router.post("/deduplicate")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="deduplicate_facts",
+    error_code_prefix="KNOWLEDGE",
+)
 async def deduplicate_facts(req: Request, dry_run: bool = True):
     """
     Remove duplicate facts based on category + title.
@@ -3184,132 +3189,132 @@ async def deduplicate_facts(req: Request, dry_run: bool = True):
     Returns:
         Report of duplicates found and removed
     """
-    try:
-        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb is None:
-            raise HTTPException(
-                status_code=500, detail="Knowledge base not initialized"
-            )
-
-        logger.info(f"Starting deduplication scan (dry_run={dry_run})...")
-
-        # Use SCAN to iterate through all fact keys
-        fact_groups = {}  # category:title -> list of (fact_id, created_at, fact_key)
-        cursor = 0
-        total_facts = 0
-
-        while True:
-            cursor, keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
-
-            if keys:
-                # Use pipeline for batch GET operations
-                pipe = kb.redis_client.pipeline()
-                for key in keys:
-                    pipe.hget(key, "metadata")
-                    pipe.hget(key, "created_at")
-                results = pipe.execute()
-
-                # Group facts by category+title
-                for i in range(0, len(results), 2):
-                    metadata_str = results[i]
-                    created_at = results[i + 1]
-                    fact_key = keys[i // 2]
-
-                    # Decode key if it's bytes
-                    if isinstance(fact_key, bytes):
-                        fact_key = fact_key.decode("utf-8")
-
-                    if metadata_str:
-                        try:
-                            metadata = json.loads(metadata_str)
-                            category = metadata.get("category", "unknown")
-                            title = metadata.get("title", "unknown")
-                            fact_id = metadata.get("fact_id", fact_key.split(":")[1])
-
-                            group_key = f"{category}:{title}"
-
-                            if group_key not in fact_groups:
-                                fact_groups[group_key] = []
-
-                            fact_groups[group_key].append(
-                                {
-                                    "fact_id": fact_id,
-                                    "fact_key": fact_key,
-                                    "created_at": created_at or "1970-01-01T00:00:00",
-                                    "category": category,
-                                    "title": title,
-                                }
-                            )
-                            total_facts += 1
-                        except json.JSONDecodeError:
-                            logger.warning(f"Failed to parse metadata for {fact_key}")
-
-            if cursor == 0:
-                break
-
-        logger.info(
-            f"Scanned {total_facts} facts, found {len(fact_groups)} unique category+title combinations"
+    if kb is None:
+        raise HTTPException(
+            status_code=500, detail="Knowledge base not initialized"
         )
 
-        # Find duplicates
-        duplicates_found = []
-        facts_to_delete = []
+    logger.info(f"Starting deduplication scan (dry_run={dry_run})...")
 
-        for group_key, facts in fact_groups.items():
-            if len(facts) > 1:
-                # Sort by created_at to keep the oldest
-                facts.sort(key=lambda x: x["created_at"])
+    # Use SCAN to iterate through all fact keys
+    fact_groups = {}  # category:title -> list of (fact_id, created_at, fact_key)
+    cursor = 0
+    total_facts = 0
 
-                # Keep first (oldest), mark rest for deletion
-                kept_fact = facts[0]
-                duplicate_facts = facts[1:]
+    while True:
+        cursor, keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
 
-                duplicates_found.append(
-                    {
-                        "category": kept_fact["category"],
-                        "title": kept_fact["title"],
-                        "total_copies": len(facts),
-                        "kept_fact_id": kept_fact["fact_id"],
-                        "kept_created_at": kept_fact["created_at"],
-                        "removed_count": len(duplicate_facts),
-                        "removed_fact_ids": [f["fact_id"] for f in duplicate_facts],
-                    }
-                )
+        if keys:
+            # Use pipeline for batch GET operations
+            pipe = kb.redis_client.pipeline()
+            for key in keys:
+                pipe.hget(key, "metadata")
+                pipe.hget(key, "created_at")
+            results = pipe.execute()
 
-                facts_to_delete.extend([f["fact_key"] for f in duplicate_facts])
+            # Group facts by category+title
+            for i in range(0, len(results), 2):
+                metadata_str = results[i]
+                created_at = results[i + 1]
+                fact_key = keys[i // 2]
 
-        # Delete duplicates if not dry run
-        deleted_count = 0
-        if not dry_run and facts_to_delete:
-            logger.info(f"Deleting {len(facts_to_delete)} duplicate facts...")
+                # Decode key if it's bytes
+                if isinstance(fact_key, bytes):
+                    fact_key = fact_key.decode("utf-8")
 
-            # Delete in batches
-            batch_size = 100
-            for i in range(0, len(facts_to_delete), batch_size):
-                batch = facts_to_delete[i : i + batch_size]
-                kb.redis_client.delete(*batch)
-                deleted_count += len(batch)
+                if metadata_str:
+                    try:
+                        metadata = json.loads(metadata_str)
+                        category = metadata.get("category", "unknown")
+                        title = metadata.get("title", "unknown")
+                        fact_id = metadata.get("fact_id", fact_key.split(":")[1])
 
-            logger.info(f"Deleted {deleted_count} duplicate facts")
+                        group_key = f"{category}:{title}"
 
-        return {
-            "status": "success",
-            "dry_run": dry_run,
-            "total_facts_scanned": total_facts,
-            "unique_combinations": len(fact_groups),
-            "duplicate_groups_found": len(duplicates_found),
-            "total_duplicates": len(facts_to_delete),
-            "deleted_count": deleted_count,
-            "duplicates": duplicates_found[:50],  # Return first 50 for preview
-        }
+                        if group_key not in fact_groups:
+                            fact_groups[group_key] = []
 
-    except Exception as e:
-        logger.error(f"Error during deduplication: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+                        fact_groups[group_key].append(
+                            {
+                                "fact_id": fact_id,
+                                "fact_key": fact_key,
+                                "created_at": created_at or "1970-01-01T00:00:00",
+                                "category": category,
+                                "title": title,
+                            }
+                        )
+                        total_facts += 1
+                    except json.JSONDecodeError:
+                        logger.warning(f"Failed to parse metadata for {fact_key}")
+
+        if cursor == 0:
+            break
+
+    logger.info(
+        f"Scanned {total_facts} facts, found {len(fact_groups)} unique category+title combinations"
+    )
+
+    # Find duplicates
+    duplicates_found = []
+    facts_to_delete = []
+
+    for group_key, facts in fact_groups.items():
+        if len(facts) > 1:
+            # Sort by created_at to keep the oldest
+            facts.sort(key=lambda x: x["created_at"])
+
+            # Keep first (oldest), mark rest for deletion
+            kept_fact = facts[0]
+            duplicate_facts = facts[1:]
+
+            duplicates_found.append(
+                {
+                    "category": kept_fact["category"],
+                    "title": kept_fact["title"],
+                    "total_copies": len(facts),
+                    "kept_fact_id": kept_fact["fact_id"],
+                    "kept_created_at": kept_fact["created_at"],
+                    "removed_count": len(duplicate_facts),
+                    "removed_fact_ids": [f["fact_id"] for f in duplicate_facts],
+                }
+            )
+
+            facts_to_delete.extend([f["fact_key"] for f in duplicate_facts])
+
+    # Delete duplicates if not dry run
+    deleted_count = 0
+    if not dry_run and facts_to_delete:
+        logger.info(f"Deleting {len(facts_to_delete)} duplicate facts...")
+
+        # Delete in batches
+        batch_size = 100
+        for i in range(0, len(facts_to_delete), batch_size):
+            batch = facts_to_delete[i : i + batch_size]
+            kb.redis_client.delete(*batch)
+            deleted_count += len(batch)
+
+        logger.info(f"Deleted {deleted_count} duplicate facts")
+
+    return {
+        "status": "success",
+        "dry_run": dry_run,
+        "total_facts_scanned": total_facts,
+        "unique_combinations": len(fact_groups),
+        "duplicate_groups_found": len(duplicates_found),
+        "total_duplicates": len(facts_to_delete),
+        "deleted_count": deleted_count,
+        "duplicates": duplicates_found[:50],  # Return first 50 for preview
+    }
 
 
 @router.get("/orphans")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="find_orphaned_facts",
+    error_code_prefix="KNOWLEDGE",
+)
 async def find_orphaned_facts(req: Request):
     """
     Find facts whose source files no longer exist.
@@ -3318,78 +3323,73 @@ async def find_orphaned_facts(req: Request):
     Returns:
         List of orphaned facts
     """
-    try:
-        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb is None:
-            raise HTTPException(
-                status_code=500, detail="Knowledge base not initialized"
-            )
-
-        logger.info("Scanning for orphaned facts...")
-
-        orphaned_facts = []
-        cursor = 0
-        total_checked = 0
-
-        while True:
-            cursor, keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
-
-            if keys:
-                # Use pipeline for batch operations
-                pipe = kb.redis_client.pipeline()
-                for key in keys:
-                    pipe.hget(key, "metadata")
-                results = pipe.execute()
-
-                for key, metadata_str in zip(keys, results):
-                    # Decode key if it's bytes
-                    if isinstance(key, bytes):
-                        key = key.decode("utf-8")
-
-                    if metadata_str:
-                        try:
-                            metadata = json.loads(metadata_str)
-                            file_path = metadata.get("file_path")
-
-                            # Only check facts with file_path metadata
-                            if file_path:
-                                total_checked += 1
-
-                                # Check if file exists
-                                if not PathLib(file_path).exists():
-                                    orphaned_facts.append(
-                                        {
-                                            "fact_id": metadata.get("fact_id"),
-                                            "fact_key": key,
-                                            "title": metadata.get("title", "Unknown"),
-                                            "category": metadata.get(
-                                                "category", "Unknown"
-                                            ),
-                                            "file_path": file_path,
-                                            "source": metadata.get("source", "Unknown"),
-                                        }
-                                    )
-                        except json.JSONDecodeError:
-                            logger.warning(f"Failed to parse metadata for {key}")
-
-            if cursor == 0:
-                break
-
-        logger.info(
-            f"Checked {total_checked} facts with file paths, found {len(orphaned_facts)} orphans"
+    if kb is None:
+        raise HTTPException(
+            status_code=500, detail="Knowledge base not initialized"
         )
 
-        return {
-            "status": "success",
-            "total_facts_checked": total_checked,
-            "orphaned_count": len(orphaned_facts),
-            "orphaned_facts": orphaned_facts,
-        }
+    logger.info("Scanning for orphaned facts...")
 
-    except Exception as e:
-        logger.error(f"Error finding orphaned facts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    orphaned_facts = []
+    cursor = 0
+    total_checked = 0
+
+    while True:
+        cursor, keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
+
+        if keys:
+            # Use pipeline for batch operations
+            pipe = kb.redis_client.pipeline()
+            for key in keys:
+                pipe.hget(key, "metadata")
+            results = pipe.execute()
+
+            for key, metadata_str in zip(keys, results):
+                # Decode key if it's bytes
+                if isinstance(key, bytes):
+                    key = key.decode("utf-8")
+
+                if metadata_str:
+                    try:
+                        metadata = json.loads(metadata_str)
+                        file_path = metadata.get("file_path")
+
+                        # Only check facts with file_path metadata
+                        if file_path:
+                            total_checked += 1
+
+                            # Check if file exists
+                            if not PathLib(file_path).exists():
+                                orphaned_facts.append(
+                                    {
+                                        "fact_id": metadata.get("fact_id"),
+                                        "fact_key": key,
+                                        "title": metadata.get("title", "Unknown"),
+                                        "category": metadata.get(
+                                            "category", "Unknown"
+                                        ),
+                                        "file_path": file_path,
+                                        "source": metadata.get("source", "Unknown"),
+                                    }
+                                )
+                    except json.JSONDecodeError:
+                        logger.warning(f"Failed to parse metadata for {key}")
+
+        if cursor == 0:
+            break
+
+    logger.info(
+        f"Checked {total_checked} facts with file paths, found {len(orphaned_facts)} orphans"
+    )
+
+    return {
+        "status": "success",
+        "total_facts_checked": total_checked,
+        "orphaned_count": len(orphaned_facts),
+        "orphaned_facts": orphaned_facts,
+    }
 
 
 @router.delete("/orphans")
