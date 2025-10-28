@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from unittest.mock import Mock, AsyncMock, patch
 import time
 import inspect
+import unittest
 
 
 class TestChatHealthEndpoint:
