@@ -6446,3 +6446,139 @@ class TestBatch39AnalyticsMigrations:
         # All should use ANALYTICS prefix
         assert 'error_code_prefix="ANALYTICS"' in chains_source
         assert 'error_code_prefix="ANALYTICS"' in quality_source
+
+
+# ============================================================================
+# BATCH 40: Code Analysis Endpoints (GET quality-metrics + communication-chains)
+# ============================================================================
+
+
+class TestBatch40AnalyticsMigrations(unittest.TestCase):
+    """Test suite for Batch 40 analytics endpoint migrations"""
+
+    def test_quality_metrics_decorator_present(self):
+        """Verify @with_error_handling decorator on get_code_quality_metrics"""
+        from backend.api.analytics import get_code_quality_metrics
+        import inspect
+
+        source = inspect.getsource(get_code_quality_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn("error_code_prefix", source)
+
+    def test_quality_metrics_no_try_catch(self):
+        """Verify try-catch removed from get_code_quality_metrics"""
+        from backend.api.analytics import get_code_quality_metrics
+        import inspect
+
+        source = inspect.getsource(get_code_quality_metrics)
+        # Should not have try-catch pattern
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except Exception", source)
+
+    def test_quality_metrics_business_logic_preserved(self):
+        """Verify business logic preserved in get_code_quality_metrics"""
+        from backend.api.analytics import get_code_quality_metrics
+        import inspect
+
+        source = inspect.getsource(get_code_quality_metrics)
+        # Key business logic should be present
+        self.assertIn("analytics_state.get", source)
+        self.assertIn("no_analysis_available", source)
+        self.assertIn("quality_metrics", source)
+        self.assertIn("recommendations", source)
+
+    def test_quality_metrics_error_handling(self):
+        """Test error handling in get_code_quality_metrics"""
+        from backend.api.analytics import get_code_quality_metrics
+        from src.utils.error_boundaries import ErrorCategory
+        import inspect
+
+        source = inspect.getsource(get_code_quality_metrics)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_code_quality_metrics"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_communication_chains_decorator_present(self):
+        """Verify @with_error_handling decorator on get_communication_chains"""
+        from backend.api.analytics import get_communication_chains
+        import inspect
+
+        source = inspect.getsource(get_communication_chains)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn("error_code_prefix", source)
+
+    def test_communication_chains_no_try_catch(self):
+        """Verify try-catch removed from get_communication_chains"""
+        from backend.api.analytics import get_communication_chains
+        import inspect
+
+        source = inspect.getsource(get_communication_chains)
+        # Should not have try-catch pattern
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except Exception", source)
+
+    def test_communication_chains_business_logic_preserved(self):
+        """Verify business logic preserved in get_communication_chains"""
+        from backend.api.analytics import get_communication_chains
+        import inspect
+
+        source = inspect.getsource(get_communication_chains)
+        # Key business logic should be present
+        self.assertIn("analytics_state.get", source)
+        self.assertIn("communication_chains", source)
+        self.assertIn("enhanced_chains", source)
+        self.assertIn("correlation_analysis", source)
+        self.assertIn("runtime_patterns", source)
+
+    def test_communication_chains_error_handling(self):
+        """Test error handling in get_communication_chains"""
+        from backend.api.analytics import get_communication_chains
+        from src.utils.error_boundaries import ErrorCategory
+        import inspect
+
+        source = inspect.getsource(get_communication_chains)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_communication_chains"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_batch40_all_endpoints_migrated(self):
+        """Verify all Batch 40 endpoints have been migrated"""
+        from backend.api.analytics import (
+            get_code_quality_metrics,
+            get_communication_chains,
+        )
+        import inspect
+
+        endpoints = [get_code_quality_metrics, get_communication_chains]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have decorator
+            self.assertIn("@with_error_handling", source)
+            # None should have try-catch
+            self.assertNotIn("try:", source)
+
+    def test_batch40_consistent_error_category(self):
+        """Verify consistent error category across Batch 40"""
+        from backend.api.analytics import (
+            get_code_quality_metrics,
+            get_communication_chains,
+        )
+        import inspect
+
+        endpoints = [get_code_quality_metrics, get_communication_chains]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use ANALYTICS prefix
+            self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+
+if __name__ == "__main__":
+    unittest.main()
