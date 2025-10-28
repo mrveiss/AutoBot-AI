@@ -651,6 +651,11 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
 
 
 @router.delete("/workflow/{workflow_id}")
+@with_error_handling(
+    category=ErrorCategory.NOT_FOUND,
+    operation="cancel_workflow",
+    error_code_prefix="WORKFLOW",
+)
 async def cancel_workflow(workflow_id: str):
     """Cancel an active workflow."""
     if workflow_id not in active_workflows:
@@ -676,6 +681,11 @@ async def cancel_workflow(workflow_id: str):
 
 
 @router.get("/workflow/{workflow_id}/pending_approvals")
+@with_error_handling(
+    category=ErrorCategory.NOT_FOUND,
+    operation="get_pending_approvals",
+    error_code_prefix="WORKFLOW",
+)
 async def get_pending_approvals(workflow_id: str):
     """Get pending approval requests for a workflow."""
     if workflow_id not in active_workflows:
