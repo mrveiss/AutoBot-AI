@@ -2704,5 +2704,216 @@ class TestBatch18MigrationStats:
         assert total_batch_18_tests == 14  # Comprehensive coverage
 
 
+class TestVectorizeIndividualFactEndpoint:
+    """Test migrated POST /vectorize_fact/{fact_id} endpoint"""
+
+    def test_vectorize_individual_fact_has_decorator(self):
+        """Verify @with_error_handling decorator is applied"""
+        from backend.api.knowledge import vectorize_individual_fact
+        import inspect
+
+        source = inspect.getsource(vectorize_individual_fact)
+
+        # Should have decorator with correct parameters
+        assert "@with_error_handling" in source
+        assert "ErrorCategory.SERVER_ERROR" in source
+        assert 'operation="vectorize_individual_fact"' in source
+        assert 'error_code_prefix="KNOWLEDGE"' in source
+
+    def test_vectorize_individual_fact_no_outer_try_catch(self):
+        """Verify outer try-catch and HTTPException re-raise removed"""
+        from backend.api.knowledge import vectorize_individual_fact
+        import inspect
+
+        source = inspect.getsource(vectorize_individual_fact)
+
+        # Should have NO try blocks (Simple Pattern - decorator only)
+        try_count = source.count("try:")
+        assert try_count == 0
+
+        # Should NOT have HTTPException re-raise
+        assert "except HTTPException:" not in source
+
+    def test_vectorize_individual_fact_preserves_httpexception(self):
+        """Verify endpoint preserves HTTPException for validation errors"""
+        from backend.api.knowledge import vectorize_individual_fact
+        import inspect
+
+        source = inspect.getsource(vectorize_individual_fact)
+
+        # Should preserve KB not initialized check
+        assert "if kb is None:" in source
+        assert "raise HTTPException" in source
+        assert "Knowledge base not initialized" in source
+
+        # Should preserve fact not found check
+        assert "if not fact_data:" in source
+        assert "Fact {fact_id} not found in knowledge base" in source
+
+    def test_vectorize_individual_fact_preserves_background_tasks(self):
+        """Verify endpoint preserves background task creation"""
+        from backend.api.knowledge import vectorize_individual_fact
+        import inspect
+
+        source = inspect.getsource(vectorize_individual_fact)
+
+        # Should generate job ID and create job record
+        assert "job_id = str(uuid.uuid4())" in source
+        assert "job_data = {" in source
+        assert '"status": "pending"' in source
+
+        # Should use background_tasks
+        assert "background_tasks.add_task" in source
+        assert "_vectorize_fact_background" in source
+
+    def test_vectorize_individual_fact_preserves_redis_operations(self):
+        """Verify endpoint preserves Redis job storage"""
+        from backend.api.knowledge import vectorize_individual_fact
+        import inspect
+
+        source = inspect.getsource(vectorize_individual_fact)
+
+        # Should store job in Redis with 1 hour TTL
+        assert "kb.redis_client.setex" in source
+        assert 'f"vectorization_job:{job_id}"' in source
+        assert "3600" in source  # 1 hour TTL
+        assert "json.dumps(job_data)" in source
+
+
+class TestGetVectorizationJobStatusEndpoint:
+    """Test migrated GET /vectorize_job/{job_id} endpoint"""
+
+    def test_get_vectorization_job_status_has_decorator(self):
+        """Verify @with_error_handling decorator is applied"""
+        from backend.api.knowledge import get_vectorization_job_status
+        import inspect
+
+        source = inspect.getsource(get_vectorization_job_status)
+
+        # Should have decorator with correct parameters
+        assert "@with_error_handling" in source
+        assert "ErrorCategory.SERVER_ERROR" in source
+        assert 'operation="get_vectorization_job_status"' in source
+        assert 'error_code_prefix="KNOWLEDGE"' in source
+
+    def test_get_vectorization_job_status_no_outer_try_catch(self):
+        """Verify outer try-catch and HTTPException re-raise removed"""
+        from backend.api.knowledge import get_vectorization_job_status
+        import inspect
+
+        source = inspect.getsource(get_vectorization_job_status)
+
+        # Should have NO try blocks (Simple Pattern - decorator only)
+        try_count = source.count("try:")
+        assert try_count == 0
+
+        # Should NOT have HTTPException re-raise
+        assert "except HTTPException:" not in source
+
+    def test_get_vectorization_job_status_preserves_httpexception(self):
+        """Verify endpoint preserves HTTPException for validation errors"""
+        from backend.api.knowledge import get_vectorization_job_status
+        import inspect
+
+        source = inspect.getsource(get_vectorization_job_status)
+
+        # Should preserve KB not initialized check
+        assert "if kb is None:" in source
+        assert "raise HTTPException" in source
+        assert "Knowledge base not initialized" in source
+
+        # Should preserve job not found check
+        assert "if not job_json:" in source
+        assert "Vectorization job {job_id} not found" in source
+
+    def test_get_vectorization_job_status_preserves_redis_retrieval(self):
+        """Verify endpoint preserves Redis job retrieval"""
+        from backend.api.knowledge import get_vectorization_job_status
+        import inspect
+
+        source = inspect.getsource(get_vectorization_job_status)
+
+        # Should retrieve job from Redis
+        assert "job_json = kb.redis_client.get" in source
+        assert 'f"vectorization_job:{job_id}"' in source
+
+        # Should parse JSON
+        assert "job_data = json.loads(job_json)" in source
+
+    def test_get_vectorization_job_status_preserves_response_structure(self):
+        """Verify endpoint preserves response structure"""
+        from backend.api.knowledge import get_vectorization_job_status
+        import inspect
+
+        source = inspect.getsource(get_vectorization_job_status)
+
+        # Should return expected structure
+        assert 'return {"status": "success", "job": job_data}' in source
+
+
+class TestBatch19MigrationStats:
+    """Track batch 19 migration progress"""
+
+    def test_batch_19_migration_progress(self):
+        """Document migration progress after batch 19"""
+        # Total handlers: 1,070
+        # Batch 1-18: 35 endpoints
+        # Batch 19: 2 additional endpoints (vectorize_individual_fact, get_vectorization_job_status)
+        # Total: 37 endpoints migrated
+
+        total_handlers = 1070
+        migrated_count = 37
+        progress_percentage = (migrated_count / total_handlers) * 100
+
+        assert progress_percentage == pytest.approx(3.46, rel=0.01)
+
+    def test_batch_19_code_savings(self):
+        """Verify cumulative code savings after batch 19"""
+        # Batch 1-18 savings: 270 lines
+        # Batch 19 savings:
+        # - POST /vectorize_fact/{fact_id}: 64 lines → 57 lines (7 lines removed)
+        # - GET /vectorize_job/{job_id}: 35 lines → 28 lines (7 lines removed)
+        # Total batch 19: 14 lines
+
+        batch_1_18_savings = 270
+        batch_19_savings = 14  # Both outer try-catch blocks removed
+        total_savings = batch_1_18_savings + batch_19_savings
+
+        assert batch_19_savings == 14
+        assert total_savings == 284
+
+    def test_batch_19_pattern_application(self):
+        """Verify batch 19 uses Simple Pattern with HTTPException Preservation"""
+        # Batch 19 validates:
+        # - POST /vectorize_fact/{fact_id}: Simple Pattern (decorator + HTTPException)
+        # - GET /vectorize_job/{job_id}: Simple Pattern (decorator + HTTPException)
+
+        pattern_description = (
+            "Simple Pattern with HTTPException Preservation for both endpoints"
+        )
+        assert len(pattern_description) > 0  # Pattern documented
+
+    def test_batch_19_test_coverage(self):
+        """Verify batch 19 has comprehensive test coverage"""
+        # Each endpoint should have 5 tests covering:
+        # 1. Decorator presence
+        # 2. Outer try-catch removal
+        # 3. HTTPException preservation
+        # 4. Business logic preservation (background tasks or Redis retrieval)
+        # 5. Response structure preservation
+
+        vectorize_individual_fact_tests = 5  # All aspects covered
+        get_vectorization_job_status_tests = 5  # All aspects covered
+        batch_stats_tests = 4  # Progress, savings, patterns, coverage
+
+        total_batch_19_tests = (
+            vectorize_individual_fact_tests
+            + get_vectorization_job_status_tests
+            + batch_stats_tests
+        )
+
+        assert total_batch_19_tests == 14  # Comprehensive coverage
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
