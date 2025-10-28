@@ -1576,181 +1576,183 @@ async def get_monitoring_status():
 
 
 @router.get("/monitoring/phase9/dashboard")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_phase9_dashboard_data",
+    error_code_prefix="ANALYTICS",
+)
 async def get_phase9_dashboard_data():
     """Get comprehensive Phase 9 dashboard data"""
-    try:
-        # Get performance metrics
-        performance_data = await analytics_controller.collect_performance_metrics()
+    # Get performance metrics
+    performance_data = await analytics_controller.collect_performance_metrics()
 
-        # Get system health
-        system_health = await hardware_monitor.get_system_health()
+    # Get system health
+    system_health = await hardware_monitor.get_system_health()
 
-        # Calculate overall health score
-        cpu_health = 100 - performance_data.get("system_performance", {}).get(
-            "cpu_percent", 0
-        )
-        memory_health = 100 - performance_data.get("system_performance", {}).get(
-            "memory_percent", 0
-        )
-        gpu_health = 100 - performance_data.get("hardware_performance", {}).get(
-            "gpu_utilization", 0
-        )
+    # Calculate overall health score
+    cpu_health = 100 - performance_data.get("system_performance", {}).get(
+        "cpu_percent", 0
+    )
+    memory_health = 100 - performance_data.get("system_performance", {}).get(
+        "memory_percent", 0
+    )
+    gpu_health = 100 - performance_data.get("hardware_performance", {}).get(
+        "gpu_utilization", 0
+    )
 
-        overall_score = (cpu_health + memory_health + gpu_health) / 3
+    overall_score = (cpu_health + memory_health + gpu_health) / 3
 
-        dashboard_data = {
-            "timestamp": datetime.now().isoformat(),
-            "overall_health": {
-                "score": round(overall_score, 1),
-                "status": (
-                    "excellent"
-                    if overall_score > 80
-                    else (
-                        "good"
-                        if overall_score > 60
-                        else "warning" if overall_score > 40 else "critical"
-                    )
-                ),
-                "text": (
-                    "Excellent"
-                    if overall_score > 80
-                    else (
-                        "Good"
-                        if overall_score > 60
-                        else "Warning" if overall_score > 40 else "Critical"
-                    )
-                ),
-            },
-            "gpu_metrics": performance_data.get("hardware_performance", {}).get(
-                "gpu", {}
+    dashboard_data = {
+        "timestamp": datetime.now().isoformat(),
+        "overall_health": {
+            "score": round(overall_score, 1),
+            "status": (
+                "excellent"
+                if overall_score > 80
+                else (
+                    "good"
+                    if overall_score > 60
+                    else "warning" if overall_score > 40 else "critical"
+                )
             ),
-            "npu_metrics": performance_data.get("hardware_performance", {}).get(
-                "npu", {}
+            "text": (
+                "Excellent"
+                if overall_score > 80
+                else (
+                    "Good"
+                    if overall_score > 60
+                    else "Warning" if overall_score > 40 else "Critical"
+                )
             ),
-            "system_metrics": {
-                "cpu": performance_data.get("system_performance", {}),
-                "memory": performance_data.get("system_performance", {}),
-                "network": performance_data.get("network_io", {}),
-            },
-            "api_performance": performance_data.get("api_performance", {}),
-            "active_connections": len(analytics_state["websocket_connections"]),
-            "recent_api_calls": len(
-                [
-                    call
-                    for call in analytics_state["api_call_patterns"]
-                    if datetime.fromisoformat(call["timestamp"])
-                    > datetime.now() - timedelta(minutes=5)
-                ]
-            ),
-        }
+        },
+        "gpu_metrics": performance_data.get("hardware_performance", {}).get(
+            "gpu", {}
+        ),
+        "npu_metrics": performance_data.get("hardware_performance", {}).get(
+            "npu", {}
+        ),
+        "system_metrics": {
+            "cpu": performance_data.get("system_performance", {}),
+            "memory": performance_data.get("system_performance", {}),
+            "network": performance_data.get("network_io", {}),
+        },
+        "api_performance": performance_data.get("api_performance", {}),
+        "active_connections": len(analytics_state["websocket_connections"]),
+        "recent_api_calls": len(
+            [
+                call
+                for call in analytics_state["api_call_patterns"]
+                if datetime.fromisoformat(call["timestamp"])
+                > datetime.now() - timedelta(minutes=5)
+            ]
+        ),
+    }
 
-        return dashboard_data
-    except Exception as e:
-        logger.error(f"Failed to get Phase 9 dashboard data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return dashboard_data
 
 
 @router.get("/monitoring/phase9/alerts")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_phase9_alerts",
+    error_code_prefix="ANALYTICS",
+)
 async def get_phase9_alerts():
     """Get Phase 9 monitoring alerts"""
-    try:
-        alerts = []
+    alerts = []
 
-        # Get current metrics for alert generation
-        performance_data = await analytics_controller.collect_performance_metrics()
+    # Get current metrics for alert generation
+    performance_data = await analytics_controller.collect_performance_metrics()
 
-        # CPU alerts
-        cpu_percent = performance_data.get("system_performance", {}).get(
-            "cpu_percent", 0
+    # CPU alerts
+    cpu_percent = performance_data.get("system_performance", {}).get(
+        "cpu_percent", 0
+    )
+    if cpu_percent > 90:
+        alerts.append(
+            {
+                "id": f"cpu_high_{int(time.time())}",
+                "type": "cpu",
+                "severity": "critical",
+                "title": "High CPU Usage",
+                "message": f"CPU usage is at {cpu_percent:.1f}%",
+                "timestamp": datetime.now().isoformat(),
+                "value": cpu_percent,
+                "threshold": 90,
+            }
         )
-        if cpu_percent > 90:
-            alerts.append(
-                {
-                    "id": f"cpu_high_{int(time.time())}",
-                    "type": "cpu",
-                    "severity": "critical",
-                    "title": "High CPU Usage",
-                    "message": f"CPU usage is at {cpu_percent:.1f}%",
-                    "timestamp": datetime.now().isoformat(),
-                    "value": cpu_percent,
-                    "threshold": 90,
-                }
-            )
-        elif cpu_percent > 75:
-            alerts.append(
-                {
-                    "id": f"cpu_warn_{int(time.time())}",
-                    "type": "cpu",
-                    "severity": "warning",
-                    "title": "Elevated CPU Usage",
-                    "message": f"CPU usage is at {cpu_percent:.1f}%",
-                    "timestamp": datetime.now().isoformat(),
-                    "value": cpu_percent,
-                    "threshold": 75,
-                }
-            )
-
-        # Memory alerts
-        memory_percent = performance_data.get("system_performance", {}).get(
-            "memory_percent", 0
+    elif cpu_percent > 75:
+        alerts.append(
+            {
+                "id": f"cpu_warn_{int(time.time())}",
+                "type": "cpu",
+                "severity": "warning",
+                "title": "Elevated CPU Usage",
+                "message": f"CPU usage is at {cpu_percent:.1f}%",
+                "timestamp": datetime.now().isoformat(),
+                "value": cpu_percent,
+                "threshold": 75,
+            }
         )
-        if memory_percent > 90:
-            alerts.append(
-                {
-                    "id": f"memory_high_{int(time.time())}",
-                    "type": "memory",
-                    "severity": "critical",
-                    "title": "High Memory Usage",
-                    "message": f"Memory usage is at {memory_percent:.1f}%",
-                    "timestamp": datetime.now().isoformat(),
-                    "value": memory_percent,
-                    "threshold": 90,
-                }
-            )
 
-        # GPU alerts
-        gpu_util = performance_data.get("hardware_performance", {}).get(
-            "gpu_utilization", 0
+    # Memory alerts
+    memory_percent = performance_data.get("system_performance", {}).get(
+        "memory_percent", 0
+    )
+    if memory_percent > 90:
+        alerts.append(
+            {
+                "id": f"memory_high_{int(time.time())}",
+                "type": "memory",
+                "severity": "critical",
+                "title": "High Memory Usage",
+                "message": f"Memory usage is at {memory_percent:.1f}%",
+                "timestamp": datetime.now().isoformat(),
+                "value": memory_percent,
+                "threshold": 90,
+            }
         )
-        if gpu_util > 95:
-            alerts.append(
-                {
-                    "id": f"gpu_high_{int(time.time())}",
-                    "type": "gpu",
-                    "severity": "warning",
-                    "title": "High GPU Utilization",
-                    "message": f"GPU utilization is at {gpu_util:.1f}%",
-                    "timestamp": datetime.now().isoformat(),
-                    "value": gpu_util,
-                    "threshold": 95,
-                }
-            )
 
-        # API performance alerts
-        api_performance = performance_data.get("api_performance", {})
-        slow_endpoints = [
-            endpoint
-            for endpoint, data in api_performance.items()
-            if data.get("avg_response_time", 0) > 5.0
-        ]
+    # GPU alerts
+    gpu_util = performance_data.get("hardware_performance", {}).get(
+        "gpu_utilization", 0
+    )
+    if gpu_util > 95:
+        alerts.append(
+            {
+                "id": f"gpu_high_{int(time.time())}",
+                "type": "gpu",
+                "severity": "warning",
+                "title": "High GPU Utilization",
+                "message": f"GPU utilization is at {gpu_util:.1f}%",
+                "timestamp": datetime.now().isoformat(),
+                "value": gpu_util,
+                "threshold": 95,
+            }
+        )
 
-        if slow_endpoints:
-            alerts.append(
-                {
-                    "id": f"api_slow_{int(time.time())}",
-                    "type": "api_performance",
-                    "severity": "warning",
-                    "title": "Slow API Endpoints",
-                    "message": f"{len(slow_endpoints)} endpoints have high response times",
-                    "timestamp": datetime.now().isoformat(),
-                    "details": slow_endpoints[:3],
-                }
-            )
+    # API performance alerts
+    api_performance = performance_data.get("api_performance", {})
+    slow_endpoints = [
+        endpoint
+        for endpoint, data in api_performance.items()
+        if data.get("avg_response_time", 0) > 5.0
+    ]
 
-        return alerts
-    except Exception as e:
-        logger.error(f"Failed to get Phase 9 alerts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    if slow_endpoints:
+        alerts.append(
+            {
+                "id": f"api_slow_{int(time.time())}",
+                "type": "api_performance",
+                "severity": "warning",
+                "title": "Slow API Endpoints",
+                "message": f"{len(slow_endpoints)} endpoints have high response times",
+                "timestamp": datetime.now().isoformat(),
+                "details": slow_endpoints[:3],
+            }
+        )
+
+    return alerts
 
 
 @router.get("/monitoring/phase9/optimization/recommendations")
