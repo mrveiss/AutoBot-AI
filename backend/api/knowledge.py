@@ -280,6 +280,11 @@ async def get_knowledge_stats_basic(req: Request):
 
 
 @router.get("/categories/main")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_main_categories",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_main_categories(req: Request):
     """
     Get the 3 main knowledge base categories with their metadata and stats.
@@ -300,115 +305,115 @@ async def get_main_categories(req: Request):
             ]
         }
     """
-    try:
-        from backend.knowledge_categories import (
-            CATEGORY_METADATA,
-            KnowledgeCategory,
-            get_category_for_source,
-        )
+    from backend.knowledge_categories import (
+        CATEGORY_METADATA,
+        KnowledgeCategory,
+        get_category_for_source,
+    )
 
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        logger.info(
-            f"get_main_categories - kb_to_use: {kb_to_use is not None}, has_redis: {kb_to_use.aioredis_client is not None if kb_to_use else False}"
-        )
+    logger.info(
+        f"get_main_categories - kb_to_use: {kb_to_use is not None}, has_redis: {kb_to_use.aioredis_client is not None if kb_to_use else False}"
+    )
 
-        # Initialize category counts
-        category_counts = {
-            KnowledgeCategory.AUTOBOT_DOCUMENTATION: 0,
-            KnowledgeCategory.SYSTEM_KNOWLEDGE: 0,
-            KnowledgeCategory.USER_KNOWLEDGE: 0,
-        }
+    # Initialize category counts
+    category_counts = {
+        KnowledgeCategory.AUTOBOT_DOCUMENTATION: 0,
+        KnowledgeCategory.SYSTEM_KNOWLEDGE: 0,
+        KnowledgeCategory.USER_KNOWLEDGE: 0,
+    }
 
-        # PERFORMANCE FIX: Use cached category counts instead of scanning all facts
-        # Scanning 393 facts and parsing JSON metadata takes seconds
-        # Use pre-computed counts stored in Redis for instant lookups (<50ms)
-        if kb_to_use and kb_to_use.aioredis_client:
-            logger.info("Attempting to get cached category counts...")
-            try:
-                # Try to get cached counts first (instant lookup)
-                cache_keys = {
-                    KnowledgeCategory.AUTOBOT_DOCUMENTATION: "kb:stats:category:autobot-documentation",
-                    KnowledgeCategory.SYSTEM_KNOWLEDGE: "kb:stats:category:system-knowledge",
-                    KnowledgeCategory.USER_KNOWLEDGE: "kb:stats:category:user-knowledge",
-                }
+    # PERFORMANCE FIX: Use cached category counts instead of scanning all facts
+    # Scanning 393 facts and parsing JSON metadata takes seconds
+    # Use pre-computed counts stored in Redis for instant lookups (<50ms)
+    if kb_to_use and kb_to_use.aioredis_client:
+        logger.info("Attempting to get cached category counts...")
+        try:
+            # Try to get cached counts first (instant lookup)
+            cache_keys = {
+                KnowledgeCategory.AUTOBOT_DOCUMENTATION: "kb:stats:category:autobot-documentation",
+                KnowledgeCategory.SYSTEM_KNOWLEDGE: "kb:stats:category:system-knowledge",
+                KnowledgeCategory.USER_KNOWLEDGE: "kb:stats:category:user-knowledge",
+            }
 
-                cached_values = await kb_to_use.aioredis_client.mget(
-                    list(cache_keys.values())
-                )
-
-                # Check if all cache values exist
-                if all(v is not None for v in cached_values):
-                    # Use cached values
-                    for i, cat_id in enumerate(cache_keys.keys()):
-                        category_counts[cat_id] = int(cached_values[i])
-                    logger.debug(f"Using cached category counts: {category_counts}")
-                else:
-                    # Cache miss - compute counts the slow way
-                    logger.info("Cache miss - computing category counts from all facts")
-
-                    # Get all facts from knowledge base
-                    all_facts = await kb_to_use.get_all_facts()
-
-                    logger.info(
-                        f"Categorizing {len(all_facts)} facts into main categories"
-                    )
-
-                    # Categorize each fact based on its source/metadata
-                    for fact in all_facts:
-                        # Get source from fact metadata
-                        source = fact.get("metadata", {}).get("source", "") or fact.get(
-                            "source", ""
-                        )
-                        if not source:
-                            # Try to get filename or title as fallback
-                            source = fact.get("metadata", {}).get(
-                                "filename", ""
-                            ) or fact.get("title", "")
-
-                        # Map to main category
-                        main_category = get_category_for_source(source)
-                        if main_category in category_counts:
-                            category_counts[main_category] += 1
-
-                    logger.info(f"Category counts: {category_counts}")
-
-                    # Cache the counts for 60 seconds
-                    for cat_id, cache_key in cache_keys.items():
-                        await kb_to_use.aioredis_client.set(
-                            cache_key, category_counts[cat_id], ex=60
-                        )
-
-            except Exception as e:
-                logger.error(f"Error categorizing facts: {e}")
-                # Fallback: just show 0 if we can't categorize
-                pass
-
-        # Build main categories with counts
-        main_categories = []
-        for cat_id, meta in CATEGORY_METADATA.items():
-            count = category_counts.get(cat_id, 0)
-
-            main_categories.append(
-                {
-                    "id": cat_id,
-                    "name": meta["name"],
-                    "description": meta["description"],
-                    "icon": meta["icon"],
-                    "color": meta["color"],
-                    "examples": meta["examples"],
-                    "count": count,
-                }
+            cached_values = await kb_to_use.aioredis_client.mget(
+                list(cache_keys.values())
             )
 
-        return {"categories": main_categories, "total": len(main_categories)}
+            # Check if all cache values exist
+            if all(v is not None for v in cached_values):
+                # Use cached values
+                for i, cat_id in enumerate(cache_keys.keys()):
+                    category_counts[cat_id] = int(cached_values[i])
+                logger.debug(f"Using cached category counts: {category_counts}")
+            else:
+                # Cache miss - compute counts the slow way
+                logger.info("Cache miss - computing category counts from all facts")
 
-    except Exception as e:
-        logger.error(f"Error getting main categories: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+                # Get all facts from knowledge base
+                all_facts = await kb_to_use.get_all_facts()
+
+                logger.info(
+                    f"Categorizing {len(all_facts)} facts into main categories"
+                )
+
+                # Categorize each fact based on its source/metadata
+                for fact in all_facts:
+                    # Get source from fact metadata
+                    source = fact.get("metadata", {}).get("source", "") or fact.get(
+                        "source", ""
+                    )
+                    if not source:
+                        # Try to get filename or title as fallback
+                        source = fact.get("metadata", {}).get(
+                            "filename", ""
+                        ) or fact.get("title", "")
+
+                    # Map to main category
+                    main_category = get_category_for_source(source)
+                    if main_category in category_counts:
+                        category_counts[main_category] += 1
+
+                logger.info(f"Category counts: {category_counts}")
+
+                # Cache the counts for 60 seconds
+                for cat_id, cache_key in cache_keys.items():
+                    await kb_to_use.aioredis_client.set(
+                        cache_key, category_counts[cat_id], ex=60
+                    )
+
+        except Exception as e:
+            logger.error(f"Error categorizing facts: {e}")
+            # Fallback: just show 0 if we can't categorize
+            pass
+
+    # Build main categories with counts
+    main_categories = []
+    for cat_id, meta in CATEGORY_METADATA.items():
+        count = category_counts.get(cat_id, 0)
+
+        main_categories.append(
+            {
+                "id": cat_id,
+                "name": meta["name"],
+                "description": meta["description"],
+                "icon": meta["icon"],
+                "color": meta["color"],
+                "examples": meta["examples"],
+                "count": count,
+            }
+        )
+
+    return {"categories": main_categories, "total": len(main_categories)}
 
 
 @router.post("/vectorization_status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_vectorization_status_batch",
+    error_code_prefix="KNOWLEDGE",
+)
 async def check_vectorization_status_batch(request: dict, req: Request):
     """
     Check vectorization status for multiple facts in a single efficient batch operation.
@@ -445,91 +450,80 @@ async def check_vectorization_status_batch(request: dict, req: Request):
         - Cache TTL: 60 seconds (configurable)
         - Typical response time: <50ms for 1000 facts
     """
-    try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb_to_use is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Knowledge base not initialized - please check logs for errors",
-            )
+    if kb_to_use is None:
+        raise InternalError(
+            "Knowledge base not initialized - please check logs for errors"
+        )
 
-        # Extract parameters
-        fact_ids = request.get("fact_ids", [])
-        include_dimensions = request.get("include_dimensions", False)
-        use_cache = request.get("use_cache", True)
+    # Extract parameters
+    fact_ids = request.get("fact_ids", [])
+    include_dimensions = request.get("include_dimensions", False)
+    use_cache = request.get("use_cache", True)
 
-        # Validate input
-        if not fact_ids:
-            return {
-                "statuses": {},
-                "summary": {
-                    "total_checked": 0,
-                    "vectorized": 0,
-                    "not_vectorized": 0,
-                    "vectorization_percentage": 0.0,
-                },
-                "cached": False,
-                "check_time_ms": 0.0,
-                "message": "No fact IDs provided",
-            }
+    # Validate input
+    if not fact_ids:
+        return {
+            "statuses": {},
+            "summary": {
+                "total_checked": 0,
+                "vectorized": 0,
+                "not_vectorized": 0,
+                "vectorization_percentage": 0.0,
+            },
+            "cached": False,
+            "check_time_ms": 0.0,
+            "message": "No fact IDs provided",
+        }
 
-        if len(fact_ids) > 1000:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Too many fact IDs ({len(fact_ids)}). Maximum 1000 per request.",
-            )
+    if len(fact_ids) > 1000:
+        raise ValueError(
+            f"Too many fact IDs ({len(fact_ids)}). Maximum 1000 per request."
+        )
 
-        # Generate cache key
-        cache_key = f"cache:vectorization_status:{_generate_cache_key(fact_ids)}"
-        cached_result = None
+    # Generate cache key
+    cache_key = f"cache:vectorization_status:{_generate_cache_key(fact_ids)}"
+    cached_result = None
 
-        # Try cache if enabled
-        if use_cache:
-            try:
-                cached_json = kb_to_use.redis_client.get(cache_key)
-                if cached_json:
-                    cached_result = json.loads(cached_json)
-                    cached_result["cached"] = True
-                    logger.debug(
-                        f"Cache hit for vectorization status ({len(fact_ids)} facts)"
-                    )
-                    return cached_result
-            except Exception as cache_err:
+    # Try cache if enabled
+    if use_cache:
+        try:
+            cached_json = kb_to_use.redis_client.get(cache_key)
+            if cached_json:
+                cached_result = json.loads(cached_json)
+                cached_result["cached"] = True
                 logger.debug(
-                    f"Cache read failed (continuing without cache): {cache_err}"
+                    f"Cache hit for vectorization status ({len(fact_ids)} facts)"
                 )
+                return cached_result
+        except Exception as cache_err:
+            logger.debug(
+                f"Cache read failed (continuing without cache): {cache_err}"
+            )
 
-        # Cache miss - perform batch check
-        logger.info(
-            f"Checking vectorization status for {len(fact_ids)} facts (batch operation)"
-        )
+    # Cache miss - perform batch check
+    logger.info(
+        f"Checking vectorization status for {len(fact_ids)} facts (batch operation)"
+    )
 
-        result = await _check_vectorization_batch_internal(
-            kb_to_use, fact_ids, include_dimensions
-        )
+    result = await _check_vectorization_batch_internal(
+        kb_to_use, fact_ids, include_dimensions
+    )
 
-        result["cached"] = False
+    result["cached"] = False
 
-        # Cache the result (TTL: 60 seconds)
-        if use_cache:
-            try:
-                kb_to_use.redis_client.setex(
-                    cache_key, 60, json.dumps(result)  # 60 second TTL
-                )
-                logger.debug(f"Cached vectorization status for {len(fact_ids)} facts")
-            except Exception as cache_err:
-                logger.warning(f"Failed to cache vectorization status: {cache_err}")
+    # Cache the result (TTL: 60 seconds)
+    if use_cache:
+        try:
+            kb_to_use.redis_client.setex(
+                cache_key, 60, json.dumps(result)  # 60 second TTL
+            )
+            logger.debug(f"Cached vectorization status for {len(fact_ids)} facts")
+        except Exception as cache_err:
+            logger.warning(f"Failed to cache vectorization status: {cache_err}")
 
-        return result
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error checking vectorization status: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Vectorization status check failed: {str(e)}"
-        )
+    return result
 
 
 @router.get("/categories")
