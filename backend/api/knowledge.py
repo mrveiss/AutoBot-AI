@@ -1781,6 +1781,11 @@ Type: System Configuration
 
 
 @router.get("/entries")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_knowledge_entries",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_knowledge_entries(
     req: Request,
     limit: int = Query(default=100, ge=1, le=1000),
@@ -1804,183 +1809,176 @@ async def get_knowledge_entries(
         count: Number of entries returned
         has_more: Whether more entries are available
     """
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+    if kb_to_use is None:
+        return {
+            "entries": [],
+            "next_cursor": "0",
+            "count": 0,
+            "has_more": False,
+            "message": "Knowledge base not initialized",
+        }
+
+    logger.info(
+        f"Getting knowledge entries: limit={limit}, cursor={cursor}, category={category}"
+    )
+
+    # Use Redis SCAN for memory-efficient cursor-based iteration
+    entries = []
+    current_cursor = int(cursor) if cursor else 0
+
     try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
-        if kb_to_use is None:
-            return {
-                "entries": [],
-                "next_cursor": "0",
-                "count": 0,
-                "has_more": False,
-                "message": "Knowledge base not initialized",
-            }
-
-        logger.info(
-            f"Getting knowledge entries: limit={limit}, cursor={cursor}, category={category}"
+        # HSCAN iterates over hash fields without loading all data into memory
+        # match parameter filters keys during scan (server-side filtering)
+        next_cursor, items = kb_to_use.redis_client.hscan(
+            "knowledge_base:facts",
+            cursor=current_cursor,
+            count=limit * 2,  # Scan more to account for filtering
         )
 
-        # Use Redis SCAN for memory-efficient cursor-based iteration
-        entries = []
-        current_cursor = int(cursor) if cursor else 0
+        # Parse and filter facts
+        for fact_id, fact_json in items.items():
+            try:
+                fact = json.loads(fact_json)
 
-        try:
-            # HSCAN iterates over hash fields without loading all data into memory
-            # match parameter filters keys during scan (server-side filtering)
-            next_cursor, items = kb_to_use.redis_client.hscan(
-                "knowledge_base:facts",
-                cursor=current_cursor,
-                count=limit * 2,  # Scan more to account for filtering
-            )
-
-            # Parse and filter facts
-            for fact_id, fact_json in items.items():
-                try:
-                    fact = json.loads(fact_json)
-
-                    # Filter by category if specified
-                    if (
-                        category
-                        and fact.get("metadata", {}).get("category", "") != category
-                    ):
-                        continue
-
-                    # Format entry for frontend
-                    entry = {
-                        "id": (
-                            fact_id.decode() if isinstance(fact_id, bytes) else fact_id
-                        ),
-                        "content": fact.get("content", ""),
-                        "title": fact.get("metadata", {}).get("title", "Untitled"),
-                        "source": fact.get("metadata", {}).get("source", "unknown"),
-                        "category": fact.get("metadata", {}).get("category", "general"),
-                        "type": fact.get("metadata", {}).get("type", "document"),
-                        "created_at": fact.get("metadata", {}).get("created_at"),
-                        "metadata": fact.get("metadata", {}),
-                    }
-                    entries.append(entry)
-
-                    # Stop when we have enough entries
-                    if len(entries) >= limit:
-                        break
-
-                except Exception as parse_err:
-                    logger.warning(f"Error parsing fact {fact_id}: {parse_err}")
+                # Filter by category if specified
+                if (
+                    category
+                    and fact.get("metadata", {}).get("category", "") != category
+                ):
                     continue
 
-            # Sort by creation date (newest first) - only sorts current page
-            entries.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+                # Format entry for frontend
+                entry = {
+                    "id": (
+                        fact_id.decode() if isinstance(fact_id, bytes) else fact_id
+                    ),
+                    "content": fact.get("content", ""),
+                    "title": fact.get("metadata", {}).get("title", "Untitled"),
+                    "source": fact.get("metadata", {}).get("source", "unknown"),
+                    "category": fact.get("metadata", {}).get("category", "general"),
+                    "type": fact.get("metadata", {}).get("type", "document"),
+                    "created_at": fact.get("metadata", {}).get("created_at"),
+                    "metadata": fact.get("metadata", {}),
+                }
+                entries.append(entry)
 
-            # Limit to requested size
-            entries = entries[:limit]
+                # Stop when we have enough entries
+                if len(entries) >= limit:
+                    break
 
-            return {
-                "entries": entries,
-                "next_cursor": str(next_cursor),
-                "count": len(entries),
-                "has_more": next_cursor != 0,
-            }
+            except Exception as parse_err:
+                logger.warning(f"Error parsing fact {fact_id}: {parse_err}")
+                continue
 
-        except Exception as redis_err:
-            logger.error(f"Redis error getting facts: {redis_err}")
-            return {
-                "entries": [],
-                "next_cursor": "0",
-                "count": 0,
-                "has_more": False,
-                "error": "Redis connection error",
-            }
+        # Sort by creation date (newest first) - only sorts current page
+        entries.sort(key=lambda x: x.get("created_at", ""), reverse=True)
 
-    except Exception as e:
-        logger.error(f"Error getting knowledge entries: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to get entries: {str(e)}")
+        # Limit to requested size
+        entries = entries[:limit]
+
+        return {
+            "entries": entries,
+            "next_cursor": str(next_cursor),
+            "count": len(entries),
+            "has_more": next_cursor != 0,
+        }
+
+    except Exception as redis_err:
+        logger.error(f"Redis error getting facts: {redis_err}")
+        return {
+            "entries": [],
+            "next_cursor": "0",
+            "count": 0,
+            "has_more": False,
+            "error": "Redis connection error",
+        }
 
 
 @router.get("/detailed_stats")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_detailed_stats",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_detailed_stats(req: Request):
     """Get detailed knowledge base statistics with additional metrics"""
-    try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb_to_use is None:
-            return {
-                "status": "offline",
-                "message": "Knowledge base not initialized",
-                "basic_stats": {},
-                "category_breakdown": {},
-                "source_breakdown": {},
-                "type_breakdown": {},
-                "size_metrics": {},
-            }
-
-        # Get basic stats
-        basic_stats = await kb_to_use.get_stats()
-
-        # Get all facts for detailed analysis
-        try:
-            all_facts_data = kb_to_use.redis_client.hgetall("knowledge_base:facts")
-        except Exception:
-            all_facts_data = {}
-
-        # Analyze facts for detailed breakdowns
-        category_counts = {}
-        source_counts = {}
-        type_counts = {}
-        total_content_size = 0
-        fact_sizes = []
-
-        for fact_json in all_facts_data.values():
-            try:
-                fact = json.loads(fact_json)
-                metadata = fact.get("metadata", {})
-
-                # Category breakdown
-                category = metadata.get("category", "uncategorized")
-                category_counts[category] = category_counts.get(category, 0) + 1
-
-                # Source breakdown
-                source = metadata.get("source", "unknown")
-                source_counts[source] = source_counts.get(source, 0) + 1
-
-                # Type breakdown
-                fact_type = metadata.get("type", "document")
-                type_counts[fact_type] = type_counts.get(fact_type, 0) + 1
-
-                # Size metrics
-                content = fact.get("content", "")
-                content_size = len(content)
-                total_content_size += content_size
-                fact_sizes.append(content_size)
-            except (KeyError, TypeError, AttributeError) as e:
-                logger.warning(f"Error processing fact for size calculation: {e}")
-                continue
-
-        # Calculate size metrics
-        avg_size = total_content_size / len(fact_sizes) if fact_sizes else 0
-        fact_sizes.sort()
-        median_size = fact_sizes[len(fact_sizes) // 2] if fact_sizes else 0
-
+    if kb_to_use is None:
         return {
-            "status": "online" if basic_stats.get("initialized") else "offline",
-            "basic_stats": basic_stats,
-            "category_breakdown": category_counts,
-            "source_breakdown": source_counts,
-            "type_breakdown": type_counts,
-            "size_metrics": {
-                "total_content_size": total_content_size,
-                "average_fact_size": avg_size,
-                "median_fact_size": median_size,
-                "largest_fact_size": max(fact_sizes) if fact_sizes else 0,
-                "smallest_fact_size": min(fact_sizes) if fact_sizes else 0,
-            },
-            "rag_available": RAG_AVAILABLE,
+            "status": "offline",
+            "message": "Knowledge base not initialized",
+            "basic_stats": {},
+            "category_breakdown": {},
+            "source_breakdown": {},
+            "type_breakdown": {},
+            "size_metrics": {},
         }
 
-    except Exception as e:
-        logger.error(f"Error getting detailed stats: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get detailed stats: {str(e)}"
-        )
+    # Get basic stats
+    basic_stats = await kb_to_use.get_stats()
+
+    # Get all facts for detailed analysis
+    try:
+        all_facts_data = kb_to_use.redis_client.hgetall("knowledge_base:facts")
+    except Exception:
+        all_facts_data = {}
+
+    # Analyze facts for detailed breakdowns
+    category_counts = {}
+    source_counts = {}
+    type_counts = {}
+    total_content_size = 0
+    fact_sizes = []
+
+    for fact_json in all_facts_data.values():
+        try:
+            fact = json.loads(fact_json)
+            metadata = fact.get("metadata", {})
+
+            # Category breakdown
+            category = metadata.get("category", "uncategorized")
+            category_counts[category] = category_counts.get(category, 0) + 1
+
+            # Source breakdown
+            source = metadata.get("source", "unknown")
+            source_counts[source] = source_counts.get(source, 0) + 1
+
+            # Type breakdown
+            fact_type = metadata.get("type", "document")
+            type_counts[fact_type] = type_counts.get(fact_type, 0) + 1
+
+            # Size metrics
+            content = fact.get("content", "")
+            content_size = len(content)
+            total_content_size += content_size
+            fact_sizes.append(content_size)
+        except (KeyError, TypeError, AttributeError) as e:
+            logger.warning(f"Error processing fact for size calculation: {e}")
+            continue
+
+    # Calculate size metrics
+    avg_size = total_content_size / len(fact_sizes) if fact_sizes else 0
+    fact_sizes.sort()
+    median_size = fact_sizes[len(fact_sizes) // 2] if fact_sizes else 0
+
+    return {
+        "status": "online" if basic_stats.get("initialized") else "offline",
+        "basic_stats": basic_stats,
+        "category_breakdown": category_counts,
+        "source_breakdown": source_counts,
+        "type_breakdown": type_counts,
+        "size_metrics": {
+            "total_content_size": total_content_size,
+            "average_fact_size": avg_size,
+            "median_fact_size": median_size,
+            "largest_fact_size": max(fact_sizes) if fact_sizes else 0,
+            "smallest_fact_size": min(fact_sizes) if fact_sizes else 0,
+        },
+        "rag_available": RAG_AVAILABLE,
+    }
 
 
 @router.get("/machine_profile")
