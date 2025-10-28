@@ -1017,129 +1017,129 @@ async def get_code_quality_assessment():
 
 
 @router.get("/code/quality-metrics")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_code_quality_metrics",
+    error_code_prefix="ANALYTICS",
+)
 async def get_code_quality_metrics():
     """Get code quality metrics from cached analysis"""
-    try:
-        cached_analysis = analytics_state.get("code_analysis_cache")
+    cached_analysis = analytics_state.get("code_analysis_cache")
 
-        if not cached_analysis:
-            return {
-                "status": "no_analysis_available",
-                "message": "No cached code analysis found. Run /code/index first.",
-                "suggestion": "POST /api/analytics/code/index with analysis_type='full'",
-            }
-
-        # Extract quality metrics
-        quality_metrics = {
-            "analysis_timestamp": cached_analysis.get("timestamp"),
-            "codebase_metrics": cached_analysis.get("codebase_metrics", {}),
-            "quality_indicators": {},
-            "recommendations": [],
+    if not cached_analysis:
+        return {
+            "status": "no_analysis_available",
+            "message": "No cached code analysis found. Run /code/index first.",
+            "suggestion": "POST /api/analytics/code/index with analysis_type='full'",
         }
 
-        # Process code analysis results if available
-        if "code_analysis" in cached_analysis:
-            code_data = cached_analysis["code_analysis"]
+    # Extract quality metrics
+    quality_metrics = {
+        "analysis_timestamp": cached_analysis.get("timestamp"),
+        "codebase_metrics": cached_analysis.get("codebase_metrics", {}),
+        "quality_indicators": {},
+        "recommendations": [],
+    }
 
-            quality_metrics["quality_indicators"] = {
-                "complexity_score": code_data.get("complexity", 0),
-                "maintainability": code_data.get("maintainability", "unknown"),
-                "test_coverage": code_data.get("test_coverage", 0),
-                "documentation_coverage": code_data.get("doc_coverage", 0),
-            }
+    # Process code analysis results if available
+    if "code_analysis" in cached_analysis:
+        code_data = cached_analysis["code_analysis"]
 
-            # Generate recommendations
-            if code_data.get("complexity", 0) > 7:
-                quality_metrics["recommendations"].append(
-                    {
-                        "type": "complexity",
-                        "message": "High complexity detected. Consider refactoring complex functions.",
-                        "priority": "medium",
-                    }
-                )
+        quality_metrics["quality_indicators"] = {
+            "complexity_score": code_data.get("complexity", 0),
+            "maintainability": code_data.get("maintainability", "unknown"),
+            "test_coverage": code_data.get("test_coverage", 0),
+            "documentation_coverage": code_data.get("doc_coverage", 0),
+        }
 
-            if code_data.get("test_coverage", 0) < 70:
-                quality_metrics["recommendations"].append(
-                    {
-                        "type": "testing",
-                        "message": "Low test coverage. Consider adding more unit tests.",
-                        "priority": "high",
-                    }
-                )
+        # Generate recommendations
+        if code_data.get("complexity", 0) > 7:
+            quality_metrics["recommendations"].append(
+                {
+                    "type": "complexity",
+                    "message": "High complexity detected. Consider refactoring complex functions.",
+                    "priority": "medium",
+                }
+            )
 
-        return quality_metrics
+        if code_data.get("test_coverage", 0) < 70:
+            quality_metrics["recommendations"].append(
+                {
+                    "type": "testing",
+                    "message": "Low test coverage. Consider adding more unit tests.",
+                    "priority": "high",
+                }
+            )
 
-    except Exception as e:
-        logger.error(f"Failed to get code quality metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return quality_metrics
 
 
 @router.get("/code/communication-chains")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_communication_chains",
+    error_code_prefix="ANALYTICS",
+)
 async def get_communication_chains():
     """Get communication chain analysis from code analysis"""
-    try:
-        cached_analysis = analytics_state.get("code_analysis_cache")
+    cached_analysis = analytics_state.get("code_analysis_cache")
 
-        if not cached_analysis or "communication_chains" not in cached_analysis:
-            return {
-                "status": "no_analysis_available",
-                "message": "No communication chain analysis found.",
-                "suggestion": "POST /api/analytics/code/index with analysis_type='communication_chains'",
-            }
-
-        chains = cached_analysis["communication_chains"]
-
-        # Enhance with runtime patterns
-        enhanced_chains = {
-            "static_analysis": chains,
-            "runtime_patterns": dict(analytics_controller.communication_chains),
-            "correlation_analysis": {},
-            "insights": [],
+    if not cached_analysis or "communication_chains" not in cached_analysis:
+        return {
+            "status": "no_analysis_available",
+            "message": "No communication chain analysis found.",
+            "suggestion": "POST /api/analytics/code/index with analysis_type='communication_chains'",
         }
 
-        # Correlate static and runtime patterns
-        static_endpoints = chains.get("api_endpoints", [])
-        runtime_patterns = analytics_controller.api_frequencies
+    chains = cached_analysis["communication_chains"]
 
-        for endpoint in static_endpoints:
-            if endpoint in runtime_patterns:
-                enhanced_chains["correlation_analysis"][endpoint] = {
-                    "static_detected": True,
-                    "runtime_calls": runtime_patterns[endpoint],
-                    "avg_response_time": (
-                        sum(analytics_controller.response_times[endpoint])
-                        / len(analytics_controller.response_times[endpoint])
-                        if analytics_controller.response_times[endpoint]
-                        else 0
-                    ),
-                }
+    # Enhance with runtime patterns
+    enhanced_chains = {
+        "static_analysis": chains,
+        "runtime_patterns": dict(analytics_controller.communication_chains),
+        "correlation_analysis": {},
+        "insights": [],
+    }
 
-        # Generate insights
-        unused_endpoints = [ep for ep in static_endpoints if ep not in runtime_patterns]
-        if unused_endpoints:
-            enhanced_chains["insights"].append(
-                {
-                    "type": "unused_endpoints",
-                    "message": f"Found {len(unused_endpoints)} endpoints that are defined but not used",
-                    "details": unused_endpoints[:5],
-                }
-            )
+    # Correlate static and runtime patterns
+    static_endpoints = chains.get("api_endpoints", [])
+    runtime_patterns = analytics_controller.api_frequencies
 
-        runtime_only = [ep for ep in runtime_patterns if ep not in static_endpoints]
-        if runtime_only:
-            enhanced_chains["insights"].append(
-                {
-                    "type": "undocumented_endpoints",
-                    "message": f"Found {len(runtime_only)} endpoints in use but not in static analysis",
-                    "details": runtime_only[:5],
-                }
-            )
+    for endpoint in static_endpoints:
+        if endpoint in runtime_patterns:
+            enhanced_chains["correlation_analysis"][endpoint] = {
+                "static_detected": True,
+                "runtime_calls": runtime_patterns[endpoint],
+                "avg_response_time": (
+                    sum(analytics_controller.response_times[endpoint])
+                    / len(analytics_controller.response_times[endpoint])
+                    if analytics_controller.response_times[endpoint]
+                    else 0
+                ),
+            }
 
-        return enhanced_chains
+    # Generate insights
+    unused_endpoints = [ep for ep in static_endpoints if ep not in runtime_patterns]
+    if unused_endpoints:
+        enhanced_chains["insights"].append(
+            {
+                "type": "unused_endpoints",
+                "message": f"Found {len(unused_endpoints)} endpoints that are defined but not used",
+                "details": unused_endpoints[:5],
+            }
+        )
 
-    except Exception as e:
-        logger.error(f"Failed to get communication chains: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    runtime_only = [ep for ep in runtime_patterns if ep not in static_endpoints]
+    if runtime_only:
+        enhanced_chains["insights"].append(
+            {
+                "type": "undocumented_endpoints",
+                "message": f"Found {len(runtime_only)} endpoints in use but not in static analysis",
+                "details": runtime_only[:5],
+            }
+        )
+
+    return enhanced_chains
 
 
 # ============================================================================
