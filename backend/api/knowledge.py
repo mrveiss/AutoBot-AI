@@ -1982,128 +1982,124 @@ async def get_detailed_stats(req: Request):
 
 
 @router.get("/machine_profile")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_machine_profile",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_machine_profile(req: Request):
     """Get machine profile with system information and capabilities"""
-    try:
-        import platform
+    import platform
 
-        import psutil
+    import psutil
 
-        # Gather system information
-        machine_info = {
-            "hostname": platform.node(),
-            "system": platform.system(),
-            "release": platform.release(),
-            "version": platform.version(),
-            "machine": platform.machine(),
-            "processor": platform.processor(),
-            "python_version": platform.python_version(),
-            "cpu_count": psutil.cpu_count(logical=False),
-            "cpu_count_logical": psutil.cpu_count(logical=True),
-            "memory_total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
-            "memory_available_gb": round(
-                psutil.virtual_memory().available / (1024**3), 2
-            ),
-            "disk_total_gb": round(psutil.disk_usage("/").total / (1024**3), 2),
-            "disk_free_gb": round(psutil.disk_usage("/").free / (1024**3), 2),
-        }
+    # Gather system information
+    machine_info = {
+        "hostname": platform.node(),
+        "system": platform.system(),
+        "release": platform.release(),
+        "version": platform.version(),
+        "machine": platform.machine(),
+        "processor": platform.processor(),
+        "python_version": platform.python_version(),
+        "cpu_count": psutil.cpu_count(logical=False),
+        "cpu_count_logical": psutil.cpu_count(logical=True),
+        "memory_total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
+        "memory_available_gb": round(
+            psutil.virtual_memory().available / (1024**3), 2
+        ),
+        "disk_total_gb": round(psutil.disk_usage("/").total / (1024**3), 2),
+        "disk_free_gb": round(psutil.disk_usage("/").free / (1024**3), 2),
+    }
 
-        # Get knowledge base stats
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-        kb_stats = await kb_to_use.get_stats() if kb_to_use else {}
+    # Get knowledge base stats
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_stats = await kb_to_use.get_stats() if kb_to_use else {}
 
-        return {
-            "status": "success",
-            "machine_profile": machine_info,
-            "knowledge_base_stats": kb_stats,
-            "capabilities": {
-                "rag_available": RAG_AVAILABLE,
-                "vector_search": kb_stats.get("initialized", False),
-                "man_pages_available": True,  # Always available on Linux
-                "system_knowledge": True,
-            },
-        }
-
-    except Exception as e:
-        logger.error(f"Error getting machine profile: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get machine profile: {str(e)}"
-        )
+    return {
+        "status": "success",
+        "machine_profile": machine_info,
+        "knowledge_base_stats": kb_stats,
+        "capabilities": {
+            "rag_available": RAG_AVAILABLE,
+            "vector_search": kb_stats.get("initialized", False),
+            "man_pages_available": True,  # Always available on Linux
+            "system_knowledge": True,
+        },
+    }
 
 
 @router.get("/man_pages/summary")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_man_pages_summary",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_man_pages_summary(req: Request):
     """Get summary of man pages integration status"""
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+    if kb_to_use is None:
+        return {
+            "status": "error",
+            "message": "Knowledge base not initialized",
+            "man_pages_summary": {
+                "total_man_pages": 0,
+                "indexed_count": 0,
+                "last_indexed": None,
+            },
+        }
+
+    # Get all facts and count man pages
     try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+        all_facts_data = kb_to_use.redis_client.hgetall("knowledge_base:facts")
 
-        if kb_to_use is None:
-            return {
-                "status": "error",
-                "message": "Knowledge base not initialized",
-                "man_pages_summary": {
-                    "total_man_pages": 0,
-                    "indexed_count": 0,
-                    "last_indexed": None,
-                },
-            }
+        man_page_count = 0
+        system_command_count = 0
+        last_indexed = None
 
-        # Get all facts and count man pages
-        try:
-            all_facts_data = kb_to_use.redis_client.hgetall("knowledge_base:facts")
+        for fact_json in all_facts_data.values():
+            try:
+                fact = json.loads(fact_json)
+                metadata = fact.get("metadata", {})
 
-            man_page_count = 0
-            system_command_count = 0
-            last_indexed = None
+                if metadata.get("type") == "manual_page":
+                    man_page_count += 1
+                elif metadata.get("type") == "system_command":
+                    system_command_count += 1
 
-            for fact_json in all_facts_data.values():
-                try:
-                    fact = json.loads(fact_json)
-                    metadata = fact.get("metadata", {})
+                # Track most recent timestamp
+                created_at = metadata.get("created_at")
+                if created_at and (
+                    last_indexed is None or created_at > last_indexed
+                ):
+                    last_indexed = created_at
+            except (KeyError, TypeError, ValueError) as e:
+                logger.warning(f"Error parsing fact metadata: {e}")
+                continue
 
-                    if metadata.get("type") == "manual_page":
-                        man_page_count += 1
-                    elif metadata.get("type") == "system_command":
-                        system_command_count += 1
+        return {
+            "status": "success",
+            "man_pages_summary": {
+                "total_man_pages": man_page_count,
+                "system_commands": system_command_count,
+                "indexed_count": man_page_count + system_command_count,
+                "last_indexed": last_indexed,
+                "integration_active": man_page_count > 0,
+            },
+        }
 
-                    # Track most recent timestamp
-                    created_at = metadata.get("created_at")
-                    if created_at and (
-                        last_indexed is None or created_at > last_indexed
-                    ):
-                        last_indexed = created_at
-                except (KeyError, TypeError, ValueError) as e:
-                    logger.warning(f"Error parsing fact metadata: {e}")
-                    continue
-
-            return {
-                "status": "success",
-                "man_pages_summary": {
-                    "total_man_pages": man_page_count,
-                    "system_commands": system_command_count,
-                    "indexed_count": man_page_count + system_command_count,
-                    "last_indexed": last_indexed,
-                    "integration_active": man_page_count > 0,
-                },
-            }
-
-        except Exception as redis_err:
-            logger.error(f"Redis error getting man pages: {redis_err}")
-            return {
-                "status": "error",
-                "message": "Failed to query knowledge base",
-                "man_pages_summary": {
-                    "total_man_pages": 0,
-                    "indexed_count": 0,
-                    "last_indexed": None,
-                },
-            }
-
-    except Exception as e:
-        logger.error(f"Error getting man pages summary: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get man pages summary: {str(e)}"
-        )
+    except Exception as redis_err:
+        logger.error(f"Redis error getting man pages: {redis_err}")
+        return {
+            "status": "error",
+            "message": "Failed to query knowledge base",
+            "man_pages_summary": {
+                "total_man_pages": 0,
+                "indexed_count": 0,
+                "last_indexed": None,
+            },
+        }
 
 
 @router.post("/machine_knowledge/initialize")
