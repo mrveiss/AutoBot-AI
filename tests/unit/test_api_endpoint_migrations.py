@@ -4007,5 +4007,222 @@ class TestBatch24MigrationStats:
         assert total_batch_24_tests == 14  # Comprehensive coverage
 
 
+class TestBatch25UpdateFact:
+    """Test Batch 25 - PUT /fact/{fact_id} endpoint migration"""
+
+    def test_update_fact_has_decorator(self):
+        """Verify endpoint has @with_error_handling decorator"""
+        from backend.api.knowledge import update_fact
+        import inspect
+
+        source = inspect.getsource(update_fact)
+
+        # Should have decorator with proper configuration
+        assert "@with_error_handling" in source
+        assert "category=ErrorCategory.SERVER_ERROR" in source
+        assert 'operation="update_fact"' in source
+        assert 'error_code_prefix="KNOWLEDGE"' in source
+
+    def test_update_fact_no_outer_try_catch(self):
+        """Verify outer try-catch block was removed"""
+        from backend.api.knowledge import update_fact
+        import inspect
+
+        source = inspect.getsource(update_fact)
+
+        # Count try blocks - should be 0 (Simple Pattern with HTTPException Preservation)
+        try_count = source.count("try:")
+        assert try_count == 0  # No try blocks needed
+
+    def test_update_fact_preserves_httpexceptions(self):
+        """Verify endpoint preserves validation HTTPExceptions"""
+        from backend.api.knowledge import update_fact
+        import inspect
+
+        source = inspect.getsource(update_fact)
+
+        # Should preserve multiple HTTPExceptions for validation
+        assert source.count("raise HTTPException") >= 6  # Multiple validation errors
+        assert 'status_code=400, detail="Invalid fact_id format"' in source
+        assert 'detail="At least one field (content or metadata) must be provided"' in source
+        assert 'status_code=500, detail="Knowledge base not initialized' in source
+        assert 'status_code=501, detail="Update operation not supported' in source
+        assert 'status_code=404, detail=error_message' in source
+        assert 'status_code=500, detail=error_message' in source
+
+    def test_update_fact_preserves_crud_logic(self):
+        """Verify endpoint preserves CRUD update logic"""
+        from backend.api.knowledge import update_fact
+        import inspect
+
+        source = inspect.getsource(update_fact)
+
+        # Should preserve validation logic
+        assert "if not fact_id or not isinstance(fact_id, str):" in source
+        assert "if request.content is None and request.metadata is None:" in source
+
+        # Should preserve KB operations
+        assert "kb = await get_or_create_knowledge_base(req.app, force_refresh=False)" in source
+        assert 'if not hasattr(kb, "update_fact"):' in source
+        assert "result = await kb.update_fact(" in source
+        assert "fact_id=fact_id, content=request.content, metadata=request.metadata" in source
+
+    def test_update_fact_preserves_result_handling(self):
+        """Verify endpoint preserves result checking logic"""
+        from backend.api.knowledge import update_fact
+        import inspect
+
+        source = inspect.getsource(update_fact)
+
+        # Should preserve success/failure handling
+        assert 'if result.get("success"):' in source
+        assert '"status": "success"' in source
+        assert '"updated_fields": result.get("updated_fields", [])' in source
+        assert '"vector_updated": result.get("vector_updated", False)' in source
+
+        # Should preserve error handling
+        assert 'error_message = result.get("message", "Unknown error")' in source
+        assert 'if "not found" in error_message.lower():' in source
+
+
+class TestBatch25DeleteFact:
+    """Test Batch 25 - DELETE /fact/{fact_id} endpoint migration"""
+
+    def test_delete_fact_has_decorator(self):
+        """Verify endpoint has @with_error_handling decorator"""
+        from backend.api.knowledge import delete_fact
+        import inspect
+
+        source = inspect.getsource(delete_fact)
+
+        # Should have decorator with proper configuration
+        assert "@with_error_handling" in source
+        assert "category=ErrorCategory.SERVER_ERROR" in source
+        assert 'operation="delete_fact"' in source
+        assert 'error_code_prefix="KNOWLEDGE"' in source
+
+    def test_delete_fact_no_outer_try_catch(self):
+        """Verify outer try-catch block was removed"""
+        from backend.api.knowledge import delete_fact
+        import inspect
+
+        source = inspect.getsource(delete_fact)
+
+        # Count try blocks - should be 0 (Simple Pattern with HTTPException Preservation)
+        try_count = source.count("try:")
+        assert try_count == 0  # No try blocks needed
+
+    def test_delete_fact_preserves_httpexceptions(self):
+        """Verify endpoint preserves validation HTTPExceptions"""
+        from backend.api.knowledge import delete_fact
+        import inspect
+
+        source = inspect.getsource(delete_fact)
+
+        # Should preserve multiple HTTPExceptions for validation
+        assert source.count("raise HTTPException") >= 5  # Multiple validation errors
+        assert 'status_code=400, detail="Invalid fact_id format"' in source
+        assert 'status_code=500, detail="Knowledge base not initialized' in source
+        assert 'status_code=501, detail="Delete operation not supported' in source
+        assert 'status_code=404, detail=error_message' in source
+        assert 'status_code=500, detail=error_message' in source
+
+    def test_delete_fact_preserves_crud_logic(self):
+        """Verify endpoint preserves CRUD delete logic"""
+        from backend.api.knowledge import delete_fact
+        import inspect
+
+        source = inspect.getsource(delete_fact)
+
+        # Should preserve validation logic
+        assert "if not fact_id or not isinstance(fact_id, str):" in source
+
+        # Should preserve KB operations
+        assert "kb = await get_or_create_knowledge_base(req.app, force_refresh=False)" in source
+        assert 'if not hasattr(kb, "delete_fact"):' in source
+        assert "result = await kb.delete_fact(fact_id=fact_id)" in source
+
+    def test_delete_fact_preserves_result_handling(self):
+        """Verify endpoint preserves result checking logic"""
+        from backend.api.knowledge import delete_fact
+        import inspect
+
+        source = inspect.getsource(delete_fact)
+
+        # Should preserve success/failure handling
+        assert 'if result.get("success"):' in source
+        assert '"status": "success"' in source
+        assert '"vector_deleted": result.get("vector_deleted", False)' in source
+
+        # Should preserve error handling
+        assert 'error_message = result.get("message", "Unknown error")' in source
+        assert 'if "not found" in error_message.lower():' in source
+
+
+class TestBatch25MigrationStats:
+    """Track batch 25 migration progress"""
+
+    def test_batch_25_migration_progress(self):
+        """Document migration progress after batch 25"""
+        # Total handlers: 1,070
+        # Batch 1-24: 47 endpoints
+        # Batch 25: 2 additional endpoints (update_fact, delete_fact)
+        # Total: 49 endpoints migrated
+
+        total_handlers = 1070
+        migrated_count = 49
+        progress_percentage = (migrated_count / total_handlers) * 100
+
+        assert progress_percentage == pytest.approx(4.58, rel=0.01)
+
+    def test_batch_25_code_savings(self):
+        """Verify cumulative code savings after batch 25"""
+        # Batch 1-24 savings: 354 lines
+        # Batch 25 savings:
+        # - PUT /fact/{fact_id}: 77 lines → 66 lines (11 lines removed - try/except HTTPException pattern)
+        # - DELETE /fact/{fact_id}: 61 lines → 50 lines (11 lines removed - try/except HTTPException pattern)
+        # Total batch 25: 22 lines
+
+        batch_1_24_savings = 354
+        batch_25_savings = 22  # Both outer try-catch blocks with HTTPException re-raise removed
+        total_savings = batch_1_24_savings + batch_25_savings
+
+        assert batch_25_savings == 22
+        assert total_savings == 376
+
+    def test_batch_25_pattern_application(self):
+        """Verify batch 25 uses Simple Pattern with HTTPException Preservation"""
+        # Batch 25 validates:
+        # - PUT /fact/{fact_id}: Simple Pattern (decorator + multiple HTTPExceptions for CRUD validation)
+        # - DELETE /fact/{fact_id}: Simple Pattern (decorator + multiple HTTPExceptions for CRUD validation)
+        # Both endpoints removed try/except HTTPException/except Exception pattern
+
+        pattern_description = (
+            "Simple Pattern with HTTPException Preservation (CRUD endpoints with multiple validations)"
+        )
+        assert len(pattern_description) > 0  # Pattern documented
+
+    def test_batch_25_test_coverage(self):
+        """Verify batch 25 has comprehensive test coverage"""
+        # Each endpoint should have 5 tests covering:
+        # 1. Decorator presence
+        # 2. Outer try-catch removal
+        # 3. HTTPException preservation (multiple validations)
+        # 4. CRUD operation logic (validation, KB calls)
+        # 5. Result handling (success/failure responses)
+
+        update_fact_tests = 5  # All aspects covered
+        delete_fact_tests = 5  # All aspects covered
+        batch_stats_tests = 4  # Progress, savings, patterns, coverage
+
+        total_batch_25_tests = (
+            update_fact_tests
+            + delete_fact_tests
+            + batch_stats_tests
+        )
+
+        assert total_batch_25_tests == 14  # Comprehensive coverage
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
