@@ -1756,124 +1756,126 @@ async def get_phase9_alerts():
 
 
 @router.get("/monitoring/phase9/optimization/recommendations")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_phase9_optimization_recommendations",
+    error_code_prefix="ANALYTICS",
+)
 async def get_phase9_optimization_recommendations():
     """Get Phase 9 optimization recommendations"""
-    try:
-        recommendations = []
+    recommendations = []
 
-        # Get current performance data
-        performance_data = await analytics_controller.collect_performance_metrics()
-        communication_patterns = (
-            await analytics_controller.analyze_communication_patterns()
+    # Get current performance data
+    performance_data = await analytics_controller.collect_performance_metrics()
+    communication_patterns = (
+        await analytics_controller.analyze_communication_patterns()
+    )
+
+    # CPU optimization recommendations
+    cpu_percent = performance_data.get("system_performance", {}).get(
+        "cpu_percent", 0
+    )
+    if cpu_percent > 80:
+        recommendations.append(
+            {
+                "type": "cpu_optimization",
+                "priority": "high",
+                "title": "Optimize CPU Usage",
+                "description": "CPU usage is consistently high. Consider optimizing background processes.",
+                "impact": "High",
+                "estimated_improvement": "15-25% performance boost",
+                "actions": [
+                    "Review running processes and terminate unnecessary ones",
+                    "Optimize async operations to reduce CPU blocking",
+                    "Consider scaling horizontally with additional VMs",
+                ],
+            }
         )
 
-        # CPU optimization recommendations
-        cpu_percent = performance_data.get("system_performance", {}).get(
-            "cpu_percent", 0
+    # Memory optimization recommendations
+    memory_percent = performance_data.get("system_performance", {}).get(
+        "memory_percent", 0
+    )
+    if memory_percent > 80:
+        recommendations.append(
+            {
+                "type": "memory_optimization",
+                "priority": "medium",
+                "title": "Optimize Memory Usage",
+                "description": "Memory usage is high. Consider memory optimization strategies.",
+                "impact": "Medium",
+                "estimated_improvement": "10-20% memory reduction",
+                "actions": [
+                    "Clear Redis caches for unused data",
+                    "Optimize knowledge base vector storage",
+                    "Implement memory pooling for frequent operations",
+                ],
+            }
         )
-        if cpu_percent > 80:
+
+    # API optimization recommendations
+    if communication_patterns.get("avg_response_time", 0) > 2.0:
+        recommendations.append(
+            {
+                "type": "api_optimization",
+                "priority": "high",
+                "title": "Optimize API Response Times",
+                "description": f"Average API response time is {communication_patterns.get('avg_response_time', 0):.2f}s",
+                "impact": "High",
+                "estimated_improvement": "50-70% faster responses",
+                "actions": [
+                    "Implement response caching for frequently requested data",
+                    "Optimize database queries and indexing",
+                    "Add connection pooling for external services",
+                ],
+            }
+        )
+
+    # Code analysis recommendations
+    cached_analysis = analytics_state.get("code_analysis_cache")
+    if cached_analysis and "code_analysis" in cached_analysis:
+        complexity = cached_analysis["code_analysis"].get("complexity", 0)
+        if complexity > 7:
             recommendations.append(
                 {
-                    "type": "cpu_optimization",
-                    "priority": "high",
-                    "title": "Optimize CPU Usage",
-                    "description": "CPU usage is consistently high. Consider optimizing background processes.",
-                    "impact": "High",
-                    "estimated_improvement": "15-25% performance boost",
-                    "actions": [
-                        "Review running processes and terminate unnecessary ones",
-                        "Optimize async operations to reduce CPU blocking",
-                        "Consider scaling horizontally with additional VMs",
-                    ],
-                }
-            )
-
-        # Memory optimization recommendations
-        memory_percent = performance_data.get("system_performance", {}).get(
-            "memory_percent", 0
-        )
-        if memory_percent > 80:
-            recommendations.append(
-                {
-                    "type": "memory_optimization",
+                    "type": "code_quality",
                     "priority": "medium",
-                    "title": "Optimize Memory Usage",
-                    "description": "Memory usage is high. Consider memory optimization strategies.",
+                    "title": "Reduce Code Complexity",
+                    "description": f"Code complexity score is {complexity}/10",
                     "impact": "Medium",
-                    "estimated_improvement": "10-20% memory reduction",
+                    "estimated_improvement": "Better maintainability and performance",
                     "actions": [
-                        "Clear Redis caches for unused data",
-                        "Optimize knowledge base vector storage",
-                        "Implement memory pooling for frequent operations",
+                        "Refactor complex functions into smaller components",
+                        "Extract common patterns into utility functions",
+                        "Implement proper error handling patterns",
                     ],
                 }
             )
 
-        # API optimization recommendations
-        if communication_patterns.get("avg_response_time", 0) > 2.0:
-            recommendations.append(
-                {
-                    "type": "api_optimization",
-                    "priority": "high",
-                    "title": "Optimize API Response Times",
-                    "description": f"Average API response time is {communication_patterns.get('avg_response_time', 0):.2f}s",
-                    "impact": "High",
-                    "estimated_improvement": "50-70% faster responses",
-                    "actions": [
-                        "Implement response caching for frequently requested data",
-                        "Optimize database queries and indexing",
-                        "Add connection pooling for external services",
-                    ],
-                }
-            )
-
-        # Code analysis recommendations
-        cached_analysis = analytics_state.get("code_analysis_cache")
-        if cached_analysis and "code_analysis" in cached_analysis:
-            complexity = cached_analysis["code_analysis"].get("complexity", 0)
-            if complexity > 7:
-                recommendations.append(
-                    {
-                        "type": "code_quality",
-                        "priority": "medium",
-                        "title": "Reduce Code Complexity",
-                        "description": f"Code complexity score is {complexity}/10",
-                        "impact": "Medium",
-                        "estimated_improvement": "Better maintainability and performance",
-                        "actions": [
-                            "Refactor complex functions into smaller components",
-                            "Extract common patterns into utility functions",
-                            "Implement proper error handling patterns",
-                        ],
-                    }
-                )
-
-        return recommendations
-    except Exception as e:
-        logger.error(f"Failed to get Phase 9 optimization recommendations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return recommendations
 
 
 @router.post("/monitoring/phase9/start")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_monitoring",
+    error_code_prefix="ANALYTICS",
+)
 async def start_monitoring():
     """Start Phase 9 monitoring"""
-    try:
-        # Start metrics collection
-        collector = analytics_controller.metrics_collector
-        if hasattr(collector, "_is_collecting") and not collector._is_collecting:
-            asyncio.create_task(collector.start_collection())
+    # Start metrics collection
+    collector = analytics_controller.metrics_collector
+    if hasattr(collector, "_is_collecting") and not collector._is_collecting:
+        asyncio.create_task(collector.start_collection())
 
-        # Initialize session tracking
-        analytics_state["session_start"] = datetime.now().isoformat()
+    # Initialize session tracking
+    analytics_state["session_start"] = datetime.now().isoformat()
 
-        return {
-            "status": "started",
-            "message": "Phase 9 monitoring started successfully",
-            "timestamp": datetime.now().isoformat(),
-        }
-    except Exception as e:
-        logger.error(f"Failed to start Phase 9 monitoring: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "started",
+        "message": "Phase 9 monitoring started successfully",
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.post("/monitoring/phase9/stop")
