@@ -593,6 +593,11 @@ async def view_file(request: Request, path: str):
 
 
 @router.post("/rename")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rename_file_or_directory",
+    error_code_prefix="FILES",
+)
 async def rename_file_or_directory(
     request: Request, path: str = Form(...), new_name: str = Form(...)
 ):
@@ -615,62 +620,58 @@ async def rename_file_or_directory(
     # Store user data in request state for audit logging
     request.state.user = user_data
 
-    try:
-        # Validate new name
-        if not new_name or "/" in new_name or "\\" in new_name or ".." in new_name:
-            raise HTTPException(status_code=400, detail="Invalid file/directory name")
+    # Validate new name
+    if not new_name or "/" in new_name or "\\" in new_name or ".." in new_name:
+        raise HTTPException(status_code=400, detail="Invalid file/directory name")
 
-        source_path = validate_and_resolve_path(path)
+    source_path = validate_and_resolve_path(path)
 
-        if not source_path.exists():
-            raise HTTPException(status_code=404, detail="File or directory not found")
+    if not source_path.exists():
+        raise HTTPException(status_code=404, detail="File or directory not found")
 
-        # Create new path with same parent directory
-        target_path = source_path.parent / new_name
+    # Create new path with same parent directory
+    target_path = source_path.parent / new_name
 
-        if target_path.exists():
-            raise HTTPException(
-                status_code=409, detail=f"A file or directory named '{new_name}' already exists"
-            )
-
-        # Perform rename
-        source_path.rename(target_path)
-
-        # Get info for the renamed item
-        relative_path = str(target_path.relative_to(SANDBOXED_ROOT))
-        item_info = get_file_info(target_path, relative_path)
-
-        # Enhanced audit logging
-        security_layer = get_security_layer(request)
-        security_layer.audit_log(
-            "file_rename",
-            user_data.get("username", "unknown"),
-            "success",
-            {
-                "old_path": path,
-                "new_name": new_name,
-                "new_path": relative_path,
-                "type": "directory" if target_path.is_dir() else "file",
-                "user_role": user_data.get("role", "unknown"),
-                "ip": request.client.host if request.client else "unknown",
-            },
-        )
-
-        return {
-            "message": f"Successfully renamed to '{new_name}'",
-            "item_info": item_info,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error renaming file/directory: {e}")
+    if target_path.exists():
         raise HTTPException(
-            status_code=500, detail=f"Error renaming: {str(e)}"
+            status_code=409, detail=f"A file or directory named '{new_name}' already exists"
         )
+
+    # Perform rename
+    source_path.rename(target_path)
+
+    # Get info for the renamed item
+    relative_path = str(target_path.relative_to(SANDBOXED_ROOT))
+    item_info = get_file_info(target_path, relative_path)
+
+    # Enhanced audit logging
+    security_layer = get_security_layer(request)
+    security_layer.audit_log(
+        "file_rename",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "old_path": path,
+            "new_name": new_name,
+            "new_path": relative_path,
+            "type": "directory" if target_path.is_dir() else "file",
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+        },
+    )
+
+    return {
+        "message": f"Successfully renamed to '{new_name}'",
+        "item_info": item_info,
+    }
 
 
 @router.get("/preview")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="preview_file",
+    error_code_prefix="FILES",
+)
 async def preview_file(request: Request, path: str):
     """
     Get file preview with content and download URL.
@@ -689,53 +690,46 @@ async def preview_file(request: Request, path: str):
 
     request.state.user = user_data
 
-    try:
-        target_file = validate_and_resolve_path(path)
+    target_file = validate_and_resolve_path(path)
 
-        if not target_file.exists():
-            raise HTTPException(status_code=404, detail="File not found")
+    if not target_file.exists():
+        raise HTTPException(status_code=404, detail="File not found")
 
-        if not target_file.is_file():
-            raise HTTPException(status_code=400, detail="Path is not a file")
+    if not target_file.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
 
-        # Get file info
-        relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
-        file_info = get_file_info(target_file, relative_path)
+    # Get file info
+    relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
+    file_info = get_file_info(target_file, relative_path)
 
-        # Determine file type
-        file_type = "binary"
-        content = None
+    # Determine file type
+    file_type = "binary"
+    content = None
 
-        if file_info.mime_type:
-            if file_info.mime_type.startswith("text/"):
-                file_type = "text"
-                try:
-                    async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
-                        content = await f.read()
-                except UnicodeDecodeError:
-                    file_type = "binary"
-            elif file_info.mime_type.startswith("image/"):
-                file_type = "image"
-            elif file_info.mime_type == "application/pdf":
-                file_type = "pdf"
+    if file_info.mime_type:
+        if file_info.mime_type.startswith("text/"):
+            file_type = "text"
+            try:
+                async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
+                    content = await f.read()
+            except UnicodeDecodeError:
+                file_type = "binary"
+        elif file_info.mime_type.startswith("image/"):
+            file_type = "image"
+        elif file_info.mime_type == "application/pdf":
+            file_type = "pdf"
 
-        # Generate download URL
-        download_url = f"/api/files/download/{path}"
+    # Generate download URL
+    download_url = f"/api/files/download/{path}"
 
-        return {
-            "type": file_type,
-            "url": download_url,
-            "content": content,
-            "mime_type": file_info.mime_type,
-            "size": file_info.size,
-            "name": file_info.name
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error previewing file: {e}")
-        raise HTTPException(status_code=500, detail=f"Error previewing file: {str(e)}")
+    return {
+        "type": file_type,
+        "url": download_url,
+        "content": content,
+        "mime_type": file_info.mime_type,
+        "size": file_info.size,
+        "name": file_info.name
+    }
 
 
 @router.delete("/delete")
