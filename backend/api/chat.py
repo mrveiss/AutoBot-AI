@@ -653,6 +653,11 @@ async def list_chats(request: Request):
 
 @router.post("/chat")
 @router.post("/chat/message")  # Alternative endpoint
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_message",
+    error_code_prefix="CHAT",
+)
 async def send_message(
     message: ChatMessage,
     request: Request,
@@ -661,55 +666,44 @@ async def send_message(
 ):
     """Send a chat message and get AI response"""
     request_id = generate_request_id()
+    log_request_context(request, "send_message", request_id)
 
-    try:
-        log_request_context(request, "send_message", request_id)
+    # Validate message content
+    if not message.content or not message.content.strip():
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Message content cannot be empty")
 
-        # Validate message content
-        if not message.content or not message.content.strip():
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise ValidationError("Message content cannot be empty")
+    # Get dependencies from request state
+    chat_history_manager = get_chat_history_manager(request)
+    llm_service = get_llm_service(request)
+    memory_interface = get_memory_interface(request)
 
-        # Get dependencies from request state
-        chat_history_manager = get_chat_history_manager(request)
-        llm_service = get_llm_service(request)
-        memory_interface = get_memory_interface(request)
+    # Process the chat message
+    response_data = await process_chat_message(
+        message,
+        chat_history_manager,
+        llm_service,
+        memory_interface,
+        knowledge_base,
+        config,
+        request_id,
+    )
 
-        # Process the chat message
-        response_data = await process_chat_message(
-            message,
-            chat_history_manager,
-            llm_service,
-            memory_interface,
-            knowledge_base,
-            config,
-            request_id,
-        )
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "data": response_data,
-                "message": "Message processed successfully",
-                "request_id": request_id,
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"[{request_id}] send_message error: {e}")
-        return create_error_response(
-            error_code="INTERNAL_ERROR",
-            message=str(e),
-            request_id=request_id,
-            status_code=500,
-        )
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": response_data,
+            "message": "Message processed successfully",
+            "request_id": request_id,
+        },
+    )
 
 
 @router.post("/chat/stream")
@@ -1304,33 +1298,27 @@ async def chat_health_check(request: Request):
 
 
 @router.get("/chat/stats")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="chat_statistics",
+    error_code_prefix="CHAT",
+)
 async def chat_statistics(request: Request):
     """Get chat service statistics"""
     request_id = generate_request_id()
+    log_request_context(request, "chat_statistics", request_id)
 
-    try:
-        log_request_context(request, "chat_statistics", request_id)
+    # Get dependencies from request state
+    chat_history_manager = get_chat_history_manager(request)
 
-        # Get dependencies from request state
-        chat_history_manager = get_chat_history_manager(request)
+    # Get basic statistics
+    stats = await chat_history_manager.get_statistics()
 
-        # Get basic statistics
-        stats = await chat_history_manager.get_statistics()
-
-        return create_success_response(
-            data=stats,
-            message="Statistics retrieved successfully",
-            request_id=request_id,
-        )
-
-    except Exception as e:
-        logger.error(f"[{request_id}] chat_statistics error: {e}")
-        return create_error_response(
-            error_code="INTERNAL_ERROR",
-            message=str(e),
-            request_id=request_id,
-            status_code=500,
-        )
+    return create_success_response(
+        data=stats,
+        message="Statistics retrieved successfully",
+        request_id=request_id,
+    )
 
 
 # MISSING ENDPOINTS FOR FRONTEND COMPATIBILITY
