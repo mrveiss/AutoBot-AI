@@ -1148,104 +1148,104 @@ async def get_communication_chains():
 
 
 @router.get("/realtime/metrics")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_realtime_metrics",
+    error_code_prefix="ANALYTICS",
+)
 async def get_realtime_metrics():
     """Get current real-time metrics snapshot"""
-    try:
-        # Get current system metrics
-        current_metrics = (
-            await analytics_controller.metrics_collector.collect_all_metrics()
-        )
-        system_resources = hardware_monitor.get_system_resources()
+    # Get current system metrics
+    current_metrics = (
+        await analytics_controller.metrics_collector.collect_all_metrics()
+    )
+    system_resources = hardware_monitor.get_system_resources()
 
-        realtime_data = {
-            "timestamp": datetime.now().isoformat(),
-            "system_metrics": {
-                name: {
-                    "value": metric.value,
-                    "unit": metric.unit,
-                    "category": metric.category,
-                    "metadata": metric.metadata,
-                }
-                for name, metric in current_metrics.items()
-            },
-            "system_resources": system_resources,
-            "active_connections": len(analytics_state["websocket_connections"]),
-            "recent_api_calls": len(
-                [
-                    call
-                    for call in analytics_state["api_call_patterns"]
-                    if datetime.fromisoformat(call["timestamp"])
-                    > datetime.now() - timedelta(minutes=1)
-                ]
+    realtime_data = {
+        "timestamp": datetime.now().isoformat(),
+        "system_metrics": {
+            name: {
+                "value": metric.value,
+                "unit": metric.unit,
+                "category": metric.category,
+                "metadata": metric.metadata,
+            }
+            for name, metric in current_metrics.items()
+        },
+        "system_resources": system_resources,
+        "active_connections": len(analytics_state["websocket_connections"]),
+        "recent_api_calls": len(
+            [
+                call
+                for call in analytics_state["api_call_patterns"]
+                if datetime.fromisoformat(call["timestamp"])
+                > datetime.now() - timedelta(minutes=1)
+            ]
+        ),
+        "performance_snapshot": {
+            "cpu_percent": system_resources.get("cpu", {}).get(
+                "percent_overall", 0
             ),
-            "performance_snapshot": {
-                "cpu_percent": system_resources.get("cpu", {}).get(
-                    "percent_overall", 0
-                ),
-                "memory_percent": system_resources.get("memory", {}).get("percent", 0),
-                "disk_percent": system_resources.get("disk", {}).get("percent", 0),
-            },
-        }
+            "memory_percent": system_resources.get("memory", {}).get("percent", 0),
+            "disk_percent": system_resources.get("disk", {}).get("percent", 0),
+        },
+    }
 
-        return realtime_data
-
-    except Exception as e:
-        logger.error(f"Failed to get realtime metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return realtime_data
 
 
 @router.post("/events/track")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="track_analytics_event",
+    error_code_prefix="ANALYTICS",
+)
 async def track_analytics_event(event: RealTimeEvent):
     """Track a real-time analytics event"""
-    try:
-        # Store event in analytics state
-        event_data = event.dict()
-        event_data["processed_at"] = datetime.now().isoformat()
+    # Store event in analytics state
+    event_data = event.dict()
+    event_data["processed_at"] = datetime.now().isoformat()
 
-        # Store in Redis for persistence
-        redis_conn = await analytics_controller.get_redis_connection(
-            RedisDatabase.METRICS
+    # Store in Redis for persistence
+    redis_conn = await analytics_controller.get_redis_connection(
+        RedisDatabase.METRICS
+    )
+    if redis_conn:
+        await redis_conn.lpush("analytics:events", json.dumps(event_data))
+        await redis_conn.ltrim("analytics:events", 0, 9999)  # Keep last 10k events
+
+    # Update tracking based on event type
+    if event.event_type == "api_call":
+        endpoint = event.data.get("endpoint", "unknown")
+        response_time = event.data.get("response_time", 0)
+        status_code = event.data.get("status_code", 200)
+        await analytics_controller.track_api_call(
+            endpoint, response_time, status_code
         )
-        if redis_conn:
-            await redis_conn.lpush("analytics:events", json.dumps(event_data))
-            await redis_conn.ltrim("analytics:events", 0, 9999)  # Keep last 10k events
 
-        # Update tracking based on event type
-        if event.event_type == "api_call":
-            endpoint = event.data.get("endpoint", "unknown")
-            response_time = event.data.get("response_time", 0)
-            status_code = event.data.get("status_code", 200)
-            await analytics_controller.track_api_call(
-                endpoint, response_time, status_code
-            )
+    elif event.event_type == "websocket_activity":
+        activity_type = event.data.get("activity_type", "unknown")
+        analytics_controller.websocket_activity[activity_type] += 1
 
-        elif event.event_type == "websocket_activity":
-            activity_type = event.data.get("activity_type", "unknown")
-            analytics_controller.websocket_activity[activity_type] += 1
+    # Broadcast to connected WebSocket clients
+    if analytics_state["websocket_connections"]:
+        broadcast_data = {"type": "analytics_event", "event": event_data}
+        disconnected = set()
 
-        # Broadcast to connected WebSocket clients
-        if analytics_state["websocket_connections"]:
-            broadcast_data = {"type": "analytics_event", "event": event_data}
-            disconnected = set()
+        for websocket in analytics_state["websocket_connections"]:
+            try:
+                await websocket.send_json(broadcast_data)
+            except Exception:
+                disconnected.add(websocket)
 
-            for websocket in analytics_state["websocket_connections"]:
-                try:
-                    await websocket.send_json(broadcast_data)
-                except Exception:
-                    disconnected.add(websocket)
+        # Clean up disconnected WebSockets
+        analytics_state["websocket_connections"] -= disconnected
 
-            # Clean up disconnected WebSockets
-            analytics_state["websocket_connections"] -= disconnected
-
-        return {
-            "status": "tracked",
-            "event_id": f"{event.event_type}_{event.timestamp}",
-            "broadcast_count": len(analytics_state["websocket_connections"]),
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to track analytics event: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "tracked",
+        "event_id": f"{event.event_type}_{event.timestamp}",
+        "broadcast_count": len(analytics_state["websocket_connections"]),
+    }
 
 
 @router.get("/trends/historical")
