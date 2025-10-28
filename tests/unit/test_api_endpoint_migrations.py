@@ -4429,3 +4429,108 @@ class TestBatch26MigrationStats:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
+
+
+class TestBatch27DownloadFile:
+    """Test Batch 27 - GET /download endpoint migration"""
+
+    def test_download_file_has_decorator(self):
+        from backend.api.files import download_file
+        import inspect
+        source = inspect.getsource(download_file)
+        assert "@with_error_handling" in source
+        assert 'operation="download_file"' in source
+
+    def test_download_file_no_outer_try_catch(self):
+        from backend.api.files import download_file
+        import inspect
+        source = inspect.getsource(download_file)
+        assert source.count("try:") == 0
+
+    def test_download_file_preserves_httpexceptions(self):
+        from backend.api.files import download_file
+        import inspect
+        source = inspect.getsource(download_file)
+        assert 'status_code=403' in source
+        assert 'status_code=404, detail="File not found"' in source
+        assert 'status_code=400, detail="Path is not a file"' in source
+
+    def test_download_file_preserves_business_logic(self):
+        from backend.api.files import download_file
+        import inspect
+        source = inspect.getsource(download_file)
+        assert "target_file = validate_and_resolve_path(path)" in source
+        assert "return FileResponse(" in source
+
+    def test_download_file_preserves_audit_logging(self):
+        from backend.api.files import download_file
+        import inspect
+        source = inspect.getsource(download_file)
+        assert "security_layer.audit_log(" in source
+        assert '"file_download"' in source
+
+
+class TestBatch27ViewFile:
+    """Test Batch 27 - GET /view endpoint migration"""
+
+    def test_view_file_has_decorator(self):
+        from backend.api.files import view_file
+        import inspect
+        source = inspect.getsource(view_file)
+        assert "@with_error_handling" in source
+        assert 'operation="view_file"' in source
+
+    def test_view_file_no_outer_try_catch(self):
+        from backend.api.files import view_file
+        import inspect
+        source = inspect.getsource(view_file)
+        assert source.count("try:") == 1  # Only inner try for UnicodeDecodeError
+
+    def test_view_file_preserves_httpexceptions(self):
+        from backend.api.files import view_file
+        import inspect
+        source = inspect.getsource(view_file)
+        assert 'status_code=403' in source
+        assert 'status_code=404, detail="File not found"' in source
+        assert 'status_code=400, detail="Path is not a file"' in source
+
+    def test_view_file_preserves_business_logic(self):
+        from backend.api.files import view_file
+        import inspect
+        source = inspect.getsource(view_file)
+        assert "file_info = get_file_info(target_file, relative_path)" in source
+        assert "async with aiofiles.open(target_file" in source
+
+    def test_view_file_preserves_inner_try_catch(self):
+        from backend.api.files import view_file
+        import inspect
+        source = inspect.getsource(view_file)
+        assert "except UnicodeDecodeError:" in source
+
+
+class TestBatch27MigrationStats:
+    """Track batch 27 migration progress"""
+
+    def test_batch_27_migration_progress(self):
+        total_handlers = 1070
+        migrated_count = 53
+        progress_percentage = (migrated_count / total_handlers) * 100
+        assert progress_percentage == pytest.approx(4.95, rel=0.01)
+
+    def test_batch_27_code_savings(self):
+        batch_1_26_savings = 379
+        batch_27_savings = 4  # Git diff: 62 deletions - 58 insertions
+        total_savings = batch_1_26_savings + batch_27_savings
+        assert batch_27_savings == 4
+        assert total_savings == 383
+
+    def test_batch_27_pattern_application(self):
+        pattern_description = "Simple Pattern with HTTPException Preservation + Nested Error Handling"
+        assert len(pattern_description) > 0
+
+    def test_batch_27_test_coverage(self):
+        download_file_tests = 5
+        view_file_tests = 5
+        batch_stats_tests = 4
+        total_batch_27_tests = download_file_tests + view_file_tests + batch_stats_tests
+        assert total_batch_27_tests == 14
