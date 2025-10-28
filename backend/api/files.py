@@ -22,6 +22,7 @@ from backend.utils.paths_manager import ensure_data_directory, get_data_path
 from src.auth_middleware import auth_middleware
 from src.constants.network_constants import NetworkConstants
 from src.security_layer import SecurityLayer
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -252,6 +253,11 @@ def is_safe_file(filename: str) -> bool:
 
 
 @router.get("/list", response_model=DirectoryListing)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_files",
+    error_code_prefix="FILES",
+)
 async def list_files(request: Request, path: str = ""):
     """
     List files in the specified directory within the sandbox.
@@ -269,58 +275,51 @@ async def list_files(request: Request, path: str = ""):
     # Store user data in request state for audit logging
     request.state.user = user_data
 
-    try:
-        target_path = validate_and_resolve_path(path)
+    target_path = validate_and_resolve_path(path)
 
-        if not target_path.exists():
-            raise HTTPException(status_code=404, detail="Directory not found")
+    if not target_path.exists():
+        raise HTTPException(status_code=404, detail="Directory not found")
 
-        if not target_path.is_dir():
-            raise HTTPException(status_code=400, detail="Path is not a directory")
+    if not target_path.is_dir():
+        raise HTTPException(status_code=400, detail="Path is not a directory")
 
-        files = []
-        total_size = 0
-        total_files = 0
-        total_directories = 0
+    files = []
+    total_size = 0
+    total_files = 0
+    total_directories = 0
 
-        for item in sorted(
-            target_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())
-        ):
-            try:
-                relative_item_path = str(item.relative_to(SANDBOXED_ROOT))
-                file_info = get_file_info(item, relative_item_path)
-                files.append(file_info)
+    for item in sorted(
+        target_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())
+    ):
+        try:
+            relative_item_path = str(item.relative_to(SANDBOXED_ROOT))
+            file_info = get_file_info(item, relative_item_path)
+            files.append(file_info)
 
-                if item.is_file():
-                    total_files += 1
-                    total_size += file_info.size or 0
-                else:
-                    total_directories += 1
+            if item.is_file():
+                total_files += 1
+                total_size += file_info.size or 0
+            else:
+                total_directories += 1
 
-            except (OSError, PermissionError) as e:
-                logger.warning(f"Skipping inaccessible file {item}: {e}")
-                continue
+        except (OSError, PermissionError) as e:
+            logger.warning(f"Skipping inaccessible file {item}: {e}")
+            continue
 
-        # Calculate parent path
-        parent_path = None
-        if path:
-            parent = Path(path).parent
-            parent_path = str(parent) if str(parent) != "." else ""
+    # Calculate parent path
+    parent_path = None
+    if path:
+        parent = Path(path).parent
+        parent_path = str(parent) if str(parent) != "." else ""
 
-        return DirectoryListing(
-            current_path=path,
-            parent_path=parent_path,
-            files=files,
-            total_files=total_files,
-            total_directories=total_directories,
-            total_size=total_size,
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error listing files: {e}")
-        raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
+    return DirectoryListing(
+        current_path=path,
+        parent_path=parent_path,
+        files=files,
+        total_files=total_files,
+        total_directories=total_directories,
+        total_size=total_size,
+    )
 
 
 def validate_file_content(content: bytes, filename: str) -> bool:
@@ -372,6 +371,11 @@ def validate_file_content(content: bytes, filename: str) -> bool:
 
 
 @router.post("/upload", response_model=FileUploadResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="upload_file",
+    error_code_prefix="FILES",
+)
 async def upload_file(
     request: Request,
     file: UploadFile = File(...),
@@ -398,93 +402,86 @@ async def upload_file(
     # Store user data in request state for audit logging
     request.state.user = user_data
 
-    try:
-        # Validate file
-        if not file.filename:
-            raise HTTPException(status_code=400, detail="No filename provided")
+    # Validate file
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
 
-        if not is_safe_file(file.filename):
-            raise HTTPException(
-                status_code=400, detail=f"File type not allowed: {file.filename}"
-            )
-
-        # Read and validate file content
-        content = await file.read()
-
-        # Check file size
-        if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=413,
-                detail=(
-                    "File too large. Maximum size: " f"{MAX_FILE_SIZE // (1024*1024)}MB"
-                ),
-            )
-
-        # Validate content for security threats
-        if not validate_file_content(content, file.filename):
-            raise HTTPException(
-                status_code=400,
-                detail="File content contains potentially dangerous elements",
-            )
-
-        # Verify MIME type matches file extension
-        detected_mime = mimetypes.guess_type(file.filename)[0]
-        if detected_mime and file.content_type and file.content_type != detected_mime:
-            logger.warning(
-                f"MIME type mismatch for {file.filename}: "
-                f"declared={file.content_type}, detected={detected_mime}"
-            )
-
-        # Validate and resolve target directory
-        target_dir = validate_and_resolve_path(path)
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        # Prepare target file path
-        target_file = target_dir / file.filename
-
-        # Check if file exists and overwrite policy
-        if target_file.exists() and not overwrite:
-            raise HTTPException(
-                status_code=409,
-                detail="File already exists. Use overwrite=true to replace it.",
-            )
-
-        # Write file - PERFORMANCE FIX: Convert to async file I/O
-        async with aiofiles.open(target_file, "wb") as f:
-            await f.write(content)
-
-        # Get file info for response
-        relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
-        file_info = get_file_info(target_file, relative_path)
-
-        # Enhanced audit logging with authenticated user
-        security_layer = get_security_layer(request)
-        security_layer.audit_log(
-            "file_upload",
-            user_data.get("username", "unknown"),
-            "success",
-            {
-                "filename": file.filename,
-                "path": relative_path,
-                "size": len(content),
-                "user_role": user_data.get("role", "unknown"),
-                "ip": request.client.host if request.client else "unknown",
-                "overwrite": overwrite,
-            },
+    if not is_safe_file(file.filename):
+        raise HTTPException(
+            status_code=400, detail=f"File type not allowed: {file.filename}"
         )
 
-        return FileUploadResponse(
-            success=True,
-            message=f"File '{file.filename}' uploaded successfully",
-            file_info=file_info,
-            upload_id=f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+    # Read and validate file content
+    content = await file.read()
+
+    # Check file size
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "File too large. Maximum size: " f"{MAX_FILE_SIZE // (1024*1024)}MB"
+            ),
         )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error uploading file: {e}")
-        raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
+    # Validate content for security threats
+    if not validate_file_content(content, file.filename):
+        raise HTTPException(
+            status_code=400,
+            detail="File content contains potentially dangerous elements",
+        )
+
+    # Verify MIME type matches file extension
+    detected_mime = mimetypes.guess_type(file.filename)[0]
+    if detected_mime and file.content_type and file.content_type != detected_mime:
+        logger.warning(
+            f"MIME type mismatch for {file.filename}: "
+            f"declared={file.content_type}, detected={detected_mime}"
+        )
+
+    # Validate and resolve target directory
+    target_dir = validate_and_resolve_path(path)
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    # Prepare target file path
+    target_file = target_dir / file.filename
+
+    # Check if file exists and overwrite policy
+    if target_file.exists() and not overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail="File already exists. Use overwrite=true to replace it.",
+        )
+
+    # Write file - PERFORMANCE FIX: Convert to async file I/O
+    async with aiofiles.open(target_file, "wb") as f:
+        await f.write(content)
+
+    # Get file info for response
+    relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
+    file_info = get_file_info(target_file, relative_path)
+
+    # Enhanced audit logging with authenticated user
+    security_layer = get_security_layer(request)
+    security_layer.audit_log(
+        "file_upload",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "filename": file.filename,
+            "path": relative_path,
+            "size": len(content),
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+            "overwrite": overwrite,
+        },
+    )
+
+    return FileUploadResponse(
+        success=True,
+        message=f"File '{file.filename}' uploaded successfully",
+        file_info=file_info,
+        upload_id=f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+    )
 
 
 @router.get("/download/{path:path}")
