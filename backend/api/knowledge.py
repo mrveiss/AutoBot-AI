@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, validator
 
 from backend.background_vectorization import get_background_vectorizer
 from backend.knowledge_factory import get_or_create_knowledge_base
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import RAG Agent for enhanced search capabilities
 try:
@@ -632,92 +633,92 @@ async def add_text_to_knowledge(request: dict, req: Request):
 
 
 @router.post("/search")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_knowledge",
+    error_code_prefix="KB",
+)
 async def search_knowledge(request: dict, req: Request):
     """Search knowledge base with optional RAG enhancement - FIXED parameter mismatch between KnowledgeBase and KnowledgeBaseV2"""
-    try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb_to_use is None:
+    if kb_to_use is None:
+        return {
+            "results": [],
+            "total_results": 0,
+            "message": "Knowledge base not initialized - please check logs for errors",
+        }
+
+    query = request.get("query", "")
+    top_k = request.get("top_k", 10)
+    limit = request.get("limit", 10)  # Also accept 'limit' for compatibility
+    mode = request.get("mode", "auto")
+    use_rag = request.get("use_rag", False)  # New parameter for RAG enhancement
+
+    # Use limit if provided, otherwise use top_k
+    search_limit = limit if request.get("limit") is not None else top_k
+
+    logger.info(
+        f"Knowledge search request: '{query}' (top_k={search_limit}, mode={mode}, use_rag={use_rag})"
+    )
+
+    # Check if knowledge base is empty - fast check to avoid timeout
+    try:
+        stats = await kb_to_use.get_stats()
+        fact_count = stats.get("total_facts", 0)
+
+        if fact_count == 0:
+            logger.info(
+                "Knowledge base is empty - returning empty results immediately"
+            )
             return {
                 "results": [],
                 "total_results": 0,
-                "message": "Knowledge base not initialized - please check logs for errors",
+                "query": query,
+                "mode": mode,
+                "kb_implementation": kb_to_use.__class__.__name__,
+                "message": "Knowledge base is empty - no documents to search. Add documents in the Manage tab.",
             }
+    except Exception as stats_err:
+        logger.warning(f"Could not check KB stats: {stats_err}")
 
-        query = request.get("query", "")
-        top_k = request.get("top_k", 10)
-        limit = request.get("limit", 10)  # Also accept 'limit' for compatibility
-        mode = request.get("mode", "auto")
-        use_rag = request.get("use_rag", False)  # New parameter for RAG enhancement
+    # FIXED: Check which knowledge base implementation we're using and call with correct parameters
+    kb_class_name = kb_to_use.__class__.__name__
 
-        # Use limit if provided, otherwise use top_k
-        search_limit = limit if request.get("limit") is not None else top_k
-
-        logger.info(
-            f"Knowledge search request: '{query}' (top_k={search_limit}, mode={mode}, use_rag={use_rag})"
+    if kb_class_name == "KnowledgeBaseV2":
+        # KnowledgeBaseV2 uses 'top_k' parameter
+        results = await kb_to_use.search(query=query, top_k=search_limit)
+    else:
+        # Original KnowledgeBase uses 'similarity_top_k' parameter
+        results = await kb_to_use.search(
+            query=query, similarity_top_k=search_limit, mode=mode
         )
 
-        # Check if knowledge base is empty - fast check to avoid timeout
+    # Enhanced search with RAG if requested and available
+    if use_rag and RAG_AVAILABLE and results:
         try:
-            stats = await kb_to_use.get_stats()
-            fact_count = stats.get("total_facts", 0)
+            rag_enhancement = await _enhance_search_with_rag(query, results)
+            return {
+                "results": results,
+                "total_results": len(results),
+                "query": query,
+                "mode": mode,
+                "kb_implementation": kb_class_name,
+                "rag_enhanced": True,
+                "rag_analysis": rag_enhancement,
+            }
+        except Exception as e:
+            logger.error(f"RAG enhancement failed: {e}")
+            # Continue with regular results if RAG fails
 
-            if fact_count == 0:
-                logger.info(
-                    "Knowledge base is empty - returning empty results immediately"
-                )
-                return {
-                    "results": [],
-                    "total_results": 0,
-                    "query": query,
-                    "mode": mode,
-                    "kb_implementation": kb_to_use.__class__.__name__,
-                    "message": "Knowledge base is empty - no documents to search. Add documents in the Manage tab.",
-                }
-        except Exception as stats_err:
-            logger.warning(f"Could not check KB stats: {stats_err}")
-
-        # FIXED: Check which knowledge base implementation we're using and call with correct parameters
-        kb_class_name = kb_to_use.__class__.__name__
-
-        if kb_class_name == "KnowledgeBaseV2":
-            # KnowledgeBaseV2 uses 'top_k' parameter
-            results = await kb_to_use.search(query=query, top_k=search_limit)
-        else:
-            # Original KnowledgeBase uses 'similarity_top_k' parameter
-            results = await kb_to_use.search(
-                query=query, similarity_top_k=search_limit, mode=mode
-            )
-
-        # Enhanced search with RAG if requested and available
-        if use_rag and RAG_AVAILABLE and results:
-            try:
-                rag_enhancement = await _enhance_search_with_rag(query, results)
-                return {
-                    "results": results,
-                    "total_results": len(results),
-                    "query": query,
-                    "mode": mode,
-                    "kb_implementation": kb_class_name,
-                    "rag_enhanced": True,
-                    "rag_analysis": rag_enhancement,
-                }
-            except Exception as e:
-                logger.error(f"RAG enhancement failed: {e}")
-                # Continue with regular results if RAG fails
-
-        return {
-            "results": results,
-            "total_results": len(results),
-            "query": query,
-            "mode": mode,
-            "kb_implementation": kb_class_name,
-            "rag_enhanced": False,
-        }
-
-    except Exception as e:
-        logger.error(f"Error searching knowledge: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+    return {
+        "results": results,
+        "total_results": len(results),
+        "query": query,
+        "mode": mode,
+        "kb_implementation": kb_class_name,
+        "rag_enhanced": False,
+    }
 
 
 @router.post("/rag_search")
@@ -997,58 +998,50 @@ async def similarity_search(request: dict, req: Request):
 
 
 @router.get("/health")
+@with_error_handling(
+    category=ErrorCategory.SERVICE_UNAVAILABLE,
+    operation="get_knowledge_health",
+    error_code_prefix="KB",
+)
 async def get_knowledge_health(req: Request):
     """Get knowledge base health status with RAG capability status - FIXED to use proper instance"""
-    try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb_to_use is None:
-            return {
-                "status": "unhealthy",
-                "initialized": False,
-                "redis_connected": False,
-                "vector_store_available": False,
-                "rag_available": RAG_AVAILABLE,
-                "rag_status": "disabled" if not RAG_AVAILABLE else "unknown",
-                "message": "Knowledge base not initialized",
-            }
-
-        # Try to get stats to verify health
-        stats = await kb_to_use.get_stats()
-
-        # Check RAG Agent health if available
-        rag_status = "disabled"
-        if RAG_AVAILABLE:
-            try:
-                rag_agent = get_rag_agent()
-                # Simple test to verify RAG agent works
-                rag_status = "healthy"
-            except Exception as e:
-                rag_status = f"error: {str(e)}"
-
-        return {
-            "status": "healthy",
-            "initialized": stats.get("initialized", False),
-            "redis_connected": True,
-            "vector_store_available": stats.get("index_available", False),
-            "total_facts": stats.get("total_facts", 0),
-            "db_size": stats.get("db_size", 0),
-            "kb_implementation": kb_to_use.__class__.__name__,
-            "rag_available": RAG_AVAILABLE,
-            "rag_status": rag_status,
-        }
-
-    except Exception as e:
-        logger.error(f"Error checking knowledge health: {str(e)}")
+    if kb_to_use is None:
         return {
             "status": "unhealthy",
             "initialized": False,
             "redis_connected": False,
             "vector_store_available": False,
             "rag_available": RAG_AVAILABLE,
-            "rag_status": "disabled" if not RAG_AVAILABLE else f"error: {str(e)}",
-            "error": str(e),
+            "rag_status": "disabled" if not RAG_AVAILABLE else "unknown",
+            "message": "Knowledge base not initialized",
         }
+
+    # Try to get stats to verify health
+    stats = await kb_to_use.get_stats()
+
+    # Check RAG Agent health if available
+    rag_status = "disabled"
+    if RAG_AVAILABLE:
+        try:
+            rag_agent = get_rag_agent()
+            # Simple test to verify RAG agent works
+            rag_status = "healthy"
+        except Exception as e:
+            rag_status = f"error: {str(e)}"
+
+    return {
+        "status": "healthy",
+        "initialized": stats.get("initialized", False),
+        "redis_connected": True,
+        "vector_store_available": stats.get("index_available", False),
+        "total_facts": stats.get("total_facts", 0),
+        "db_size": stats.get("db_size", 0),
+        "kb_implementation": kb_to_use.__class__.__name__,
+        "rag_available": RAG_AVAILABLE,
+        "rag_status": rag_status,
+    }
 
 
 # === NEW REPOPULATE ENDPOINTS ===
