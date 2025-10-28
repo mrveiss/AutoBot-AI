@@ -1148,78 +1148,72 @@ async def delete_session(
 
 
 @router.get("/chat/sessions/{session_id}/export")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_session",
+    error_code_prefix="CHAT",
+)
 async def export_session(session_id: str, request: Request, format: str = "json"):
     """Export a chat session in various formats"""
     request_id = generate_request_id()
+    log_request_context(request, "export_session", request_id)
 
-    try:
-        log_request_context(request, "export_session", request_id)
+    # Validate session ID
+    if not validate_chat_session_id(session_id):
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Invalid session ID format")
 
-        # Validate session ID
-        if not validate_chat_session_id(session_id):
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise ValidationError("Invalid session ID format")
+    # Validate format
+    if format not in ["json", "txt", "csv"]:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Invalid export format. Supported: json, txt, csv")
 
-        # Validate format
-        if format not in ["json", "txt", "csv"]:
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise ValidationError("Invalid export format. Supported: json, txt, csv")
+    # Get dependencies from request state
+    chat_history_manager = get_chat_history_manager(request)
 
-        # Get dependencies from request state
-        chat_history_manager = get_chat_history_manager(request)
+    # Get session data
+    session_data = await chat_history_manager.export_session(session_id, format)
 
-        # Get session data
-        session_data = await chat_history_manager.export_session(session_id, format)
+    if session_data is None:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ResourceNotFoundError(f"Session {session_id} not found")
 
-        if session_data is None:
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise ResourceNotFoundError(f"Session {session_id} not found")
+    # Set appropriate content type
+    content_types = {
+        "json": "application/json",
+        "txt": "text/plain",
+        "csv": "text/csv",
+    }
 
-        # Set appropriate content type
-        content_types = {
-            "json": "application/json",
-            "txt": "text/plain",
-            "csv": "text/csv",
-        }
+    await log_chat_event(
+        "session_exported", session_id, {"format": format, "request_id": request_id}
+    )
 
-        await log_chat_event(
-            "session_exported", session_id, {"format": format, "request_id": request_id}
-        )
-
-        return Response(
-            content=session_data,
-            media_type=content_types[format],
-            headers={
-                "Content-Disposition": f"attachment; filename=chat_session_{session_id}.{format}"
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"[{request_id}] export_session error: {e}")
-        return create_error_response(
-            error_code="INTERNAL_ERROR",
-            message=str(e),
-            request_id=request_id,
-            status_code=500,
-        )
+    return Response(
+        content=session_data,
+        media_type=content_types[format],
+        headers={
+            "Content-Disposition": f"attachment; filename=chat_session_{session_id}.{format}"
+        },
+    )
 
 
 # ====================================================================
@@ -1488,6 +1482,11 @@ async def merge_messages(
 
 
 @router.post("/chats/{chat_id}/save")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_chat_by_id",
+    error_code_prefix="CHAT",
+)
 async def save_chat_by_id(
     chat_id: str,
     request_data: dict,
@@ -1496,70 +1495,64 @@ async def save_chat_by_id(
 ):
     """Save chat session by ID (frontend compatibility endpoint)"""
     request_id = generate_request_id()
+    log_request_context(request, "save_chat_by_id", request_id)
+
+    # Get dependencies from request state
+    chat_history_manager = get_chat_history_manager(request)
+
+    if not chat_history_manager:
+        return create_error_response(
+            error_code="SERVICE_UNAVAILABLE",
+            message="Chat history service not available",
+            request_id=request_id,
+            status_code=503,
+        )
+
+    # CRITICAL FIX: Merge messages to prevent race condition
+    # Load existing messages from file/cache to preserve backend-added messages
+    save_data = request_data.get("data", {})
+    new_messages = save_data.get("messages", [])
 
     try:
-        log_request_context(request, "save_chat_by_id", request_id)
+        # Load existing messages to check for backend-added terminal messages
+        existing_messages = await chat_history_manager.load_session(chat_id)
 
-        # Get dependencies from request state
-        chat_history_manager = get_chat_history_manager(request)
+        # Merge with deduplication to preserve backend-added messages
+        merged_messages = await merge_messages(existing_messages, new_messages)
 
-        if not chat_history_manager:
-            return create_error_response(
-                error_code="SERVICE_UNAVAILABLE",
-                message="Chat history service not available",
-                request_id=request_id,
-                status_code=503,
-            )
-
-        # CRITICAL FIX: Merge messages to prevent race condition
-        # Load existing messages from file/cache to preserve backend-added messages
-        save_data = request_data.get("data", {})
-        new_messages = save_data.get("messages", [])
-
-        try:
-            # Load existing messages to check for backend-added terminal messages
-            existing_messages = await chat_history_manager.load_session(chat_id)
-
-            # Merge with deduplication to preserve backend-added messages
-            merged_messages = await merge_messages(existing_messages, new_messages)
-
-            logger.info(
-                f"[{request_id}] Merged {len(existing_messages)} existing + "
-                f"{len(new_messages)} new = {len(merged_messages)} total messages"
-            )
-        except Exception as merge_error:
-            # Fallback to new messages only if merge fails
-            logger.warning(f"[{request_id}] Message merge failed, using new messages only: {merge_error}")
-            merged_messages = new_messages
-
-        # Save the merged chat session
-        result = await chat_history_manager.save_session(
-            session_id=chat_id,
-            messages=merged_messages,
-            name=save_data.get("name", ""),
+        logger.info(
+            f"[{request_id}] Merged {len(existing_messages)} existing + "
+            f"{len(new_messages)} new = {len(merged_messages)} total messages"
         )
+    except Exception as merge_error:
+        # Fallback to new messages only if merge fails
+        logger.warning(f"[{request_id}] Message merge failed, using new messages only: {merge_error}")
+        merged_messages = new_messages
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "data": result,
-                "message": "Chat saved successfully",
-                "request_id": request_id,
-            },
-        )
+    # Save the merged chat session
+    result = await chat_history_manager.save_session(
+        session_id=chat_id,
+        messages=merged_messages,
+        name=save_data.get("name", ""),
+    )
 
-    except Exception as e:
-        logger.error(f"[{request_id}] save_chat_by_id error: {e}")
-        return create_error_response(
-            error_code="INTERNAL_ERROR",
-            message=str(e),
-            request_id=request_id,
-            status_code=500,
-        )
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": result,
+            "message": "Chat saved successfully",
+            "request_id": request_id,
+        },
+    )
 
 
 @router.delete("/chats/{chat_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_chat_by_id",
+    error_code_prefix="CHAT",
+)
 async def delete_chat_by_id(
     chat_id: str,
     request: Request,
@@ -1569,42 +1562,31 @@ async def delete_chat_by_id(
 ):
     """Delete chat session by ID (frontend compatibility endpoint)"""
     request_id = generate_request_id()
+    log_request_context(request, "delete_chat_by_id", request_id)
 
-    try:
-        log_request_context(request, "delete_chat_by_id", request_id)
+    # Get dependencies from request state
+    chat_history_manager = get_chat_history_manager(request)
 
-        # Get dependencies from request state
-        chat_history_manager = get_chat_history_manager(request)
-
-        if not chat_history_manager:
-            return create_error_response(
-                error_code="SERVICE_UNAVAILABLE",
-                message="Chat history service not available",
-                request_id=request_id,
-                status_code=503,
-            )
-
-        # Delete the chat session
-        result = chat_history_manager.delete_session(session_id=chat_id)
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "data": {"session_id": chat_id, "deleted": result},
-                "message": "Chat deleted successfully",
-                "request_id": request_id,
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"[{request_id}] delete_chat_by_id error: {e}")
+    if not chat_history_manager:
         return create_error_response(
-            error_code="INTERNAL_ERROR",
-            message=str(e),
+            error_code="SERVICE_UNAVAILABLE",
+            message="Chat history service not available",
             request_id=request_id,
-            status_code=500,
+            status_code=503,
         )
+
+    # Delete the chat session
+    result = chat_history_manager.delete_session(session_id=chat_id)
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {"session_id": chat_id, "deleted": result},
+            "message": "Chat deleted successfully",
+            "request_id": request_id,
+        },
+    )
 
 
 @router.post("/chat/direct")
