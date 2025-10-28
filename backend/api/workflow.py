@@ -196,150 +196,149 @@ async def approve_workflow_step(workflow_id: str, approval: WorkflowApprovalResp
 
 
 @router.post("/execute")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_workflow",
+    error_code_prefix="WORKFLOW",
+)
 async def execute_workflow(
     workflow_request: WorkflowExecutionRequest,
     background_tasks: BackgroundTasks,
     request: Request,
 ):
     """Execute a workflow with coordination of multiple agents."""
-    try:
-        # Get both orchestrators from app state
-        lightweight_orchestrator = getattr(
-            request.app.state, "lightweight_orchestrator", None
+    # Get both orchestrators from app state
+    lightweight_orchestrator = getattr(
+        request.app.state, "lightweight_orchestrator", None
+    )
+    orchestrator = getattr(request.app.state, "orchestrator", None)
+
+    if lightweight_orchestrator is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Lightweight orchestrator not available - "
+            "application not fully initialized",
         )
-        orchestrator = getattr(request.app.state, "orchestrator", None)
 
-        if lightweight_orchestrator is None:
-            raise HTTPException(
-                status_code=422,
-                detail="Lightweight orchestrator not available - "
-                "application not fully initialized",
-            )
+    if orchestrator is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Main orchestrator not available - "
+            "application not fully initialized",
+        )
 
-        if orchestrator is None:
-            raise HTTPException(
-                status_code=422,
-                detail="Main orchestrator not available - "
-                "application not fully initialized",
-            )
-
-        # TEMPORARY FIX: Use lightweight orchestrator to avoid blocking
-        # The full orchestrator's execute_goal method has blocking operations
-        try:
-            # Use lightweight orchestrator for fast, non-blocking response
-            result = await lightweight_orchestrator.route_request(
-                workflow_request.user_message
-            )
-
-            # Check if we got a simple response or should use full orchestration
-            if result.get("bypass_orchestration"):
-                return {
-                    "success": True,
-                    "type": "lightweight_response",
-                    "result": result.get(
-                        "simple_response", "Response generated successfully"
-                    ),
-                    "routing_method": result.get(
-                        "routing_reason", "lightweight_pattern_match"
-                    ),
-                }
-            else:
-                # For complex requests, we need the full orchestrator but it's blocking
-                # For now, return a message explaining this limitation
-                return {
-                    "success": False,
-                    "type": "complex_workflow_blocked",
-                    "result": "Complex workflow orchestration is temporarily "
-                    "disabled due to blocking operations. This request "
-                    "requires multi-agent coordination which is not yet "
-                    "available in the current implementation.",
-                    "complexity": result.get("complexity", "unknown"),
-                    "suggested_agents": result.get("suggested_agents", []),
-                }
-
-        except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.error(f"Workflow execution error: {e}", exc_info=True)
-            raise HTTPException(
-                status_code=500, detail=f"Workflow execution failed: {str(e)}"
-            )
-
-        # The following code is unreachable and disabled to prevent hanging
-        # Create workflow response
-        workflow_response = await orchestrator.create_workflow_response(
+    # TEMPORARY FIX: Use lightweight orchestrator to avoid blocking
+    # The full orchestrator's execute_goal method has blocking operations
+    try:
+        # Use lightweight orchestrator for fast, non-blocking response
+        result = await lightweight_orchestrator.route_request(
             workflow_request.user_message
         )
-        workflow_id = (
-            workflow_request.workflow_id
-            or workflow_response.get("workflow_id")
-            or str(uuid.uuid4())
-        )
 
-        # Store workflow in active workflows
-        workflow_data = {
-            "workflow_id": workflow_id,
-            "user_message": workflow_request.user_message,
-            "classification": workflow_response.get("message_classification"),
-            "steps": [],
-            "current_step": 0,
-            "status": "planned",
-            "created_at": datetime.now().isoformat(),
-            "estimated_duration": workflow_response.get("estimated_duration"),
-            "agents_involved": workflow_response.get("agents_involved", []),
-            "auto_approve": workflow_request.auto_approve,
-        }
-
-        # Start workflow metrics tracking
-        metrics_data = {
-            "user_message": workflow_request.user_message,
-            "complexity": workflow_response.get("message_classification", "unknown"),
-            "total_steps": len(workflow_response.get("workflow_preview", [])),
-            "agents_involved": workflow_response.get("agents_involved", []),
-        }
-        workflow_metrics.start_workflow_tracking(workflow_id, metrics_data)
-
-        # Record initial system metrics
-        initial_resources = system_monitor.get_current_metrics()
-        workflow_metrics.record_resource_usage(workflow_id, initial_resources)
-
-        # Convert workflow preview to executable steps
-        steps = []
-        for i, step_desc in enumerate(workflow_response.get("workflow_preview", [])):
-            step = {
-                "step_id": f"step_{i+1}",
-                "description": step_desc,
-                "status": "pending",
-                "requires_approval": "requires your approval" in step_desc,
-                "agent_type": step_desc.split(":")[0].lower(),
-                "action": (
-                    step_desc.split(":")[1].strip() if ":" in step_desc else step_desc
+        # Check if we got a simple response or should use full orchestration
+        if result.get("bypass_orchestration"):
+            return {
+                "success": True,
+                "type": "lightweight_response",
+                "result": result.get(
+                    "simple_response", "Response generated successfully"
                 ),
-                "started_at": None,
-                "completed_at": None,
+                "routing_method": result.get(
+                    "routing_reason", "lightweight_pattern_match"
+                ),
             }
-            steps.append(step)
-
-        workflow_data["steps"] = steps
-        active_workflows[workflow_id] = workflow_data
-
-        # Start workflow execution in background
-        background_tasks.add_task(execute_workflow_steps, workflow_id, orchestrator)
-
-        return {
-            "success": True,
-            "type": "workflow_orchestration",
-            "workflow_id": workflow_id,
-            "workflow_response": workflow_response,
-            "execution_started": True,
-            "status_endpoint": f"/api/workflow/{workflow_id}/status",
-        }
+        else:
+            # For complex requests, we need the full orchestrator but it's blocking
+            # For now, return a message explaining this limitation
+            return {
+                "success": False,
+                "type": "complex_workflow_blocked",
+                "result": "Complex workflow orchestration is temporarily "
+                "disabled due to blocking operations. This request "
+                "requires multi-agent coordination which is not yet "
+                "available in the current implementation.",
+                "complexity": result.get("complexity", "unknown"),
+                "suggested_agents": result.get("suggested_agents", []),
+            }
 
     except Exception as e:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.error(f"Workflow execution error: {e}", exc_info=True)
         raise HTTPException(
             status_code=500, detail=f"Workflow execution failed: {str(e)}"
         )
+
+    # The following code is unreachable and disabled to prevent hanging
+    # Create workflow response
+    workflow_response = await orchestrator.create_workflow_response(
+        workflow_request.user_message
+    )
+    workflow_id = (
+        workflow_request.workflow_id
+        or workflow_response.get("workflow_id")
+        or str(uuid.uuid4())
+    )
+
+    # Store workflow in active workflows
+    workflow_data = {
+        "workflow_id": workflow_id,
+        "user_message": workflow_request.user_message,
+        "classification": workflow_response.get("message_classification"),
+        "steps": [],
+        "current_step": 0,
+        "status": "planned",
+        "created_at": datetime.now().isoformat(),
+        "estimated_duration": workflow_response.get("estimated_duration"),
+        "agents_involved": workflow_response.get("agents_involved", []),
+        "auto_approve": workflow_request.auto_approve,
+    }
+
+    # Start workflow metrics tracking
+    metrics_data = {
+        "user_message": workflow_request.user_message,
+        "complexity": workflow_response.get("message_classification", "unknown"),
+        "total_steps": len(workflow_response.get("workflow_preview", [])),
+        "agents_involved": workflow_response.get("agents_involved", []),
+    }
+    workflow_metrics.start_workflow_tracking(workflow_id, metrics_data)
+
+    # Record initial system metrics
+    initial_resources = system_monitor.get_current_metrics()
+    workflow_metrics.record_resource_usage(workflow_id, initial_resources)
+
+    # Convert workflow preview to executable steps
+    steps = []
+    for i, step_desc in enumerate(workflow_response.get("workflow_preview", [])):
+        step = {
+            "step_id": f"step_{i+1}",
+            "description": step_desc,
+            "status": "pending",
+            "requires_approval": "requires your approval" in step_desc,
+            "agent_type": step_desc.split(":")[0].lower(),
+            "action": (
+                step_desc.split(":")[1].strip() if ":" in step_desc else step_desc
+            ),
+            "started_at": None,
+            "completed_at": None,
+        }
+        steps.append(step)
+
+    workflow_data["steps"] = steps
+    active_workflows[workflow_id] = workflow_data
+
+    # Start workflow execution in background
+    background_tasks.add_task(execute_workflow_steps, workflow_id, orchestrator)
+
+    return {
+        "success": True,
+        "type": "workflow_orchestration",
+        "workflow_id": workflow_id,
+        "workflow_response": workflow_response,
+        "execution_started": True,
+        "status_endpoint": f"/api/workflow/{workflow_id}/status",
+    }
 
 
 async def execute_workflow_steps(workflow_id: str, orchestrator):
