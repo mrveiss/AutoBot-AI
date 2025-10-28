@@ -1433,48 +1433,48 @@ async def websocket_realtime_analytics(websocket: WebSocket):
 
 
 @router.post("/collection/start")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_analytics_collection",
+    error_code_prefix="ANALYTICS",
+)
 async def start_analytics_collection():
     """Start continuous analytics collection"""
-    try:
-        # Initialize session tracking
-        analytics_state["session_start"] = datetime.now().isoformat()
+    # Initialize session tracking
+    analytics_state["session_start"] = datetime.now().isoformat()
 
-        # Start metrics collection
-        collector = analytics_controller.metrics_collector
-        if not collector._is_collecting:
-            asyncio.create_task(collector.start_collection())
-            await asyncio.sleep(0.5)  # Give it time to start
+    # Start metrics collection
+    collector = analytics_controller.metrics_collector
+    if not collector._is_collecting:
+        asyncio.create_task(collector.start_collection())
+        await asyncio.sleep(0.5)  # Give it time to start
 
-        return {
-            "status": "started",
-            "message": "Analytics collection started successfully",
-            "session_id": analytics_state["session_start"],
-            "metrics_collection": collector._is_collecting,
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to start analytics collection: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "started",
+        "message": "Analytics collection started successfully",
+        "session_id": analytics_state["session_start"],
+        "metrics_collection": collector._is_collecting,
+    }
 
 
 @router.post("/collection/stop")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_analytics_collection",
+    error_code_prefix="ANALYTICS",
+)
 async def stop_analytics_collection():
     """Stop continuous analytics collection"""
-    try:
-        # Stop metrics collection
-        collector = analytics_controller.metrics_collector
-        if collector._is_collecting:
-            await collector.stop_collection()
+    # Stop metrics collection
+    collector = analytics_controller.metrics_collector
+    if collector._is_collecting:
+        await collector.stop_collection()
 
-        return {
-            "status": "stopped",
-            "message": "Analytics collection stopped successfully",
-            "session_duration": analytics_state.get("session_start", "unknown"),
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to stop analytics collection: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "stopped",
+        "message": "Analytics collection stopped successfully",
+        "session_duration": analytics_state.get("session_start", "unknown"),
+    }
 
 
 @router.get("/status")
