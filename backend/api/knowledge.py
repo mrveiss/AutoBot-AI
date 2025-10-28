@@ -2536,6 +2536,11 @@ async def get_fact_by_key(
 
 
 @router.post("/vectorize_facts")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="vectorize_existing_facts",
+    error_code_prefix="KNOWLEDGE",
+)
 async def vectorize_existing_facts(
     req: Request,
     batch_size: int = 50,
@@ -2553,145 +2558,141 @@ async def vectorize_existing_facts(
     This prevents resource lockup by processing facts in manageable batches
     and can be run periodically to vectorize new facts.
     """
-    try:
-        kb = await get_or_create_knowledge_base(req.app)
+    kb = await get_or_create_knowledge_base(req.app)
 
-        if not kb:
-            raise HTTPException(
-                status_code=500, detail="Knowledge base not initialized"
-            )
-
-        # Get all fact keys from Redis
-        fact_keys = await kb._scan_redis_keys_async("fact:*")
-
-        if not fact_keys:
-            return {
-                "status": "success",
-                "message": "No facts found to vectorize",
-                "processed": 0,
-                "success": 0,
-                "failed": 0,
-                "skipped": 0,
-            }
-
-        logger.info(
-            f"Starting batched vectorization of {len(fact_keys)} facts (batch_size={batch_size}, delay={batch_delay}s)"
+    if not kb:
+        raise HTTPException(
+            status_code=500, detail="Knowledge base not initialized"
         )
 
-        success_count = 0
-        failed_count = 0
-        skipped_count = 0
-        processed_facts = []
+    # Get all fact keys from Redis
+    fact_keys = await kb._scan_redis_keys_async("fact:*")
 
-        total_batches = (len(fact_keys) + batch_size - 1) // batch_size
-
-        # Process in batches
-        for batch_num in range(total_batches):
-            start_idx = batch_num * batch_size
-            end_idx = min(start_idx + batch_size, len(fact_keys))
-            batch = fact_keys[start_idx:end_idx]
-
-            logger.info(
-                f"Processing batch {batch_num + 1}/{total_batches} ({len(batch)} facts)"
-            )
-
-            for fact_key in batch:
-                try:
-                    # Get fact data
-                    fact_data = await kb.aioredis_client.hgetall(fact_key)
-
-                    if not fact_data:
-                        logger.warning(f"No data found for fact key: {fact_key}")
-                        failed_count += 1
-                        continue
-
-                    # Extract content and metadata (handle both bytes and string keys from Redis)
-                    content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
-                    content = (
-                        content_raw.decode("utf-8")
-                        if isinstance(content_raw, bytes)
-                        else str(content_raw) if content_raw else ""
-                    )
-
-                    metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
-                    metadata = json.loads(
-                        metadata_str.decode("utf-8")
-                        if isinstance(metadata_str, bytes)
-                        else metadata_str
-                    )
-
-                    # Extract fact ID from key (fact:uuid)
-                    fact_id = fact_key.split(":")[-1] if ":" in fact_key else fact_key
-
-                    # Check if already vectorized by checking vector_indexed status
-                    if skip_existing:
-                        # Check if this fact is already in the vector index
-                        vector_key = f"llama_index/vector_{fact_id}"
-                        has_vector = await kb.aioredis_client.exists(vector_key)
-                        if has_vector:
-                            skipped_count += 1
-                            continue
-
-                    # Vectorize existing fact without duplication
-                    result = await kb.vectorize_existing_fact(
-                        fact_id=fact_id, content=content, metadata=metadata
-                    )
-
-                    if result.get("status") == "success" and result.get(
-                        "vector_indexed"
-                    ):
-                        success_count += 1
-                        processed_facts.append(
-                            {"fact_id": fact_id, "status": "vectorized"}
-                        )
-                    else:
-                        failed_count += 1
-                        logger.warning(
-                            f"Failed to vectorize fact {fact_id}: {result.get('message')}"
-                        )
-
-                except Exception as e:
-                    failed_count += 1
-                    logger.error(f"Error processing fact {fact_key}: {e}")
-
-            # Delay between batches to prevent resource exhaustion
-            if batch_num < total_batches - 1:
-                await asyncio.sleep(batch_delay)
-
-        # KnowledgeBaseV2 automatically indexes during add_document - no rebuild needed
-        logger.info("Batched vectorization complete - index updated automatically")
-
+    if not fact_keys:
         return {
             "status": "success",
-            "message": f"Vectorization complete: {success_count} successful, {failed_count} failed, {skipped_count} skipped",
-            "processed": len(fact_keys),
-            "success": success_count,
-            "failed": failed_count,
-            "skipped": skipped_count,
-            "batches": total_batches,
-            "details": processed_facts[:10],  # Return first 10 for reference
+            "message": "No facts found to vectorize",
+            "processed": 0,
+            "success": 0,
+            "failed": 0,
+            "skipped": 0,
         }
 
-    except Exception as e:
-        logger.error(f"Error vectorizing facts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    logger.info(
+        f"Starting batched vectorization of {len(fact_keys)} facts (batch_size={batch_size}, delay={batch_delay}s)"
+    )
+
+    success_count = 0
+    failed_count = 0
+    skipped_count = 0
+    processed_facts = []
+
+    total_batches = (len(fact_keys) + batch_size - 1) // batch_size
+
+    # Process in batches
+    for batch_num in range(total_batches):
+        start_idx = batch_num * batch_size
+        end_idx = min(start_idx + batch_size, len(fact_keys))
+        batch = fact_keys[start_idx:end_idx]
+
+        logger.info(
+            f"Processing batch {batch_num + 1}/{total_batches} ({len(batch)} facts)"
+        )
+
+        for fact_key in batch:
+            try:
+                # Get fact data
+                fact_data = await kb.aioredis_client.hgetall(fact_key)
+
+                if not fact_data:
+                    logger.warning(f"No data found for fact key: {fact_key}")
+                    failed_count += 1
+                    continue
+
+                # Extract content and metadata (handle both bytes and string keys from Redis)
+                content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
+                content = (
+                    content_raw.decode("utf-8")
+                    if isinstance(content_raw, bytes)
+                    else str(content_raw) if content_raw else ""
+                )
+
+                metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
+                metadata = json.loads(
+                    metadata_str.decode("utf-8")
+                    if isinstance(metadata_str, bytes)
+                    else metadata_str
+                )
+
+                # Extract fact ID from key (fact:uuid)
+                fact_id = fact_key.split(":")[-1] if ":" in fact_key else fact_key
+
+                # Check if already vectorized by checking vector_indexed status
+                if skip_existing:
+                    # Check if this fact is already in the vector index
+                    vector_key = f"llama_index/vector_{fact_id}"
+                    has_vector = await kb.aioredis_client.exists(vector_key)
+                    if has_vector:
+                        skipped_count += 1
+                        continue
+
+                # Vectorize existing fact without duplication
+                result = await kb.vectorize_existing_fact(
+                    fact_id=fact_id, content=content, metadata=metadata
+                )
+
+                if result.get("status") == "success" and result.get(
+                    "vector_indexed"
+                ):
+                    success_count += 1
+                    processed_facts.append(
+                        {"fact_id": fact_id, "status": "vectorized"}
+                    )
+                else:
+                    failed_count += 1
+                    logger.warning(
+                        f"Failed to vectorize fact {fact_id}: {result.get('message')}"
+                    )
+
+            except Exception as e:
+                failed_count += 1
+                logger.error(f"Error processing fact {fact_key}: {e}")
+
+        # Delay between batches to prevent resource exhaustion
+        if batch_num < total_batches - 1:
+            await asyncio.sleep(batch_delay)
+
+    # KnowledgeBaseV2 automatically indexes during add_document - no rebuild needed
+    logger.info("Batched vectorization complete - index updated automatically")
+
+    return {
+        "status": "success",
+        "message": f"Vectorization complete: {success_count} successful, {failed_count} failed, {skipped_count} skipped",
+        "processed": len(fact_keys),
+        "success": success_count,
+        "failed": failed_count,
+        "skipped": skipped_count,
+        "batches": total_batches,
+        "details": processed_facts[:10],  # Return first 10 for reference
+    }
 
 
 @router.get("/import/status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_import_status",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_import_status(
     req: Request, file_path: Optional[str] = None, category: Optional[str] = None
 ):
     """Get import status for files"""
-    try:
-        from backend.models.knowledge_import_tracking import ImportTracker
+    from backend.models.knowledge_import_tracking import ImportTracker
 
-        tracker = ImportTracker()
-        results = tracker.get_import_status(file_path=file_path, category=category)
+    tracker = ImportTracker()
+    results = tracker.get_import_status(file_path=file_path, category=category)
 
-        return {"status": "success", "imports": results, "total": len(results)}
-    except Exception as e:
-        logger.error(f"Error getting import status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "success", "imports": results, "total": len(results)}
 
 
 @router.get("/import/statistics")
