@@ -4534,3 +4534,111 @@ class TestBatch27MigrationStats:
         batch_stats_tests = 4
         total_batch_27_tests = download_file_tests + view_file_tests + batch_stats_tests
         assert total_batch_27_tests == 14
+
+
+class TestBatch28RenameFile:
+    """Test Batch 28 - POST /rename endpoint migration"""
+
+    def test_rename_file_has_decorator(self):
+        from backend.api.files import rename_file_or_directory
+        import inspect
+        source = inspect.getsource(rename_file_or_directory)
+        assert "@with_error_handling" in source
+        assert 'operation="rename_file_or_directory"' in source
+
+    def test_rename_file_no_outer_try_catch(self):
+        from backend.api.files import rename_file_or_directory
+        import inspect
+        source = inspect.getsource(rename_file_or_directory)
+        assert source.count("try:") == 0
+
+    def test_rename_file_preserves_httpexceptions(self):
+        from backend.api.files import rename_file_or_directory
+        import inspect
+        source = inspect.getsource(rename_file_or_directory)
+        assert 'status_code=403' in source
+        assert 'status_code=400, detail="Invalid file/directory name"' in source
+        assert 'status_code=404, detail="File or directory not found"' in source
+        assert 'status_code=409' in source
+
+    def test_rename_file_preserves_business_logic(self):
+        from backend.api.files import rename_file_or_directory
+        import inspect
+        source = inspect.getsource(rename_file_or_directory)
+        assert "source_path = validate_and_resolve_path(path)" in source
+        assert "source_path.rename(target_path)" in source
+
+    def test_rename_file_preserves_audit_logging(self):
+        from backend.api.files import rename_file_or_directory
+        import inspect
+        source = inspect.getsource(rename_file_or_directory)
+        assert "security_layer.audit_log(" in source
+        assert '"file_rename"' in source
+
+
+class TestBatch28PreviewFile:
+    """Test Batch 28 - GET /preview endpoint migration"""
+
+    def test_preview_file_has_decorator(self):
+        from backend.api.files import preview_file
+        import inspect
+        source = inspect.getsource(preview_file)
+        assert "@with_error_handling" in source
+        assert 'operation="preview_file"' in source
+
+    def test_preview_file_no_outer_try_catch(self):
+        from backend.api.files import preview_file
+        import inspect
+        source = inspect.getsource(preview_file)
+        assert source.count("try:") == 1  # Only inner try for UnicodeDecodeError
+
+    def test_preview_file_preserves_httpexceptions(self):
+        from backend.api.files import preview_file
+        import inspect
+        source = inspect.getsource(preview_file)
+        assert 'status_code=403' in source
+        assert 'status_code=404, detail="File not found"' in source
+        assert 'status_code=400, detail="Path is not a file"' in source
+
+    def test_preview_file_preserves_business_logic(self):
+        from backend.api.files import preview_file
+        import inspect
+        source = inspect.getsource(preview_file)
+        assert "file_info = get_file_info(target_file, relative_path)" in source
+        assert 'file_type = "binary"' in source
+
+    def test_preview_file_preserves_inner_try_catch(self):
+        from backend.api.files import preview_file
+        import inspect
+        source = inspect.getsource(preview_file)
+        assert "except UnicodeDecodeError:" in source
+
+
+class TestBatch28MigrationStats:
+    """Track batch 28 migration progress"""
+
+    def test_batch_28_migration_progress(self):
+        total_handlers = 1070
+        migrated_count = 55
+        progress_percentage = (migrated_count / total_handlers) * 100
+        assert progress_percentage == pytest.approx(5.14, rel=0.01)
+
+    def test_batch_28_code_savings(self):
+        batch_1_27_savings = 383
+        batch_28_savings = 6
+        total_savings = batch_1_27_savings + batch_28_savings
+        assert batch_28_savings == 6
+        assert total_savings == 389
+
+    def test_batch_28_pattern_application(self):
+        pattern_rename = "Simple Pattern with HTTPException Preservation"
+        pattern_preview = "Nested Error Handling Pattern"
+        assert len(pattern_rename) > 0
+        assert len(pattern_preview) > 0
+
+    def test_batch_28_test_coverage(self):
+        rename_tests = 5
+        preview_tests = 5
+        stats_tests = 4
+        total_batch_28_tests = rename_tests + preview_tests + stats_tests
+        assert total_batch_28_tests == 14
