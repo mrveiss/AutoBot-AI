@@ -3488,6 +3488,11 @@ async def scan_for_unimported_files(req: Request, directory: str = "docs"):
 
 
 @router.post("/vectorize_facts/background")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_background_vectorization",
+    error_code_prefix="KNOWLEDGE",
+)
 async def start_background_vectorization(
     req: Request, background_tasks: BackgroundTasks
 ):
@@ -3495,48 +3500,45 @@ async def start_background_vectorization(
     Start background vectorization of all pending facts.
     Returns immediately while vectorization runs in the background.
     """
-    try:
-        kb = await get_or_create_knowledge_base(req.app)
-        if not kb:
-            raise HTTPException(
-                status_code=500, detail="Knowledge base not initialized"
-            )
+    kb = await get_or_create_knowledge_base(req.app)
+    if not kb:
+        raise HTTPException(
+            status_code=500, detail="Knowledge base not initialized"
+        )
 
-        vectorizer = get_background_vectorizer()
+    vectorizer = get_background_vectorizer()
 
-        # Add vectorization to background tasks
-        background_tasks.add_task(vectorizer.vectorize_pending_facts, kb)
+    # Add vectorization to background tasks
+    background_tasks.add_task(vectorizer.vectorize_pending_facts, kb)
 
-        return {
-            "status": "started",
-            "message": "Background vectorization started",
-            "last_run": (
-                vectorizer.last_run.isoformat() if vectorizer.last_run else None
-            ),
-            "is_running": vectorizer.is_running,
-        }
-    except Exception as e:
-        logger.error(f"Failed to start background vectorization: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "started",
+        "message": "Background vectorization started",
+        "last_run": (
+            vectorizer.last_run.isoformat() if vectorizer.last_run else None
+        ),
+        "is_running": vectorizer.is_running,
+    }
 
 
 @router.get("/vectorize_facts/status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_vectorization_status",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_vectorization_status(req: Request):
     """Get the status of background vectorization"""
-    try:
-        vectorizer = get_background_vectorizer()
+    vectorizer = get_background_vectorizer()
 
-        return {
-            "is_running": vectorizer.is_running,
-            "last_run": (
-                vectorizer.last_run.isoformat() if vectorizer.last_run else None
-            ),
-            "check_interval": vectorizer.check_interval,
-            "batch_size": vectorizer.batch_size,
-        }
-    except Exception as e:
-        logger.error(f"Failed to get vectorization status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "is_running": vectorizer.is_running,
+        "last_run": (
+            vectorizer.last_run.isoformat() if vectorizer.last_run else None
+        ),
+        "check_interval": vectorizer.check_interval,
+        "batch_size": vectorizer.batch_size,
+    }
 
 
 # ===== CRUD OPERATIONS FOR FACTS =====
