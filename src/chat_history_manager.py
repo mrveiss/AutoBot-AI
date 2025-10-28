@@ -1347,31 +1347,36 @@ class ChatHistoryManager:
                             f"✅ Updated Memory Graph entity for session: {session_id}"
                         )
 
-                    except ValueError:
+                    except (ValueError, RuntimeError) as e:
                         # Entity doesn't exist yet - create it
-                        logger.debug(
-                            f"Entity not found, creating new entity for session: {session_id}"
-                        )
+                        # Check if it's an entity-not-found error (can be ValueError or RuntimeError)
+                        if "Entity not found" in str(e):
+                            logger.debug(
+                                f"Entity not found, creating new entity for session: {session_id}"
+                            )
 
-                        entity_metadata = {
-                            "session_id": session_id,
-                            "title": name or session_id,
-                            "status": "active",
-                            "priority": "medium",
-                            "topics": metadata["topics"],
-                            "entity_mentions": metadata["entity_mentions"],
-                        }
+                            entity_metadata = {
+                                "session_id": session_id,
+                                "title": name or session_id,
+                                "status": "active",
+                                "priority": "medium",
+                                "topics": metadata["topics"],
+                                "entity_mentions": metadata["entity_mentions"],
+                            }
 
-                        # Create entity with observations included (prevents race condition)
-                        await self.memory_graph.create_conversation_entity(
-                            session_id=session_id,
-                            metadata=entity_metadata,
-                            observations=observations,
-                        )
+                            # Create entity with observations included (prevents race condition)
+                            await self.memory_graph.create_conversation_entity(
+                                session_id=session_id,
+                                metadata=entity_metadata,
+                                observations=observations,
+                            )
 
-                        logger.info(
-                            f"✅ Created Memory Graph entity for session: {session_id}"
-                        )
+                            logger.info(
+                                f"✅ Created Memory Graph entity for session: {session_id}"
+                            )
+                        else:
+                            # Re-raise if it's a different error
+                            raise
 
                 except Exception as mg_error:
                     logger.warning(
