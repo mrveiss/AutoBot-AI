@@ -485,6 +485,11 @@ async def upload_file(
 
 
 @router.get("/download/{path:path}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="download_file",
+    error_code_prefix="FILES",
+)
 async def download_file(request: Request, path: str):
     """
     Download a file from the sandbox.
@@ -504,44 +509,42 @@ async def download_file(request: Request, path: str):
     # Store user data in request state for audit logging
     request.state.user = user_data
 
-    try:
-        target_file = validate_and_resolve_path(path)
+    target_file = validate_and_resolve_path(path)
 
-        if not target_file.exists():
-            raise HTTPException(status_code=404, detail="File not found")
+    if not target_file.exists():
+        raise HTTPException(status_code=404, detail="File not found")
 
-        if not target_file.is_file():
-            raise HTTPException(status_code=400, detail="Path is not a file")
+    if not target_file.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
 
-        # Enhanced audit logging with authenticated user
-        security_layer = get_security_layer(request)
-        security_layer.audit_log(
-            "file_download",
-            user_data.get("username", "unknown"),
-            "success",
-            {
-                "path": path,
-                "size": target_file.stat().st_size,
-                "filename": target_file.name,
-                "user_role": user_data.get("role", "unknown"),
-                "ip": request.client.host if request.client else "unknown",
-            },
-        )
+    # Enhanced audit logging with authenticated user
+    security_layer = get_security_layer(request)
+    security_layer.audit_log(
+        "file_download",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "path": path,
+            "size": target_file.stat().st_size,
+            "filename": target_file.name,
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+        },
+    )
 
-        return FileResponse(
-            path=str(target_file),
-            filename=target_file.name,
-            media_type="application/octet-stream",
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error downloading file: {e}")
-        raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
+    return FileResponse(
+        path=str(target_file),
+        filename=target_file.name,
+        media_type="application/octet-stream",
+    )
 
 
 @router.get("/view/{path:path}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="view_file",
+    error_code_prefix="FILES",
+)
 async def view_file(request: Request, path: str):
     """
     View file content (for text files) or get file info.
@@ -559,41 +562,34 @@ async def view_file(request: Request, path: str):
     # Store user data in request state for audit logging
     request.state.user = user_data
 
-    try:
-        target_file = validate_and_resolve_path(path)
+    target_file = validate_and_resolve_path(path)
 
-        if not target_file.exists():
-            raise HTTPException(status_code=404, detail="File not found")
+    if not target_file.exists():
+        raise HTTPException(status_code=404, detail="File not found")
 
-        if not target_file.is_file():
-            raise HTTPException(status_code=400, detail="Path is not a file")
+    if not target_file.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
 
-        # Get file info
-        relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
-        file_info = get_file_info(target_file, relative_path)
+    # Get file info
+    relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
+    file_info = get_file_info(target_file, relative_path)
 
-        # Try to read content for text files
-        content = None
-        if file_info.mime_type and file_info.mime_type.startswith("text/"):
-            try:
-                # PERFORMANCE FIX: Convert to async file I/O
-                async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
-                    content = await f.read()
-            except UnicodeDecodeError:
-                # File is binary, don't include content
-                pass
+    # Try to read content for text files
+    content = None
+    if file_info.mime_type and file_info.mime_type.startswith("text/"):
+        try:
+            # PERFORMANCE FIX: Convert to async file I/O
+            async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
+                content = await f.read()
+        except UnicodeDecodeError:
+            # File is binary, don't include content
+            pass
 
-        return {
-            "file_info": file_info,
-            "content": content,
-            "is_text": content is not None,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error viewing file: {e}")
-        raise HTTPException(status_code=500, detail=f"Error viewing file: {str(e)}")
+    return {
+        "file_info": file_info,
+        "content": content,
+        "is_text": content is not None,
+    }
 
 
 @router.post("/rename")
