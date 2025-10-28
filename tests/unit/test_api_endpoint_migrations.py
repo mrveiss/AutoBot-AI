@@ -6262,3 +6262,187 @@ class TestBatch38AnalyticsMigrations:
         # All should use ANALYTICS prefix
         assert 'error_code_prefix="ANALYTICS"' in stop_source
         assert 'error_code_prefix="ANALYTICS"' in query_source
+
+
+# ============================================================================
+# Batch 39: analytics.py - Code analysis endpoints (2 endpoints)
+# ============================================================================
+
+
+class TestBatch39AnalyticsMigrations:
+    """Test batch 39 analytics.py code analysis endpoint migrations"""
+
+    def test_analyze_communication_chains_detailed_has_decorator(self):
+        """Test POST /code/analyze/communication-chains has @with_error_handling decorator"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.analyze_communication_chains_detailed)
+        assert (
+            "@with_error_handling" in source
+        ), "Endpoint missing @with_error_handling decorator"
+        assert (
+            'category=ErrorCategory.SERVER_ERROR' in source
+        ), "Decorator should use SERVER_ERROR category"
+        assert (
+            'operation="analyze_communication_chains_detailed"' in source
+        ), "Decorator should specify operation name"
+        assert (
+            'error_code_prefix="ANALYTICS"' in source
+        ), "Decorator should use ANALYTICS prefix"
+
+    def test_analyze_communication_chains_detailed_no_outer_try_catch(self):
+        """Test POST /code/analyze/communication-chains has no outer try-catch block"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.analyze_communication_chains_detailed)
+        lines = source.split("\n")
+
+        # Check that function body doesn't start with try
+        function_body_started = False
+        for line in lines:
+            if 'async def analyze_communication_chains_detailed' in line:
+                function_body_started = True
+                continue
+            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+                assert not line.strip().startswith(
+                    "try:"
+                ), "Endpoint should not have outer try-catch block"
+                break
+
+    def test_analyze_communication_chains_detailed_preserves_business_logic(self):
+        """Test POST /code/analyze/communication-chains preserves business logic"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.analyze_communication_chains_detailed)
+        
+        # Check key business logic is preserved
+        assert "analysis_request = CodeAnalysisRequest(" in source
+        assert 'analysis_type="communication_chains"' in source
+        assert "results = await analytics_controller.perform_code_analysis(analysis_request)" in source
+        assert 'if results.get("status") == "success":' in source
+        assert "runtime_patterns = analytics_controller.api_frequencies" in source
+        assert 'static_patterns = results.get("communication_chains"' in source
+        assert "correlation_data = {}" in source
+        assert 'for endpoint in static_patterns.get("api_endpoints"' in source
+        assert '"static_detected": True' in source
+        assert '"runtime_calls": runtime_patterns.get(endpoint' in source
+        assert '"avg_response_time":' in source
+        assert '"error_rate":' in source
+        assert 'results["runtime_correlation"] = correlation_data' in source
+        assert 'results["insights"] = []' in source
+        assert "unused_endpoints = [" in source
+        assert "high_error_endpoints = [" in source
+        assert '"type": "unused_endpoints"' in source
+        assert '"type": "high_error_endpoints"' in source
+        assert "return results" in source
+
+    def test_analyze_communication_chains_detailed_no_manual_error_handling(self):
+        """Test POST /code/analyze/communication-chains has no manual error handling"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.analyze_communication_chains_detailed)
+        
+        # Should not have except blocks
+        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert "HTTPException" not in source, "Should not raise HTTPException manually"
+
+    def test_get_code_quality_score_has_decorator(self):
+        """Test GET /code/metrics/quality-score has @with_error_handling decorator"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_code_quality_score)
+        assert (
+            "@with_error_handling" in source
+        ), "Endpoint missing @with_error_handling decorator"
+        assert (
+            'category=ErrorCategory.SERVER_ERROR' in source
+        ), "Decorator should use SERVER_ERROR category"
+        assert (
+            'operation="get_code_quality_score"' in source
+        ), "Decorator should specify operation name"
+        assert (
+            'error_code_prefix="ANALYTICS"' in source
+        ), "Decorator should use ANALYTICS prefix"
+
+    def test_get_code_quality_score_no_outer_try_catch(self):
+        """Test GET /code/metrics/quality-score has no outer try-catch block"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_code_quality_score)
+        lines = source.split("\n")
+
+        # Check that function body doesn't start with try
+        function_body_started = False
+        for line in lines:
+            if 'async def get_code_quality_score' in line:
+                function_body_started = True
+                continue
+            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+                assert not line.strip().startswith(
+                    "try:"
+                ), "Endpoint should not have outer try-catch block"
+                break
+
+    def test_get_code_quality_score_preserves_business_logic(self):
+        """Test GET /code/metrics/quality-score preserves business logic"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_code_quality_score)
+        
+        # Check key business logic is preserved
+        assert 'cached_analysis = analytics_state.get("code_analysis_cache")' in source
+        assert "if not cached_analysis:" in source
+        assert "analysis_request = CodeAnalysisRequest(analysis_type=" in source
+        assert "await analytics_controller.perform_code_analysis(" in source
+        assert "quality_factors = {" in source
+        assert '"complexity": 0' in source
+        assert '"maintainability": 0' in source
+        assert '"test_coverage": 0' in source
+        assert '"documentation": 0' in source
+        assert '"security": 0' in source
+        assert 'if "code_analysis" in cached_analysis:' in source
+        assert 'code_data = cached_analysis["code_analysis"]' in source
+        assert 'complexity = code_data.get("complexity", 10)' in source
+        assert 'quality_factors["complexity"] = max(0, (10 - complexity) * 10)' in source
+        assert 'quality_factors["test_coverage"] = code_data.get("test_coverage"' in source
+        assert "maintainability_scores = {" in source
+        assert "overall_score = sum(quality_factors.values())" in source
+        assert '"overall_score": round(overall_score, 1)' in source
+        assert '"grade":' in source
+        assert '"quality_factors": quality_factors' in source
+
+    def test_get_code_quality_score_no_manual_error_handling(self):
+        """Test GET /code/metrics/quality-score has no manual error handling"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.get_code_quality_score)
+        
+        # Should not have except blocks
+        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert "HTTPException" not in source, "Should not raise HTTPException manually"
+
+    def test_batch39_all_endpoints_migrated(self):
+        """Test all batch 39 endpoints have been migrated"""
+        from backend.api import analytics
+
+        # Check both endpoints have decorators
+        chains_source = inspect.getsource(analytics.analyze_communication_chains_detailed)
+        quality_source = inspect.getsource(analytics.get_code_quality_score)
+
+        assert "@with_error_handling" in chains_source, "Communication chains endpoint not migrated"
+        assert "@with_error_handling" in quality_source, "Quality score endpoint not migrated"
+
+    def test_batch39_consistent_error_handling(self):
+        """Test batch 39 endpoints use consistent error handling configuration"""
+        from backend.api import analytics
+
+        chains_source = inspect.getsource(analytics.analyze_communication_chains_detailed)
+        quality_source = inspect.getsource(analytics.get_code_quality_score)
+
+        # All should use SERVER_ERROR category
+        assert 'category=ErrorCategory.SERVER_ERROR' in chains_source
+        assert 'category=ErrorCategory.SERVER_ERROR' in quality_source
+
+        # All should use ANALYTICS prefix
+        assert 'error_code_prefix="ANALYTICS"' in chains_source
+        assert 'error_code_prefix="ANALYTICS"' in quality_source
