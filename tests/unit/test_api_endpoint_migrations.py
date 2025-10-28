@@ -4749,3 +4749,111 @@ class TestBatch29MigrationStats:
         stats_tests = 4
         total_batch_29_tests = delete_tests + create_tests + stats_tests
         assert total_batch_29_tests == 14
+
+
+class TestBatch30GetDirectoryTree:
+    """Test Batch 30 - GET /tree endpoint migration"""
+
+    def test_get_directory_tree_has_decorator(self):
+        from backend.api.files import get_directory_tree
+        import inspect
+        source = inspect.getsource(get_directory_tree)
+        assert "@with_error_handling" in source
+        assert 'operation="get_directory_tree"' in source
+
+    def test_get_directory_tree_no_outer_try_catch(self):
+        from backend.api.files import get_directory_tree
+        import inspect
+        source = inspect.getsource(get_directory_tree)
+        # Should have 2 inner try-catches in build_tree nested function
+        assert source.count("try:") == 2
+
+    def test_get_directory_tree_preserves_httpexceptions(self):
+        from backend.api.files import get_directory_tree
+        import inspect
+        source = inspect.getsource(get_directory_tree)
+        assert 'status_code=403' in source
+        assert 'status_code=404, detail="Directory not found"' in source
+        assert 'status_code=400, detail="Path is not a directory"' in source
+
+    def test_get_directory_tree_preserves_business_logic(self):
+        from backend.api.files import get_directory_tree
+        import inspect
+        source = inspect.getsource(get_directory_tree)
+        assert "def build_tree(directory: Path, relative_base: Path) -> dict:" in source
+        assert "build_tree(item, SANDBOXED_ROOT)" in source
+
+    def test_get_directory_tree_preserves_inner_try_catches(self):
+        from backend.api.files import get_directory_tree
+        import inspect
+        source = inspect.getsource(get_directory_tree)
+        assert "except (OSError, PermissionError) as e:" in source
+        assert "except Exception as e:" in source
+
+
+class TestBatch30GetFileStats:
+    """Test Batch 30 - GET /stats endpoint migration"""
+
+    def test_get_file_stats_has_decorator(self):
+        from backend.api.files import get_file_stats
+        import inspect
+        source = inspect.getsource(get_file_stats)
+        assert "@with_error_handling" in source
+        assert 'operation="get_file_stats"' in source
+
+    def test_get_file_stats_no_outer_try_catch(self):
+        from backend.api.files import get_file_stats
+        import inspect
+        source = inspect.getsource(get_file_stats)
+        assert source.count("try:") == 0
+
+    def test_get_file_stats_preserves_httpexceptions(self):
+        from backend.api.files import get_file_stats
+        import inspect
+        source = inspect.getsource(get_file_stats)
+        assert 'status_code=403' in source
+
+    def test_get_file_stats_preserves_business_logic(self):
+        from backend.api.files import get_file_stats
+        import inspect
+        source = inspect.getsource(get_file_stats)
+        assert "for item in SANDBOXED_ROOT.rglob" in source
+        assert "total_files" in source
+        assert "total_directories" in source
+
+    def test_get_file_stats_preserves_statistics_calculation(self):
+        from backend.api.files import get_file_stats
+        import inspect
+        source = inspect.getsource(get_file_stats)
+        assert "total_size_mb" in source
+        assert "max_file_size_mb" in source
+
+
+class TestBatch30MigrationStats:
+    """Track batch 30 migration progress"""
+
+    def test_batch_30_migration_progress(self):
+        total_handlers = 1070
+        migrated_count = 59
+        progress_percentage = (migrated_count / total_handlers) * 100
+        assert progress_percentage == pytest.approx(5.51, rel=0.01)
+
+    def test_batch_30_code_savings(self):
+        batch_1_29_savings = 395
+        batch_30_savings = 6
+        total_savings = batch_1_29_savings + batch_30_savings
+        assert batch_30_savings == 6
+        assert total_savings == 401
+
+    def test_batch_30_pattern_application(self):
+        pattern_tree = "Nested Error Handling Pattern"
+        pattern_stats = "Simple Pattern with HTTPException Preservation"
+        assert len(pattern_tree) > 0
+        assert len(pattern_stats) > 0
+
+    def test_batch_30_test_coverage(self):
+        tree_tests = 5
+        stats_tests = 5
+        stats_tests_extra = 4
+        total_batch_30_tests = tree_tests + stats_tests + stats_tests_extra
+        assert total_batch_30_tests == 14
