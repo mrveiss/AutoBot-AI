@@ -2950,6 +2950,11 @@ async def get_vectorization_job_status(job_id: str, req: Request):
 
 
 @router.get("/vectorize_jobs/failed")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_failed_vectorization_jobs",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_failed_vectorization_jobs(req: Request):
     """
     Get all failed vectorization jobs from Redis.
@@ -2957,51 +2962,51 @@ async def get_failed_vectorization_jobs(req: Request):
     Returns:
         List of failed jobs with their error details
     """
-    try:
-        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb is None:
-            raise HTTPException(
-                status_code=500, detail="Knowledge base not initialized"
-            )
+    if kb is None:
+        raise HTTPException(
+            status_code=500, detail="Knowledge base not initialized"
+        )
 
-        # Use SCAN to iterate through keys efficiently (non-blocking)
-        failed_jobs = []
-        cursor = 0
+    # Use SCAN to iterate through keys efficiently (non-blocking)
+    failed_jobs = []
+    cursor = 0
 
-        while True:
-            cursor, keys = kb.redis_client.scan(
-                cursor, match="vectorization_job:*", count=100
-            )
+    while True:
+        cursor, keys = kb.redis_client.scan(
+            cursor, match="vectorization_job:*", count=100
+        )
 
-            # Use pipeline for batch operations
-            if keys:
-                pipe = kb.redis_client.pipeline()
-                for key in keys:
-                    pipe.get(key)
-                results = pipe.execute()
+        # Use pipeline for batch operations
+        if keys:
+            pipe = kb.redis_client.pipeline()
+            for key in keys:
+                pipe.get(key)
+            results = pipe.execute()
 
-                for job_json in results:
-                    if job_json:
-                        job_data = json.loads(job_json)
-                        if job_data.get("status") == "failed":
-                            failed_jobs.append(job_data)
+            for job_json in results:
+                if job_json:
+                    job_data = json.loads(job_json)
+                    if job_data.get("status") == "failed":
+                        failed_jobs.append(job_data)
 
-            if cursor == 0:
-                break
+        if cursor == 0:
+            break
 
-        return {
-            "status": "success",
-            "failed_jobs": failed_jobs,
-            "total_failed": len(failed_jobs),
-        }
-
-    except Exception as e:
-        logger.error(f"Error getting failed vectorization jobs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "success",
+        "failed_jobs": failed_jobs,
+        "total_failed": len(failed_jobs),
+    }
 
 
 @router.post("/vectorize_jobs/{job_id}/retry")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="retry_vectorization_job",
+    error_code_prefix="KNOWLEDGE",
+)
 async def retry_vectorization_job(
     job_id: str, req: Request, background_tasks: BackgroundTasks, force: bool = False
 ):
@@ -3015,64 +3020,57 @@ async def retry_vectorization_job(
     Returns:
         New job tracking information
     """
-    try:
-        kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb is None:
-            raise HTTPException(
-                status_code=500, detail="Knowledge base not initialized"
-            )
-
-        # Get old job data
-        old_job_json = kb.redis_client.get(f"vectorization_job:{job_id}")
-
-        if not old_job_json:
-            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-
-        old_job_data = json.loads(old_job_json)
-        fact_id = old_job_data.get("fact_id")
-
-        if not fact_id:
-            raise HTTPException(status_code=400, detail="Job does not contain fact_id")
-
-        # Create new job
-        new_job_id = str(uuid.uuid4())
-        job_data = {
-            "job_id": new_job_id,
-            "fact_id": fact_id,
-            "status": "pending",
-            "progress": 0,
-            "started_at": datetime.now().isoformat(),
-            "completed_at": None,
-            "error": None,
-            "result": None,
-            "retry_of": job_id,  # Track that this is a retry
-        }
-
-        kb.redis_client.setex(
-            f"vectorization_job:{new_job_id}", 3600, json.dumps(job_data)
+    if kb is None:
+        raise HTTPException(
+            status_code=500, detail="Knowledge base not initialized"
         )
 
-        # Add background task
-        background_tasks.add_task(
-            _vectorize_fact_background, kb, fact_id, new_job_id, force
-        )
+    # Get old job data
+    old_job_json = kb.redis_client.get(f"vectorization_job:{job_id}")
 
-        logger.info(f"Retrying vectorization job {job_id} as {new_job_id}")
+    if not old_job_json:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        return {
-            "status": "success",
-            "message": "Retry job started",
-            "new_job_id": new_job_id,
-            "fact_id": fact_id,
-            "original_job_id": job_id,
-        }
+    old_job_data = json.loads(old_job_json)
+    fact_id = old_job_data.get("fact_id")
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error retrying vectorization job {job_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    if not fact_id:
+        raise HTTPException(status_code=400, detail="Job does not contain fact_id")
+
+    # Create new job
+    new_job_id = str(uuid.uuid4())
+    job_data = {
+        "job_id": new_job_id,
+        "fact_id": fact_id,
+        "status": "pending",
+        "progress": 0,
+        "started_at": datetime.now().isoformat(),
+        "completed_at": None,
+        "error": None,
+        "result": None,
+        "retry_of": job_id,  # Track that this is a retry
+    }
+
+    kb.redis_client.setex(
+        f"vectorization_job:{new_job_id}", 3600, json.dumps(job_data)
+    )
+
+    # Add background task
+    background_tasks.add_task(
+        _vectorize_fact_background, kb, fact_id, new_job_id, force
+    )
+
+    logger.info(f"Retrying vectorization job {job_id} as {new_job_id}")
+
+    return {
+        "status": "success",
+        "message": "Retry job started",
+        "new_job_id": new_job_id,
+        "fact_id": fact_id,
+        "original_job_id": job_id,
+    }
 
 
 @router.delete("/vectorize_jobs/{job_id}")
