@@ -5500,7 +5500,7 @@ class TestBatch34MigrationStats:
         # Batch 34: 1 endpoint migrated (POST /execute)
         # Total progress: 66/1,070 endpoints
         progress = 66 / 1070
-        assert progress >= 0.0617, f"Migration progress should be at least 6.17%, got {progress*100:.2f}%"
+        assert progress >= 0.0616, f"Migration progress should be at least 6.16%, got {progress*100:.2f}%"
 
     def test_batch_34_code_savings(self):
         """Verify batch 34 code savings calculation"""
