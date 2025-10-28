@@ -33,6 +33,7 @@ from backend.dependencies import get_config, get_knowledge_base
 from backend.security.session_ownership import validate_session_ownership
 from src.auth_middleware import auth_middleware
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_database_manager import get_redis_client
 
 # Import models - DISABLED: Models don't exist yet
@@ -1269,44 +1270,37 @@ async def export_session(session_id: str, request: Request, format: str = "json"
 
 
 @router.get("/chat/health")
+@with_error_handling(
+    category=ErrorCategory.SERVICE_UNAVAILABLE,
+    operation="chat_health_check",
+    error_code_prefix="CHAT",
+)
 async def chat_health_check(request: Request):
     """Health check for chat service"""
-    try:
-        chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
-        llm_service = getattr(request.app.state, "llm_service", None)
+    chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
+    llm_service = getattr(request.app.state, "llm_service", None)
 
-        health_status = {
-            "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
-            "components": {
-                "chat_history_manager": (
-                    "healthy" if chat_history_manager else "unavailable"
-                ),
-                "llm_service": "healthy" if llm_service else "unavailable",
-            },
-        }
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "components": {
+            "chat_history_manager": (
+                "healthy" if chat_history_manager else "unavailable"
+            ),
+            "llm_service": "healthy" if llm_service else "unavailable",
+        },
+    }
 
-        overall_healthy = all(
-            status == "healthy" for status in health_status["components"].values()
-        )
+    overall_healthy = all(
+        status == "healthy" for status in health_status["components"].values()
+    )
 
-        if not overall_healthy:
-            health_status["status"] = "degraded"
+    if not overall_healthy:
+        health_status["status"] = "degraded"
 
-        return JSONResponse(
-            status_code=200 if overall_healthy else 503, content=health_status
-        )
-
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "unhealthy",
-                "error": str(e),
-                "timestamp": datetime.utcnow().isoformat(),
-            },
-        )
+    return JSONResponse(
+        status_code=200 if overall_healthy else 503, content=health_status
+    )
 
 
 @router.get("/chat/stats")
