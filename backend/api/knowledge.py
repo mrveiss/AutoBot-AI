@@ -2340,133 +2340,139 @@ async def _enhance_search_with_rag(
 
 
 @router.get("/facts/by_category")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_facts_by_category",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_facts_by_category(
     req: Request, category: Optional[str] = None, limit: int = 100
 ):
     """Get facts grouped by category for browsing with caching"""
-    try:
-        kb = await get_or_create_knowledge_base(req.app)
-        import json
+    kb = await get_or_create_knowledge_base(req.app)
+    import json
 
-        # Check cache first (60 second TTL)
-        cache_key = f"kb:cache:facts_by_category:{category or 'all'}:{limit}"
-        cached_result = kb.redis_client.get(cache_key)
+    # Check cache first (60 second TTL)
+    cache_key = f"kb:cache:facts_by_category:{category or 'all'}:{limit}"
+    cached_result = kb.redis_client.get(cache_key)
 
-        if cached_result:
-            logger.debug(
-                f"Cache HIT for facts_by_category (category={category}, limit={limit})"
-            )
-            return json.loads(
-                cached_result.decode("utf-8")
-                if isinstance(cached_result, bytes)
-                else cached_result
-            )
-
-        logger.info(
-            f"Cache MISS for facts_by_category - scanning all facts (category={category}, limit={limit})"
+    if cached_result:
+        logger.debug(
+            f"Cache HIT for facts_by_category (category={category}, limit={limit})"
+        )
+        return json.loads(
+            cached_result.decode("utf-8")
+            if isinstance(cached_result, bytes)
+            else cached_result
         )
 
-        # Get all fact keys from Redis
-        fact_keys = kb.redis_client.keys("fact:*")
+    logger.info(
+        f"Cache MISS for facts_by_category - scanning all facts (category={category}, limit={limit})"
+    )
 
-        if not fact_keys:
-            return {"categories": {}, "total_facts": 0}
+    # Get all fact keys from Redis
+    fact_keys = kb.redis_client.keys("fact:*")
 
-        # Group facts by category
-        categories_dict = {}
+    if not fact_keys:
+        return {"categories": {}, "total_facts": 0}
 
-        for fact_key in fact_keys:
-            try:
-                # Get fact data from hash
-                fact_data = kb.redis_client.hgetall(fact_key)
+    # Group facts by category
+    categories_dict = {}
 
-                if not fact_data:
-                    continue
+    for fact_key in fact_keys:
+        try:
+            # Get fact data from hash
+            fact_data = kb.redis_client.hgetall(fact_key)
 
-                # Extract metadata (handle both bytes and string keys from Redis)
-                metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
-                metadata = json.loads(
-                    metadata_str.decode("utf-8")
-                    if isinstance(metadata_str, bytes)
-                    else metadata_str
-                )
-
-                # Extract content (handle both bytes and string keys from Redis)
-                content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
-                content = (
-                    content_raw.decode("utf-8")
-                    if isinstance(content_raw, bytes)
-                    else str(content_raw) if content_raw else ""
-                )
-
-                # Get category based on source field (not metadata.category)
-                from backend.knowledge_categories import get_category_for_source
-
-                source = metadata.get("source", "")
-                fact_category = (
-                    get_category_for_source(source).value if source else "general"
-                )
-                fact_title = metadata.get("title", metadata.get("command", "Untitled"))
-                fact_type = metadata.get("type", "unknown")
-
-                if fact_category not in categories_dict:
-                    categories_dict[fact_category] = []
-
-                # Add to category list
-                categories_dict[fact_category].append(
-                    {
-                        "key": (
-                            fact_key.decode("utf-8")
-                            if isinstance(fact_key, bytes)
-                            else str(fact_key)
-                        ),
-                        "title": fact_title,
-                        "content": (
-                            content[:500] + "..." if len(content) > 500 else content
-                        ),  # Preview
-                        "full_content": content,
-                        "category": fact_category,
-                        "type": fact_type,
-                        "metadata": metadata,
-                    }
-                )
-
-            except Exception as e:
-                logger.warning(f"Error processing fact {fact_key}: {e}")
+            if not fact_data:
                 continue
 
-        # Filter by category if specified
-        if category:
-            categories_dict = {
-                k: v for k, v in categories_dict.items() if k == category
-            }
+            # Extract metadata (handle both bytes and string keys from Redis)
+            metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
+            metadata = json.loads(
+                metadata_str.decode("utf-8")
+                if isinstance(metadata_str, bytes)
+                else metadata_str
+            )
 
-        # Limit results per category
-        for cat in categories_dict:
-            categories_dict[cat] = categories_dict[cat][:limit]
+            # Extract content (handle both bytes and string keys from Redis)
+            content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
+            content = (
+                content_raw.decode("utf-8")
+                if isinstance(content_raw, bytes)
+                else str(content_raw) if content_raw else ""
+            )
 
-        result = {
-            "categories": categories_dict,
-            "total_facts": sum(len(v) for v in categories_dict.values()),
-            "category_filter": category,
+            # Get category based on source field (not metadata.category)
+            from backend.knowledge_categories import get_category_for_source
+
+            source = metadata.get("source", "")
+            fact_category = (
+                get_category_for_source(source).value if source else "general"
+            )
+            fact_title = metadata.get("title", metadata.get("command", "Untitled"))
+            fact_type = metadata.get("type", "unknown")
+
+            if fact_category not in categories_dict:
+                categories_dict[fact_category] = []
+
+            # Add to category list
+            categories_dict[fact_category].append(
+                {
+                    "key": (
+                        fact_key.decode("utf-8")
+                        if isinstance(fact_key, bytes)
+                        else str(fact_key)
+                    ),
+                    "title": fact_title,
+                    "content": (
+                        content[:500] + "..." if len(content) > 500 else content
+                    ),  # Preview
+                    "full_content": content,
+                    "category": fact_category,
+                    "type": fact_type,
+                    "metadata": metadata,
+                }
+            )
+
+        except Exception as e:
+            logger.warning(f"Error processing fact {fact_key}: {e}")
+            continue
+
+    # Filter by category if specified
+    if category:
+        categories_dict = {
+            k: v for k, v in categories_dict.items() if k == category
         }
 
-        # Cache the result for 60 seconds
-        try:
-            kb.redis_client.setex(cache_key, 60, json.dumps(result))
-            logger.debug(
-                f"Cached facts_by_category result (category={category}, limit={limit})"
-            )
-        except Exception as cache_error:
-            logger.warning(f"Failed to cache facts_by_category: {cache_error}")
+    # Limit results per category
+    for cat in categories_dict:
+        categories_dict[cat] = categories_dict[cat][:limit]
 
-        return result
-    except Exception as e:
-        logger.error(f"Error getting facts by category: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    result = {
+        "categories": categories_dict,
+        "total_facts": sum(len(v) for v in categories_dict.values()),
+        "category_filter": category,
+    }
+
+    # Cache the result for 60 seconds
+    try:
+        kb.redis_client.setex(cache_key, 60, json.dumps(result))
+        logger.debug(
+            f"Cached facts_by_category result (category={category}, limit={limit})"
+        )
+    except Exception as cache_error:
+        logger.warning(f"Failed to cache facts_by_category: {cache_error}")
+
+    return result
 
 
 @router.get("/fact/{fact_key}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_fact_by_key",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_fact_by_key(
     fact_key: str = Path(..., regex=r"^[a-zA-Z0-9_:-]+$", max_length=255),
     req: Request = None,
@@ -2482,57 +2488,51 @@ async def get_fact_by_key(
         - Path traversal attempts blocked
         - Maximum key length enforced
     """
-    try:
-        # Additional security check for path traversal
-        if ".." in fact_key or "/" in fact_key or "\\" in fact_key:
-            raise HTTPException(
-                status_code=400, detail="Invalid fact_key: path traversal not allowed"
-            )
-
-        kb = await get_or_create_knowledge_base(req.app)
-        import json
-
-        # Get fact data from Redis hash
-        fact_data = kb.redis_client.hgetall(fact_key)
-
-        if not fact_data:
-            raise HTTPException(status_code=404, detail=f"Fact not found: {fact_key}")
-
-        # Extract metadata (handle both bytes and string keys from Redis)
-        metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
-        metadata = json.loads(
-            metadata_str.decode("utf-8")
-            if isinstance(metadata_str, bytes)
-            else metadata_str
+    # Additional security check for path traversal
+    if ".." in fact_key or "/" in fact_key or "\\" in fact_key:
+        raise HTTPException(
+            status_code=400, detail="Invalid fact_key: path traversal not allowed"
         )
 
-        # Extract content (handle both bytes and string keys from Redis)
-        content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
-        content = (
-            content_raw.decode("utf-8")
-            if isinstance(content_raw, bytes)
-            else str(content_raw) if content_raw else ""
-        )
+    kb = await get_or_create_knowledge_base(req.app)
+    import json
 
-        # Extract created_at (handle both bytes and string keys from Redis)
-        created_at_raw = fact_data.get("created_at") or fact_data.get(b"created_at", b"")
-        created_at = (
-            created_at_raw.decode("utf-8")
-            if isinstance(created_at_raw, bytes)
-            else str(created_at_raw) if created_at_raw else ""
-        )
+    # Get fact data from Redis hash
+    fact_data = kb.redis_client.hgetall(fact_key)
 
-        return {
-            "key": fact_key,
-            "content": content,
-            "metadata": metadata,
-            "created_at": created_at,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting fact {fact_key}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    if not fact_data:
+        raise HTTPException(status_code=404, detail=f"Fact not found: {fact_key}")
+
+    # Extract metadata (handle both bytes and string keys from Redis)
+    metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
+    metadata = json.loads(
+        metadata_str.decode("utf-8")
+        if isinstance(metadata_str, bytes)
+        else metadata_str
+    )
+
+    # Extract content (handle both bytes and string keys from Redis)
+    content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
+    content = (
+        content_raw.decode("utf-8")
+        if isinstance(content_raw, bytes)
+        else str(content_raw) if content_raw else ""
+    )
+
+    # Extract created_at (handle both bytes and string keys from Redis)
+    created_at_raw = fact_data.get("created_at") or fact_data.get(b"created_at", b"")
+    created_at = (
+        created_at_raw.decode("utf-8")
+        if isinstance(created_at_raw, bytes)
+        else str(created_at_raw) if created_at_raw else ""
+    )
+
+    return {
+        "key": fact_key,
+        "content": content,
+        "metadata": metadata,
+        "created_at": created_at,
+    }
 
 
 @router.post("/vectorize_facts")
