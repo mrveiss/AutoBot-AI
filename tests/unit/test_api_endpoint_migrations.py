@@ -5051,3 +5051,184 @@ class TestBatch32MigrationStats:
         stats_tests = 4
         total_batch_32_tests = status_tests + approve_tests + stats_tests
         assert total_batch_32_tests == 14
+
+
+# ============================================================
+# Batch 33: backend/api/workflow.py DELETE & GET approvals endpoints
+# ============================================================
+
+
+class TestBatch33WorkflowDELETEAndGETApprovals:
+    """Test batch 33 migrations: DELETE /workflow/{id} and GET /pending_approvals"""
+
+    def test_cancel_workflow_has_decorator(self):
+        """Verify DELETE /workflow/{workflow_id} has @with_error_handling decorator"""
+        import inspect
+        from backend.api.workflow import cancel_workflow
+        
+        source = inspect.getsource(cancel_workflow)
+        assert "@with_error_handling" in source, "cancel_workflow missing decorator"
+        assert "ErrorCategory.NOT_FOUND" in source, "cancel_workflow wrong category"
+        assert 'operation="cancel_workflow"' in source, "cancel_workflow wrong operation"
+        assert 'error_code_prefix="WORKFLOW"' in source, "cancel_workflow wrong prefix"
+
+    def test_cancel_workflow_preserves_http_exception(self):
+        """Verify cancel_workflow preserves HTTPException for 404"""
+        import inspect
+        from backend.api.workflow import cancel_workflow
+        
+        source = inspect.getsource(cancel_workflow)
+        assert 'raise HTTPException(status_code=404' in source, "cancel_workflow should preserve 404 HTTPException"
+
+    def test_cancel_workflow_business_logic_preserved(self):
+        """Verify cancel_workflow business logic is intact"""
+        import inspect
+        from backend.api.workflow import cancel_workflow
+        
+        source = inspect.getsource(cancel_workflow)
+        # Status update
+        assert 'workflow["status"] = "cancelled"' in source, "cancel_workflow missing status update"
+        # Timestamp
+        assert 'workflow["cancelled_at"]' in source, "cancel_workflow missing cancelled_at"
+        # Future cancellation
+        assert "if not future.done():" in source, "cancel_workflow missing future check"
+        assert "future.cancel()" in source, "cancel_workflow missing future cancellation"
+        # Event publishing
+        assert 'await event_manager.publish(' in source, "cancel_workflow missing event publishing"
+        assert '"workflow_cancelled"' in source, "cancel_workflow missing event type"
+
+    def test_cancel_workflow_no_generic_try_catch(self):
+        """Verify cancel_workflow has no generic try-catch blocks"""
+        import inspect
+        from backend.api.workflow import cancel_workflow
+        
+        source = inspect.getsource(cancel_workflow)
+        lines = source.split('\n')
+        
+        # Should not have try-catch for generic exception handling
+        for i, line in enumerate(lines):
+            if 'try:' in line and 'except' in ''.join(lines[i:i+10]):
+                # If there's a try-catch, ensure it's specific (not generic Exception)
+                except_block = ''.join(lines[i:i+10])
+                if 'except Exception' in except_block:
+                    pytest.fail("cancel_workflow should not have generic Exception handler")
+
+    def test_get_pending_approvals_has_decorator(self):
+        """Verify GET /workflow/{workflow_id}/pending_approvals has @with_error_handling decorator"""
+        import inspect
+        from backend.api.workflow import get_pending_approvals
+        
+        source = inspect.getsource(get_pending_approvals)
+        assert "@with_error_handling" in source, "get_pending_approvals missing decorator"
+        assert "ErrorCategory.NOT_FOUND" in source, "get_pending_approvals wrong category"
+        assert 'operation="get_pending_approvals"' in source, "get_pending_approvals wrong operation"
+        assert 'error_code_prefix="WORKFLOW"' in source, "get_pending_approvals wrong prefix"
+
+    def test_get_pending_approvals_preserves_http_exception(self):
+        """Verify get_pending_approvals preserves HTTPException for 404"""
+        import inspect
+        from backend.api.workflow import get_pending_approvals
+        
+        source = inspect.getsource(get_pending_approvals)
+        assert 'raise HTTPException(status_code=404' in source, "get_pending_approvals should preserve 404 HTTPException"
+
+    def test_get_pending_approvals_business_logic_preserved(self):
+        """Verify get_pending_approvals business logic is intact"""
+        import inspect
+        from backend.api.workflow import get_pending_approvals
+        
+        source = inspect.getsource(get_pending_approvals)
+        # Workflow lookup
+        assert 'workflow = active_workflows[workflow_id]' in source, "get_pending_approvals missing workflow lookup"
+        # Step filtering
+        assert 'for step in workflow.get("steps", [])' in source, "get_pending_approvals missing step iteration"
+        assert 'if step["status"] == "waiting_approval"' in source, "get_pending_approvals missing approval filter"
+        # Pending list generation
+        assert "pending_steps.append(" in source, "get_pending_approvals missing list append"
+        assert '"step_id"' in source, "get_pending_approvals missing step_id field"
+        assert '"description"' in source, "get_pending_approvals missing description field"
+        assert '"agent_type"' in source, "get_pending_approvals missing agent_type field"
+
+    def test_get_pending_approvals_return_format(self):
+        """Verify get_pending_approvals return format"""
+        import inspect
+        from backend.api.workflow import get_pending_approvals
+        
+        source = inspect.getsource(get_pending_approvals)
+        assert '"success": True' in source, "get_pending_approvals missing success field"
+        assert '"workflow_id": workflow_id' in source, "get_pending_approvals missing workflow_id field"
+        assert '"pending_approvals": pending_steps' in source, "get_pending_approvals missing pending_approvals field"
+
+    def test_get_pending_approvals_no_generic_try_catch(self):
+        """Verify get_pending_approvals has no generic try-catch blocks"""
+        import inspect
+        from backend.api.workflow import get_pending_approvals
+        
+        source = inspect.getsource(get_pending_approvals)
+        lines = source.split('\n')
+        
+        # Should not have try-catch for generic exception handling
+        for i, line in enumerate(lines):
+            if 'try:' in line and 'except' in ''.join(lines[i:i+10]):
+                # If there's a try-catch, ensure it's specific (not generic Exception)
+                except_block = ''.join(lines[i:i+10])
+                if 'except Exception' in except_block:
+                    pytest.fail("get_pending_approvals should not have generic Exception handler")
+
+    def test_batch_33_migration_consistency(self):
+        """Verify both batch 33 endpoints use consistent patterns"""
+        import inspect
+        from backend.api.workflow import cancel_workflow, get_pending_approvals
+        
+        cancel_source = inspect.getsource(cancel_workflow)
+        approvals_source = inspect.getsource(get_pending_approvals)
+        
+        # Both should use NOT_FOUND category
+        assert "ErrorCategory.NOT_FOUND" in cancel_source
+        assert "ErrorCategory.NOT_FOUND" in approvals_source
+        
+        # Both should have WORKFLOW prefix
+        assert 'error_code_prefix="WORKFLOW"' in cancel_source
+        assert 'error_code_prefix="WORKFLOW"' in approvals_source
+        
+        # Both should preserve HTTPException
+        assert "raise HTTPException" in cancel_source
+        assert "raise HTTPException" in approvals_source
+
+    def test_batch_33_decorator_placement(self):
+        """Verify decorators are properly placed above function definitions"""
+        import inspect
+        from backend.api.workflow import cancel_workflow, get_pending_approvals
+        
+        for func in [cancel_workflow, get_pending_approvals]:
+            source = inspect.getsource(func)
+            lines = source.split('\n')
+            
+            # Find @with_error_handling decorator
+            decorator_line = -1
+            func_def_line = -1
+            
+            for i, line in enumerate(lines):
+                if '@with_error_handling' in line:
+                    decorator_line = i
+                if 'async def ' in line:
+                    func_def_line = i
+                    break
+            
+            assert decorator_line != -1, f"{func.__name__} missing @with_error_handling decorator"
+            assert func_def_line != -1, f"{func.__name__} missing function definition"
+            assert decorator_line < func_def_line, f"{func.__name__} decorator not before function"
+
+    def test_batch_33_all_endpoints_migrated(self):
+        """Verify all batch 33 endpoints were successfully migrated"""
+        import inspect
+        from backend.api.workflow import cancel_workflow, get_pending_approvals
+        
+        endpoints = [
+            (cancel_workflow, "cancel_workflow"),
+            (get_pending_approvals, "get_pending_approvals"),
+        ]
+        
+        for func, name in endpoints:
+            source = inspect.getsource(func)
+            assert "@with_error_handling" in source, f"{name} not migrated"
