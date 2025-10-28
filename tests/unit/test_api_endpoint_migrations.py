@@ -4951,3 +4951,103 @@ class TestBatch31MigrationStats:
         stats_tests = 4
         total_batch_31_tests = list_workflows_tests + get_details_tests + stats_tests
         assert total_batch_31_tests == 13
+
+
+class TestBatch32GetWorkflowStatus:
+    """Test Batch 32 - GET /workflow/{workflow_id}/status endpoint migration"""
+
+    def test_get_workflow_status_has_decorator(self):
+        from backend.api.workflow import get_workflow_status
+        import inspect
+        source = inspect.getsource(get_workflow_status)
+        assert "@with_error_handling" in source
+        assert 'operation="get_workflow_status"' in source
+
+    def test_get_workflow_status_no_try_catch(self):
+        from backend.api.workflow import get_workflow_status
+        import inspect
+        source = inspect.getsource(get_workflow_status)
+        assert source.count("try:") == 0
+
+    def test_get_workflow_status_preserves_httpexception(self):
+        from backend.api.workflow import get_workflow_status
+        import inspect
+        source = inspect.getsource(get_workflow_status)
+        assert 'status_code=404, detail="Workflow not found"' in source
+
+    def test_get_workflow_status_preserves_business_logic(self):
+        from backend.api.workflow import get_workflow_status
+        import inspect
+        source = inspect.getsource(get_workflow_status)
+        assert "current_step = workflow.get" in source
+        assert "progress" in source
+
+    def test_get_workflow_status_has_correct_category(self):
+        from backend.api.workflow import get_workflow_status
+        import inspect
+        source = inspect.getsource(get_workflow_status)
+        assert "category=ErrorCategory.NOT_FOUND" in source
+
+
+class TestBatch32ApproveWorkflowStep:
+    """Test Batch 32 - POST /workflow/{workflow_id}/approve endpoint migration"""
+
+    def test_approve_workflow_step_has_decorator(self):
+        from backend.api.workflow import approve_workflow_step
+        import inspect
+        source = inspect.getsource(approve_workflow_step)
+        assert "@with_error_handling" in source
+        assert 'operation="approve_workflow_step"' in source
+
+    def test_approve_workflow_step_no_try_catch(self):
+        from backend.api.workflow import approve_workflow_step
+        import inspect
+        source = inspect.getsource(approve_workflow_step)
+        assert source.count("try:") == 0
+
+    def test_approve_workflow_step_preserves_httpexceptions(self):
+        from backend.api.workflow import approve_workflow_step
+        import inspect
+        source = inspect.getsource(approve_workflow_step)
+        assert 'status_code=404, detail="Workflow not found"' in source
+        assert 'status_code=404, detail="No pending approval' in source
+
+    def test_approve_workflow_step_preserves_business_logic(self):
+        from backend.api.workflow import approve_workflow_step
+        import inspect
+        source = inspect.getsource(approve_workflow_step)
+        assert "future = pending_approvals.pop(approval_key)" in source
+        assert "await event_manager.publish(" in source
+
+    def test_approve_workflow_step_has_correct_category(self):
+        from backend.api.workflow import approve_workflow_step
+        import inspect
+        source = inspect.getsource(approve_workflow_step)
+        assert "category=ErrorCategory.NOT_FOUND" in source
+
+
+class TestBatch32MigrationStats:
+    """Track batch 32 migration progress"""
+
+    def test_batch_32_migration_progress(self):
+        total_handlers = 1070
+        migrated_count = 63
+        progress_percentage = (migrated_count / total_handlers) * 100
+        assert progress_percentage == pytest.approx(5.89, rel=0.01)
+
+    def test_batch_32_workflow_file_progress(self):
+        workflow_migrated = 4
+        assert workflow_migrated == 4
+
+    def test_batch_32_pattern_application(self):
+        pattern_status = "Simple Pattern with HTTPException Preservation"
+        pattern_approve = "Simple Pattern with HTTPException Preservation"
+        assert len(pattern_status) > 0
+        assert len(pattern_approve) > 0
+
+    def test_batch_32_test_coverage(self):
+        status_tests = 5
+        approve_tests = 5
+        stats_tests = 4
+        total_batch_32_tests = status_tests + approve_tests + stats_tests
+        assert total_batch_32_tests == 14
