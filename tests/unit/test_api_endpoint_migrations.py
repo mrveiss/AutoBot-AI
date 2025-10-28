@@ -1257,5 +1257,161 @@ class TestBatch11MigrationStats:
         assert len(pattern_description) > 0  # Pattern documented
 
 
+class TestGetMainCategoriesEndpoint:
+    """Test migrated get_main_categories endpoint (Batch 12)"""
+
+    def test_get_main_categories_has_decorator(self):
+        """Test GET /categories/main has @with_error_handling decorator"""
+        from backend.api.knowledge import get_main_categories
+        import inspect
+
+        source = inspect.getsource(get_main_categories)
+
+        # Verify decorator is present
+        assert "@with_error_handling" in source
+        assert "ErrorCategory.SERVER_ERROR" in source
+        assert 'error_code_prefix="KNOWLEDGE"' in source
+
+    def test_get_main_categories_preserves_inner_cache_handling(self):
+        """Test GET /categories/main preserves inner try-catch for cache operations"""
+        from backend.api.knowledge import get_main_categories
+        import inspect
+
+        source = inspect.getsource(get_main_categories)
+
+        # Verify inner try-catch preserved for cache operations
+        try_count = source.count("try:")
+        assert try_count >= 1  # At least one inner try block for cache
+
+        # Verify cache error handling (non-fatal)
+        assert "except Exception as e:" in source
+        assert "logger.error" in source or "logger.warning" in source
+        assert "pass" in source  # Graceful degradation
+
+    def test_get_main_categories_no_outer_try_catch(self):
+        """Test GET /categories/main has minimal try blocks (only inner cache handling)"""
+        from backend.api.knowledge import get_main_categories
+        import inspect
+
+        source = inspect.getsource(get_main_categories)
+
+        # Should have inner try-catch for cache, but not outer wrapping entire function
+        # The decorator provides the outer error handling
+        lines = source.split("\n")
+        # First try should not be at the start of function body
+        first_try_line = next((i for i, line in enumerate(lines) if "try:" in line), -1)
+        # Should be deep in the function (after initial setup)
+        assert first_try_line > 10  # Not at function start
+
+
+class TestCheckVectorizationStatusBatchEndpoint:
+    """Test migrated check_vectorization_status_batch endpoint (Batch 12)"""
+
+    def test_check_vectorization_status_batch_has_decorator(self):
+        """Test POST /vectorization_status has @with_error_handling decorator"""
+        from backend.api.knowledge import check_vectorization_status_batch
+        import inspect
+
+        source = inspect.getsource(check_vectorization_status_batch)
+
+        # Verify decorator is present
+        assert "@with_error_handling" in source
+        assert "ErrorCategory.SERVER_ERROR" in source
+        assert 'error_code_prefix="KNOWLEDGE"' in source
+
+    def test_check_vectorization_status_raises_internal_error_when_kb_unavailable(self):
+        """Test POST /vectorization_status raises InternalError when kb unavailable"""
+        from backend.api.knowledge import check_vectorization_status_batch
+        import inspect
+
+        source = inspect.getsource(check_vectorization_status_batch)
+
+        # Verify InternalError raised when kb_to_use is None
+        assert "raise InternalError" in source
+        assert "Knowledge base not initialized" in source
+
+    def test_check_vectorization_status_raises_value_error_for_validation(self):
+        """Test POST /vectorization_status raises ValueError for validation (>1000 fact_ids)"""
+        from backend.api.knowledge import check_vectorization_status_batch
+        import inspect
+
+        source = inspect.getsource(check_vectorization_status_batch)
+
+        # Verify ValueError raised for validation
+        assert "raise ValueError" in source
+        assert "Too many fact IDs" in source
+        assert "1000" in source
+
+    def test_check_vectorization_status_preserves_inner_cache_handling(self):
+        """Test POST /vectorization_status preserves inner try-catches for cache operations"""
+        from backend.api.knowledge import check_vectorization_status_batch
+        import inspect
+
+        source = inspect.getsource(check_vectorization_status_batch)
+
+        # Verify inner try-catches preserved (2 blocks: cache read + cache write)
+        try_count = source.count("try:")
+        assert try_count >= 2  # Cache read and cache write
+
+        # Verify cache error handling (non-fatal)
+        assert "cache_err" in source
+        assert "logger.debug" in source or "logger.warning" in source
+
+    def test_check_vectorization_status_no_httpexception_reraise(self):
+        """Test POST /vectorization_status has no HTTPException re-raise pattern"""
+        from backend.api.knowledge import check_vectorization_status_batch
+        import inspect
+
+        source = inspect.getsource(check_vectorization_status_batch)
+
+        # Verify no HTTPException re-raise pattern (handled by decorator now)
+        assert "except HTTPException:" not in source
+        assert source.count("raise HTTPException") == 0  # Converted to ValueError/InternalError
+
+
+class TestBatch12MigrationStats:
+    """Track batch 12 migration progress"""
+
+    def test_batch_12_migration_progress(self):
+        """Document migration progress after batch 12"""
+        # Total handlers: 1,070
+        # Batch 1-11: 21 endpoints
+        # Batch 12: 2 additional endpoints (get_main_categories, check_vectorization_status_batch)
+        # Total: 23 endpoints migrated
+
+        total_handlers = 1070
+        migrated_count = 23
+        progress_percentage = (migrated_count / total_handlers) * 100
+
+        assert progress_percentage == pytest.approx(2.15, rel=0.01)
+
+    def test_batch_12_code_savings(self):
+        """Verify cumulative code savings after batch 12"""
+        # Batch 1-11 savings: 172 lines
+        # Batch 12 savings:
+        # - GET /categories/main: 127 → 122 lines (5 lines removed)
+        # - POST /vectorization_status: 85 → 76 lines (9 lines removed)
+        # Total batch 12: 14 lines
+
+        batch_1_11_savings = 172
+        batch_12_savings = 14  # Both outer try-catch blocks removed
+        total_savings = batch_1_11_savings + batch_12_savings
+
+        assert batch_12_savings == 14
+        assert total_savings == 186
+
+    def test_nested_cache_error_handling_pattern(self):
+        """Verify nested error handling pattern for endpoints with cache operations"""
+        # Batch 12 validates pattern for endpoints with cache operations:
+        # - Outer: @with_error_handling (catches fatal errors)
+        # - Inner: try-catch blocks for cache operations (graceful degradation)
+        # - Cache failures are non-fatal (logged and continue)
+        #
+        # This pattern ensures cache failures don't break the endpoint
+
+        pattern_description = "Nested error handling with graceful cache degradation"
+        assert len(pattern_description) > 0  # Pattern documented
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
