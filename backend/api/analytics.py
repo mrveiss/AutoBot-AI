@@ -1955,158 +1955,160 @@ async def query_phase9_metrics(query_request: dict):
 
 
 @router.post("/code/analyze/communication-chains")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_communication_chains_detailed",
+    error_code_prefix="ANALYTICS",
+)
 async def analyze_communication_chains_detailed():
     """Perform detailed communication chain analysis"""
-    try:
-        # Run communication chain analysis
-        analysis_request = CodeAnalysisRequest(
-            analysis_type="communication_chains", include_metrics=True
-        )
+    # Run communication chain analysis
+    analysis_request = CodeAnalysisRequest(
+        analysis_type="communication_chains", include_metrics=True
+    )
 
-        results = await analytics_controller.perform_code_analysis(analysis_request)
+    results = await analytics_controller.perform_code_analysis(analysis_request)
 
-        # Enhance with runtime correlation
-        if results.get("status") == "success":
-            runtime_patterns = analytics_controller.api_frequencies
-            static_patterns = results.get("communication_chains", {})
+    # Enhance with runtime correlation
+    if results.get("status") == "success":
+        runtime_patterns = analytics_controller.api_frequencies
+        static_patterns = results.get("communication_chains", {})
 
-            # Create correlation matrix
-            correlation_data = {}
+        # Create correlation matrix
+        correlation_data = {}
 
-            for endpoint in static_patterns.get("api_endpoints", []):
-                correlation_data[endpoint] = {
-                    "static_detected": True,
-                    "runtime_calls": runtime_patterns.get(endpoint, 0),
-                    "avg_response_time": (
-                        sum(analytics_controller.response_times.get(endpoint, []))
-                        / max(
-                            len(analytics_controller.response_times.get(endpoint, [])),
-                            1,
-                        )
-                    ),
-                    "error_rate": (
-                        analytics_controller.error_counts.get(endpoint, 0)
-                        / max(runtime_patterns.get(endpoint, 1), 1)
-                        * 100
-                    ),
+        for endpoint in static_patterns.get("api_endpoints", []):
+            correlation_data[endpoint] = {
+                "static_detected": True,
+                "runtime_calls": runtime_patterns.get(endpoint, 0),
+                "avg_response_time": (
+                    sum(analytics_controller.response_times.get(endpoint, []))
+                    / max(
+                        len(analytics_controller.response_times.get(endpoint, [])),
+                        1,
+                    )
+                ),
+                "error_rate": (
+                    analytics_controller.error_counts.get(endpoint, 0)
+                    / max(runtime_patterns.get(endpoint, 1), 1)
+                    * 100
+                ),
+            }
+
+        results["runtime_correlation"] = correlation_data
+        results["insights"] = []
+
+        # Generate insights
+        unused_endpoints = [
+            ep
+            for ep in static_patterns.get("api_endpoints", [])
+            if ep not in runtime_patterns
+        ]
+
+        if unused_endpoints:
+            results["insights"].append(
+                {
+                    "type": "unused_endpoints",
+                    "count": len(unused_endpoints),
+                    "endpoints": unused_endpoints[:10],
+                    "recommendation": "Consider removing unused endpoints or adding tests",
                 }
+            )
 
-            results["runtime_correlation"] = correlation_data
-            results["insights"] = []
+        high_error_endpoints = [
+            ep for ep, data in correlation_data.items() if data["error_rate"] > 5.0
+        ]
 
-            # Generate insights
-            unused_endpoints = [
-                ep
-                for ep in static_patterns.get("api_endpoints", [])
-                if ep not in runtime_patterns
-            ]
+        if high_error_endpoints:
+            results["insights"].append(
+                {
+                    "type": "high_error_endpoints",
+                    "count": len(high_error_endpoints),
+                    "endpoints": high_error_endpoints,
+                    "recommendation": "Investigate and fix endpoints with high error rates",
+                }
+            )
 
-            if unused_endpoints:
-                results["insights"].append(
-                    {
-                        "type": "unused_endpoints",
-                        "count": len(unused_endpoints),
-                        "endpoints": unused_endpoints[:10],
-                        "recommendation": "Consider removing unused endpoints or adding tests",
-                    }
-                )
-
-            high_error_endpoints = [
-                ep for ep, data in correlation_data.items() if data["error_rate"] > 5.0
-            ]
-
-            if high_error_endpoints:
-                results["insights"].append(
-                    {
-                        "type": "high_error_endpoints",
-                        "count": len(high_error_endpoints),
-                        "endpoints": high_error_endpoints,
-                        "recommendation": "Investigate and fix endpoints with high error rates",
-                    }
-                )
-
-        return results
-    except Exception as e:
-        logger.error(f"Failed to analyze communication chains: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return results
 
 
 @router.get("/code/metrics/quality-score")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_code_quality_score",
+    error_code_prefix="ANALYTICS",
+)
 async def get_code_quality_score():
     """Get comprehensive code quality score"""
-    try:
-        cached_analysis = analytics_state.get("code_analysis_cache")
+    cached_analysis = analytics_state.get("code_analysis_cache")
 
-        if not cached_analysis:
-            # Trigger new analysis
-            analysis_request = CodeAnalysisRequest(analysis_type="full")
-            cached_analysis = await analytics_controller.perform_code_analysis(
-                analysis_request
-            )
+    if not cached_analysis:
+        # Trigger new analysis
+        analysis_request = CodeAnalysisRequest(analysis_type="full")
+        cached_analysis = await analytics_controller.perform_code_analysis(
+            analysis_request
+        )
 
-        # Calculate quality score
-        quality_factors = {
-            "complexity": 0,
-            "maintainability": 0,
-            "test_coverage": 0,
-            "documentation": 0,
-            "security": 0,
+    # Calculate quality score
+    quality_factors = {
+        "complexity": 0,
+        "maintainability": 0,
+        "test_coverage": 0,
+        "documentation": 0,
+        "security": 0,
+    }
+
+    if "code_analysis" in cached_analysis:
+        code_data = cached_analysis["code_analysis"]
+
+        # Complexity score (inverted - lower complexity is better)
+        complexity = code_data.get("complexity", 10)
+        quality_factors["complexity"] = max(0, (10 - complexity) * 10)
+
+        # Test coverage
+        quality_factors["test_coverage"] = code_data.get("test_coverage", 0)
+
+        # Documentation coverage
+        quality_factors["documentation"] = code_data.get("doc_coverage", 0)
+
+        # Maintainability (convert to numeric)
+        maintainability = code_data.get("maintainability", "poor")
+        maintainability_scores = {
+            "excellent": 95,
+            "good": 80,
+            "fair": 65,
+            "poor": 40,
         }
+        quality_factors["maintainability"] = maintainability_scores.get(
+            maintainability, 40
+        )
 
-        if "code_analysis" in cached_analysis:
-            code_data = cached_analysis["code_analysis"]
+        # Security score (placeholder - would need security analysis)
+        quality_factors["security"] = 75  # Default security score
 
-            # Complexity score (inverted - lower complexity is better)
-            complexity = code_data.get("complexity", 10)
-            quality_factors["complexity"] = max(0, (10 - complexity) * 10)
+    # Calculate overall score
+    overall_score = sum(quality_factors.values()) / len(quality_factors)
 
-            # Test coverage
-            quality_factors["test_coverage"] = code_data.get("test_coverage", 0)
-
-            # Documentation coverage
-            quality_factors["documentation"] = code_data.get("doc_coverage", 0)
-
-            # Maintainability (convert to numeric)
-            maintainability = code_data.get("maintainability", "poor")
-            maintainability_scores = {
-                "excellent": 95,
-                "good": 80,
-                "fair": 65,
-                "poor": 40,
-            }
-            quality_factors["maintainability"] = maintainability_scores.get(
-                maintainability, 40
-            )
-
-            # Security score (placeholder - would need security analysis)
-            quality_factors["security"] = 75  # Default security score
-
-        # Calculate overall score
-        overall_score = sum(quality_factors.values()) / len(quality_factors)
-
-        return {
-            "overall_score": round(overall_score, 1),
-            "grade": (
-                "A"
-                if overall_score >= 90
+    return {
+        "overall_score": round(overall_score, 1),
+        "grade": (
+            "A"
+            if overall_score >= 90
+            else (
+                "B"
+                if overall_score >= 80
                 else (
-                    "B"
-                    if overall_score >= 80
-                    else (
-                        "C"
-                        if overall_score >= 70
-                        else "D" if overall_score >= 60 else "F"
-                    )
+                    "C"
+                    if overall_score >= 70
+                    else "D" if overall_score >= 60 else "F"
                 )
-            ),
-            "quality_factors": quality_factors,
-            "recommendations": [],
-            "last_analysis": cached_analysis.get("timestamp"),
-            "codebase_metrics": cached_analysis.get("codebase_metrics", {}),
-        }
-    except Exception as e:
-        logger.error(f"Failed to get code quality score: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+            )
+        ),
+        "quality_factors": quality_factors,
+        "recommendations": [],
+        "last_analysis": cached_analysis.get("timestamp"),
+        "codebase_metrics": cached_analysis.get("codebase_metrics", {}),
+    }
 
 
 # ============================================================================
