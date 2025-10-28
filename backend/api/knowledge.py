@@ -533,103 +533,99 @@ async def check_vectorization_status_batch(request: dict, req: Request):
 
 
 @router.get("/categories")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_knowledge_categories",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_knowledge_categories(req: Request):
     """Get all knowledge base categories with fact counts"""
-    try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb_to_use is None:
-            return {"categories": [], "total": 0}
-
-        # Get stats - await async method
-        stats = await kb_to_use.get_stats() if hasattr(kb_to_use, "get_stats") else {}
-        categories_list = stats.get("categories", [])
-
-        # Get all facts to count by category - sync redis operation
-        try:
-            all_facts_data = kb_to_use.redis_client.hgetall("knowledge_base:facts")
-        except Exception as redis_err:
-            logger.debug(f"Redis error getting facts: {redis_err}")
-            all_facts_data = {}
-
-        category_counts = {}
-        for fact_json in all_facts_data.values():
-            try:
-                fact = json.loads(fact_json)
-                category = fact.get("metadata", {}).get("category", "uncategorized")
-                category_counts[category] = category_counts.get(category, 0) + 1
-            except (json.JSONDecodeError, KeyError, TypeError) as e:
-                logger.warning(f"Error parsing fact JSON: {e}")
-                continue
-
-        # Format for frontend with counts
-        categories = [
-            {"name": cat, "count": category_counts.get(cat, 0), "id": cat}
-            for cat in categories_list
-        ]
-
-        return {"categories": categories, "total": len(categories)}
-
-    except Exception as e:
-        logger.error(f"Error getting categories: {str(e)}")
-        import traceback
-
-        logger.error(traceback.format_exc())
+    if kb_to_use is None:
         return {"categories": [], "total": 0}
+
+    # Get stats - await async method
+    stats = await kb_to_use.get_stats() if hasattr(kb_to_use, "get_stats") else {}
+    categories_list = stats.get("categories", [])
+
+    # Get all facts to count by category - sync redis operation
+    try:
+        all_facts_data = kb_to_use.redis_client.hgetall("knowledge_base:facts")
+    except Exception as redis_err:
+        logger.debug(f"Redis error getting facts: {redis_err}")
+        all_facts_data = {}
+
+    category_counts = {}
+    for fact_json in all_facts_data.values():
+        try:
+            fact = json.loads(fact_json)
+            category = fact.get("metadata", {}).get("category", "uncategorized")
+            category_counts[category] = category_counts.get(category, 0) + 1
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            logger.warning(f"Error parsing fact JSON: {e}")
+            continue
+
+    # Format for frontend with counts
+    categories = [
+        {"name": cat, "count": category_counts.get(cat, 0), "id": cat}
+        for cat in categories_list
+    ]
+
+    return {"categories": categories, "total": len(categories)}
 
 
 @router.post("/add_text")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_text_to_knowledge",
+    error_code_prefix="KNOWLEDGE",
+)
 async def add_text_to_knowledge(request: dict, req: Request):
     """Add text to knowledge base - FIXED to use proper instance"""
-    try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb_to_use is None:
-            return {
-                "status": "error",
-                "message": "Knowledge base not initialized - please check logs for errors",
-            }
-
-        text = request.get("text", "")
-        title = request.get("title", "")
-        source = request.get("source", "manual")
-        category = request.get("category", "general")
-
-        if not text:
-            raise HTTPException(status_code=400, detail="Text content is required")
-
-        logger.info(
-            f"Adding text to knowledge: title='{title}', source='{source}', length={len(text)}"
+    if kb_to_use is None:
+        raise InternalError(
+            "Knowledge base not initialized - please check logs for errors"
         )
 
-        # Use the store_fact method for KnowledgeBaseV2 or add_fact for compatibility
-        if hasattr(kb_to_use, "store_fact"):
-            # KnowledgeBaseV2
-            result = await kb_to_use.store_fact(
-                content=text,
-                metadata={"title": title, "source": source, "category": category},
-            )
-            fact_id = result.get("fact_id")
-        else:
-            # Original KnowledgeBase
-            result = await kb_to_use.store_fact(
-                text=text,
-                metadata={"title": title, "source": source, "category": category},
-            )
-            fact_id = result.get("fact_id")
+    text = request.get("text", "")
+    title = request.get("title", "")
+    source = request.get("source", "manual")
+    category = request.get("category", "general")
 
-        return {
-            "status": "success",
-            "message": "Fact stored successfully",
-            "fact_id": fact_id,
-            "text_length": len(text),
-            "title": title,
-            "source": source,
-        }
+    if not text:
+        raise ValueError("Text content is required")
 
-    except Exception as e:
-        logger.error(f"Error adding text to knowledge: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Add text failed: {str(e)}")
+    logger.info(
+        f"Adding text to knowledge: title='{title}', source='{source}', length={len(text)}"
+    )
+
+    # Use the store_fact method for KnowledgeBaseV2 or add_fact for compatibility
+    if hasattr(kb_to_use, "store_fact"):
+        # KnowledgeBaseV2
+        result = await kb_to_use.store_fact(
+            content=text,
+            metadata={"title": title, "source": source, "category": category},
+        )
+        fact_id = result.get("fact_id")
+    else:
+        # Original KnowledgeBase
+        result = await kb_to_use.store_fact(
+            text=text,
+            metadata={"title": title, "source": source, "category": category},
+        )
+        fact_id = result.get("fact_id")
+
+    return {
+        "status": "success",
+        "message": "Fact stored successfully",
+        "fact_id": fact_id,
+        "text_length": len(text),
+        "title": title,
+        "source": source,
+    }
 
 
 @router.post("/search")
