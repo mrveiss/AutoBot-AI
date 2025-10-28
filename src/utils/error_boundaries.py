@@ -54,16 +54,26 @@ class ErrorSeverity(Enum):
 class ErrorCategory(Enum):
     """Error categories for better organization and handling"""
 
+    # System-level categories
     SYSTEM = "system"
     NETWORK = "network"
     DATABASE = "database"
     LLM = "llm"
     AGENT = "agent"
     API = "api"
-    VALIDATION = "validation"
     CONFIGURATION = "configuration"
-    EXTERNAL_SERVICE = "external_service"
     USER_INPUT = "user_input"
+
+    # HTTP-aligned categories (for API endpoints)
+    VALIDATION = "validation"              # 400 Bad Request
+    AUTHENTICATION = "authentication"      # 401 Unauthorized
+    AUTHORIZATION = "authorization"        # 403 Forbidden
+    NOT_FOUND = "not_found"               # 404 Not Found
+    CONFLICT = "conflict"                 # 409 Conflict
+    RATE_LIMIT = "rate_limit"             # 429 Too Many Requests
+    SERVER_ERROR = "server_error"         # 500 Internal Server Error
+    SERVICE_UNAVAILABLE = "service_unavailable"  # 503 Service Unavailable
+    EXTERNAL_SERVICE = "external_service"  # 502 Bad Gateway
 
 
 class RecoveryStrategy(Enum):
@@ -106,6 +116,63 @@ class ErrorReport:
     recovery_attempts: int = 0
     resolved: bool = False
     timestamp: float = field(default_factory=time.time)
+
+
+@dataclass
+class APIErrorResponse:
+    """Standardized API error response for FastAPI endpoints"""
+
+    category: ErrorCategory
+    message: str
+    code: str  # Error code like "KB_001", "AUTH_002"
+    status_code: int
+    details: Optional[Dict[str, Any]] = None
+    retry_after: Optional[int] = None  # Seconds to wait before retry
+    trace_id: Optional[str] = None
+    timestamp: float = field(default_factory=time.time)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON response"""
+        response = {
+            "error": {
+                "category": self.category.value,
+                "message": self.message,
+                "code": self.code,
+                "timestamp": self.timestamp,
+            }
+        }
+        if self.details:
+            response["error"]["details"] = self.details
+        if self.retry_after:
+            response["error"]["retry_after"] = self.retry_after
+        if self.trace_id:
+            response["error"]["trace_id"] = self.trace_id
+        return response
+
+    @staticmethod
+    def get_status_code_for_category(category: ErrorCategory) -> int:
+        """Map error category to HTTP status code"""
+        status_map = {
+            ErrorCategory.VALIDATION: 400,
+            ErrorCategory.AUTHENTICATION: 401,
+            ErrorCategory.AUTHORIZATION: 403,
+            ErrorCategory.NOT_FOUND: 404,
+            ErrorCategory.CONFLICT: 409,
+            ErrorCategory.RATE_LIMIT: 429,
+            ErrorCategory.SERVER_ERROR: 500,
+            ErrorCategory.EXTERNAL_SERVICE: 502,
+            ErrorCategory.SERVICE_UNAVAILABLE: 503,
+            # Defaults for other categories
+            ErrorCategory.SYSTEM: 500,
+            ErrorCategory.NETWORK: 503,
+            ErrorCategory.DATABASE: 500,
+            ErrorCategory.LLM: 500,
+            ErrorCategory.AGENT: 500,
+            ErrorCategory.API: 500,
+            ErrorCategory.CONFIGURATION: 500,
+            ErrorCategory.USER_INPUT: 400,
+        }
+        return status_map.get(category, 500)
 
 
 class ErrorBoundaryException(Exception):
@@ -575,6 +642,121 @@ def error_boundary(
                         else:
                             # Handle error immediately
                             return asyncio.run(manager.handle_error(e, context))
+
+            return sync_wrapper
+
+    return decorator
+
+
+def with_error_handling(
+    category: ErrorCategory = ErrorCategory.SERVER_ERROR,
+    operation: str = None,
+    error_code_prefix: str = "API",
+):
+    """
+    Simplified decorator for API endpoints with automatic HTTP error conversion.
+
+    Usage:
+        @with_error_handling(
+            category=ErrorCategory.VALIDATION,
+            operation="validate_user_input"
+        )
+        async def create_user(user_data: dict):
+            # Implementation
+            pass
+
+    Args:
+        category: Error category (determines HTTP status code)
+        operation: Operation name for logging/tracing
+        error_code_prefix: Prefix for error codes (e.g., "KB", "AUTH")
+    """
+    def decorator(func):
+        func_operation = operation or func.__name__
+
+        if asyncio.iscoroutinefunction(func):
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    # Generate trace ID
+                    trace_id = f"{func_operation}_{int(time.time()*1000)}"
+
+                    # Generate error code
+                    error_code = f"{error_code_prefix}_{abs(hash(str(e))) % 10000:04d}"
+
+                    # Get status code from category
+                    status_code = APIErrorResponse.get_status_code_for_category(category)
+
+                    # Create API error response
+                    error_response = APIErrorResponse(
+                        category=category,
+                        message=str(e),
+                        code=error_code,
+                        status_code=status_code,
+                        details={"operation": func_operation},
+                        trace_id=trace_id,
+                    )
+
+                    # Log the error
+                    logger.error(
+                        f"Error in {func_operation}: {e} "
+                        f"(trace_id: {trace_id}, code: {error_code})"
+                    )
+
+                    # Raise FastAPI HTTPException
+                    try:
+                        from fastapi import HTTPException
+                        raise HTTPException(
+                            status_code=status_code,
+                            detail=error_response.to_dict()
+                        )
+                    except ImportError:
+                        # FastAPI not available, return error dict
+                        return error_response.to_dict()
+
+            return async_wrapper
+        else:
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    # Generate trace ID
+                    trace_id = f"{func_operation}_{int(time.time()*1000)}"
+
+                    # Generate error code
+                    error_code = f"{error_code_prefix}_{abs(hash(str(e))) % 10000:04d}"
+
+                    # Get status code from category
+                    status_code = APIErrorResponse.get_status_code_for_category(category)
+
+                    # Create API error response
+                    error_response = APIErrorResponse(
+                        category=category,
+                        message=str(e),
+                        code=error_code,
+                        status_code=status_code,
+                        details={"operation": func_operation},
+                        trace_id=trace_id,
+                    )
+
+                    # Log the error
+                    logger.error(
+                        f"Error in {func_operation}: {e} "
+                        f"(trace_id: {trace_id}, code: {error_code})"
+                    )
+
+                    # Raise FastAPI HTTPException
+                    try:
+                        from fastapi import HTTPException
+                        raise HTTPException(
+                            status_code=status_code,
+                            detail=error_response.to_dict()
+                        )
+                    except ImportError:
+                        # FastAPI not available, return error dict
+                        return error_response.to_dict()
 
             return sync_wrapper
 
