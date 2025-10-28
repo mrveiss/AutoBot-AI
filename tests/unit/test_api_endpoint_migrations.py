@@ -6725,3 +6725,135 @@ class TestBatch41AnalyticsMigrations(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ============================================================================
+# BATCH 42: Collection Management Endpoints (POST collection/start + collection/stop)
+# ============================================================================
+
+
+class TestBatch42AnalyticsMigrations(unittest.TestCase):
+    """Test suite for Batch 42 analytics collection management endpoint migrations"""
+
+    def test_start_analytics_collection_decorator_present(self):
+        """Verify @with_error_handling decorator on start_analytics_collection"""
+        from backend.api.analytics import start_analytics_collection
+        import inspect
+
+        source = inspect.getsource(start_analytics_collection)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn("error_code_prefix", source)
+
+    def test_start_analytics_collection_no_try_catch(self):
+        """Verify try-catch removed from start_analytics_collection"""
+        from backend.api.analytics import start_analytics_collection
+        import inspect
+
+        source = inspect.getsource(start_analytics_collection)
+        # Should not have try-catch pattern
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except Exception", source)
+
+    def test_start_analytics_collection_business_logic_preserved(self):
+        """Verify business logic preserved in start_analytics_collection"""
+        from backend.api.analytics import start_analytics_collection
+        import inspect
+
+        source = inspect.getsource(start_analytics_collection)
+        # Key business logic should be present
+        self.assertIn("analytics_state", source)
+        self.assertIn("session_start", source)
+        self.assertIn("metrics_collector", source)
+        self.assertIn("start_collection", source)
+
+    def test_start_analytics_collection_error_handling(self):
+        """Test error handling configuration in start_analytics_collection"""
+        from backend.api.analytics import start_analytics_collection
+        import inspect
+
+        source = inspect.getsource(start_analytics_collection)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="start_analytics_collection"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_stop_analytics_collection_decorator_present(self):
+        """Verify @with_error_handling decorator on stop_analytics_collection"""
+        from backend.api.analytics import stop_analytics_collection
+        import inspect
+
+        source = inspect.getsource(stop_analytics_collection)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn("error_code_prefix", source)
+
+    def test_stop_analytics_collection_no_try_catch(self):
+        """Verify try-catch removed from stop_analytics_collection"""
+        from backend.api.analytics import stop_analytics_collection
+        import inspect
+
+        source = inspect.getsource(stop_analytics_collection)
+        # Should not have try-catch pattern
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except Exception", source)
+
+    def test_stop_analytics_collection_business_logic_preserved(self):
+        """Verify business logic preserved in stop_analytics_collection"""
+        from backend.api.analytics import stop_analytics_collection
+        import inspect
+
+        source = inspect.getsource(stop_analytics_collection)
+        # Key business logic should be present
+        self.assertIn("metrics_collector", source)
+        self.assertIn("stop_collection", source)
+        self.assertIn("session_duration", source)
+
+    def test_stop_analytics_collection_error_handling(self):
+        """Test error handling configuration in stop_analytics_collection"""
+        from backend.api.analytics import stop_analytics_collection
+        import inspect
+
+        source = inspect.getsource(stop_analytics_collection)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="stop_analytics_collection"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_batch42_all_endpoints_migrated(self):
+        """Verify all Batch 42 endpoints have been migrated"""
+        from backend.api.analytics import (
+            start_analytics_collection,
+            stop_analytics_collection,
+        )
+        import inspect
+
+        endpoints = [start_analytics_collection, stop_analytics_collection]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have decorator
+            self.assertIn("@with_error_handling", source)
+            # None should have try-catch
+            self.assertNotIn("try:", source)
+
+    def test_batch42_consistent_error_category(self):
+        """Verify consistent error category across Batch 42"""
+        from backend.api.analytics import (
+            start_analytics_collection,
+            stop_analytics_collection,
+        )
+        import inspect
+
+        endpoints = [start_analytics_collection, stop_analytics_collection]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use ANALYTICS prefix
+            self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+
+if __name__ == "__main__":
+    unittest.main()
