@@ -106,6 +106,11 @@ async def get_workflow_details(workflow_id: str):
 
 
 @router.get("/workflow/{workflow_id}/status")
+@with_error_handling(
+    category=ErrorCategory.NOT_FOUND,
+    operation="get_workflow_status",
+    error_code_prefix="WORKFLOW",
+)
 async def get_workflow_status(workflow_id: str):
     """Get current status of a workflow."""
     if workflow_id not in active_workflows:
@@ -133,6 +138,11 @@ async def get_workflow_status(workflow_id: str):
 
 
 @router.post("/workflow/{workflow_id}/approve")
+@with_error_handling(
+    category=ErrorCategory.NOT_FOUND,
+    operation="approve_workflow_step",
+    error_code_prefix="WORKFLOW",
+)
 async def approve_workflow_step(workflow_id: str, approval: WorkflowApprovalResponse):
     """Approve or deny a workflow step that requires user confirmation."""
     if workflow_id not in active_workflows:
