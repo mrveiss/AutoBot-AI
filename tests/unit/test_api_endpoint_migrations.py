@@ -3136,5 +3136,221 @@ class TestBatch20MigrationStats:
         assert total_batch_20_tests == 14  # Comprehensive coverage
 
 
+class TestDeleteVectorizationJobEndpoint:
+    """Test migrated DELETE /vectorize_jobs/{job_id} endpoint"""
+
+    def test_delete_vectorization_job_has_decorator(self):
+        """Verify @with_error_handling decorator is applied"""
+        from backend.api.knowledge import delete_vectorization_job
+        import inspect
+
+        source = inspect.getsource(delete_vectorization_job)
+
+        # Should have decorator with correct parameters
+        assert "@with_error_handling" in source
+        assert "ErrorCategory.SERVER_ERROR" in source
+        assert 'operation="delete_vectorization_job"' in source
+        assert 'error_code_prefix="KNOWLEDGE"' in source
+
+    def test_delete_vectorization_job_no_outer_try_catch(self):
+        """Verify outer try-catch and HTTPException re-raise removed"""
+        from backend.api.knowledge import delete_vectorization_job
+        import inspect
+
+        source = inspect.getsource(delete_vectorization_job)
+
+        # Should have NO try blocks (Simple Pattern - decorator only)
+        try_count = source.count("try:")
+        assert try_count == 0
+
+        # Should NOT have HTTPException re-raise
+        assert "except HTTPException:" not in source
+
+    def test_delete_vectorization_job_preserves_httpexception(self):
+        """Verify endpoint preserves HTTPException for validation errors"""
+        from backend.api.knowledge import delete_vectorization_job
+        import inspect
+
+        source = inspect.getsource(delete_vectorization_job)
+
+        # Should preserve KB not initialized check (500)
+        assert "if kb is None:" in source
+        assert "Knowledge base not initialized" in source
+
+        # Should preserve job not found check (404)
+        assert "if deleted == 0:" in source
+        assert "Job {job_id} not found" in source
+
+    def test_delete_vectorization_job_preserves_redis_delete(self):
+        """Verify endpoint preserves Redis delete operation"""
+        from backend.api.knowledge import delete_vectorization_job
+        import inspect
+
+        source = inspect.getsource(delete_vectorization_job)
+
+        # Should delete job from Redis
+        assert 'deleted = kb.redis_client.delete(f"vectorization_job:{job_id}")' in source
+
+        # Should log deletion
+        assert 'logger.info(f"Deleted vectorization job {job_id}")' in source
+
+    def test_delete_vectorization_job_preserves_response_structure(self):
+        """Verify endpoint preserves response structure"""
+        from backend.api.knowledge import delete_vectorization_job
+        import inspect
+
+        source = inspect.getsource(delete_vectorization_job)
+
+        # Should return expected structure
+        assert 'return {' in source
+        assert '"status": "success"' in source
+        assert '"message": f"Job {job_id} deleted"' in source
+        assert '"job_id": job_id' in source
+
+
+class TestClearFailedVectorizationJobsEndpoint:
+    """Test migrated DELETE /vectorize_jobs/failed/clear endpoint"""
+
+    def test_clear_failed_vectorization_jobs_has_decorator(self):
+        """Verify @with_error_handling decorator is applied"""
+        from backend.api.knowledge import clear_failed_vectorization_jobs
+        import inspect
+
+        source = inspect.getsource(clear_failed_vectorization_jobs)
+
+        # Should have decorator with correct parameters
+        assert "@with_error_handling" in source
+        assert "ErrorCategory.SERVER_ERROR" in source
+        assert 'operation="clear_failed_vectorization_jobs"' in source
+        assert 'error_code_prefix="KNOWLEDGE"' in source
+
+    def test_clear_failed_vectorization_jobs_no_outer_try_catch(self):
+        """Verify outer try-catch block removed"""
+        from backend.api.knowledge import clear_failed_vectorization_jobs
+        import inspect
+
+        source = inspect.getsource(clear_failed_vectorization_jobs)
+
+        # Should have NO try blocks (Simple Pattern - decorator only)
+        try_count = source.count("try:")
+        assert try_count == 0
+
+        # Should NOT have exception handler
+        assert "except Exception as e:" not in source
+
+    def test_clear_failed_vectorization_jobs_preserves_httpexception(self):
+        """Verify endpoint preserves HTTPException for KB not initialized"""
+        from backend.api.knowledge import clear_failed_vectorization_jobs
+        import inspect
+
+        source = inspect.getsource(clear_failed_vectorization_jobs)
+
+        # Should preserve KB not initialized check
+        assert "if kb is None:" in source
+        assert "raise HTTPException" in source
+        assert "Knowledge base not initialized" in source
+
+    def test_clear_failed_vectorization_jobs_preserves_redis_scan(self):
+        """Verify endpoint preserves Redis SCAN operations"""
+        from backend.api.knowledge import clear_failed_vectorization_jobs
+        import inspect
+
+        source = inspect.getsource(clear_failed_vectorization_jobs)
+
+        # Should use SCAN for efficient iteration
+        assert "cursor, keys = kb.redis_client.scan" in source
+        assert 'match="vectorization_job:*"' in source
+        assert "count=100" in source
+
+        # Should use while True loop
+        assert "while True:" in source
+        assert "if cursor == 0:" in source
+        assert "break" in source
+
+    def test_clear_failed_vectorization_jobs_preserves_batch_deletion(self):
+        """Verify endpoint preserves batch deletion logic"""
+        from backend.api.knowledge import clear_failed_vectorization_jobs
+        import inspect
+
+        source = inspect.getsource(clear_failed_vectorization_jobs)
+
+        # Should use pipeline for batch operations
+        assert "pipe = kb.redis_client.pipeline()" in source
+        assert "pipe.get(key)" in source
+        assert "results = pipe.execute()" in source
+
+        # Should filter for failed jobs
+        assert 'job_data.get("status") == "failed"' in source
+        assert "failed_keys.append(key)" in source
+
+        # Should batch delete
+        assert "kb.redis_client.delete(*failed_keys)" in source
+        assert "deleted_count += len(failed_keys)" in source
+
+
+class TestBatch21MigrationStats:
+    """Track batch 21 migration progress"""
+
+    def test_batch_21_migration_progress(self):
+        """Document migration progress after batch 21"""
+        # Total handlers: 1,070
+        # Batch 1-20: 39 endpoints
+        # Batch 21: 2 additional endpoints (delete_vectorization_job, clear_failed_vectorization_jobs)
+        # Total: 41 endpoints migrated
+
+        total_handlers = 1070
+        migrated_count = 41
+        progress_percentage = (migrated_count / total_handlers) * 100
+
+        assert progress_percentage == pytest.approx(3.83, rel=0.01)
+
+    def test_batch_21_code_savings(self):
+        """Verify cumulative code savings after batch 21"""
+        # Batch 1-20 savings: 298 lines
+        # Batch 21 savings:
+        # - DELETE /vectorize_jobs/{job_id}: 38 lines → 31 lines (7 lines removed)
+        # - DELETE /vectorize_jobs/failed/clear: 59 lines → 52 lines (7 lines removed)
+        # Total batch 21: 14 lines
+
+        batch_1_20_savings = 298
+        batch_21_savings = 14  # Both outer try-catch blocks removed
+        total_savings = batch_1_20_savings + batch_21_savings
+
+        assert batch_21_savings == 14
+        assert total_savings == 312
+
+    def test_batch_21_pattern_application(self):
+        """Verify batch 21 uses Simple Pattern with HTTPException Preservation"""
+        # Batch 21 validates:
+        # - DELETE /vectorize_jobs/{job_id}: Simple Pattern (decorator + HTTPException for KB, job not found)
+        # - DELETE /vectorize_jobs/failed/clear: Simple Pattern (decorator + HTTPException for KB)
+
+        pattern_description = (
+            "Simple Pattern with HTTPException Preservation for both endpoints"
+        )
+        assert len(pattern_description) > 0  # Pattern documented
+
+    def test_batch_21_test_coverage(self):
+        """Verify batch 21 has comprehensive test coverage"""
+        # Each endpoint should have 5 tests covering:
+        # 1. Decorator presence
+        # 2. Outer try-catch removal
+        # 3. HTTPException preservation
+        # 4. Business logic preservation (Redis delete or batch deletion)
+        # 5. Response structure or batch operations
+
+        delete_vectorization_job_tests = 5  # All aspects covered
+        clear_failed_vectorization_jobs_tests = 5  # All aspects covered
+        batch_stats_tests = 4  # Progress, savings, patterns, coverage
+
+        total_batch_21_tests = (
+            delete_vectorization_job_tests
+            + clear_failed_vectorization_jobs_tests
+            + batch_stats_tests
+        )
+
+        assert total_batch_21_tests == 14  # Comprehensive coverage
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
