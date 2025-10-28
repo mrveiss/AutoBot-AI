@@ -6094,3 +6094,171 @@ class TestBatch37AnalyticsMigrations:
         # All should use ANALYTICS prefix
         assert 'error_code_prefix="ANALYTICS"' in recommendations_source
         assert 'error_code_prefix="ANALYTICS"' in start_source
+
+
+# ============================================================================
+# Batch 38: analytics.py - Phase 9 monitoring endpoints (2 endpoints)
+# ============================================================================
+
+
+class TestBatch38AnalyticsMigrations:
+    """Test batch 38 analytics.py endpoint migrations"""
+
+    def test_stop_monitoring_has_decorator(self):
+        """Test POST /monitoring/phase9/stop has @with_error_handling decorator"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.stop_monitoring)
+        assert (
+            "@with_error_handling" in source
+        ), "Endpoint missing @with_error_handling decorator"
+        assert (
+            'category=ErrorCategory.SERVER_ERROR' in source
+        ), "Decorator should use SERVER_ERROR category"
+        assert (
+            'operation="stop_monitoring"' in source
+        ), "Decorator should specify operation name"
+        assert (
+            'error_code_prefix="ANALYTICS"' in source
+        ), "Decorator should use ANALYTICS prefix"
+
+    def test_stop_monitoring_no_outer_try_catch(self):
+        """Test POST /monitoring/phase9/stop has no outer try-catch block"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.stop_monitoring)
+        lines = source.split("\n")
+
+        # Check that function body doesn't start with try
+        function_body_started = False
+        for line in lines:
+            if 'async def stop_monitoring' in line:
+                function_body_started = True
+                continue
+            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+                assert not line.strip().startswith(
+                    "try:"
+                ), "Endpoint should not have outer try-catch block"
+                break
+
+    def test_stop_monitoring_preserves_business_logic(self):
+        """Test POST /monitoring/phase9/stop preserves business logic"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.stop_monitoring)
+        
+        # Check key business logic is preserved
+        assert "collector = analytics_controller.metrics_collector" in source
+        assert 'if hasattr(collector, "_is_collecting") and collector._is_collecting:' in source
+        assert "await collector.stop_collection()" in source
+        assert 'return {' in source
+        assert '"status": "stopped"' in source
+        assert '"message": "Phase 9 monitoring stopped successfully"' in source
+        assert '"timestamp": datetime.now().isoformat()' in source
+
+    def test_stop_monitoring_no_manual_error_handling(self):
+        """Test POST /monitoring/phase9/stop has no manual error handling"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.stop_monitoring)
+        
+        # Should not have except blocks
+        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert "HTTPException" not in source, "Should not raise HTTPException manually"
+
+    def test_query_phase9_metrics_has_decorator(self):
+        """Test POST /monitoring/phase9/metrics/query has @with_error_handling decorator"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.query_phase9_metrics)
+        assert (
+            "@with_error_handling" in source
+        ), "Endpoint missing @with_error_handling decorator"
+        assert (
+            'category=ErrorCategory.SERVER_ERROR' in source
+        ), "Decorator should use SERVER_ERROR category"
+        assert (
+            'operation="query_phase9_metrics"' in source
+        ), "Decorator should specify operation name"
+        assert (
+            'error_code_prefix="ANALYTICS"' in source
+        ), "Decorator should use ANALYTICS prefix"
+
+    def test_query_phase9_metrics_no_outer_try_catch(self):
+        """Test POST /monitoring/phase9/metrics/query has no outer try-catch block"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.query_phase9_metrics)
+        lines = source.split("\n")
+
+        # Check that function body doesn't start with try
+        function_body_started = False
+        for line in lines:
+            if 'async def query_phase9_metrics' in line:
+                function_body_started = True
+                continue
+            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+                assert not line.strip().startswith(
+                    "try:"
+                ), "Endpoint should not have outer try-catch block"
+                break
+
+    def test_query_phase9_metrics_preserves_business_logic(self):
+        """Test POST /monitoring/phase9/metrics/query preserves business logic"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.query_phase9_metrics)
+        
+        # Check key business logic is preserved
+        assert 'metric_name = query_request.get("metric", "all")' in source
+        assert 'time_range = query_request.get("time_range", 3600)' in source
+        assert "await analytics_controller.metrics_collector.collect_all_metrics()" in source
+        assert 'if metric_name != "all" and metric_name in current_metrics:' in source
+        assert "filtered_metrics = {metric_name: current_metrics[metric_name]}" in source
+        assert "historical_data = []" in source
+        assert "cutoff_time = datetime.now() - timedelta(seconds=time_range)" in source
+        assert 'for perf_point in analytics_state["performance_history"]:' in source
+        assert "point_time = datetime.fromisoformat(perf_point" in source
+        assert "if point_time > cutoff_time:" in source
+        assert "historical_data.append(perf_point)" in source
+        assert '"current_metrics": {' in source
+        assert '"historical_data": historical_data' in source
+        assert '"query_info": {' in source
+        assert '"metric": metric_name' in source
+        assert '"time_range_seconds": time_range' in source
+
+    def test_query_phase9_metrics_no_manual_error_handling(self):
+        """Test POST /monitoring/phase9/metrics/query has no manual error handling"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.query_phase9_metrics)
+        
+        # Should not have except blocks
+        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert "HTTPException" not in source, "Should not raise HTTPException manually"
+
+    def test_batch38_all_endpoints_migrated(self):
+        """Test all batch 38 endpoints have been migrated"""
+        from backend.api import analytics
+
+        # Check both endpoints have decorators
+        stop_source = inspect.getsource(analytics.stop_monitoring)
+        query_source = inspect.getsource(analytics.query_phase9_metrics)
+
+        assert "@with_error_handling" in stop_source, "Stop monitoring endpoint not migrated"
+        assert "@with_error_handling" in query_source, "Query metrics endpoint not migrated"
+
+    def test_batch38_consistent_error_handling(self):
+        """Test batch 38 endpoints use consistent error handling configuration"""
+        from backend.api import analytics
+
+        stop_source = inspect.getsource(analytics.stop_monitoring)
+        query_source = inspect.getsource(analytics.query_phase9_metrics)
+
+        # All should use SERVER_ERROR category
+        assert 'category=ErrorCategory.SERVER_ERROR' in stop_source
+        assert 'category=ErrorCategory.SERVER_ERROR' in query_source
+
+        # All should use ANALYTICS prefix
+        assert 'error_code_prefix="ANALYTICS"' in stop_source
+        assert 'error_code_prefix="ANALYTICS"' in query_source
