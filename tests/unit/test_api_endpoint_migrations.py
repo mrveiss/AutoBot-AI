@@ -6991,3 +6991,143 @@ class TestBatch43AnalyticsMigrations(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ============================================================================
+# BATCH 44: System Health & Performance Endpoints (GET system/health-detailed + performance/metrics)
+# ============================================================================
+
+
+class TestBatch44AnalyticsMigrations(unittest.TestCase):
+    """Test suite for Batch 44 system health and performance endpoint migrations"""
+
+    def test_get_detailed_system_health_decorator_present(self):
+        """Verify @with_error_handling decorator on get_detailed_system_health"""
+        from backend.api.analytics import get_detailed_system_health
+        import inspect
+
+        source = inspect.getsource(get_detailed_system_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn("error_code_prefix", source)
+
+    def test_get_detailed_system_health_nested_try_preserved(self):
+        """Verify nested try-catch preserved in get_detailed_system_health for Redis/service checks"""
+        from backend.api.analytics import get_detailed_system_health
+        import inspect
+
+        source = inspect.getsource(get_detailed_system_health)
+        # Should have nested try-catch for Redis and service connectivity
+        self.assertIn("try:", source)
+        # Verify it's for connectivity checks
+        self.assertTrue("redis_conn" in source or "service_connectivity" in source)
+
+    def test_get_detailed_system_health_business_logic_preserved(self):
+        """Verify business logic preserved in get_detailed_system_health"""
+        from backend.api.analytics import get_detailed_system_health
+        import inspect
+
+        source = inspect.getsource(get_detailed_system_health)
+        # Key business logic should be present
+        self.assertIn("base_health", source)
+        self.assertIn("detailed_health", source)
+        self.assertIn("redis_connectivity", source)
+        self.assertIn("service_connectivity", source)
+        self.assertIn("resource_alerts", source)
+
+    def test_get_detailed_system_health_error_handling(self):
+        """Test error handling configuration in get_detailed_system_health"""
+        from backend.api.analytics import get_detailed_system_health
+        import inspect
+
+        source = inspect.getsource(get_detailed_system_health)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_detailed_system_health"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_get_performance_metrics_decorator_present(self):
+        """Verify @with_error_handling decorator on get_performance_metrics"""
+        from backend.api.analytics import get_performance_metrics
+        import inspect
+
+        source = inspect.getsource(get_performance_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn("error_code_prefix", source)
+
+    def test_get_performance_metrics_no_try_catch(self):
+        """Verify try-catch removed from get_performance_metrics"""
+        from backend.api.analytics import get_performance_metrics
+        import inspect
+
+        source = inspect.getsource(get_performance_metrics)
+        # Should not have outer try-catch pattern
+        lines = source.split('\n')
+        function_body_started = False
+        for line in lines:
+            if 'def get_performance_metrics' in line:
+                function_body_started = True
+                continue
+            if function_body_started and line.strip() and not line.strip().startswith('"""') and not line.strip().startswith('#'):
+                self.assertNotIn('try:', line)
+                break
+
+    def test_get_performance_metrics_business_logic_preserved(self):
+        """Verify business logic preserved in get_performance_metrics"""
+        from backend.api.analytics import get_performance_metrics
+        import inspect
+
+        source = inspect.getsource(get_performance_metrics)
+        # Key business logic should be present
+        self.assertIn("collect_performance_metrics", source)
+        self.assertIn("performance_history", source)
+        self.assertIn("historical_context", source)
+        self.assertIn("current_snapshot", source)
+
+    def test_get_performance_metrics_error_handling(self):
+        """Test error handling configuration in get_performance_metrics"""
+        from backend.api.analytics import get_performance_metrics
+        import inspect
+
+        source = inspect.getsource(get_performance_metrics)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_performance_metrics"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_batch44_all_endpoints_migrated(self):
+        """Verify all Batch 44 endpoints have been migrated"""
+        from backend.api.analytics import (
+            get_detailed_system_health,
+            get_performance_metrics,
+        )
+        import inspect
+
+        endpoints = [get_detailed_system_health, get_performance_metrics]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have decorator
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch44_consistent_error_category(self):
+        """Verify consistent error category across Batch 44"""
+        from backend.api.analytics import (
+            get_detailed_system_health,
+            get_performance_metrics,
+        )
+        import inspect
+
+        endpoints = [get_detailed_system_health, get_performance_metrics]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use ANALYTICS prefix
+            self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+
+if __name__ == "__main__":
+    unittest.main()
