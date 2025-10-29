@@ -799,74 +799,74 @@ async def get_performance_metrics():
 
 
 @router.get("/communication/patterns")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_communication_patterns",
+    error_code_prefix="ANALYTICS",
+)
 async def get_communication_patterns():
     """Get detailed communication pattern analysis"""
-    try:
-        patterns = await analytics_controller.analyze_communication_patterns()
+    patterns = await analytics_controller.analyze_communication_patterns()
 
-        # Add additional analysis
-        patterns["analysis_timestamp"] = datetime.now().isoformat()
-        patterns["pattern_insights"] = []
+    # Add additional analysis
+    patterns["analysis_timestamp"] = datetime.now().isoformat()
+    patterns["pattern_insights"] = []
 
-        # Analyze for insights
-        if patterns["api_patterns"]:
-            # Find high-frequency, high-latency endpoints
-            high_latency_endpoints = [
-                p
-                for p in patterns["api_patterns"]
-                if p["avg_response_time"] > 1.0 and p["frequency"] > 10
-            ]
+    # Analyze for insights
+    if patterns["api_patterns"]:
+        # Find high-frequency, high-latency endpoints
+        high_latency_endpoints = [
+            p
+            for p in patterns["api_patterns"]
+            if p["avg_response_time"] > 1.0 and p["frequency"] > 10
+        ]
 
-            if high_latency_endpoints:
-                patterns["pattern_insights"].append(
-                    {
-                        "type": "performance_concern",
-                        "message": f"Found {len(high_latency_endpoints)} high-frequency endpoints with high latency",
-                        "details": high_latency_endpoints[:3],  # Show top 3
-                    }
-                )
+        if high_latency_endpoints:
+            patterns["pattern_insights"].append(
+                {
+                    "type": "performance_concern",
+                    "message": f"Found {len(high_latency_endpoints)} high-frequency endpoints with high latency",
+                    "details": high_latency_endpoints[:3],  # Show top 3
+                }
+            )
 
-            # Find endpoints with high error rates
-            high_error_endpoints = [
-                p for p in patterns["api_patterns"] if p["error_rate"] > 5.0
-            ]
+        # Find endpoints with high error rates
+        high_error_endpoints = [
+            p for p in patterns["api_patterns"] if p["error_rate"] > 5.0
+        ]
 
-            if high_error_endpoints:
-                patterns["pattern_insights"].append(
-                    {
-                        "type": "reliability_concern",
-                        "message": f"Found {len(high_error_endpoints)} endpoints with high error rates",
-                        "details": high_error_endpoints[:3],
-                    }
-                )
+        if high_error_endpoints:
+            patterns["pattern_insights"].append(
+                {
+                    "type": "reliability_concern",
+                    "message": f"Found {len(high_error_endpoints)} endpoints with high error rates",
+                    "details": high_error_endpoints[:3],
+                }
+            )
 
-        return patterns
-
-    except Exception as e:
-        logger.error(f"Failed to get communication patterns: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return patterns
 
 
 @router.get("/usage/statistics")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_usage_statistics",
+    error_code_prefix="ANALYTICS",
+)
 async def get_usage_statistics():
     """Get comprehensive usage statistics"""
-    try:
-        stats = await analytics_controller.get_usage_statistics()
+    stats = await analytics_controller.get_usage_statistics()
 
-        # Add time-based analysis
-        stats["analysis_period"] = {
-            "start_time": analytics_state.get(
-                "session_start", datetime.now().isoformat()
-            ),
-            "current_time": datetime.now().isoformat(),
-            "data_points": len(analytics_state["api_call_patterns"]),
-        }
+    # Add time-based analysis
+    stats["analysis_period"] = {
+        "start_time": analytics_state.get(
+            "session_start", datetime.now().isoformat()
+        ),
+        "current_time": datetime.now().isoformat(),
+        "data_points": len(analytics_state["api_call_patterns"]),
+    }
 
-        return stats
-
-    except Exception as e:
-        logger.error(f"Failed to get usage statistics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return stats
 
 
 # ============================================================================
