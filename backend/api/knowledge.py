@@ -248,6 +248,11 @@ async def get_knowledge_stats(req: Request):
 
 
 @router.get("/test_categories_main")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_main_categories",
+    error_code_prefix="KNOWLEDGE",
+)
 async def test_main_categories():
     """Test endpoint to verify file is loaded"""
     from backend.knowledge_categories import CATEGORY_METADATA
@@ -712,206 +717,206 @@ async def search_knowledge(request: dict, req: Request):
 
 
 @router.post("/rag_search")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rag_enhanced_search",
+    error_code_prefix="KNOWLEDGE",
+)
 async def rag_enhanced_search(request: dict, req: Request):
     """RAG-enhanced knowledge search for comprehensive document synthesis"""
-    try:
-        if not RAG_AVAILABLE:
-            raise HTTPException(
-                status_code=503,
-                detail="RAG functionality not available - AI Stack may not be running",
-            )
-
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
-        if kb_to_use is None:
-            return {
-                "status": "error",
-                "synthesized_response": "",
-                "results": [],
-                "message": "Knowledge base not initialized - please check logs for errors",
-            }
-
-        query = request.get("query", "")
-        top_k = request.get("top_k", 10)
-        limit = request.get("limit", 10)
-        reformulate_query = request.get("reformulate_query", True)
-
-        if not query:
-            raise HTTPException(status_code=400, detail="Query is required")
-
-        # Use limit if provided, otherwise use top_k
-        search_limit = limit if request.get("limit") is not None else top_k
-
-        logger.info(
-            f"RAG-enhanced search request: '{query}' (top_k={search_limit}, reformulate={reformulate_query})"
+    if not RAG_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="RAG functionality not available - AI Stack may not be running",
         )
 
-        # Check if knowledge base is empty - fast check to avoid timeout
-        try:
-            stats = await kb_to_use.get_stats()
-            fact_count = stats.get("total_facts", 0)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-            if fact_count == 0:
-                logger.info(
-                    "Knowledge base is empty - returning empty RAG results immediately"
-                )
-                return {
-                    "status": "success",
-                    "synthesized_response": "The knowledge base is currently empty. Please add documents in the Manage tab to enable search functionality.",
-                    "results": [],
-                    "query": query,
-                    "reformulated_query": query,
-                    "rag_analysis": {
-                        "relevance_score": 0.0,
-                        "confidence": 0.0,
-                        "sources_used": 0,
-                        "synthesis_quality": "empty_kb",
-                    },
-                    "message": "Knowledge base is empty",
-                }
-        except Exception as stats_err:
-            logger.warning(f"Could not check KB stats: {stats_err}")
+    if kb_to_use is None:
+        return {
+            "status": "error",
+            "synthesized_response": "",
+            "results": [],
+            "message": "Knowledge base not initialized - please check logs for errors",
+        }
 
-        # Step 1: Query reformulation if requested
-        original_query = query
-        reformulated_queries = [query]
+    query = request.get("query", "")
+    top_k = request.get("top_k", 10)
+    limit = request.get("limit", 10)
+    reformulate_query = request.get("reformulate_query", True)
 
-        if reformulate_query:
-            try:
-                rag_agent = get_rag_agent()
-                reformulation_result = await rag_agent.reformulate_query(query)
+    if not query:
+        raise HTTPException(status_code=400, detail="Query is required")
 
-                if reformulation_result.get("status") == "success":
-                    additional_queries = reformulation_result.get(
-                        "reformulated_queries", []
-                    )
-                    reformulated_queries.extend(
-                        additional_queries[:3]
-                    )  # Limit to avoid too many queries
+    # Use limit if provided, otherwise use top_k
+    search_limit = limit if request.get("limit") is not None else top_k
 
-            except Exception as e:
-                logger.warning(f"Query reformulation failed: {e}")
+    logger.info(
+        f"RAG-enhanced search request: '{query}' (top_k={search_limit}, reformulate={reformulate_query})"
+    )
 
-        # Step 2: Search with all queries
-        all_results = []
-        seen_content = set()
+    # Check if knowledge base is empty - fast check to avoid timeout
+    try:
+        stats = await kb_to_use.get_stats()
+        fact_count = stats.get("total_facts", 0)
 
-        for search_query in reformulated_queries:
-            try:
-                # Get search results
-                kb_class_name = kb_to_use.__class__.__name__
-
-                if kb_class_name == "KnowledgeBaseV2":
-                    query_results = await kb_to_use.search(
-                        query=search_query, top_k=search_limit
-                    )
-                else:
-                    query_results = await kb_to_use.search(
-                        query=search_query, similarity_top_k=search_limit
-                    )
-
-                # Deduplicate results
-                for result in query_results:
-                    content = result.get("content", "")
-                    if content and content not in seen_content:
-                        seen_content.add(content)
-                        result["source_query"] = search_query
-                        all_results.append(result)
-
-            except Exception as e:
-                logger.error(f"Search failed for query '{search_query}': {e}")
-
-        # Step 3: Limit total results
-        all_results = all_results[:search_limit]
-
-        # Step 4: RAG processing for synthesis
-        if all_results:
-            try:
-                rag_agent = get_rag_agent()
-
-                # Convert results to RAG-compatible format
-                documents = []
-                for result in all_results:
-                    documents.append(
-                        {
-                            "content": result.get("content", ""),
-                            "metadata": {
-                                "filename": result.get("metadata", {}).get(
-                                    "title", "Unknown"
-                                ),
-                                "source": result.get("metadata", {}).get(
-                                    "source", "knowledge_base"
-                                ),
-                                "category": result.get("metadata", {}).get(
-                                    "category", "general"
-                                ),
-                                "score": result.get("score", 0.0),
-                                "source_query": result.get(
-                                    "source_query", original_query
-                                ),
-                            },
-                        }
-                    )
-
-                # Process with RAG agent
-                rag_result = await rag_agent.process_document_query(
-                    query=original_query,
-                    documents=documents,
-                    context={"reformulated_queries": reformulated_queries},
-                )
-
-                return {
-                    "status": "success",
-                    "synthesized_response": rag_result.get("synthesized_response", ""),
-                    "confidence_score": rag_result.get("confidence_score", 0.0),
-                    "document_analysis": rag_result.get("document_analysis", {}),
-                    "sources_used": rag_result.get("sources_used", []),
-                    "results": all_results,
-                    "total_results": len(all_results),
-                    "original_query": original_query,
-                    "reformulated_queries": (
-                        reformulated_queries[1:]
-                        if len(reformulated_queries) > 1
-                        else []
-                    ),
-                    "kb_implementation": kb_to_use.__class__.__name__,
-                    "agent_metadata": rag_result.get("metadata", {}),
-                    "rag_enhanced": True,
-                }
-
-            except Exception as e:
-                logger.error(f"RAG processing failed: {e}")
-                # Return search results without synthesis
-                return {
-                    "status": "partial_success",
-                    "synthesized_response": f"Found {len(all_results)} relevant documents but synthesis failed: {str(e)}",
-                    "results": all_results,
-                    "total_results": len(all_results),
-                    "original_query": original_query,
-                    "reformulated_queries": (
-                        reformulated_queries[1:]
-                        if len(reformulated_queries) > 1
-                        else []
-                    ),
-                    "error": str(e),
-                    "rag_enhanced": False,
-                }
-        else:
+        if fact_count == 0:
+            logger.info(
+                "Knowledge base is empty - returning empty RAG results immediately"
+            )
             return {
                 "status": "success",
-                "synthesized_response": f"No relevant documents found for query: '{original_query}'",
+                "synthesized_response": "The knowledge base is currently empty. Please add documents in the Manage tab to enable search functionality.",
                 "results": [],
-                "total_results": 0,
+                "query": query,
+                "reformulated_query": query,
+                "rag_analysis": {
+                    "relevance_score": 0.0,
+                    "confidence": 0.0,
+                    "sources_used": 0,
+                    "synthesis_quality": "empty_kb",
+                },
+                "message": "Knowledge base is empty",
+            }
+    except Exception as stats_err:
+        logger.warning(f"Could not check KB stats: {stats_err}")
+
+    # Step 1: Query reformulation if requested
+    original_query = query
+    reformulated_queries = [query]
+
+    if reformulate_query:
+        try:
+            rag_agent = get_rag_agent()
+            reformulation_result = await rag_agent.reformulate_query(query)
+
+            if reformulation_result.get("status") == "success":
+                additional_queries = reformulation_result.get(
+                    "reformulated_queries", []
+                )
+                reformulated_queries.extend(
+                    additional_queries[:3]
+                )  # Limit to avoid too many queries
+
+        except Exception as e:
+            logger.warning(f"Query reformulation failed: {e}")
+
+    # Step 2: Search with all queries
+    all_results = []
+    seen_content = set()
+
+    for search_query in reformulated_queries:
+        try:
+            # Get search results
+            kb_class_name = kb_to_use.__class__.__name__
+
+            if kb_class_name == "KnowledgeBaseV2":
+                query_results = await kb_to_use.search(
+                    query=search_query, top_k=search_limit
+                )
+            else:
+                query_results = await kb_to_use.search(
+                    query=search_query, similarity_top_k=search_limit
+                )
+
+            # Deduplicate results
+            for result in query_results:
+                content = result.get("content", "")
+                if content and content not in seen_content:
+                    seen_content.add(content)
+                    result["source_query"] = search_query
+                    all_results.append(result)
+
+        except Exception as e:
+            logger.error(f"Search failed for query '{search_query}': {e}")
+
+    # Step 3: Limit total results
+    all_results = all_results[:search_limit]
+
+    # Step 4: RAG processing for synthesis
+    if all_results:
+        try:
+            rag_agent = get_rag_agent()
+
+            # Convert results to RAG-compatible format
+            documents = []
+            for result in all_results:
+                documents.append(
+                    {
+                        "content": result.get("content", ""),
+                        "metadata": {
+                            "filename": result.get("metadata", {}).get(
+                                "title", "Unknown"
+                            ),
+                            "source": result.get("metadata", {}).get(
+                                "source", "knowledge_base"
+                            ),
+                            "category": result.get("metadata", {}).get(
+                                "category", "general"
+                            ),
+                            "score": result.get("score", 0.0),
+                            "source_query": result.get(
+                                "source_query", original_query
+                            ),
+                        },
+                    }
+                )
+
+            # Process with RAG agent
+            rag_result = await rag_agent.process_document_query(
+                query=original_query,
+                documents=documents,
+                context={"reformulated_queries": reformulated_queries},
+            )
+
+            return {
+                "status": "success",
+                "synthesized_response": rag_result.get("synthesized_response", ""),
+                "confidence_score": rag_result.get("confidence_score", 0.0),
+                "document_analysis": rag_result.get("document_analysis", {}),
+                "sources_used": rag_result.get("sources_used", []),
+                "results": all_results,
+                "total_results": len(all_results),
                 "original_query": original_query,
                 "reformulated_queries": (
-                    reformulated_queries[1:] if len(reformulated_queries) > 1 else []
+                    reformulated_queries[1:]
+                    if len(reformulated_queries) > 1
+                    else []
                 ),
+                "kb_implementation": kb_to_use.__class__.__name__,
+                "agent_metadata": rag_result.get("metadata", {}),
                 "rag_enhanced": True,
             }
 
-    except Exception as e:
-        logger.error(f"Error in RAG-enhanced search: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"RAG search failed: {str(e)}")
+        except Exception as e:
+            logger.error(f"RAG processing failed: {e}")
+            # Return search results without synthesis
+            return {
+                "status": "partial_success",
+                "synthesized_response": f"Found {len(all_results)} relevant documents but synthesis failed: {str(e)}",
+                "results": all_results,
+                "total_results": len(all_results),
+                "original_query": original_query,
+                "reformulated_queries": (
+                    reformulated_queries[1:]
+                    if len(reformulated_queries) > 1
+                    else []
+                ),
+                "error": str(e),
+                "rag_enhanced": False,
+            }
+    else:
+        return {
+            "status": "success",
+            "synthesized_response": f"No relevant documents found for query: '{original_query}'",
+            "results": [],
+            "total_results": 0,
+            "original_query": original_query,
+            "reformulated_queries": (
+                reformulated_queries[1:] if len(reformulated_queries) > 1 else []
+            ),
+            "rag_enhanced": True,
+        }
 
 
 @router.post("/similarity_search")
