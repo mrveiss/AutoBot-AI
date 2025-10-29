@@ -7516,5 +7516,136 @@ class TestBatch47AnalyticsMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="ANALYTICS"', source)
 
 
+# ============================================================================
+# BATCH 48: Knowledge Base Endpoints (GET test_categories_main + POST rag_search)
+# ============================================================================
+
+
+class TestBatch48KnowledgeMigrations(unittest.TestCase):
+    """Test suite for Batch 48 knowledge base endpoints"""
+
+    def test_test_main_categories_decorator_present(self):
+        """Verify @with_error_handling decorator on test_main_categories"""
+        from backend.api.knowledge import test_main_categories
+        import inspect
+
+        source = inspect.getsource(test_main_categories)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="test_main_categories"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_test_main_categories_no_try_catch(self):
+        """Verify no try-catch in test_main_categories (Simple Pattern)"""
+        from backend.api.knowledge import test_main_categories
+        import inspect
+
+        source = inspect.getsource(test_main_categories)
+        # Simple pattern: no try-catch blocks
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0)
+
+    def test_test_main_categories_business_logic_preserved(self):
+        """Verify business logic preserved in test_main_categories"""
+        from backend.api.knowledge import test_main_categories
+        import inspect
+
+        source = inspect.getsource(test_main_categories)
+        # Key business logic should be present
+        self.assertIn("CATEGORY_METADATA", source)
+        self.assertIn("status", source)
+        self.assertIn("categories", source)
+
+    def test_test_main_categories_error_handling(self):
+        """Test error handling configuration in test_main_categories"""
+        from backend.api.knowledge import test_main_categories
+        import inspect
+
+        source = inspect.getsource(test_main_categories)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="test_main_categories"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_rag_enhanced_search_decorator_present(self):
+        """Verify @with_error_handling decorator on rag_enhanced_search"""
+        from backend.api.knowledge import rag_enhanced_search
+        import inspect
+
+        source = inspect.getsource(rag_enhanced_search)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="rag_enhanced_search"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_rag_enhanced_search_nested_try_catch_preserved(self):
+        """Verify nested try-catch blocks preserved in rag_enhanced_search (Mixed Pattern)"""
+        from backend.api.knowledge import rag_enhanced_search
+        import inspect
+
+        source = inspect.getsource(rag_enhanced_search)
+        # Mixed pattern: nested try-catch blocks should be preserved
+        try_count = source.count("try:")
+        # Should have 4 nested try-catch blocks (KB stats, query reformulation, search loop, RAG synthesis)
+        self.assertEqual(try_count, 4)
+
+    def test_rag_enhanced_search_business_logic_preserved(self):
+        """Verify business logic preserved in rag_enhanced_search"""
+        from backend.api.knowledge import rag_enhanced_search
+        import inspect
+
+        source = inspect.getsource(rag_enhanced_search)
+        # Key business logic should be present
+        self.assertIn("RAG_AVAILABLE", source)
+        self.assertIn("get_or_create_knowledge_base", source)
+        self.assertIn("reformulate_query", source)
+        self.assertIn("get_rag_agent", source)
+        self.assertIn("process_document_query", source)
+        self.assertIn("synthesized_response", source)
+
+    def test_rag_enhanced_search_error_handling(self):
+        """Test error handling configuration in rag_enhanced_search"""
+        from backend.api.knowledge import rag_enhanced_search
+        import inspect
+
+        source = inspect.getsource(rag_enhanced_search)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="rag_enhanced_search"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_batch48_all_endpoints_migrated(self):
+        """Verify all Batch 48 endpoints have been migrated"""
+        from backend.api.knowledge import (
+            test_main_categories,
+            rag_enhanced_search,
+        )
+        import inspect
+
+        endpoints = [test_main_categories, rag_enhanced_search]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have decorator
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch48_consistent_error_category(self):
+        """Verify consistent error category across Batch 48"""
+        from backend.api.knowledge import (
+            test_main_categories,
+            rag_enhanced_search,
+        )
+        import inspect
+
+        endpoints = [test_main_categories, rag_enhanced_search]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use KNOWLEDGE prefix
+            self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
