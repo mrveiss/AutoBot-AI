@@ -875,70 +875,70 @@ async def get_usage_statistics():
 
 
 @router.post("/code/index")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="index_codebase",
+    error_code_prefix="ANALYTICS",
+)
 async def index_codebase(request: CodeAnalysisRequest):
     """Trigger codebase indexing and analysis"""
-    try:
-        # Validate request
-        if not Path(request.target_path).exists():
-            raise HTTPException(
-                status_code=400,
-                detail=f"Target path does not exist: {request.target_path}",
-            )
+    # Validate request
+    if not Path(request.target_path).exists():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Target path does not exist: {request.target_path}",
+        )
 
-        # Perform analysis
-        results = await analytics_controller.perform_code_analysis(request)
+    # Perform analysis
+    results = await analytics_controller.perform_code_analysis(request)
 
-        return {
-            "status": "completed",
-            "request": request.dict(),
-            "results": results,
-            "cached_for_reuse": True,
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to index codebase: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "completed",
+        "request": request.dict(),
+        "results": results,
+        "cached_for_reuse": True,
+    }
 
 
 @router.get("/code/status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_code_analysis_status",
+    error_code_prefix="ANALYTICS",
+)
 async def get_code_analysis_status():
     """Get current code analysis status and capabilities"""
-    try:
-        status = {
-            "tools_available": {
-                "code_analysis_suite": analytics_controller.code_analysis_path.exists(),
-                "code_index_mcp": analytics_controller.code_index_path.exists(),
-            },
-            "last_analysis_time": analytics_state.get("last_analysis_time"),
-            "cache_status": {
-                "has_cached_results": bool(analytics_state.get("code_analysis_cache")),
-                "cache_timestamp": analytics_state.get("last_analysis_time"),
-            },
-            "supported_analysis_types": ["full", "incremental", "communication_chains"],
+    status = {
+        "tools_available": {
+            "code_analysis_suite": analytics_controller.code_analysis_path.exists(),
+            "code_index_mcp": analytics_controller.code_index_path.exists(),
+        },
+        "last_analysis_time": analytics_state.get("last_analysis_time"),
+        "cache_status": {
+            "has_cached_results": bool(analytics_state.get("code_analysis_cache")),
+            "cache_timestamp": analytics_state.get("last_analysis_time"),
+        },
+        "supported_analysis_types": ["full", "incremental", "communication_chains"],
+    }
+
+    # Add tool details if available
+    if analytics_controller.code_analysis_path.exists():
+        status["code_analysis_suite"] = {
+            "path": str(analytics_controller.code_analysis_path),
+            "scripts_available": list(
+                analytics_controller.code_analysis_path.glob("scripts/*.py")
+            ),
         }
 
-        # Add tool details if available
-        if analytics_controller.code_analysis_path.exists():
-            status["code_analysis_suite"] = {
-                "path": str(analytics_controller.code_analysis_path),
-                "scripts_available": list(
-                    analytics_controller.code_analysis_path.glob("scripts/*.py")
-                ),
-            }
+    if analytics_controller.code_index_path.exists():
+        status["code_index_mcp"] = {
+            "path": str(analytics_controller.code_index_path),
+            "config_available": (
+                analytics_controller.code_index_path / "pyproject.toml"
+            ).exists(),
+        }
 
-        if analytics_controller.code_index_path.exists():
-            status["code_index_mcp"] = {
-                "path": str(analytics_controller.code_index_path),
-                "config_available": (
-                    analytics_controller.code_index_path / "pyproject.toml"
-                ).exists(),
-            }
-
-        return status
-
-    except Exception as e:
-        logger.error(f"Failed to get code analysis status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return status
 
 
 @router.get("/quality/assessment")
