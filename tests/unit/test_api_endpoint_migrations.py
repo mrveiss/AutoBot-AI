@@ -7647,5 +7647,139 @@ class TestBatch48KnowledgeMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="KNOWLEDGE"', source)
 
 
+# ============================================================================
+# BATCH 49: Knowledge Base Endpoints (POST similarity_search + POST populate_system_commands)
+# ============================================================================
+
+
+class TestBatch49KnowledgeMigrations(unittest.TestCase):
+    """Test suite for Batch 49 knowledge base endpoints"""
+
+    def test_similarity_search_decorator_present(self):
+        """Verify @with_error_handling decorator on similarity_search"""
+        from backend.api.knowledge import similarity_search
+        import inspect
+
+        source = inspect.getsource(similarity_search)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="similarity_search"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_similarity_search_nested_try_catch_preserved(self):
+        """Verify nested try-catch block preserved in similarity_search (Mixed Pattern)"""
+        from backend.api.knowledge import similarity_search
+        import inspect
+
+        source = inspect.getsource(similarity_search)
+        # Mixed pattern: nested try-catch block should be preserved for RAG enhancement
+        try_count = source.count("try:")
+        # Should have 1 nested try-catch block (RAG enhancement)
+        self.assertEqual(try_count, 1)
+
+    def test_similarity_search_business_logic_preserved(self):
+        """Verify business logic preserved in similarity_search"""
+        from backend.api.knowledge import similarity_search
+        import inspect
+
+        source = inspect.getsource(similarity_search)
+        # Key business logic should be present
+        self.assertIn("get_or_create_knowledge_base", source)
+        self.assertIn("KnowledgeBaseV2", source)
+        self.assertIn("similarity_top_k", source)
+        self.assertIn("threshold", source)
+        self.assertIn("use_rag", source)
+        self.assertIn("_enhance_search_with_rag", source)
+
+    def test_similarity_search_error_handling(self):
+        """Test error handling configuration in similarity_search"""
+        from backend.api.knowledge import similarity_search
+        import inspect
+
+        source = inspect.getsource(similarity_search)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="similarity_search"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_populate_system_commands_decorator_present(self):
+        """Verify @with_error_handling decorator on populate_system_commands"""
+        from backend.api.knowledge import populate_system_commands
+        import inspect
+
+        source = inspect.getsource(populate_system_commands)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="populate_system_commands"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_populate_system_commands_nested_try_catch_preserved(self):
+        """Verify nested try-catch block preserved in populate_system_commands (Mixed Pattern)"""
+        from backend.api.knowledge import populate_system_commands
+        import inspect
+
+        source = inspect.getsource(populate_system_commands)
+        # Mixed pattern: nested try-catch block should be preserved for command processing
+        try_count = source.count("try:")
+        # Should have 1 nested try-catch block (command processing loop)
+        self.assertEqual(try_count, 1)
+
+    def test_populate_system_commands_business_logic_preserved(self):
+        """Verify business logic preserved in populate_system_commands"""
+        from backend.api.knowledge import populate_system_commands
+        import inspect
+
+        source = inspect.getsource(populate_system_commands)
+        # Key business logic should be present
+        self.assertIn("get_or_create_knowledge_base", source)
+        self.assertIn("system_commands", source)
+        self.assertIn("batch_size", source)
+        self.assertIn("store_fact", source)
+        self.assertIn("items_added", source)
+
+    def test_populate_system_commands_error_handling(self):
+        """Test error handling configuration in populate_system_commands"""
+        from backend.api.knowledge import populate_system_commands
+        import inspect
+
+        source = inspect.getsource(populate_system_commands)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="populate_system_commands"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_batch49_all_endpoints_migrated(self):
+        """Verify all Batch 49 endpoints have been migrated"""
+        from backend.api.knowledge import (
+            similarity_search,
+            populate_system_commands,
+        )
+        import inspect
+
+        endpoints = [similarity_search, populate_system_commands]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have decorator
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch49_consistent_error_category(self):
+        """Verify consistent error category across Batch 49"""
+        from backend.api.knowledge import (
+            similarity_search,
+            populate_system_commands,
+        )
+        import inspect
+
+        endpoints = [similarity_search, populate_system_commands]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use KNOWLEDGE prefix
+            self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
