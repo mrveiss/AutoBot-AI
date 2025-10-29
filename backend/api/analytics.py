@@ -942,76 +942,66 @@ async def get_code_analysis_status():
 
 
 @router.get("/quality/assessment")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_code_quality_assessment",
+    error_code_prefix="ANALYTICS",
+)
 async def get_code_quality_assessment():
     """Get comprehensive code quality assessment for frontend dashboard"""
-    try:
-        # Get cached analysis or trigger new one
-        cached_analysis = analytics_state.get("code_analysis_cache")
+    # Get cached analysis or trigger new one
+    cached_analysis = analytics_state.get("code_analysis_cache")
 
-        # Default quality scores
-        quality_assessment = {
-            "overall_score": 75,
-            "maintainability": 80,
-            "testability": 70,
-            "documentation": 65,
-            "complexity": 85,
-            "security": 75,
-            "performance": 80,
-            "timestamp": datetime.now().isoformat(),
+    # Default quality scores
+    quality_assessment = {
+        "overall_score": 75,
+        "maintainability": 80,
+        "testability": 70,
+        "documentation": 65,
+        "complexity": 85,
+        "security": 75,
+        "performance": 80,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    # If we have cached analysis, use it
+    if cached_analysis and "code_analysis" in cached_analysis:
+        code_data = cached_analysis["code_analysis"]
+
+        # Calculate quality metrics based on analysis
+        complexity = code_data.get("complexity", 5)
+        quality_assessment["complexity"] = max(0, (10 - complexity) * 10)
+
+        quality_assessment["testability"] = code_data.get("test_coverage", 70)
+        quality_assessment["documentation"] = code_data.get("doc_coverage", 65)
+
+        # Calculate maintainability
+        maintainability = code_data.get("maintainability", "good")
+        maintainability_scores = {
+            "excellent": 95,
+            "good": 80,
+            "fair": 65,
+            "poor": 40,
         }
+        quality_assessment["maintainability"] = maintainability_scores.get(
+            maintainability, 80
+        )
 
-        # If we have cached analysis, use it
-        if cached_analysis and "code_analysis" in cached_analysis:
-            code_data = cached_analysis["code_analysis"]
-
-            # Calculate quality metrics based on analysis
-            complexity = code_data.get("complexity", 5)
-            quality_assessment["complexity"] = max(0, (10 - complexity) * 10)
-
-            quality_assessment["testability"] = code_data.get("test_coverage", 70)
-            quality_assessment["documentation"] = code_data.get("doc_coverage", 65)
-
-            # Calculate maintainability
-            maintainability = code_data.get("maintainability", "good")
-            maintainability_scores = {
-                "excellent": 95,
-                "good": 80,
-                "fair": 65,
-                "poor": 40,
-            }
-            quality_assessment["maintainability"] = maintainability_scores.get(
-                maintainability, 80
+        # Overall score is average of all factors
+        quality_assessment["overall_score"] = round(
+            (
+                quality_assessment["maintainability"]
+                + quality_assessment["testability"]
+                + quality_assessment["documentation"]
+                + quality_assessment["complexity"]
+                + quality_assessment["security"]
+                + quality_assessment["performance"]
             )
+            / 6,
+            1,
+        )
 
-            # Overall score is average of all factors
-            quality_assessment["overall_score"] = round(
-                (
-                    quality_assessment["maintainability"]
-                    + quality_assessment["testability"]
-                    + quality_assessment["documentation"]
-                    + quality_assessment["complexity"]
-                    + quality_assessment["security"]
-                    + quality_assessment["performance"]
-                )
-                / 6,
-                1,
-            )
-
-        return quality_assessment
-
-    except Exception as e:
-        logger.error(f"Failed to get code quality assessment: {e}")
-        # Return default values on error
-        return {
-            "overall_score": 75,
-            "maintainability": 80,
-            "testability": 70,
-            "documentation": 65,
-            "complexity": 85,
-            "security": 75,
-            "performance": 80,
-            "timestamp": datetime.now().isoformat(),
-        }
+    return quality_assessment
 
 
 @router.get("/code/quality-metrics")
@@ -2272,20 +2262,21 @@ async def websocket_live_analytics(websocket: WebSocket):
 
 # Initialize analytics on module load
 @router.on_event("startup")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="initialize_analytics",
+    error_code_prefix="ANALYTICS",
+)
 async def initialize_analytics():
     """Initialize analytics system on startup"""
-    try:
-        logger.info("Initializing Enhanced Analytics API...")
+    logger.info("Initializing Enhanced Analytics API...")
 
-        # Initialize session
-        analytics_state["session_start"] = datetime.now().isoformat()
+    # Initialize session
+    analytics_state["session_start"] = datetime.now().isoformat()
 
-        # Start metrics collection
-        collector = analytics_controller.metrics_collector
-        if hasattr(collector, "_is_collecting") and not collector._is_collecting:
-            asyncio.create_task(collector.start_collection())
+    # Start metrics collection
+    collector = analytics_controller.metrics_collector
+    if hasattr(collector, "_is_collecting") and not collector._is_collecting:
+        asyncio.create_task(collector.start_collection())
 
-        logger.info("Enhanced Analytics API initialized successfully")
-
-    except Exception as e:
-        logger.error(f"Failed to initialize analytics: {e}")
+    logger.info("Enhanced Analytics API initialized successfully")
