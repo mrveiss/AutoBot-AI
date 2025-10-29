@@ -7129,5 +7129,133 @@ class TestBatch44AnalyticsMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="ANALYTICS"', source)
 
 
+# ============================================================================
+# BATCH 45: Analytics Endpoints (GET communication/patterns + usage/statistics)
+# ============================================================================
+
+
+class TestBatch45AnalyticsMigrations(unittest.TestCase):
+    """Test suite for Batch 45 analytics endpoints"""
+
+    def test_get_communication_patterns_decorator_present(self):
+        """Verify @with_error_handling decorator on get_communication_patterns"""
+        from backend.api.analytics import get_communication_patterns
+        import inspect
+
+        source = inspect.getsource(get_communication_patterns)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_communication_patterns"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_get_communication_patterns_no_try_catch(self):
+        """Verify try-catch removed from get_communication_patterns (Simple Pattern)"""
+        from backend.api.analytics import get_communication_patterns
+        import inspect
+
+        source = inspect.getsource(get_communication_patterns)
+        # Simple pattern: no try-catch blocks
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0)
+
+    def test_get_communication_patterns_business_logic_preserved(self):
+        """Verify business logic preserved in get_communication_patterns"""
+        from backend.api.analytics import get_communication_patterns
+        import inspect
+
+        source = inspect.getsource(get_communication_patterns)
+        # Key business logic should be present
+        self.assertIn("analyze_communication_patterns", source)
+        self.assertIn("pattern_insights", source)
+        self.assertIn("high_latency_endpoints", source)
+        self.assertIn("high_error_endpoints", source)
+
+    def test_get_communication_patterns_error_handling(self):
+        """Test error handling configuration in get_communication_patterns"""
+        from backend.api.analytics import get_communication_patterns
+        import inspect
+
+        source = inspect.getsource(get_communication_patterns)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_communication_patterns"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_get_usage_statistics_decorator_present(self):
+        """Verify @with_error_handling decorator on get_usage_statistics"""
+        from backend.api.analytics import get_usage_statistics
+        import inspect
+
+        source = inspect.getsource(get_usage_statistics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_usage_statistics"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_get_usage_statistics_no_try_catch(self):
+        """Verify try-catch removed from get_usage_statistics (Simple Pattern)"""
+        from backend.api.analytics import get_usage_statistics
+        import inspect
+
+        source = inspect.getsource(get_usage_statistics)
+        # Simple pattern: no try-catch blocks
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0)
+
+    def test_get_usage_statistics_business_logic_preserved(self):
+        """Verify business logic preserved in get_usage_statistics"""
+        from backend.api.analytics import get_usage_statistics
+        import inspect
+
+        source = inspect.getsource(get_usage_statistics)
+        # Key business logic should be present
+        self.assertIn("get_usage_statistics", source)
+        self.assertIn("analysis_period", source)
+        self.assertIn("session_start", source)
+
+    def test_get_usage_statistics_error_handling(self):
+        """Test error handling configuration in get_usage_statistics"""
+        from backend.api.analytics import get_usage_statistics
+        import inspect
+
+        source = inspect.getsource(get_usage_statistics)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_usage_statistics"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_batch45_all_endpoints_migrated(self):
+        """Verify all Batch 45 endpoints have been migrated"""
+        from backend.api.analytics import (
+            get_communication_patterns,
+            get_usage_statistics,
+        )
+        import inspect
+
+        endpoints = [get_communication_patterns, get_usage_statistics]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have decorator
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch45_consistent_error_category(self):
+        """Verify consistent error category across Batch 45"""
+        from backend.api.analytics import (
+            get_communication_patterns,
+            get_usage_statistics,
+        )
+        import inspect
+
+        endpoints = [get_communication_patterns, get_usage_statistics]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use ANALYTICS prefix
+            self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
