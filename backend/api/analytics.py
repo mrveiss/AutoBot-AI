@@ -658,139 +658,139 @@ async def get_dashboard_overview():
 
 
 @router.get("/system/health-detailed")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_detailed_system_health",
+    error_code_prefix="ANALYTICS",
+)
 async def get_detailed_system_health():
     """Get detailed system health with enhanced analytics"""
-    try:
-        # Get base system health from existing monitor
-        base_health = await hardware_monitor.get_system_health()
+    # Get base system health from existing monitor
+    base_health = await hardware_monitor.get_system_health()
 
-        # Add analytics-specific health checks
-        detailed_health = {
-            "base_health": base_health,
-            "analytics_health": {
-                "api_tracking_active": len(analytics_state["api_call_patterns"]) > 0,
-                "websocket_connections": len(analytics_state["websocket_connections"]),
-                "performance_tracking": len(analytics_state["performance_history"]) > 0,
-                "redis_connectivity": {},
-            },
-            "service_connectivity": {},
-            "resource_alerts": [],
-        }
+    # Add analytics-specific health checks
+    detailed_health = {
+        "base_health": base_health,
+        "analytics_health": {
+            "api_tracking_active": len(analytics_state["api_call_patterns"]) > 0,
+            "websocket_connections": len(analytics_state["websocket_connections"]),
+            "performance_tracking": len(analytics_state["performance_history"]) > 0,
+            "redis_connectivity": {},
+        },
+        "service_connectivity": {},
+        "resource_alerts": [],
+    }
 
-        # Check Redis connectivity for all databases
-        for db in RedisDatabase:
-            try:
-                redis_conn = await analytics_controller.get_redis_connection(db)
-                if redis_conn:
-                    await redis_conn.ping()
-                    detailed_health["analytics_health"]["redis_connectivity"][
-                        db.name
-                    ] = "connected"
-                else:
-                    detailed_health["analytics_health"]["redis_connectivity"][
-                        db.name
-                    ] = "failed"
-            except Exception as e:
+    # Check Redis connectivity for all databases
+    for db in RedisDatabase:
+        try:
+            redis_conn = await analytics_controller.get_redis_connection(db)
+            if redis_conn:
+                await redis_conn.ping()
                 detailed_health["analytics_health"]["redis_connectivity"][
                     db.name
-                ] = f"error: {str(e)}"
+                ] = "connected"
+            else:
+                detailed_health["analytics_health"]["redis_connectivity"][
+                    db.name
+                ] = "failed"
+        except Exception as e:
+            detailed_health["analytics_health"]["redis_connectivity"][
+                db.name
+            ] = f"error: {str(e)}"
 
-        # Check service connectivity
-        services = {
-            "ollama": get_service_address("ollama", NetworkConstants.OLLAMA_PORT),
-            "frontend": get_service_address("frontend", NetworkConstants.FRONTEND_PORT),
-            "redis": get_service_address("redis", NetworkConstants.REDIS_PORT),
-        }
+    # Check service connectivity
+    services = {
+        "ollama": get_service_address("ollama", NetworkConstants.OLLAMA_PORT),
+        "frontend": get_service_address("frontend", NetworkConstants.FRONTEND_PORT),
+        "redis": get_service_address("redis", NetworkConstants.REDIS_PORT),
+    }
 
-        for service_name, service_url in services.items():
-            try:
-                if service_name == "redis":
-                    # Redis check is already done above
-                    detailed_health["service_connectivity"][
-                        service_name
-                    ] = "checked_via_redis"
-                else:
-                    response = requests.get(f"{service_url}/health", timeout=5)
-                    detailed_health["service_connectivity"][service_name] = {
-                        "status": (
-                            "healthy" if response.status_code == 200 else "unhealthy"
-                        ),
-                        "response_time": response.elapsed.total_seconds(),
-                        "status_code": response.status_code,
-                    }
-            except Exception as e:
+    for service_name, service_url in services.items():
+        try:
+            if service_name == "redis":
+                # Redis check is already done above
+                detailed_health["service_connectivity"][
+                    service_name
+                ] = "checked_via_redis"
+            else:
+                response = requests.get(f"{service_url}/health", timeout=5)
                 detailed_health["service_connectivity"][service_name] = {
-                    "status": "unreachable",
-                    "error": str(e),
+                    "status": (
+                        "healthy" if response.status_code == 200 else "unhealthy"
+                    ),
+                    "response_time": response.elapsed.total_seconds(),
+                    "status_code": response.status_code,
                 }
+        except Exception as e:
+            detailed_health["service_connectivity"][service_name] = {
+                "status": "unreachable",
+                "error": str(e),
+            }
 
-        # Resource alerts
-        system_resources = hardware_monitor.get_system_resources()
-        if (
-            "cpu" in system_resources
-            and system_resources["cpu"]["percent_overall"] > 90
-        ):
-            detailed_health["resource_alerts"].append(
-                {
-                    "type": "cpu_high",
-                    "message": f"CPU usage at {system_resources['cpu']['percent_overall']:.1f}%",
-                    "severity": "warning",
-                }
-            )
+    # Resource alerts
+    system_resources = hardware_monitor.get_system_resources()
+    if (
+        "cpu" in system_resources
+        and system_resources["cpu"]["percent_overall"] > 90
+    ):
+        detailed_health["resource_alerts"].append(
+            {
+                "type": "cpu_high",
+                "message": f"CPU usage at {system_resources['cpu']['percent_overall']:.1f}%",
+                "severity": "warning",
+            }
+        )
 
-        if "memory" in system_resources and system_resources["memory"]["percent"] > 90:
-            detailed_health["resource_alerts"].append(
-                {
-                    "type": "memory_high",
-                    "message": f"Memory usage at {system_resources['memory']['percent']:.1f}%",
-                    "severity": "warning",
-                }
-            )
+    if "memory" in system_resources and system_resources["memory"]["percent"] > 90:
+        detailed_health["resource_alerts"].append(
+            {
+                "type": "memory_high",
+                "message": f"Memory usage at {system_resources['memory']['percent']:.1f}%",
+                "severity": "warning",
+            }
+        )
 
-        return detailed_health
-
-    except Exception as e:
-        logger.error(f"Failed to get detailed system health: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return detailed_health
 
 
 @router.get("/performance/metrics")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_performance_metrics",
+    error_code_prefix="ANALYTICS",
+)
 async def get_performance_metrics():
     """Get comprehensive performance metrics"""
-    try:
-        metrics = await analytics_controller.collect_performance_metrics()
+    metrics = await analytics_controller.collect_performance_metrics()
 
-        # Add historical context
-        if analytics_state["performance_history"]:
-            recent_history = list(analytics_state["performance_history"])[-10:]
-            metrics["historical_context"] = {
-                "samples_count": len(recent_history),
-                "avg_cpu_last_10": sum(h.get("cpu_percent", 0) for h in recent_history)
-                / len(recent_history),
-                "avg_memory_last_10": sum(
-                    h.get("memory_percent", 0) for h in recent_history
-                )
-                / len(recent_history),
-            }
-
-        # Store current metrics in history
-        current_snapshot = {
-            "timestamp": datetime.now().isoformat(),
-            "cpu_percent": metrics.get("system_performance", {}).get("cpu_percent", 0),
-            "memory_percent": metrics.get("system_performance", {}).get(
-                "memory_percent", 0
-            ),
-            "gpu_utilization": metrics.get("hardware_performance", {}).get(
-                "gpu_utilization", 0
-            ),
+    # Add historical context
+    if analytics_state["performance_history"]:
+        recent_history = list(analytics_state["performance_history"])[-10:]
+        metrics["historical_context"] = {
+            "samples_count": len(recent_history),
+            "avg_cpu_last_10": sum(h.get("cpu_percent", 0) for h in recent_history)
+            / len(recent_history),
+            "avg_memory_last_10": sum(
+                h.get("memory_percent", 0) for h in recent_history
+            )
+            / len(recent_history),
         }
-        analytics_state["performance_history"].append(current_snapshot)
 
-        return metrics
+    # Store current metrics in history
+    current_snapshot = {
+        "timestamp": datetime.now().isoformat(),
+        "cpu_percent": metrics.get("system_performance", {}).get("cpu_percent", 0),
+        "memory_percent": metrics.get("system_performance", {}).get(
+            "memory_percent", 0
+        ),
+        "gpu_utilization": metrics.get("hardware_performance", {}).get(
+            "gpu_utilization", 0
+        ),
+    }
+    analytics_state["performance_history"].append(current_snapshot)
 
-    except Exception as e:
-        logger.error(f"Failed to get performance metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return metrics
 
 
 # ============================================================================
