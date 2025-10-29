@@ -7257,5 +7257,134 @@ class TestBatch45AnalyticsMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="ANALYTICS"', source)
 
 
+# ============================================================================
+# BATCH 46: Code Analysis Endpoints (POST code/index + GET code/status)
+# ============================================================================
+
+
+class TestBatch46AnalyticsMigrations(unittest.TestCase):
+    """Test suite for Batch 46 code analysis endpoints"""
+
+    def test_index_codebase_decorator_present(self):
+        """Verify @with_error_handling decorator on index_codebase"""
+        from backend.api.analytics import index_codebase
+        import inspect
+
+        source = inspect.getsource(index_codebase)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="index_codebase"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_index_codebase_no_try_catch(self):
+        """Verify try-catch removed from index_codebase (Simple Pattern)"""
+        from backend.api.analytics import index_codebase
+        import inspect
+
+        source = inspect.getsource(index_codebase)
+        # Simple pattern: no try-catch blocks
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0)
+
+    def test_index_codebase_business_logic_preserved(self):
+        """Verify business logic preserved in index_codebase"""
+        from backend.api.analytics import index_codebase
+        import inspect
+
+        source = inspect.getsource(index_codebase)
+        # Key business logic should be present
+        self.assertIn("Path(request.target_path).exists()", source)
+        self.assertIn("perform_code_analysis", source)
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=400", source)
+
+    def test_index_codebase_error_handling(self):
+        """Test error handling configuration in index_codebase"""
+        from backend.api.analytics import index_codebase
+        import inspect
+
+        source = inspect.getsource(index_codebase)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="index_codebase"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_get_code_analysis_status_decorator_present(self):
+        """Verify @with_error_handling decorator on get_code_analysis_status"""
+        from backend.api.analytics import get_code_analysis_status
+        import inspect
+
+        source = inspect.getsource(get_code_analysis_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_code_analysis_status"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_get_code_analysis_status_no_try_catch(self):
+        """Verify try-catch removed from get_code_analysis_status (Simple Pattern)"""
+        from backend.api.analytics import get_code_analysis_status
+        import inspect
+
+        source = inspect.getsource(get_code_analysis_status)
+        # Simple pattern: no try-catch blocks
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0)
+
+    def test_get_code_analysis_status_business_logic_preserved(self):
+        """Verify business logic preserved in get_code_analysis_status"""
+        from backend.api.analytics import get_code_analysis_status
+        import inspect
+
+        source = inspect.getsource(get_code_analysis_status)
+        # Key business logic should be present
+        self.assertIn("tools_available", source)
+        self.assertIn("code_analysis_suite", source)
+        self.assertIn("code_index_mcp", source)
+        self.assertIn("last_analysis_time", source)
+
+    def test_get_code_analysis_status_error_handling(self):
+        """Test error handling configuration in get_code_analysis_status"""
+        from backend.api.analytics import get_code_analysis_status
+        import inspect
+
+        source = inspect.getsource(get_code_analysis_status)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_code_analysis_status"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_batch46_all_endpoints_migrated(self):
+        """Verify all Batch 46 endpoints have been migrated"""
+        from backend.api.analytics import (
+            index_codebase,
+            get_code_analysis_status,
+        )
+        import inspect
+
+        endpoints = [index_codebase, get_code_analysis_status]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have decorator
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch46_consistent_error_category(self):
+        """Verify consistent error category across Batch 46"""
+        from backend.api.analytics import (
+            index_codebase,
+            get_code_analysis_status,
+        )
+        import inspect
+
+        endpoints = [index_codebase, get_code_analysis_status]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use ANALYTICS prefix
+            self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
