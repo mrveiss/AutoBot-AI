@@ -7386,5 +7386,135 @@ class TestBatch46AnalyticsMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="ANALYTICS"', source)
 
 
+# ============================================================================
+# BATCH 47: Quality Assessment + Startup Event (GET quality/assessment + startup)
+# ============================================================================
+
+
+class TestBatch47AnalyticsMigrations(unittest.TestCase):
+    """Test suite for Batch 47 quality assessment and startup event"""
+
+    def test_get_code_quality_assessment_decorator_present(self):
+        """Verify @with_error_handling decorator on get_code_quality_assessment"""
+        from backend.api.analytics import get_code_quality_assessment
+        import inspect
+
+        source = inspect.getsource(get_code_quality_assessment)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_code_quality_assessment"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_get_code_quality_assessment_no_try_catch(self):
+        """Verify try-catch removed from get_code_quality_assessment (Simple Pattern)"""
+        from backend.api.analytics import get_code_quality_assessment
+        import inspect
+
+        source = inspect.getsource(get_code_quality_assessment)
+        # Simple pattern: no try-catch blocks
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0)
+
+    def test_get_code_quality_assessment_business_logic_preserved(self):
+        """Verify business logic preserved in get_code_quality_assessment"""
+        from backend.api.analytics import get_code_quality_assessment
+        import inspect
+
+        source = inspect.getsource(get_code_quality_assessment)
+        # Key business logic should be present
+        self.assertIn("cached_analysis", source)
+        self.assertIn("quality_assessment", source)
+        self.assertIn("overall_score", source)
+        self.assertIn("maintainability", source)
+        self.assertIn("complexity", source)
+
+    def test_get_code_quality_assessment_error_handling(self):
+        """Test error handling configuration in get_code_quality_assessment"""
+        from backend.api.analytics import get_code_quality_assessment
+        import inspect
+
+        source = inspect.getsource(get_code_quality_assessment)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_code_quality_assessment"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_initialize_analytics_decorator_present(self):
+        """Verify @with_error_handling decorator on initialize_analytics"""
+        from backend.api.analytics import initialize_analytics
+        import inspect
+
+        source = inspect.getsource(initialize_analytics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="initialize_analytics"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_initialize_analytics_no_try_catch(self):
+        """Verify try-catch removed from initialize_analytics (Simple Pattern)"""
+        from backend.api.analytics import initialize_analytics
+        import inspect
+
+        source = inspect.getsource(initialize_analytics)
+        # Simple pattern: no try-catch blocks
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0)
+
+    def test_initialize_analytics_business_logic_preserved(self):
+        """Verify business logic preserved in initialize_analytics"""
+        from backend.api.analytics import initialize_analytics
+        import inspect
+
+        source = inspect.getsource(initialize_analytics)
+        # Key business logic should be present
+        self.assertIn("session_start", source)
+        self.assertIn("metrics_collector", source)
+        self.assertIn("start_collection", source)
+        self.assertIn("logger.info", source)
+
+    def test_initialize_analytics_error_handling(self):
+        """Test error handling configuration in initialize_analytics"""
+        from backend.api.analytics import initialize_analytics
+        import inspect
+
+        source = inspect.getsource(initialize_analytics)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="initialize_analytics"', source)
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+    def test_batch47_all_endpoints_migrated(self):
+        """Verify all Batch 47 endpoints have been migrated"""
+        from backend.api.analytics import (
+            get_code_quality_assessment,
+            initialize_analytics,
+        )
+        import inspect
+
+        endpoints = [get_code_quality_assessment, initialize_analytics]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have decorator
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch47_consistent_error_category(self):
+        """Verify consistent error category across Batch 47"""
+        from backend.api.analytics import (
+            get_code_quality_assessment,
+            initialize_analytics,
+        )
+        import inspect
+
+        endpoints = [get_code_quality_assessment, initialize_analytics]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use ANALYTICS prefix
+            self.assertIn('error_code_prefix="ANALYTICS"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
