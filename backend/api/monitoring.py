@@ -531,227 +531,223 @@ async def update_performance_threshold(threshold: ThresholdUpdate):
 
 
 @router.get("/hardware/gpu")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_gpu_details",
+    error_code_prefix="MONITORING",
+)
 async def get_gpu_details():
     """Get detailed GPU information and metrics"""
-    try:
-        gpu_metrics = await phase9_monitor.collect_gpu_metrics()
+    gpu_metrics = await phase9_monitor.collect_gpu_metrics()
 
-        if not gpu_metrics:
-            return {"available": False, "message": "GPU not available or accessible"}
+    if not gpu_metrics:
+        return {"available": False, "message": "GPU not available or accessible"}
 
-        return {
-            "available": True,
-            "current_metrics": gpu_metrics.__dict__,
-            "historical_data": [
-                {
-                    "timestamp": m.timestamp,
-                    "utilization_percent": m.utilization_percent,
-                    "memory_utilization_percent": m.memory_utilization_percent,
-                    "temperature_celsius": m.temperature_celsius,
-                }
-                for m in list(phase9_monitor.gpu_metrics_buffer)[
-                    -60:
-                ]  # Last 60 samples
+    return {
+        "available": True,
+        "current_metrics": gpu_metrics.__dict__,
+        "historical_data": [
+            {
+                "timestamp": m.timestamp,
+                "utilization_percent": m.utilization_percent,
+                "memory_utilization_percent": m.memory_utilization_percent,
+                "temperature_celsius": m.temperature_celsius,
+            }
+            for m in list(phase9_monitor.gpu_metrics_buffer)[
+                -60:
+            ]  # Last 60 samples
+        ],
+        "optimization_status": {
+            "target_utilization": phase9_monitor.performance_baselines[
+                "gpu_utilization_target"
             ],
-            "optimization_status": {
-                "target_utilization": phase9_monitor.performance_baselines[
-                    "gpu_utilization_target"
-                ],
-                "current_efficiency": _calculate_gpu_efficiency(gpu_metrics),
-                "throttling_detected": gpu_metrics.thermal_throttling
-                or gpu_metrics.power_throttling,
-            },
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get GPU details: {str(e)}"
-        )
+            "current_efficiency": _calculate_gpu_efficiency(gpu_metrics),
+            "throttling_detected": gpu_metrics.thermal_throttling
+            or gpu_metrics.power_throttling,
+        },
+    }
 
 
 @router.get("/hardware/npu")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_npu_details",
+    error_code_prefix="MONITORING",
+)
 async def get_npu_details():
     """Get detailed NPU information and metrics"""
-    try:
-        npu_metrics = await phase9_monitor.collect_npu_metrics()
+    npu_metrics = await phase9_monitor.collect_npu_metrics()
 
-        if not npu_metrics:
-            return {"available": False, "message": "NPU not available or not supported"}
+    if not npu_metrics:
+        return {"available": False, "message": "NPU not available or not supported"}
 
-        return {
-            "available": True,
-            "current_metrics": npu_metrics.__dict__,
-            "historical_data": [
-                {
-                    "timestamp": m.timestamp,
-                    "utilization_percent": m.utilization_percent,
-                    "acceleration_ratio": m.acceleration_ratio,
-                    "inference_count": m.inference_count,
-                }
-                for m in list(phase9_monitor.npu_metrics_buffer)[
-                    -60:
-                ]  # Last 60 samples
+    return {
+        "available": True,
+        "current_metrics": npu_metrics.__dict__,
+        "historical_data": [
+            {
+                "timestamp": m.timestamp,
+                "utilization_percent": m.utilization_percent,
+                "acceleration_ratio": m.acceleration_ratio,
+                "inference_count": m.inference_count,
+            }
+            for m in list(phase9_monitor.npu_metrics_buffer)[
+                -60:
+            ]  # Last 60 samples
+        ],
+        "optimization_status": {
+            "target_acceleration": phase9_monitor.performance_baselines[
+                "npu_acceleration_target"
             ],
-            "optimization_status": {
-                "target_acceleration": phase9_monitor.performance_baselines[
-                    "npu_acceleration_target"
-                ],
-                "current_efficiency": _calculate_npu_efficiency(npu_metrics),
-                "wsl_limitation": npu_metrics.wsl_limitation,
-            },
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get NPU details: {str(e)}"
-        )
+            "current_efficiency": _calculate_npu_efficiency(npu_metrics),
+            "wsl_limitation": npu_metrics.wsl_limitation,
+        },
+    }
 
 
 @router.get("/services/health")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_services_health",
+    error_code_prefix="MONITORING",
+)
 async def get_services_health():
     """Get health status of all monitored services"""
-    try:
-        service_metrics = await phase9_monitor.collect_service_performance_metrics()
+    service_metrics = await phase9_monitor.collect_service_performance_metrics()
 
-        services_health = {
-            "timestamp": time.time(),
-            "total_services": len(service_metrics),
-            "healthy_services": sum(
-                1 for s in service_metrics if s.status == "healthy"
-            ),
-            "degraded_services": sum(
-                1 for s in service_metrics if s.status == "degraded"
-            ),
-            "critical_services": sum(
-                1 for s in service_metrics if s.status in ["critical", "offline"]
-            ),
-            "services": [],
-        }
+    services_health = {
+        "timestamp": time.time(),
+        "total_services": len(service_metrics),
+        "healthy_services": sum(
+            1 for s in service_metrics if s.status == "healthy"
+        ),
+        "degraded_services": sum(
+            1 for s in service_metrics if s.status == "degraded"
+        ),
+        "critical_services": sum(
+            1 for s in service_metrics if s.status in ["critical", "offline"]
+        ),
+        "services": [],
+    }
 
-        for service in service_metrics:
-            services_health["services"].append(
-                {
-                    "name": service.service_name,
-                    "host": service.host,
-                    "port": service.port,
-                    "status": service.status,
-                    "response_time_ms": service.response_time_ms,
-                    "health_score": service.health_score,
-                    "uptime_hours": service.uptime_hours,
-                }
-            )
-
-        # Calculate overall system health
-        if services_health["critical_services"] > 0:
-            overall_status = "critical"
-        elif services_health["degraded_services"] > 0:
-            overall_status = "degraded"
-        else:
-            overall_status = "healthy"
-
-        services_health["overall_status"] = overall_status
-        services_health["health_percentage"] = (
-            round(
-                (
-                    services_health["healthy_services"]
-                    / services_health["total_services"]
-                )
-                * 100,
-                1,
-            )
-            if services_health["total_services"] > 0
-            else 0
+    for service in service_metrics:
+        services_health["services"].append(
+            {
+                "name": service.service_name,
+                "host": service.host,
+                "port": service.port,
+                "status": service.status,
+                "response_time_ms": service.response_time_ms,
+                "health_score": service.health_score,
+                "uptime_hours": service.uptime_hours,
+            }
         )
 
-        return services_health
+    # Calculate overall system health
+    if services_health["critical_services"] > 0:
+        overall_status = "critical"
+    elif services_health["degraded_services"] > 0:
+        overall_status = "degraded"
+    else:
+        overall_status = "healthy"
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get services health: {str(e)}"
+    services_health["overall_status"] = overall_status
+    services_health["health_percentage"] = (
+        round(
+            (
+                services_health["healthy_services"]
+                / services_health["total_services"]
+            )
+            * 100,
+            1,
         )
+        if services_health["total_services"] > 0
+        else 0
+    )
+
+    return services_health
 
 
 @router.get("/export/metrics")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_metrics",
+    error_code_prefix="MONITORING",
+)
 async def export_metrics(
     format: str = Query("json", pattern="^(json|csv)$"),
     time_range_hours: int = Query(1, ge=1, le=168),  # Max 1 week
 ):
     """Export performance metrics in JSON or CSV format"""
-    try:
-        # Calculate time range
-        end_time = time.time()
-        start_time = end_time - (time_range_hours * 3600)
+    # Calculate time range
+    end_time = time.time()
+    start_time = end_time - (time_range_hours * 3600)
 
-        # Collect all metrics within time range
-        export_data = {
-            "export_info": {
-                "timestamp": end_time,
-                "time_range_hours": time_range_hours,
-                "start_time": start_time,
-                "end_time": end_time,
-                "format": format,
+    # Collect all metrics within time range
+    export_data = {
+        "export_info": {
+            "timestamp": end_time,
+            "time_range_hours": time_range_hours,
+            "start_time": start_time,
+            "end_time": end_time,
+            "format": format,
+        },
+        "gpu_metrics": [],
+        "npu_metrics": [],
+        "system_metrics": [],
+        "service_metrics": {},
+    }
+
+    # Filter GPU metrics
+    for metric in phase9_monitor.gpu_metrics_buffer:
+        if start_time <= metric.timestamp <= end_time:
+            export_data["gpu_metrics"].append(metric.__dict__)
+
+    # Filter NPU metrics
+    for metric in phase9_monitor.npu_metrics_buffer:
+        if start_time <= metric.timestamp <= end_time:
+            export_data["npu_metrics"].append(metric.__dict__)
+
+    # Filter system metrics
+    for metric in phase9_monitor.system_metrics_buffer:
+        if start_time <= metric.timestamp <= end_time:
+            export_data["system_metrics"].append(metric.__dict__)
+
+    # Filter service metrics
+    for (
+        service_name,
+        metrics_buffer,
+    ) in phase9_monitor.service_metrics_buffer.items():
+        filtered_metrics = [
+            m.__dict__
+            for m in metrics_buffer
+            if start_time <= m.timestamp <= end_time
+        ]
+        if filtered_metrics:
+            export_data["service_metrics"][service_name] = filtered_metrics
+
+    if format == "json":
+        # Return JSON response
+        return JSONResponse(
+            content=export_data,
+            headers={
+                "Content-Disposition": f"attachment; filename=autobot_metrics_{int(end_time)}.json"
             },
-            "gpu_metrics": [],
-            "npu_metrics": [],
-            "system_metrics": [],
-            "service_metrics": {},
-        }
+        )
 
-        # Filter GPU metrics
-        for metric in phase9_monitor.gpu_metrics_buffer:
-            if start_time <= metric.timestamp <= end_time:
-                export_data["gpu_metrics"].append(metric.__dict__)
+    elif format == "csv":
+        # Convert to CSV and return as streaming response
+        csv_content = _convert_metrics_to_csv(export_data)
 
-        # Filter NPU metrics
-        for metric in phase9_monitor.npu_metrics_buffer:
-            if start_time <= metric.timestamp <= end_time:
-                export_data["npu_metrics"].append(metric.__dict__)
+        async def generate():
+            yield csv_content.encode()
 
-        # Filter system metrics
-        for metric in phase9_monitor.system_metrics_buffer:
-            if start_time <= metric.timestamp <= end_time:
-                export_data["system_metrics"].append(metric.__dict__)
-
-        # Filter service metrics
-        for (
-            service_name,
-            metrics_buffer,
-        ) in phase9_monitor.service_metrics_buffer.items():
-            filtered_metrics = [
-                m.__dict__
-                for m in metrics_buffer
-                if start_time <= m.timestamp <= end_time
-            ]
-            if filtered_metrics:
-                export_data["service_metrics"][service_name] = filtered_metrics
-
-        if format == "json":
-            # Return JSON response
-            return JSONResponse(
-                content=export_data,
-                headers={
-                    "Content-Disposition": f"attachment; filename=autobot_metrics_{int(end_time)}.json"
-                },
-            )
-
-        elif format == "csv":
-            # Convert to CSV and return as streaming response
-            csv_content = _convert_metrics_to_csv(export_data)
-
-            async def generate():
-                yield csv_content.encode()
-
-            return StreamingResponse(
-                generate(),
-                media_type="text/csv",
-                headers={
-                    "Content-Disposition": f"attachment; filename=autobot_metrics_{int(end_time)}.csv"
-                },
-            )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to export metrics: {str(e)}"
+        return StreamingResponse(
+            generate(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=autobot_metrics_{int(end_time)}.csv"
+            },
         )
 
 
