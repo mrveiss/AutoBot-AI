@@ -194,6 +194,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { apiService } from '../services/api.js'
 import type { WorkflowResponse } from '@/types/models'
+import { formatDateTime as formatDate } from '@/utils/formatHelpers'
 
 // Types
 interface Workflow {
@@ -230,9 +231,7 @@ const approvingSteps = ref(new Set<string>())
 const refreshInterval = ref<number | null>(null)
 
 // Computed
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleString()
-}
+// NOTE: formatDate removed - now using formatDateTime from @/utils/formatHelpers
 
 // Methods
 const loadWorkflows = async () => {

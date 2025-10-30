@@ -111,6 +111,7 @@
 <script setup lang="ts">
 import { defineProps, defineEmits } from 'vue'
 import type { Host } from '@/composables/useInfrastructure'
+import { formatDateTime } from '@/utils/formatHelpers'
 
 defineProps<{
   host: Host
@@ -123,12 +124,6 @@ defineEmits<{
   delete: [hostId: string]
 }>()
 
-function formatDate(dateString: string): string {
-  try {
-    const date = new Date(dateString)
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  } catch {
-    return dateString
-  }
-}
+// NOTE: formatDate removed - now using formatDateTime from @/utils/formatHelpers
+const formatDate = formatDateTime
 </script>

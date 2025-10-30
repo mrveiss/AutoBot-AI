@@ -165,6 +165,7 @@
 import { ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
+import { formatDate } from '@/utils/formatHelpers'
 
 // Interfaces
 interface DuplicateGroup {
@@ -302,15 +303,7 @@ const cleanupOrphans = async () => {
   }
 }
 
-// Format date
-const formatDate = (isoString: string): string => {
-  try {
-    const date = new Date(isoString)
-    return date.toLocaleDateString()
-  } catch {
-    return isoString
-  }
-}
+// NOTE: formatDate removed - now using shared utility from @/utils/formatHelpers
 </script>
 
 <style scoped>

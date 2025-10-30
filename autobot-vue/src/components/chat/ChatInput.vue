@@ -222,6 +222,7 @@ import { useChatController } from '@/models/controllers'
 import globalWebSocketService from '@/services/GlobalWebSocketService'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import ProgressBar from '@/components/ui/ProgressBar.vue'
+import { formatFileSize } from '@/utils/formatHelpers'
 
 const store = useChatStore()
 const controller = useChatController()
@@ -521,13 +522,7 @@ const getFileIcon = (type: string): string => {
   return 'fas fa-file text-gray-600'
 }
 
-const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes'
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
+// NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
 
 const generateId = (): string => {
   return Date.now().toString(36) + Math.random().toString(36).substr(2)

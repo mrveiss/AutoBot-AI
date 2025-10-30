@@ -246,6 +246,7 @@ import type { ChatSession } from '@/stores/useChatStore'
 import DeleteConversationDialog from './DeleteConversationDialog.vue'
 import type { FileStats } from '@/composables/useConversationFiles'
 import ApiClient from '@/utils/ApiClient.js'
+import { formatDate } from '@/utils/formatHelpers'
 
 const store = useChatStore()
 const controller = useChatController()
@@ -383,10 +384,7 @@ const reloadSystem = async () => {
   }
 }
 
-const formatDate = (date: Date | string): string => {
-  const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString()
-}
+// NOTE: formatDate removed - now using shared utility from @/utils/formatHelpers
 
 // Multi-select functions
 const enableSelectionMode = () => {

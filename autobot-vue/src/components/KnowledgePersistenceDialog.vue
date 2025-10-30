@@ -217,6 +217,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { useToast } from '@/composables/useToast.js';
 import { apiService } from '@/services/api.js';
+import { formatDateTime as formatDate } from '@/utils/formatHelpers';
 
 // Props
 const props = defineProps({
@@ -313,9 +314,7 @@ const getSuggestionText = (action) => {
   return suggestions[action] || '';
 };
 
-const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleString();
-};
+// NOTE: formatDate removed - now using formatDateTime from @/utils/formatHelpers
 
 const updateItemDecision = (itemId) => {
   if (!selectedItems.value[itemId]) {

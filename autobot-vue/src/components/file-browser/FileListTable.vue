@@ -89,6 +89,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { formatDateTime } from '@/utils/formatHelpers'
 
 interface FileItem {
   name: string
@@ -203,14 +204,8 @@ const formatSize = (bytes: number = 0): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
-const formatDate = (dateString?: string): string => {
-  if (!dateString) return 'Unknown'
-  try {
-    return new Date(dateString).toLocaleString()
-  } catch {
-    return 'Invalid Date'
-  }
-}
+// NOTE: formatDate removed - now using formatDateTime from @/utils/formatHelpers
+const formatDate = formatDateTime
 </script>
 
 <style scoped>

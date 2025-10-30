@@ -355,6 +355,7 @@ import SystemKnowledgeManager from '@/components/SystemKnowledgeManager.vue'
 import ManPageManager from '@/components/ManPageManager.vue'
 import FailedVectorizationsManager from '@/components/knowledge/FailedVectorizationsManager.vue'
 import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vue'
+import { formatDate, formatDateTime } from '@/utils/formatHelpers'
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
@@ -591,16 +592,7 @@ const closeDialog = () => {
   dialogMode.value = 'view'
 }
 
-// Utility functions
-const formatDate = (date: Date | string): string => {
-  const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString()
-}
-
-const formatDateTime = (date: Date | string): string => {
-  const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleString()
-}
+// NOTE: formatDate and formatDateTime removed - now using shared utilities from @/utils/formatHelpers
 
 const formatContent = (content: string): string => {
   // Basic markdown-like formatting

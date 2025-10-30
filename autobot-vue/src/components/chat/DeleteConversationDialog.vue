@@ -204,6 +204,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { FileStats } from '@/composables/useConversationFiles'
+import { formatFileSize } from '@/utils/formatHelpers'
 
 const props = defineProps<{
   visible: boolean
@@ -227,16 +228,7 @@ const isDeleting = ref(false)
 // Computed
 const hasFiles = computed(() => props.fileStats && props.fileStats.total_files > 0)
 
-// Methods
-const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes'
-
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
-}
+// NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
 
 const getFileActionSummary = (): string => {
   switch (fileAction.value) {
