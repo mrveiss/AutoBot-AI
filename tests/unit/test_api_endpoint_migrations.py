@@ -7913,5 +7913,161 @@ class TestBatch50KnowledgeMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="KNOWLEDGE"', source)
 
 
+class TestBatch51KnowledgeMigrations(unittest.TestCase):
+    """Test batch 51 migrations: knowledge.py POST /populate_autobot_docs + GET /import/statistics"""
+
+    def test_populate_autobot_docs_decorator_present(self):
+        """Test populate_autobot_docs has @with_error_handling decorator"""
+        from backend.api.knowledge import populate_autobot_docs
+        import inspect
+
+        source = inspect.getsource(populate_autobot_docs)
+        # Should have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_populate_autobot_docs_no_outer_try_catch(self):
+        """Test populate_autobot_docs outer try-catch removed"""
+        from backend.api.knowledge import populate_autobot_docs
+        import inspect
+
+        source = inspect.getsource(populate_autobot_docs)
+        lines = source.split("\n")
+
+        # Should NOT have outer try on first line after docstring
+        docstring_end = False
+        for i, line in enumerate(lines):
+            if '"""' in line and docstring_end:
+                # Found end of docstring, next non-empty line should NOT be try
+                for next_line in lines[i + 1 :]:
+                    if next_line.strip() and not next_line.strip().startswith("#"):
+                        self.assertNotEqual(
+                            next_line.strip(), "try:", "Should not have outer try-catch"
+                        )
+                        break
+                break
+            elif '"""' in line:
+                docstring_end = True
+
+    def test_populate_autobot_docs_nested_try_catch_preserved(self):
+        """Test populate_autobot_docs preserves nested try-catch blocks"""
+        from backend.api.knowledge import populate_autobot_docs
+        import inspect
+
+        source = inspect.getsource(populate_autobot_docs)
+
+        # Should preserve nested try-catch for file processing loop
+        self.assertIn("for doc_file in doc_files:", source)
+        self.assertIn("try:", source)
+        self.assertIn("except Exception as e:", source)
+        self.assertIn("Error processing AutoBot doc", source)
+
+        # Should preserve nested try-catch for config addition
+        self.assertIn("# Add AutoBot configuration information", source)
+        self.assertIn("Error adding AutoBot configuration", source)
+
+    def test_populate_autobot_docs_business_logic_preserved(self):
+        """Test populate_autobot_docs business logic preserved"""
+        from backend.api.knowledge import populate_autobot_docs
+        import inspect
+
+        source = inspect.getsource(populate_autobot_docs)
+
+        # Core business logic should be preserved
+        self.assertIn("ImportTracker", source)
+        self.assertIn("force_reindex", source)
+        self.assertIn("get_or_create_knowledge_base", source)
+        self.assertIn("docs_path.rglob", source)
+        self.assertIn("AutoBot Documentation", source)
+        self.assertIn("NetworkConstants", source)
+        self.assertIn("store_fact", source)
+
+    def test_populate_autobot_docs_error_handling(self):
+        """Test error handling configuration in populate_autobot_docs"""
+        from backend.api.knowledge import populate_autobot_docs
+        import inspect
+
+        source = inspect.getsource(populate_autobot_docs)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="populate_autobot_docs"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_import_statistics_decorator_present(self):
+        """Test get_import_statistics has @with_error_handling decorator"""
+        from backend.api.knowledge import get_import_statistics
+        import inspect
+
+        source = inspect.getsource(get_import_statistics)
+        # Should have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_import_statistics_no_try_catch(self):
+        """Test get_import_statistics try-catch completely removed"""
+        from backend.api.knowledge import get_import_statistics
+        import inspect
+
+        source = inspect.getsource(get_import_statistics)
+        lines = source.split("\n")
+
+        # Should NOT have any try-catch blocks (Simple Pattern)
+        # Count indented try statements (not in decorators)
+        try_count = 0
+        for line in lines:
+            if line.strip().startswith("try:"):
+                try_count += 1
+
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+
+    def test_import_statistics_business_logic_preserved(self):
+        """Test get_import_statistics business logic preserved"""
+        from backend.api.knowledge import get_import_statistics
+        import inspect
+
+        source = inspect.getsource(get_import_statistics)
+
+        # Core business logic should be preserved
+        self.assertIn("ImportTracker", source)
+        self.assertIn("get_statistics", source)
+        self.assertIn('"status": "success"', source)
+        self.assertIn('"statistics"', source)
+
+    def test_import_statistics_error_handling(self):
+        """Test error handling configuration in get_import_statistics"""
+        from backend.api.knowledge import get_import_statistics
+        import inspect
+
+        source = inspect.getsource(get_import_statistics)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_import_statistics"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_batch51_all_endpoints_migrated(self):
+        """Verify all Batch 51 endpoints have been migrated"""
+        from backend.api.knowledge import populate_autobot_docs, get_import_statistics
+        import inspect
+
+        endpoints = [populate_autobot_docs, get_import_statistics]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have decorator
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch51_consistent_error_category(self):
+        """Verify consistent error category across Batch 51"""
+        from backend.api.knowledge import populate_autobot_docs, get_import_statistics
+        import inspect
+
+        endpoints = [populate_autobot_docs, get_import_statistics]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use KNOWLEDGE prefix
+            self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
