@@ -961,58 +961,54 @@ async def list_terminal_sessions():
 
 
 @router.get("/sessions/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_terminal_session",
+    error_code_prefix="TERMINAL",
+)
 async def get_terminal_session(session_id: str):
     """Get information about a specific terminal session"""
-    try:
-        config = session_manager.session_configs.get(session_id)
-        if not config:
-            raise HTTPException(status_code=404, detail="Session not found")
+    config = session_manager.session_configs.get(session_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-        is_active = session_manager.has_connection(session_id)
+    is_active = session_manager.has_connection(session_id)
 
-        # Get session statistics if active
-        stats = {}
-        if is_active and hasattr(session_manager, "get_session_stats"):
-            stats = session_manager.get_session_stats(session_id)
+    # Get session statistics if active
+    stats = {}
+    if is_active and hasattr(session_manager, "get_session_stats"):
+        stats = session_manager.get_session_stats(session_id)
 
-        return {
-            "session_id": session_id,
-            "config": config,
-            "is_active": is_active,
-            "statistics": stats,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "session_id": session_id,
+        "config": config,
+        "is_active": is_active,
+        "statistics": stats,
+    }
 
 
 @router.delete("/sessions/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_terminal_session",
+    error_code_prefix="TERMINAL",
+)
 async def delete_terminal_session(session_id: str):
     """Delete a terminal session and close any active connections"""
-    try:
-        config = session_manager.session_configs.get(session_id)
-        if not config:
-            raise HTTPException(status_code=404, detail="Session not found")
+    config = session_manager.session_configs.get(session_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-        # Close WebSocket connection if active
-        if session_manager.has_connection(session_id):
-            await session_manager.close_connection(session_id)
+    # Close WebSocket connection if active
+    if session_manager.has_connection(session_id):
+        await session_manager.close_connection(session_id)
 
-        # Remove session configuration
-        del session_manager.session_configs[session_id]
+    # Remove session configuration
+    del session_manager.session_configs[session_id]
 
-        logger.info(f"Deleted terminal session: {session_id}")
+    logger.info(f"Deleted terminal session: {session_id}")
 
-        return {"session_id": session_id, "status": "deleted"}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"session_id": session_id, "status": "deleted"}
 
 
 @router.post("/command")
