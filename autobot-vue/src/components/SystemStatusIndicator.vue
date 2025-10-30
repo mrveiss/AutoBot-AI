@@ -179,6 +179,7 @@ import XMarkIcon from '@heroicons/vue/24/outline/XMarkIcon'
 import ExclamationTriangleIcon from '@heroicons/vue/24/outline/ExclamationTriangleIcon'
 import InformationCircleIcon from '@heroicons/vue/24/outline/InformationCircleIcon'
 import XCircleIcon from '@heroicons/vue/24/outline/XCircleIcon'
+import { formatTime } from '@/utils/formatHelpers'
 import CheckCircleIcon from '@heroicons/vue/24/outline/CheckCircleIcon'
 
 const appStore = useAppStore()
@@ -246,22 +247,6 @@ const getStatusDescription = (status: string): string => {
   }
 }
 
-const formatTime = (timestamp: Date | number): string => {
-  let date: Date;
-  
-  if (timestamp instanceof Date) {
-    date = timestamp;
-  } else if (typeof timestamp === 'number') {
-    date = new Date(timestamp);
-  } else {
-    date = new Date();
-  }
-  
-  return date.toLocaleTimeString(undefined, { 
-    hour: '2-digit', 
-    minute: '2-digit' 
-  })
-}
 
 const refreshStatus = async () => {
   try {

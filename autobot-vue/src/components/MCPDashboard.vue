@@ -153,6 +153,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '@/stores/app'
+import { formatTime } from '@/utils/formatHelpers'
 
 // Store
 const appStore = useAppStore()
@@ -220,10 +221,6 @@ const getStatusIcon = (status) => {
   }
 }
 
-const formatTime = (timestamp) => {
-  const date = new Date(timestamp)
-  return date.toLocaleTimeString()
-}
 
 const refreshData = async () => {
   loading.value = true

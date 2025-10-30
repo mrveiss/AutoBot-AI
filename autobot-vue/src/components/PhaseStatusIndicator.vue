@@ -120,6 +120,7 @@
 <script>
 import { ref, onMounted, computed } from 'vue';
 import { apiService } from '../services/api';
+import { formatDateTime } from '@/utils/formatHelpers';
 
 export default {
   name: 'PhaseStatusIndicator',
@@ -248,7 +249,7 @@ export default {
 
     const formatDate = (date) => {
       if (!date) return 'Never';
-      return new Date(date).toLocaleDateString() + ' ' + new Date(date).toLocaleTimeString();
+      return formatDateTime(date);
     };
 
     const getPhaseStatus = (phase) => {

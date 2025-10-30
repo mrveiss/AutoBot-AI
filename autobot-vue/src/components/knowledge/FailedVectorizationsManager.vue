@@ -88,6 +88,7 @@
 import { ref, onMounted } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
+import { formatDateTime } from '@/utils/formatHelpers'
 
 interface FailedJob {
   job_id: string
@@ -207,15 +208,8 @@ const clearAllFailed = async () => {
   }
 }
 
-// Format timestamp
-const formatTime = (isoString: string): string => {
-  try {
-    const date = new Date(isoString)
-    return date.toLocaleString()
-  } catch {
-    return isoString
-  }
-}
+// Use shared datetime formatting utility
+const formatTime = formatDateTime
 
 // Load on mount
 onMounted(() => {

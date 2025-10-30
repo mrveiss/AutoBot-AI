@@ -323,6 +323,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { secretsApiClient } from '../utils/SecretsApiClient';
 import { useAppStore } from '../stores/useAppStore.ts';
+import { formatDateTime } from '@/utils/formatHelpers';
 
 export default {
   name: 'SecretsManager',
@@ -581,7 +582,7 @@ export default {
     
     const formatDate = (dateString) => {
       if (!dateString) return 'N/A';
-      return new Date(dateString).toLocaleString();
+      return formatDateTime(dateString);
     };
     
     const isExpired = (secret) => {
