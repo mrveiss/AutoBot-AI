@@ -233,6 +233,11 @@ async def get_agent_terminal_session(
 
 
 @router.delete("/sessions/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_agent_terminal_session",
+    error_code_prefix="AGENT_TERMINAL",
+)
 async def delete_agent_terminal_session(
     session_id: str,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
@@ -240,25 +245,23 @@ async def delete_agent_terminal_session(
     """
     Delete (close) an agent terminal session.
     """
-    try:
-        success = await service.close_session(session_id)
+    success = await service.close_session(session_id)
 
-        if not success:
-            raise HTTPException(status_code=404, detail="Session not found")
+    if not success:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-        return {
-            "status": "deleted",
-            "session_id": session_id,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting agent terminal session: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "deleted",
+        "session_id": session_id,
+    }
 
 
 @router.post("/execute")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_agent_command",
+    error_code_prefix="AGENT_TERMINAL",
+)
 async def execute_agent_command(
     session_id: str,
     request: ExecuteCommandRequest,
@@ -278,22 +281,22 @@ async def execute_agent_command(
     - If pending_approval: includes approval details
     - If success: includes command execution result
     """
-    try:
-        result = await service.execute_command(
-            session_id=session_id,
-            command=request.command,
-            description=request.description,
-            force_approval=request.force_approval,
-        )
+    result = await service.execute_command(
+        session_id=session_id,
+        command=request.command,
+        description=request.description,
+        force_approval=request.force_approval,
+    )
 
-        return result
-
-    except Exception as e:
-        logger.error(f"Error executing agent command: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    return result
 
 
 @router.post("/sessions/{session_id}/approve")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="approve_agent_command",
+    error_code_prefix="AGENT_TERMINAL",
+)
 async def approve_agent_command(
     session_id: str,
     request: ApproveCommandRequest,
@@ -304,27 +307,22 @@ async def approve_agent_command(
 
     User approves HIGH/DANGEROUS commands that agents want to execute.
     """
-    try:
-        logger.info(
-            f"[API] Approval request received: session_id={session_id}, approved={request.approved}, user_id={request.user_id}, comment={request.comment}"
-        )
+    logger.info(
+        f"[API] Approval request received: session_id={session_id}, approved={request.approved}, user_id={request.user_id}, comment={request.comment}"
+    )
 
-        result = await service.approve_command(
-            session_id=session_id,
-            approved=request.approved,
-            user_id=request.user_id,
-            comment=request.comment,
-            auto_approve_future=request.auto_approve_future,
-        )
+    result = await service.approve_command(
+        session_id=session_id,
+        approved=request.approved,
+        user_id=request.user_id,
+        comment=request.comment,
+        auto_approve_future=request.auto_approve_future,
+    )
 
-        logger.info(
-            f"[API] Approval result: {result.get('status')}, error={result.get('error')}"
-        )
-        return result
-
-    except Exception as e:
-        logger.error(f"Error approving agent command: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    logger.info(
+        f"[API] Approval result: {result.get('status')}, error={result.get('error')}"
+    )
+    return result
 
 
 @router.post("/sessions/{session_id}/interrupt")
