@@ -1022,6 +1022,11 @@ def _convert_metrics_to_csv(data: Dict[str, Any]) -> str:
 # Performance monitoring decorator endpoint
 @router.post("/test/performance")
 @monitor_performance("api_test")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_performance_monitoring",
+    error_code_prefix="MONITORING",
+)
 async def test_performance_monitoring():
     """Test endpoint to demonstrate performance monitoring"""
     # Simulate some work
@@ -1159,6 +1164,11 @@ from src.monitoring.prometheus_metrics import get_metrics_manager
     summary="Prometheus Metrics Endpoint",
     description="Exposes metrics in Prometheus format for scraping",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_prometheus_metrics",
+    error_code_prefix="MONITORING",
+)
 async def get_prometheus_metrics():
     """
     Prometheus metrics endpoint.
@@ -1180,49 +1190,51 @@ async def get_prometheus_metrics():
     summary="Metrics Health Check",
     description="Verify metrics collection is working",
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="metrics_health_check",
+    error_code_prefix="MONITORING",
+)
 async def metrics_health_check():
     """Health check for Prometheus metrics system"""
-    try:
-        metrics_manager = get_metrics_manager()
-        metrics_data = metrics_manager.get_metrics()
+    metrics_manager = get_metrics_manager()
+    metrics_data = metrics_manager.get_metrics()
 
-        return {
-            "status": "healthy",
-            "metrics_count": len(metrics_data.decode("utf-8").split("\n")),
-            "endpoint": "/api/monitoring/metrics",
-            "format": "Prometheus text format",
-            "metric_categories": [
-                # Redis & Performance Metrics
-                "autobot_timeout_total",
-                "autobot_operation_duration_seconds",
-                "autobot_timeout_rate",
-                "autobot_redis_pool_connections",
-                "autobot_redis_pool_saturation_ratio",
-                "autobot_circuit_breaker_events_total",
-                "autobot_circuit_breaker_state",
-                "autobot_circuit_breaker_failure_count",
-                "autobot_redis_requests_total",
-                "autobot_redis_success_rate",
-                # Workflow Metrics
-                "autobot_workflow_executions_total",
-                "autobot_workflow_duration_seconds",
-                "autobot_workflow_steps_executed_total",
-                "autobot_active_workflows",
-                "autobot_workflow_approvals_total",
-                # GitHub Integration Metrics
-                "autobot_github_operations_total",
-                "autobot_github_api_duration_seconds",
-                "autobot_github_rate_limit_remaining",
-                "autobot_github_commits_total",
-                "autobot_github_pull_requests_total",
-                "autobot_github_issues_total",
-                # Task Execution Metrics
-                "autobot_tasks_executed_total",
-                "autobot_task_duration_seconds",
-                "autobot_active_tasks",
-                "autobot_task_queue_size",
-                "autobot_task_retries_total",
-            ],
-        }
-    except Exception as e:
-        return {"status": "unhealthy", "error": str(e)}
+    return {
+        "status": "healthy",
+        "metrics_count": len(metrics_data.decode("utf-8").split("\n")),
+        "endpoint": "/api/monitoring/metrics",
+        "format": "Prometheus text format",
+        "metric_categories": [
+            # Redis & Performance Metrics
+            "autobot_timeout_total",
+            "autobot_operation_duration_seconds",
+            "autobot_timeout_rate",
+            "autobot_redis_pool_connections",
+            "autobot_redis_pool_saturation_ratio",
+            "autobot_circuit_breaker_events_total",
+            "autobot_circuit_breaker_state",
+            "autobot_circuit_breaker_failure_count",
+            "autobot_redis_requests_total",
+            "autobot_redis_success_rate",
+            # Workflow Metrics
+            "autobot_workflow_executions_total",
+            "autobot_workflow_duration_seconds",
+            "autobot_workflow_steps_executed_total",
+            "autobot_active_workflows",
+            "autobot_workflow_approvals_total",
+            # GitHub Integration Metrics
+            "autobot_github_operations_total",
+            "autobot_github_api_duration_seconds",
+            "autobot_github_rate_limit_remaining",
+            "autobot_github_commits_total",
+            "autobot_github_pull_requests_total",
+            "autobot_github_issues_total",
+            # Task Execution Metrics
+            "autobot_tasks_executed_total",
+            "autobot_task_duration_seconds",
+            "autobot_active_tasks",
+            "autobot_task_queue_size",
+            "autobot_task_retries_total",
+        ],
+    }

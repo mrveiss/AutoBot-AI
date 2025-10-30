@@ -10763,5 +10763,138 @@ class TestBatch62MonitoringMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="MONITORING"', source)
 
 
+class TestBatch63MonitoringMigrations(unittest.TestCase):
+    """Test batch 63 migrations: monitoring.py final 3 endpoints (test/prometheus/health)"""
+
+    def test_test_performance_monitoring_decorator_present(self):
+        """Test test_performance_monitoring has @with_error_handling decorator"""
+        from backend.api.monitoring import test_performance_monitoring
+
+        source = inspect.getsource(test_performance_monitoring)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_test_performance_monitoring_no_try_catch(self):
+        """Test test_performance_monitoring has no redundant try-catch blocks"""
+        from backend.api.monitoring import test_performance_monitoring
+
+        source = inspect.getsource(test_performance_monitoring)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"Expected 0 try blocks in test_performance_monitoring, found {try_count}",
+        )
+
+    def test_test_performance_monitoring_business_logic_preserved(self):
+        """Test test_performance_monitoring business logic is preserved"""
+        from backend.api.monitoring import test_performance_monitoring
+
+        source = inspect.getsource(test_performance_monitoring)
+        self.assertIn("await asyncio.sleep(0.1)", source)
+        self.assertIn("await collect_phase9_metrics()", source)
+        self.assertIn('"message"', source)
+        self.assertIn('"metrics_collected"', source)
+        self.assertIn('"timestamp"', source)
+
+    def test_get_prometheus_metrics_decorator_present(self):
+        """Test get_prometheus_metrics has @with_error_handling decorator"""
+        from backend.api.monitoring import get_prometheus_metrics
+
+        source = inspect.getsource(get_prometheus_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_get_prometheus_metrics_no_try_catch(self):
+        """Test get_prometheus_metrics has no redundant try-catch blocks"""
+        from backend.api.monitoring import get_prometheus_metrics
+
+        source = inspect.getsource(get_prometheus_metrics)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, f"Expected 0 try blocks in get_prometheus_metrics, found {try_count}"
+        )
+
+    def test_get_prometheus_metrics_business_logic_preserved(self):
+        """Test get_prometheus_metrics business logic is preserved"""
+        from backend.api.monitoring import get_prometheus_metrics
+
+        source = inspect.getsource(get_prometheus_metrics)
+        self.assertIn("get_metrics_manager()", source)
+        self.assertIn("get_metrics()", source)
+        self.assertIn("Response", source)
+        self.assertIn('media_type="text/plain', source)
+
+    def test_metrics_health_check_decorator_present(self):
+        """Test metrics_health_check has @with_error_handling decorator"""
+        from backend.api.monitoring import metrics_health_check
+
+        source = inspect.getsource(metrics_health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_metrics_health_check_no_try_catch(self):
+        """Test metrics_health_check has no redundant try-catch blocks"""
+        from backend.api.monitoring import metrics_health_check
+
+        source = inspect.getsource(metrics_health_check)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, f"Expected 0 try blocks in metrics_health_check, found {try_count}"
+        )
+
+    def test_metrics_health_check_business_logic_preserved(self):
+        """Test metrics_health_check business logic is preserved"""
+        from backend.api.monitoring import metrics_health_check
+
+        source = inspect.getsource(metrics_health_check)
+        self.assertIn("get_metrics_manager()", source)
+        self.assertIn("get_metrics()", source)
+        self.assertIn('"status": "healthy"', source)
+        self.assertIn('"metrics_count"', source)
+        self.assertIn('"metric_categories"', source)
+        self.assertIn("autobot_timeout_total", source)
+
+    def test_batch63_decorator_configuration(self):
+        """Verify all batch 63 endpoints have correct decorator configuration"""
+        from backend.api.monitoring import (
+            get_prometheus_metrics,
+            metrics_health_check,
+            test_performance_monitoring,
+        )
+
+        endpoints = [
+            test_performance_monitoring,
+            get_prometheus_metrics,
+            metrics_health_check,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch63_consistent_error_category(self):
+        """Verify consistent error category and prefix for Batch 63"""
+        from backend.api.monitoring import (
+            get_prometheus_metrics,
+            metrics_health_check,
+            test_performance_monitoring,
+        )
+
+        endpoints = [
+            test_performance_monitoring,
+            get_prometheus_metrics,
+            metrics_health_check,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            self.assertIn('error_code_prefix="MONITORING"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
