@@ -4,6 +4,7 @@ Handles workflow approvals, progress tracking, and coordination
 """
 
 import asyncio
+import time
 import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -15,9 +16,13 @@ from src.constants.network_constants import NetworkConstants
 from src.event_manager import event_manager
 from src.metrics.system_monitor import system_monitor
 from src.metrics.workflow_metrics import workflow_metrics
+from src.monitoring.prometheus_metrics import get_metrics_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
+
+# Prometheus metrics instance
+prometheus_metrics = get_metrics_manager()
 
 
 # Workflow models
@@ -175,6 +180,13 @@ async def approve_workflow_step(workflow_id: str, approval: WorkflowApprovalResp
         steps[current_step]["status"] = "approved" if approval.approved else "denied"
         steps[current_step]["user_response"] = approval.user_input
 
+    # Record Prometheus approval metric
+    workflow_type = workflow.get("classification", "unknown")
+    prometheus_metrics.record_workflow_approval(
+        workflow_type=workflow_type,
+        decision="approved" if approval.approved else "rejected",
+    )
+
     # Publish approval event
     await event_manager.publish(
         "workflow_approval",
@@ -282,6 +294,7 @@ async def execute_workflow(
     )
 
     # Store workflow in active workflows
+    workflow_start_time = time.time()
     workflow_data = {
         "workflow_id": workflow_id,
         "user_message": workflow_request.user_message,
@@ -290,6 +303,7 @@ async def execute_workflow(
         "current_step": 0,
         "status": "planned",
         "created_at": datetime.now().isoformat(),
+        "workflow_start_time": workflow_start_time,  # For Prometheus duration tracking
         "estimated_duration": workflow_response.get("estimated_duration"),
         "agents_involved": workflow_response.get("agents_involved", []),
         "auto_approve": workflow_request.auto_approve,
@@ -303,6 +317,19 @@ async def execute_workflow(
         "agents_involved": workflow_response.get("agents_involved", []),
     }
     workflow_metrics.start_workflow_tracking(workflow_id, metrics_data)
+
+    # Track workflow start in Prometheus (record later on completion with duration)
+    prometheus_metrics.update_active_workflows(
+        workflow_type=workflow_response.get("message_classification", "unknown"),
+        count=len(
+            [
+                w
+                for w in active_workflows.values()
+                if w.get("classification")
+                == workflow_response.get("message_classification")
+            ]
+        ),
+    )
 
     # Record initial system metrics
     initial_resources = system_monitor.get_current_metrics()
@@ -395,7 +422,8 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
 
                 # Wait for approval with cancellation support
                 try:
-                    from src.utils.async_cancellation import execute_with_cancellation
+                    from src.utils.async_cancellation import \
+                        execute_with_cancellation
 
                     approval_result = await execute_with_cancellation(
                         approval_future, f"workflow_approval_{workflow['id']}"
@@ -434,6 +462,30 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
         workflow["status"] = "completed"
         workflow["completed_at"] = datetime.now().isoformat()
 
+        # Record Prometheus workflow execution metric (success)
+        if "workflow_start_time" in workflow:
+            duration = time.time() - workflow["workflow_start_time"]
+            workflow_type = workflow.get("classification", "unknown")
+            prometheus_metrics.record_workflow_execution(
+                workflow_type=workflow_type, status="success", duration=duration
+            )
+
+            # Update active workflows count (decrement)
+            prometheus_metrics.update_active_workflows(
+                workflow_type=workflow_type,
+                count=max(
+                    0,
+                    len(
+                        [
+                            w
+                            for w in active_workflows.values()
+                            if w.get("classification") == workflow_type
+                        ]
+                    )
+                    - 1,
+                ),
+            )
+
         await event_manager.publish(
             "workflow_completed",
             {
@@ -447,6 +499,30 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
     except Exception as e:
         workflow["status"] = "failed"
         workflow["error"] = str(e)
+
+        # Record Prometheus workflow execution metric (failed)
+        if "workflow_start_time" in workflow:
+            duration = time.time() - workflow["workflow_start_time"]
+            workflow_type = workflow.get("classification", "unknown")
+            prometheus_metrics.record_workflow_execution(
+                workflow_type=workflow_type, status="failed", duration=duration
+            )
+
+            # Update active workflows count (decrement)
+            prometheus_metrics.update_active_workflows(
+                workflow_type=workflow_type,
+                count=max(
+                    0,
+                    len(
+                        [
+                            w
+                            for w in active_workflows.values()
+                            if w.get("classification") == workflow_type
+                        ]
+                    )
+                    - 1,
+                ),
+            )
 
         await event_manager.publish(
             "workflow_failed",
@@ -494,7 +570,8 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
 
         elif agent_type == "research":
             # Real web research
-            from src.agents.research_agent import ResearchAgent, ResearchRequest
+            from src.agents.research_agent import (ResearchAgent,
+                                                   ResearchRequest)
 
             research_agent = ResearchAgent()
 
@@ -555,7 +632,8 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
 
         elif agent_type == "security_scanner":
             # Security scanning agent
-            from src.agents.security_scanner_agent import security_scanner_agent
+            from src.agents.security_scanner_agent import \
+                security_scanner_agent
 
             # Extract scan parameters from action
             scan_context = step.get("inputs", {})
@@ -576,7 +654,8 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
 
         elif agent_type == "network_discovery":
             # Network discovery agent
-            from src.agents.network_discovery_agent import network_discovery_agent
+            from src.agents.network_discovery_agent import \
+                network_discovery_agent
 
             # Extract discovery parameters
             discovery_context = step.get("inputs", {})
@@ -601,9 +680,8 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
 
         elif agent_type == "system_commands":
             # Real system command execution
-            from src.agents.enhanced_system_commands_agent import (
-                EnhancedSystemCommandsAgent,
-            )
+            from src.agents.enhanced_system_commands_agent import \
+                EnhancedSystemCommandsAgent
 
             cmd_agent = EnhancedSystemCommandsAgent()
 
@@ -644,9 +722,27 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
         workflow_metrics.end_step_timing(
             workflow_id, step_id, success=False, error=str(e)
         )
+
+        # Record Prometheus workflow step metric (failed)
+        if workflow_id in active_workflows:
+            workflow_type = active_workflows[workflow_id].get(
+                "classification", "unknown"
+            )
+            prometheus_metrics.record_workflow_step(
+                workflow_type=workflow_type, step_type=agent_type, status="failed"
+            )
     else:
         # End step timing with success
         workflow_metrics.end_step_timing(workflow_id, step_id, success=True)
+
+        # Record Prometheus workflow step metric (success)
+        if workflow_id in active_workflows:
+            workflow_type = active_workflows[workflow_id].get(
+                "classification", "unknown"
+            )
+            prometheus_metrics.record_workflow_step(
+                workflow_type=workflow_type, step_type=agent_type, status="completed"
+            )
 
 
 @router.delete("/workflow/{workflow_id}")
