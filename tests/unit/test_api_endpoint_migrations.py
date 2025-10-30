@@ -11451,5 +11451,203 @@ class TestBatch66ResearchBrowserMigrations(unittest.TestCase):
             )
 
 
+class TestBatch67AgentTerminalMigrations(unittest.TestCase):
+    """Test batch 67 migrations: agent_terminal.py first 3 endpoints"""
+
+    def test_create_agent_terminal_session_decorator_present(self):
+        """Test create_agent_terminal_session has @with_error_handling decorator"""
+        from backend.api.agent_terminal import create_agent_terminal_session
+
+        source = inspect.getsource(create_agent_terminal_session)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT_TERMINAL"', source)
+
+    def test_create_agent_terminal_session_mixed_pattern(self):
+        """Test create_agent_terminal_session uses Mixed Pattern - preserves nested try-catch for agent role parsing"""
+        from backend.api.agent_terminal import create_agent_terminal_session
+
+        source = inspect.getsource(create_agent_terminal_session)
+        # Should have exactly 1 try-catch for agent role parsing
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            1,
+            "create_agent_terminal_session should have exactly 1 try-catch (for agent role parsing)",
+        )
+        # Should have nested try-catch for AgentRole parsing
+        self.assertIn("AgentRole[request.agent_role.upper()]", source)
+        self.assertIn("except KeyError:", source)
+
+    def test_create_agent_terminal_session_httpexception_preserved(self):
+        """Test create_agent_terminal_session preserves HTTPException for invalid agent role"""
+        from backend.api.agent_terminal import create_agent_terminal_session
+
+        source = inspect.getsource(create_agent_terminal_session)
+        self.assertIn("HTTPException", source)
+        self.assertIn("Invalid agent_role", source)
+        self.assertIn("status_code=400", source)
+
+    def test_list_agent_terminal_sessions_decorator_present(self):
+        """Test list_agent_terminal_sessions has @with_error_handling decorator"""
+        from backend.api.agent_terminal import list_agent_terminal_sessions
+
+        source = inspect.getsource(list_agent_terminal_sessions)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT_TERMINAL"', source)
+
+    def test_list_agent_terminal_sessions_simple_pattern(self):
+        """Test list_agent_terminal_sessions uses Simple Pattern - no try-catch blocks"""
+        from backend.api.agent_terminal import list_agent_terminal_sessions
+
+        source = inspect.getsource(list_agent_terminal_sessions)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            "list_agent_terminal_sessions should have no try-catch blocks (Simple Pattern)",
+        )
+
+    def test_list_agent_terminal_sessions_business_logic(self):
+        """Test list_agent_terminal_sessions preserves business logic"""
+        from backend.api.agent_terminal import list_agent_terminal_sessions
+
+        source = inspect.getsource(list_agent_terminal_sessions)
+        # Should call list_sessions on service
+        self.assertIn("service.list_sessions", source)
+        # Should return sessions list with total count
+        self.assertIn('"status": "success"', source)
+        self.assertIn('"total": len(sessions)', source)
+
+    def test_get_agent_terminal_session_decorator_present(self):
+        """Test get_agent_terminal_session has @with_error_handling decorator"""
+        from backend.api.agent_terminal import get_agent_terminal_session
+
+        source = inspect.getsource(get_agent_terminal_session)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT_TERMINAL"', source)
+
+    def test_get_agent_terminal_session_simple_pattern(self):
+        """Test get_agent_terminal_session uses Simple Pattern - no try-catch blocks"""
+        from backend.api.agent_terminal import get_agent_terminal_session
+
+        source = inspect.getsource(get_agent_terminal_session)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            "get_agent_terminal_session should have no try-catch blocks (Simple Pattern)",
+        )
+
+    def test_get_agent_terminal_session_httpexception_preserved(self):
+        """Test get_agent_terminal_session preserves HTTPException for session not found"""
+        from backend.api.agent_terminal import get_agent_terminal_session
+
+        source = inspect.getsource(get_agent_terminal_session)
+        self.assertIn("HTTPException", source)
+        self.assertIn('"Session not found"', source)
+        self.assertIn("status_code=404", source)
+        # Should check session existence
+        self.assertIn("if not session_info:", source)
+
+    def test_batch67_decorator_configuration(self):
+        """Test all batch 67 endpoints have consistent decorator configuration"""
+        from backend.api.agent_terminal import (
+            create_agent_terminal_session,
+            get_agent_terminal_session,
+            list_agent_terminal_sessions,
+        )
+
+        endpoints = [
+            create_agent_terminal_session,
+            list_agent_terminal_sessions,
+            get_agent_terminal_session,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} should use ErrorCategory.SERVER_ERROR",
+            )
+            self.assertIn(
+                'error_code_prefix="AGENT_TERMINAL"',
+                source,
+                f"{endpoint.__name__} should use AGENT_TERMINAL prefix",
+            )
+
+    def test_batch67_error_category_consistency(self):
+        """Test batch 67 uses correct error categories"""
+        from backend.api.agent_terminal import (
+            create_agent_terminal_session,
+            get_agent_terminal_session,
+            list_agent_terminal_sessions,
+        )
+
+        # All agent_terminal endpoints should use SERVER_ERROR category
+        for func in [
+            create_agent_terminal_session,
+            list_agent_terminal_sessions,
+            get_agent_terminal_session,
+        ]:
+            source = inspect.getsource(func)
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+
+    def test_batch67_simple_pattern_compliance(self):
+        """Test batch 67 Simple Pattern endpoints have no error handling code"""
+        from backend.api.agent_terminal import (
+            get_agent_terminal_session,
+            list_agent_terminal_sessions,
+        )
+
+        for func in [list_agent_terminal_sessions, get_agent_terminal_session]:
+            source = inspect.getsource(func)
+            # Should not have manual error handling
+            self.assertEqual(source.count("    try:"), 0)
+            self.assertEqual(source.count("    except"), 0)
+
+    def test_batch67_httpexception_preservation(self):
+        """Test batch 67 preserves HTTPException business logic"""
+        from backend.api.agent_terminal import (
+            create_agent_terminal_session,
+            get_agent_terminal_session,
+        )
+
+        # These endpoints raise HTTPException for business logic
+        for func in [create_agent_terminal_session, get_agent_terminal_session]:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "HTTPException",
+                source,
+                f"{func.__name__} should preserve HTTPException raises",
+            )
+
+    def test_batch67_business_logic_preservation(self):
+        """Test batch 67 preserves all business logic"""
+        from backend.api.agent_terminal import (
+            create_agent_terminal_session,
+            get_agent_terminal_session,
+            list_agent_terminal_sessions,
+        )
+
+        # create_agent_terminal_session should parse agent role
+        source = inspect.getsource(create_agent_terminal_session)
+        self.assertIn("AgentRole[request.agent_role.upper()]", source)
+        self.assertIn("service.create_session", source)
+
+        # list_agent_terminal_sessions should filter by agent_id and conversation_id
+        source = inspect.getsource(list_agent_terminal_sessions)
+        self.assertIn("agent_id=agent_id", source)
+        self.assertIn("conversation_id=conversation_id", source)
+
+        # get_agent_terminal_session should check if session exists
+        source = inspect.getsource(get_agent_terminal_session)
+        self.assertIn("service.get_session_info", source)
+        self.assertIn("if not session_info:", source)
+
+
 if __name__ == "__main__":
     unittest.main()
