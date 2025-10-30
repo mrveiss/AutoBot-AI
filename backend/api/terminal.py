@@ -1109,74 +1109,68 @@ async def send_terminal_input(session_id: str, request: TerminalInputRequest):
 
 
 @router.post("/sessions/{session_id}/signal/{signal_name}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_terminal_signal",
+    error_code_prefix="TERMINAL",
+)
 async def send_terminal_signal(session_id: str, signal_name: str):
     """Send a signal to a terminal session"""
-    try:
-        if not session_manager.has_connection(session_id):
-            raise HTTPException(status_code=404, detail="Session not active")
+    if not session_manager.has_connection(session_id):
+        raise HTTPException(status_code=404, detail="Session not active")
 
-        # Map signal names to signal constants
-        signal_map = {
-            "SIGINT": signal.SIGINT,
-            "SIGTERM": signal.SIGTERM,
-            "SIGKILL": signal.SIGKILL,
-            "SIGSTOP": signal.SIGSTOP,
-            "SIGCONT": signal.SIGCONT,
-        }
+    # Map signal names to signal constants
+    signal_map = {
+        "SIGINT": signal.SIGINT,
+        "SIGTERM": signal.SIGTERM,
+        "SIGKILL": signal.SIGKILL,
+        "SIGSTOP": signal.SIGSTOP,
+        "SIGCONT": signal.SIGCONT,
+    }
 
-        if signal_name not in signal_map:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid signal: {signal_name}"
-            )
+    if signal_name not in signal_map:
+        raise HTTPException(status_code=400, detail=f"Invalid signal: {signal_name}")
 
-        success = await session_manager.send_signal(session_id, signal_map[signal_name])
+    success = await session_manager.send_signal(session_id, signal_map[signal_name])
 
-        if success:
-            return {"session_id": session_id, "signal": signal_name, "status": "sent"}
-        else:
-            raise HTTPException(status_code=500, detail="Failed to send signal")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error sending signal to session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    if success:
+        return {"session_id": session_id, "signal": signal_name, "status": "sent"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to send signal")
 
 
 @router.get("/sessions/{session_id}/history")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_terminal_command_history",
+    error_code_prefix="TERMINAL",
+)
 async def get_terminal_command_history(session_id: str):
     """Get command history for a terminal session"""
-    try:
-        config = session_manager.session_configs.get(session_id)
-        if not config:
-            raise HTTPException(status_code=404, detail="Session not found")
+    config = session_manager.session_configs.get(session_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-        # Check if session has active connection
-        is_active = session_manager.has_connection(session_id)
+    # Check if session has active connection
+    is_active = session_manager.has_connection(session_id)
 
-        if not is_active:
-            return {
-                "session_id": session_id,
-                "is_active": False,
-                "history": [],
-                "message": "Session is not active, no command history available",
-            }
-
-        # Get command history from active terminal
-        history = session_manager.get_command_history(session_id)
-
+    if not is_active:
         return {
             "session_id": session_id,
-            "is_active": True,
-            "history": history,
-            "total_commands": len(history),
+            "is_active": False,
+            "history": [],
+            "message": "Session is not active, no command history available",
         }
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting command history for session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # Get command history from active terminal
+    history = session_manager.get_command_history(session_id)
+
+    return {
+        "session_id": session_id,
+        "is_active": True,
+        "history": history,
+        "total_commands": len(history),
+    }
 
 
 @router.get("/audit/{session_id}")
