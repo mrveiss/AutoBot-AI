@@ -1012,69 +1012,67 @@ async def delete_terminal_session(session_id: str):
 
 
 @router.post("/command")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_single_command",
+    error_code_prefix="TERMINAL",
+)
 async def execute_single_command(request: CommandRequest):
     """Execute a single command with security assessment"""
-    try:
-        # Assess command for security risk
+    # Assess command for security risk
 
-        # Assess command risk
-        risk_level = CommandRiskLevel.SAFE
-        command_lower = request.command.lower().strip()
+    # Assess command risk
+    risk_level = CommandRiskLevel.SAFE
+    command_lower = request.command.lower().strip()
 
-        for pattern in RISKY_COMMAND_PATTERNS:
+    for pattern in RISKY_COMMAND_PATTERNS:
+        if pattern in command_lower:
+            risk_level = CommandRiskLevel.DANGEROUS
+            break
+    else:
+        for pattern in MODERATE_RISK_PATTERNS:
             if pattern in command_lower:
-                risk_level = CommandRiskLevel.DANGEROUS
+                risk_level = CommandRiskLevel.MODERATE
                 break
-        else:
-            for pattern in MODERATE_RISK_PATTERNS:
-                if pattern in command_lower:
-                    risk_level = CommandRiskLevel.MODERATE
-                    break
 
-        # Log command execution attempt
-        logger.info(
-            f"Single command execution: {request.command} (risk: {risk_level.value})"
-        )
+    # Log command execution attempt
+    logger.info(
+        f"Single command execution: {request.command} (risk: {risk_level.value})"
+    )
 
-        # For now, return the assessment (actual execution would need subprocess)
-        return {
-            "command": request.command,
-            "risk_level": risk_level.value,
-            "status": "assessed",
-            "message": f"Command assessed as {risk_level.value} risk",
-            "requires_confirmation": risk_level != CommandRiskLevel.SAFE,
-        }
-
-    except Exception as e:
-        logger.error(f"Error executing command: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # For now, return the assessment (actual execution would need subprocess)
+    return {
+        "command": request.command,
+        "risk_level": risk_level.value,
+        "status": "assessed",
+        "message": f"Command assessed as {risk_level.value} risk",
+        "requires_confirmation": risk_level != CommandRiskLevel.SAFE,
+    }
 
 
 @router.post("/sessions/{session_id}/input")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_terminal_input",
+    error_code_prefix="TERMINAL",
+)
 async def send_terminal_input(session_id: str, request: TerminalInputRequest):
     """Send input to a specific terminal session"""
-    try:
-        if not session_manager.has_connection(session_id):
-            raise HTTPException(status_code=404, detail="Session not active")
+    if not session_manager.has_connection(session_id):
+        raise HTTPException(status_code=404, detail="Session not active")
 
-        # Send input to the WebSocket connection
-        # This would be implemented through the session manager
-        success = await session_manager.send_input(session_id, request.text)
+    # Send input to the WebSocket connection
+    # This would be implemented through the session manager
+    success = await session_manager.send_input(session_id, request.text)
 
-        if success:
-            return {
-                "session_id": session_id,
-                "status": "sent",
-                "input": request.text if not request.is_password else "***",
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Failed to send input")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error sending input to session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    if success:
+        return {
+            "session_id": session_id,
+            "status": "sent",
+            "input": request.text if not request.is_password else "***",
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Failed to send input")
 
 
 @router.post("/sessions/{session_id}/signal/{signal_name}")
