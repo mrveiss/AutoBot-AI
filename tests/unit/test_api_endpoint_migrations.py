@@ -10896,5 +10896,132 @@ class TestBatch63MonitoringMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="MONITORING"', source)
 
 
+class TestBatch64ResearchBrowserMigrations(unittest.TestCase):
+    """Test batch 64 migrations: research_browser.py first 2 endpoints"""
+
+    def test_health_check_decorator_present(self):
+        """Test health_check has @with_error_handling decorator"""
+        from backend.api.research_browser import health_check
+
+        source = inspect.getsource(health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="RESEARCH_BROWSER"', source)
+
+    def test_health_check_mixed_pattern(self):
+        """Test health_check uses Mixed Pattern - preserves nested try-catch for config fallback"""
+        from backend.api.research_browser import health_check
+
+        source = inspect.getsource(health_check)
+        # Should have exactly 1 try-catch for config fallback
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            1,
+            "health_check should have exactly 1 try-catch (for config fallback)",
+        )
+
+        # Should have nested try-catch for get_service_url
+        self.assertIn("cfg.get_service_url", source)
+        self.assertIn("except Exception:", source)
+        self.assertIn("NetworkConstants.BROWSER_SERVICE_PORT", source)
+
+    def test_health_check_business_logic_preserved(self):
+        """Test health_check business logic is preserved"""
+        from backend.api.research_browser import health_check
+
+        source = inspect.getsource(health_check)
+        self.assertIn("research_browser_manager", source)
+        self.assertIn('"status"', source)
+        self.assertIn('"service"', source)
+        self.assertIn('"browser_service_url"', source)
+        self.assertIn('"timestamp"', source)
+        self.assertIn("datetime.now().isoformat()", source)
+
+    def test_research_url_decorator_present(self):
+        """Test research_url has @with_error_handling decorator"""
+        from backend.api.research_browser import research_url
+
+        source = inspect.getsource(research_url)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="RESEARCH_BROWSER"', source)
+
+    def test_research_url_simple_pattern(self):
+        """Test research_url uses Simple Pattern - no try-catch blocks"""
+        from backend.api.research_browser import research_url
+
+        source = inspect.getsource(research_url)
+        # Should have NO try-catch blocks
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "research_url should have no try-catch blocks (Simple Pattern)"
+        )
+
+    def test_research_url_business_logic_preserved(self):
+        """Test research_url business logic is preserved"""
+        from backend.api.research_browser import research_url
+
+        source = inspect.getsource(research_url)
+        self.assertIn("research_browser_manager.research_url", source)
+        self.assertIn("request.conversation_id", source)
+        self.assertIn("request.url", source)
+        self.assertIn("request.extract_content", source)
+        self.assertIn("JSONResponse", source)
+        self.assertIn("status_code=200", source)
+
+    def test_batch64_decorator_configuration(self):
+        """Verify all batch 64 endpoints have correct decorator configuration"""
+        from backend.api.research_browser import health_check, research_url
+
+        endpoints = [health_check, research_url]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch64_consistent_error_category(self):
+        """Verify consistent error category and prefix for Batch 64"""
+        from backend.api.research_browser import health_check, research_url
+
+        endpoints = [health_check, research_url]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            self.assertIn('error_code_prefix="RESEARCH_BROWSER"', source)
+
+    def test_batch64_no_redundant_error_handling(self):
+        """Verify batch 64 endpoints don't have redundant error responses"""
+        from backend.api.research_browser import health_check, research_url
+
+        # health_check: Mixed Pattern - has nested try-catch for config (allowed)
+        health_source = inspect.getsource(health_check)
+        # Should NOT have redundant logger.error at function level
+        self.assertNotIn(
+            "logger.error(f\"Research browser health check failed",
+            health_source,
+        )
+
+        # research_url: Simple Pattern - no try-catch at all
+        research_source = inspect.getsource(research_url)
+        self.assertNotIn("logger.error(f\"Research URL failed", research_source)
+        self.assertNotIn("except Exception as e:", research_source)
+
+    def test_batch64_imports_error_boundaries(self):
+        """Verify research_browser.py imports error_boundaries"""
+        import backend.api.research_browser as module
+
+        # Check module has the required imports
+        self.assertTrue(
+            hasattr(module, "ErrorCategory"),
+            "research_browser should import ErrorCategory",
+        )
+        self.assertTrue(
+            hasattr(module, "with_error_handling"),
+            "research_browser should import with_error_handling",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
