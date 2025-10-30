@@ -295,6 +295,7 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
 import apiClient from '@/utils/ApiClient'
+import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import type { KnowledgeCategory, KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import KnowledgeBrowser from './KnowledgeBrowser.vue'
@@ -467,8 +468,7 @@ const viewCategoryDocuments = async (category: any) => {
 
   try {
     const response = await apiClient.get(`/api/knowledge_base/categories/${encodeURIComponent(category.path)}`)
-    // Handle both Response object and already-parsed JSON
-    const data = typeof response.json === 'function' ? await response.json() : response
+    const data = await parseApiResponse(response)
     categoryDocuments.value = data?.documents || []
     showCategoryDocuments.value = true
   } catch (error) {
@@ -499,7 +499,7 @@ const closeDocumentModal = () => {
 const loadMainCategories = async () => {
   try {
     const response = await apiClient.get('/api/knowledge_base/categories/main')
-    const data = typeof response.json === 'function' ? await response.json() : response
+    const data = await parseApiResponse(response)
     mainCategories.value = data?.categories || []
   } catch (error) {
     console.error('Failed to load main categories:', error)

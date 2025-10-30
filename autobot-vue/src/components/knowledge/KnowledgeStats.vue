@@ -358,6 +358,7 @@ import { useKnowledgeController } from '@/models/controllers/index'
 import type { KnowledgeCategory } from '@/stores/useKnowledgeStore'
 import ManPageManager from '@/components/ManPageManager.vue'
 import apiClient from '@/utils/ApiClient'
+import { parseApiResponse } from '@/utils/apiResponseHelpers'
 
 // TypeScript Interfaces
 interface VectorStats {
@@ -715,12 +716,7 @@ const refreshVectorStats = async () => {
 
   try {
     const statsResponse = await apiClient.get('/api/knowledge_base/stats')
-
-    if (!statsResponse.ok) {
-      throw new Error(`Failed to fetch statistics: ${statsResponse.statusText}`)
-    }
-
-    const stats: VectorStats = await statsResponse.json()
+    const stats: VectorStats = await parseApiResponse(statsResponse)
 
     // Validate stats response
     if (typeof stats.total_facts !== 'number' || typeof stats.total_documents !== 'number') {
@@ -730,12 +726,10 @@ const refreshVectorStats = async () => {
     vectorStats.value = stats
 
     // Fetch category fact counts
-    const factsResponse = await apiClient.get('/api/knowledge_base/facts/by_category')
+    try {
+      const factsResponse = await apiClient.get('/api/knowledge_base/facts/by_category')
+      const factsData = await parseApiResponse(factsResponse)
 
-    if (!factsResponse.ok) {
-      console.warn('Failed to fetch category facts, continuing with basic stats')
-    } else {
-      const factsData = await factsResponse.json()
       if (factsData && factsData.categories) {
         const counts: Record<string, number> = {}
         Object.keys(factsData.categories).forEach((category: string) => {
@@ -743,6 +737,8 @@ const refreshVectorStats = async () => {
         })
         categoryFactCounts.value = counts
       }
+    } catch (factsError) {
+      console.warn('Failed to fetch category facts, continuing with basic stats:', factsError)
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred'
