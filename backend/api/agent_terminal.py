@@ -326,6 +326,11 @@ async def approve_agent_command(
 
 
 @router.post("/sessions/{session_id}/interrupt")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="interrupt_agent_session",
+    error_code_prefix="AGENT_TERMINAL",
+)
 async def interrupt_agent_session(
     session_id: str,
     request: InterruptRequest,
@@ -340,20 +345,20 @@ async def interrupt_agent_session(
     - Execute own commands
     - Deny pending agent commands
     """
-    try:
-        result = await service.user_interrupt(
-            session_id=session_id,
-            user_id=request.user_id,
-        )
+    result = await service.user_interrupt(
+        session_id=session_id,
+        user_id=request.user_id,
+    )
 
-        return result
-
-    except Exception as e:
-        logger.error(f"Error interrupting agent session: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    return result
 
 
 @router.post("/sessions/{session_id}/resume")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="resume_agent_session",
+    error_code_prefix="AGENT_TERMINAL",
+)
 async def resume_agent_session(
     session_id: str,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
@@ -363,14 +368,8 @@ async def resume_agent_session(
 
     Allows agent to continue executing commands after user returns control.
     """
-    try:
-        result = await service.agent_resume(session_id=session_id)
-
-        return result
-
-    except Exception as e:
-        logger.error(f"Error resuming agent session: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    result = await service.agent_resume(session_id=session_id)
+    return result
 
 
 @router.get("/")
