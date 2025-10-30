@@ -163,6 +163,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import ApiClient from '@/utils/ApiClient'
+import { parseApiResponse } from '@/utils/apiResponseHelpers'
 
 const store = useKnowledgeStore()
 
@@ -301,7 +302,7 @@ const populateSystemCommands = async () => {
     progressDetails.value = 'Adding common Linux commands and examples...'
 
     const apiResponse = await ApiClient.post('/api/knowledge_base/populate_system_commands', {})
-    const response = await apiResponse.json()
+    const response = await parseApiResponse(apiResponse)
 
     if (response.status === 'success') {
       populateStatus.value.systemCommands = 'success'
@@ -340,7 +341,7 @@ const populateManPages = async () => {
     progressDetails.value = 'Adding system manual pages...'
 
     const apiResponse = await ApiClient.post('/api/knowledge_base/populate_man_pages', {})
-    const response = await apiResponse.json()
+    const response = await parseApiResponse(apiResponse)
 
     if (response.status === 'success') {
       populateStatus.value.manPages = 'success'
@@ -379,7 +380,7 @@ const populateAutoBotDocs = async () => {
     progressDetails.value = 'Adding AutoBot documentation and guides...'
 
     const apiResponse = await ApiClient.post('/api/knowledge_base/populate_autobot_docs', {})
-    const response = await apiResponse.json()
+    const response = await parseApiResponse(apiResponse)
 
     if (response.status === 'success') {
       populateStatus.value.autobotDocs = 'success'
@@ -440,7 +441,7 @@ const clearAllKnowledge = async () => {
     progressDetails.value = 'Removing all entries from the knowledge base...'
 
     const apiResponse = await ApiClient.post('/api/knowledge_base/clear_all', {})
-    const response = await apiResponse.json()
+    const response = await parseApiResponse(apiResponse)
 
     if (response.status === 'success') {
       addStatusMessage('success', 'Knowledge Base Cleared',

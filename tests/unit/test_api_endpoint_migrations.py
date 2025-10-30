@@ -9626,5 +9626,207 @@ class TestBatch56TerminalMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="TERMINAL"', source)
 
 
+class TestBatch57TerminalMigrations(unittest.TestCase):
+    """Test batch 57 migrations: terminal.py POST /terminal/check-tool + POST /terminal/validate-command + GET /terminal/package-managers"""
+
+    def test_check_tool_installed_decorator_present(self):
+        """Test check_tool_installed has @with_error_handling decorator"""
+        import inspect
+
+        from backend.api.terminal import check_tool_installed
+
+        source = inspect.getsource(check_tool_installed)
+        # Should have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_check_tool_installed_no_try_catch(self):
+        """Test check_tool_installed try-catch completely removed"""
+        import inspect
+
+        from backend.api.terminal import check_tool_installed
+
+        source = inspect.getsource(check_tool_installed)
+        lines = source.split("\n")
+
+        # Should NOT have any try-catch blocks (Simple Pattern)
+        try_count = 0
+        for line in lines:
+            if line.strip().startswith("try:"):
+                try_count += 1
+
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
+
+    def test_check_tool_installed_business_logic_preserved(self):
+        """Test check_tool_installed business logic preserved"""
+        import inspect
+
+        from backend.api.terminal import check_tool_installed
+
+        source = inspect.getsource(check_tool_installed)
+
+        # Core business logic should be preserved
+        self.assertIn("from src.agents.system_command_agent import SystemCommandAgent", source)
+        self.assertIn("system_command_agent = SystemCommandAgent()", source)
+        self.assertIn(
+            "result = await system_command_agent.check_tool_installed(tool_name)",
+            source,
+        )
+        self.assertIn("return result", source)
+
+    def test_check_tool_installed_decorator_configuration(self):
+        """Test check_tool_installed decorator has correct configuration"""
+        import inspect
+
+        from backend.api.terminal import check_tool_installed
+
+        source = inspect.getsource(check_tool_installed)
+
+        # Verify decorator configuration
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="check_tool_installed"', source)
+        self.assertIn('error_code_prefix="TERMINAL"', source)
+
+    def test_validate_command_decorator_present(self):
+        """Test validate_command has @with_error_handling decorator"""
+        import inspect
+
+        from backend.api.terminal import validate_command
+
+        source = inspect.getsource(validate_command)
+        # Should have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_validate_command_no_try_catch(self):
+        """Test validate_command try-catch completely removed"""
+        import inspect
+
+        from backend.api.terminal import validate_command
+
+        source = inspect.getsource(validate_command)
+        lines = source.split("\n")
+
+        # Should NOT have any try-catch blocks (Simple Pattern)
+        try_count = 0
+        for line in lines:
+            if line.strip().startswith("try:"):
+                try_count += 1
+
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
+
+    def test_validate_command_business_logic_preserved(self):
+        """Test validate_command business logic preserved"""
+        import inspect
+
+        from backend.api.terminal import validate_command
+
+        source = inspect.getsource(validate_command)
+
+        # Core business logic should be preserved
+        self.assertIn("from src.agents.system_command_agent import SystemCommandAgent", source)
+        self.assertIn("system_command_agent = SystemCommandAgent()", source)
+        self.assertIn(
+            "result = await system_command_agent.validate_command_safety(command)",
+            source,
+        )
+        self.assertIn("return result", source)
+
+    def test_validate_command_decorator_configuration(self):
+        """Test validate_command decorator has correct configuration"""
+        import inspect
+
+        from backend.api.terminal import validate_command
+
+        source = inspect.getsource(validate_command)
+
+        # Verify decorator configuration
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="validate_command"', source)
+        self.assertIn('error_code_prefix="TERMINAL"', source)
+
+    def test_get_package_managers_decorator_present(self):
+        """Test get_package_managers has @with_error_handling decorator"""
+        import inspect
+
+        from backend.api.terminal import get_package_managers
+
+        source = inspect.getsource(get_package_managers)
+        # Should have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_get_package_managers_no_try_catch(self):
+        """Test get_package_managers try-catch completely removed"""
+        import inspect
+
+        from backend.api.terminal import get_package_managers
+
+        source = inspect.getsource(get_package_managers)
+        lines = source.split("\n")
+
+        # Should NOT have any try-catch blocks (Simple Pattern)
+        try_count = 0
+        for line in lines:
+            if line.strip().startswith("try:"):
+                try_count += 1
+
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
+
+    def test_get_package_managers_business_logic_preserved(self):
+        """Test get_package_managers business logic preserved"""
+        import inspect
+
+        from backend.api.terminal import get_package_managers
+
+        source = inspect.getsource(get_package_managers)
+
+        # Core business logic should be preserved
+        self.assertIn("from src.agents.system_command_agent import SystemCommandAgent", source)
+        self.assertIn("system_command_agent = SystemCommandAgent()", source)
+        self.assertIn(
+            "detected = await system_command_agent.detect_package_manager()", source
+        )
+        self.assertIn("all_managers = list(system_command_agent.PACKAGE_MANAGERS.keys())", source)
+        self.assertIn('"detected": detected', source)
+        self.assertIn('"available": all_managers', source)
+        self.assertIn('"package_managers": system_command_agent.PACKAGE_MANAGERS', source)
+
+    def test_get_package_managers_decorator_configuration(self):
+        """Test get_package_managers decorator has correct configuration"""
+        import inspect
+
+        from backend.api.terminal import get_package_managers
+
+        source = inspect.getsource(get_package_managers)
+
+        # Verify decorator configuration
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_package_managers"', source)
+        self.assertIn('error_code_prefix="TERMINAL"', source)
+
+    def test_batch57_consistent_error_category(self):
+        """Verify consistent error category across Batch 57"""
+        import inspect
+
+        from backend.api.terminal import (
+            check_tool_installed,
+            get_package_managers,
+            validate_command,
+        )
+
+        endpoints = [check_tool_installed, validate_command, get_package_managers]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use TERMINAL prefix
+            self.assertIn('error_code_prefix="TERMINAL"', source)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -216,19 +216,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import apiClient from '@/utils/ApiClient'
+import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
 import TreeNodeComponent, { type TreeNode } from './TreeNodeComponent.vue'
 import VectorizationProgressModal from './VectorizationProgressModal.vue'
-
-// Helper function to safely parse JSON from response
-const parseResponse = async (response: any): Promise<any> => {
-  if (typeof response.json === 'function') {
-    return await response.json()
-  }
-  // Already parsed or direct data
-  return response
-}
 
 // Use the shared composables
 const {
@@ -513,7 +505,7 @@ const selectMainCategory = (mainCatId: string) => {
 const loadMainCategories = async () => {
   try {
     const response = await apiClient.get('/api/knowledge_base/categories/main')
-    const data = await parseResponse(response)
+    const data = await parseApiResponse(response)
 
     if (data && data.categories) {
       mainCategories.value = data.categories
@@ -557,7 +549,7 @@ const loadKnowledgeTree = async () => {
   try {
     // Load facts from knowledge base by category
     const response = await apiClient.get('/api/knowledge_base/facts/by_category')
-    const data = await parseResponse(response)
+    const data = await parseApiResponse(response)
 
     if (data && data.categories) {
       // Build tree structure from categories
@@ -608,7 +600,7 @@ const loadUserKnowledge = async () => {
 
     // apiClient.get() already returns parsed JSON, not a Response object
     const response = await apiClient.get(`/api/knowledge_base/entries?${params}`)
-    const data = await parseResponse(response)
+    const data = await parseApiResponse(response)
 
     // Handle both old (offset) and new (cursor) response formats for backward compatibility
     let entries: any[] = []
@@ -661,7 +653,7 @@ const loadMoreEntries = async () => {
     })
 
     const response = await apiClient.get(`/api/knowledge_base/entries?${params}`)
-    const data = await parseResponse(response)
+    const data = await parseApiResponse(response)
 
     // Handle response format
     let entries: any[] = []
@@ -926,7 +918,7 @@ const loadFolderContents = async (folder: TreeNode) => {
       category: folder.category,
       n_results: 100
     })
-    const data = await parseResponse(response)
+    const data = await parseApiResponse(response)
 
     if (data.results && Array.isArray(data.results)) {
       folder.children = data.results.map((item: any, idx: number) => ({
@@ -964,7 +956,7 @@ const loadFileContent = async (file: TreeNode) => {
       if (factKey) {
         // Fetch full fact data from backend
         const apiResponse = await apiClient.get(`/api/knowledge_base/fact/${factKey}`)
-        const response = await parseResponse(apiResponse)
+        const response = await parseApiResponse(apiResponse)
 
         if (response && response.content) {
           fileContent.value = response.content

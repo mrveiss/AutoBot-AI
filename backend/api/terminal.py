@@ -1336,54 +1336,54 @@ async def install_tool(request: ToolInstallRequest):
 
 
 @router.post("/terminal/check-tool")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_tool_installed",
+    error_code_prefix="TERMINAL",
+)
 async def check_tool_installed(tool_name: str):
     """Check if a tool is installed"""
-    try:
-        from src.agents.system_command_agent import SystemCommandAgent
+    from src.agents.system_command_agent import SystemCommandAgent
 
-        system_command_agent = SystemCommandAgent()
-        result = await system_command_agent.check_tool_installed(tool_name)
-        return result
-
-    except Exception as e:
-        logger.error(f"Error checking tool: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    system_command_agent = SystemCommandAgent()
+    result = await system_command_agent.check_tool_installed(tool_name)
+    return result
 
 
 @router.post("/terminal/validate-command")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="validate_command",
+    error_code_prefix="TERMINAL",
+)
 async def validate_command(command: str):
     """Validate command safety"""
-    try:
-        from src.agents.system_command_agent import SystemCommandAgent
+    from src.agents.system_command_agent import SystemCommandAgent
 
-        system_command_agent = SystemCommandAgent()
-        result = await system_command_agent.validate_command_safety(command)
-        return result
-
-    except Exception as e:
-        logger.error(f"Error validating command: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    system_command_agent = SystemCommandAgent()
+    result = await system_command_agent.validate_command_safety(command)
+    return result
 
 
 @router.get("/terminal/package-managers")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_package_managers",
+    error_code_prefix="TERMINAL",
+)
 async def get_package_managers():
     """Get available package managers"""
-    try:
-        from src.agents.system_command_agent import SystemCommandAgent
+    from src.agents.system_command_agent import SystemCommandAgent
 
-        system_command_agent = SystemCommandAgent()
-        detected = await system_command_agent.detect_package_manager()
-        all_managers = list(system_command_agent.PACKAGE_MANAGERS.keys())
+    system_command_agent = SystemCommandAgent()
+    detected = await system_command_agent.detect_package_manager()
+    all_managers = list(system_command_agent.PACKAGE_MANAGERS.keys())
 
-        return {
-            "detected": detected,
-            "available": all_managers,
-            "package_managers": system_command_agent.PACKAGE_MANAGERS,
-        }
-
-    except Exception as e:
-        logger.error(f"Error getting package managers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "detected": detected,
+        "available": all_managers,
+        "package_managers": system_command_agent.PACKAGE_MANAGERS,
+    }
 
 
 # Information endpoints
