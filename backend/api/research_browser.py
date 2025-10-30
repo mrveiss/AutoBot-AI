@@ -192,50 +192,48 @@ async def download_mhtml(session_id: str, filename: str):
 
 
 @router.delete("/session/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cleanup_session",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 async def cleanup_session(session_id: str):
     """Clean up a research session"""
-    try:
-        await research_browser_manager.cleanup_session(session_id)
+    await research_browser_manager.cleanup_session(session_id)
 
-        return JSONResponse(
-            status_code=200,
-            content={"success": True, "message": f"Session {session_id} cleaned up"},
-        )
-
-    except Exception as e:
-        logger.error(f"Cleanup session failed: {e}")
-        return JSONResponse(
-            status_code=500, content={"success": False, "error": str(e)}
-        )
+    return JSONResponse(
+        status_code=200,
+        content={"success": True, "message": f"Session {session_id} cleaned up"},
+    )
 
 
 @router.get("/sessions")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_sessions",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 async def list_sessions():
     """List all active research sessions"""
-    try:
-        sessions_info = []
+    sessions_info = []
 
-        for session_id, session in research_browser_manager.sessions.items():
-            sessions_info.append(
-                {
-                    "session_id": session_id,
-                    "conversation_id": session.conversation_id,
-                    "status": session.status,
-                    "current_url": session.current_url,
-                    "interaction_required": session.interaction_required,
-                    "created_at": session.created_at.isoformat(),
-                    "last_activity": session.last_activity.isoformat(),
-                }
-            )
-
-        return JSONResponse(
-            status_code=200,
-            content={"sessions": sessions_info, "total_sessions": len(sessions_info)},
+    for session_id, session in research_browser_manager.sessions.items():
+        sessions_info.append(
+            {
+                "session_id": session_id,
+                "conversation_id": session.conversation_id,
+                "status": session.status,
+                "current_url": session.current_url,
+                "interaction_required": session.interaction_required,
+                "created_at": session.created_at.isoformat(),
+                "last_activity": session.last_activity.isoformat(),
+            }
         )
 
-    except Exception as e:
-        logger.error(f"List sessions failed: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    return JSONResponse(
+        status_code=200,
+        content={"sessions": sessions_info, "total_sessions": len(sessions_info)},
+    )
 
 
 class NavigationRequest(BaseModel):
@@ -243,108 +241,106 @@ class NavigationRequest(BaseModel):
 
 
 @router.post("/session/{session_id}/navigate")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="navigate_session",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 async def navigate_session(session_id: str, request: NavigationRequest):
     """Navigate a research session to a specific URL"""
-    try:
-        session = research_browser_manager.get_session(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
+    session = research_browser_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-        result = await session.navigate_to(request.url)
+    result = await session.navigate_to(request.url)
 
-        return JSONResponse(status_code=200, content=result)
-
-    except Exception as e:
-        logger.error(f"Navigate session failed: {e}")
-        return JSONResponse(
-            status_code=500, content={"success": False, "error": str(e)}
-        )
+    return JSONResponse(status_code=200, content=result)
 
 
 # Browser integration endpoints for frontend
 @router.get("/browser/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_browser_info",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 async def get_browser_info(session_id: str):
     """Get browser information for frontend integration"""
-    try:
-        session = research_browser_manager.get_session(session_id)
+    session = research_browser_manager.get_session(session_id)
 
-        # Special handling for chat-browser - create default session if needed
-        if not session and session_id == "chat-browser":
-            logger.info(
-                "Creating default chat-browser session for frontend integration"
-            )
-            # Create a default research session for chat integration
-            session = research_browser_manager.create_session(
-                conversation_id="default-chat",
-                interaction_settings={
-                    "captcha": False,
-                    "cloudflare": False,
-                    "cookies": False,
-                    "js": False,
-                },
-            )
-
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-
-        # Check if we have a Docker browser container available
-        docker_browser_info = None
-        try:
-            # Try to detect Playwright container
-            # Import centralized configuration with intelligent port detection
-            from src.unified_config_manager import (
-                PLAYWRIGHT_VNC_URL,
-                get_vnc_direct_url,
-            )
-
-            # This would integrate with your existing browser setup
-            docker_browser_info = {
-                "available": True,
-                "vnc_url": PLAYWRIGHT_VNC_URL.replace(
-                    "vnc.html", ""
-                ),  # NoVNC web interface
-                "direct_url": get_vnc_direct_url(),  # Intelligent VNC connection (5900 or 5901)
-                "session_active": session.status == "active",
-                "environment": "container" if os.path.exists("/.dockerenv") else "host",
-            }
-        except Exception:
-            docker_browser_info = {"available": False}
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "session_id": session_id,
-                "conversation_id": session.conversation_id,
-                "status": session.status,
-                "current_url": session.current_url,
-                "interaction_required": session.interaction_required,
-                "interaction_message": session.interaction_message,
-                "docker_browser": docker_browser_info,
-                "actions": [
-                    {
-                        "action": "wait",
-                        "label": "Wait for Interaction",
-                        "description": "Wait for user to complete interaction",
-                    },
-                    {
-                        "action": "manual_intervention",
-                        "label": "Manual Control",
-                        "description": "Take manual control of browser",
-                    },
-                    {
-                        "action": "save_mhtml",
-                        "label": "Save Page",
-                        "description": "Save current page as MHTML backup",
-                    },
-                    {
-                        "action": "extract_content",
-                        "label": "Extract Content",
-                        "description": "Extract text content from current page",
-                    },
-                ],
+    # Special handling for chat-browser - create default session if needed
+    if not session and session_id == "chat-browser":
+        logger.info(
+            "Creating default chat-browser session for frontend integration"
+        )
+        # Create a default research session for chat integration
+        session = research_browser_manager.create_session(
+            conversation_id="default-chat",
+            interaction_settings={
+                "captcha": False,
+                "cloudflare": False,
+                "cookies": False,
+                "js": False,
             },
         )
 
-    except Exception as e:
-        logger.error(f"Get browser info failed: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Check if we have a Docker browser container available
+    docker_browser_info = None
+    try:
+        # Try to detect Playwright container
+        # Import centralized configuration with intelligent port detection
+        from src.unified_config_manager import (
+            PLAYWRIGHT_VNC_URL,
+            get_vnc_direct_url,
+        )
+
+        # This would integrate with your existing browser setup
+        docker_browser_info = {
+            "available": True,
+            "vnc_url": PLAYWRIGHT_VNC_URL.replace(
+                "vnc.html", ""
+            ),  # NoVNC web interface
+            "direct_url": get_vnc_direct_url(),  # Intelligent VNC connection (5900 or 5901)
+            "session_active": session.status == "active",
+            "environment": "container" if os.path.exists("/.dockerenv") else "host",
+        }
+    except Exception:
+        docker_browser_info = {"available": False}
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "session_id": session_id,
+            "conversation_id": session.conversation_id,
+            "status": session.status,
+            "current_url": session.current_url,
+            "interaction_required": session.interaction_required,
+            "interaction_message": session.interaction_message,
+            "docker_browser": docker_browser_info,
+            "actions": [
+                {
+                    "action": "wait",
+                    "label": "Wait for Interaction",
+                    "description": "Wait for user to complete interaction",
+                },
+                {
+                    "action": "manual_intervention",
+                    "label": "Manual Control",
+                    "description": "Take manual control of browser",
+                },
+                {
+                    "action": "save_mhtml",
+                    "label": "Save Page",
+                    "description": "Save current page as MHTML backup",
+                },
+                {
+                    "action": "extract_content",
+                    "label": "Extract Content",
+                    "description": "Extract text content from current page",
+                },
+            ],
+        },
+    )
