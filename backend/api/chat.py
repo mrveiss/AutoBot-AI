@@ -355,145 +355,8 @@ async def process_chat_message(
     request_id: str,
 ) -> Dict[str, Any]:
     """Process a chat message and generate response"""
-    try:
-        # Validate session ID
-        if message.session_id and not validate_chat_session_id(message.session_id):
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise ValidationError("Invalid session ID format")
-
-        # Get or create session
-        session_id = message.session_id or generate_chat_session_id()
-
-        # Store user message
-        user_message_id = generate_message_id()
-        user_message_data = {
-            "id": user_message_id,
-            "content": message.content,
-            "role": message.role,
-            "timestamp": datetime.utcnow().isoformat(),
-            "metadata": message.metadata,
-            "session_id": session_id,
-        }
-
-        # Add to session history
-        if hasattr(chat_history_manager, "add_message"):
-            await chat_history_manager.add_message(session_id, user_message_data)
-
-        # Log chat event
-        await log_chat_event(
-            "message_received",
-            session_id,
-            {
-                "message_id": user_message_id,
-                "content_length": len(message.content),
-                "role": message.role,
-            },
-        )
-
-        # Get chat context from history (Redis-backed, efficient retrieval)
-        chat_context = []
-        if hasattr(chat_history_manager, "get_session_messages"):
-            try:
-                # Use model-aware message retrieval for optimal context window usage
-                # Context manager calculates efficient limits based on model capabilities
-                model_name = message.metadata.get("model") if message.metadata else None
-                recent_messages = await chat_history_manager.get_session_messages(
-                    session_id, model_name=model_name
-                )
-                chat_context = recent_messages or []
-                logger.info(
-                    f"Retrieved {len(chat_context)} messages for model {model_name or 'default'}"
-                )
-            except Exception as e:
-                logger.warning(f"Could not retrieve chat context: {e}")
-
-        # Generate AI response
-        try:
-            # Prepare context for LLM
-            # Use model-aware message limit for optimal context window usage
-            model_name = message.metadata.get("model") if message.metadata else None
-            context_manager = getattr(chat_history_manager, "context_manager", None)
-
-            if context_manager:
-                message_limit = context_manager.get_message_limit(model_name)
-                logger.info(
-                    f"Using {message_limit} messages for LLM context (model: {model_name or 'default'})"
-                )
-            else:
-                message_limit = 20  # Fallback default
-                logger.warning("Context manager not available, using default limit")
-
-            llm_context = []
-            for msg in chat_context[-message_limit:]:  # Model-aware message limit
-                llm_context.append(
-                    {"role": msg.get("role", "user"), "content": msg.get("content", "")}
-                )
-
-            # Add current message to context
-            llm_context.append({"role": message.role, "content": message.content})
-
-            # Generate response using LLM service
-            if hasattr(llm_service, "generate_response"):
-                ai_response = await llm_service.generate_response(
-                    messages=llm_context, session_id=session_id, request_id=request_id
-                )
-            else:
-                # Fallback response
-                ai_response = {
-                    "content": "I'm currently unable to generate a response. Please try again.",
-                    "role": "assistant",
-                }
-
-        except Exception as e:
-            logger.error(f"LLM generation failed: {e}")
-            ai_response = {
-                "content": "I encountered an error processing your message. Please try again.",
-                "role": "assistant",
-            }
-
-        # Store AI response
-        ai_message_id = generate_message_id()
-        ai_message_data = {
-            "id": ai_message_id,
-            "content": ai_response.get("content", ""),
-            "role": "assistant",
-            "timestamp": datetime.utcnow().isoformat(),
-            "metadata": ai_response.get("metadata", {}),
-            "session_id": session_id,
-        }
-
-        # Add AI response to session history
-        if hasattr(chat_history_manager, "add_message"):
-            await chat_history_manager.add_message(session_id, ai_message_data)
-
-        # Log response event
-        await log_chat_event(
-            "response_generated",
-            session_id,
-            {
-                "message_id": ai_message_id,
-                "content_length": len(ai_response.get("content", "")),
-                "request_id": request_id,
-            },
-        )
-
-        return {
-            "content": ai_response.get("content", ""),
-            "role": "assistant",
-            "session_id": session_id,
-            "message_id": ai_message_id,
-            "timestamp": datetime.utcnow().isoformat(),
-            "metadata": ai_response.get("metadata", {}),
-        }
-
-    except Exception as e:
-        logger.error(f"Error processing chat message: {e}")
+    # Validate session ID
+    if message.session_id and not validate_chat_session_id(message.session_id):
         (
             AutoBotError,
             InternalError,
@@ -501,10 +364,132 @@ async def process_chat_message(
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise InternalError(
-            "Failed to process chat message",
-            details={"error": str(e), "request_id": request_id},
-        )
+        raise ValidationError("Invalid session ID format")
+
+    # Get or create session
+    session_id = message.session_id or generate_chat_session_id()
+
+    # Store user message
+    user_message_id = generate_message_id()
+    user_message_data = {
+        "id": user_message_id,
+        "content": message.content,
+        "role": message.role,
+        "timestamp": datetime.utcnow().isoformat(),
+        "metadata": message.metadata,
+        "session_id": session_id,
+    }
+
+    # Add to session history
+    if hasattr(chat_history_manager, "add_message"):
+        await chat_history_manager.add_message(session_id, user_message_data)
+
+    # Log chat event
+    await log_chat_event(
+        "message_received",
+        session_id,
+        {
+            "message_id": user_message_id,
+            "content_length": len(message.content),
+            "role": message.role,
+        },
+    )
+
+    # Get chat context from history (Redis-backed, efficient retrieval)
+    chat_context = []
+    if hasattr(chat_history_manager, "get_session_messages"):
+        try:
+            # Use model-aware message retrieval for optimal context window usage
+            # Context manager calculates efficient limits based on model capabilities
+            model_name = message.metadata.get("model") if message.metadata else None
+            recent_messages = await chat_history_manager.get_session_messages(
+                session_id, model_name=model_name
+            )
+            chat_context = recent_messages or []
+            logger.info(
+                f"Retrieved {len(chat_context)} messages for model {model_name or 'default'}"
+            )
+        except Exception as e:
+            logger.warning(f"Could not retrieve chat context: {e}")
+
+    # Generate AI response
+    try:
+        # Prepare context for LLM
+        # Use model-aware message limit for optimal context window usage
+        model_name = message.metadata.get("model") if message.metadata else None
+        context_manager = getattr(chat_history_manager, "context_manager", None)
+
+        if context_manager:
+            message_limit = context_manager.get_message_limit(model_name)
+            logger.info(
+                f"Using {message_limit} messages for LLM context (model: {model_name or 'default'})"
+            )
+        else:
+            message_limit = 20  # Fallback default
+            logger.warning("Context manager not available, using default limit")
+
+        llm_context = []
+        for msg in chat_context[-message_limit:]:  # Model-aware message limit
+            llm_context.append(
+                {"role": msg.get("role", "user"), "content": msg.get("content", "")}
+            )
+
+        # Add current message to context
+        llm_context.append({"role": message.role, "content": message.content})
+
+        # Generate response using LLM service
+        if hasattr(llm_service, "generate_response"):
+            ai_response = await llm_service.generate_response(
+                messages=llm_context, session_id=session_id, request_id=request_id
+            )
+        else:
+            # Fallback response
+            ai_response = {
+                "content": "I'm currently unable to generate a response. Please try again.",
+                "role": "assistant",
+            }
+
+    except Exception as e:
+        logger.error(f"LLM generation failed: {e}")
+        ai_response = {
+            "content": "I encountered an error processing your message. Please try again.",
+            "role": "assistant",
+        }
+
+    # Store AI response
+    ai_message_id = generate_message_id()
+    ai_message_data = {
+        "id": ai_message_id,
+        "content": ai_response.get("content", ""),
+        "role": "assistant",
+        "timestamp": datetime.utcnow().isoformat(),
+        "metadata": ai_response.get("metadata", {}),
+        "session_id": session_id,
+    }
+
+    # Add AI response to session history
+    if hasattr(chat_history_manager, "add_message"):
+        await chat_history_manager.add_message(session_id, ai_message_data)
+
+    # Log response event
+    await log_chat_event(
+        "response_generated",
+        session_id,
+        {
+            "message_id": ai_message_id,
+            "content_length": len(ai_response.get("content", "")),
+            "request_id": request_id,
+        },
+    )
+
+    return {
+        "content": ai_response.get("content", ""),
+        "role": "assistant",
+        "session_id": session_id,
+        "message_id": ai_message_id,
+        "timestamp": datetime.utcnow().isoformat(),
+        "metadata": ai_response.get("metadata", {}),
+    }
 
 
 # ====================================================================
@@ -604,35 +589,10 @@ async def list_chats(request: Request):
             details={"component": "chat_history_manager"},
         )
 
-    try:
-        # CRITICAL FIX: Remove await - list_sessions_fast is synchronous
-        sessions = chat_history_manager.list_sessions_fast()
-        return JSONResponse(status_code=200, content=sessions)
-    except AttributeError as e:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise InternalError(
-            "Chat history manager is misconfigured",
-            details={"missing_method": "list_sessions"},
-        )
-    except Exception as e:
-        logger.error(f"Failed to retrieve chat sessions: {e}")
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise InternalError(
-            "Failed to retrieve chat sessions",
-            details={"error": str(e)},
-        )
+    # Get sessions directly - decorator handles all errors
+    # CRITICAL FIX: Remove await - list_sessions_fast is synchronous
+    sessions = chat_history_manager.list_sessions_fast()
+    return JSONResponse(status_code=200, content=sessions)
 
 
 @router.post("/chat")
