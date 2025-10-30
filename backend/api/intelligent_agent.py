@@ -5,15 +5,20 @@ Provides REST and WebSocket endpoints for the intelligent agent system.
 """
 
 import logging
+import time
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.monitoring.prometheus_metrics import get_metrics_manager
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
 logger = logging.getLogger(__name__)
+
+# Prometheus metrics instance
+prometheus_metrics = get_metrics_manager()
 
 # Global agent instance
 _agent_instance = None
@@ -137,10 +142,12 @@ async def process_natural_language_goal(request: GoalRequest):
     This endpoint processes the goal completely and returns the final result.
     For real-time streaming, use the WebSocket endpoint instead.
     """
+    # Task type and agent type for Prometheus metrics
+    task_type = "natural_language_goal"
+    agent_type = "intelligent_agent"
+
     try:
         agent = await get_agent()
-
-        import time
 
         start_time = time.time()
 
@@ -160,6 +167,14 @@ async def process_natural_language_goal(request: GoalRequest):
         execution_time = time.time() - start_time
         result = "\n".join(result_chunks)
 
+        # Record Prometheus task execution metric (success)
+        prometheus_metrics.record_task_execution(
+            task_type=task_type,
+            agent_type=agent_type,
+            status="success",
+            duration=execution_time,
+        )
+
         return GoalResponse(
             success=True,
             result=result,
@@ -169,6 +184,16 @@ async def process_natural_language_goal(request: GoalRequest):
 
     except Exception as e:
         logger.error(f"Error processing goal '{request.goal}': {e}")
+
+        # Record Prometheus task execution metric (failed)
+        duration = time.time() - start_time if "start_time" in locals() else 0
+        prometheus_metrics.record_task_execution(
+            task_type=task_type,
+            agent_type=agent_type,
+            status="failed",
+            duration=duration,
+        )
+
         raise HTTPException(status_code=500, detail=str(e))
 
 
