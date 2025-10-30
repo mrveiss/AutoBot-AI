@@ -1461,92 +1461,89 @@ Command: {command}
 
 
 @router.post("/populate_man_pages")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="populate_man_pages",
+    error_code_prefix="KNOWLEDGE",
+)
 async def populate_man_pages(
     request: dict, req: Request, background_tasks: BackgroundTasks
 ):
     """Populate knowledge base with common manual pages (runs in background)"""
-    try:
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb_to_use is None:
-            return {
-                "status": "error",
-                "message": "Knowledge base not initialized - please check logs for errors",
-                "items_added": 0,
-            }
-
-        # Start background task
-        background_tasks.add_task(_populate_man_pages_background, kb_to_use)
-
+    if kb_to_use is None:
         return {
-            "status": "success",
-            "message": "Man pages population started in background",
-            "items_added": 0,  # Will be updated as background task runs
-            "background": True,
+            "status": "error",
+            "message": "Knowledge base not initialized - please check logs for errors",
+            "items_added": 0,
         }
 
-    except Exception as e:
-        logger.error(f"Error starting man pages population: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start man pages population: {str(e)}"
-        )
+    # Start background task
+    background_tasks.add_task(_populate_man_pages_background, kb_to_use)
+
+    return {
+        "status": "success",
+        "message": "Man pages population started in background",
+        "items_added": 0,  # Will be updated as background task runs
+        "background": True,
+    }
 
 
 @router.post("/refresh_system_knowledge")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="refresh_system_knowledge",
+    error_code_prefix="KNOWLEDGE",
+)
 async def refresh_system_knowledge(request: dict, req: Request):
     """
     Refresh ALL system knowledge (man pages + AutoBot docs)
     Use this after system updates, package installations, or documentation changes
     """
-    try:
-        logger.info("Starting comprehensive system knowledge refresh...")
+    logger.info("Starting comprehensive system knowledge refresh...")
 
-        # Run the comprehensive indexing script
+    # Run the comprehensive indexing script
+    try:
         result = subprocess.run(
             [sys.executable, "scripts/utilities/index_all_man_pages.py"],
             capture_output=True,
             text=True,
             timeout=600,  # 10 minute timeout for comprehensive indexing
         )
-
-        if result.returncode == 0:
-            # Parse output for statistics
-            output_lines = result.stdout.split("\n")
-            indexed_count = 0
-            total_facts = 0
-
-            for line in output_lines:
-                if "Successfully indexed:" in line:
-                    indexed_count = int(line.split(":")[1].strip())
-                elif "Total facts in KB:" in line:
-                    total_facts = int(line.split(":")[1].strip())
-
-            logger.info(
-                f"System knowledge refresh complete: {indexed_count} commands indexed"
-            )
-
-            return {
-                "status": "success",
-                "message": f"System knowledge refreshed successfully",
-                "commands_indexed": indexed_count,
-                "total_facts": total_facts,
-            }
-        else:
-            logger.error(f"System knowledge refresh failed: {result.stderr}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Knowledge refresh failed: {result.stderr[:500]}",
-            )
-
     except subprocess.TimeoutExpired:
         logger.error("System knowledge refresh timed out")
         raise HTTPException(
             status_code=504, detail="Knowledge refresh timed out (>10 minutes)"
         )
-    except Exception as e:
-        logger.error(f"Error refreshing system knowledge: {str(e)}")
+
+    if result.returncode == 0:
+        # Parse output for statistics
+        output_lines = result.stdout.split("\n")
+        indexed_count = 0
+        total_facts = 0
+
+        for line in output_lines:
+            if "Successfully indexed:" in line:
+                indexed_count = int(line.split(":")[1].strip())
+            elif "Total facts in KB:" in line:
+                total_facts = int(line.split(":")[1].strip())
+
+        logger.info(
+            f"System knowledge refresh complete: {indexed_count} commands indexed"
+        )
+
+        return {
+            "status": "success",
+            "message": f"System knowledge refreshed successfully",
+            "commands_indexed": indexed_count,
+            "total_facts": total_facts,
+        }
+    else:
+        logger.error(f"System knowledge refresh failed: {result.stderr}")
         raise HTTPException(
-            status_code=500, detail=f"Knowledge refresh failed: {str(e)}"
+            status_code=500,
+            detail=f"Knowledge refresh failed: {result.stderr[:500]}",
         )
 
 
