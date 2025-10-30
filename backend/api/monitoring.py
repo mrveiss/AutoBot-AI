@@ -266,161 +266,157 @@ async def stop_monitoring_endpoint():
 
 
 @router.get("/dashboard")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_performance_dashboard",
+    error_code_prefix="MONITORING",
+)
 async def get_performance_dashboard():
     """Get comprehensive performance dashboard"""
-    try:
-        dashboard = get_phase9_performance_dashboard()
+    dashboard = get_phase9_performance_dashboard()
 
-        # Add additional analysis
-        dashboard["analysis"] = {
-            "overall_health": _calculate_overall_health(dashboard),
-            "performance_score": _calculate_performance_score(dashboard),
-            "bottlenecks": _identify_bottlenecks(dashboard),
-            "resource_utilization": _analyze_resource_utilization(dashboard),
-        }
+    # Add additional analysis
+    dashboard["analysis"] = {
+        "overall_health": _calculate_overall_health(dashboard),
+        "performance_score": _calculate_performance_score(dashboard),
+        "bottlenecks": _identify_bottlenecks(dashboard),
+        "resource_utilization": _analyze_resource_utilization(dashboard),
+    }
 
-        return dashboard
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get performance dashboard: {str(e)}"
-        )
+    return dashboard
 
 
 @router.get("/dashboard/overview")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dashboard_overview",
+    error_code_prefix="MONITORING",
+)
 async def get_dashboard_overview():
     """Get dashboard overview data for frontend"""
-    try:
-        dashboard = get_phase9_performance_dashboard()
+    dashboard = get_phase9_performance_dashboard()
 
-        # Add additional analysis
-        dashboard["analysis"] = {
-            "overall_health": _calculate_overall_health(dashboard),
-            "performance_score": _calculate_performance_score(dashboard),
-            "bottlenecks": _identify_bottlenecks(dashboard),
-            "resource_utilization": _analyze_resource_utilization(dashboard),
-        }
+    # Add additional analysis
+    dashboard["analysis"] = {
+        "overall_health": _calculate_overall_health(dashboard),
+        "performance_score": _calculate_performance_score(dashboard),
+        "bottlenecks": _identify_bottlenecks(dashboard),
+        "resource_utilization": _analyze_resource_utilization(dashboard),
+    }
 
-        return dashboard
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get dashboard overview: {str(e)}"
-        )
+    return dashboard
 
 
 @router.get("/metrics/current")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_current_metrics",
+    error_code_prefix="MONITORING",
+)
 async def get_current_metrics():
     """Get current performance metrics snapshot"""
-    try:
-        metrics = await collect_phase9_metrics()
-        return {
-            "timestamp": time.time(),
-            "metrics": metrics,
-            "collection_successful": metrics.get("collection_successful", False),
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to collect current metrics: {str(e)}"
-        )
+    metrics = await collect_phase9_metrics()
+    return {
+        "timestamp": time.time(),
+        "metrics": metrics,
+        "collection_successful": metrics.get("collection_successful", False),
+    }
 
 
 @router.post("/metrics/query")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="query_metrics",
+    error_code_prefix="MONITORING",
+)
 async def query_metrics(query: MetricsQuery):
     """Query historical performance metrics with filters"""
-    try:
-        result = {
-            "query": query.dict(),
-            "timestamp": time.time(),
-            "metrics": {},
-            "trends": {},
-            "alerts": [],
-        }
+    result = {
+        "query": query.dict(),
+        "timestamp": time.time(),
+        "metrics": {},
+        "trends": {},
+        "alerts": [],
+    }
 
-        # Calculate time range
-        end_time = time.time()
-        start_time = end_time - (query.time_range_minutes * 60)
+    # Calculate time range
+    end_time = time.time()
+    start_time = end_time - (query.time_range_minutes * 60)
 
-        # Filter metrics by time range and categories
-        categories = query.categories or [
-            "gpu",
-            "npu",
-            "multimodal",
-            "system",
-            "services",
-        ]
+    # Filter metrics by time range and categories
+    categories = query.categories or [
+        "gpu",
+        "npu",
+        "multimodal",
+        "system",
+        "services",
+    ]
 
-        for category in categories:
-            if category == "gpu" and phase9_monitor.gpu_metrics_buffer:
-                filtered_metrics = [
-                    m
-                    for m in phase9_monitor.gpu_metrics_buffer
-                    if start_time <= m.timestamp <= end_time
-                ]
-                result["metrics"]["gpu"] = [
-                    {
-                        "timestamp": m.timestamp,
-                        "utilization_percent": m.utilization_percent,
-                        "memory_utilization_percent": m.memory_utilization_percent,
-                        "temperature_celsius": m.temperature_celsius,
-                        "power_draw_watts": m.power_draw_watts,
-                    }
-                    for m in filtered_metrics
-                ]
-
-            elif category == "npu" and phase9_monitor.npu_metrics_buffer:
-                filtered_metrics = [
-                    m
-                    for m in phase9_monitor.npu_metrics_buffer
-                    if start_time <= m.timestamp <= end_time
-                ]
-                result["metrics"]["npu"] = [
-                    {
-                        "timestamp": m.timestamp,
-                        "utilization_percent": m.utilization_percent,
-                        "acceleration_ratio": m.acceleration_ratio,
-                        "inference_count": m.inference_count,
-                        "average_inference_time_ms": m.average_inference_time_ms,
-                    }
-                    for m in filtered_metrics
-                ]
-
-            elif category == "system" and phase9_monitor.system_metrics_buffer:
-                filtered_metrics = [
-                    m
-                    for m in phase9_monitor.system_metrics_buffer
-                    if start_time <= m.timestamp <= end_time
-                ]
-                result["metrics"]["system"] = [
-                    {
-                        "timestamp": m.timestamp,
-                        "cpu_usage_percent": m.cpu_usage_percent,
-                        "memory_usage_percent": m.memory_usage_percent,
-                        "cpu_load_1m": m.cpu_load_1m,
-                        "network_latency_ms": m.network_latency_ms,
-                    }
-                    for m in filtered_metrics
-                ]
-
-        # Include trends if requested
-        if query.include_trends:
-            result["trends"] = phase9_monitor._calculate_performance_trends()
-
-        # Include recent alerts if requested
-        if query.include_alerts:
-            result["alerts"] = [
-                alert
-                for alert in phase9_monitor.performance_alerts
-                if start_time <= alert.get("timestamp", 0) <= end_time
+    for category in categories:
+        if category == "gpu" and phase9_monitor.gpu_metrics_buffer:
+            filtered_metrics = [
+                m
+                for m in phase9_monitor.gpu_metrics_buffer
+                if start_time <= m.timestamp <= end_time
+            ]
+            result["metrics"]["gpu"] = [
+                {
+                    "timestamp": m.timestamp,
+                    "utilization_percent": m.utilization_percent,
+                    "memory_utilization_percent": m.memory_utilization_percent,
+                    "temperature_celsius": m.temperature_celsius,
+                    "power_draw_watts": m.power_draw_watts,
+                }
+                for m in filtered_metrics
             ]
 
-        return result
+        elif category == "npu" and phase9_monitor.npu_metrics_buffer:
+            filtered_metrics = [
+                m
+                for m in phase9_monitor.npu_metrics_buffer
+                if start_time <= m.timestamp <= end_time
+            ]
+            result["metrics"]["npu"] = [
+                {
+                    "timestamp": m.timestamp,
+                    "utilization_percent": m.utilization_percent,
+                    "acceleration_ratio": m.acceleration_ratio,
+                    "inference_count": m.inference_count,
+                    "average_inference_time_ms": m.average_inference_time_ms,
+                }
+                for m in filtered_metrics
+            ]
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to query metrics: {str(e)}"
-        )
+        elif category == "system" and phase9_monitor.system_metrics_buffer:
+            filtered_metrics = [
+                m
+                for m in phase9_monitor.system_metrics_buffer
+                if start_time <= m.timestamp <= end_time
+            ]
+            result["metrics"]["system"] = [
+                {
+                    "timestamp": m.timestamp,
+                    "cpu_usage_percent": m.cpu_usage_percent,
+                    "memory_usage_percent": m.memory_usage_percent,
+                    "cpu_load_1m": m.cpu_load_1m,
+                    "network_latency_ms": m.network_latency_ms,
+                }
+                for m in filtered_metrics
+            ]
+
+    # Include trends if requested
+    if query.include_trends:
+        result["trends"] = phase9_monitor._calculate_performance_trends()
+
+    # Include recent alerts if requested
+    if query.include_alerts:
+        result["alerts"] = [
+            alert
+            for alert in phase9_monitor.performance_alerts
+            if start_time <= alert.get("timestamp", 0) <= end_time
+        ]
+
+    return result
 
 
 @router.get(
@@ -1203,6 +1199,7 @@ async def metrics_health_check():
             "endpoint": "/api/monitoring/metrics",
             "format": "Prometheus text format",
             "metric_categories": [
+                # Redis & Performance Metrics
                 "autobot_timeout_total",
                 "autobot_operation_duration_seconds",
                 "autobot_timeout_rate",
@@ -1213,6 +1210,25 @@ async def metrics_health_check():
                 "autobot_circuit_breaker_failure_count",
                 "autobot_redis_requests_total",
                 "autobot_redis_success_rate",
+                # Workflow Metrics
+                "autobot_workflow_executions_total",
+                "autobot_workflow_duration_seconds",
+                "autobot_workflow_steps_executed_total",
+                "autobot_active_workflows",
+                "autobot_workflow_approvals_total",
+                # GitHub Integration Metrics
+                "autobot_github_operations_total",
+                "autobot_github_api_duration_seconds",
+                "autobot_github_rate_limit_remaining",
+                "autobot_github_commits_total",
+                "autobot_github_pull_requests_total",
+                "autobot_github_issues_total",
+                # Task Execution Metrics
+                "autobot_tasks_executed_total",
+                "autobot_task_duration_seconds",
+                "autobot_active_tasks",
+                "autobot_task_queue_size",
+                "autobot_task_retries_total",
             ],
         }
     except Exception as e:

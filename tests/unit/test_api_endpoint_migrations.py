@@ -10146,5 +10146,232 @@ class TestBatch59MonitoringMigrations(unittest.TestCase):
         self.assertIn('error_code_prefix="MONITORING"', source)
 
 
+class TestBatch60MonitoringMigrations(unittest.TestCase):
+    """Test batch 60 migrations: monitoring.py next 4 endpoints (dashboard/metrics)"""
+
+    def test_get_performance_dashboard_decorator_present(self):
+        """Test get_performance_dashboard has @with_error_handling decorator"""
+        from backend.api.monitoring import get_performance_dashboard
+
+        source = inspect.getsource(get_performance_dashboard)
+
+        # Decorator should be present
+        self.assertIn("@with_error_handling", source)
+        # Category should be SERVER_ERROR
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        # Prefix should be MONITORING
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_get_performance_dashboard_no_try_catch(self):
+        """Test get_performance_dashboard has no redundant try-catch blocks"""
+        from backend.api.monitoring import get_performance_dashboard
+
+        source = inspect.getsource(get_performance_dashboard)
+
+        # Count try blocks - should be 0 (all redundant ones removed)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"Expected 0 try blocks in get_performance_dashboard, found {try_count}",
+        )
+
+    def test_get_performance_dashboard_business_logic_preserved(self):
+        """Test get_performance_dashboard business logic is preserved"""
+        from backend.api.monitoring import get_performance_dashboard
+
+        source = inspect.getsource(get_performance_dashboard)
+
+        # Key business logic should be preserved
+        self.assertIn("get_phase9_performance_dashboard()", source)
+        self.assertIn('"analysis"', source)
+        self.assertIn("_calculate_overall_health", source)
+        self.assertIn("_calculate_performance_score", source)
+        self.assertIn("_identify_bottlenecks", source)
+        self.assertIn("_analyze_resource_utilization", source)
+
+    def test_get_dashboard_overview_decorator_present(self):
+        """Test get_dashboard_overview has @with_error_handling decorator"""
+        from backend.api.monitoring import get_dashboard_overview
+
+        source = inspect.getsource(get_dashboard_overview)
+
+        # Decorator should be present
+        self.assertIn("@with_error_handling", source)
+        # Category should be SERVER_ERROR
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        # Prefix should be MONITORING
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_get_dashboard_overview_no_try_catch(self):
+        """Test get_dashboard_overview has no redundant try-catch blocks"""
+        from backend.api.monitoring import get_dashboard_overview
+
+        source = inspect.getsource(get_dashboard_overview)
+
+        # Count try blocks - should be 0 (all redundant ones removed)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"Expected 0 try blocks in get_dashboard_overview, found {try_count}",
+        )
+
+    def test_get_dashboard_overview_business_logic_preserved(self):
+        """Test get_dashboard_overview business logic is preserved"""
+        from backend.api.monitoring import get_dashboard_overview
+
+        source = inspect.getsource(get_dashboard_overview)
+
+        # Key business logic should be preserved (same as get_performance_dashboard)
+        self.assertIn("get_phase9_performance_dashboard()", source)
+        self.assertIn('"analysis"', source)
+        self.assertIn("_calculate_overall_health", source)
+        self.assertIn("_calculate_performance_score", source)
+
+    def test_get_current_metrics_decorator_present(self):
+        """Test get_current_metrics has @with_error_handling decorator"""
+        from backend.api.monitoring import get_current_metrics
+
+        source = inspect.getsource(get_current_metrics)
+
+        # Decorator should be present
+        self.assertIn("@with_error_handling", source)
+        # Category should be SERVER_ERROR
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        # Prefix should be MONITORING
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_get_current_metrics_no_try_catch(self):
+        """Test get_current_metrics has no redundant try-catch blocks"""
+        from backend.api.monitoring import get_current_metrics
+
+        source = inspect.getsource(get_current_metrics)
+
+        # Count try blocks - should be 0 (all redundant ones removed)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"Expected 0 try blocks in get_current_metrics, found {try_count}",
+        )
+
+    def test_get_current_metrics_business_logic_preserved(self):
+        """Test get_current_metrics business logic is preserved"""
+        from backend.api.monitoring import get_current_metrics
+
+        source = inspect.getsource(get_current_metrics)
+
+        # Key business logic should be preserved
+        self.assertIn("await collect_phase9_metrics()", source)
+        self.assertIn('"timestamp"', source)
+        self.assertIn('"metrics"', source)
+        self.assertIn('"collection_successful"', source)
+
+    def test_query_metrics_decorator_present(self):
+        """Test query_metrics has @with_error_handling decorator"""
+        from backend.api.monitoring import query_metrics
+
+        source = inspect.getsource(query_metrics)
+
+        # Decorator should be present
+        self.assertIn("@with_error_handling", source)
+        # Category should be SERVER_ERROR
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        # Prefix should be MONITORING
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_query_metrics_no_try_catch(self):
+        """Test query_metrics has no redundant try-catch blocks"""
+        from backend.api.monitoring import query_metrics
+
+        source = inspect.getsource(query_metrics)
+
+        # Count try blocks - should be 0 (all redundant ones removed)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, f"Expected 0 try blocks in query_metrics, found {try_count}"
+        )
+
+    def test_query_metrics_business_logic_preserved(self):
+        """Test query_metrics business logic is preserved"""
+        from backend.api.monitoring import query_metrics
+
+        source = inspect.getsource(query_metrics)
+
+        # Key business logic should be preserved
+        self.assertIn("query.dict()", source)
+        self.assertIn("query.time_range_minutes", source)
+        self.assertIn("phase9_monitor.gpu_metrics_buffer", source)
+        self.assertIn("phase9_monitor.npu_metrics_buffer", source)
+        self.assertIn("phase9_monitor.system_metrics_buffer", source)
+        self.assertIn("query.include_trends", source)
+        self.assertIn("query.include_alerts", source)
+
+    def test_batch60_decorator_configuration(self):
+        """Verify all batch 60 endpoints have correct decorator configuration"""
+        from backend.api.monitoring import (
+            get_current_metrics,
+            get_dashboard_overview,
+            get_performance_dashboard,
+            query_metrics,
+        )
+
+        endpoints = [
+            get_performance_dashboard,
+            get_dashboard_overview,
+            get_current_metrics,
+            query_metrics,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+
+            # All should have @with_error_handling decorator
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} missing decorator",
+            )
+
+            # All should use SERVER_ERROR category
+            self.assertIn(
+                "ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} not using SERVER_ERROR",
+            )
+
+            # All should use MONITORING prefix
+            self.assertIn(
+                'error_code_prefix="MONITORING"',
+                source,
+                f"{endpoint.__name__} not using MONITORING prefix",
+            )
+
+    def test_batch60_consistent_error_category(self):
+        """Verify consistent error category and prefix for Batch 60"""
+        from backend.api.monitoring import (
+            get_current_metrics,
+            get_dashboard_overview,
+            get_performance_dashboard,
+            query_metrics,
+        )
+
+        endpoints = [
+            get_performance_dashboard,
+            get_dashboard_overview,
+            get_current_metrics,
+            query_metrics,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+
+            # All batch 60 endpoints should use SERVER_ERROR
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use MONITORING prefix
+            self.assertIn('error_code_prefix="MONITORING"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
