@@ -9479,5 +9479,152 @@ class TestBatch55TerminalMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="TERMINAL"', source)
 
 
+class TestBatch56TerminalMigrations(unittest.TestCase):
+    """Test batch 56 migrations: terminal.py GET /audit/{id} + POST /terminal/install-tool"""
+
+    def test_get_session_audit_log_decorator_present(self):
+        """Test get_session_audit_log has @with_error_handling decorator"""
+        import inspect
+
+        from backend.api.terminal import get_session_audit_log
+
+        source = inspect.getsource(get_session_audit_log)
+        # Should have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_get_session_audit_log_no_try_catch(self):
+        """Test get_session_audit_log try-catch completely removed"""
+        import inspect
+
+        from backend.api.terminal import get_session_audit_log
+
+        source = inspect.getsource(get_session_audit_log)
+        lines = source.split("\n")
+
+        # Should NOT have any try-catch blocks (Simple Pattern)
+        try_count = 0
+        for line in lines:
+            if line.strip().startswith("try:"):
+                try_count += 1
+
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
+
+    def test_get_session_audit_log_business_logic_preserved(self):
+        """Test get_session_audit_log business logic preserved"""
+        import inspect
+
+        from backend.api.terminal import get_session_audit_log
+
+        source = inspect.getsource(get_session_audit_log)
+
+        # Core business logic should be preserved
+        self.assertIn("config = session_manager.session_configs.get(session_id)", source)
+        self.assertIn("if not config:", source)
+        self.assertIn(
+            'raise HTTPException(status_code=404, detail="Session not found")', source
+        )
+        self.assertIn('"session_id": session_id', source)
+        self.assertIn('config.get("enable_logging", False)', source)
+        self.assertIn('config.get("security_level")', source)
+        self.assertIn(
+            '"message": "Audit log access requires elevated permissions"', source
+        )
+
+    def test_get_session_audit_log_decorator_configuration(self):
+        """Test get_session_audit_log decorator has correct configuration"""
+        import inspect
+
+        from backend.api.terminal import get_session_audit_log
+
+        source = inspect.getsource(get_session_audit_log)
+
+        # Verify decorator configuration
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_session_audit_log"', source)
+        self.assertIn('error_code_prefix="TERMINAL"', source)
+
+    def test_install_tool_decorator_present(self):
+        """Test install_tool has @with_error_handling decorator"""
+        import inspect
+
+        from backend.api.terminal import install_tool
+
+        source = inspect.getsource(install_tool)
+        # Should have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_install_tool_no_try_catch(self):
+        """Test install_tool try-catch completely removed"""
+        import inspect
+
+        from backend.api.terminal import install_tool
+
+        source = inspect.getsource(install_tool)
+        lines = source.split("\n")
+
+        # Should NOT have any try-catch blocks (Simple Pattern)
+        try_count = 0
+        for line in lines:
+            if line.strip().startswith("try:"):
+                try_count += 1
+
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
+
+    def test_install_tool_business_logic_preserved(self):
+        """Test install_tool business logic preserved"""
+        import inspect
+
+        from backend.api.terminal import install_tool
+
+        source = inspect.getsource(install_tool)
+
+        # Core business logic should be preserved
+        self.assertIn("from src.agents.system_command_agent import SystemCommandAgent", source)
+        self.assertIn("system_command_agent = SystemCommandAgent()", source)
+        self.assertIn("tool_info = {", source)
+        self.assertIn('"name": request.tool_name', source)
+        self.assertIn('"package_name": request.package_name or request.tool_name', source)
+        self.assertIn('"install_method": request.install_method', source)
+        self.assertIn('"custom_command": request.custom_command', source)
+        self.assertIn('"update_first": request.update_first', source)
+        self.assertIn(
+            'result = await system_command_agent.install_tool(tool_info, "default")',
+            source,
+        )
+        self.assertIn("return result", source)
+
+    def test_install_tool_decorator_configuration(self):
+        """Test install_tool decorator has correct configuration"""
+        import inspect
+
+        from backend.api.terminal import install_tool
+
+        source = inspect.getsource(install_tool)
+
+        # Verify decorator configuration
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="install_tool"', source)
+        self.assertIn('error_code_prefix="TERMINAL"', source)
+
+    def test_batch56_consistent_error_category(self):
+        """Verify consistent error category across Batch 56"""
+        import inspect
+
+        from backend.api.terminal import get_session_audit_log, install_tool
+
+        endpoints = [get_session_audit_log, install_tool]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use TERMINAL prefix
+            self.assertIn('error_code_prefix="TERMINAL"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
