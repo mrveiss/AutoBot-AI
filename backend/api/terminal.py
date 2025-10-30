@@ -22,9 +22,9 @@ from typing import Dict, Optional
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from src.chat_history_manager import ChatHistoryManager
 from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
-from src.chat_history_manager import ChatHistoryManager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -309,9 +309,15 @@ class ConsolidatedTerminalWebSocket:
         self.active = False
 
         # CRITICAL FIX: Flush any remaining buffered output to chat before cleanup
-        if self.chat_history_manager and self.conversation_id and self._output_buffer.strip():
+        if (
+            self.chat_history_manager
+            and self.conversation_id
+            and self._output_buffer.strip()
+        ):
             try:
-                logger.info(f"[CHAT INTEGRATION] Flushing remaining output buffer on cleanup: {len(self._output_buffer)} chars")
+                logger.info(
+                    f"[CHAT INTEGRATION] Flushing remaining output buffer on cleanup: {len(self._output_buffer)} chars"
+                )
                 await self.chat_history_manager.add_message(
                     sender="terminal",
                     text=self._output_buffer,
@@ -406,18 +412,19 @@ class ConsolidatedTerminalWebSocket:
 
         # CRITICAL FIX: Only log complete commands (when Enter is pressed)
         # Terminal sends character-by-character, we only want to log on Enter
-        is_command_complete = '\r' in text or '\n' in text
+        is_command_complete = "\r" in text or "\n" in text
 
         # Build command buffer for this session
-        if not hasattr(self, '_command_buffer'):
+        if not hasattr(self, "_command_buffer"):
             self._command_buffer = ""
 
         # CRITICAL: Log ALL input to transcript (character-by-character for complete record)
         if self.terminal_logger and self.conversation_id:
             try:
                 transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
-                import aiofiles
                 from pathlib import Path
+
+                import aiofiles
 
                 transcript_path = Path("data/chats") / transcript_file
                 async with aiofiles.open(transcript_path, "a") as f:
@@ -427,7 +434,9 @@ class ConsolidatedTerminalWebSocket:
 
         if is_command_complete:
             # Extract command before the newline
-            command = (self._command_buffer + text).split('\r')[0].split('\n')[0].strip()
+            command = (
+                (self._command_buffer + text).split("\r")[0].split("\n")[0].strip()
+            )
             self._command_buffer = ""  # Reset buffer
 
             # Only log non-empty commands
@@ -435,7 +444,9 @@ class ConsolidatedTerminalWebSocket:
                 await self.send_to_terminal(text)
                 return
 
-            logger.info(f"[COMPLETE COMMAND] Session {self.session_id}: {repr(command)}")
+            logger.info(
+                f"[COMPLETE COMMAND] Session {self.session_id}: {repr(command)}"
+            )
         else:
             # Accumulate characters until Enter is pressed
             self._command_buffer += text
@@ -489,7 +500,9 @@ class ConsolidatedTerminalWebSocket:
         # Use sender="terminal" instead of "user" to prevent triggering AI responses
         if self.chat_history_manager and self.conversation_id:
             try:
-                logger.info(f"[CHAT INTEGRATION] Saving command to chat: {command[:50]}")
+                logger.info(
+                    f"[CHAT INTEGRATION] Saving command to chat: {command[:50]}"
+                )
                 await self.chat_history_manager.add_message(
                     sender="terminal",
                     text=f"$ {command}",
@@ -600,6 +613,7 @@ class ConsolidatedTerminalWebSocket:
         try:
             # Map signal names to signal numbers
             import signal
+
             signal_map = {
                 "SIGINT": signal.SIGINT,
                 "SIGTERM": signal.SIGTERM,
@@ -610,11 +624,13 @@ class ConsolidatedTerminalWebSocket:
             sig = signal_map.get(signal_name)
             if not sig:
                 logger.warning(f"Unknown signal: {signal_name}")
-                await self.send_message({
-                    "type": "error",
-                    "content": f"Unknown signal: {signal_name}",
-                    "timestamp": time.time(),
-                })
+                await self.send_message(
+                    {
+                        "type": "error",
+                        "content": f"Unknown signal: {signal_name}",
+                        "timestamp": time.time(),
+                    }
+                )
                 return
 
             # Send signal to PTY process
@@ -622,25 +638,31 @@ class ConsolidatedTerminalWebSocket:
                 success = self.pty_process.send_signal(sig)
                 if success:
                     logger.info(f"Sent {signal_name} to PTY process")
-                    await self.send_message({
-                        "type": "signal_sent",
-                        "signal": signal_name,
-                        "timestamp": time.time(),
-                    })
+                    await self.send_message(
+                        {
+                            "type": "signal_sent",
+                            "signal": signal_name,
+                            "timestamp": time.time(),
+                        }
+                    )
                 else:
                     logger.error(f"Failed to send {signal_name}")
-                    await self.send_message({
-                        "type": "error",
-                        "content": f"Failed to send signal: {signal_name}",
-                        "timestamp": time.time(),
-                    })
+                    await self.send_message(
+                        {
+                            "type": "error",
+                            "content": f"Failed to send signal: {signal_name}",
+                            "timestamp": time.time(),
+                        }
+                    )
             else:
                 logger.warning("No PTY process to send signal to")
-                await self.send_message({
-                    "type": "error",
-                    "content": "No active process to interrupt",
-                    "timestamp": time.time(),
-                })
+                await self.send_message(
+                    {
+                        "type": "error",
+                        "content": "No active process to interrupt",
+                        "timestamp": time.time(),
+                    }
+                )
 
             if self.enable_logging:
                 self._log_command_activity(
@@ -654,11 +676,13 @@ class ConsolidatedTerminalWebSocket:
 
         except Exception as e:
             logger.error(f"Error sending signal: {e}")
-            await self.send_message({
-                "type": "error",
-                "content": f"Error sending signal: {str(e)}",
-                "timestamp": time.time(),
-            })
+            await self.send_message(
+                {
+                    "type": "error",
+                    "content": f"Error sending signal: {str(e)}",
+                    "timestamp": time.time(),
+                }
+            )
 
     def _assess_command_risk(self, command: str) -> CommandRiskLevel:
         """Assess the security risk level of a command"""
@@ -729,8 +753,9 @@ class ConsolidatedTerminalWebSocket:
             try:
                 # Write raw output to transcript file
                 transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
-                import aiofiles
                 from pathlib import Path
+
+                import aiofiles
 
                 transcript_path = Path("data/chats") / transcript_file
                 async with aiofiles.open(transcript_path, "a") as f:
@@ -753,13 +778,15 @@ class ConsolidatedTerminalWebSocket:
                 should_save = (
                     len(self._output_buffer) > 500
                     or (current_time - self._last_output_save_time) > 2.0
-                    or '\n' in content
+                    or "\n" in content
                 )
 
                 if should_save and self._output_buffer.strip():
                     try:
                         buffer_to_save = self._output_buffer
-                        logger.info(f"[CHAT INTEGRATION] Saving output to chat: {len(buffer_to_save)} chars")
+                        logger.info(
+                            f"[CHAT INTEGRATION] Saving output to chat: {len(buffer_to_save)} chars"
+                        )
                         await self.chat_history_manager.add_message(
                             sender="terminal",
                             text=buffer_to_save,
@@ -830,7 +857,9 @@ class ConsolidatedTerminalManager:
                 try:
                     success = terminal.pty_process.send_signal(sig)
                     if success:
-                        logger.info(f"Sent signal {sig} to terminal session {session_id}")
+                        logger.info(
+                            f"Sent signal {sig} to terminal session {session_id}"
+                        )
                     return success
                 except Exception as e:
                     logger.error(f"Failed to send signal to session {session_id}: {e}")
@@ -862,7 +891,9 @@ class ConsolidatedTerminalManager:
             ]
         return []
 
-    async def send_output_to_conversation(self, conversation_id: str, content: str) -> int:
+    async def send_output_to_conversation(
+        self, conversation_id: str, content: str
+    ) -> int:
         """
         Send output to all terminal WebSockets linked to a conversation.
 
@@ -886,7 +917,9 @@ class ConsolidatedTerminalManager:
                         count += 1
                         logger.debug(f"Sent output to terminal {session_id}")
                     except Exception as e:
-                        logger.error(f"Failed to send output to terminal {session_id}: {e}")
+                        logger.error(
+                            f"Failed to send output to terminal {session_id}: {e}"
+                        )
         return count
 
 

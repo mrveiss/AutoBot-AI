@@ -14,12 +14,13 @@ Verifies:
 - HTTP status codes correct
 """
 
+import inspect
+import time
+import unittest
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import Mock, AsyncMock, patch
-import time
-import inspect
-import unittest
 
 
 class TestChatHealthEndpoint:
@@ -28,8 +29,9 @@ class TestChatHealthEndpoint:
     @pytest.mark.asyncio
     async def test_health_check_returns_degraded_when_service_unavailable(self):
         """Test health check returns HTTP 503 when services degraded"""
-        from backend.api.chat import chat_health_check
         from fastapi import Request
+
+        from backend.api.chat import chat_health_check
 
         # Mock request with unavailable llm_service
         mock_request = Mock(spec=Request)
@@ -48,8 +50,9 @@ class TestChatHealthEndpoint:
     @pytest.mark.asyncio
     async def test_health_check_returns_healthy_when_all_services_available(self):
         """Test health check returns HTTP 200 when all services healthy"""
-        from backend.api.chat import chat_health_check
         from fastapi import Request
+
+        from backend.api.chat import chat_health_check
 
         # Mock request with all services available
         mock_request = Mock(spec=Request)
@@ -77,14 +80,17 @@ class TestChatStatsEndpoint:
         from backend.api.chat import chat_statistics
 
         # Check if decorator is applied (function should be wrapped)
-        assert hasattr(chat_statistics, "__wrapped__") or hasattr(chat_statistics, "__name__")
+        assert hasattr(chat_statistics, "__wrapped__") or hasattr(
+            chat_statistics, "__name__"
+        )
         assert chat_statistics.__name__ == "chat_statistics"
 
     @pytest.mark.asyncio
     async def test_stats_endpoint_error_handling(self):
         """Test that stats endpoint decorator handles errors properly"""
+        from fastapi import HTTPException, Request
+
         from backend.api.chat import chat_statistics
-        from fastapi import Request, HTTPException
 
         # Mock request that will cause exception
         mock_request = Mock(spec=Request)
@@ -92,7 +98,7 @@ class TestChatStatsEndpoint:
         mock_request.app.state = Mock()
 
         # Make get_chat_history_manager raise exception
-        with patch('backend.api.chat.get_chat_history_manager') as mock_get_manager:
+        with patch("backend.api.chat.get_chat_history_manager") as mock_get_manager:
             mock_get_manager.side_effect = RuntimeError("Database connection failed")
 
             # Should raise HTTPException
@@ -110,9 +116,10 @@ class TestChatMessageEndpoint:
     @pytest.mark.asyncio
     async def test_message_endpoint_validates_empty_content(self):
         """Test that message endpoint still validates empty content"""
-        from backend.api.chat import send_message
         from fastapi import Request
         from pydantic import BaseModel
+
+        from backend.api.chat import send_message
 
         # Create ChatMessage mock
         class ChatMessage(BaseModel):
@@ -136,14 +143,15 @@ class TestKnowledgeHealthEndpoint:
     @pytest.mark.asyncio
     async def test_knowledge_health_returns_unhealthy_when_kb_none(self):
         """Test health check returns unhealthy when KB not initialized"""
-        from backend.api.knowledge import get_knowledge_health
         from fastapi import Request
+
+        from backend.api.knowledge import get_knowledge_health
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
 
         # Mock get_or_create_knowledge_base to return None
-        with patch('backend.api.knowledge.get_or_create_knowledge_base') as mock_get_kb:
+        with patch("backend.api.knowledge.get_or_create_knowledge_base") as mock_get_kb:
             mock_get_kb.return_value = None
 
             response = await get_knowledge_health(mock_request)
@@ -159,15 +167,16 @@ class TestKnowledgeSearchEndpoint:
     @pytest.mark.asyncio
     async def test_search_returns_empty_when_kb_none(self):
         """Test search returns empty results when KB not initialized"""
-        from backend.api.knowledge import search_knowledge
         from fastapi import Request
+
+        from backend.api.knowledge import search_knowledge
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
         search_request = {"query": "test"}
 
         # Mock get_or_create_knowledge_base to return None
-        with patch('backend.api.knowledge.get_or_create_knowledge_base') as mock_get_kb:
+        with patch("backend.api.knowledge.get_or_create_knowledge_base") as mock_get_kb:
             mock_get_kb.return_value = None
 
             response = await search_knowledge(search_request, mock_request)
@@ -272,8 +281,9 @@ class TestTraceIDGeneration:
 
     def test_trace_id_format(self):
         """Test trace ID format: {operation}_{timestamp}"""
-        from src.utils.error_boundaries import APIErrorResponse, ErrorCategory
         import re
+
+        from src.utils.error_boundaries import APIErrorResponse, ErrorCategory
 
         error = APIErrorResponse(
             category=ErrorCategory.SERVER_ERROR,
@@ -304,9 +314,10 @@ class TestChatStreamEndpoint:
     @pytest.mark.asyncio
     async def test_stream_endpoint_validates_empty_content(self):
         """Test that stream endpoint validates empty message content"""
-        from backend.api.chat import stream_message
         from fastapi import Request
         from pydantic import BaseModel
+
+        from backend.api.chat import stream_message
 
         # Create ChatMessage mock
         class ChatMessage(BaseModel):
@@ -330,13 +341,14 @@ class TestChatSessionsEndpoints:
     @pytest.mark.asyncio
     async def test_list_sessions_raises_error_when_manager_none(self):
         """Test list_sessions raises InternalError when manager not initialized"""
-        from backend.api.chat import list_sessions
         from fastapi import Request
+
+        from backend.api.chat import list_sessions
 
         mock_request = Mock(spec=Request)
 
         # Mock get_chat_history_manager to return None
-        with patch('backend.api.chat.get_chat_history_manager') as mock_get_manager:
+        with patch("backend.api.chat.get_chat_history_manager") as mock_get_manager:
             mock_get_manager.return_value = None
 
             # Should raise InternalError (caught by decorator)
@@ -346,9 +358,10 @@ class TestChatSessionsEndpoints:
     @pytest.mark.asyncio
     async def test_create_session_preserves_auth_logic(self):
         """Test create_session preserves authentication metadata logic"""
-        from backend.api.chat import create_session
         from fastapi import Request
         from pydantic import BaseModel
+
+        from backend.api.chat import create_session
 
         # Create SessionCreate mock
         class SessionCreate(BaseModel):
@@ -359,10 +372,15 @@ class TestChatSessionsEndpoints:
         mock_request = Mock(spec=Request)
 
         # Mock dependencies
-        with patch('backend.api.chat.get_chat_history_manager') as mock_get_manager, \
-             patch('backend.api.chat.auth_middleware') as mock_auth, \
-             patch('backend.api.chat.generate_chat_session_id') as mock_gen_id, \
-             patch('backend.api.chat.log_chat_event') as mock_log:
+        with patch(
+            "backend.api.chat.get_chat_history_manager"
+        ) as mock_get_manager, patch(
+            "backend.api.chat.auth_middleware"
+        ) as mock_auth, patch(
+            "backend.api.chat.generate_chat_session_id"
+        ) as mock_gen_id, patch(
+            "backend.api.chat.log_chat_event"
+        ) as mock_log:
 
             mock_manager = AsyncMock()
             mock_manager.create_session = AsyncMock(return_value={"id": "test123"})
@@ -415,14 +433,15 @@ class TestSessionCRUDEndpoints:
     @pytest.mark.asyncio
     async def test_get_session_messages_validates_session_id(self):
         """Test GET /sessions/{id} validates session_id format"""
-        from backend.api.chat import get_session_messages
         from fastapi import Request
+
+        from backend.api.chat import get_session_messages
 
         mock_request = Mock(spec=Request)
         mock_ownership = {"valid": True}
 
         # Mock validate_chat_session_id to return False
-        with patch('backend.api.chat.validate_chat_session_id') as mock_validate:
+        with patch("backend.api.chat.validate_chat_session_id") as mock_validate:
             mock_validate.return_value = False
 
             # Should raise ValidationError
@@ -438,9 +457,10 @@ class TestSessionCRUDEndpoints:
     @pytest.mark.asyncio
     async def test_update_session_preserves_ownership_security(self):
         """Test PUT /sessions/{id} preserves ownership validation"""
-        from backend.api.chat import update_session
         from fastapi import Request
         from pydantic import BaseModel
+
+        from backend.api.chat import update_session
 
         # Create SessionUpdate mock
         class SessionUpdate(BaseModel):
@@ -453,8 +473,9 @@ class TestSessionCRUDEndpoints:
 
         # The ownership parameter being passed confirms security is preserved
         # Mock dependencies
-        with patch('backend.api.chat.validate_chat_session_id') as mock_validate, \
-             patch('backend.api.chat.get_chat_history_manager') as mock_get_manager:
+        with patch("backend.api.chat.validate_chat_session_id") as mock_validate, patch(
+            "backend.api.chat.get_chat_history_manager"
+        ) as mock_get_manager:
 
             mock_validate.return_value = True
             mock_manager = AsyncMock()
@@ -473,18 +494,22 @@ class TestSessionCRUDEndpoints:
     @pytest.mark.asyncio
     async def test_delete_session_preserves_file_handling_logic(self):
         """Test DELETE /sessions/{id} preserves file handling inner try-catch"""
-        from backend.api.chat import delete_session
         from fastapi import Request
+
+        from backend.api.chat import delete_session
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
         mock_request.app.state = Mock()
-        mock_request.app.state.conversation_file_manager = None  # File manager unavailable
+        mock_request.app.state.conversation_file_manager = (
+            None  # File manager unavailable
+        )
         mock_ownership = {"valid": True}
 
         # Mock dependencies
-        with patch('backend.api.chat.validate_chat_session_id') as mock_validate, \
-             patch('backend.api.chat.get_chat_history_manager') as mock_get_manager:
+        with patch("backend.api.chat.validate_chat_session_id") as mock_validate, patch(
+            "backend.api.chat.get_chat_history_manager"
+        ) as mock_get_manager:
 
             mock_validate.return_value = True
             mock_manager = Mock()
@@ -556,13 +581,14 @@ class TestSessionExportAndManagementEndpoints:
     @pytest.mark.asyncio
     async def test_export_session_validates_format(self):
         """Test GET /sessions/{id}/export validates export format"""
-        from backend.api.chat import export_session
         from fastapi import Request
+
+        from backend.api.chat import export_session
 
         mock_request = Mock(spec=Request)
 
         # Mock validate_chat_session_id to return True
-        with patch('backend.api.chat.validate_chat_session_id') as mock_validate:
+        with patch("backend.api.chat.validate_chat_session_id") as mock_validate:
             mock_validate.return_value = True
 
             # Should raise ValidationError for invalid format
@@ -576,8 +602,9 @@ class TestSessionExportAndManagementEndpoints:
     @pytest.mark.asyncio
     async def test_save_chat_preserves_message_merge_logic(self):
         """Test POST /chats/{id}/save preserves message merging inner try-catch"""
-        from backend.api.chat import save_chat_by_id
         from fastapi import Request
+
+        from backend.api.chat import save_chat_by_id
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -586,14 +613,16 @@ class TestSessionExportAndManagementEndpoints:
         request_data = {"data": {"messages": [], "name": "Test Chat"}}
 
         # Mock dependencies
-        with patch('backend.api.chat.get_chat_history_manager') as mock_get_manager:
+        with patch("backend.api.chat.get_chat_history_manager") as mock_get_manager:
             mock_manager = AsyncMock()
             mock_manager.load_session = AsyncMock(return_value=[])
-            mock_manager.save_session = AsyncMock(return_value={"session_id": "test123"})
+            mock_manager.save_session = AsyncMock(
+                return_value={"session_id": "test123"}
+            )
             mock_get_manager.return_value = mock_manager
 
             # Mock merge_messages
-            with patch('backend.api.chat.merge_messages') as mock_merge:
+            with patch("backend.api.chat.merge_messages") as mock_merge:
                 mock_merge.return_value = []
 
                 response = await save_chat_by_id(
@@ -609,8 +638,9 @@ class TestSessionExportAndManagementEndpoints:
     @pytest.mark.asyncio
     async def test_delete_chat_preserves_ownership_security(self):
         """Test DELETE /chats/{id} preserves ownership validation"""
-        from backend.api.chat import delete_chat_by_id
         from fastapi import Request
+
+        from backend.api.chat import delete_chat_by_id
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -618,7 +648,7 @@ class TestSessionExportAndManagementEndpoints:
         mock_ownership = {"valid": True, "owner": "testuser"}
 
         # Mock dependencies
-        with patch('backend.api.chat.get_chat_history_manager') as mock_get_manager:
+        with patch("backend.api.chat.get_chat_history_manager") as mock_get_manager:
             mock_manager = Mock()
             mock_manager.delete_session = Mock(return_value=True)
             mock_get_manager.return_value = mock_manager
@@ -688,8 +718,9 @@ class TestListChatsEndpoint:
     @pytest.mark.asyncio
     async def test_list_chats_raises_error_when_manager_none(self):
         """Test GET /chats raises InternalError when manager not initialized"""
-        from backend.api.chat import list_chats
         from fastapi import Request
+
+        from backend.api.chat import list_chats
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -703,8 +734,9 @@ class TestListChatsEndpoint:
     @pytest.mark.asyncio
     async def test_list_chats_preserves_inner_error_handling(self):
         """Test GET /chats preserves inner try-catch for AttributeError"""
-        from backend.api.chat import list_chats
         from fastapi import Request
+
+        from backend.api.chat import list_chats
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -712,7 +744,9 @@ class TestListChatsEndpoint:
 
         # Mock manager that raises AttributeError (missing method)
         mock_manager = Mock()
-        mock_manager.list_sessions_fast = Mock(side_effect=AttributeError("Missing method"))
+        mock_manager.list_sessions_fast = Mock(
+            side_effect=AttributeError("Missing method")
+        )
         mock_request.app.state.chat_history_manager = mock_manager
 
         # Should raise InternalError with "misconfigured" message
@@ -769,8 +803,9 @@ class TestSendChatMessageByIdEndpoint:
     @pytest.mark.asyncio
     async def test_send_chat_message_raises_validation_error_when_message_empty(self):
         """Test POST /chats/{chat_id}/message raises ValidationError when message is empty"""
-        from backend.api.chat import send_chat_message_by_id
         from fastapi import Request
+
+        from backend.api.chat import send_chat_message_by_id
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -781,13 +816,18 @@ class TestSendChatMessageByIdEndpoint:
 
         # Should raise ValidationError
         with pytest.raises(Exception):  # ValidationError or HTTPException
-            await send_chat_message_by_id("test-chat-id", request_data, mock_request, {})
+            await send_chat_message_by_id(
+                "test-chat-id", request_data, mock_request, {}
+            )
 
     @pytest.mark.asyncio
-    async def test_send_chat_message_raises_internal_error_when_services_unavailable(self):
+    async def test_send_chat_message_raises_internal_error_when_services_unavailable(
+        self,
+    ):
         """Test POST /chats/{chat_id}/message raises InternalError when services unavailable"""
-        from backend.api.chat import send_chat_message_by_id
         from fastapi import Request
+
+        from backend.api.chat import send_chat_message_by_id
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -801,15 +841,18 @@ class TestSendChatMessageByIdEndpoint:
         with patch("backend.api.chat.get_chat_history_manager", return_value=None):
             # Should raise InternalError for missing services
             with pytest.raises(Exception):  # InternalError or HTTPException
-                await send_chat_message_by_id("test-chat-id", request_data, mock_request, {})
+                await send_chat_message_by_id(
+                    "test-chat-id", request_data, mock_request, {}
+                )
 
     def test_send_chat_message_preserves_lazy_initialization(self):
         """Test POST /chats/{chat_id}/message preserves lazy initialization try-catch"""
         # Verify the endpoint structure contains lazy initialization with try-catch
         # This is a structural test - ensures pattern is preserved in code
 
-        from backend.api.chat import send_chat_message_by_id
         import inspect
+
+        from backend.api.chat import send_chat_message_by_id
 
         source = inspect.getsource(send_chat_message_by_id)
 
@@ -827,8 +870,9 @@ class TestSendChatMessageByIdEndpoint:
         # Verify the endpoint structure contains inner try-catch for streaming
         # This is a structural test - ensures pattern is preserved in code
 
-        from backend.api.chat import send_chat_message_by_id
         import inspect
+
+        from backend.api.chat import send_chat_message_by_id
 
         source = inspect.getsource(send_chat_message_by_id)
 
@@ -880,7 +924,9 @@ class TestBatch8MigrationStats:
         # CRITICAL: Streaming endpoints MUST preserve inner try-catch for in-stream errors
         # Cannot use decorator alone - SSE requires inline error event generation
 
-        pattern_description = "Streaming endpoints: Outer decorator + inner streaming error handler"
+        pattern_description = (
+            "Streaming endpoints: Outer decorator + inner streaming error handler"
+        )
         assert len(pattern_description) > 0  # Pattern documented
 
 
@@ -892,8 +938,9 @@ class TestSendDirectChatResponseEndpoint:
         # Verify the endpoint structure raises InternalError on lazy init failure
         # This is a structural test - ensures pattern is preserved in code
 
-        from backend.api.chat import send_direct_chat_response
         import inspect
+
+        from backend.api.chat import send_direct_chat_response
 
         source = inspect.getsource(send_direct_chat_response)
 
@@ -907,8 +954,9 @@ class TestSendDirectChatResponseEndpoint:
         # Verify the endpoint structure contains lazy initialization with try-catch
         # This is a structural test - ensures pattern is preserved in code
 
-        from backend.api.chat import send_direct_chat_response
         import inspect
+
+        from backend.api.chat import send_direct_chat_response
 
         source = inspect.getsource(send_direct_chat_response)
 
@@ -925,8 +973,9 @@ class TestSendDirectChatResponseEndpoint:
         # Verify the endpoint structure contains inner try-catch for streaming
         # This is a structural test - ensures pattern is preserved in code
 
-        from backend.api.chat import send_direct_chat_response
         import inspect
+
+        from backend.api.chat import send_direct_chat_response
 
         source = inspect.getsource(send_direct_chat_response)
 
@@ -940,8 +989,9 @@ class TestSendDirectChatResponseEndpoint:
         # Verify the endpoint passes remember_choice context correctly
         # This is a structural test - ensures pattern is preserved in code
 
-        from backend.api.chat import send_direct_chat_response
         import inspect
+
+        from backend.api.chat import send_direct_chat_response
 
         source = inspect.getsource(send_direct_chat_response)
 
@@ -990,7 +1040,9 @@ class TestBatch9MigrationStats:
         #
         # Pattern consistency ensures maintainability and predictable behavior
 
-        pattern_description = "Streaming endpoints follow consistent nested error handling pattern"
+        pattern_description = (
+            "Streaming endpoints follow consistent nested error handling pattern"
+        )
         assert len(pattern_description) > 0  # Pattern documented
 
 
@@ -999,8 +1051,9 @@ class TestGetKnowledgeStatsEndpoint:
 
     def test_get_knowledge_stats_has_decorator(self):
         """Test GET /knowledge/stats has @with_error_handling decorator"""
-        from backend.api.knowledge import get_knowledge_stats
         import inspect
+
+        from backend.api.knowledge import get_knowledge_stats
 
         source = inspect.getsource(get_knowledge_stats)
 
@@ -1011,8 +1064,9 @@ class TestGetKnowledgeStatsEndpoint:
 
     def test_get_knowledge_stats_no_outer_try_catch(self):
         """Test GET /knowledge/stats has no outer try-catch block"""
-        from backend.api.knowledge import get_knowledge_stats
         import inspect
+
+        from backend.api.knowledge import get_knowledge_stats
 
         source = inspect.getsource(get_knowledge_stats)
 
@@ -1024,8 +1078,9 @@ class TestGetKnowledgeStatsEndpoint:
 
     def test_get_knowledge_stats_preserves_offline_state(self):
         """Test GET /knowledge/stats preserves offline state handling"""
-        from backend.api.knowledge import get_knowledge_stats
         import inspect
+
+        from backend.api.knowledge import get_knowledge_stats
 
         source = inspect.getsource(get_knowledge_stats)
 
@@ -1039,8 +1094,9 @@ class TestGetKnowledgeStatsBasicEndpoint:
 
     def test_get_knowledge_stats_basic_has_decorator(self):
         """Test GET /knowledge/stats/basic has @with_error_handling decorator"""
-        from backend.api.knowledge import get_knowledge_stats_basic
         import inspect
+
+        from backend.api.knowledge import get_knowledge_stats_basic
 
         source = inspect.getsource(get_knowledge_stats_basic)
 
@@ -1051,8 +1107,9 @@ class TestGetKnowledgeStatsBasicEndpoint:
 
     def test_get_knowledge_stats_basic_no_outer_try_catch(self):
         """Test GET /knowledge/stats/basic has no outer try-catch block"""
-        from backend.api.knowledge import get_knowledge_stats_basic
         import inspect
+
+        from backend.api.knowledge import get_knowledge_stats_basic
 
         source = inspect.getsource(get_knowledge_stats_basic)
 
@@ -1064,8 +1121,9 @@ class TestGetKnowledgeStatsBasicEndpoint:
 
     def test_get_knowledge_stats_basic_preserves_offline_state(self):
         """Test GET /knowledge/stats/basic preserves offline state handling"""
-        from backend.api.knowledge import get_knowledge_stats_basic
         import inspect
+
+        from backend.api.knowledge import get_knowledge_stats_basic
 
         source = inspect.getsource(get_knowledge_stats_basic)
 
@@ -1115,7 +1173,9 @@ class TestBatch10MigrationStats:
         #
         # This pattern works for simple endpoints that return null-safe data
 
-        pattern_description = "Simple GET endpoints: Decorator only, no inner try-catch needed"
+        pattern_description = (
+            "Simple GET endpoints: Decorator only, no inner try-catch needed"
+        )
         assert len(pattern_description) > 0  # Pattern documented
 
 
@@ -1124,8 +1184,9 @@ class TestGetKnowledgeCategoriesEndpoint:
 
     def test_get_knowledge_categories_has_decorator(self):
         """Test GET /categories has @with_error_handling decorator"""
-        from backend.api.knowledge import get_knowledge_categories
         import inspect
+
+        from backend.api.knowledge import get_knowledge_categories
 
         source = inspect.getsource(get_knowledge_categories)
 
@@ -1136,8 +1197,9 @@ class TestGetKnowledgeCategoriesEndpoint:
 
     def test_get_knowledge_categories_preserves_inner_error_handling(self):
         """Test GET /categories preserves inner try-catches for Redis/JSON operations"""
-        from backend.api.knowledge import get_knowledge_categories
         import inspect
+
+        from backend.api.knowledge import get_knowledge_categories
 
         source = inspect.getsource(get_knowledge_categories)
 
@@ -1155,8 +1217,9 @@ class TestGetKnowledgeCategoriesEndpoint:
 
     def test_get_knowledge_categories_preserves_empty_list_fallback(self):
         """Test GET /categories preserves empty list fallback when kb_to_use is None"""
-        from backend.api.knowledge import get_knowledge_categories
         import inspect
+
+        from backend.api.knowledge import get_knowledge_categories
 
         source = inspect.getsource(get_knowledge_categories)
 
@@ -1171,8 +1234,9 @@ class TestAddTextToKnowledgeEndpoint:
 
     def test_add_text_to_knowledge_has_decorator(self):
         """Test POST /add_text has @with_error_handling decorator"""
-        from backend.api.knowledge import add_text_to_knowledge
         import inspect
+
+        from backend.api.knowledge import add_text_to_knowledge
 
         source = inspect.getsource(add_text_to_knowledge)
 
@@ -1183,8 +1247,9 @@ class TestAddTextToKnowledgeEndpoint:
 
     def test_add_text_to_knowledge_raises_internal_error_when_kb_unavailable(self):
         """Test POST /add_text raises InternalError when knowledge base unavailable"""
-        from backend.api.knowledge import add_text_to_knowledge
         import inspect
+
+        from backend.api.knowledge import add_text_to_knowledge
 
         source = inspect.getsource(add_text_to_knowledge)
 
@@ -1194,8 +1259,9 @@ class TestAddTextToKnowledgeEndpoint:
 
     def test_add_text_to_knowledge_raises_value_error_for_validation(self):
         """Test POST /add_text raises ValueError for validation (converted to 400)"""
-        from backend.api.knowledge import add_text_to_knowledge
         import inspect
+
+        from backend.api.knowledge import add_text_to_knowledge
 
         source = inspect.getsource(add_text_to_knowledge)
 
@@ -1205,8 +1271,9 @@ class TestAddTextToKnowledgeEndpoint:
 
     def test_add_text_to_knowledge_no_outer_try_catch(self):
         """Test POST /add_text has no outer try-catch block"""
-        from backend.api.knowledge import add_text_to_knowledge
         import inspect
+
+        from backend.api.knowledge import add_text_to_knowledge
 
         source = inspect.getsource(add_text_to_knowledge)
 
@@ -1255,7 +1322,9 @@ class TestBatch11MigrationStats:
         #
         # This pattern contrasts with simple GET endpoints (Batch 10) that need no inner handling
 
-        pattern_description = "Nested error handling: outer decorator + inner specific handlers"
+        pattern_description = (
+            "Nested error handling: outer decorator + inner specific handlers"
+        )
         assert len(pattern_description) > 0  # Pattern documented
 
 
@@ -1264,8 +1333,9 @@ class TestGetMainCategoriesEndpoint:
 
     def test_get_main_categories_has_decorator(self):
         """Test GET /categories/main has @with_error_handling decorator"""
-        from backend.api.knowledge import get_main_categories
         import inspect
+
+        from backend.api.knowledge import get_main_categories
 
         source = inspect.getsource(get_main_categories)
 
@@ -1276,8 +1346,9 @@ class TestGetMainCategoriesEndpoint:
 
     def test_get_main_categories_preserves_inner_cache_handling(self):
         """Test GET /categories/main preserves inner try-catch for cache operations"""
-        from backend.api.knowledge import get_main_categories
         import inspect
+
+        from backend.api.knowledge import get_main_categories
 
         source = inspect.getsource(get_main_categories)
 
@@ -1292,8 +1363,9 @@ class TestGetMainCategoriesEndpoint:
 
     def test_get_main_categories_no_outer_try_catch(self):
         """Test GET /categories/main has minimal try blocks (only inner cache handling)"""
-        from backend.api.knowledge import get_main_categories
         import inspect
+
+        from backend.api.knowledge import get_main_categories
 
         source = inspect.getsource(get_main_categories)
 
@@ -1311,8 +1383,9 @@ class TestCheckVectorizationStatusBatchEndpoint:
 
     def test_check_vectorization_status_batch_has_decorator(self):
         """Test POST /vectorization_status has @with_error_handling decorator"""
-        from backend.api.knowledge import check_vectorization_status_batch
         import inspect
+
+        from backend.api.knowledge import check_vectorization_status_batch
 
         source = inspect.getsource(check_vectorization_status_batch)
 
@@ -1323,8 +1396,9 @@ class TestCheckVectorizationStatusBatchEndpoint:
 
     def test_check_vectorization_status_raises_internal_error_when_kb_unavailable(self):
         """Test POST /vectorization_status raises InternalError when kb unavailable"""
-        from backend.api.knowledge import check_vectorization_status_batch
         import inspect
+
+        from backend.api.knowledge import check_vectorization_status_batch
 
         source = inspect.getsource(check_vectorization_status_batch)
 
@@ -1334,8 +1408,9 @@ class TestCheckVectorizationStatusBatchEndpoint:
 
     def test_check_vectorization_status_raises_value_error_for_validation(self):
         """Test POST /vectorization_status raises ValueError for validation (>1000 fact_ids)"""
-        from backend.api.knowledge import check_vectorization_status_batch
         import inspect
+
+        from backend.api.knowledge import check_vectorization_status_batch
 
         source = inspect.getsource(check_vectorization_status_batch)
 
@@ -1346,8 +1421,9 @@ class TestCheckVectorizationStatusBatchEndpoint:
 
     def test_check_vectorization_status_preserves_inner_cache_handling(self):
         """Test POST /vectorization_status preserves inner try-catches for cache operations"""
-        from backend.api.knowledge import check_vectorization_status_batch
         import inspect
+
+        from backend.api.knowledge import check_vectorization_status_batch
 
         source = inspect.getsource(check_vectorization_status_batch)
 
@@ -1361,14 +1437,17 @@ class TestCheckVectorizationStatusBatchEndpoint:
 
     def test_check_vectorization_status_no_httpexception_reraise(self):
         """Test POST /vectorization_status has no HTTPException re-raise pattern"""
-        from backend.api.knowledge import check_vectorization_status_batch
         import inspect
+
+        from backend.api.knowledge import check_vectorization_status_batch
 
         source = inspect.getsource(check_vectorization_status_batch)
 
         # Verify no HTTPException re-raise pattern (handled by decorator now)
         assert "except HTTPException:" not in source
-        assert source.count("raise HTTPException") == 0  # Converted to ValueError/InternalError
+        assert (
+            source.count("raise HTTPException") == 0
+        )  # Converted to ValueError/InternalError
 
 
 class TestBatch12MigrationStats:
@@ -1425,8 +1504,9 @@ class TestGetKnowledgeEntriesEndpoint:
 
     def test_get_knowledge_entries_has_decorator(self):
         """Test GET /entries has @with_error_handling decorator"""
-        from backend.api.knowledge import get_knowledge_entries
         import inspect
+
+        from backend.api.knowledge import get_knowledge_entries
 
         source = inspect.getsource(get_knowledge_entries)
 
@@ -1438,8 +1518,9 @@ class TestGetKnowledgeEntriesEndpoint:
 
     def test_get_knowledge_entries_no_outer_try_catch(self):
         """Test GET /entries outer try-catch removed (decorator handles it)"""
-        from backend.api.knowledge import get_knowledge_entries
         import inspect
+
+        from backend.api.knowledge import get_knowledge_entries
 
         source = inspect.getsource(get_knowledge_entries)
 
@@ -1459,8 +1540,9 @@ class TestGetKnowledgeEntriesEndpoint:
 
     def test_get_knowledge_entries_preserves_inner_error_handling(self):
         """Test GET /entries preserves inner try-catches for Redis and JSON"""
-        from backend.api.knowledge import get_knowledge_entries
         import inspect
+
+        from backend.api.knowledge import get_knowledge_entries
 
         source = inspect.getsource(get_knowledge_entries)
 
@@ -1473,8 +1555,9 @@ class TestGetKnowledgeEntriesEndpoint:
 
     def test_get_knowledge_entries_preserves_offline_state(self):
         """Test GET /entries preserves offline state handling"""
-        from backend.api.knowledge import get_knowledge_entries
         import inspect
+
+        from backend.api.knowledge import get_knowledge_entries
 
         source = inspect.getsource(get_knowledge_entries)
 
@@ -1486,8 +1569,9 @@ class TestGetKnowledgeEntriesEndpoint:
 
     def test_get_knowledge_entries_preserves_cursor_pagination(self):
         """Test GET /entries preserves cursor-based pagination logic"""
-        from backend.api.knowledge import get_knowledge_entries
         import inspect
+
+        from backend.api.knowledge import get_knowledge_entries
 
         source = inspect.getsource(get_knowledge_entries)
 
@@ -1498,8 +1582,9 @@ class TestGetKnowledgeEntriesEndpoint:
 
     def test_get_knowledge_entries_preserves_category_filtering(self):
         """Test GET /entries preserves category filtering logic"""
-        from backend.api.knowledge import get_knowledge_entries
         import inspect
+
+        from backend.api.knowledge import get_knowledge_entries
 
         source = inspect.getsource(get_knowledge_entries)
 
@@ -1513,8 +1598,9 @@ class TestGetDetailedStatsEndpoint:
 
     def test_get_detailed_stats_has_decorator(self):
         """Test GET /detailed_stats has @with_error_handling decorator"""
-        from backend.api.knowledge import get_detailed_stats
         import inspect
+
+        from backend.api.knowledge import get_detailed_stats
 
         source = inspect.getsource(get_detailed_stats)
 
@@ -1526,8 +1612,9 @@ class TestGetDetailedStatsEndpoint:
 
     def test_get_detailed_stats_no_outer_try_catch(self):
         """Test GET /detailed_stats outer try-catch removed (decorator handles it)"""
-        from backend.api.knowledge import get_detailed_stats
         import inspect
+
+        from backend.api.knowledge import get_detailed_stats
 
         source = inspect.getsource(get_detailed_stats)
 
@@ -1546,8 +1633,9 @@ class TestGetDetailedStatsEndpoint:
 
     def test_get_detailed_stats_preserves_inner_error_handling(self):
         """Test GET /detailed_stats preserves inner try-catches for Redis and JSON"""
-        from backend.api.knowledge import get_detailed_stats
         import inspect
+
+        from backend.api.knowledge import get_detailed_stats
 
         source = inspect.getsource(get_detailed_stats)
 
@@ -1556,13 +1644,16 @@ class TestGetDetailedStatsEndpoint:
         assert "hgetall" in source
 
         # Verify JSON parsing error handling preserved
-        assert "KeyError" in source or "TypeError" in source or "AttributeError" in source
+        assert (
+            "KeyError" in source or "TypeError" in source or "AttributeError" in source
+        )
         assert "logger.warning" in source
 
     def test_get_detailed_stats_preserves_offline_state(self):
         """Test GET /detailed_stats preserves offline state handling"""
-        from backend.api.knowledge import get_detailed_stats
         import inspect
+
+        from backend.api.knowledge import get_detailed_stats
 
         source = inspect.getsource(get_detailed_stats)
 
@@ -1570,12 +1661,15 @@ class TestGetDetailedStatsEndpoint:
         assert "if kb_to_use is None:" in source
         assert '"status": "offline"' in source
         assert '"basic_stats": {}' in source or 'basic_stats": {}' in source
-        assert '"category_breakdown": {}' in source or 'category_breakdown": {}' in source
+        assert (
+            '"category_breakdown": {}' in source or 'category_breakdown": {}' in source
+        )
 
     def test_get_detailed_stats_preserves_analytics_logic(self):
         """Test GET /detailed_stats preserves detailed analytics calculations"""
-        from backend.api.knowledge import get_detailed_stats
         import inspect
+
+        from backend.api.knowledge import get_detailed_stats
 
         source = inspect.getsource(get_detailed_stats)
 
@@ -1588,8 +1682,9 @@ class TestGetDetailedStatsEndpoint:
 
     def test_get_detailed_stats_preserves_size_metrics(self):
         """Test GET /detailed_stats preserves size metrics calculations"""
-        from backend.api.knowledge import get_detailed_stats
         import inspect
+
+        from backend.api.knowledge import get_detailed_stats
 
         source = inspect.getsource(get_detailed_stats)
 
@@ -1641,7 +1736,9 @@ class TestBatch13MigrationStats:
         #
         # This pattern ensures pagination works even with some Redis/parse errors
 
-        pattern_description = "Nested error handling with cursor pagination and parse errors"
+        pattern_description = (
+            "Nested error handling with cursor pagination and parse errors"
+        )
         assert len(pattern_description) > 0  # Pattern documented
 
     def test_batch_13_test_coverage(self):
@@ -1658,7 +1755,9 @@ class TestBatch13MigrationStats:
         get_detailed_stats_tests = 6  # All aspects covered
         batch_stats_tests = 4  # Progress, savings, patterns, coverage
 
-        total_batch_13_tests = get_entries_tests + get_detailed_stats_tests + batch_stats_tests
+        total_batch_13_tests = (
+            get_entries_tests + get_detailed_stats_tests + batch_stats_tests
+        )
 
         assert total_batch_13_tests == 16  # Comprehensive coverage
 
@@ -1673,8 +1772,9 @@ class TestGetMachineProfileEndpoint:
 
     def test_get_machine_profile_has_decorator(self):
         """Test GET /machine_profile has @with_error_handling decorator"""
-        from backend.api.knowledge import get_machine_profile
         import inspect
+
+        from backend.api.knowledge import get_machine_profile
 
         source = inspect.getsource(get_machine_profile)
 
@@ -1686,8 +1786,9 @@ class TestGetMachineProfileEndpoint:
 
     def test_get_machine_profile_no_outer_try_catch(self):
         """Test GET /machine_profile outer try-catch removed (decorator handles it)"""
-        from backend.api.knowledge import get_machine_profile
         import inspect
+
+        from backend.api.knowledge import get_machine_profile
 
         source = inspect.getsource(get_machine_profile)
 
@@ -1699,8 +1800,9 @@ class TestGetMachineProfileEndpoint:
 
     def test_get_machine_profile_preserves_system_info_collection(self):
         """Test GET /machine_profile preserves system information collection"""
-        from backend.api.knowledge import get_machine_profile
         import inspect
+
+        from backend.api.knowledge import get_machine_profile
 
         source = inspect.getsource(get_machine_profile)
 
@@ -1713,8 +1815,9 @@ class TestGetMachineProfileEndpoint:
 
     def test_get_machine_profile_preserves_kb_stats_integration(self):
         """Test GET /machine_profile preserves knowledge base stats integration"""
-        from backend.api.knowledge import get_machine_profile
         import inspect
+
+        from backend.api.knowledge import get_machine_profile
 
         source = inspect.getsource(get_machine_profile)
 
@@ -1725,8 +1828,9 @@ class TestGetMachineProfileEndpoint:
 
     def test_get_machine_profile_preserves_capabilities(self):
         """Test GET /machine_profile preserves capabilities reporting"""
-        from backend.api.knowledge import get_machine_profile
         import inspect
+
+        from backend.api.knowledge import get_machine_profile
 
         source = inspect.getsource(get_machine_profile)
 
@@ -1742,8 +1846,9 @@ class TestGetManPagesSummaryEndpoint:
 
     def test_get_man_pages_summary_has_decorator(self):
         """Test GET /man_pages/summary has @with_error_handling decorator"""
-        from backend.api.knowledge import get_man_pages_summary
         import inspect
+
+        from backend.api.knowledge import get_man_pages_summary
 
         source = inspect.getsource(get_man_pages_summary)
 
@@ -1755,8 +1860,9 @@ class TestGetManPagesSummaryEndpoint:
 
     def test_get_man_pages_summary_no_outer_try_catch(self):
         """Test GET /man_pages/summary outer try-catch removed (decorator handles it)"""
-        from backend.api.knowledge import get_man_pages_summary
         import inspect
+
+        from backend.api.knowledge import get_man_pages_summary
 
         source = inspect.getsource(get_man_pages_summary)
 
@@ -1775,8 +1881,9 @@ class TestGetManPagesSummaryEndpoint:
 
     def test_get_man_pages_summary_preserves_inner_error_handling(self):
         """Test GET /man_pages/summary preserves inner try-catches for Redis and JSON"""
-        from backend.api.knowledge import get_man_pages_summary
         import inspect
+
+        from backend.api.knowledge import get_man_pages_summary
 
         source = inspect.getsource(get_man_pages_summary)
 
@@ -1790,8 +1897,9 @@ class TestGetManPagesSummaryEndpoint:
 
     def test_get_man_pages_summary_preserves_offline_state(self):
         """Test GET /man_pages/summary preserves offline state handling"""
-        from backend.api.knowledge import get_man_pages_summary
         import inspect
+
+        from backend.api.knowledge import get_man_pages_summary
 
         source = inspect.getsource(get_man_pages_summary)
 
@@ -1803,8 +1911,9 @@ class TestGetManPagesSummaryEndpoint:
 
     def test_get_man_pages_summary_preserves_fact_type_filtering(self):
         """Test GET /man_pages/summary preserves fact type filtering logic"""
-        from backend.api.knowledge import get_man_pages_summary
         import inspect
+
+        from backend.api.knowledge import get_man_pages_summary
 
         source = inspect.getsource(get_man_pages_summary)
 
@@ -1816,8 +1925,9 @@ class TestGetManPagesSummaryEndpoint:
 
     def test_get_man_pages_summary_preserves_timestamp_tracking(self):
         """Test GET /man_pages/summary preserves timestamp tracking"""
-        from backend.api.knowledge import get_man_pages_summary
         import inspect
+
+        from backend.api.knowledge import get_man_pages_summary
 
         source = inspect.getsource(get_man_pages_summary)
 
@@ -1882,7 +1992,9 @@ class TestBatch14MigrationStats:
         get_man_pages_summary_tests = 6  # Nested error handling
         batch_stats_tests = 4  # Progress, savings, patterns, coverage
 
-        total_batch_14_tests = get_machine_profile_tests + get_man_pages_summary_tests + batch_stats_tests
+        total_batch_14_tests = (
+            get_machine_profile_tests + get_man_pages_summary_tests + batch_stats_tests
+        )
 
         assert total_batch_14_tests == 15  # Comprehensive coverage
 
@@ -1897,8 +2009,9 @@ class TestInitializeMachineKnowledgeEndpoint:
 
     def test_initialize_machine_knowledge_has_decorator(self):
         """Test POST /machine_knowledge/initialize has @with_error_handling decorator"""
-        from backend.api.knowledge import initialize_machine_knowledge
         import inspect
+
+        from backend.api.knowledge import initialize_machine_knowledge
 
         source = inspect.getsource(initialize_machine_knowledge)
 
@@ -1910,8 +2023,9 @@ class TestInitializeMachineKnowledgeEndpoint:
 
     def test_initialize_machine_knowledge_no_outer_try_catch(self):
         """Test POST /machine_knowledge/initialize outer try-catch removed"""
-        from backend.api.knowledge import initialize_machine_knowledge
         import inspect
+
+        from backend.api.knowledge import initialize_machine_knowledge
 
         source = inspect.getsource(initialize_machine_knowledge)
 
@@ -1921,8 +2035,9 @@ class TestInitializeMachineKnowledgeEndpoint:
 
     def test_initialize_machine_knowledge_preserves_offline_state(self):
         """Test POST /machine_knowledge/initialize preserves offline state handling"""
-        from backend.api.knowledge import initialize_machine_knowledge
         import inspect
+
+        from backend.api.knowledge import initialize_machine_knowledge
 
         source = inspect.getsource(initialize_machine_knowledge)
 
@@ -1933,8 +2048,9 @@ class TestInitializeMachineKnowledgeEndpoint:
 
     def test_initialize_machine_knowledge_preserves_system_commands_call(self):
         """Test POST /machine_knowledge/initialize preserves populate_system_commands call"""
-        from backend.api.knowledge import initialize_machine_knowledge
         import inspect
+
+        from backend.api.knowledge import initialize_machine_knowledge
 
         source = inspect.getsource(initialize_machine_knowledge)
 
@@ -1945,8 +2061,9 @@ class TestInitializeMachineKnowledgeEndpoint:
 
     def test_initialize_machine_knowledge_preserves_response_structure(self):
         """Test POST /machine_knowledge/initialize preserves response structure"""
-        from backend.api.knowledge import initialize_machine_knowledge
         import inspect
+
+        from backend.api.knowledge import initialize_machine_knowledge
 
         source = inspect.getsource(initialize_machine_knowledge)
 
@@ -1964,8 +2081,9 @@ class TestIntegrateManPagesEndpoint:
 
     def test_integrate_man_pages_has_decorator(self):
         """Test POST /man_pages/integrate has @with_error_handling decorator"""
-        from backend.api.knowledge import integrate_man_pages
         import inspect
+
+        from backend.api.knowledge import integrate_man_pages
 
         source = inspect.getsource(integrate_man_pages)
 
@@ -1977,8 +2095,9 @@ class TestIntegrateManPagesEndpoint:
 
     def test_integrate_man_pages_no_outer_try_catch(self):
         """Test POST /man_pages/integrate outer try-catch removed"""
-        from backend.api.knowledge import integrate_man_pages
         import inspect
+
+        from backend.api.knowledge import integrate_man_pages
 
         source = inspect.getsource(integrate_man_pages)
 
@@ -1988,8 +2107,9 @@ class TestIntegrateManPagesEndpoint:
 
     def test_integrate_man_pages_preserves_offline_state(self):
         """Test POST /man_pages/integrate preserves offline state handling"""
-        from backend.api.knowledge import integrate_man_pages
         import inspect
+
+        from backend.api.knowledge import integrate_man_pages
 
         source = inspect.getsource(integrate_man_pages)
 
@@ -2000,8 +2120,9 @@ class TestIntegrateManPagesEndpoint:
 
     def test_integrate_man_pages_preserves_background_task(self):
         """Test POST /man_pages/integrate preserves background task scheduling"""
-        from backend.api.knowledge import integrate_man_pages
         import inspect
+
+        from backend.api.knowledge import integrate_man_pages
 
         source = inspect.getsource(integrate_man_pages)
 
@@ -2011,8 +2132,9 @@ class TestIntegrateManPagesEndpoint:
 
     def test_integrate_man_pages_preserves_response_structure(self):
         """Test POST /man_pages/integrate preserves response structure"""
-        from backend.api.knowledge import integrate_man_pages
         import inspect
+
+        from backend.api.knowledge import integrate_man_pages
 
         source = inspect.getsource(integrate_man_pages)
 
@@ -2088,8 +2210,9 @@ class TestSearchManPagesEndpoint:
 
     def test_search_man_pages_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import search_man_pages
         import inspect
+
+        from backend.api.knowledge import search_man_pages
 
         source = inspect.getsource(search_man_pages)
         assert "@with_error_handling" in source
@@ -2098,8 +2221,9 @@ class TestSearchManPagesEndpoint:
 
     def test_search_man_pages_no_outer_try_catch(self):
         """Verify outer try-catch block was removed"""
-        from backend.api.knowledge import search_man_pages
         import inspect
+
+        from backend.api.knowledge import search_man_pages
 
         source = inspect.getsource(search_man_pages)
         # Should have no try blocks (Simple Pattern - decorator only)
@@ -2109,8 +2233,9 @@ class TestSearchManPagesEndpoint:
     @pytest.mark.asyncio
     async def test_search_man_pages_offline_state(self):
         """Verify endpoint handles offline state gracefully"""
-        from backend.api.knowledge import search_man_pages
         from fastapi import Request
+
+        from backend.api.knowledge import search_man_pages
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -2130,8 +2255,9 @@ class TestSearchManPagesEndpoint:
     @pytest.mark.asyncio
     async def test_search_man_pages_filters_results(self):
         """Verify endpoint filters for man pages only"""
-        from backend.api.knowledge import search_man_pages
         from fastapi import Request
+
+        from backend.api.knowledge import search_man_pages
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -2161,8 +2287,9 @@ class TestSearchManPagesEndpoint:
 
     def test_search_man_pages_supports_class_based_selection(self):
         """Verify endpoint handles different knowledge base classes"""
-        from backend.api.knowledge import search_man_pages
         import inspect
+
+        from backend.api.knowledge import search_man_pages
 
         source = inspect.getsource(search_man_pages)
 
@@ -2178,8 +2305,9 @@ class TestClearAllKnowledgeEndpoint:
 
     def test_clear_all_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import clear_all_knowledge
         import inspect
+
+        from backend.api.knowledge import clear_all_knowledge
 
         source = inspect.getsource(clear_all_knowledge)
         assert "@with_error_handling" in source
@@ -2188,8 +2316,9 @@ class TestClearAllKnowledgeEndpoint:
 
     def test_clear_all_no_outer_try_catch(self):
         """Verify outer try-catch block was removed"""
-        from backend.api.knowledge import clear_all_knowledge
         import inspect
+
+        from backend.api.knowledge import clear_all_knowledge
 
         source = inspect.getsource(clear_all_knowledge)
         # Should have inner try blocks for non-fatal operations
@@ -2199,8 +2328,9 @@ class TestClearAllKnowledgeEndpoint:
     @pytest.mark.asyncio
     async def test_clear_all_offline_state(self):
         """Verify endpoint handles offline state gracefully"""
-        from backend.api.knowledge import clear_all_knowledge
         from fastapi import Request
+
+        from backend.api.knowledge import clear_all_knowledge
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -2220,8 +2350,9 @@ class TestClearAllKnowledgeEndpoint:
     @pytest.mark.asyncio
     async def test_clear_all_uses_clear_all_method(self):
         """Verify endpoint uses clear_all method when available"""
-        from backend.api.knowledge import clear_all_knowledge
         from fastapi import Request
+
+        from backend.api.knowledge import clear_all_knowledge
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -2246,14 +2377,15 @@ class TestClearAllKnowledgeEndpoint:
     @pytest.mark.asyncio
     async def test_clear_all_logs_warning_for_destructive_operation(self):
         """Verify destructive operation is logged with warning"""
-        from backend.api.knowledge import clear_all_knowledge
         import inspect
+
+        from backend.api.knowledge import clear_all_knowledge
 
         source = inspect.getsource(clear_all_knowledge)
 
         # Should log warning before clearing
-        assert 'logger.warning' in source
-        assert 'DESTRUCTIVE' in source
+        assert "logger.warning" in source
+        assert "DESTRUCTIVE" in source
 
 
 class TestBatch16MigrationStats:
@@ -2321,8 +2453,9 @@ class TestGetFactsByCategoryEndpoint:
 
     def test_get_facts_by_category_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import get_facts_by_category
         import inspect
+
+        from backend.api.knowledge import get_facts_by_category
 
         source = inspect.getsource(get_facts_by_category)
         assert "@with_error_handling" in source
@@ -2331,8 +2464,9 @@ class TestGetFactsByCategoryEndpoint:
 
     def test_get_facts_by_category_no_outer_try_catch(self):
         """Verify outer try-catch block was removed"""
-        from backend.api.knowledge import get_facts_by_category
         import inspect
+
+        from backend.api.knowledge import get_facts_by_category
 
         source = inspect.getsource(get_facts_by_category)
         # Should have inner try blocks for fact processing and caching
@@ -2342,13 +2476,14 @@ class TestGetFactsByCategoryEndpoint:
     @pytest.mark.asyncio
     async def test_get_facts_by_category_preserves_caching(self):
         """Verify endpoint preserves caching logic"""
-        from backend.api.knowledge import get_facts_by_category
         import inspect
+
+        from backend.api.knowledge import get_facts_by_category
 
         source = inspect.getsource(get_facts_by_category)
 
         # Should have cache key generation
-        assert "cache_key = f\"kb:cache:facts_by_category" in source
+        assert 'cache_key = f"kb:cache:facts_by_category' in source
         # Should check cache first
         assert "cached_result = kb.redis_client.get(cache_key)" in source
         # Should cache results
@@ -2357,8 +2492,9 @@ class TestGetFactsByCategoryEndpoint:
     @pytest.mark.asyncio
     async def test_get_facts_by_category_preserves_category_filtering(self):
         """Verify endpoint preserves category filtering"""
-        from backend.api.knowledge import get_facts_by_category
         import inspect
+
+        from backend.api.knowledge import get_facts_by_category
 
         source = inspect.getsource(get_facts_by_category)
 
@@ -2371,8 +2507,9 @@ class TestGetFactsByCategoryEndpoint:
     @pytest.mark.asyncio
     async def test_get_facts_by_category_handles_redis_operations(self):
         """Verify endpoint handles Redis operations with inner try-catches"""
-        from backend.api.knowledge import get_facts_by_category
         import inspect
+
+        from backend.api.knowledge import get_facts_by_category
 
         source = inspect.getsource(get_facts_by_category)
 
@@ -2389,8 +2526,9 @@ class TestGetFactByKeyEndpoint:
 
     def test_get_fact_by_key_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import get_fact_by_key
         import inspect
+
+        from backend.api.knowledge import get_fact_by_key
 
         source = inspect.getsource(get_fact_by_key)
         assert "@with_error_handling" in source
@@ -2399,8 +2537,9 @@ class TestGetFactByKeyEndpoint:
 
     def test_get_fact_by_key_no_outer_try_catch(self):
         """Verify outer try-catch and HTTPException re-raise removed"""
-        from backend.api.knowledge import get_fact_by_key
         import inspect
+
+        from backend.api.knowledge import get_fact_by_key
 
         source = inspect.getsource(get_fact_by_key)
         # Should have NO try blocks (Simple Pattern - decorator only)
@@ -2410,8 +2549,9 @@ class TestGetFactByKeyEndpoint:
     @pytest.mark.asyncio
     async def test_get_fact_by_key_preserves_security_validation(self):
         """Verify endpoint preserves path traversal security checks"""
-        from backend.api.knowledge import get_fact_by_key
         import inspect
+
+        from backend.api.knowledge import get_fact_by_key
 
         source = inspect.getsource(get_fact_by_key)
 
@@ -2424,8 +2564,9 @@ class TestGetFactByKeyEndpoint:
     @pytest.mark.asyncio
     async def test_get_fact_by_key_preserves_not_found_handling(self):
         """Verify endpoint raises 404 for missing facts"""
-        from backend.api.knowledge import get_fact_by_key
         import inspect
+
+        from backend.api.knowledge import get_fact_by_key
 
         source = inspect.getsource(get_fact_by_key)
 
@@ -2438,21 +2579,22 @@ class TestGetFactByKeyEndpoint:
     @pytest.mark.asyncio
     async def test_get_fact_by_key_preserves_metadata_extraction(self):
         """Verify endpoint preserves metadata and content extraction logic"""
-        from backend.api.knowledge import get_fact_by_key
         import inspect
+
+        from backend.api.knowledge import get_fact_by_key
 
         source = inspect.getsource(get_fact_by_key)
 
         # Should extract metadata
-        assert "metadata_str = fact_data.get(\"metadata\")" in source
+        assert 'metadata_str = fact_data.get("metadata")' in source
         assert "metadata = json.loads" in source
         # Should extract content
-        assert "content_raw = fact_data.get(\"content\")" in source
+        assert 'content_raw = fact_data.get("content")' in source
         # Should extract created_at
-        assert "created_at_raw = fact_data.get(\"created_at\")" in source
+        assert 'created_at_raw = fact_data.get("created_at")' in source
         # Should handle bytes/string conversions
         assert "if isinstance" in source
-        assert "decode(\"utf-8\")" in source
+        assert 'decode("utf-8")' in source
 
 
 class TestBatch17MigrationStats:
@@ -2510,7 +2652,9 @@ class TestBatch17MigrationStats:
         fact_by_key_tests = 5  # All aspects covered
         batch_stats_tests = 4  # Progress, savings, patterns, coverage
 
-        total_batch_17_tests = facts_by_category_tests + fact_by_key_tests + batch_stats_tests
+        total_batch_17_tests = (
+            facts_by_category_tests + fact_by_key_tests + batch_stats_tests
+        )
 
         assert total_batch_17_tests == 14  # Comprehensive coverage
 
@@ -2520,8 +2664,9 @@ class TestVectorizeExistingFactsEndpoint:
 
     def test_vectorize_existing_facts_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import vectorize_existing_facts
         import inspect
+
+        from backend.api.knowledge import vectorize_existing_facts
 
         source = inspect.getsource(vectorize_existing_facts)
         assert "@with_error_handling" in source
@@ -2530,8 +2675,9 @@ class TestVectorizeExistingFactsEndpoint:
 
     def test_vectorize_existing_facts_no_outer_try_catch(self):
         """Verify outer try-catch block was removed"""
-        from backend.api.knowledge import vectorize_existing_facts
         import inspect
+
+        from backend.api.knowledge import vectorize_existing_facts
 
         source = inspect.getsource(vectorize_existing_facts)
         # Should have inner try block for batch processing loop (non-fatal errors)
@@ -2541,8 +2687,9 @@ class TestVectorizeExistingFactsEndpoint:
     @pytest.mark.asyncio
     async def test_vectorize_existing_facts_preserves_httpexception(self):
         """Verify endpoint preserves HTTPException for KB not initialized"""
-        from backend.api.knowledge import vectorize_existing_facts
         import inspect
+
+        from backend.api.knowledge import vectorize_existing_facts
 
         source = inspect.getsource(vectorize_existing_facts)
 
@@ -2555,21 +2702,25 @@ class TestVectorizeExistingFactsEndpoint:
     @pytest.mark.asyncio
     async def test_vectorize_existing_facts_preserves_batch_processing(self):
         """Verify endpoint preserves batch processing logic"""
-        from backend.api.knowledge import vectorize_existing_facts
         import inspect
+
+        from backend.api.knowledge import vectorize_existing_facts
 
         source = inspect.getsource(vectorize_existing_facts)
 
         # Should have batch processing logic
-        assert "total_batches = (len(fact_keys) + batch_size - 1) // batch_size" in source
+        assert (
+            "total_batches = (len(fact_keys) + batch_size - 1) // batch_size" in source
+        )
         assert "for batch_num in range(total_batches):" in source
         assert "await asyncio.sleep(batch_delay)" in source
 
     @pytest.mark.asyncio
     async def test_vectorize_existing_facts_handles_inner_errors(self):
         """Verify endpoint handles inner errors with try-catch for non-fatal processing"""
-        from backend.api.knowledge import vectorize_existing_facts
         import inspect
+
+        from backend.api.knowledge import vectorize_existing_facts
 
         source = inspect.getsource(vectorize_existing_facts)
 
@@ -2587,8 +2738,9 @@ class TestGetImportStatusEndpoint:
 
     def test_get_import_status_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import get_import_status
         import inspect
+
+        from backend.api.knowledge import get_import_status
 
         source = inspect.getsource(get_import_status)
         assert "@with_error_handling" in source
@@ -2597,8 +2749,9 @@ class TestGetImportStatusEndpoint:
 
     def test_get_import_status_no_outer_try_catch(self):
         """Verify outer try-catch block was removed"""
-        from backend.api.knowledge import get_import_status
         import inspect
+
+        from backend.api.knowledge import get_import_status
 
         source = inspect.getsource(get_import_status)
         # Should have NO try blocks (Simple Pattern - decorator only)
@@ -2608,21 +2761,26 @@ class TestGetImportStatusEndpoint:
     @pytest.mark.asyncio
     async def test_get_import_status_preserves_import_tracker(self):
         """Verify endpoint preserves ImportTracker usage"""
-        from backend.api.knowledge import get_import_status
         import inspect
+
+        from backend.api.knowledge import get_import_status
 
         source = inspect.getsource(get_import_status)
 
         # Should import and use ImportTracker
-        assert "from backend.models.knowledge_import_tracking import ImportTracker" in source
+        assert (
+            "from backend.models.knowledge_import_tracking import ImportTracker"
+            in source
+        )
         assert "tracker = ImportTracker()" in source
         assert "tracker.get_import_status" in source
 
     @pytest.mark.asyncio
     async def test_get_import_status_preserves_filtering(self):
         """Verify endpoint preserves file_path and category filtering"""
-        from backend.api.knowledge import get_import_status
         import inspect
+
+        from backend.api.knowledge import get_import_status
 
         source = inspect.getsource(get_import_status)
 
@@ -2635,8 +2793,9 @@ class TestGetImportStatusEndpoint:
     @pytest.mark.asyncio
     async def test_get_import_status_preserves_response_structure(self):
         """Verify endpoint preserves response structure"""
-        from backend.api.knowledge import get_import_status
         import inspect
+
+        from backend.api.knowledge import get_import_status
 
         source = inspect.getsource(get_import_status)
 
@@ -2683,9 +2842,7 @@ class TestBatch18MigrationStats:
         # - POST /vectorize_facts: Nested Error Handling Pattern (inner try-catch for batch processing)
         # - GET /import/status: Simple Pattern (decorator only)
 
-        pattern_description = (
-            "Mixed patterns: Nested Error Handling + Simple Pattern"
-        )
+        pattern_description = "Mixed patterns: Nested Error Handling + Simple Pattern"
         assert len(pattern_description) > 0  # Pattern documented
 
     def test_batch_18_test_coverage(self):
@@ -2701,7 +2858,9 @@ class TestBatch18MigrationStats:
         import_status_tests = 5  # All aspects covered
         batch_stats_tests = 4  # Progress, savings, patterns, coverage
 
-        total_batch_18_tests = vectorize_facts_tests + import_status_tests + batch_stats_tests
+        total_batch_18_tests = (
+            vectorize_facts_tests + import_status_tests + batch_stats_tests
+        )
 
         assert total_batch_18_tests == 14  # Comprehensive coverage
 
@@ -2711,8 +2870,9 @@ class TestVectorizeIndividualFactEndpoint:
 
     def test_vectorize_individual_fact_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import vectorize_individual_fact
         import inspect
+
+        from backend.api.knowledge import vectorize_individual_fact
 
         source = inspect.getsource(vectorize_individual_fact)
 
@@ -2724,8 +2884,9 @@ class TestVectorizeIndividualFactEndpoint:
 
     def test_vectorize_individual_fact_no_outer_try_catch(self):
         """Verify outer try-catch and HTTPException re-raise removed"""
-        from backend.api.knowledge import vectorize_individual_fact
         import inspect
+
+        from backend.api.knowledge import vectorize_individual_fact
 
         source = inspect.getsource(vectorize_individual_fact)
 
@@ -2738,8 +2899,9 @@ class TestVectorizeIndividualFactEndpoint:
 
     def test_vectorize_individual_fact_preserves_httpexception(self):
         """Verify endpoint preserves HTTPException for validation errors"""
-        from backend.api.knowledge import vectorize_individual_fact
         import inspect
+
+        from backend.api.knowledge import vectorize_individual_fact
 
         source = inspect.getsource(vectorize_individual_fact)
 
@@ -2754,8 +2916,9 @@ class TestVectorizeIndividualFactEndpoint:
 
     def test_vectorize_individual_fact_preserves_background_tasks(self):
         """Verify endpoint preserves background task creation"""
-        from backend.api.knowledge import vectorize_individual_fact
         import inspect
+
+        from backend.api.knowledge import vectorize_individual_fact
 
         source = inspect.getsource(vectorize_individual_fact)
 
@@ -2770,8 +2933,9 @@ class TestVectorizeIndividualFactEndpoint:
 
     def test_vectorize_individual_fact_preserves_redis_operations(self):
         """Verify endpoint preserves Redis job storage"""
-        from backend.api.knowledge import vectorize_individual_fact
         import inspect
+
+        from backend.api.knowledge import vectorize_individual_fact
 
         source = inspect.getsource(vectorize_individual_fact)
 
@@ -2787,8 +2951,9 @@ class TestGetVectorizationJobStatusEndpoint:
 
     def test_get_vectorization_job_status_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import get_vectorization_job_status
         import inspect
+
+        from backend.api.knowledge import get_vectorization_job_status
 
         source = inspect.getsource(get_vectorization_job_status)
 
@@ -2800,8 +2965,9 @@ class TestGetVectorizationJobStatusEndpoint:
 
     def test_get_vectorization_job_status_no_outer_try_catch(self):
         """Verify outer try-catch and HTTPException re-raise removed"""
-        from backend.api.knowledge import get_vectorization_job_status
         import inspect
+
+        from backend.api.knowledge import get_vectorization_job_status
 
         source = inspect.getsource(get_vectorization_job_status)
 
@@ -2814,8 +2980,9 @@ class TestGetVectorizationJobStatusEndpoint:
 
     def test_get_vectorization_job_status_preserves_httpexception(self):
         """Verify endpoint preserves HTTPException for validation errors"""
-        from backend.api.knowledge import get_vectorization_job_status
         import inspect
+
+        from backend.api.knowledge import get_vectorization_job_status
 
         source = inspect.getsource(get_vectorization_job_status)
 
@@ -2830,8 +2997,9 @@ class TestGetVectorizationJobStatusEndpoint:
 
     def test_get_vectorization_job_status_preserves_redis_retrieval(self):
         """Verify endpoint preserves Redis job retrieval"""
-        from backend.api.knowledge import get_vectorization_job_status
         import inspect
+
+        from backend.api.knowledge import get_vectorization_job_status
 
         source = inspect.getsource(get_vectorization_job_status)
 
@@ -2844,8 +3012,9 @@ class TestGetVectorizationJobStatusEndpoint:
 
     def test_get_vectorization_job_status_preserves_response_structure(self):
         """Verify endpoint preserves response structure"""
-        from backend.api.knowledge import get_vectorization_job_status
         import inspect
+
+        from backend.api.knowledge import get_vectorization_job_status
 
         source = inspect.getsource(get_vectorization_job_status)
 
@@ -2922,8 +3091,9 @@ class TestGetFailedVectorizationJobsEndpoint:
 
     def test_get_failed_vectorization_jobs_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import get_failed_vectorization_jobs
         import inspect
+
+        from backend.api.knowledge import get_failed_vectorization_jobs
 
         source = inspect.getsource(get_failed_vectorization_jobs)
 
@@ -2935,8 +3105,9 @@ class TestGetFailedVectorizationJobsEndpoint:
 
     def test_get_failed_vectorization_jobs_no_outer_try_catch(self):
         """Verify outer try-catch block removed"""
-        from backend.api.knowledge import get_failed_vectorization_jobs
         import inspect
+
+        from backend.api.knowledge import get_failed_vectorization_jobs
 
         source = inspect.getsource(get_failed_vectorization_jobs)
 
@@ -2949,8 +3120,9 @@ class TestGetFailedVectorizationJobsEndpoint:
 
     def test_get_failed_vectorization_jobs_preserves_httpexception(self):
         """Verify endpoint preserves HTTPException for KB not initialized"""
-        from backend.api.knowledge import get_failed_vectorization_jobs
         import inspect
+
+        from backend.api.knowledge import get_failed_vectorization_jobs
 
         source = inspect.getsource(get_failed_vectorization_jobs)
 
@@ -2961,8 +3133,9 @@ class TestGetFailedVectorizationJobsEndpoint:
 
     def test_get_failed_vectorization_jobs_preserves_redis_scan(self):
         """Verify endpoint preserves Redis SCAN operations"""
-        from backend.api.knowledge import get_failed_vectorization_jobs
         import inspect
+
+        from backend.api.knowledge import get_failed_vectorization_jobs
 
         source = inspect.getsource(get_failed_vectorization_jobs)
 
@@ -2978,8 +3151,9 @@ class TestGetFailedVectorizationJobsEndpoint:
 
     def test_get_failed_vectorization_jobs_preserves_pipeline(self):
         """Verify endpoint preserves Redis pipeline batch operations"""
-        from backend.api.knowledge import get_failed_vectorization_jobs
         import inspect
+
+        from backend.api.knowledge import get_failed_vectorization_jobs
 
         source = inspect.getsource(get_failed_vectorization_jobs)
 
@@ -2998,8 +3172,9 @@ class TestRetryVectorizationJobEndpoint:
 
     def test_retry_vectorization_job_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import retry_vectorization_job
         import inspect
+
+        from backend.api.knowledge import retry_vectorization_job
 
         source = inspect.getsource(retry_vectorization_job)
 
@@ -3011,8 +3186,9 @@ class TestRetryVectorizationJobEndpoint:
 
     def test_retry_vectorization_job_no_outer_try_catch(self):
         """Verify outer try-catch and HTTPException re-raise removed"""
-        from backend.api.knowledge import retry_vectorization_job
         import inspect
+
+        from backend.api.knowledge import retry_vectorization_job
 
         source = inspect.getsource(retry_vectorization_job)
 
@@ -3025,8 +3201,9 @@ class TestRetryVectorizationJobEndpoint:
 
     def test_retry_vectorization_job_preserves_httpexception(self):
         """Verify endpoint preserves HTTPException for validation errors"""
-        from backend.api.knowledge import retry_vectorization_job
         import inspect
+
+        from backend.api.knowledge import retry_vectorization_job
 
         source = inspect.getsource(retry_vectorization_job)
 
@@ -3044,13 +3221,17 @@ class TestRetryVectorizationJobEndpoint:
 
     def test_retry_vectorization_job_preserves_retry_logic(self):
         """Verify endpoint preserves retry job creation logic"""
-        from backend.api.knowledge import retry_vectorization_job
         import inspect
+
+        from backend.api.knowledge import retry_vectorization_job
 
         source = inspect.getsource(retry_vectorization_job)
 
         # Should retrieve old job data
-        assert 'old_job_json = kb.redis_client.get(f"vectorization_job:{job_id}")' in source
+        assert (
+            'old_job_json = kb.redis_client.get(f"vectorization_job:{job_id}")'
+            in source
+        )
         assert "old_job_data = json.loads(old_job_json)" in source
         assert 'fact_id = old_job_data.get("fact_id")' in source
 
@@ -3060,8 +3241,9 @@ class TestRetryVectorizationJobEndpoint:
 
     def test_retry_vectorization_job_preserves_background_tasks(self):
         """Verify endpoint preserves background task creation"""
-        from backend.api.knowledge import retry_vectorization_job
         import inspect
+
+        from backend.api.knowledge import retry_vectorization_job
 
         source = inspect.getsource(retry_vectorization_job)
 
@@ -3143,8 +3325,9 @@ class TestDeleteVectorizationJobEndpoint:
 
     def test_delete_vectorization_job_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import delete_vectorization_job
         import inspect
+
+        from backend.api.knowledge import delete_vectorization_job
 
         source = inspect.getsource(delete_vectorization_job)
 
@@ -3156,8 +3339,9 @@ class TestDeleteVectorizationJobEndpoint:
 
     def test_delete_vectorization_job_no_outer_try_catch(self):
         """Verify outer try-catch and HTTPException re-raise removed"""
-        from backend.api.knowledge import delete_vectorization_job
         import inspect
+
+        from backend.api.knowledge import delete_vectorization_job
 
         source = inspect.getsource(delete_vectorization_job)
 
@@ -3170,8 +3354,9 @@ class TestDeleteVectorizationJobEndpoint:
 
     def test_delete_vectorization_job_preserves_httpexception(self):
         """Verify endpoint preserves HTTPException for validation errors"""
-        from backend.api.knowledge import delete_vectorization_job
         import inspect
+
+        from backend.api.knowledge import delete_vectorization_job
 
         source = inspect.getsource(delete_vectorization_job)
 
@@ -3185,26 +3370,30 @@ class TestDeleteVectorizationJobEndpoint:
 
     def test_delete_vectorization_job_preserves_redis_delete(self):
         """Verify endpoint preserves Redis delete operation"""
-        from backend.api.knowledge import delete_vectorization_job
         import inspect
+
+        from backend.api.knowledge import delete_vectorization_job
 
         source = inspect.getsource(delete_vectorization_job)
 
         # Should delete job from Redis
-        assert 'deleted = kb.redis_client.delete(f"vectorization_job:{job_id}")' in source
+        assert (
+            'deleted = kb.redis_client.delete(f"vectorization_job:{job_id}")' in source
+        )
 
         # Should log deletion
         assert 'logger.info(f"Deleted vectorization job {job_id}")' in source
 
     def test_delete_vectorization_job_preserves_response_structure(self):
         """Verify endpoint preserves response structure"""
-        from backend.api.knowledge import delete_vectorization_job
         import inspect
+
+        from backend.api.knowledge import delete_vectorization_job
 
         source = inspect.getsource(delete_vectorization_job)
 
         # Should return expected structure
-        assert 'return {' in source
+        assert "return {" in source
         assert '"status": "success"' in source
         assert '"message": f"Job {job_id} deleted"' in source
         assert '"job_id": job_id' in source
@@ -3215,8 +3404,9 @@ class TestClearFailedVectorizationJobsEndpoint:
 
     def test_clear_failed_vectorization_jobs_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import clear_failed_vectorization_jobs
         import inspect
+
+        from backend.api.knowledge import clear_failed_vectorization_jobs
 
         source = inspect.getsource(clear_failed_vectorization_jobs)
 
@@ -3228,8 +3418,9 @@ class TestClearFailedVectorizationJobsEndpoint:
 
     def test_clear_failed_vectorization_jobs_no_outer_try_catch(self):
         """Verify outer try-catch block removed"""
-        from backend.api.knowledge import clear_failed_vectorization_jobs
         import inspect
+
+        from backend.api.knowledge import clear_failed_vectorization_jobs
 
         source = inspect.getsource(clear_failed_vectorization_jobs)
 
@@ -3242,8 +3433,9 @@ class TestClearFailedVectorizationJobsEndpoint:
 
     def test_clear_failed_vectorization_jobs_preserves_httpexception(self):
         """Verify endpoint preserves HTTPException for KB not initialized"""
-        from backend.api.knowledge import clear_failed_vectorization_jobs
         import inspect
+
+        from backend.api.knowledge import clear_failed_vectorization_jobs
 
         source = inspect.getsource(clear_failed_vectorization_jobs)
 
@@ -3254,8 +3446,9 @@ class TestClearFailedVectorizationJobsEndpoint:
 
     def test_clear_failed_vectorization_jobs_preserves_redis_scan(self):
         """Verify endpoint preserves Redis SCAN operations"""
-        from backend.api.knowledge import clear_failed_vectorization_jobs
         import inspect
+
+        from backend.api.knowledge import clear_failed_vectorization_jobs
 
         source = inspect.getsource(clear_failed_vectorization_jobs)
 
@@ -3271,8 +3464,9 @@ class TestClearFailedVectorizationJobsEndpoint:
 
     def test_clear_failed_vectorization_jobs_preserves_batch_deletion(self):
         """Verify endpoint preserves batch deletion logic"""
-        from backend.api.knowledge import clear_failed_vectorization_jobs
         import inspect
+
+        from backend.api.knowledge import clear_failed_vectorization_jobs
 
         source = inspect.getsource(clear_failed_vectorization_jobs)
 
@@ -3364,8 +3558,9 @@ class TestDeduplicateFactsEndpoint:
 
     def test_deduplicate_facts_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import deduplicate_facts
         import inspect
+
+        from backend.api.knowledge import deduplicate_facts
 
         source = inspect.getsource(deduplicate_facts)
 
@@ -3376,8 +3571,9 @@ class TestDeduplicateFactsEndpoint:
 
     def test_deduplicate_facts_no_outer_try_catch(self):
         """Verify outer try-catch and HTTPException re-raise removed"""
-        from backend.api.knowledge import deduplicate_facts
         import inspect
+
+        from backend.api.knowledge import deduplicate_facts
 
         source = inspect.getsource(deduplicate_facts)
 
@@ -3387,12 +3583,13 @@ class TestDeduplicateFactsEndpoint:
 
         # Should NOT have outer exception handling
         assert "except Exception as e:" not in source
-        assert "logger.error(f\"Error during deduplication:" not in source
+        assert 'logger.error(f"Error during deduplication:' not in source
 
     def test_deduplicate_facts_preserves_httpexception(self):
         """Verify endpoint preserves HTTPException for validation errors"""
-        from backend.api.knowledge import deduplicate_facts
         import inspect
+
+        from backend.api.knowledge import deduplicate_facts
 
         source = inspect.getsource(deduplicate_facts)
 
@@ -3402,8 +3599,9 @@ class TestDeduplicateFactsEndpoint:
 
     def test_deduplicate_facts_preserves_redis_operations(self):
         """Verify endpoint preserves Redis SCAN and pipeline operations"""
-        from backend.api.knowledge import deduplicate_facts
         import inspect
+
+        from backend.api.knowledge import deduplicate_facts
 
         source = inspect.getsource(deduplicate_facts)
 
@@ -3423,8 +3621,9 @@ class TestDeduplicateFactsEndpoint:
 
     def test_deduplicate_facts_preserves_business_logic(self):
         """Verify endpoint preserves deduplication logic"""
-        from backend.api.knowledge import deduplicate_facts
         import inspect
+
+        from backend.api.knowledge import deduplicate_facts
 
         source = inspect.getsource(deduplicate_facts)
 
@@ -3448,8 +3647,9 @@ class TestFindOrphanedFactsEndpoint:
 
     def test_find_orphaned_facts_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import find_orphaned_facts
         import inspect
+
+        from backend.api.knowledge import find_orphaned_facts
 
         source = inspect.getsource(find_orphaned_facts)
 
@@ -3460,8 +3660,9 @@ class TestFindOrphanedFactsEndpoint:
 
     def test_find_orphaned_facts_no_outer_try_catch(self):
         """Verify outer try-catch and HTTPException re-raise removed"""
-        from backend.api.knowledge import find_orphaned_facts
         import inspect
+
+        from backend.api.knowledge import find_orphaned_facts
 
         source = inspect.getsource(find_orphaned_facts)
 
@@ -3471,12 +3672,13 @@ class TestFindOrphanedFactsEndpoint:
 
         # Should NOT have outer exception handling
         assert "except Exception as e:" not in source
-        assert "logger.error(f\"Error finding orphaned facts:" not in source
+        assert 'logger.error(f"Error finding orphaned facts:' not in source
 
     def test_find_orphaned_facts_preserves_httpexception(self):
         """Verify endpoint preserves HTTPException for validation errors"""
-        from backend.api.knowledge import find_orphaned_facts
         import inspect
+
+        from backend.api.knowledge import find_orphaned_facts
 
         source = inspect.getsource(find_orphaned_facts)
 
@@ -3486,8 +3688,9 @@ class TestFindOrphanedFactsEndpoint:
 
     def test_find_orphaned_facts_preserves_redis_operations(self):
         """Verify endpoint preserves Redis SCAN and pipeline operations"""
-        from backend.api.knowledge import find_orphaned_facts
         import inspect
+
+        from backend.api.knowledge import find_orphaned_facts
 
         source = inspect.getsource(find_orphaned_facts)
 
@@ -3506,8 +3709,9 @@ class TestFindOrphanedFactsEndpoint:
 
     def test_find_orphaned_facts_preserves_file_checking(self):
         """Verify endpoint preserves file existence checking logic"""
-        from backend.api.knowledge import find_orphaned_facts
         import inspect
+
+        from backend.api.knowledge import find_orphaned_facts
 
         source = inspect.getsource(find_orphaned_facts)
 
@@ -3596,8 +3800,9 @@ class TestCleanupOrphanedFactsEndpoint:
 
     def test_cleanup_orphaned_facts_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import cleanup_orphaned_facts
         import inspect
+
+        from backend.api.knowledge import cleanup_orphaned_facts
 
         source = inspect.getsource(cleanup_orphaned_facts)
 
@@ -3608,8 +3813,9 @@ class TestCleanupOrphanedFactsEndpoint:
 
     def test_cleanup_orphaned_facts_no_outer_try_catch(self):
         """Verify outer try-catch and HTTPException re-raise removed"""
-        from backend.api.knowledge import cleanup_orphaned_facts
         import inspect
+
+        from backend.api.knowledge import cleanup_orphaned_facts
 
         source = inspect.getsource(cleanup_orphaned_facts)
 
@@ -3619,12 +3825,13 @@ class TestCleanupOrphanedFactsEndpoint:
 
         # Should NOT have outer exception handling
         assert "except Exception as e:" not in source
-        assert "logger.error(f\"Error cleaning up orphaned facts:" not in source
+        assert 'logger.error(f"Error cleaning up orphaned facts:' not in source
 
     def test_cleanup_orphaned_facts_calls_find_orphaned_facts(self):
         """Verify endpoint calls find_orphaned_facts to get orphans"""
-        from backend.api.knowledge import cleanup_orphaned_facts
         import inspect
+
+        from backend.api.knowledge import cleanup_orphaned_facts
 
         source = inspect.getsource(cleanup_orphaned_facts)
 
@@ -3634,8 +3841,9 @@ class TestCleanupOrphanedFactsEndpoint:
 
     def test_cleanup_orphaned_facts_preserves_batch_deletion(self):
         """Verify endpoint preserves batch deletion logic"""
-        from backend.api.knowledge import cleanup_orphaned_facts
         import inspect
+
+        from backend.api.knowledge import cleanup_orphaned_facts
 
         source = inspect.getsource(cleanup_orphaned_facts)
 
@@ -3653,8 +3861,9 @@ class TestCleanupOrphanedFactsEndpoint:
 
     def test_cleanup_orphaned_facts_preserves_dry_run(self):
         """Verify endpoint preserves dry run functionality"""
-        from backend.api.knowledge import cleanup_orphaned_facts
         import inspect
+
+        from backend.api.knowledge import cleanup_orphaned_facts
 
         source = inspect.getsource(cleanup_orphaned_facts)
 
@@ -3671,8 +3880,9 @@ class TestScanForUnimportedFilesEndpoint:
 
     def test_scan_for_unimported_files_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import scan_for_unimported_files
         import inspect
+
+        from backend.api.knowledge import scan_for_unimported_files
 
         source = inspect.getsource(scan_for_unimported_files)
 
@@ -3683,8 +3893,9 @@ class TestScanForUnimportedFilesEndpoint:
 
     def test_scan_for_unimported_files_no_outer_try_catch(self):
         """Verify outer try-catch and HTTPException re-raise removed"""
-        from backend.api.knowledge import scan_for_unimported_files
         import inspect
+
+        from backend.api.knowledge import scan_for_unimported_files
 
         source = inspect.getsource(scan_for_unimported_files)
 
@@ -3694,12 +3905,13 @@ class TestScanForUnimportedFilesEndpoint:
 
         # Should NOT have outer exception handling
         assert "except Exception as e:" not in source
-        assert "logger.error(f\"Error scanning for unimported files:" not in source
+        assert 'logger.error(f"Error scanning for unimported files:' not in source
 
     def test_scan_for_unimported_files_preserves_httpexception(self):
         """Verify endpoint preserves HTTPException for validation errors"""
-        from backend.api.knowledge import scan_for_unimported_files
         import inspect
+
+        from backend.api.knowledge import scan_for_unimported_files
 
         source = inspect.getsource(scan_for_unimported_files)
 
@@ -3710,13 +3922,17 @@ class TestScanForUnimportedFilesEndpoint:
 
     def test_scan_for_unimported_files_preserves_import_tracker(self):
         """Verify endpoint preserves ImportTracker logic"""
-        from backend.api.knowledge import scan_for_unimported_files
         import inspect
+
+        from backend.api.knowledge import scan_for_unimported_files
 
         source = inspect.getsource(scan_for_unimported_files)
 
         # Should import and initialize ImportTracker
-        assert "from backend.models.knowledge_import_tracking import ImportTracker" in source
+        assert (
+            "from backend.models.knowledge_import_tracking import ImportTracker"
+            in source
+        )
         assert "tracker = ImportTracker()" in source
 
         # Should use tracker methods
@@ -3725,8 +3941,9 @@ class TestScanForUnimportedFilesEndpoint:
 
     def test_scan_for_unimported_files_preserves_scanning_logic(self):
         """Verify endpoint preserves file scanning logic"""
-        from backend.api.knowledge import scan_for_unimported_files
         import inspect
+
+        from backend.api.knowledge import scan_for_unimported_files
 
         source = inspect.getsource(scan_for_unimported_files)
 
@@ -3818,8 +4035,9 @@ class TestStartBackgroundVectorizationEndpoint:
 
     def test_start_background_vectorization_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import start_background_vectorization
         import inspect
+
+        from backend.api.knowledge import start_background_vectorization
 
         source = inspect.getsource(start_background_vectorization)
 
@@ -3830,8 +4048,9 @@ class TestStartBackgroundVectorizationEndpoint:
 
     def test_start_background_vectorization_no_outer_try_catch(self):
         """Verify outer try-catch and HTTPException re-raise removed"""
-        from backend.api.knowledge import start_background_vectorization
         import inspect
+
+        from backend.api.knowledge import start_background_vectorization
 
         source = inspect.getsource(start_background_vectorization)
 
@@ -3841,12 +4060,13 @@ class TestStartBackgroundVectorizationEndpoint:
 
         # Should NOT have outer exception handling
         assert "except Exception as e:" not in source
-        assert "logger.error(f\"Failed to start background vectorization:" not in source
+        assert 'logger.error(f"Failed to start background vectorization:' not in source
 
     def test_start_background_vectorization_preserves_httpexception(self):
         """Verify endpoint preserves HTTPException for validation errors"""
-        from backend.api.knowledge import start_background_vectorization
         import inspect
+
+        from backend.api.knowledge import start_background_vectorization
 
         source = inspect.getsource(start_background_vectorization)
 
@@ -3856,8 +4076,9 @@ class TestStartBackgroundVectorizationEndpoint:
 
     def test_start_background_vectorization_preserves_background_tasks(self):
         """Verify endpoint preserves background task creation"""
-        from backend.api.knowledge import start_background_vectorization
         import inspect
+
+        from backend.api.knowledge import start_background_vectorization
 
         source = inspect.getsource(start_background_vectorization)
 
@@ -3865,12 +4086,16 @@ class TestStartBackgroundVectorizationEndpoint:
         assert "vectorizer = get_background_vectorizer()" in source
 
         # Should add background task
-        assert "background_tasks.add_task(vectorizer.vectorize_pending_facts, kb)" in source
+        assert (
+            "background_tasks.add_task(vectorizer.vectorize_pending_facts, kb)"
+            in source
+        )
 
     def test_start_background_vectorization_preserves_response(self):
         """Verify endpoint preserves response structure"""
-        from backend.api.knowledge import start_background_vectorization
         import inspect
+
+        from backend.api.knowledge import start_background_vectorization
 
         source = inspect.getsource(start_background_vectorization)
 
@@ -3886,8 +4111,9 @@ class TestGetVectorizationStatusEndpoint:
 
     def test_get_vectorization_status_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
-        from backend.api.knowledge import get_vectorization_status
         import inspect
+
+        from backend.api.knowledge import get_vectorization_status
 
         source = inspect.getsource(get_vectorization_status)
 
@@ -3898,8 +4124,9 @@ class TestGetVectorizationStatusEndpoint:
 
     def test_get_vectorization_status_no_outer_try_catch(self):
         """Verify outer try-catch and HTTPException re-raise removed"""
-        from backend.api.knowledge import get_vectorization_status
         import inspect
+
+        from backend.api.knowledge import get_vectorization_status
 
         source = inspect.getsource(get_vectorization_status)
 
@@ -3909,12 +4136,13 @@ class TestGetVectorizationStatusEndpoint:
 
         # Should NOT have outer exception handling
         assert "except Exception as e:" not in source
-        assert "logger.error(f\"Failed to get vectorization status:" not in source
+        assert 'logger.error(f"Failed to get vectorization status:' not in source
 
     def test_get_vectorization_status_calls_get_background_vectorizer(self):
         """Verify endpoint calls get_background_vectorizer"""
-        from backend.api.knowledge import get_vectorization_status
         import inspect
+
+        from backend.api.knowledge import get_vectorization_status
 
         source = inspect.getsource(get_vectorization_status)
 
@@ -3923,8 +4151,9 @@ class TestGetVectorizationStatusEndpoint:
 
     def test_get_vectorization_status_preserves_response_fields(self):
         """Verify endpoint preserves response structure"""
-        from backend.api.knowledge import get_vectorization_status
         import inspect
+
+        from backend.api.knowledge import get_vectorization_status
 
         source = inspect.getsource(get_vectorization_status)
 
@@ -3936,8 +4165,9 @@ class TestGetVectorizationStatusEndpoint:
 
     def test_get_vectorization_status_no_httpexceptions(self):
         """Verify endpoint has no HTTPException validation (all errors propagate)"""
-        from backend.api.knowledge import get_vectorization_status
         import inspect
+
+        from backend.api.knowledge import get_vectorization_status
 
         source = inspect.getsource(get_vectorization_status)
 
@@ -4014,8 +4244,9 @@ class TestBatch25UpdateFact:
 
     def test_update_fact_has_decorator(self):
         """Verify endpoint has @with_error_handling decorator"""
-        from backend.api.knowledge import update_fact
         import inspect
+
+        from backend.api.knowledge import update_fact
 
         source = inspect.getsource(update_fact)
 
@@ -4027,8 +4258,9 @@ class TestBatch25UpdateFact:
 
     def test_update_fact_no_outer_try_catch(self):
         """Verify outer try-catch block was removed"""
-        from backend.api.knowledge import update_fact
         import inspect
+
+        from backend.api.knowledge import update_fact
 
         source = inspect.getsource(update_fact)
 
@@ -4038,24 +4270,35 @@ class TestBatch25UpdateFact:
 
     def test_update_fact_preserves_httpexceptions(self):
         """Verify endpoint preserves validation HTTPExceptions"""
-        from backend.api.knowledge import update_fact
         import inspect
+
+        from backend.api.knowledge import update_fact
 
         source = inspect.getsource(update_fact)
 
         # Should preserve multiple HTTPExceptions for validation
         assert source.count("raise HTTPException") >= 6  # Multiple validation errors
         assert 'status_code=400, detail="Invalid fact_id format"' in source
-        assert 'detail="At least one field (content or metadata) must be provided"' in source
-        assert 'detail="Knowledge base not initialized - please check logs for errors"' in source
-        assert 'detail="Update operation not supported by current knowledge base implementation"' in source
-        assert 'status_code=404, detail=error_message' in source
-        assert 'status_code=500, detail=error_message' in source
+        assert (
+            'detail="At least one field (content or metadata) must be provided"'
+            in source
+        )
+        assert (
+            'detail="Knowledge base not initialized - please check logs for errors"'
+            in source
+        )
+        assert (
+            'detail="Update operation not supported by current knowledge base implementation"'
+            in source
+        )
+        assert "status_code=404, detail=error_message" in source
+        assert "status_code=500, detail=error_message" in source
 
     def test_update_fact_preserves_crud_logic(self):
         """Verify endpoint preserves CRUD update logic"""
-        from backend.api.knowledge import update_fact
         import inspect
+
+        from backend.api.knowledge import update_fact
 
         source = inspect.getsource(update_fact)
 
@@ -4064,15 +4307,22 @@ class TestBatch25UpdateFact:
         assert "if request.content is None and request.metadata is None:" in source
 
         # Should preserve KB operations
-        assert "kb = await get_or_create_knowledge_base(req.app, force_refresh=False)" in source
+        assert (
+            "kb = await get_or_create_knowledge_base(req.app, force_refresh=False)"
+            in source
+        )
         assert 'if not hasattr(kb, "update_fact"):' in source
         assert "result = await kb.update_fact(" in source
-        assert "fact_id=fact_id, content=request.content, metadata=request.metadata" in source
+        assert (
+            "fact_id=fact_id, content=request.content, metadata=request.metadata"
+            in source
+        )
 
     def test_update_fact_preserves_result_handling(self):
         """Verify endpoint preserves result checking logic"""
-        from backend.api.knowledge import update_fact
         import inspect
+
+        from backend.api.knowledge import update_fact
 
         source = inspect.getsource(update_fact)
 
@@ -4092,8 +4342,9 @@ class TestBatch25DeleteFact:
 
     def test_delete_fact_has_decorator(self):
         """Verify endpoint has @with_error_handling decorator"""
-        from backend.api.knowledge import delete_fact
         import inspect
+
+        from backend.api.knowledge import delete_fact
 
         source = inspect.getsource(delete_fact)
 
@@ -4105,8 +4356,9 @@ class TestBatch25DeleteFact:
 
     def test_delete_fact_no_outer_try_catch(self):
         """Verify outer try-catch block was removed"""
-        from backend.api.knowledge import delete_fact
         import inspect
+
+        from backend.api.knowledge import delete_fact
 
         source = inspect.getsource(delete_fact)
 
@@ -4116,23 +4368,31 @@ class TestBatch25DeleteFact:
 
     def test_delete_fact_preserves_httpexceptions(self):
         """Verify endpoint preserves validation HTTPExceptions"""
-        from backend.api.knowledge import delete_fact
         import inspect
+
+        from backend.api.knowledge import delete_fact
 
         source = inspect.getsource(delete_fact)
 
         # Should preserve multiple HTTPExceptions for validation
         assert source.count("raise HTTPException") >= 5  # Multiple validation errors
         assert 'status_code=400, detail="Invalid fact_id format"' in source
-        assert 'detail="Knowledge base not initialized - please check logs for errors"' in source
-        assert 'detail="Delete operation not supported by current knowledge base implementation"' in source
-        assert 'status_code=404, detail=error_message' in source
-        assert 'status_code=500, detail=error_message' in source
+        assert (
+            'detail="Knowledge base not initialized - please check logs for errors"'
+            in source
+        )
+        assert (
+            'detail="Delete operation not supported by current knowledge base implementation"'
+            in source
+        )
+        assert "status_code=404, detail=error_message" in source
+        assert "status_code=500, detail=error_message" in source
 
     def test_delete_fact_preserves_crud_logic(self):
         """Verify endpoint preserves CRUD delete logic"""
-        from backend.api.knowledge import delete_fact
         import inspect
+
+        from backend.api.knowledge import delete_fact
 
         source = inspect.getsource(delete_fact)
 
@@ -4140,14 +4400,18 @@ class TestBatch25DeleteFact:
         assert "if not fact_id or not isinstance(fact_id, str):" in source
 
         # Should preserve KB operations
-        assert "kb = await get_or_create_knowledge_base(req.app, force_refresh=False)" in source
+        assert (
+            "kb = await get_or_create_knowledge_base(req.app, force_refresh=False)"
+            in source
+        )
         assert 'if not hasattr(kb, "delete_fact"):' in source
         assert "result = await kb.delete_fact(fact_id=fact_id)" in source
 
     def test_delete_fact_preserves_result_handling(self):
         """Verify endpoint preserves result checking logic"""
-        from backend.api.knowledge import delete_fact
         import inspect
+
+        from backend.api.knowledge import delete_fact
 
         source = inspect.getsource(delete_fact)
 
@@ -4186,7 +4450,9 @@ class TestBatch25MigrationStats:
         # Total batch 25: 22 lines
 
         batch_1_24_savings = 354
-        batch_25_savings = 22  # Both outer try-catch blocks with HTTPException re-raise removed
+        batch_25_savings = (
+            22  # Both outer try-catch blocks with HTTPException re-raise removed
+        )
         total_savings = batch_1_24_savings + batch_25_savings
 
         assert batch_25_savings == 22
@@ -4199,9 +4465,7 @@ class TestBatch25MigrationStats:
         # - DELETE /fact/{fact_id}: Simple Pattern (decorator + multiple HTTPExceptions for CRUD validation)
         # Both endpoints removed try/except HTTPException/except Exception pattern
 
-        pattern_description = (
-            "Simple Pattern with HTTPException Preservation (CRUD endpoints with multiple validations)"
-        )
+        pattern_description = "Simple Pattern with HTTPException Preservation (CRUD endpoints with multiple validations)"
         assert len(pattern_description) > 0  # Pattern documented
 
     def test_batch_25_test_coverage(self):
@@ -4217,11 +4481,7 @@ class TestBatch25MigrationStats:
         delete_fact_tests = 5  # All aspects covered
         batch_stats_tests = 4  # Progress, savings, patterns, coverage
 
-        total_batch_25_tests = (
-            update_fact_tests
-            + delete_fact_tests
-            + batch_stats_tests
-        )
+        total_batch_25_tests = update_fact_tests + delete_fact_tests + batch_stats_tests
 
         assert total_batch_25_tests == 14  # Comprehensive coverage
 
@@ -4231,8 +4491,9 @@ class TestBatch26ListFiles:
 
     def test_list_files_has_decorator(self):
         """Verify endpoint has @with_error_handling decorator"""
-        from backend.api.files import list_files
         import inspect
+
+        from backend.api.files import list_files
 
         source = inspect.getsource(list_files)
 
@@ -4244,8 +4505,9 @@ class TestBatch26ListFiles:
 
     def test_list_files_no_outer_try_catch(self):
         """Verify outer try-catch block was removed"""
-        from backend.api.files import list_files
         import inspect
+
+        from backend.api.files import list_files
 
         source = inspect.getsource(list_files)
 
@@ -4256,21 +4518,26 @@ class TestBatch26ListFiles:
 
     def test_list_files_preserves_httpexceptions(self):
         """Verify endpoint preserves validation HTTPExceptions"""
-        from backend.api.files import list_files
         import inspect
+
+        from backend.api.files import list_files
 
         source = inspect.getsource(list_files)
 
         # Should preserve multiple HTTPExceptions for validation
         assert source.count("raise HTTPException") >= 3  # Multiple validation errors
-        assert 'status_code=403, detail="Insufficient permissions for file operations"' in source
+        assert (
+            'status_code=403, detail="Insufficient permissions for file operations"'
+            in source
+        )
         assert 'status_code=404, detail="Directory not found"' in source
         assert 'status_code=400, detail="Path is not a directory"' in source
 
     def test_list_files_preserves_business_logic(self):
         """Verify endpoint preserves file listing logic"""
-        from backend.api.files import list_files
         import inspect
+
+        from backend.api.files import list_files
 
         source = inspect.getsource(list_files)
 
@@ -4283,8 +4550,9 @@ class TestBatch26ListFiles:
 
     def test_list_files_preserves_inner_try_catch(self):
         """Verify endpoint preserves inner try-catch for file iteration errors"""
-        from backend.api.files import list_files
         import inspect
+
+        from backend.api.files import list_files
 
         source = inspect.getsource(list_files)
 
@@ -4298,8 +4566,9 @@ class TestBatch26UploadFile:
 
     def test_upload_file_has_decorator(self):
         """Verify endpoint has @with_error_handling decorator"""
-        from backend.api.files import upload_file
         import inspect
+
+        from backend.api.files import upload_file
 
         source = inspect.getsource(upload_file)
 
@@ -4311,8 +4580,9 @@ class TestBatch26UploadFile:
 
     def test_upload_file_no_outer_try_catch(self):
         """Verify outer try-catch block was removed"""
-        from backend.api.files import upload_file
         import inspect
+
+        from backend.api.files import upload_file
 
         source = inspect.getsource(upload_file)
 
@@ -4322,24 +4592,29 @@ class TestBatch26UploadFile:
 
     def test_upload_file_preserves_httpexceptions(self):
         """Verify endpoint preserves validation HTTPExceptions"""
-        from backend.api.files import upload_file
         import inspect
+
+        from backend.api.files import upload_file
 
         source = inspect.getsource(upload_file)
 
         # Should preserve multiple HTTPExceptions for validation
         assert source.count("raise HTTPException") >= 6  # Multiple validation errors
-        assert 'status_code=403, detail="Insufficient permissions for file upload"' in source
+        assert (
+            'status_code=403, detail="Insufficient permissions for file upload"'
+            in source
+        )
         assert 'status_code=400, detail="No filename provided"' in source
         assert 'detail=f"File type not allowed: {file.filename}"' in source
-        assert 'status_code=413' in source
+        assert "status_code=413" in source
         assert 'detail="File content contains potentially dangerous elements"' in source
-        assert 'status_code=409' in source
+        assert "status_code=409" in source
 
     def test_upload_file_preserves_business_logic(self):
         """Verify endpoint preserves file upload logic"""
-        from backend.api.files import upload_file
         import inspect
+
+        from backend.api.files import upload_file
 
         source = inspect.getsource(upload_file)
 
@@ -4353,14 +4628,15 @@ class TestBatch26UploadFile:
 
     def test_upload_file_preserves_audit_logging(self):
         """Verify endpoint preserves audit logging"""
-        from backend.api.files import upload_file
         import inspect
+
+        from backend.api.files import upload_file
 
         source = inspect.getsource(upload_file)
 
         # Should preserve audit logging
         assert "security_layer = get_security_layer(request)" in source
-        assert 'security_layer.audit_log(' in source
+        assert "security_layer.audit_log(" in source
         assert '"file_upload"' in source
 
 
@@ -4420,11 +4696,7 @@ class TestBatch26MigrationStats:
         upload_file_tests = 5  # All aspects covered
         batch_stats_tests = 4  # Progress, savings, patterns, coverage
 
-        total_batch_26_tests = (
-            list_files_tests
-            + upload_file_tests
-            + batch_stats_tests
-        )
+        total_batch_26_tests = list_files_tests + upload_file_tests + batch_stats_tests
 
         assert total_batch_26_tests == 14  # Comprehensive coverage
 
@@ -4437,36 +4709,46 @@ class TestBatch27DownloadFile:
     """Test Batch 27 - GET /download endpoint migration"""
 
     def test_download_file_has_decorator(self):
-        from backend.api.files import download_file
         import inspect
+
+        from backend.api.files import download_file
+
         source = inspect.getsource(download_file)
         assert "@with_error_handling" in source
         assert 'operation="download_file"' in source
 
     def test_download_file_no_outer_try_catch(self):
-        from backend.api.files import download_file
         import inspect
+
+        from backend.api.files import download_file
+
         source = inspect.getsource(download_file)
         assert source.count("try:") == 0
 
     def test_download_file_preserves_httpexceptions(self):
-        from backend.api.files import download_file
         import inspect
+
+        from backend.api.files import download_file
+
         source = inspect.getsource(download_file)
-        assert 'status_code=403' in source
+        assert "status_code=403" in source
         assert 'status_code=404, detail="File not found"' in source
         assert 'status_code=400, detail="Path is not a file"' in source
 
     def test_download_file_preserves_business_logic(self):
-        from backend.api.files import download_file
         import inspect
+
+        from backend.api.files import download_file
+
         source = inspect.getsource(download_file)
         assert "target_file = validate_and_resolve_path(path)" in source
         assert "return FileResponse(" in source
 
     def test_download_file_preserves_audit_logging(self):
-        from backend.api.files import download_file
         import inspect
+
+        from backend.api.files import download_file
+
         source = inspect.getsource(download_file)
         assert "security_layer.audit_log(" in source
         assert '"file_download"' in source
@@ -4476,36 +4758,46 @@ class TestBatch27ViewFile:
     """Test Batch 27 - GET /view endpoint migration"""
 
     def test_view_file_has_decorator(self):
-        from backend.api.files import view_file
         import inspect
+
+        from backend.api.files import view_file
+
         source = inspect.getsource(view_file)
         assert "@with_error_handling" in source
         assert 'operation="view_file"' in source
 
     def test_view_file_no_outer_try_catch(self):
-        from backend.api.files import view_file
         import inspect
+
+        from backend.api.files import view_file
+
         source = inspect.getsource(view_file)
         assert source.count("try:") == 1  # Only inner try for UnicodeDecodeError
 
     def test_view_file_preserves_httpexceptions(self):
-        from backend.api.files import view_file
         import inspect
+
+        from backend.api.files import view_file
+
         source = inspect.getsource(view_file)
-        assert 'status_code=403' in source
+        assert "status_code=403" in source
         assert 'status_code=404, detail="File not found"' in source
         assert 'status_code=400, detail="Path is not a file"' in source
 
     def test_view_file_preserves_business_logic(self):
-        from backend.api.files import view_file
         import inspect
+
+        from backend.api.files import view_file
+
         source = inspect.getsource(view_file)
         assert "file_info = get_file_info(target_file, relative_path)" in source
         assert "async with aiofiles.open(target_file" in source
 
     def test_view_file_preserves_inner_try_catch(self):
-        from backend.api.files import view_file
         import inspect
+
+        from backend.api.files import view_file
+
         source = inspect.getsource(view_file)
         assert "except UnicodeDecodeError:" in source
 
@@ -4527,7 +4819,9 @@ class TestBatch27MigrationStats:
         assert total_savings == 383
 
     def test_batch_27_pattern_application(self):
-        pattern_description = "Simple Pattern with HTTPException Preservation + Nested Error Handling"
+        pattern_description = (
+            "Simple Pattern with HTTPException Preservation + Nested Error Handling"
+        )
         assert len(pattern_description) > 0
 
     def test_batch_27_test_coverage(self):
@@ -4542,37 +4836,47 @@ class TestBatch28RenameFile:
     """Test Batch 28 - POST /rename endpoint migration"""
 
     def test_rename_file_has_decorator(self):
-        from backend.api.files import rename_file_or_directory
         import inspect
+
+        from backend.api.files import rename_file_or_directory
+
         source = inspect.getsource(rename_file_or_directory)
         assert "@with_error_handling" in source
         assert 'operation="rename_file_or_directory"' in source
 
     def test_rename_file_no_outer_try_catch(self):
-        from backend.api.files import rename_file_or_directory
         import inspect
+
+        from backend.api.files import rename_file_or_directory
+
         source = inspect.getsource(rename_file_or_directory)
         assert source.count("try:") == 0
 
     def test_rename_file_preserves_httpexceptions(self):
-        from backend.api.files import rename_file_or_directory
         import inspect
+
+        from backend.api.files import rename_file_or_directory
+
         source = inspect.getsource(rename_file_or_directory)
-        assert 'status_code=403' in source
+        assert "status_code=403" in source
         assert 'status_code=400, detail="Invalid file/directory name"' in source
         assert 'status_code=404, detail="File or directory not found"' in source
-        assert 'status_code=409' in source
+        assert "status_code=409" in source
 
     def test_rename_file_preserves_business_logic(self):
-        from backend.api.files import rename_file_or_directory
         import inspect
+
+        from backend.api.files import rename_file_or_directory
+
         source = inspect.getsource(rename_file_or_directory)
         assert "source_path = validate_and_resolve_path(path)" in source
         assert "source_path.rename(target_path)" in source
 
     def test_rename_file_preserves_audit_logging(self):
-        from backend.api.files import rename_file_or_directory
         import inspect
+
+        from backend.api.files import rename_file_or_directory
+
         source = inspect.getsource(rename_file_or_directory)
         assert "security_layer.audit_log(" in source
         assert '"file_rename"' in source
@@ -4582,36 +4886,46 @@ class TestBatch28PreviewFile:
     """Test Batch 28 - GET /preview endpoint migration"""
 
     def test_preview_file_has_decorator(self):
-        from backend.api.files import preview_file
         import inspect
+
+        from backend.api.files import preview_file
+
         source = inspect.getsource(preview_file)
         assert "@with_error_handling" in source
         assert 'operation="preview_file"' in source
 
     def test_preview_file_no_outer_try_catch(self):
-        from backend.api.files import preview_file
         import inspect
+
+        from backend.api.files import preview_file
+
         source = inspect.getsource(preview_file)
         assert source.count("try:") == 1  # Only inner try for UnicodeDecodeError
 
     def test_preview_file_preserves_httpexceptions(self):
-        from backend.api.files import preview_file
         import inspect
+
+        from backend.api.files import preview_file
+
         source = inspect.getsource(preview_file)
-        assert 'status_code=403' in source
+        assert "status_code=403" in source
         assert 'status_code=404, detail="File not found"' in source
         assert 'status_code=400, detail="Path is not a file"' in source
 
     def test_preview_file_preserves_business_logic(self):
-        from backend.api.files import preview_file
         import inspect
+
+        from backend.api.files import preview_file
+
         source = inspect.getsource(preview_file)
         assert "file_info = get_file_info(target_file, relative_path)" in source
         assert 'file_type = "binary"' in source
 
     def test_preview_file_preserves_inner_try_catch(self):
-        from backend.api.files import preview_file
         import inspect
+
+        from backend.api.files import preview_file
+
         source = inspect.getsource(preview_file)
         assert "except UnicodeDecodeError:" in source
 
@@ -4650,36 +4964,46 @@ class TestBatch29DeleteFile:
     """Test Batch 29 - DELETE /delete endpoint migration"""
 
     def test_delete_file_has_decorator(self):
-        from backend.api.files import delete_file
         import inspect
+
+        from backend.api.files import delete_file
+
         source = inspect.getsource(delete_file)
         assert "@with_error_handling" in source
         assert 'operation="delete_file"' in source
 
     def test_delete_file_no_outer_try_catch(self):
-        from backend.api.files import delete_file
         import inspect
+
+        from backend.api.files import delete_file
+
         source = inspect.getsource(delete_file)
         assert source.count("try:") == 1  # Only inner try for OSError
 
     def test_delete_file_preserves_httpexceptions(self):
-        from backend.api.files import delete_file
         import inspect
+
+        from backend.api.files import delete_file
+
         source = inspect.getsource(delete_file)
-        assert 'status_code=403' in source
+        assert "status_code=403" in source
         assert 'status_code=404, detail="File or directory not found"' in source
 
     def test_delete_file_preserves_business_logic(self):
-        from backend.api.files import delete_file
         import inspect
+
+        from backend.api.files import delete_file
+
         source = inspect.getsource(delete_file)
         assert "target_path.unlink()" in source
         assert "target_path.rmdir()" in source
         assert "shutil.rmtree(target_path)" in source
 
     def test_delete_file_preserves_inner_try_catch(self):
-        from backend.api.files import delete_file
         import inspect
+
+        from backend.api.files import delete_file
+
         source = inspect.getsource(delete_file)
         assert "except OSError:" in source
 
@@ -4688,36 +5012,46 @@ class TestBatch29CreateDirectory:
     """Test Batch 29 - POST /create_directory endpoint migration"""
 
     def test_create_directory_has_decorator(self):
-        from backend.api.files import create_directory
         import inspect
+
+        from backend.api.files import create_directory
+
         source = inspect.getsource(create_directory)
         assert "@with_error_handling" in source
         assert 'operation="create_directory"' in source
 
     def test_create_directory_no_outer_try_catch(self):
-        from backend.api.files import create_directory
         import inspect
+
+        from backend.api.files import create_directory
+
         source = inspect.getsource(create_directory)
         assert source.count("try:") == 0
 
     def test_create_directory_preserves_httpexceptions(self):
-        from backend.api.files import create_directory
         import inspect
+
+        from backend.api.files import create_directory
+
         source = inspect.getsource(create_directory)
-        assert 'status_code=403' in source
+        assert "status_code=403" in source
         assert 'status_code=400, detail="Invalid directory name"' in source
         assert 'status_code=409, detail="Directory already exists"' in source
 
     def test_create_directory_preserves_business_logic(self):
-        from backend.api.files import create_directory
         import inspect
+
+        from backend.api.files import create_directory
+
         source = inspect.getsource(create_directory)
         assert "parent_dir = validate_and_resolve_path(path)" in source
         assert "new_dir.mkdir(parents=True, exist_ok=False)" in source
 
     def test_create_directory_preserves_audit_logging(self):
-        from backend.api.files import create_directory
         import inspect
+
+        from backend.api.files import create_directory
+
         source = inspect.getsource(create_directory)
         assert "security_layer.audit_log(" in source
         assert '"directory_create"' in source
@@ -4757,37 +5091,47 @@ class TestBatch30GetDirectoryTree:
     """Test Batch 30 - GET /tree endpoint migration"""
 
     def test_get_directory_tree_has_decorator(self):
-        from backend.api.files import get_directory_tree
         import inspect
+
+        from backend.api.files import get_directory_tree
+
         source = inspect.getsource(get_directory_tree)
         assert "@with_error_handling" in source
         assert 'operation="get_directory_tree"' in source
 
     def test_get_directory_tree_no_outer_try_catch(self):
-        from backend.api.files import get_directory_tree
         import inspect
+
+        from backend.api.files import get_directory_tree
+
         source = inspect.getsource(get_directory_tree)
         # Should have 2 inner try-catches in build_tree nested function
         assert source.count("try:") == 2
 
     def test_get_directory_tree_preserves_httpexceptions(self):
-        from backend.api.files import get_directory_tree
         import inspect
+
+        from backend.api.files import get_directory_tree
+
         source = inspect.getsource(get_directory_tree)
-        assert 'status_code=403' in source
+        assert "status_code=403" in source
         assert 'status_code=404, detail="Directory not found"' in source
         assert 'status_code=400, detail="Path is not a directory"' in source
 
     def test_get_directory_tree_preserves_business_logic(self):
-        from backend.api.files import get_directory_tree
         import inspect
+
+        from backend.api.files import get_directory_tree
+
         source = inspect.getsource(get_directory_tree)
         assert "def build_tree(directory: Path, relative_base: Path) -> dict:" in source
         assert "build_tree(item, SANDBOXED_ROOT)" in source
 
     def test_get_directory_tree_preserves_inner_try_catches(self):
-        from backend.api.files import get_directory_tree
         import inspect
+
+        from backend.api.files import get_directory_tree
+
         source = inspect.getsource(get_directory_tree)
         assert "except (OSError, PermissionError) as e:" in source
         assert "except Exception as e:" in source
@@ -4797,35 +5141,45 @@ class TestBatch30GetFileStats:
     """Test Batch 30 - GET /stats endpoint migration"""
 
     def test_get_file_stats_has_decorator(self):
-        from backend.api.files import get_file_stats
         import inspect
+
+        from backend.api.files import get_file_stats
+
         source = inspect.getsource(get_file_stats)
         assert "@with_error_handling" in source
         assert 'operation="get_file_stats"' in source
 
     def test_get_file_stats_no_outer_try_catch(self):
-        from backend.api.files import get_file_stats
         import inspect
+
+        from backend.api.files import get_file_stats
+
         source = inspect.getsource(get_file_stats)
         assert source.count("try:") == 0
 
     def test_get_file_stats_preserves_httpexceptions(self):
-        from backend.api.files import get_file_stats
         import inspect
+
+        from backend.api.files import get_file_stats
+
         source = inspect.getsource(get_file_stats)
-        assert 'status_code=403' in source
+        assert "status_code=403" in source
 
     def test_get_file_stats_preserves_business_logic(self):
-        from backend.api.files import get_file_stats
         import inspect
+
+        from backend.api.files import get_file_stats
+
         source = inspect.getsource(get_file_stats)
         assert "for item in SANDBOXED_ROOT.rglob" in source
         assert "total_files" in source
         assert "total_directories" in source
 
     def test_get_file_stats_preserves_statistics_calculation(self):
-        from backend.api.files import get_file_stats
         import inspect
+
+        from backend.api.files import get_file_stats
+
         source = inspect.getsource(get_file_stats)
         assert "total_size_mb" in source
         assert "max_file_size_mb" in source
@@ -4865,28 +5219,36 @@ class TestBatch31ListActiveWorkflows:
     """Test Batch 31 - GET /workflows endpoint migration"""
 
     def test_list_active_workflows_has_decorator(self):
-        from backend.api.workflow import list_active_workflows
         import inspect
+
+        from backend.api.workflow import list_active_workflows
+
         source = inspect.getsource(list_active_workflows)
         assert "@with_error_handling" in source
         assert 'operation="list_active_workflows"' in source
 
     def test_list_active_workflows_no_try_catch(self):
-        from backend.api.workflow import list_active_workflows
         import inspect
+
+        from backend.api.workflow import list_active_workflows
+
         source = inspect.getsource(list_active_workflows)
         assert source.count("try:") == 0
 
     def test_list_active_workflows_preserves_business_logic(self):
-        from backend.api.workflow import list_active_workflows
         import inspect
+
+        from backend.api.workflow import list_active_workflows
+
         source = inspect.getsource(list_active_workflows)
         assert "for workflow_id, workflow_data in active_workflows.items():" in source
         assert "workflows_summary.append(summary)" in source
 
     def test_list_active_workflows_has_correct_category(self):
-        from backend.api.workflow import list_active_workflows
         import inspect
+
+        from backend.api.workflow import list_active_workflows
+
         source = inspect.getsource(list_active_workflows)
         assert "category=ErrorCategory.SERVER_ERROR" in source
 
@@ -4895,33 +5257,43 @@ class TestBatch31GetWorkflowDetails:
     """Test Batch 31 - GET /workflow/{workflow_id} endpoint migration"""
 
     def test_get_workflow_details_has_decorator(self):
-        from backend.api.workflow import get_workflow_details
         import inspect
+
+        from backend.api.workflow import get_workflow_details
+
         source = inspect.getsource(get_workflow_details)
         assert "@with_error_handling" in source
         assert 'operation="get_workflow_details"' in source
 
     def test_get_workflow_details_no_try_catch(self):
-        from backend.api.workflow import get_workflow_details
         import inspect
+
+        from backend.api.workflow import get_workflow_details
+
         source = inspect.getsource(get_workflow_details)
         assert source.count("try:") == 0
 
     def test_get_workflow_details_preserves_httpexception(self):
-        from backend.api.workflow import get_workflow_details
         import inspect
+
+        from backend.api.workflow import get_workflow_details
+
         source = inspect.getsource(get_workflow_details)
         assert 'status_code=404, detail="Workflow not found"' in source
 
     def test_get_workflow_details_preserves_business_logic(self):
-        from backend.api.workflow import get_workflow_details
         import inspect
+
+        from backend.api.workflow import get_workflow_details
+
         source = inspect.getsource(get_workflow_details)
         assert "workflow = active_workflows[workflow_id]" in source
 
     def test_get_workflow_details_has_correct_category(self):
-        from backend.api.workflow import get_workflow_details
         import inspect
+
+        from backend.api.workflow import get_workflow_details
+
         source = inspect.getsource(get_workflow_details)
         assert "category=ErrorCategory.NOT_FOUND" in source
 
@@ -4959,34 +5331,44 @@ class TestBatch32GetWorkflowStatus:
     """Test Batch 32 - GET /workflow/{workflow_id}/status endpoint migration"""
 
     def test_get_workflow_status_has_decorator(self):
-        from backend.api.workflow import get_workflow_status
         import inspect
+
+        from backend.api.workflow import get_workflow_status
+
         source = inspect.getsource(get_workflow_status)
         assert "@with_error_handling" in source
         assert 'operation="get_workflow_status"' in source
 
     def test_get_workflow_status_no_try_catch(self):
-        from backend.api.workflow import get_workflow_status
         import inspect
+
+        from backend.api.workflow import get_workflow_status
+
         source = inspect.getsource(get_workflow_status)
         assert source.count("try:") == 0
 
     def test_get_workflow_status_preserves_httpexception(self):
-        from backend.api.workflow import get_workflow_status
         import inspect
+
+        from backend.api.workflow import get_workflow_status
+
         source = inspect.getsource(get_workflow_status)
         assert 'status_code=404, detail="Workflow not found"' in source
 
     def test_get_workflow_status_preserves_business_logic(self):
-        from backend.api.workflow import get_workflow_status
         import inspect
+
+        from backend.api.workflow import get_workflow_status
+
         source = inspect.getsource(get_workflow_status)
         assert "current_step = workflow.get" in source
         assert "progress" in source
 
     def test_get_workflow_status_has_correct_category(self):
-        from backend.api.workflow import get_workflow_status
         import inspect
+
+        from backend.api.workflow import get_workflow_status
+
         source = inspect.getsource(get_workflow_status)
         assert "category=ErrorCategory.NOT_FOUND" in source
 
@@ -4995,35 +5377,45 @@ class TestBatch32ApproveWorkflowStep:
     """Test Batch 32 - POST /workflow/{workflow_id}/approve endpoint migration"""
 
     def test_approve_workflow_step_has_decorator(self):
-        from backend.api.workflow import approve_workflow_step
         import inspect
+
+        from backend.api.workflow import approve_workflow_step
+
         source = inspect.getsource(approve_workflow_step)
         assert "@with_error_handling" in source
         assert 'operation="approve_workflow_step"' in source
 
     def test_approve_workflow_step_no_try_catch(self):
-        from backend.api.workflow import approve_workflow_step
         import inspect
+
+        from backend.api.workflow import approve_workflow_step
+
         source = inspect.getsource(approve_workflow_step)
         assert source.count("try:") == 0
 
     def test_approve_workflow_step_preserves_httpexceptions(self):
-        from backend.api.workflow import approve_workflow_step
         import inspect
+
+        from backend.api.workflow import approve_workflow_step
+
         source = inspect.getsource(approve_workflow_step)
         assert 'status_code=404, detail="Workflow not found"' in source
         assert 'status_code=404, detail="No pending approval' in source
 
     def test_approve_workflow_step_preserves_business_logic(self):
-        from backend.api.workflow import approve_workflow_step
         import inspect
+
+        from backend.api.workflow import approve_workflow_step
+
         source = inspect.getsource(approve_workflow_step)
         assert "future = pending_approvals.pop(approval_key)" in source
         assert "await event_manager.publish(" in source
 
     def test_approve_workflow_step_has_correct_category(self):
-        from backend.api.workflow import approve_workflow_step
         import inspect
+
+        from backend.api.workflow import approve_workflow_step
+
         source = inspect.getsource(approve_workflow_step)
         assert "category=ErrorCategory.NOT_FOUND" in source
 
@@ -5066,133 +5458,187 @@ class TestBatch33WorkflowDELETEAndGETApprovals:
     def test_cancel_workflow_has_decorator(self):
         """Verify DELETE /workflow/{workflow_id} has @with_error_handling decorator"""
         import inspect
+
         from backend.api.workflow import cancel_workflow
-        
+
         source = inspect.getsource(cancel_workflow)
         assert "@with_error_handling" in source, "cancel_workflow missing decorator"
         assert "ErrorCategory.NOT_FOUND" in source, "cancel_workflow wrong category"
-        assert 'operation="cancel_workflow"' in source, "cancel_workflow wrong operation"
+        assert (
+            'operation="cancel_workflow"' in source
+        ), "cancel_workflow wrong operation"
         assert 'error_code_prefix="WORKFLOW"' in source, "cancel_workflow wrong prefix"
 
     def test_cancel_workflow_preserves_http_exception(self):
         """Verify cancel_workflow preserves HTTPException for 404"""
         import inspect
+
         from backend.api.workflow import cancel_workflow
-        
+
         source = inspect.getsource(cancel_workflow)
-        assert 'raise HTTPException(status_code=404' in source, "cancel_workflow should preserve 404 HTTPException"
+        assert (
+            "raise HTTPException(status_code=404" in source
+        ), "cancel_workflow should preserve 404 HTTPException"
 
     def test_cancel_workflow_business_logic_preserved(self):
         """Verify cancel_workflow business logic is intact"""
         import inspect
+
         from backend.api.workflow import cancel_workflow
-        
+
         source = inspect.getsource(cancel_workflow)
         # Status update
-        assert 'workflow["status"] = "cancelled"' in source, "cancel_workflow missing status update"
+        assert (
+            'workflow["status"] = "cancelled"' in source
+        ), "cancel_workflow missing status update"
         # Timestamp
-        assert 'workflow["cancelled_at"]' in source, "cancel_workflow missing cancelled_at"
+        assert (
+            'workflow["cancelled_at"]' in source
+        ), "cancel_workflow missing cancelled_at"
         # Future cancellation
         assert "if not future.done():" in source, "cancel_workflow missing future check"
-        assert "future.cancel()" in source, "cancel_workflow missing future cancellation"
+        assert (
+            "future.cancel()" in source
+        ), "cancel_workflow missing future cancellation"
         # Event publishing
-        assert 'await event_manager.publish(' in source, "cancel_workflow missing event publishing"
+        assert (
+            "await event_manager.publish(" in source
+        ), "cancel_workflow missing event publishing"
         assert '"workflow_cancelled"' in source, "cancel_workflow missing event type"
 
     def test_cancel_workflow_no_generic_try_catch(self):
         """Verify cancel_workflow has no generic try-catch blocks"""
         import inspect
+
         from backend.api.workflow import cancel_workflow
-        
+
         source = inspect.getsource(cancel_workflow)
-        lines = source.split('\n')
-        
+        lines = source.split("\n")
+
         # Should not have try-catch for generic exception handling
         for i, line in enumerate(lines):
-            if 'try:' in line and 'except' in ''.join(lines[i:i+10]):
+            if "try:" in line and "except" in "".join(lines[i : i + 10]):
                 # If there's a try-catch, ensure it's specific (not generic Exception)
-                except_block = ''.join(lines[i:i+10])
-                if 'except Exception' in except_block:
-                    pytest.fail("cancel_workflow should not have generic Exception handler")
+                except_block = "".join(lines[i : i + 10])
+                if "except Exception" in except_block:
+                    pytest.fail(
+                        "cancel_workflow should not have generic Exception handler"
+                    )
 
     def test_get_pending_approvals_has_decorator(self):
         """Verify GET /workflow/{workflow_id}/pending_approvals has @with_error_handling decorator"""
         import inspect
+
         from backend.api.workflow import get_pending_approvals
-        
+
         source = inspect.getsource(get_pending_approvals)
-        assert "@with_error_handling" in source, "get_pending_approvals missing decorator"
-        assert "ErrorCategory.NOT_FOUND" in source, "get_pending_approvals wrong category"
-        assert 'operation="get_pending_approvals"' in source, "get_pending_approvals wrong operation"
-        assert 'error_code_prefix="WORKFLOW"' in source, "get_pending_approvals wrong prefix"
+        assert (
+            "@with_error_handling" in source
+        ), "get_pending_approvals missing decorator"
+        assert (
+            "ErrorCategory.NOT_FOUND" in source
+        ), "get_pending_approvals wrong category"
+        assert (
+            'operation="get_pending_approvals"' in source
+        ), "get_pending_approvals wrong operation"
+        assert (
+            'error_code_prefix="WORKFLOW"' in source
+        ), "get_pending_approvals wrong prefix"
 
     def test_get_pending_approvals_preserves_http_exception(self):
         """Verify get_pending_approvals preserves HTTPException for 404"""
         import inspect
+
         from backend.api.workflow import get_pending_approvals
-        
+
         source = inspect.getsource(get_pending_approvals)
-        assert 'raise HTTPException(status_code=404' in source, "get_pending_approvals should preserve 404 HTTPException"
+        assert (
+            "raise HTTPException(status_code=404" in source
+        ), "get_pending_approvals should preserve 404 HTTPException"
 
     def test_get_pending_approvals_business_logic_preserved(self):
         """Verify get_pending_approvals business logic is intact"""
         import inspect
+
         from backend.api.workflow import get_pending_approvals
-        
+
         source = inspect.getsource(get_pending_approvals)
         # Workflow lookup
-        assert 'workflow = active_workflows[workflow_id]' in source, "get_pending_approvals missing workflow lookup"
+        assert (
+            "workflow = active_workflows[workflow_id]" in source
+        ), "get_pending_approvals missing workflow lookup"
         # Step filtering
-        assert 'for step in workflow.get("steps", [])' in source, "get_pending_approvals missing step iteration"
-        assert 'if step["status"] == "waiting_approval"' in source, "get_pending_approvals missing approval filter"
+        assert (
+            'for step in workflow.get("steps", [])' in source
+        ), "get_pending_approvals missing step iteration"
+        assert (
+            'if step["status"] == "waiting_approval"' in source
+        ), "get_pending_approvals missing approval filter"
         # Pending list generation
-        assert "pending_steps.append(" in source, "get_pending_approvals missing list append"
+        assert (
+            "pending_steps.append(" in source
+        ), "get_pending_approvals missing list append"
         assert '"step_id"' in source, "get_pending_approvals missing step_id field"
-        assert '"description"' in source, "get_pending_approvals missing description field"
-        assert '"agent_type"' in source, "get_pending_approvals missing agent_type field"
+        assert (
+            '"description"' in source
+        ), "get_pending_approvals missing description field"
+        assert (
+            '"agent_type"' in source
+        ), "get_pending_approvals missing agent_type field"
 
     def test_get_pending_approvals_return_format(self):
         """Verify get_pending_approvals return format"""
         import inspect
+
         from backend.api.workflow import get_pending_approvals
-        
+
         source = inspect.getsource(get_pending_approvals)
-        assert '"success": True' in source, "get_pending_approvals missing success field"
-        assert '"workflow_id": workflow_id' in source, "get_pending_approvals missing workflow_id field"
-        assert '"pending_approvals": pending_steps' in source, "get_pending_approvals missing pending_approvals field"
+        assert (
+            '"success": True' in source
+        ), "get_pending_approvals missing success field"
+        assert (
+            '"workflow_id": workflow_id' in source
+        ), "get_pending_approvals missing workflow_id field"
+        assert (
+            '"pending_approvals": pending_steps' in source
+        ), "get_pending_approvals missing pending_approvals field"
 
     def test_get_pending_approvals_no_generic_try_catch(self):
         """Verify get_pending_approvals has no generic try-catch blocks"""
         import inspect
+
         from backend.api.workflow import get_pending_approvals
-        
+
         source = inspect.getsource(get_pending_approvals)
-        lines = source.split('\n')
-        
+        lines = source.split("\n")
+
         # Should not have try-catch for generic exception handling
         for i, line in enumerate(lines):
-            if 'try:' in line and 'except' in ''.join(lines[i:i+10]):
+            if "try:" in line and "except" in "".join(lines[i : i + 10]):
                 # If there's a try-catch, ensure it's specific (not generic Exception)
-                except_block = ''.join(lines[i:i+10])
-                if 'except Exception' in except_block:
-                    pytest.fail("get_pending_approvals should not have generic Exception handler")
+                except_block = "".join(lines[i : i + 10])
+                if "except Exception" in except_block:
+                    pytest.fail(
+                        "get_pending_approvals should not have generic Exception handler"
+                    )
 
     def test_batch_33_migration_consistency(self):
         """Verify both batch 33 endpoints use consistent patterns"""
         import inspect
+
         from backend.api.workflow import cancel_workflow, get_pending_approvals
-        
+
         cancel_source = inspect.getsource(cancel_workflow)
         approvals_source = inspect.getsource(get_pending_approvals)
-        
+
         # Both should use NOT_FOUND category
         assert "ErrorCategory.NOT_FOUND" in cancel_source
         assert "ErrorCategory.NOT_FOUND" in approvals_source
-        
+
         # Both should have WORKFLOW prefix
         assert 'error_code_prefix="WORKFLOW"' in cancel_source
         assert 'error_code_prefix="WORKFLOW"' in approvals_source
-        
+
         # Both should preserve HTTPException
         assert "raise HTTPException" in cancel_source
         assert "raise HTTPException" in approvals_source
@@ -5200,37 +5646,43 @@ class TestBatch33WorkflowDELETEAndGETApprovals:
     def test_batch_33_decorator_placement(self):
         """Verify decorators are properly placed above function definitions"""
         import inspect
+
         from backend.api.workflow import cancel_workflow, get_pending_approvals
-        
+
         for func in [cancel_workflow, get_pending_approvals]:
             source = inspect.getsource(func)
-            lines = source.split('\n')
-            
+            lines = source.split("\n")
+
             # Find @with_error_handling decorator
             decorator_line = -1
             func_def_line = -1
-            
+
             for i, line in enumerate(lines):
-                if '@with_error_handling' in line:
+                if "@with_error_handling" in line:
                     decorator_line = i
-                if 'async def ' in line:
+                if "async def " in line:
                     func_def_line = i
                     break
-            
-            assert decorator_line != -1, f"{func.__name__} missing @with_error_handling decorator"
+
+            assert (
+                decorator_line != -1
+            ), f"{func.__name__} missing @with_error_handling decorator"
             assert func_def_line != -1, f"{func.__name__} missing function definition"
-            assert decorator_line < func_def_line, f"{func.__name__} decorator not before function"
+            assert (
+                decorator_line < func_def_line
+            ), f"{func.__name__} decorator not before function"
 
     def test_batch_33_all_endpoints_migrated(self):
         """Verify all batch 33 endpoints were successfully migrated"""
         import inspect
+
         from backend.api.workflow import cancel_workflow, get_pending_approvals
-        
+
         endpoints = [
             (cancel_workflow, "cancel_workflow"),
             (get_pending_approvals, "get_pending_approvals"),
         ]
-        
+
         for func, name in endpoints:
             source = inspect.getsource(func)
             assert "@with_error_handling" in source, f"{name} not migrated"
@@ -5247,31 +5699,35 @@ class TestBatch34ExecuteWorkflow:
     def test_execute_workflow_has_decorator(self):
         """Verify POST /execute has @with_error_handling decorator"""
         import inspect
+
         from backend.api.workflow import execute_workflow
-        
+
         source = inspect.getsource(execute_workflow)
         assert "@with_error_handling" in source, "execute_workflow missing decorator"
         assert "ErrorCategory.SERVER_ERROR" in source, "execute_workflow wrong category"
-        assert 'operation="execute_workflow"' in source, "execute_workflow wrong operation"
+        assert (
+            'operation="execute_workflow"' in source
+        ), "execute_workflow wrong operation"
         assert 'error_code_prefix="WORKFLOW"' in source, "execute_workflow wrong prefix"
 
     def test_execute_workflow_outer_try_catch_removed(self):
         """Verify execute_workflow has no outer try-catch block"""
         import inspect
+
         from backend.api.workflow import execute_workflow
-        
+
         source = inspect.getsource(execute_workflow)
-        lines = source.split('\n')
-        
+        lines = source.split("\n")
+
         # Find function start
         func_start = -1
         for i, line in enumerate(lines):
-            if 'async def execute_workflow' in line:
+            if "async def execute_workflow" in line:
                 func_start = i
                 break
-        
+
         assert func_start != -1, "Could not find function definition"
-        
+
         # Check first non-comment line after docstring isn't "try:"
         in_docstring = False
         first_logic_line = None
@@ -5281,137 +5737,179 @@ class TestBatch34ExecuteWorkflow:
                 in_docstring = not in_docstring
                 if not in_docstring and '"""' in line:
                     continue
-            elif not in_docstring and line and not line.startswith('#'):
+            elif not in_docstring and line and not line.startswith("#"):
                 first_logic_line = line
                 break
-        
+
         # First logic line should NOT be "try:"
         assert first_logic_line != "try:", "execute_workflow still has outer try block"
-        
+
         # Should not have outer "except Exception as e:" after main return
         # The nested try-catch for lightweight orchestrator is OK
         # Check there's no except after the main workflow return
         main_return_idx = -1
         for i, line in enumerate(lines):
-            if '"status_endpoint"' in line and 'workflow' in line:
+            if '"status_endpoint"' in line and "workflow" in line:
                 main_return_idx = i
                 break
-        
+
         if main_return_idx != -1:
             # Check next 10 lines after main return - should not have "except Exception"
             for i in range(main_return_idx, min(main_return_idx + 10, len(lines))):
                 line = lines[i].strip()
-                if line.startswith('async def '):
+                if line.startswith("async def "):
                     # Reached next function, good
                     break
                 # Should not find outer except block
-                assert not (line.startswith('except Exception') and 'Workflow execution failed' in ''.join(lines[i:i+3])), \
-                    "execute_workflow still has outer except block"
+                assert not (
+                    line.startswith("except Exception")
+                    and "Workflow execution failed" in "".join(lines[i : i + 3])
+                ), "execute_workflow still has outer except block"
 
     def test_execute_workflow_nested_try_catch_preserved(self):
         """Verify execute_workflow preserves nested try-catch for lightweight orchestrator"""
         import inspect
+
         from backend.api.workflow import execute_workflow
-        
+
         source = inspect.getsource(execute_workflow)
-        
+
         # Should have nested try-catch for lightweight orchestrator routing
-        assert "# TEMPORARY FIX: Use lightweight orchestrator" in source, \
-            "execute_workflow missing lightweight orchestrator comment"
-        assert "result = await lightweight_orchestrator.route_request" in source, \
-            "execute_workflow missing lightweight orchestrator routing"
-        
+        assert (
+            "# TEMPORARY FIX: Use lightweight orchestrator" in source
+        ), "execute_workflow missing lightweight orchestrator comment"
+        assert (
+            "result = await lightweight_orchestrator.route_request" in source
+        ), "execute_workflow missing lightweight orchestrator routing"
+
         # Should have nested except with logging
-        lines = source.split('\n')
+        lines = source.split("\n")
         found_nested_except = False
         found_logging = False
-        
+
         for i, line in enumerate(lines):
-            if 'except Exception as e:' in line:
+            if "except Exception as e:" in line:
                 # Check if this is the nested except (has logging)
-                context = ''.join(lines[i:i+5])
-                if 'import logging' in context or 'logger.error' in context:
+                context = "".join(lines[i : i + 5])
+                if "import logging" in context or "logger.error" in context:
                     found_nested_except = True
                     found_logging = True
-        
+
         assert found_nested_except, "execute_workflow missing nested except block"
         assert found_logging, "execute_workflow nested except missing logging"
 
     def test_execute_workflow_preserves_httpexceptions(self):
         """Verify execute_workflow preserves all HTTPExceptions"""
         import inspect
+
         from backend.api.workflow import execute_workflow
-        
+
         source = inspect.getsource(execute_workflow)
-        
+
         # Should have 3 HTTPExceptions
-        httpexception_count = source.count('raise HTTPException')
-        assert httpexception_count == 3, f"execute_workflow should have 3 HTTPExceptions, found {httpexception_count}"
-        
+        httpexception_count = source.count("raise HTTPException")
+        assert (
+            httpexception_count == 3
+        ), f"execute_workflow should have 3 HTTPExceptions, found {httpexception_count}"
+
         # Verify specific HTTPExceptions
-        assert 'Lightweight orchestrator not available' in source, "Missing lightweight orchestrator HTTPException"
-        assert 'Main orchestrator not available' in source, "Missing main orchestrator HTTPException"
-        assert 'Workflow execution failed' in source, "Missing workflow execution HTTPException"
+        assert (
+            "Lightweight orchestrator not available" in source
+        ), "Missing lightweight orchestrator HTTPException"
+        assert (
+            "Main orchestrator not available" in source
+        ), "Missing main orchestrator HTTPException"
+        assert (
+            "Workflow execution failed" in source
+        ), "Missing workflow execution HTTPException"
 
     def test_execute_workflow_business_logic_preserved(self):
         """Verify execute_workflow business logic is intact"""
         import inspect
+
         from backend.api.workflow import execute_workflow
-        
+
         source = inspect.getsource(execute_workflow)
-        
+
         # Orchestrator retrieval
-        assert 'lightweight_orchestrator = getattr' in source, "Missing lightweight orchestrator retrieval"
-        assert 'orchestrator = getattr' in source, "Missing main orchestrator retrieval"
-        
+        assert (
+            "lightweight_orchestrator = getattr" in source
+        ), "Missing lightweight orchestrator retrieval"
+        assert "orchestrator = getattr" in source, "Missing main orchestrator retrieval"
+
         # Validation logic
-        assert 'if lightweight_orchestrator is None:' in source, "Missing lightweight orchestrator validation"
-        assert 'if orchestrator is None:' in source, "Missing main orchestrator validation"
-        
+        assert (
+            "if lightweight_orchestrator is None:" in source
+        ), "Missing lightweight orchestrator validation"
+        assert (
+            "if orchestrator is None:" in source
+        ), "Missing main orchestrator validation"
+
         # Routing logic
-        assert 'result = await lightweight_orchestrator.route_request' in source, "Missing routing call"
-        assert 'if result.get("bypass_orchestration"):' in source, "Missing bypass orchestration check"
-        
+        assert (
+            "result = await lightweight_orchestrator.route_request" in source
+        ), "Missing routing call"
+        assert (
+            'if result.get("bypass_orchestration"):' in source
+        ), "Missing bypass orchestration check"
+
         # Response types
-        assert '"type": "lightweight_response"' in source, "Missing lightweight response type"
-        assert '"type": "complex_workflow_blocked"' in source, "Missing blocked workflow type"
-        assert '"type": "workflow_orchestration"' in source, "Missing orchestration type"
+        assert (
+            '"type": "lightweight_response"' in source
+        ), "Missing lightweight response type"
+        assert (
+            '"type": "complex_workflow_blocked"' in source
+        ), "Missing blocked workflow type"
+        assert (
+            '"type": "workflow_orchestration"' in source
+        ), "Missing orchestration type"
 
     def test_execute_workflow_background_task_execution(self):
         """Verify execute_workflow background task logic is preserved"""
         import inspect
+
         from backend.api.workflow import execute_workflow
-        
+
         source = inspect.getsource(execute_workflow)
-        
+
         # Background task setup
-        assert 'background_tasks.add_task' in source, "Missing background task addition"
-        assert 'execute_workflow_steps' in source, "Missing execute_workflow_steps reference"
-        
+        assert "background_tasks.add_task" in source, "Missing background task addition"
+        assert (
+            "execute_workflow_steps" in source
+        ), "Missing execute_workflow_steps reference"
+
         # Workflow data storage
-        assert 'active_workflows[workflow_id]' in source, "Missing workflow storage"
+        assert "active_workflows[workflow_id]" in source, "Missing workflow storage"
         assert '"workflow_id": workflow_id' in source, "Missing workflow ID in data"
         assert '"status": "planned"' in source, "Missing status field"
 
     def test_execute_workflow_metrics_tracking(self):
         """Verify execute_workflow metrics tracking is preserved"""
         import inspect
+
         from backend.api.workflow import execute_workflow
-        
+
         source = inspect.getsource(execute_workflow)
-        
+
         # Metrics tracking
-        assert 'workflow_metrics.start_workflow_tracking' in source, "Missing metrics tracking"
-        assert 'workflow_metrics.record_resource_usage' in source, "Missing resource tracking"
-        assert 'system_monitor.get_current_metrics()' in source, "Missing system monitoring"
+        assert (
+            "workflow_metrics.start_workflow_tracking" in source
+        ), "Missing metrics tracking"
+        assert (
+            "workflow_metrics.record_resource_usage" in source
+        ), "Missing resource tracking"
+        assert (
+            "system_monitor.get_current_metrics()" in source
+        ), "Missing system monitoring"
 
     def test_execute_workflow_response_structure(self):
         """Verify execute_workflow return structure"""
         import inspect
+
         from backend.api.workflow import execute_workflow
-        
+
         source = inspect.getsource(execute_workflow)
-        
+
         # Main return structure
         assert '"success": True' in source, "Missing success field"
         assert '"workflow_id": workflow_id' in source, "Missing workflow_id field"
@@ -5421,58 +5919,67 @@ class TestBatch34ExecuteWorkflow:
     def test_execute_workflow_unreachable_code_comment(self):
         """Verify execute_workflow has unreachable code comment"""
         import inspect
+
         from backend.api.workflow import execute_workflow
-        
+
         source = inspect.getsource(execute_workflow)
-        
+
         # Should have comment about unreachable code
-        assert "# The following code is unreachable" in source, \
-            "Missing unreachable code comment"
+        assert (
+            "# The following code is unreachable" in source
+        ), "Missing unreachable code comment"
 
     def test_batch_34_migration_consistency(self):
         """Verify batch 34 endpoint uses consistent decorator pattern"""
         import inspect
+
         from backend.api.workflow import execute_workflow
-        
+
         source = inspect.getsource(execute_workflow)
-        
+
         # Should use SERVER_ERROR category
         assert "ErrorCategory.SERVER_ERROR" in source
-        
+
         # Should have WORKFLOW prefix
         assert 'error_code_prefix="WORKFLOW"' in source
-        
+
         # Should preserve HTTPExceptions
         assert "raise HTTPException" in source
 
     def test_batch_34_decorator_placement(self):
         """Verify decorator is properly placed above function definition"""
         import inspect
+
         from backend.api.workflow import execute_workflow
-        
+
         source = inspect.getsource(execute_workflow)
-        lines = source.split('\n')
-        
+        lines = source.split("\n")
+
         # Find @with_error_handling decorator
         decorator_line = -1
         func_def_line = -1
-        
+
         for i, line in enumerate(lines):
-            if '@with_error_handling' in line:
+            if "@with_error_handling" in line:
                 decorator_line = i
-            if 'async def execute_workflow' in line:
+            if "async def execute_workflow" in line:
                 func_def_line = i
                 break
-        
-        assert decorator_line != -1, "execute_workflow missing @with_error_handling decorator"
+
+        assert (
+            decorator_line != -1
+        ), "execute_workflow missing @with_error_handling decorator"
         assert func_def_line != -1, "execute_workflow missing function definition"
-        assert decorator_line < func_def_line, "execute_workflow decorator not before function"
+        assert (
+            decorator_line < func_def_line
+        ), "execute_workflow decorator not before function"
 
     def test_batch_34_workflow_file_complete(self):
         """Verify all workflow.py endpoints have been migrated"""
         import inspect
+
         from backend.api import workflow
-        
+
         # Get all router endpoints
         endpoints = [
             workflow.list_active_workflows,
@@ -5483,7 +5990,7 @@ class TestBatch34ExecuteWorkflow:
             workflow.cancel_workflow,
             workflow.get_pending_approvals,
         ]
-        
+
         for endpoint in endpoints:
             source = inspect.getsource(endpoint)
             assert "@with_error_handling" in source, f"{endpoint.__name__} not migrated"
@@ -5502,7 +6009,9 @@ class TestBatch34MigrationStats:
         # Batch 34: 1 endpoint migrated (POST /execute)
         # Total progress: 66/1,070 endpoints
         progress = 66 / 1070
-        assert progress >= 0.0616, f"Migration progress should be at least 6.16%, got {progress*100:.2f}%"
+        assert (
+            progress >= 0.0616
+        ), f"Migration progress should be at least 6.16%, got {progress*100:.2f}%"
 
     def test_batch_34_code_savings(self):
         """Verify batch 34 code savings calculation"""
@@ -5510,34 +6019,42 @@ class TestBatch34MigrationStats:
         # Cumulative: 406 lines saved
         batch_34_savings = 5
         cumulative_savings = 406
-        
-        assert batch_34_savings == 5, f"Batch 34 should save 5 lines, calculated {batch_34_savings}"
-        assert cumulative_savings >= 406, f"Cumulative savings should be at least 406 lines, got {cumulative_savings}"
+
+        assert (
+            batch_34_savings == 5
+        ), f"Batch 34 should save 5 lines, calculated {batch_34_savings}"
+        assert (
+            cumulative_savings >= 406
+        ), f"Cumulative savings should be at least 406 lines, got {cumulative_savings}"
 
     def test_batch_34_nested_error_handling_pattern(self):
         """Verify batch 34 uses nested error handling pattern correctly"""
         import inspect
+
         from backend.api.workflow import execute_workflow
-        
+
         source = inspect.getsource(execute_workflow)
-        
+
         # Should have decorator
         assert "@with_error_handling" in source
-        
+
         # Should have nested try-catch preserved
         nested_try_count = 0
-        lines = source.split('\n')
+        lines = source.split("\n")
         for line in lines:
-            if 'try:' in line and line.strip().startswith('try:'):
+            if "try:" in line and line.strip().startswith("try:"):
                 nested_try_count += 1
-        
-        assert nested_try_count == 1, f"Should have 1 nested try block, found {nested_try_count}"
+
+        assert (
+            nested_try_count == 1
+        ), f"Should have 1 nested try block, found {nested_try_count}"
 
     def test_batch_34_workflow_file_completion(self):
         """Verify workflow.py file is 100% complete"""
         import inspect
+
         from backend.api import workflow
-        
+
         # All 7 endpoints should be migrated
         all_endpoints = [
             workflow.list_active_workflows,
@@ -5548,32 +6065,34 @@ class TestBatch34MigrationStats:
             workflow.cancel_workflow,
             workflow.get_pending_approvals,
         ]
-        
+
         migrated_count = 0
         for endpoint in all_endpoints:
             source = inspect.getsource(endpoint)
             if "@with_error_handling" in source:
                 migrated_count += 1
-        
-        assert migrated_count == 7, f"All 7 workflow.py endpoints should be migrated, found {migrated_count}"
-        
+
+        assert (
+            migrated_count == 7
+        ), f"All 7 workflow.py endpoints should be migrated, found {migrated_count}"
+
     def test_batch_34_test_coverage(self):
         """Verify batch 34 has comprehensive test coverage"""
         # This test verifies that batch 34 tests exist and are structured correctly
         import sys
-        
+
         # Get this test class
         current_module = sys.modules[__name__]
-        
+
         # Count batch 34 test methods
         batch_34_tests = [
-            name for name in dir(TestBatch34ExecuteWorkflow)
-            if name.startswith('test_')
+            name for name in dir(TestBatch34ExecuteWorkflow) if name.startswith("test_")
         ]
-        
+
         # Should have at least 10 tests for complex nested error handling endpoint
-        assert len(batch_34_tests) >= 10, \
-            f"Batch 34 should have at least 10 tests, found {len(batch_34_tests)}"
+        assert (
+            len(batch_34_tests) >= 10
+        ), f"Batch 34 should have at least 10 tests, found {len(batch_34_tests)}"
 
 
 # ============================================================
@@ -5587,8 +6106,9 @@ class TestBatch35AnalyticsEndpoints:
     def test_get_analytics_status_has_decorator(self):
         """Verify GET /status has @with_error_handling decorator"""
         import inspect
+
         from backend.api.analytics import get_analytics_status
-        
+
         source = inspect.getsource(get_analytics_status)
         assert "@with_error_handling" in source
         assert "ErrorCategory.SERVER_ERROR" in source
@@ -5598,25 +6118,29 @@ class TestBatch35AnalyticsEndpoints:
     def test_get_analytics_status_outer_try_removed(self):
         """Verify GET /status outer try-catch removed"""
         import inspect
+
         from backend.api.analytics import get_analytics_status
-        
+
         source = inspect.getsource(get_analytics_status)
-        lines = source.split('\n')
-        
+        lines = source.split("\n")
+
         # Should not have outer try-catch for entire function
         # But should preserve nested try-catch for Redis
-        try_count = source.count('try:')
+        try_count = source.count("try:")
         # Should have 1 try (nested Redis check)
         assert try_count == 1, f"Should have 1 nested try block, found {try_count}"
 
     def test_get_analytics_status_preserves_nested_try(self):
         """Verify GET /status preserves nested Redis connectivity try-catch"""
         import inspect
+
         from backend.api.analytics import get_analytics_status
-        
+
         source = inspect.getsource(get_analytics_status)
         assert "for db in [RedisDatabase" in source
-        assert "redis_conn = await analytics_controller.get_redis_connection(db)" in source
+        assert (
+            "redis_conn = await analytics_controller.get_redis_connection(db)" in source
+        )
         # Nested try-catch for Redis should be preserved
         assert "except Exception as e:" in source
         assert '"redis_connectivity"' in source
@@ -5624,8 +6148,9 @@ class TestBatch35AnalyticsEndpoints:
     def test_get_analytics_status_business_logic(self):
         """Verify GET /status business logic preserved"""
         import inspect
+
         from backend.api.analytics import get_analytics_status
-        
+
         source = inspect.getsource(get_analytics_status)
         assert "collector = analytics_controller.metrics_collector" in source
         assert '"analytics_system": "operational"' in source
@@ -5637,8 +6162,9 @@ class TestBatch35AnalyticsEndpoints:
     def test_get_monitoring_status_has_decorator(self):
         """Verify GET /monitoring/phase9/status has @with_error_handling decorator"""
         import inspect
+
         from backend.api.analytics import get_monitoring_status
-        
+
         source = inspect.getsource(get_monitoring_status)
         assert "@with_error_handling" in source
         assert "ErrorCategory.SERVER_ERROR" in source
@@ -5648,18 +6174,20 @@ class TestBatch35AnalyticsEndpoints:
     def test_get_monitoring_status_try_catch_removed(self):
         """Verify GET /monitoring/phase9/status try-catch completely removed"""
         import inspect
+
         from backend.api.analytics import get_monitoring_status
-        
+
         source = inspect.getsource(get_monitoring_status)
         # Should have NO try blocks in this endpoint
-        assert 'try:' not in source
-        assert 'except Exception' not in source
+        assert "try:" not in source
+        assert "except Exception" not in source
 
     def test_get_monitoring_status_business_logic(self):
         """Verify GET /monitoring/phase9/status business logic preserved"""
         import inspect
+
         from backend.api.analytics import get_monitoring_status
-        
+
         source = inspect.getsource(get_monitoring_status)
         assert "collector = analytics_controller.metrics_collector" in source
         assert '"active"' in source
@@ -5673,22 +6201,23 @@ class TestBatch35AnalyticsEndpoints:
     def test_batch_35_import_added(self):
         """Verify batch 35 added error_boundaries import"""
         import backend.api.analytics as analytics_module
-        
+
         # Check import exists
-        assert hasattr(analytics_module, 'ErrorCategory')
-        assert hasattr(analytics_module, 'with_error_handling')
+        assert hasattr(analytics_module, "ErrorCategory")
+        assert hasattr(analytics_module, "with_error_handling")
 
     def test_batch_35_analytics_file_started(self):
         """Verify analytics.py file started (2/20+ endpoints)"""
         import inspect
+
         from backend.api import analytics
-        
+
         # Check both migrated endpoints have decorators
         endpoints = [
             analytics.get_analytics_status,
             analytics.get_monitoring_status,
         ]
-        
+
         for endpoint in endpoints:
             source = inspect.getsource(endpoint)
             assert "@with_error_handling" in source, f"{endpoint.__name__} not migrated"
@@ -5707,7 +6236,9 @@ class TestBatch35MigrationStats:
         # Batch 35: 2 endpoints migrated
         # Total: 68/1,070 endpoints
         progress = 68 / 1070
-        assert progress >= 0.063, f"Migration progress should be at least 6.3%, got {progress*100:.2f}%"
+        assert (
+            progress >= 0.063
+        ), f"Migration progress should be at least 6.3%, got {progress*100:.2f}%"
 
     def test_batch_35_code_savings(self):
         """Verify batch 35 code savings"""
@@ -5715,7 +6246,7 @@ class TestBatch35MigrationStats:
         # Cumulative: 412 lines
         batch_35_savings = 6
         cumulative_savings = 412
-        
+
         assert batch_35_savings == 6
         assert cumulative_savings >= 412
 
@@ -5724,8 +6255,9 @@ class TestBatch35MigrationStats:
         # analytics.py has 38 try blocks total (most in codebase)
         # Started with 2 endpoints in batch 35
         import inspect
+
         from backend.api.analytics import get_analytics_status, get_monitoring_status
-        
+
         # Both should be migrated
         for endpoint in [get_analytics_status, get_monitoring_status]:
             source = inspect.getsource(endpoint)
@@ -5734,16 +6266,20 @@ class TestBatch35MigrationStats:
     def test_batch_35_test_coverage(self):
         """Verify batch 35 has adequate test coverage"""
         import sys
+
         current_module = sys.modules[__name__]
-        
+
         # Count batch 35 test methods
         batch_35_tests = [
-            name for name in dir(TestBatch35AnalyticsEndpoints)
-            if name.startswith('test_')
+            name
+            for name in dir(TestBatch35AnalyticsEndpoints)
+            if name.startswith("test_")
         ]
-        
+
         # Should have at least 8 tests
-        assert len(batch_35_tests) >= 8, f"Batch 35 should have at least 8 tests, found {len(batch_35_tests)}"
+        assert (
+            len(batch_35_tests) >= 8
+        ), f"Batch 35 should have at least 8 tests, found {len(batch_35_tests)}"
 
 
 # ============================================================================
@@ -5763,7 +6299,7 @@ class TestBatch36AnalyticsMigrations:
             "@with_error_handling" in source
         ), "Endpoint missing @with_error_handling decorator"
         assert (
-            'category=ErrorCategory.SERVER_ERROR' in source
+            "category=ErrorCategory.SERVER_ERROR" in source
         ), "Decorator should use SERVER_ERROR category"
         assert (
             'operation="get_phase9_dashboard_data"' in source
@@ -5782,10 +6318,14 @@ class TestBatch36AnalyticsMigrations:
         # Check that function body doesn't start with try
         function_body_started = False
         for line in lines:
-            if 'async def get_phase9_dashboard_data' in line:
+            if "async def get_phase9_dashboard_data" in line:
                 function_body_started = True
                 continue
-            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+            if (
+                function_body_started
+                and line.strip()
+                and not line.strip().startswith('"""')
+            ):
                 assert not line.strip().startswith(
                     "try:"
                 ), "Endpoint should not have outer try-catch block"
@@ -5796,13 +6336,20 @@ class TestBatch36AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.get_phase9_dashboard_data)
-        
+
         # Check key business logic is preserved
-        assert "performance_data = await analytics_controller.collect_performance_metrics()" in source
+        assert (
+            "performance_data = await analytics_controller.collect_performance_metrics()"
+            in source
+        )
         assert "system_health = await hardware_monitor.get_system_health()" in source
         assert 'cpu_health = 100 - performance_data.get("system_performance"' in source
-        assert 'memory_health = 100 - performance_data.get("system_performance"' in source
-        assert 'gpu_health = 100 - performance_data.get("hardware_performance"' in source
+        assert (
+            'memory_health = 100 - performance_data.get("system_performance"' in source
+        )
+        assert (
+            'gpu_health = 100 - performance_data.get("hardware_performance"' in source
+        )
         assert "overall_score = (cpu_health + memory_health + gpu_health) / 3" in source
         assert "dashboard_data = {" in source
         assert '"overall_health": {' in source
@@ -5816,9 +6363,11 @@ class TestBatch36AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.get_phase9_dashboard_data)
-        
+
         # Should not have except blocks
-        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert (
+            "except Exception" not in source
+        ), "Should not have manual exception handling"
         assert "HTTPException" not in source, "Should not raise HTTPException manually"
 
     def test_get_phase9_alerts_has_decorator(self):
@@ -5830,7 +6379,7 @@ class TestBatch36AnalyticsMigrations:
             "@with_error_handling" in source
         ), "Endpoint missing @with_error_handling decorator"
         assert (
-            'category=ErrorCategory.SERVER_ERROR' in source
+            "category=ErrorCategory.SERVER_ERROR" in source
         ), "Decorator should use SERVER_ERROR category"
         assert (
             'operation="get_phase9_alerts"' in source
@@ -5849,10 +6398,14 @@ class TestBatch36AnalyticsMigrations:
         # Check that function body doesn't start with try
         function_body_started = False
         for line in lines:
-            if 'async def get_phase9_alerts' in line:
+            if "async def get_phase9_alerts" in line:
                 function_body_started = True
                 continue
-            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+            if (
+                function_body_started
+                and line.strip()
+                and not line.strip().startswith('"""')
+            ):
                 assert not line.strip().startswith(
                     "try:"
                 ), "Endpoint should not have outer try-catch block"
@@ -5863,24 +6416,27 @@ class TestBatch36AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.get_phase9_alerts)
-        
+
         # Check key business logic is preserved
         assert "alerts = []" in source
-        assert "performance_data = await analytics_controller.collect_performance_metrics()" in source
-        assert '# CPU alerts' in source
+        assert (
+            "performance_data = await analytics_controller.collect_performance_metrics()"
+            in source
+        )
+        assert "# CPU alerts" in source
         assert 'cpu_percent = performance_data.get("system_performance"' in source
-        assert 'if cpu_percent > 90:' in source
+        assert "if cpu_percent > 90:" in source
         assert '"severity": "critical"' in source
         assert '"title": "High CPU Usage"' in source
-        assert '# Memory alerts' in source
+        assert "# Memory alerts" in source
         assert 'memory_percent = performance_data.get("system_performance"' in source
-        assert 'if memory_percent > 90:' in source
+        assert "if memory_percent > 90:" in source
         assert '"title": "High Memory Usage"' in source
-        assert '# GPU alerts' in source
+        assert "# GPU alerts" in source
         assert 'gpu_util = performance_data.get("hardware_performance"' in source
-        assert 'if gpu_util > 95:' in source
+        assert "if gpu_util > 95:" in source
         assert '"title": "High GPU Utilization"' in source
-        assert '# API performance alerts' in source
+        assert "# API performance alerts" in source
         assert 'api_performance = performance_data.get("api_performance"' in source
         assert "slow_endpoints = [" in source
         assert '"title": "Slow API Endpoints"' in source
@@ -5891,9 +6447,11 @@ class TestBatch36AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.get_phase9_alerts)
-        
+
         # Should not have except blocks
-        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert (
+            "except Exception" not in source
+        ), "Should not have manual exception handling"
         assert "HTTPException" not in source, "Should not raise HTTPException manually"
 
     def test_batch36_all_endpoints_migrated(self):
@@ -5904,7 +6462,9 @@ class TestBatch36AnalyticsMigrations:
         dashboard_source = inspect.getsource(analytics.get_phase9_dashboard_data)
         alerts_source = inspect.getsource(analytics.get_phase9_alerts)
 
-        assert "@with_error_handling" in dashboard_source, "Dashboard endpoint not migrated"
+        assert (
+            "@with_error_handling" in dashboard_source
+        ), "Dashboard endpoint not migrated"
         assert "@with_error_handling" in alerts_source, "Alerts endpoint not migrated"
 
     def test_batch36_consistent_error_handling(self):
@@ -5915,8 +6475,8 @@ class TestBatch36AnalyticsMigrations:
         alerts_source = inspect.getsource(analytics.get_phase9_alerts)
 
         # All should use SERVER_ERROR category
-        assert 'category=ErrorCategory.SERVER_ERROR' in dashboard_source
-        assert 'category=ErrorCategory.SERVER_ERROR' in alerts_source
+        assert "category=ErrorCategory.SERVER_ERROR" in dashboard_source
+        assert "category=ErrorCategory.SERVER_ERROR" in alerts_source
 
         # All should use ANALYTICS prefix
         assert 'error_code_prefix="ANALYTICS"' in dashboard_source
@@ -5940,7 +6500,7 @@ class TestBatch37AnalyticsMigrations:
             "@with_error_handling" in source
         ), "Endpoint missing @with_error_handling decorator"
         assert (
-            'category=ErrorCategory.SERVER_ERROR' in source
+            "category=ErrorCategory.SERVER_ERROR" in source
         ), "Decorator should use SERVER_ERROR category"
         assert (
             'operation="get_phase9_optimization_recommendations"' in source
@@ -5959,10 +6519,14 @@ class TestBatch37AnalyticsMigrations:
         # Check that function body doesn't start with try
         function_body_started = False
         for line in lines:
-            if 'async def get_phase9_optimization_recommendations' in line:
+            if "async def get_phase9_optimization_recommendations" in line:
                 function_body_started = True
                 continue
-            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+            if (
+                function_body_started
+                and line.strip()
+                and not line.strip().startswith('"""')
+            ):
                 assert not line.strip().startswith(
                     "try:"
                 ), "Endpoint should not have outer try-catch block"
@@ -5973,27 +6537,30 @@ class TestBatch37AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.get_phase9_optimization_recommendations)
-        
+
         # Check key business logic is preserved
         assert "recommendations = []" in source
-        assert "performance_data = await analytics_controller.collect_performance_metrics()" in source
+        assert (
+            "performance_data = await analytics_controller.collect_performance_metrics()"
+            in source
+        )
         assert "communication_patterns =" in source
         assert "await analytics_controller.analyze_communication_patterns()" in source
-        assert '# CPU optimization recommendations' in source
+        assert "# CPU optimization recommendations" in source
         assert 'cpu_percent = performance_data.get("system_performance"' in source
-        assert 'if cpu_percent > 80:' in source
+        assert "if cpu_percent > 80:" in source
         assert '"type": "cpu_optimization"' in source
         assert '"title": "Optimize CPU Usage"' in source
-        assert '# Memory optimization recommendations' in source
+        assert "# Memory optimization recommendations" in source
         assert 'memory_percent = performance_data.get("system_performance"' in source
-        assert 'if memory_percent > 80:' in source
+        assert "if memory_percent > 80:" in source
         assert '"type": "memory_optimization"' in source
-        assert '# API optimization recommendations' in source
+        assert "# API optimization recommendations" in source
         assert 'if communication_patterns.get("avg_response_time", 0) > 2.0:' in source
         assert '"type": "api_optimization"' in source
-        assert '# Code analysis recommendations' in source
+        assert "# Code analysis recommendations" in source
         assert 'cached_analysis = analytics_state.get("code_analysis_cache")' in source
-        assert 'if complexity > 7:' in source
+        assert "if complexity > 7:" in source
         assert '"type": "code_quality"' in source
         assert "return recommendations" in source
 
@@ -6002,9 +6569,11 @@ class TestBatch37AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.get_phase9_optimization_recommendations)
-        
+
         # Should not have except blocks
-        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert (
+            "except Exception" not in source
+        ), "Should not have manual exception handling"
         assert "HTTPException" not in source, "Should not raise HTTPException manually"
 
     def test_start_monitoring_has_decorator(self):
@@ -6016,7 +6585,7 @@ class TestBatch37AnalyticsMigrations:
             "@with_error_handling" in source
         ), "Endpoint missing @with_error_handling decorator"
         assert (
-            'category=ErrorCategory.SERVER_ERROR' in source
+            "category=ErrorCategory.SERVER_ERROR" in source
         ), "Decorator should use SERVER_ERROR category"
         assert (
             'operation="start_monitoring"' in source
@@ -6035,10 +6604,14 @@ class TestBatch37AnalyticsMigrations:
         # Check that function body doesn't start with try
         function_body_started = False
         for line in lines:
-            if 'async def start_monitoring' in line:
+            if "async def start_monitoring" in line:
                 function_body_started = True
                 continue
-            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+            if (
+                function_body_started
+                and line.strip()
+                and not line.strip().startswith('"""')
+            ):
                 assert not line.strip().startswith(
                     "try:"
                 ), "Endpoint should not have outer try-catch block"
@@ -6049,13 +6622,16 @@ class TestBatch37AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.start_monitoring)
-        
+
         # Check key business logic is preserved
         assert "collector = analytics_controller.metrics_collector" in source
-        assert 'if hasattr(collector, "_is_collecting") and not collector._is_collecting:' in source
+        assert (
+            'if hasattr(collector, "_is_collecting") and not collector._is_collecting:'
+            in source
+        )
         assert "asyncio.create_task(collector.start_collection())" in source
         assert 'analytics_state["session_start"] = datetime.now().isoformat()' in source
-        assert 'return {' in source
+        assert "return {" in source
         assert '"status": "started"' in source
         assert '"message": "Phase 9 monitoring started successfully"' in source
         assert '"timestamp": datetime.now().isoformat()' in source
@@ -6065,9 +6641,11 @@ class TestBatch37AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.start_monitoring)
-        
+
         # Should not have except blocks
-        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert (
+            "except Exception" not in source
+        ), "Should not have manual exception handling"
         assert "HTTPException" not in source, "Should not raise HTTPException manually"
 
     def test_batch37_all_endpoints_migrated(self):
@@ -6075,22 +6653,30 @@ class TestBatch37AnalyticsMigrations:
         from backend.api import analytics
 
         # Check both endpoints have decorators
-        recommendations_source = inspect.getsource(analytics.get_phase9_optimization_recommendations)
+        recommendations_source = inspect.getsource(
+            analytics.get_phase9_optimization_recommendations
+        )
         start_source = inspect.getsource(analytics.start_monitoring)
 
-        assert "@with_error_handling" in recommendations_source, "Recommendations endpoint not migrated"
-        assert "@with_error_handling" in start_source, "Start monitoring endpoint not migrated"
+        assert (
+            "@with_error_handling" in recommendations_source
+        ), "Recommendations endpoint not migrated"
+        assert (
+            "@with_error_handling" in start_source
+        ), "Start monitoring endpoint not migrated"
 
     def test_batch37_consistent_error_handling(self):
         """Test batch 37 endpoints use consistent error handling configuration"""
         from backend.api import analytics
 
-        recommendations_source = inspect.getsource(analytics.get_phase9_optimization_recommendations)
+        recommendations_source = inspect.getsource(
+            analytics.get_phase9_optimization_recommendations
+        )
         start_source = inspect.getsource(analytics.start_monitoring)
 
         # All should use SERVER_ERROR category
-        assert 'category=ErrorCategory.SERVER_ERROR' in recommendations_source
-        assert 'category=ErrorCategory.SERVER_ERROR' in start_source
+        assert "category=ErrorCategory.SERVER_ERROR" in recommendations_source
+        assert "category=ErrorCategory.SERVER_ERROR" in start_source
 
         # All should use ANALYTICS prefix
         assert 'error_code_prefix="ANALYTICS"' in recommendations_source
@@ -6114,7 +6700,7 @@ class TestBatch38AnalyticsMigrations:
             "@with_error_handling" in source
         ), "Endpoint missing @with_error_handling decorator"
         assert (
-            'category=ErrorCategory.SERVER_ERROR' in source
+            "category=ErrorCategory.SERVER_ERROR" in source
         ), "Decorator should use SERVER_ERROR category"
         assert (
             'operation="stop_monitoring"' in source
@@ -6133,10 +6719,14 @@ class TestBatch38AnalyticsMigrations:
         # Check that function body doesn't start with try
         function_body_started = False
         for line in lines:
-            if 'async def stop_monitoring' in line:
+            if "async def stop_monitoring" in line:
                 function_body_started = True
                 continue
-            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+            if (
+                function_body_started
+                and line.strip()
+                and not line.strip().startswith('"""')
+            ):
                 assert not line.strip().startswith(
                     "try:"
                 ), "Endpoint should not have outer try-catch block"
@@ -6147,12 +6737,15 @@ class TestBatch38AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.stop_monitoring)
-        
+
         # Check key business logic is preserved
         assert "collector = analytics_controller.metrics_collector" in source
-        assert 'if hasattr(collector, "_is_collecting") and collector._is_collecting:' in source
+        assert (
+            'if hasattr(collector, "_is_collecting") and collector._is_collecting:'
+            in source
+        )
         assert "await collector.stop_collection()" in source
-        assert 'return {' in source
+        assert "return {" in source
         assert '"status": "stopped"' in source
         assert '"message": "Phase 9 monitoring stopped successfully"' in source
         assert '"timestamp": datetime.now().isoformat()' in source
@@ -6162,9 +6755,11 @@ class TestBatch38AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.stop_monitoring)
-        
+
         # Should not have except blocks
-        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert (
+            "except Exception" not in source
+        ), "Should not have manual exception handling"
         assert "HTTPException" not in source, "Should not raise HTTPException manually"
 
     def test_query_phase9_metrics_has_decorator(self):
@@ -6176,7 +6771,7 @@ class TestBatch38AnalyticsMigrations:
             "@with_error_handling" in source
         ), "Endpoint missing @with_error_handling decorator"
         assert (
-            'category=ErrorCategory.SERVER_ERROR' in source
+            "category=ErrorCategory.SERVER_ERROR" in source
         ), "Decorator should use SERVER_ERROR category"
         assert (
             'operation="query_phase9_metrics"' in source
@@ -6195,10 +6790,14 @@ class TestBatch38AnalyticsMigrations:
         # Check that function body doesn't start with try
         function_body_started = False
         for line in lines:
-            if 'async def query_phase9_metrics' in line:
+            if "async def query_phase9_metrics" in line:
                 function_body_started = True
                 continue
-            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+            if (
+                function_body_started
+                and line.strip()
+                and not line.strip().startswith('"""')
+            ):
                 assert not line.strip().startswith(
                     "try:"
                 ), "Endpoint should not have outer try-catch block"
@@ -6209,13 +6808,18 @@ class TestBatch38AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.query_phase9_metrics)
-        
+
         # Check key business logic is preserved
         assert 'metric_name = query_request.get("metric", "all")' in source
         assert 'time_range = query_request.get("time_range", 3600)' in source
-        assert "await analytics_controller.metrics_collector.collect_all_metrics()" in source
+        assert (
+            "await analytics_controller.metrics_collector.collect_all_metrics()"
+            in source
+        )
         assert 'if metric_name != "all" and metric_name in current_metrics:' in source
-        assert "filtered_metrics = {metric_name: current_metrics[metric_name]}" in source
+        assert (
+            "filtered_metrics = {metric_name: current_metrics[metric_name]}" in source
+        )
         assert "historical_data = []" in source
         assert "cutoff_time = datetime.now() - timedelta(seconds=time_range)" in source
         assert 'for perf_point in analytics_state["performance_history"]:' in source
@@ -6233,9 +6837,11 @@ class TestBatch38AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.query_phase9_metrics)
-        
+
         # Should not have except blocks
-        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert (
+            "except Exception" not in source
+        ), "Should not have manual exception handling"
         assert "HTTPException" not in source, "Should not raise HTTPException manually"
 
     def test_batch38_all_endpoints_migrated(self):
@@ -6246,8 +6852,12 @@ class TestBatch38AnalyticsMigrations:
         stop_source = inspect.getsource(analytics.stop_monitoring)
         query_source = inspect.getsource(analytics.query_phase9_metrics)
 
-        assert "@with_error_handling" in stop_source, "Stop monitoring endpoint not migrated"
-        assert "@with_error_handling" in query_source, "Query metrics endpoint not migrated"
+        assert (
+            "@with_error_handling" in stop_source
+        ), "Stop monitoring endpoint not migrated"
+        assert (
+            "@with_error_handling" in query_source
+        ), "Query metrics endpoint not migrated"
 
     def test_batch38_consistent_error_handling(self):
         """Test batch 38 endpoints use consistent error handling configuration"""
@@ -6257,8 +6867,8 @@ class TestBatch38AnalyticsMigrations:
         query_source = inspect.getsource(analytics.query_phase9_metrics)
 
         # All should use SERVER_ERROR category
-        assert 'category=ErrorCategory.SERVER_ERROR' in stop_source
-        assert 'category=ErrorCategory.SERVER_ERROR' in query_source
+        assert "category=ErrorCategory.SERVER_ERROR" in stop_source
+        assert "category=ErrorCategory.SERVER_ERROR" in query_source
 
         # All should use ANALYTICS prefix
         assert 'error_code_prefix="ANALYTICS"' in stop_source
@@ -6282,7 +6892,7 @@ class TestBatch39AnalyticsMigrations:
             "@with_error_handling" in source
         ), "Endpoint missing @with_error_handling decorator"
         assert (
-            'category=ErrorCategory.SERVER_ERROR' in source
+            "category=ErrorCategory.SERVER_ERROR" in source
         ), "Decorator should use SERVER_ERROR category"
         assert (
             'operation="analyze_communication_chains_detailed"' in source
@@ -6301,10 +6911,14 @@ class TestBatch39AnalyticsMigrations:
         # Check that function body doesn't start with try
         function_body_started = False
         for line in lines:
-            if 'async def analyze_communication_chains_detailed' in line:
+            if "async def analyze_communication_chains_detailed" in line:
                 function_body_started = True
                 continue
-            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+            if (
+                function_body_started
+                and line.strip()
+                and not line.strip().startswith('"""')
+            ):
                 assert not line.strip().startswith(
                     "try:"
                 ), "Endpoint should not have outer try-catch block"
@@ -6315,11 +6929,14 @@ class TestBatch39AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.analyze_communication_chains_detailed)
-        
+
         # Check key business logic is preserved
         assert "analysis_request = CodeAnalysisRequest(" in source
         assert 'analysis_type="communication_chains"' in source
-        assert "results = await analytics_controller.perform_code_analysis(analysis_request)" in source
+        assert (
+            "results = await analytics_controller.perform_code_analysis(analysis_request)"
+            in source
+        )
         assert 'if results.get("status") == "success":' in source
         assert "runtime_patterns = analytics_controller.api_frequencies" in source
         assert 'static_patterns = results.get("communication_chains"' in source
@@ -6342,9 +6959,11 @@ class TestBatch39AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.analyze_communication_chains_detailed)
-        
+
         # Should not have except blocks
-        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert (
+            "except Exception" not in source
+        ), "Should not have manual exception handling"
         assert "HTTPException" not in source, "Should not raise HTTPException manually"
 
     def test_get_code_quality_score_has_decorator(self):
@@ -6356,7 +6975,7 @@ class TestBatch39AnalyticsMigrations:
             "@with_error_handling" in source
         ), "Endpoint missing @with_error_handling decorator"
         assert (
-            'category=ErrorCategory.SERVER_ERROR' in source
+            "category=ErrorCategory.SERVER_ERROR" in source
         ), "Decorator should use SERVER_ERROR category"
         assert (
             'operation="get_code_quality_score"' in source
@@ -6375,10 +6994,14 @@ class TestBatch39AnalyticsMigrations:
         # Check that function body doesn't start with try
         function_body_started = False
         for line in lines:
-            if 'async def get_code_quality_score' in line:
+            if "async def get_code_quality_score" in line:
                 function_body_started = True
                 continue
-            if function_body_started and line.strip() and not line.strip().startswith('"""'):
+            if (
+                function_body_started
+                and line.strip()
+                and not line.strip().startswith('"""')
+            ):
                 assert not line.strip().startswith(
                     "try:"
                 ), "Endpoint should not have outer try-catch block"
@@ -6389,7 +7012,7 @@ class TestBatch39AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.get_code_quality_score)
-        
+
         # Check key business logic is preserved
         assert 'cached_analysis = analytics_state.get("code_analysis_cache")' in source
         assert "if not cached_analysis:" in source
@@ -6404,8 +7027,12 @@ class TestBatch39AnalyticsMigrations:
         assert 'if "code_analysis" in cached_analysis:' in source
         assert 'code_data = cached_analysis["code_analysis"]' in source
         assert 'complexity = code_data.get("complexity", 10)' in source
-        assert 'quality_factors["complexity"] = max(0, (10 - complexity) * 10)' in source
-        assert 'quality_factors["test_coverage"] = code_data.get("test_coverage"' in source
+        assert (
+            'quality_factors["complexity"] = max(0, (10 - complexity) * 10)' in source
+        )
+        assert (
+            'quality_factors["test_coverage"] = code_data.get("test_coverage"' in source
+        )
         assert "maintainability_scores = {" in source
         assert "overall_score = sum(quality_factors.values())" in source
         assert '"overall_score": round(overall_score, 1)' in source
@@ -6417,9 +7044,11 @@ class TestBatch39AnalyticsMigrations:
         from backend.api import analytics
 
         source = inspect.getsource(analytics.get_code_quality_score)
-        
+
         # Should not have except blocks
-        assert "except Exception" not in source, "Should not have manual exception handling"
+        assert (
+            "except Exception" not in source
+        ), "Should not have manual exception handling"
         assert "HTTPException" not in source, "Should not raise HTTPException manually"
 
     def test_batch39_all_endpoints_migrated(self):
@@ -6427,22 +7056,30 @@ class TestBatch39AnalyticsMigrations:
         from backend.api import analytics
 
         # Check both endpoints have decorators
-        chains_source = inspect.getsource(analytics.analyze_communication_chains_detailed)
+        chains_source = inspect.getsource(
+            analytics.analyze_communication_chains_detailed
+        )
         quality_source = inspect.getsource(analytics.get_code_quality_score)
 
-        assert "@with_error_handling" in chains_source, "Communication chains endpoint not migrated"
-        assert "@with_error_handling" in quality_source, "Quality score endpoint not migrated"
+        assert (
+            "@with_error_handling" in chains_source
+        ), "Communication chains endpoint not migrated"
+        assert (
+            "@with_error_handling" in quality_source
+        ), "Quality score endpoint not migrated"
 
     def test_batch39_consistent_error_handling(self):
         """Test batch 39 endpoints use consistent error handling configuration"""
         from backend.api import analytics
 
-        chains_source = inspect.getsource(analytics.analyze_communication_chains_detailed)
+        chains_source = inspect.getsource(
+            analytics.analyze_communication_chains_detailed
+        )
         quality_source = inspect.getsource(analytics.get_code_quality_score)
 
         # All should use SERVER_ERROR category
-        assert 'category=ErrorCategory.SERVER_ERROR' in chains_source
-        assert 'category=ErrorCategory.SERVER_ERROR' in quality_source
+        assert "category=ErrorCategory.SERVER_ERROR" in chains_source
+        assert "category=ErrorCategory.SERVER_ERROR" in quality_source
 
         # All should use ANALYTICS prefix
         assert 'error_code_prefix="ANALYTICS"' in chains_source
@@ -6459,8 +7096,9 @@ class TestBatch40AnalyticsMigrations(unittest.TestCase):
 
     def test_quality_metrics_decorator_present(self):
         """Verify @with_error_handling decorator on get_code_quality_metrics"""
-        from backend.api.analytics import get_code_quality_metrics
         import inspect
+
+        from backend.api.analytics import get_code_quality_metrics
 
         source = inspect.getsource(get_code_quality_metrics)
         self.assertIn("@with_error_handling", source)
@@ -6469,8 +7107,9 @@ class TestBatch40AnalyticsMigrations(unittest.TestCase):
 
     def test_quality_metrics_no_try_catch(self):
         """Verify try-catch removed from get_code_quality_metrics"""
-        from backend.api.analytics import get_code_quality_metrics
         import inspect
+
+        from backend.api.analytics import get_code_quality_metrics
 
         source = inspect.getsource(get_code_quality_metrics)
         # Should not have try-catch pattern
@@ -6479,8 +7118,9 @@ class TestBatch40AnalyticsMigrations(unittest.TestCase):
 
     def test_quality_metrics_business_logic_preserved(self):
         """Verify business logic preserved in get_code_quality_metrics"""
-        from backend.api.analytics import get_code_quality_metrics
         import inspect
+
+        from backend.api.analytics import get_code_quality_metrics
 
         source = inspect.getsource(get_code_quality_metrics)
         # Key business logic should be present
@@ -6491,9 +7131,10 @@ class TestBatch40AnalyticsMigrations(unittest.TestCase):
 
     def test_quality_metrics_error_handling(self):
         """Test error handling in get_code_quality_metrics"""
+        import inspect
+
         from backend.api.analytics import get_code_quality_metrics
         from src.utils.error_boundaries import ErrorCategory
-        import inspect
 
         source = inspect.getsource(get_code_quality_metrics)
         # Verify decorator configuration
@@ -6503,8 +7144,9 @@ class TestBatch40AnalyticsMigrations(unittest.TestCase):
 
     def test_communication_chains_decorator_present(self):
         """Verify @with_error_handling decorator on get_communication_chains"""
-        from backend.api.analytics import get_communication_chains
         import inspect
+
+        from backend.api.analytics import get_communication_chains
 
         source = inspect.getsource(get_communication_chains)
         self.assertIn("@with_error_handling", source)
@@ -6513,8 +7155,9 @@ class TestBatch40AnalyticsMigrations(unittest.TestCase):
 
     def test_communication_chains_no_try_catch(self):
         """Verify try-catch removed from get_communication_chains"""
-        from backend.api.analytics import get_communication_chains
         import inspect
+
+        from backend.api.analytics import get_communication_chains
 
         source = inspect.getsource(get_communication_chains)
         # Should not have try-catch pattern
@@ -6523,8 +7166,9 @@ class TestBatch40AnalyticsMigrations(unittest.TestCase):
 
     def test_communication_chains_business_logic_preserved(self):
         """Verify business logic preserved in get_communication_chains"""
-        from backend.api.analytics import get_communication_chains
         import inspect
+
+        from backend.api.analytics import get_communication_chains
 
         source = inspect.getsource(get_communication_chains)
         # Key business logic should be present
@@ -6536,9 +7180,10 @@ class TestBatch40AnalyticsMigrations(unittest.TestCase):
 
     def test_communication_chains_error_handling(self):
         """Test error handling in get_communication_chains"""
+        import inspect
+
         from backend.api.analytics import get_communication_chains
         from src.utils.error_boundaries import ErrorCategory
-        import inspect
 
         source = inspect.getsource(get_communication_chains)
         # Verify decorator configuration
@@ -6548,11 +7193,12 @@ class TestBatch40AnalyticsMigrations(unittest.TestCase):
 
     def test_batch40_all_endpoints_migrated(self):
         """Verify all Batch 40 endpoints have been migrated"""
+        import inspect
+
         from backend.api.analytics import (
             get_code_quality_metrics,
             get_communication_chains,
         )
-        import inspect
 
         endpoints = [get_code_quality_metrics, get_communication_chains]
 
@@ -6565,11 +7211,12 @@ class TestBatch40AnalyticsMigrations(unittest.TestCase):
 
     def test_batch40_consistent_error_category(self):
         """Verify consistent error category across Batch 40"""
+        import inspect
+
         from backend.api.analytics import (
             get_code_quality_metrics,
             get_communication_chains,
         )
-        import inspect
 
         endpoints = [get_code_quality_metrics, get_communication_chains]
 
@@ -6595,8 +7242,9 @@ class TestBatch41AnalyticsMigrations(unittest.TestCase):
 
     def test_get_realtime_metrics_decorator_present(self):
         """Verify @with_error_handling decorator on get_realtime_metrics"""
-        from backend.api.analytics import get_realtime_metrics
         import inspect
+
+        from backend.api.analytics import get_realtime_metrics
 
         source = inspect.getsource(get_realtime_metrics)
         self.assertIn("@with_error_handling", source)
@@ -6605,26 +7253,33 @@ class TestBatch41AnalyticsMigrations(unittest.TestCase):
 
     def test_get_realtime_metrics_no_try_catch(self):
         """Verify try-catch removed from get_realtime_metrics"""
-        from backend.api.analytics import get_realtime_metrics
         import inspect
+
+        from backend.api.analytics import get_realtime_metrics
 
         source = inspect.getsource(get_realtime_metrics)
         # Should not have outer try-catch pattern
-        lines = source.split('\n')
+        lines = source.split("\n")
         # Check that function body doesn't start with try:
         function_body_started = False
         for line in lines:
-            if 'def get_realtime_metrics' in line:
+            if "def get_realtime_metrics" in line:
                 function_body_started = True
                 continue
-            if function_body_started and line.strip() and not line.strip().startswith('"""') and not line.strip().startswith('#'):
-                self.assertNotIn('try:', line)
+            if (
+                function_body_started
+                and line.strip()
+                and not line.strip().startswith('"""')
+                and not line.strip().startswith("#")
+            ):
+                self.assertNotIn("try:", line)
                 break
 
     def test_get_realtime_metrics_business_logic_preserved(self):
         """Verify business logic preserved in get_realtime_metrics"""
-        from backend.api.analytics import get_realtime_metrics
         import inspect
+
+        from backend.api.analytics import get_realtime_metrics
 
         source = inspect.getsource(get_realtime_metrics)
         # Key business logic should be present
@@ -6635,8 +7290,9 @@ class TestBatch41AnalyticsMigrations(unittest.TestCase):
 
     def test_get_realtime_metrics_error_handling(self):
         """Test error handling configuration in get_realtime_metrics"""
-        from backend.api.analytics import get_realtime_metrics
         import inspect
+
+        from backend.api.analytics import get_realtime_metrics
 
         source = inspect.getsource(get_realtime_metrics)
         # Verify decorator configuration
@@ -6646,8 +7302,9 @@ class TestBatch41AnalyticsMigrations(unittest.TestCase):
 
     def test_track_analytics_event_decorator_present(self):
         """Verify @with_error_handling decorator on track_analytics_event"""
-        from backend.api.analytics import track_analytics_event
         import inspect
+
+        from backend.api.analytics import track_analytics_event
 
         source = inspect.getsource(track_analytics_event)
         self.assertIn("@with_error_handling", source)
@@ -6656,8 +7313,9 @@ class TestBatch41AnalyticsMigrations(unittest.TestCase):
 
     def test_track_analytics_event_nested_try_preserved(self):
         """Verify nested try-catch preserved in track_analytics_event for WebSocket handling"""
-        from backend.api.analytics import track_analytics_event
         import inspect
+
+        from backend.api.analytics import track_analytics_event
 
         source = inspect.getsource(track_analytics_event)
         # Should have nested try-catch for WebSocket error handling
@@ -6668,8 +7326,9 @@ class TestBatch41AnalyticsMigrations(unittest.TestCase):
 
     def test_track_analytics_event_business_logic_preserved(self):
         """Verify business logic preserved in track_analytics_event"""
-        from backend.api.analytics import track_analytics_event
         import inspect
+
+        from backend.api.analytics import track_analytics_event
 
         source = inspect.getsource(track_analytics_event)
         # Key business logic should be present
@@ -6681,8 +7340,9 @@ class TestBatch41AnalyticsMigrations(unittest.TestCase):
 
     def test_track_analytics_event_error_handling(self):
         """Test error handling configuration in track_analytics_event"""
-        from backend.api.analytics import track_analytics_event
         import inspect
+
+        from backend.api.analytics import track_analytics_event
 
         source = inspect.getsource(track_analytics_event)
         # Verify decorator configuration
@@ -6692,11 +7352,12 @@ class TestBatch41AnalyticsMigrations(unittest.TestCase):
 
     def test_batch41_all_endpoints_migrated(self):
         """Verify all Batch 41 endpoints have been migrated"""
+        import inspect
+
         from backend.api.analytics import (
             get_realtime_metrics,
             track_analytics_event,
         )
-        import inspect
 
         endpoints = [get_realtime_metrics, track_analytics_event]
 
@@ -6707,11 +7368,12 @@ class TestBatch41AnalyticsMigrations(unittest.TestCase):
 
     def test_batch41_consistent_error_category(self):
         """Verify consistent error category across Batch 41"""
+        import inspect
+
         from backend.api.analytics import (
             get_realtime_metrics,
             track_analytics_event,
         )
-        import inspect
 
         endpoints = [get_realtime_metrics, track_analytics_event]
 
@@ -6737,8 +7399,9 @@ class TestBatch42AnalyticsMigrations(unittest.TestCase):
 
     def test_start_analytics_collection_decorator_present(self):
         """Verify @with_error_handling decorator on start_analytics_collection"""
-        from backend.api.analytics import start_analytics_collection
         import inspect
+
+        from backend.api.analytics import start_analytics_collection
 
         source = inspect.getsource(start_analytics_collection)
         self.assertIn("@with_error_handling", source)
@@ -6747,8 +7410,9 @@ class TestBatch42AnalyticsMigrations(unittest.TestCase):
 
     def test_start_analytics_collection_no_try_catch(self):
         """Verify try-catch removed from start_analytics_collection"""
-        from backend.api.analytics import start_analytics_collection
         import inspect
+
+        from backend.api.analytics import start_analytics_collection
 
         source = inspect.getsource(start_analytics_collection)
         # Should not have try-catch pattern
@@ -6757,8 +7421,9 @@ class TestBatch42AnalyticsMigrations(unittest.TestCase):
 
     def test_start_analytics_collection_business_logic_preserved(self):
         """Verify business logic preserved in start_analytics_collection"""
-        from backend.api.analytics import start_analytics_collection
         import inspect
+
+        from backend.api.analytics import start_analytics_collection
 
         source = inspect.getsource(start_analytics_collection)
         # Key business logic should be present
@@ -6769,8 +7434,9 @@ class TestBatch42AnalyticsMigrations(unittest.TestCase):
 
     def test_start_analytics_collection_error_handling(self):
         """Test error handling configuration in start_analytics_collection"""
-        from backend.api.analytics import start_analytics_collection
         import inspect
+
+        from backend.api.analytics import start_analytics_collection
 
         source = inspect.getsource(start_analytics_collection)
         # Verify decorator configuration
@@ -6780,8 +7446,9 @@ class TestBatch42AnalyticsMigrations(unittest.TestCase):
 
     def test_stop_analytics_collection_decorator_present(self):
         """Verify @with_error_handling decorator on stop_analytics_collection"""
-        from backend.api.analytics import stop_analytics_collection
         import inspect
+
+        from backend.api.analytics import stop_analytics_collection
 
         source = inspect.getsource(stop_analytics_collection)
         self.assertIn("@with_error_handling", source)
@@ -6790,8 +7457,9 @@ class TestBatch42AnalyticsMigrations(unittest.TestCase):
 
     def test_stop_analytics_collection_no_try_catch(self):
         """Verify try-catch removed from stop_analytics_collection"""
-        from backend.api.analytics import stop_analytics_collection
         import inspect
+
+        from backend.api.analytics import stop_analytics_collection
 
         source = inspect.getsource(stop_analytics_collection)
         # Should not have try-catch pattern
@@ -6800,8 +7468,9 @@ class TestBatch42AnalyticsMigrations(unittest.TestCase):
 
     def test_stop_analytics_collection_business_logic_preserved(self):
         """Verify business logic preserved in stop_analytics_collection"""
-        from backend.api.analytics import stop_analytics_collection
         import inspect
+
+        from backend.api.analytics import stop_analytics_collection
 
         source = inspect.getsource(stop_analytics_collection)
         # Key business logic should be present
@@ -6811,8 +7480,9 @@ class TestBatch42AnalyticsMigrations(unittest.TestCase):
 
     def test_stop_analytics_collection_error_handling(self):
         """Test error handling configuration in stop_analytics_collection"""
-        from backend.api.analytics import stop_analytics_collection
         import inspect
+
+        from backend.api.analytics import stop_analytics_collection
 
         source = inspect.getsource(stop_analytics_collection)
         # Verify decorator configuration
@@ -6822,11 +7492,12 @@ class TestBatch42AnalyticsMigrations(unittest.TestCase):
 
     def test_batch42_all_endpoints_migrated(self):
         """Verify all Batch 42 endpoints have been migrated"""
+        import inspect
+
         from backend.api.analytics import (
             start_analytics_collection,
             stop_analytics_collection,
         )
-        import inspect
 
         endpoints = [start_analytics_collection, stop_analytics_collection]
 
@@ -6839,11 +7510,12 @@ class TestBatch42AnalyticsMigrations(unittest.TestCase):
 
     def test_batch42_consistent_error_category(self):
         """Verify consistent error category across Batch 42"""
+        import inspect
+
         from backend.api.analytics import (
             start_analytics_collection,
             stop_analytics_collection,
         )
-        import inspect
 
         endpoints = [start_analytics_collection, stop_analytics_collection]
 
@@ -6869,8 +7541,9 @@ class TestBatch43AnalyticsMigrations(unittest.TestCase):
 
     def test_get_historical_trends_decorator_present(self):
         """Verify @with_error_handling decorator on get_historical_trends"""
-        from backend.api.analytics import get_historical_trends
         import inspect
+
+        from backend.api.analytics import get_historical_trends
 
         source = inspect.getsource(get_historical_trends)
         self.assertIn("@with_error_handling", source)
@@ -6879,8 +7552,9 @@ class TestBatch43AnalyticsMigrations(unittest.TestCase):
 
     def test_get_historical_trends_nested_try_preserved(self):
         """Verify nested try-catch preserved in get_historical_trends for Redis operations"""
-        from backend.api.analytics import get_historical_trends
         import inspect
+
+        from backend.api.analytics import get_historical_trends
 
         source = inspect.getsource(get_historical_trends)
         # Should have nested try-catch for Redis operations
@@ -6890,8 +7564,9 @@ class TestBatch43AnalyticsMigrations(unittest.TestCase):
 
     def test_get_historical_trends_business_logic_preserved(self):
         """Verify business logic preserved in get_historical_trends"""
-        from backend.api.analytics import get_historical_trends
         import inspect
+
+        from backend.api.analytics import get_historical_trends
 
         source = inspect.getsource(get_historical_trends)
         # Key business logic should be present
@@ -6902,8 +7577,9 @@ class TestBatch43AnalyticsMigrations(unittest.TestCase):
 
     def test_get_historical_trends_error_handling(self):
         """Test error handling configuration in get_historical_trends"""
-        from backend.api.analytics import get_historical_trends
         import inspect
+
+        from backend.api.analytics import get_historical_trends
 
         source = inspect.getsource(get_historical_trends)
         # Verify decorator configuration
@@ -6913,8 +7589,9 @@ class TestBatch43AnalyticsMigrations(unittest.TestCase):
 
     def test_get_dashboard_overview_decorator_present(self):
         """Verify @with_error_handling decorator on get_dashboard_overview"""
-        from backend.api.analytics import get_dashboard_overview
         import inspect
+
+        from backend.api.analytics import get_dashboard_overview
 
         source = inspect.getsource(get_dashboard_overview)
         self.assertIn("@with_error_handling", source)
@@ -6923,8 +7600,9 @@ class TestBatch43AnalyticsMigrations(unittest.TestCase):
 
     def test_get_dashboard_overview_nested_try_preserved(self):
         """Verify nested try-catch preserved in get_dashboard_overview for realtime metrics"""
-        from backend.api.analytics import get_dashboard_overview
         import inspect
+
+        from backend.api.analytics import get_dashboard_overview
 
         source = inspect.getsource(get_dashboard_overview)
         # Should have nested try-catch for realtime metrics
@@ -6935,8 +7613,9 @@ class TestBatch43AnalyticsMigrations(unittest.TestCase):
 
     def test_get_dashboard_overview_business_logic_preserved(self):
         """Verify business logic preserved in get_dashboard_overview"""
-        from backend.api.analytics import get_dashboard_overview
         import inspect
+
+        from backend.api.analytics import get_dashboard_overview
 
         source = inspect.getsource(get_dashboard_overview)
         # Key business logic should be present
@@ -6947,8 +7626,9 @@ class TestBatch43AnalyticsMigrations(unittest.TestCase):
 
     def test_get_dashboard_overview_error_handling(self):
         """Test error handling configuration in get_dashboard_overview"""
-        from backend.api.analytics import get_dashboard_overview
         import inspect
+
+        from backend.api.analytics import get_dashboard_overview
 
         source = inspect.getsource(get_dashboard_overview)
         # Verify decorator configuration
@@ -6958,11 +7638,12 @@ class TestBatch43AnalyticsMigrations(unittest.TestCase):
 
     def test_batch43_all_endpoints_migrated(self):
         """Verify all Batch 43 endpoints have been migrated"""
-        from backend.api.analytics import (
-            get_historical_trends,
-            get_dashboard_overview,
-        )
         import inspect
+
+        from backend.api.analytics import (
+            get_dashboard_overview,
+            get_historical_trends,
+        )
 
         endpoints = [get_historical_trends, get_dashboard_overview]
 
@@ -6973,11 +7654,12 @@ class TestBatch43AnalyticsMigrations(unittest.TestCase):
 
     def test_batch43_consistent_error_category(self):
         """Verify consistent error category across Batch 43"""
-        from backend.api.analytics import (
-            get_historical_trends,
-            get_dashboard_overview,
-        )
         import inspect
+
+        from backend.api.analytics import (
+            get_dashboard_overview,
+            get_historical_trends,
+        )
 
         endpoints = [get_historical_trends, get_dashboard_overview]
 
@@ -7003,8 +7685,9 @@ class TestBatch44AnalyticsMigrations(unittest.TestCase):
 
     def test_get_detailed_system_health_decorator_present(self):
         """Verify @with_error_handling decorator on get_detailed_system_health"""
-        from backend.api.analytics import get_detailed_system_health
         import inspect
+
+        from backend.api.analytics import get_detailed_system_health
 
         source = inspect.getsource(get_detailed_system_health)
         self.assertIn("@with_error_handling", source)
@@ -7013,8 +7696,9 @@ class TestBatch44AnalyticsMigrations(unittest.TestCase):
 
     def test_get_detailed_system_health_nested_try_preserved(self):
         """Verify nested try-catch preserved in get_detailed_system_health for Redis/service checks"""
-        from backend.api.analytics import get_detailed_system_health
         import inspect
+
+        from backend.api.analytics import get_detailed_system_health
 
         source = inspect.getsource(get_detailed_system_health)
         # Should have nested try-catch for Redis and service connectivity
@@ -7024,8 +7708,9 @@ class TestBatch44AnalyticsMigrations(unittest.TestCase):
 
     def test_get_detailed_system_health_business_logic_preserved(self):
         """Verify business logic preserved in get_detailed_system_health"""
-        from backend.api.analytics import get_detailed_system_health
         import inspect
+
+        from backend.api.analytics import get_detailed_system_health
 
         source = inspect.getsource(get_detailed_system_health)
         # Key business logic should be present
@@ -7037,8 +7722,9 @@ class TestBatch44AnalyticsMigrations(unittest.TestCase):
 
     def test_get_detailed_system_health_error_handling(self):
         """Test error handling configuration in get_detailed_system_health"""
-        from backend.api.analytics import get_detailed_system_health
         import inspect
+
+        from backend.api.analytics import get_detailed_system_health
 
         source = inspect.getsource(get_detailed_system_health)
         # Verify decorator configuration
@@ -7048,8 +7734,9 @@ class TestBatch44AnalyticsMigrations(unittest.TestCase):
 
     def test_get_performance_metrics_decorator_present(self):
         """Verify @with_error_handling decorator on get_performance_metrics"""
-        from backend.api.analytics import get_performance_metrics
         import inspect
+
+        from backend.api.analytics import get_performance_metrics
 
         source = inspect.getsource(get_performance_metrics)
         self.assertIn("@with_error_handling", source)
@@ -7058,25 +7745,32 @@ class TestBatch44AnalyticsMigrations(unittest.TestCase):
 
     def test_get_performance_metrics_no_try_catch(self):
         """Verify try-catch removed from get_performance_metrics"""
-        from backend.api.analytics import get_performance_metrics
         import inspect
+
+        from backend.api.analytics import get_performance_metrics
 
         source = inspect.getsource(get_performance_metrics)
         # Should not have outer try-catch pattern
-        lines = source.split('\n')
+        lines = source.split("\n")
         function_body_started = False
         for line in lines:
-            if 'def get_performance_metrics' in line:
+            if "def get_performance_metrics" in line:
                 function_body_started = True
                 continue
-            if function_body_started and line.strip() and not line.strip().startswith('"""') and not line.strip().startswith('#'):
-                self.assertNotIn('try:', line)
+            if (
+                function_body_started
+                and line.strip()
+                and not line.strip().startswith('"""')
+                and not line.strip().startswith("#")
+            ):
+                self.assertNotIn("try:", line)
                 break
 
     def test_get_performance_metrics_business_logic_preserved(self):
         """Verify business logic preserved in get_performance_metrics"""
-        from backend.api.analytics import get_performance_metrics
         import inspect
+
+        from backend.api.analytics import get_performance_metrics
 
         source = inspect.getsource(get_performance_metrics)
         # Key business logic should be present
@@ -7087,8 +7781,9 @@ class TestBatch44AnalyticsMigrations(unittest.TestCase):
 
     def test_get_performance_metrics_error_handling(self):
         """Test error handling configuration in get_performance_metrics"""
-        from backend.api.analytics import get_performance_metrics
         import inspect
+
+        from backend.api.analytics import get_performance_metrics
 
         source = inspect.getsource(get_performance_metrics)
         # Verify decorator configuration
@@ -7098,11 +7793,12 @@ class TestBatch44AnalyticsMigrations(unittest.TestCase):
 
     def test_batch44_all_endpoints_migrated(self):
         """Verify all Batch 44 endpoints have been migrated"""
+        import inspect
+
         from backend.api.analytics import (
             get_detailed_system_health,
             get_performance_metrics,
         )
-        import inspect
 
         endpoints = [get_detailed_system_health, get_performance_metrics]
 
@@ -7113,11 +7809,12 @@ class TestBatch44AnalyticsMigrations(unittest.TestCase):
 
     def test_batch44_consistent_error_category(self):
         """Verify consistent error category across Batch 44"""
+        import inspect
+
         from backend.api.analytics import (
             get_detailed_system_health,
             get_performance_metrics,
         )
-        import inspect
 
         endpoints = [get_detailed_system_health, get_performance_metrics]
 
@@ -7139,8 +7836,9 @@ class TestBatch45AnalyticsMigrations(unittest.TestCase):
 
     def test_get_communication_patterns_decorator_present(self):
         """Verify @with_error_handling decorator on get_communication_patterns"""
-        from backend.api.analytics import get_communication_patterns
         import inspect
+
+        from backend.api.analytics import get_communication_patterns
 
         source = inspect.getsource(get_communication_patterns)
         self.assertIn("@with_error_handling", source)
@@ -7150,8 +7848,9 @@ class TestBatch45AnalyticsMigrations(unittest.TestCase):
 
     def test_get_communication_patterns_no_try_catch(self):
         """Verify try-catch removed from get_communication_patterns (Simple Pattern)"""
-        from backend.api.analytics import get_communication_patterns
         import inspect
+
+        from backend.api.analytics import get_communication_patterns
 
         source = inspect.getsource(get_communication_patterns)
         # Simple pattern: no try-catch blocks
@@ -7160,8 +7859,9 @@ class TestBatch45AnalyticsMigrations(unittest.TestCase):
 
     def test_get_communication_patterns_business_logic_preserved(self):
         """Verify business logic preserved in get_communication_patterns"""
-        from backend.api.analytics import get_communication_patterns
         import inspect
+
+        from backend.api.analytics import get_communication_patterns
 
         source = inspect.getsource(get_communication_patterns)
         # Key business logic should be present
@@ -7172,8 +7872,9 @@ class TestBatch45AnalyticsMigrations(unittest.TestCase):
 
     def test_get_communication_patterns_error_handling(self):
         """Test error handling configuration in get_communication_patterns"""
-        from backend.api.analytics import get_communication_patterns
         import inspect
+
+        from backend.api.analytics import get_communication_patterns
 
         source = inspect.getsource(get_communication_patterns)
         # Verify decorator configuration
@@ -7183,8 +7884,9 @@ class TestBatch45AnalyticsMigrations(unittest.TestCase):
 
     def test_get_usage_statistics_decorator_present(self):
         """Verify @with_error_handling decorator on get_usage_statistics"""
-        from backend.api.analytics import get_usage_statistics
         import inspect
+
+        from backend.api.analytics import get_usage_statistics
 
         source = inspect.getsource(get_usage_statistics)
         self.assertIn("@with_error_handling", source)
@@ -7194,8 +7896,9 @@ class TestBatch45AnalyticsMigrations(unittest.TestCase):
 
     def test_get_usage_statistics_no_try_catch(self):
         """Verify try-catch removed from get_usage_statistics (Simple Pattern)"""
-        from backend.api.analytics import get_usage_statistics
         import inspect
+
+        from backend.api.analytics import get_usage_statistics
 
         source = inspect.getsource(get_usage_statistics)
         # Simple pattern: no try-catch blocks
@@ -7204,8 +7907,9 @@ class TestBatch45AnalyticsMigrations(unittest.TestCase):
 
     def test_get_usage_statistics_business_logic_preserved(self):
         """Verify business logic preserved in get_usage_statistics"""
-        from backend.api.analytics import get_usage_statistics
         import inspect
+
+        from backend.api.analytics import get_usage_statistics
 
         source = inspect.getsource(get_usage_statistics)
         # Key business logic should be present
@@ -7215,8 +7919,9 @@ class TestBatch45AnalyticsMigrations(unittest.TestCase):
 
     def test_get_usage_statistics_error_handling(self):
         """Test error handling configuration in get_usage_statistics"""
-        from backend.api.analytics import get_usage_statistics
         import inspect
+
+        from backend.api.analytics import get_usage_statistics
 
         source = inspect.getsource(get_usage_statistics)
         # Verify decorator configuration
@@ -7226,11 +7931,12 @@ class TestBatch45AnalyticsMigrations(unittest.TestCase):
 
     def test_batch45_all_endpoints_migrated(self):
         """Verify all Batch 45 endpoints have been migrated"""
+        import inspect
+
         from backend.api.analytics import (
             get_communication_patterns,
             get_usage_statistics,
         )
-        import inspect
 
         endpoints = [get_communication_patterns, get_usage_statistics]
 
@@ -7241,11 +7947,12 @@ class TestBatch45AnalyticsMigrations(unittest.TestCase):
 
     def test_batch45_consistent_error_category(self):
         """Verify consistent error category across Batch 45"""
+        import inspect
+
         from backend.api.analytics import (
             get_communication_patterns,
             get_usage_statistics,
         )
-        import inspect
 
         endpoints = [get_communication_patterns, get_usage_statistics]
 
@@ -7267,8 +7974,9 @@ class TestBatch46AnalyticsMigrations(unittest.TestCase):
 
     def test_index_codebase_decorator_present(self):
         """Verify @with_error_handling decorator on index_codebase"""
-        from backend.api.analytics import index_codebase
         import inspect
+
+        from backend.api.analytics import index_codebase
 
         source = inspect.getsource(index_codebase)
         self.assertIn("@with_error_handling", source)
@@ -7278,8 +7986,9 @@ class TestBatch46AnalyticsMigrations(unittest.TestCase):
 
     def test_index_codebase_no_try_catch(self):
         """Verify try-catch removed from index_codebase (Simple Pattern)"""
-        from backend.api.analytics import index_codebase
         import inspect
+
+        from backend.api.analytics import index_codebase
 
         source = inspect.getsource(index_codebase)
         # Simple pattern: no try-catch blocks
@@ -7288,8 +7997,9 @@ class TestBatch46AnalyticsMigrations(unittest.TestCase):
 
     def test_index_codebase_business_logic_preserved(self):
         """Verify business logic preserved in index_codebase"""
-        from backend.api.analytics import index_codebase
         import inspect
+
+        from backend.api.analytics import index_codebase
 
         source = inspect.getsource(index_codebase)
         # Key business logic should be present
@@ -7300,8 +8010,9 @@ class TestBatch46AnalyticsMigrations(unittest.TestCase):
 
     def test_index_codebase_error_handling(self):
         """Test error handling configuration in index_codebase"""
-        from backend.api.analytics import index_codebase
         import inspect
+
+        from backend.api.analytics import index_codebase
 
         source = inspect.getsource(index_codebase)
         # Verify decorator configuration
@@ -7311,8 +8022,9 @@ class TestBatch46AnalyticsMigrations(unittest.TestCase):
 
     def test_get_code_analysis_status_decorator_present(self):
         """Verify @with_error_handling decorator on get_code_analysis_status"""
-        from backend.api.analytics import get_code_analysis_status
         import inspect
+
+        from backend.api.analytics import get_code_analysis_status
 
         source = inspect.getsource(get_code_analysis_status)
         self.assertIn("@with_error_handling", source)
@@ -7322,8 +8034,9 @@ class TestBatch46AnalyticsMigrations(unittest.TestCase):
 
     def test_get_code_analysis_status_no_try_catch(self):
         """Verify try-catch removed from get_code_analysis_status (Simple Pattern)"""
-        from backend.api.analytics import get_code_analysis_status
         import inspect
+
+        from backend.api.analytics import get_code_analysis_status
 
         source = inspect.getsource(get_code_analysis_status)
         # Simple pattern: no try-catch blocks
@@ -7332,8 +8045,9 @@ class TestBatch46AnalyticsMigrations(unittest.TestCase):
 
     def test_get_code_analysis_status_business_logic_preserved(self):
         """Verify business logic preserved in get_code_analysis_status"""
-        from backend.api.analytics import get_code_analysis_status
         import inspect
+
+        from backend.api.analytics import get_code_analysis_status
 
         source = inspect.getsource(get_code_analysis_status)
         # Key business logic should be present
@@ -7344,8 +8058,9 @@ class TestBatch46AnalyticsMigrations(unittest.TestCase):
 
     def test_get_code_analysis_status_error_handling(self):
         """Test error handling configuration in get_code_analysis_status"""
-        from backend.api.analytics import get_code_analysis_status
         import inspect
+
+        from backend.api.analytics import get_code_analysis_status
 
         source = inspect.getsource(get_code_analysis_status)
         # Verify decorator configuration
@@ -7355,11 +8070,12 @@ class TestBatch46AnalyticsMigrations(unittest.TestCase):
 
     def test_batch46_all_endpoints_migrated(self):
         """Verify all Batch 46 endpoints have been migrated"""
-        from backend.api.analytics import (
-            index_codebase,
-            get_code_analysis_status,
-        )
         import inspect
+
+        from backend.api.analytics import (
+            get_code_analysis_status,
+            index_codebase,
+        )
 
         endpoints = [index_codebase, get_code_analysis_status]
 
@@ -7370,11 +8086,12 @@ class TestBatch46AnalyticsMigrations(unittest.TestCase):
 
     def test_batch46_consistent_error_category(self):
         """Verify consistent error category across Batch 46"""
-        from backend.api.analytics import (
-            index_codebase,
-            get_code_analysis_status,
-        )
         import inspect
+
+        from backend.api.analytics import (
+            get_code_analysis_status,
+            index_codebase,
+        )
 
         endpoints = [index_codebase, get_code_analysis_status]
 
@@ -7396,8 +8113,9 @@ class TestBatch47AnalyticsMigrations(unittest.TestCase):
 
     def test_get_code_quality_assessment_decorator_present(self):
         """Verify @with_error_handling decorator on get_code_quality_assessment"""
-        from backend.api.analytics import get_code_quality_assessment
         import inspect
+
+        from backend.api.analytics import get_code_quality_assessment
 
         source = inspect.getsource(get_code_quality_assessment)
         self.assertIn("@with_error_handling", source)
@@ -7407,8 +8125,9 @@ class TestBatch47AnalyticsMigrations(unittest.TestCase):
 
     def test_get_code_quality_assessment_no_try_catch(self):
         """Verify try-catch removed from get_code_quality_assessment (Simple Pattern)"""
-        from backend.api.analytics import get_code_quality_assessment
         import inspect
+
+        from backend.api.analytics import get_code_quality_assessment
 
         source = inspect.getsource(get_code_quality_assessment)
         # Simple pattern: no try-catch blocks
@@ -7417,8 +8136,9 @@ class TestBatch47AnalyticsMigrations(unittest.TestCase):
 
     def test_get_code_quality_assessment_business_logic_preserved(self):
         """Verify business logic preserved in get_code_quality_assessment"""
-        from backend.api.analytics import get_code_quality_assessment
         import inspect
+
+        from backend.api.analytics import get_code_quality_assessment
 
         source = inspect.getsource(get_code_quality_assessment)
         # Key business logic should be present
@@ -7430,8 +8150,9 @@ class TestBatch47AnalyticsMigrations(unittest.TestCase):
 
     def test_get_code_quality_assessment_error_handling(self):
         """Test error handling configuration in get_code_quality_assessment"""
-        from backend.api.analytics import get_code_quality_assessment
         import inspect
+
+        from backend.api.analytics import get_code_quality_assessment
 
         source = inspect.getsource(get_code_quality_assessment)
         # Verify decorator configuration
@@ -7441,8 +8162,9 @@ class TestBatch47AnalyticsMigrations(unittest.TestCase):
 
     def test_initialize_analytics_decorator_present(self):
         """Verify @with_error_handling decorator on initialize_analytics"""
-        from backend.api.analytics import initialize_analytics
         import inspect
+
+        from backend.api.analytics import initialize_analytics
 
         source = inspect.getsource(initialize_analytics)
         self.assertIn("@with_error_handling", source)
@@ -7452,8 +8174,9 @@ class TestBatch47AnalyticsMigrations(unittest.TestCase):
 
     def test_initialize_analytics_no_try_catch(self):
         """Verify try-catch removed from initialize_analytics (Simple Pattern)"""
-        from backend.api.analytics import initialize_analytics
         import inspect
+
+        from backend.api.analytics import initialize_analytics
 
         source = inspect.getsource(initialize_analytics)
         # Simple pattern: no try-catch blocks
@@ -7462,8 +8185,9 @@ class TestBatch47AnalyticsMigrations(unittest.TestCase):
 
     def test_initialize_analytics_business_logic_preserved(self):
         """Verify business logic preserved in initialize_analytics"""
-        from backend.api.analytics import initialize_analytics
         import inspect
+
+        from backend.api.analytics import initialize_analytics
 
         source = inspect.getsource(initialize_analytics)
         # Key business logic should be present
@@ -7474,8 +8198,9 @@ class TestBatch47AnalyticsMigrations(unittest.TestCase):
 
     def test_initialize_analytics_error_handling(self):
         """Test error handling configuration in initialize_analytics"""
-        from backend.api.analytics import initialize_analytics
         import inspect
+
+        from backend.api.analytics import initialize_analytics
 
         source = inspect.getsource(initialize_analytics)
         # Verify decorator configuration
@@ -7485,11 +8210,12 @@ class TestBatch47AnalyticsMigrations(unittest.TestCase):
 
     def test_batch47_all_endpoints_migrated(self):
         """Verify all Batch 47 endpoints have been migrated"""
+        import inspect
+
         from backend.api.analytics import (
             get_code_quality_assessment,
             initialize_analytics,
         )
-        import inspect
 
         endpoints = [get_code_quality_assessment, initialize_analytics]
 
@@ -7500,11 +8226,12 @@ class TestBatch47AnalyticsMigrations(unittest.TestCase):
 
     def test_batch47_consistent_error_category(self):
         """Verify consistent error category across Batch 47"""
+        import inspect
+
         from backend.api.analytics import (
             get_code_quality_assessment,
             initialize_analytics,
         )
-        import inspect
 
         endpoints = [get_code_quality_assessment, initialize_analytics]
 
@@ -7526,8 +8253,9 @@ class TestBatch48KnowledgeMigrations(unittest.TestCase):
 
     def test_test_main_categories_decorator_present(self):
         """Verify @with_error_handling decorator on test_main_categories"""
-        from backend.api.knowledge import test_main_categories
         import inspect
+
+        from backend.api.knowledge import test_main_categories
 
         source = inspect.getsource(test_main_categories)
         self.assertIn("@with_error_handling", source)
@@ -7537,8 +8265,9 @@ class TestBatch48KnowledgeMigrations(unittest.TestCase):
 
     def test_test_main_categories_no_try_catch(self):
         """Verify no try-catch in test_main_categories (Simple Pattern)"""
-        from backend.api.knowledge import test_main_categories
         import inspect
+
+        from backend.api.knowledge import test_main_categories
 
         source = inspect.getsource(test_main_categories)
         # Simple pattern: no try-catch blocks
@@ -7547,8 +8276,9 @@ class TestBatch48KnowledgeMigrations(unittest.TestCase):
 
     def test_test_main_categories_business_logic_preserved(self):
         """Verify business logic preserved in test_main_categories"""
-        from backend.api.knowledge import test_main_categories
         import inspect
+
+        from backend.api.knowledge import test_main_categories
 
         source = inspect.getsource(test_main_categories)
         # Key business logic should be present
@@ -7558,8 +8288,9 @@ class TestBatch48KnowledgeMigrations(unittest.TestCase):
 
     def test_test_main_categories_error_handling(self):
         """Test error handling configuration in test_main_categories"""
-        from backend.api.knowledge import test_main_categories
         import inspect
+
+        from backend.api.knowledge import test_main_categories
 
         source = inspect.getsource(test_main_categories)
         # Verify decorator configuration
@@ -7569,8 +8300,9 @@ class TestBatch48KnowledgeMigrations(unittest.TestCase):
 
     def test_rag_enhanced_search_decorator_present(self):
         """Verify @with_error_handling decorator on rag_enhanced_search"""
-        from backend.api.knowledge import rag_enhanced_search
         import inspect
+
+        from backend.api.knowledge import rag_enhanced_search
 
         source = inspect.getsource(rag_enhanced_search)
         self.assertIn("@with_error_handling", source)
@@ -7580,8 +8312,9 @@ class TestBatch48KnowledgeMigrations(unittest.TestCase):
 
     def test_rag_enhanced_search_nested_try_catch_preserved(self):
         """Verify nested try-catch blocks preserved in rag_enhanced_search (Mixed Pattern)"""
-        from backend.api.knowledge import rag_enhanced_search
         import inspect
+
+        from backend.api.knowledge import rag_enhanced_search
 
         source = inspect.getsource(rag_enhanced_search)
         # Mixed pattern: nested try-catch blocks should be preserved
@@ -7591,8 +8324,9 @@ class TestBatch48KnowledgeMigrations(unittest.TestCase):
 
     def test_rag_enhanced_search_business_logic_preserved(self):
         """Verify business logic preserved in rag_enhanced_search"""
-        from backend.api.knowledge import rag_enhanced_search
         import inspect
+
+        from backend.api.knowledge import rag_enhanced_search
 
         source = inspect.getsource(rag_enhanced_search)
         # Key business logic should be present
@@ -7605,8 +8339,9 @@ class TestBatch48KnowledgeMigrations(unittest.TestCase):
 
     def test_rag_enhanced_search_error_handling(self):
         """Test error handling configuration in rag_enhanced_search"""
-        from backend.api.knowledge import rag_enhanced_search
         import inspect
+
+        from backend.api.knowledge import rag_enhanced_search
 
         source = inspect.getsource(rag_enhanced_search)
         # Verify decorator configuration
@@ -7616,11 +8351,12 @@ class TestBatch48KnowledgeMigrations(unittest.TestCase):
 
     def test_batch48_all_endpoints_migrated(self):
         """Verify all Batch 48 endpoints have been migrated"""
-        from backend.api.knowledge import (
-            test_main_categories,
-            rag_enhanced_search,
-        )
         import inspect
+
+        from backend.api.knowledge import (
+            rag_enhanced_search,
+            test_main_categories,
+        )
 
         endpoints = [test_main_categories, rag_enhanced_search]
 
@@ -7631,11 +8367,12 @@ class TestBatch48KnowledgeMigrations(unittest.TestCase):
 
     def test_batch48_consistent_error_category(self):
         """Verify consistent error category across Batch 48"""
-        from backend.api.knowledge import (
-            test_main_categories,
-            rag_enhanced_search,
-        )
         import inspect
+
+        from backend.api.knowledge import (
+            rag_enhanced_search,
+            test_main_categories,
+        )
 
         endpoints = [test_main_categories, rag_enhanced_search]
 
@@ -7657,8 +8394,9 @@ class TestBatch49KnowledgeMigrations(unittest.TestCase):
 
     def test_similarity_search_decorator_present(self):
         """Verify @with_error_handling decorator on similarity_search"""
-        from backend.api.knowledge import similarity_search
         import inspect
+
+        from backend.api.knowledge import similarity_search
 
         source = inspect.getsource(similarity_search)
         self.assertIn("@with_error_handling", source)
@@ -7668,8 +8406,9 @@ class TestBatch49KnowledgeMigrations(unittest.TestCase):
 
     def test_similarity_search_nested_try_catch_preserved(self):
         """Verify nested try-catch block preserved in similarity_search (Mixed Pattern)"""
-        from backend.api.knowledge import similarity_search
         import inspect
+
+        from backend.api.knowledge import similarity_search
 
         source = inspect.getsource(similarity_search)
         # Mixed pattern: nested try-catch block should be preserved for RAG enhancement
@@ -7679,8 +8418,9 @@ class TestBatch49KnowledgeMigrations(unittest.TestCase):
 
     def test_similarity_search_business_logic_preserved(self):
         """Verify business logic preserved in similarity_search"""
-        from backend.api.knowledge import similarity_search
         import inspect
+
+        from backend.api.knowledge import similarity_search
 
         source = inspect.getsource(similarity_search)
         # Key business logic should be present
@@ -7693,8 +8433,9 @@ class TestBatch49KnowledgeMigrations(unittest.TestCase):
 
     def test_similarity_search_error_handling(self):
         """Test error handling configuration in similarity_search"""
-        from backend.api.knowledge import similarity_search
         import inspect
+
+        from backend.api.knowledge import similarity_search
 
         source = inspect.getsource(similarity_search)
         # Verify decorator configuration
@@ -7704,8 +8445,9 @@ class TestBatch49KnowledgeMigrations(unittest.TestCase):
 
     def test_populate_system_commands_decorator_present(self):
         """Verify @with_error_handling decorator on populate_system_commands"""
-        from backend.api.knowledge import populate_system_commands
         import inspect
+
+        from backend.api.knowledge import populate_system_commands
 
         source = inspect.getsource(populate_system_commands)
         self.assertIn("@with_error_handling", source)
@@ -7715,8 +8457,9 @@ class TestBatch49KnowledgeMigrations(unittest.TestCase):
 
     def test_populate_system_commands_nested_try_catch_preserved(self):
         """Verify nested try-catch block preserved in populate_system_commands (Mixed Pattern)"""
-        from backend.api.knowledge import populate_system_commands
         import inspect
+
+        from backend.api.knowledge import populate_system_commands
 
         source = inspect.getsource(populate_system_commands)
         # Mixed pattern: nested try-catch block should be preserved for command processing
@@ -7726,8 +8469,9 @@ class TestBatch49KnowledgeMigrations(unittest.TestCase):
 
     def test_populate_system_commands_business_logic_preserved(self):
         """Verify business logic preserved in populate_system_commands"""
-        from backend.api.knowledge import populate_system_commands
         import inspect
+
+        from backend.api.knowledge import populate_system_commands
 
         source = inspect.getsource(populate_system_commands)
         # Key business logic should be present
@@ -7739,8 +8483,9 @@ class TestBatch49KnowledgeMigrations(unittest.TestCase):
 
     def test_populate_system_commands_error_handling(self):
         """Test error handling configuration in populate_system_commands"""
-        from backend.api.knowledge import populate_system_commands
         import inspect
+
+        from backend.api.knowledge import populate_system_commands
 
         source = inspect.getsource(populate_system_commands)
         # Verify decorator configuration
@@ -7750,11 +8495,12 @@ class TestBatch49KnowledgeMigrations(unittest.TestCase):
 
     def test_batch49_all_endpoints_migrated(self):
         """Verify all Batch 49 endpoints have been migrated"""
-        from backend.api.knowledge import (
-            similarity_search,
-            populate_system_commands,
-        )
         import inspect
+
+        from backend.api.knowledge import (
+            populate_system_commands,
+            similarity_search,
+        )
 
         endpoints = [similarity_search, populate_system_commands]
 
@@ -7765,11 +8511,12 @@ class TestBatch49KnowledgeMigrations(unittest.TestCase):
 
     def test_batch49_consistent_error_category(self):
         """Verify consistent error category across Batch 49"""
-        from backend.api.knowledge import (
-            similarity_search,
-            populate_system_commands,
-        )
         import inspect
+
+        from backend.api.knowledge import (
+            populate_system_commands,
+            similarity_search,
+        )
 
         endpoints = [similarity_search, populate_system_commands]
 
@@ -7791,8 +8538,9 @@ class TestBatch50KnowledgeMigrations(unittest.TestCase):
 
     def test_populate_man_pages_decorator_present(self):
         """Verify @with_error_handling decorator on populate_man_pages"""
-        from backend.api.knowledge import populate_man_pages
         import inspect
+
+        from backend.api.knowledge import populate_man_pages
 
         source = inspect.getsource(populate_man_pages)
         self.assertIn("@with_error_handling", source)
@@ -7802,8 +8550,9 @@ class TestBatch50KnowledgeMigrations(unittest.TestCase):
 
     def test_populate_man_pages_no_try_catch(self):
         """Verify try-catch removed from populate_man_pages (Simple Pattern)"""
-        from backend.api.knowledge import populate_man_pages
         import inspect
+
+        from backend.api.knowledge import populate_man_pages
 
         source = inspect.getsource(populate_man_pages)
         # Simple pattern: no try-catch blocks
@@ -7812,8 +8561,9 @@ class TestBatch50KnowledgeMigrations(unittest.TestCase):
 
     def test_populate_man_pages_business_logic_preserved(self):
         """Verify business logic preserved in populate_man_pages"""
-        from backend.api.knowledge import populate_man_pages
         import inspect
+
+        from backend.api.knowledge import populate_man_pages
 
         source = inspect.getsource(populate_man_pages)
         # Key business logic should be present
@@ -7824,8 +8574,9 @@ class TestBatch50KnowledgeMigrations(unittest.TestCase):
 
     def test_populate_man_pages_error_handling(self):
         """Test error handling configuration in populate_man_pages"""
-        from backend.api.knowledge import populate_man_pages
         import inspect
+
+        from backend.api.knowledge import populate_man_pages
 
         source = inspect.getsource(populate_man_pages)
         # Verify decorator configuration
@@ -7835,8 +8586,9 @@ class TestBatch50KnowledgeMigrations(unittest.TestCase):
 
     def test_refresh_system_knowledge_decorator_present(self):
         """Verify @with_error_handling decorator on refresh_system_knowledge"""
-        from backend.api.knowledge import refresh_system_knowledge
         import inspect
+
+        from backend.api.knowledge import refresh_system_knowledge
 
         source = inspect.getsource(refresh_system_knowledge)
         self.assertIn("@with_error_handling", source)
@@ -7846,8 +8598,9 @@ class TestBatch50KnowledgeMigrations(unittest.TestCase):
 
     def test_refresh_system_knowledge_nested_try_catch_preserved(self):
         """Verify nested try-catch block preserved in refresh_system_knowledge (Mixed Pattern)"""
-        from backend.api.knowledge import refresh_system_knowledge
         import inspect
+
+        from backend.api.knowledge import refresh_system_knowledge
 
         source = inspect.getsource(refresh_system_knowledge)
         # Mixed pattern: nested try-catch block should be preserved for subprocess timeout
@@ -7859,8 +8612,9 @@ class TestBatch50KnowledgeMigrations(unittest.TestCase):
 
     def test_refresh_system_knowledge_business_logic_preserved(self):
         """Verify business logic preserved in refresh_system_knowledge"""
-        from backend.api.knowledge import refresh_system_knowledge
         import inspect
+
+        from backend.api.knowledge import refresh_system_knowledge
 
         source = inspect.getsource(refresh_system_knowledge)
         # Key business logic should be present
@@ -7871,8 +8625,9 @@ class TestBatch50KnowledgeMigrations(unittest.TestCase):
 
     def test_refresh_system_knowledge_error_handling(self):
         """Test error handling configuration in refresh_system_knowledge"""
-        from backend.api.knowledge import refresh_system_knowledge
         import inspect
+
+        from backend.api.knowledge import refresh_system_knowledge
 
         source = inspect.getsource(refresh_system_knowledge)
         # Verify decorator configuration
@@ -7882,11 +8637,12 @@ class TestBatch50KnowledgeMigrations(unittest.TestCase):
 
     def test_batch50_all_endpoints_migrated(self):
         """Verify all Batch 50 endpoints have been migrated"""
+        import inspect
+
         from backend.api.knowledge import (
             populate_man_pages,
             refresh_system_knowledge,
         )
-        import inspect
 
         endpoints = [populate_man_pages, refresh_system_knowledge]
 
@@ -7897,11 +8653,12 @@ class TestBatch50KnowledgeMigrations(unittest.TestCase):
 
     def test_batch50_consistent_error_category(self):
         """Verify consistent error category across Batch 50"""
+        import inspect
+
         from backend.api.knowledge import (
             populate_man_pages,
             refresh_system_knowledge,
         )
-        import inspect
 
         endpoints = [populate_man_pages, refresh_system_knowledge]
 
@@ -7918,8 +8675,9 @@ class TestBatch51KnowledgeMigrations(unittest.TestCase):
 
     def test_populate_autobot_docs_decorator_present(self):
         """Test populate_autobot_docs has @with_error_handling decorator"""
-        from backend.api.knowledge import populate_autobot_docs
         import inspect
+
+        from backend.api.knowledge import populate_autobot_docs
 
         source = inspect.getsource(populate_autobot_docs)
         # Should have decorator
@@ -7927,8 +8685,9 @@ class TestBatch51KnowledgeMigrations(unittest.TestCase):
 
     def test_populate_autobot_docs_no_outer_try_catch(self):
         """Test populate_autobot_docs outer try-catch removed"""
-        from backend.api.knowledge import populate_autobot_docs
         import inspect
+
+        from backend.api.knowledge import populate_autobot_docs
 
         source = inspect.getsource(populate_autobot_docs)
         lines = source.split("\n")
@@ -7950,8 +8709,9 @@ class TestBatch51KnowledgeMigrations(unittest.TestCase):
 
     def test_populate_autobot_docs_nested_try_catch_preserved(self):
         """Test populate_autobot_docs preserves nested try-catch blocks"""
-        from backend.api.knowledge import populate_autobot_docs
         import inspect
+
+        from backend.api.knowledge import populate_autobot_docs
 
         source = inspect.getsource(populate_autobot_docs)
 
@@ -7967,8 +8727,9 @@ class TestBatch51KnowledgeMigrations(unittest.TestCase):
 
     def test_populate_autobot_docs_business_logic_preserved(self):
         """Test populate_autobot_docs business logic preserved"""
-        from backend.api.knowledge import populate_autobot_docs
         import inspect
+
+        from backend.api.knowledge import populate_autobot_docs
 
         source = inspect.getsource(populate_autobot_docs)
 
@@ -7983,8 +8744,9 @@ class TestBatch51KnowledgeMigrations(unittest.TestCase):
 
     def test_populate_autobot_docs_error_handling(self):
         """Test error handling configuration in populate_autobot_docs"""
-        from backend.api.knowledge import populate_autobot_docs
         import inspect
+
+        from backend.api.knowledge import populate_autobot_docs
 
         source = inspect.getsource(populate_autobot_docs)
         # Verify decorator configuration
@@ -7994,8 +8756,9 @@ class TestBatch51KnowledgeMigrations(unittest.TestCase):
 
     def test_import_statistics_decorator_present(self):
         """Test get_import_statistics has @with_error_handling decorator"""
-        from backend.api.knowledge import get_import_statistics
         import inspect
+
+        from backend.api.knowledge import get_import_statistics
 
         source = inspect.getsource(get_import_statistics)
         # Should have decorator
@@ -8003,8 +8766,9 @@ class TestBatch51KnowledgeMigrations(unittest.TestCase):
 
     def test_import_statistics_no_try_catch(self):
         """Test get_import_statistics try-catch completely removed"""
-        from backend.api.knowledge import get_import_statistics
         import inspect
+
+        from backend.api.knowledge import get_import_statistics
 
         source = inspect.getsource(get_import_statistics)
         lines = source.split("\n")
@@ -8016,12 +8780,15 @@ class TestBatch51KnowledgeMigrations(unittest.TestCase):
             if line.strip().startswith("try:"):
                 try_count += 1
 
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_import_statistics_business_logic_preserved(self):
         """Test get_import_statistics business logic preserved"""
-        from backend.api.knowledge import get_import_statistics
         import inspect
+
+        from backend.api.knowledge import get_import_statistics
 
         source = inspect.getsource(get_import_statistics)
 
@@ -8033,8 +8800,9 @@ class TestBatch51KnowledgeMigrations(unittest.TestCase):
 
     def test_import_statistics_error_handling(self):
         """Test error handling configuration in get_import_statistics"""
-        from backend.api.knowledge import get_import_statistics
         import inspect
+
+        from backend.api.knowledge import get_import_statistics
 
         source = inspect.getsource(get_import_statistics)
         # Verify decorator configuration
@@ -8044,8 +8812,9 @@ class TestBatch51KnowledgeMigrations(unittest.TestCase):
 
     def test_batch51_all_endpoints_migrated(self):
         """Verify all Batch 51 endpoints have been migrated"""
-        from backend.api.knowledge import populate_autobot_docs, get_import_statistics
         import inspect
+
+        from backend.api.knowledge import get_import_statistics, populate_autobot_docs
 
         endpoints = [populate_autobot_docs, get_import_statistics]
 
@@ -8056,8 +8825,9 @@ class TestBatch51KnowledgeMigrations(unittest.TestCase):
 
     def test_batch51_consistent_error_category(self):
         """Verify consistent error category across Batch 51"""
-        from backend.api.knowledge import populate_autobot_docs, get_import_statistics
         import inspect
+
+        from backend.api.knowledge import get_import_statistics, populate_autobot_docs
 
         endpoints = [populate_autobot_docs, get_import_statistics]
 
@@ -8074,8 +8844,9 @@ class TestBatch52TerminalMigrations(unittest.TestCase):
 
     def test_create_terminal_session_decorator_present(self):
         """Test create_terminal_session has @with_error_handling decorator"""
-        from backend.api.terminal import create_terminal_session
         import inspect
+
+        from backend.api.terminal import create_terminal_session
 
         source = inspect.getsource(create_terminal_session)
         # Should have decorator
@@ -8083,8 +8854,9 @@ class TestBatch52TerminalMigrations(unittest.TestCase):
 
     def test_create_terminal_session_no_try_catch(self):
         """Test create_terminal_session try-catch completely removed"""
-        from backend.api.terminal import create_terminal_session
         import inspect
+
+        from backend.api.terminal import create_terminal_session
 
         source = inspect.getsource(create_terminal_session)
         lines = source.split("\n")
@@ -8096,12 +8868,15 @@ class TestBatch52TerminalMigrations(unittest.TestCase):
             if line.strip().startswith("try:"):
                 try_count += 1
 
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_create_terminal_session_business_logic_preserved(self):
         """Test create_terminal_session business logic preserved"""
-        from backend.api.terminal import create_terminal_session
         import inspect
+
+        from backend.api.terminal import create_terminal_session
 
         source = inspect.getsource(create_terminal_session)
 
@@ -8112,15 +8887,18 @@ class TestBatch52TerminalMigrations(unittest.TestCase):
         self.assertIn('"user_id": request.user_id', source)
         self.assertIn('"conversation_id": request.conversation_id', source)
         self.assertIn('"security_level": request.security_level', source)
-        self.assertIn("session_manager.session_configs[session_id] = session_config", source)
+        self.assertIn(
+            "session_manager.session_configs[session_id] = session_config", source
+        )
         self.assertIn('logger.info(f"Created terminal session: {session_id}")', source)
         self.assertIn('"status": "created"', source)
         self.assertIn('"websocket_url"', source)
 
     def test_create_terminal_session_error_handling(self):
         """Test error handling configuration in create_terminal_session"""
-        from backend.api.terminal import create_terminal_session
         import inspect
+
+        from backend.api.terminal import create_terminal_session
 
         source = inspect.getsource(create_terminal_session)
         # Verify decorator configuration
@@ -8130,8 +8908,9 @@ class TestBatch52TerminalMigrations(unittest.TestCase):
 
     def test_list_terminal_sessions_decorator_present(self):
         """Test list_terminal_sessions has @with_error_handling decorator"""
-        from backend.api.terminal import list_terminal_sessions
         import inspect
+
+        from backend.api.terminal import list_terminal_sessions
 
         source = inspect.getsource(list_terminal_sessions)
         # Should have decorator
@@ -8139,8 +8918,9 @@ class TestBatch52TerminalMigrations(unittest.TestCase):
 
     def test_list_terminal_sessions_no_try_catch(self):
         """Test list_terminal_sessions try-catch completely removed"""
-        from backend.api.terminal import list_terminal_sessions
         import inspect
+
+        from backend.api.terminal import list_terminal_sessions
 
         source = inspect.getsource(list_terminal_sessions)
         lines = source.split("\n")
@@ -8152,18 +8932,23 @@ class TestBatch52TerminalMigrations(unittest.TestCase):
             if line.strip().startswith("try:"):
                 try_count += 1
 
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_list_terminal_sessions_business_logic_preserved(self):
         """Test list_terminal_sessions business logic preserved"""
-        from backend.api.terminal import list_terminal_sessions
         import inspect
+
+        from backend.api.terminal import list_terminal_sessions
 
         source = inspect.getsource(list_terminal_sessions)
 
         # Core business logic should be preserved
         self.assertIn("sessions = []", source)
-        self.assertIn("for session_id, config in session_manager.session_configs.items():", source)
+        self.assertIn(
+            "for session_id, config in session_manager.session_configs.items():", source
+        )
         self.assertIn("is_active = session_manager.has_connection(session_id)", source)
         self.assertIn("sessions.append(", source)
         self.assertIn('"session_id": session_id', source)
@@ -8175,8 +8960,9 @@ class TestBatch52TerminalMigrations(unittest.TestCase):
 
     def test_list_terminal_sessions_error_handling(self):
         """Test error handling configuration in list_terminal_sessions"""
-        from backend.api.terminal import list_terminal_sessions
         import inspect
+
+        from backend.api.terminal import list_terminal_sessions
 
         source = inspect.getsource(list_terminal_sessions)
         # Verify decorator configuration
@@ -8186,8 +8972,9 @@ class TestBatch52TerminalMigrations(unittest.TestCase):
 
     def test_batch52_all_endpoints_migrated(self):
         """Verify all Batch 52 endpoints have been migrated"""
-        from backend.api.terminal import create_terminal_session, list_terminal_sessions
         import inspect
+
+        from backend.api.terminal import create_terminal_session, list_terminal_sessions
 
         endpoints = [create_terminal_session, list_terminal_sessions]
 
@@ -8198,8 +8985,9 @@ class TestBatch52TerminalMigrations(unittest.TestCase):
 
     def test_batch52_consistent_error_category(self):
         """Verify consistent error category across Batch 52"""
-        from backend.api.terminal import create_terminal_session, list_terminal_sessions
         import inspect
+
+        from backend.api.terminal import create_terminal_session, list_terminal_sessions
 
         endpoints = [create_terminal_session, list_terminal_sessions]
 
@@ -8216,8 +9004,9 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
 
     def test_get_terminal_session_decorator_present(self):
         """Test get_terminal_session has @with_error_handling decorator"""
-        from backend.api.terminal import get_terminal_session
         import inspect
+
+        from backend.api.terminal import get_terminal_session
 
         source = inspect.getsource(get_terminal_session)
         # Should have decorator
@@ -8225,8 +9014,9 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
 
     def test_get_terminal_session_no_try_catch(self):
         """Test get_terminal_session try-catch completely removed"""
-        from backend.api.terminal import get_terminal_session
         import inspect
+
+        from backend.api.terminal import get_terminal_session
 
         source = inspect.getsource(get_terminal_session)
         lines = source.split("\n")
@@ -8238,18 +9028,25 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
             if line.strip().startswith("try:"):
                 try_count += 1
 
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_get_terminal_session_business_logic_preserved(self):
         """Test get_terminal_session business logic preserved"""
-        from backend.api.terminal import get_terminal_session
         import inspect
+
+        from backend.api.terminal import get_terminal_session
 
         source = inspect.getsource(get_terminal_session)
 
         # Core business logic should be preserved
-        self.assertIn("config = session_manager.session_configs.get(session_id)", source)
-        self.assertIn('raise HTTPException(status_code=404, detail="Session not found")', source)
+        self.assertIn(
+            "config = session_manager.session_configs.get(session_id)", source
+        )
+        self.assertIn(
+            'raise HTTPException(status_code=404, detail="Session not found")', source
+        )
         self.assertIn("is_active = session_manager.has_connection(session_id)", source)
         self.assertIn("stats = {}", source)
         self.assertIn('hasattr(session_manager, "get_session_stats")', source)
@@ -8260,8 +9057,9 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
 
     def test_get_terminal_session_error_handling(self):
         """Test error handling configuration in get_terminal_session"""
-        from backend.api.terminal import get_terminal_session
         import inspect
+
+        from backend.api.terminal import get_terminal_session
 
         source = inspect.getsource(get_terminal_session)
         # Verify decorator configuration
@@ -8271,8 +9069,9 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
 
     def test_delete_terminal_session_decorator_present(self):
         """Test delete_terminal_session has @with_error_handling decorator"""
-        from backend.api.terminal import delete_terminal_session
         import inspect
+
+        from backend.api.terminal import delete_terminal_session
 
         source = inspect.getsource(delete_terminal_session)
         # Should have decorator
@@ -8280,8 +9079,9 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
 
     def test_delete_terminal_session_no_try_catch(self):
         """Test delete_terminal_session try-catch completely removed"""
-        from backend.api.terminal import delete_terminal_session
         import inspect
+
+        from backend.api.terminal import delete_terminal_session
 
         source = inspect.getsource(delete_terminal_session)
         lines = source.split("\n")
@@ -8293,18 +9093,25 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
             if line.strip().startswith("try:"):
                 try_count += 1
 
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_delete_terminal_session_business_logic_preserved(self):
         """Test delete_terminal_session business logic preserved"""
-        from backend.api.terminal import delete_terminal_session
         import inspect
+
+        from backend.api.terminal import delete_terminal_session
 
         source = inspect.getsource(delete_terminal_session)
 
         # Core business logic should be preserved
-        self.assertIn("config = session_manager.session_configs.get(session_id)", source)
-        self.assertIn('raise HTTPException(status_code=404, detail="Session not found")', source)
+        self.assertIn(
+            "config = session_manager.session_configs.get(session_id)", source
+        )
+        self.assertIn(
+            'raise HTTPException(status_code=404, detail="Session not found")', source
+        )
         self.assertIn("if session_manager.has_connection(session_id):", source)
         self.assertIn("await session_manager.close_connection(session_id)", source)
         self.assertIn("del session_manager.session_configs[session_id]", source)
@@ -8313,8 +9120,9 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
 
     def test_delete_terminal_session_error_handling(self):
         """Test error handling configuration in delete_terminal_session"""
-        from backend.api.terminal import delete_terminal_session
         import inspect
+
+        from backend.api.terminal import delete_terminal_session
 
         source = inspect.getsource(delete_terminal_session)
         # Verify decorator configuration
@@ -8324,8 +9132,9 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
 
     def test_batch53_all_endpoints_migrated(self):
         """Verify all Batch 53 endpoints have been migrated"""
-        from backend.api.terminal import get_terminal_session, delete_terminal_session
         import inspect
+
+        from backend.api.terminal import delete_terminal_session, get_terminal_session
 
         endpoints = [get_terminal_session, delete_terminal_session]
 
@@ -8336,8 +9145,9 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
 
     def test_batch53_consistent_error_category(self):
         """Verify consistent error category across Batch 53"""
-        from backend.api.terminal import get_terminal_session, delete_terminal_session
         import inspect
+
+        from backend.api.terminal import delete_terminal_session, get_terminal_session
 
         endpoints = [get_terminal_session, delete_terminal_session]
 
@@ -8354,8 +9164,9 @@ class TestBatch54TerminalMigrations(unittest.TestCase):
 
     def test_execute_single_command_decorator_present(self):
         """Test execute_single_command has @with_error_handling decorator"""
-        from backend.api.terminal import execute_single_command
         import inspect
+
+        from backend.api.terminal import execute_single_command
 
         source = inspect.getsource(execute_single_command)
         # Should have decorator
@@ -8363,8 +9174,9 @@ class TestBatch54TerminalMigrations(unittest.TestCase):
 
     def test_execute_single_command_no_try_catch(self):
         """Test execute_single_command try-catch completely removed"""
-        from backend.api.terminal import execute_single_command
         import inspect
+
+        from backend.api.terminal import execute_single_command
 
         source = inspect.getsource(execute_single_command)
         lines = source.split("\n")
@@ -8375,12 +9187,15 @@ class TestBatch54TerminalMigrations(unittest.TestCase):
             if line.strip().startswith("try:"):
                 try_count += 1
 
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_execute_single_command_business_logic_preserved(self):
         """Test execute_single_command business logic preserved"""
-        from backend.api.terminal import execute_single_command
         import inspect
+
+        from backend.api.terminal import execute_single_command
 
         source = inspect.getsource(execute_single_command)
 
@@ -8397,8 +9212,9 @@ class TestBatch54TerminalMigrations(unittest.TestCase):
 
     def test_execute_single_command_error_handling(self):
         """Test error handling configuration in execute_single_command"""
-        from backend.api.terminal import execute_single_command
         import inspect
+
+        from backend.api.terminal import execute_single_command
 
         source = inspect.getsource(execute_single_command)
         # Verify decorator configuration
@@ -8408,8 +9224,9 @@ class TestBatch54TerminalMigrations(unittest.TestCase):
 
     def test_send_terminal_input_decorator_present(self):
         """Test send_terminal_input has @with_error_handling decorator"""
-        from backend.api.terminal import send_terminal_input
         import inspect
+
+        from backend.api.terminal import send_terminal_input
 
         source = inspect.getsource(send_terminal_input)
         # Should have decorator
@@ -8417,8 +9234,9 @@ class TestBatch54TerminalMigrations(unittest.TestCase):
 
     def test_send_terminal_input_no_try_catch(self):
         """Test send_terminal_input try-catch completely removed"""
-        from backend.api.terminal import send_terminal_input
         import inspect
+
+        from backend.api.terminal import send_terminal_input
 
         source = inspect.getsource(send_terminal_input)
         lines = source.split("\n")
@@ -8429,29 +9247,41 @@ class TestBatch54TerminalMigrations(unittest.TestCase):
             if line.strip().startswith("try:"):
                 try_count += 1
 
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_send_terminal_input_business_logic_preserved(self):
         """Test send_terminal_input business logic preserved"""
-        from backend.api.terminal import send_terminal_input
         import inspect
+
+        from backend.api.terminal import send_terminal_input
 
         source = inspect.getsource(send_terminal_input)
 
         # Core business logic should be preserved
         self.assertIn("if not session_manager.has_connection(session_id):", source)
-        self.assertIn('raise HTTPException(status_code=404, detail="Session not active")', source)
-        self.assertIn("success = await session_manager.send_input(session_id, request.text)", source)
+        self.assertIn(
+            'raise HTTPException(status_code=404, detail="Session not active")', source
+        )
+        self.assertIn(
+            "success = await session_manager.send_input(session_id, request.text)",
+            source,
+        )
         self.assertIn("if success:", source)
         self.assertIn('"session_id": session_id', source)
         self.assertIn('"status": "sent"', source)
         self.assertIn("request.text if not request.is_password else", source)
-        self.assertIn('raise HTTPException(status_code=500, detail="Failed to send input")', source)
+        self.assertIn(
+            'raise HTTPException(status_code=500, detail="Failed to send input")',
+            source,
+        )
 
     def test_send_terminal_input_error_handling(self):
         """Test error handling configuration in send_terminal_input"""
-        from backend.api.terminal import send_terminal_input
         import inspect
+
+        from backend.api.terminal import send_terminal_input
 
         source = inspect.getsource(send_terminal_input)
         # Verify decorator configuration
@@ -8461,8 +9291,9 @@ class TestBatch54TerminalMigrations(unittest.TestCase):
 
     def test_batch54_all_endpoints_migrated(self):
         """Verify all Batch 54 endpoints have been migrated"""
-        from backend.api.terminal import execute_single_command, send_terminal_input
         import inspect
+
+        from backend.api.terminal import execute_single_command, send_terminal_input
 
         endpoints = [execute_single_command, send_terminal_input]
 
@@ -8473,8 +9304,9 @@ class TestBatch54TerminalMigrations(unittest.TestCase):
 
     def test_batch54_consistent_error_category(self):
         """Verify consistent error category across Batch 54"""
-        from backend.api.terminal import execute_single_command, send_terminal_input
         import inspect
+
+        from backend.api.terminal import execute_single_command, send_terminal_input
 
         endpoints = [execute_single_command, send_terminal_input]
 
