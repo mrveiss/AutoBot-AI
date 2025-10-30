@@ -9318,5 +9318,166 @@ class TestBatch54TerminalMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="TERMINAL"', source)
 
 
+class TestBatch55TerminalMigrations(unittest.TestCase):
+    """Test batch 55 migrations: terminal.py POST /sessions/{id}/signal/{signal_name} + GET /sessions/{id}/history"""
+
+    def test_send_terminal_signal_decorator_present(self):
+        """Test send_terminal_signal has @with_error_handling decorator"""
+        import inspect
+
+        from backend.api.terminal import send_terminal_signal
+
+        source = inspect.getsource(send_terminal_signal)
+        # Should have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_send_terminal_signal_no_try_catch(self):
+        """Test send_terminal_signal try-catch completely removed"""
+        import inspect
+
+        from backend.api.terminal import send_terminal_signal
+
+        source = inspect.getsource(send_terminal_signal)
+        lines = source.split("\n")
+
+        # Should NOT have any try-catch blocks (Simple Pattern)
+        try_count = 0
+        for line in lines:
+            if line.strip().startswith("try:"):
+                try_count += 1
+
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
+
+    def test_send_terminal_signal_business_logic_preserved(self):
+        """Test send_terminal_signal business logic preserved"""
+        import inspect
+
+        from backend.api.terminal import send_terminal_signal
+
+        source = inspect.getsource(send_terminal_signal)
+
+        # Core business logic should be preserved
+        self.assertIn("if not session_manager.has_connection(session_id):", source)
+        self.assertIn(
+            'raise HTTPException(status_code=404, detail="Session not active")', source
+        )
+        self.assertIn("signal_map = {", source)
+        self.assertIn('"SIGINT": signal.SIGINT', source)
+        self.assertIn('"SIGTERM": signal.SIGTERM', source)
+        self.assertIn('"SIGKILL": signal.SIGKILL', source)
+        self.assertIn("if signal_name not in signal_map:", source)
+        self.assertIn(
+            'raise HTTPException(status_code=400, detail=f"Invalid signal: {signal_name}")',
+            source,
+        )
+        self.assertIn(
+            "success = await session_manager.send_signal(session_id, signal_map[signal_name])",
+            source,
+        )
+        self.assertIn("if success:", source)
+        self.assertIn('"signal": signal_name', source)
+
+    def test_send_terminal_signal_decorator_configuration(self):
+        """Test send_terminal_signal decorator has correct configuration"""
+        import inspect
+
+        from backend.api.terminal import send_terminal_signal
+
+        source = inspect.getsource(send_terminal_signal)
+
+        # Verify decorator configuration
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="send_terminal_signal"', source)
+        self.assertIn('error_code_prefix="TERMINAL"', source)
+
+    def test_get_terminal_command_history_decorator_present(self):
+        """Test get_terminal_command_history has @with_error_handling decorator"""
+        import inspect
+
+        from backend.api.terminal import get_terminal_command_history
+
+        source = inspect.getsource(get_terminal_command_history)
+        # Should have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_get_terminal_command_history_no_try_catch(self):
+        """Test get_terminal_command_history try-catch completely removed"""
+        import inspect
+
+        from backend.api.terminal import get_terminal_command_history
+
+        source = inspect.getsource(get_terminal_command_history)
+        lines = source.split("\n")
+
+        # Should NOT have any try-catch blocks (Simple Pattern)
+        try_count = 0
+        for line in lines:
+            if line.strip().startswith("try:"):
+                try_count += 1
+
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
+
+    def test_get_terminal_command_history_business_logic_preserved(self):
+        """Test get_terminal_command_history business logic preserved"""
+        import inspect
+
+        from backend.api.terminal import get_terminal_command_history
+
+        source = inspect.getsource(get_terminal_command_history)
+
+        # Core business logic should be preserved
+        self.assertIn("config = session_manager.session_configs.get(session_id)", source)
+        self.assertIn("if not config:", source)
+        self.assertIn(
+            'raise HTTPException(status_code=404, detail="Session not found")', source
+        )
+        self.assertIn("is_active = session_manager.has_connection(session_id)", source)
+        self.assertIn("if not is_active:", source)
+        self.assertIn('"is_active": False', source)
+        self.assertIn('"history": []', source)
+        self.assertIn(
+            '"message": "Session is not active, no command history available"', source
+        )
+        self.assertIn(
+            "history = session_manager.get_command_history(session_id)", source
+        )
+        self.assertIn('"total_commands": len(history)', source)
+
+    def test_get_terminal_command_history_decorator_configuration(self):
+        """Test get_terminal_command_history decorator has correct configuration"""
+        import inspect
+
+        from backend.api.terminal import get_terminal_command_history
+
+        source = inspect.getsource(get_terminal_command_history)
+
+        # Verify decorator configuration
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_terminal_command_history"', source)
+        self.assertIn('error_code_prefix="TERMINAL"', source)
+
+    def test_batch55_consistent_error_category(self):
+        """Verify consistent error category across Batch 55"""
+        import inspect
+
+        from backend.api.terminal import (
+            get_terminal_command_history,
+            send_terminal_signal,
+        )
+
+        endpoints = [send_terminal_signal, get_terminal_command_history]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use TERMINAL prefix
+            self.assertIn('error_code_prefix="TERMINAL"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
