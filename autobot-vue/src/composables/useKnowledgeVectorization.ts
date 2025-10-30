@@ -8,6 +8,7 @@
 import { ref, computed } from 'vue'
 import { useKnowledgeBase } from './useKnowledgeBase'
 import apiClient from '@/utils/ApiClient'
+import { parseApiResponse } from '@/utils/apiResponseHelpers'
 
 export type VectorizationStatus = 'vectorized' | 'pending' | 'failed' | 'unknown'
 
@@ -58,19 +59,78 @@ export function useKnowledgeVectorization() {
   // ==================== DOCUMENT STATE MANAGEMENT ====================
 
   /**
-   * Get vectorization status for a document
-   * TODO: Replace with actual backend call when endpoint is available
+   * Get vectorization status for a document (synchronous - from cache)
+   * Returns cached status or 'pending' if not yet loaded
+   * Use fetchDocumentStatus() to load from backend
    */
   const getDocumentStatus = (documentId: string): VectorizationStatus => {
     const state = documentStates.value.get(documentId)
-    if (!state) {
-      // MOCK DATA - Replace with actual backend call
-      // For now, randomly assign status for demonstration
-      const mockStatus = getMockStatus(documentId)
-      setDocumentStatus(documentId, mockStatus)
-      return mockStatus
+    return state?.status || 'pending'
+  }
+
+  /**
+   * Fetch vectorization status for a document from backend
+   * Queries the actual Redis vectorization state via backend API
+   * Updates cache with result
+   */
+  const fetchDocumentStatus = async (documentId: string): Promise<VectorizationStatus> => {
+    try {
+      // Query actual backend status
+      const response = await apiClient.post('/api/knowledge_base/vectorization_status', {
+        fact_ids: [documentId],
+        use_cache: true
+      })
+      const data = await parseApiResponse(response)
+
+      if (data?.statuses?.[documentId]) {
+        const status: VectorizationStatus = data.statuses[documentId].vectorized ? 'vectorized' : 'pending'
+        setDocumentStatus(documentId, status)
+        return status
+      }
+
+      // If no data returned, default to pending
+      setDocumentStatus(documentId, 'pending')
+      return 'pending'
+    } catch (error) {
+      console.error('Failed to fetch document vectorization status:', error)
+      // On error, mark as unknown
+      setDocumentStatus(documentId, 'unknown')
+      return 'unknown'
     }
-    return state.status
+  }
+
+  /**
+   * Fetch vectorization status for multiple documents in batch
+   * More efficient than calling fetchDocumentStatus individually
+   */
+  const fetchBatchStatus = async (documentIds: string[]): Promise<void> => {
+    if (documentIds.length === 0) return
+
+    try {
+      // Query backend in batches of 1000 (API limit)
+      const batchSize = 1000
+      for (let i = 0; i < documentIds.length; i += batchSize) {
+        const batch = documentIds.slice(i, i + batchSize)
+
+        const response = await apiClient.post('/api/knowledge_base/vectorization_status', {
+          fact_ids: batch,
+          use_cache: true
+        })
+        const data = await parseApiResponse(response)
+
+        if (data?.statuses) {
+          // Update cache with all statuses
+          Object.entries(data.statuses).forEach(([docId, statusData]: [string, any]) => {
+            const status: VectorizationStatus = statusData.vectorized ? 'vectorized' : 'pending'
+            setDocumentStatus(docId, status)
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch batch vectorization status:', error)
+      // Mark all as unknown on error
+      documentIds.forEach(id => setDocumentStatus(id, 'unknown'))
+    }
   }
 
   /**
@@ -340,26 +400,6 @@ export function useKnowledgeVectorization() {
     isPolling.value = false
   }
 
-  // ==================== MOCK DATA (TEMPORARY) ====================
-
-  /**
-   * Generate mock status for demonstration
-   * TODO: Remove when backend endpoints are available
-   */
-  const getMockStatus = (documentId: string): VectorizationStatus => {
-    // Use document ID hash to generate consistent random status
-    const hash = documentId.split('').reduce((acc, char) => {
-      return char.charCodeAt(0) + ((acc << 5) - acc)
-    }, 0)
-
-    const rand = Math.abs(hash % 100)
-
-    if (rand < 60) return 'vectorized'  // 60% vectorized
-    if (rand < 85) return 'pending'     // 25% pending
-    if (rand < 95) return 'unknown'     // 10% unknown
-    return 'failed'                      // 5% failed
-  }
-
   // ==================== CLEANUP ====================
 
   /**
@@ -386,11 +426,15 @@ export function useKnowledgeVectorization() {
     selectedDocumentsList,
     canVectorizeSelection,
 
-    // Document status
+    // Document status (synchronous - reads from cache)
     getDocumentStatus,
     setDocumentStatus,
     clearDocumentStatus,
     clearAllStatuses,
+
+    // Document status fetching (async - loads from backend)
+    fetchDocumentStatus,
+    fetchBatchStatus,
 
     // Selection management
     toggleDocumentSelection,

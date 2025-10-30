@@ -164,6 +164,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
+import { parseApiResponse } from '@/utils/apiResponseHelpers'
 
 // Interfaces
 interface DuplicateGroup {
@@ -218,7 +219,7 @@ const scanForIssues = async () => {
   try {
     // Scan for duplicates (dry run)
     const dupResponse = await apiClient.post('/api/knowledge_base/deduplicate?dry_run=true')
-    const dupData = await dupResponse.json()
+    const dupData = await parseApiResponse(dupResponse)
 
     if (dupData.status === 'success') {
       duplicateStats.value = dupData
@@ -228,7 +229,7 @@ const scanForIssues = async () => {
 
     // Scan for orphans
     const orphanResponse = await apiClient.get('/api/knowledge_base/orphans')
-    const orphanData = await orphanResponse.json()
+    const orphanData = await parseApiResponse(orphanResponse)
 
     if (orphanData.status === 'success') {
       orphanStats.value = orphanData
@@ -256,7 +257,7 @@ const cleanupDuplicates = async () => {
 
   try {
     const response = await apiClient.post('/api/knowledge_base/deduplicate?dry_run=false')
-    const data = await response.json()
+    const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
       console.log(`Successfully removed ${data.deleted_count} duplicates`)
@@ -284,7 +285,7 @@ const cleanupOrphans = async () => {
 
   try {
     const response = await apiClient.delete('/api/knowledge_base/orphans?dry_run=false')
-    const data = await response.json()
+    const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
       console.log(`Successfully removed ${data.deleted_count} orphans`)
