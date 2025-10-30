@@ -78,119 +78,117 @@ async def research_url(request: ResearchRequest):
 
 
 @router.post("/session/action")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="handle_session_action",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 async def handle_session_action(request: SessionAction):
     """Handle actions on a research session"""
-    try:
-        session = research_browser_manager.get_session(request.session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
+    session = research_browser_manager.get_session(request.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-        result = {"success": True, "session_id": request.session_id}
+    result = {"success": True, "session_id": request.session_id}
 
-        if request.action == "wait":
-            # Wait for user interaction to complete
-            interaction_complete = await session.wait_for_user_interaction(
-                request.timeout_seconds or 300
-            )
-            result["interaction_complete"] = interaction_complete
-            result["status"] = session.status
-
-        elif request.action == "manual_intervention":
-            # User is taking over manually - just update status
-            result["message"] = "Manual intervention acknowledged"
-            result["browser_accessible"] = True
-            result["current_url"] = session.current_url
-
-        elif request.action == "save_mhtml":
-            # Save current page as MHTML
-            mhtml_path = await session.save_mhtml()
-            if mhtml_path:
-                result["mhtml_path"] = mhtml_path
-                result["message"] = "Page saved as MHTML"
-            else:
-                result["success"] = False
-                result["error"] = "Failed to save MHTML"
-
-        elif request.action == "extract_content":
-            # Extract content from current page
-            content_result = await session.extract_content()
-            result["content"] = content_result
-
-        else:
-            raise HTTPException(
-                status_code=400, detail=f"Unknown action: {request.action}"
-            )
-
-        return JSONResponse(status_code=200, content=result)
-
-    except Exception as e:
-        logger.error(f"Session action failed: {e}")
-        return JSONResponse(
-            status_code=500, content={"success": False, "error": str(e)}
+    if request.action == "wait":
+        # Wait for user interaction to complete
+        interaction_complete = await session.wait_for_user_interaction(
+            request.timeout_seconds or 300
         )
+        result["interaction_complete"] = interaction_complete
+        result["status"] = session.status
+
+    elif request.action == "manual_intervention":
+        # User is taking over manually - just update status
+        result["message"] = "Manual intervention acknowledged"
+        result["browser_accessible"] = True
+        result["current_url"] = session.current_url
+
+    elif request.action == "save_mhtml":
+        # Save current page as MHTML
+        mhtml_path = await session.save_mhtml()
+        if mhtml_path:
+            result["mhtml_path"] = mhtml_path
+            result["message"] = "Page saved as MHTML"
+        else:
+            result["success"] = False
+            result["error"] = "Failed to save MHTML"
+
+    elif request.action == "extract_content":
+        # Extract content from current page
+        content_result = await session.extract_content()
+        result["content"] = content_result
+
+    else:
+        raise HTTPException(
+            status_code=400, detail=f"Unknown action: {request.action}"
+        )
+
+    return JSONResponse(status_code=200, content=result)
 
 
 @router.get("/session/{session_id}/status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_session_status",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 async def get_session_status(session_id: str):
     """Get the status of a research session"""
-    try:
-        session = research_browser_manager.get_session(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
+    session = research_browser_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "session_id": session_id,
-                "conversation_id": session.conversation_id,
-                "status": session.status,
-                "current_url": session.current_url,
-                "interaction_required": session.interaction_required,
-                "interaction_message": session.interaction_message,
-                "created_at": session.created_at.isoformat(),
-                "last_activity": session.last_activity.isoformat(),
-                "mhtml_files_count": len(session.mhtml_files),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Get session status failed: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    return JSONResponse(
+        status_code=200,
+        content={
+            "session_id": session_id,
+            "conversation_id": session.conversation_id,
+            "status": session.status,
+            "current_url": session.current_url,
+            "interaction_required": session.interaction_required,
+            "interaction_message": session.interaction_message,
+            "created_at": session.created_at.isoformat(),
+            "last_activity": session.last_activity.isoformat(),
+            "mhtml_files_count": len(session.mhtml_files),
+        },
+    )
 
 
 @router.get("/session/{session_id}/mhtml/{filename}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="download_mhtml",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 async def download_mhtml(session_id: str, filename: str):
     """Download an MHTML file from a research session"""
-    try:
-        session = research_browser_manager.get_session(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
+    session = research_browser_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-        # Find the MHTML file
-        mhtml_path = None
-        for path in session.mhtml_files:
-            if filename in path:
-                mhtml_path = path
-                break
+    # Find the MHTML file
+    mhtml_path = None
+    for path in session.mhtml_files:
+        if filename in path:
+            mhtml_path = path
+            break
 
-        if not mhtml_path or not os.path.exists(mhtml_path):
-            raise HTTPException(status_code=404, detail="MHTML file not found")
+    if not mhtml_path or not os.path.exists(mhtml_path):
+        raise HTTPException(status_code=404, detail="MHTML file not found")
 
-        # Stream the file asynchronously
-        async def generate():
-            async with aiofiles.open(mhtml_path, "rb") as f:
-                while chunk := await f.read(8192):
-                    yield chunk
+    # Stream the file asynchronously
+    async def generate():
+        async with aiofiles.open(mhtml_path, "rb") as f:
+            while chunk := await f.read(8192):
+                yield chunk
 
-        return StreamingResponse(
-            generate(),
-            media_type="application/octet-stream",
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
-        )
-
-    except Exception as e:
-        logger.error(f"Download MHTML failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return StreamingResponse(
+        generate(),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @router.delete("/session/{session_id}")
