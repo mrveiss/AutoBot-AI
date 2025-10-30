@@ -1174,28 +1174,26 @@ async def get_terminal_command_history(session_id: str):
 
 
 @router.get("/audit/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_session_audit_log",
+    error_code_prefix="TERMINAL",
+)
 async def get_session_audit_log(session_id: str):
     """Get security audit log for a session (elevated access required)"""
-    try:
-        config = session_manager.session_configs.get(session_id)
-        if not config:
-            raise HTTPException(status_code=404, detail="Session not found")
+    config = session_manager.session_configs.get(session_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-        # In a real implementation, you'd check user permissions here
-        # For now, return basic audit information
+    # In a real implementation, you'd check user permissions here
+    # For now, return basic audit information
 
-        return {
-            "session_id": session_id,
-            "audit_available": config.get("enable_logging", False),
-            "security_level": config.get("security_level"),
-            "message": "Audit log access requires elevated permissions",
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting audit log for session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "session_id": session_id,
+        "audit_available": config.get("enable_logging", False),
+        "security_level": config.get("security_level"),
+        "message": "Audit log access requires elevated permissions",
+    }
 
 
 # WebSocket Endpoints
@@ -1313,28 +1311,28 @@ async def secure_terminal_websocket_compat(websocket: WebSocket, session_id: str
 
 
 @router.post("/terminal/install-tool")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="install_tool",
+    error_code_prefix="TERMINAL",
+)
 async def install_tool(request: ToolInstallRequest):
     """Install a tool with terminal streaming"""
-    try:
-        # Import system command agent for tool installation
-        from src.agents.system_command_agent import SystemCommandAgent
+    # Import system command agent for tool installation
+    from src.agents.system_command_agent import SystemCommandAgent
 
-        system_command_agent = SystemCommandAgent()
+    system_command_agent = SystemCommandAgent()
 
-        tool_info = {
-            "name": request.tool_name,
-            "package_name": request.package_name or request.tool_name,
-            "install_method": request.install_method,
-            "custom_command": request.custom_command,
-            "update_first": request.update_first,
-        }
+    tool_info = {
+        "name": request.tool_name,
+        "package_name": request.package_name or request.tool_name,
+        "install_method": request.install_method,
+        "custom_command": request.custom_command,
+        "update_first": request.update_first,
+    }
 
-        result = await system_command_agent.install_tool(tool_info, "default")
-        return result
-
-    except Exception as e:
-        logger.error(f"Error installing tool: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    result = await system_command_agent.install_tool(tool_info, "default")
+    return result
 
 
 @router.post("/terminal/check-tool")
