@@ -1,14 +1,19 @@
 import json
 import logging
+import time
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.monitoring.prometheus_metrics import get_metrics_manager
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Prometheus metrics instance
+prometheus_metrics = get_metrics_manager()
 
 
 class GoalPayload(BaseModel):
@@ -56,12 +61,17 @@ async def receive_goal(request: Request, payload: GoalPayload):
             {"goal": goal, "reason": "permission_denied"},
         )
         return JSONResponse(
-            status_code=403, content={"message": "Permission denied to submit goal."}
+            status_code=403, content={"message": "Permission denied to submit goal"}
         )
 
     logging.info(f"Received goal via API: {goal}")
     await event_manager.publish("user_message", {"message": goal})
     await event_manager.publish("goal_received", {"goal": goal, "use_phi2": use_phi2})
+
+    # Track task execution start time for Prometheus metrics
+    task_start_time = time.time()
+    task_type = "goal_execution"
+    agent_type = "orchestrator"
 
     try:
         orchestrator_result = await orchestrator.execute_goal(
@@ -136,6 +146,15 @@ async def receive_goal(request: Request, payload: GoalPayload):
             "goal_completed", {"goal": goal, "result": response_message}
         )
 
+        # Record Prometheus task execution metric (success)
+        duration = time.time() - task_start_time
+        prometheus_metrics.record_task_execution(
+            task_type=task_type,
+            agent_type=agent_type,
+            status="success",
+            duration=duration,
+        )
+
         return {"message": response_message}
     except Exception as e:
         error_message = f"Internal Server Error during goal execution: {str(e)}"
@@ -144,6 +163,16 @@ async def receive_goal(request: Request, payload: GoalPayload):
             "submit_goal", user_role, "failure", {"goal": goal, "error": str(e)}
         )
         await event_manager.publish("error", {"message": error_message})
+
+        # Record Prometheus task execution metric (failed)
+        duration = time.time() - task_start_time
+        prometheus_metrics.record_task_execution(
+            task_type=task_type,
+            agent_type=agent_type,
+            status="failed",
+            duration=duration,
+        )
+
         return JSONResponse(
             status_code=500,
             content={"message": "Internal Server Error", "detail": str(e)},
