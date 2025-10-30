@@ -11023,5 +11023,214 @@ class TestBatch64ResearchBrowserMigrations(unittest.TestCase):
         )
 
 
+class TestBatch65ResearchBrowserMigrations(unittest.TestCase):
+    """Test batch 65 migrations: research_browser.py next 3 endpoints"""
+
+    def test_handle_session_action_decorator_present(self):
+        """Test handle_session_action has @with_error_handling decorator"""
+        from backend.api.research_browser import handle_session_action
+
+        source = inspect.getsource(handle_session_action)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="RESEARCH_BROWSER"', source)
+
+    def test_handle_session_action_simple_pattern(self):
+        """Test handle_session_action uses Simple Pattern - no try-catch blocks"""
+        from backend.api.research_browser import handle_session_action
+
+        source = inspect.getsource(handle_session_action)
+        # Should have NO try-catch blocks
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            "handle_session_action should have no try-catch blocks (Simple Pattern)",
+        )
+
+    def test_handle_session_action_business_logic_preserved(self):
+        """Test handle_session_action business logic is preserved"""
+        from backend.api.research_browser import handle_session_action
+
+        source = inspect.getsource(handle_session_action)
+        self.assertIn("research_browser_manager.get_session", source)
+        self.assertIn("request.session_id", source)
+        self.assertIn("request.action", source)
+        self.assertIn('"wait"', source)
+        self.assertIn('"manual_intervention"', source)
+        self.assertIn('"save_mhtml"', source)
+        self.assertIn('"extract_content"', source)
+        self.assertIn("HTTPException", source)
+        self.assertIn("JSONResponse", source)
+
+    def test_get_session_status_decorator_present(self):
+        """Test get_session_status has @with_error_handling decorator"""
+        from backend.api.research_browser import get_session_status
+
+        source = inspect.getsource(get_session_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="RESEARCH_BROWSER"', source)
+
+    def test_get_session_status_simple_pattern(self):
+        """Test get_session_status uses Simple Pattern - no try-catch blocks"""
+        from backend.api.research_browser import get_session_status
+
+        source = inspect.getsource(get_session_status)
+        # Should have NO try-catch blocks
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            "get_session_status should have no try-catch blocks (Simple Pattern)",
+        )
+
+    def test_get_session_status_business_logic_preserved(self):
+        """Test get_session_status business logic is preserved"""
+        from backend.api.research_browser import get_session_status
+
+        source = inspect.getsource(get_session_status)
+        self.assertIn("research_browser_manager.get_session", source)
+        self.assertIn("session_id", source)
+        self.assertIn("conversation_id", source)
+        self.assertIn("status", source)
+        self.assertIn("current_url", source)
+        self.assertIn("interaction_required", source)
+        self.assertIn("mhtml_files_count", source)
+        self.assertIn("JSONResponse", source)
+
+    def test_download_mhtml_decorator_present(self):
+        """Test download_mhtml has @with_error_handling decorator"""
+        from backend.api.research_browser import download_mhtml
+
+        source = inspect.getsource(download_mhtml)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="RESEARCH_BROWSER"', source)
+
+    def test_download_mhtml_simple_pattern(self):
+        """Test download_mhtml uses Simple Pattern - no try-catch blocks"""
+        from backend.api.research_browser import download_mhtml
+
+        source = inspect.getsource(download_mhtml)
+        # Should have NO try-catch blocks
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            "download_mhtml should have no try-catch blocks (Simple Pattern)",
+        )
+
+    def test_download_mhtml_business_logic_preserved(self):
+        """Test download_mhtml business logic is preserved"""
+        from backend.api.research_browser import download_mhtml
+
+        source = inspect.getsource(download_mhtml)
+        self.assertIn("research_browser_manager.get_session", source)
+        self.assertIn("session.mhtml_files", source)
+        self.assertIn("filename in path", source)
+        self.assertIn("os.path.exists", source)
+        self.assertIn("StreamingResponse", source)
+        self.assertIn("aiofiles.open", source)
+        self.assertIn("async def generate", source)
+
+    def test_batch65_decorator_configuration(self):
+        """Verify all batch 65 endpoints have correct decorator configuration"""
+        from backend.api.research_browser import (
+            download_mhtml,
+            get_session_status,
+            handle_session_action,
+        )
+
+        endpoints = [handle_session_action, get_session_status, download_mhtml]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch65_consistent_error_category(self):
+        """Verify consistent error category and prefix for Batch 65"""
+        from backend.api.research_browser import (
+            download_mhtml,
+            get_session_status,
+            handle_session_action,
+        )
+
+        endpoints = [handle_session_action, get_session_status, download_mhtml]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            self.assertIn('error_code_prefix="RESEARCH_BROWSER"', source)
+
+    def test_batch65_no_redundant_error_handling(self):
+        """Verify batch 65 endpoints don't have redundant error responses"""
+        from backend.api.research_browser import (
+            download_mhtml,
+            get_session_status,
+            handle_session_action,
+        )
+
+        # All three: Simple Pattern - no try-catch at all
+        for func_name, func in [
+            ("handle_session_action", handle_session_action),
+            ("get_session_status", get_session_status),
+            ("download_mhtml", download_mhtml),
+        ]:
+            source = inspect.getsource(func)
+            self.assertNotIn(
+                "except Exception as e:",
+                source,
+                f"{func_name} should not have except blocks",
+            )
+            self.assertNotIn(
+                "logger.error",
+                source,
+                f"{func_name} should not have logger.error calls",
+            )
+
+    def test_batch65_simple_pattern_compliance(self):
+        """Verify all batch 65 endpoints follow Simple Pattern"""
+        from backend.api.research_browser import (
+            download_mhtml,
+            get_session_status,
+            handle_session_action,
+        )
+
+        endpoints = [handle_session_action, get_session_status, download_mhtml]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # Simple Pattern: no try-catch blocks
+            try_count = source.count("    try:")
+            self.assertEqual(
+                try_count,
+                0,
+                f"{endpoint.__name__} should have no try-catch (Simple Pattern)",
+            )
+
+    def test_batch65_httpexception_preserved(self):
+        """Verify HTTPException raises are preserved (business logic)"""
+        from backend.api.research_browser import (
+            download_mhtml,
+            get_session_status,
+            handle_session_action,
+        )
+
+        # All three raise HTTPException for specific conditions
+        for func in [handle_session_action, get_session_status, download_mhtml]:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "HTTPException",
+                source,
+                f"{func.__name__} should preserve HTTPException raises",
+            )
+            self.assertIn(
+                '"Session not found"',
+                source,
+                f"{func.__name__} should check for session existence",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
