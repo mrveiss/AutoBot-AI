@@ -11649,5 +11649,206 @@ class TestBatch67AgentTerminalMigrations(unittest.TestCase):
         self.assertIn("if not session_info:", source)
 
 
+class TestBatch68AgentTerminalMigrations(unittest.TestCase):
+    """Test batch 68 migrations: agent_terminal.py next 3 endpoints"""
+
+    def test_delete_agent_terminal_session_decorator_present(self):
+        """Test delete_agent_terminal_session has @with_error_handling decorator"""
+        from backend.api.agent_terminal import delete_agent_terminal_session
+
+        source = inspect.getsource(delete_agent_terminal_session)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT_TERMINAL"', source)
+
+    def test_delete_agent_terminal_session_simple_pattern(self):
+        """Test delete_agent_terminal_session uses Simple Pattern - no try-catch blocks"""
+        from backend.api.agent_terminal import delete_agent_terminal_session
+
+        source = inspect.getsource(delete_agent_terminal_session)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            "delete_agent_terminal_session should have no try-catch blocks (Simple Pattern)",
+        )
+
+    def test_delete_agent_terminal_session_httpexception_preserved(self):
+        """Test delete_agent_terminal_session preserves HTTPException for session not found"""
+        from backend.api.agent_terminal import delete_agent_terminal_session
+
+        source = inspect.getsource(delete_agent_terminal_session)
+        self.assertIn("HTTPException", source)
+        self.assertIn('"Session not found"', source)
+        self.assertIn("status_code=404", source)
+        # Should check session close success
+        self.assertIn("if not success:", source)
+
+    def test_execute_agent_command_decorator_present(self):
+        """Test execute_agent_command has @with_error_handling decorator"""
+        from backend.api.agent_terminal import execute_agent_command
+
+        source = inspect.getsource(execute_agent_command)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT_TERMINAL"', source)
+
+    def test_execute_agent_command_simple_pattern(self):
+        """Test execute_agent_command uses Simple Pattern - no try-catch blocks"""
+        from backend.api.agent_terminal import execute_agent_command
+
+        source = inspect.getsource(execute_agent_command)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            "execute_agent_command should have no try-catch blocks (Simple Pattern)",
+        )
+
+    def test_execute_agent_command_business_logic(self):
+        """Test execute_agent_command preserves business logic"""
+        from backend.api.agent_terminal import execute_agent_command
+
+        source = inspect.getsource(execute_agent_command)
+        # Should call execute_command on service
+        self.assertIn("service.execute_command", source)
+        # Should pass all parameters
+        self.assertIn("session_id=session_id", source)
+        self.assertIn("command=request.command", source)
+        self.assertIn("force_approval=request.force_approval", source)
+
+    def test_approve_agent_command_decorator_present(self):
+        """Test approve_agent_command has @with_error_handling decorator"""
+        from backend.api.agent_terminal import approve_agent_command
+
+        source = inspect.getsource(approve_agent_command)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT_TERMINAL"', source)
+
+    def test_approve_agent_command_simple_pattern(self):
+        """Test approve_agent_command uses Simple Pattern - no try-catch blocks"""
+        from backend.api.agent_terminal import approve_agent_command
+
+        source = inspect.getsource(approve_agent_command)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            "approve_agent_command should have no try-catch blocks (Simple Pattern)",
+        )
+
+    def test_approve_agent_command_business_logic(self):
+        """Test approve_agent_command preserves business logic"""
+        from backend.api.agent_terminal import approve_agent_command
+
+        source = inspect.getsource(approve_agent_command)
+        # Should call approve_command on service
+        self.assertIn("service.approve_command", source)
+        # Should have logging statements
+        self.assertIn("logger.info", source)
+        self.assertIn("Approval request received", source)
+        self.assertIn("Approval result", source)
+
+    def test_batch68_decorator_configuration(self):
+        """Test all batch 68 endpoints have consistent decorator configuration"""
+        from backend.api.agent_terminal import (
+            approve_agent_command,
+            delete_agent_terminal_session,
+            execute_agent_command,
+        )
+
+        endpoints = [
+            delete_agent_terminal_session,
+            execute_agent_command,
+            approve_agent_command,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} should use ErrorCategory.SERVER_ERROR",
+            )
+            self.assertIn(
+                'error_code_prefix="AGENT_TERMINAL"',
+                source,
+                f"{endpoint.__name__} should use AGENT_TERMINAL prefix",
+            )
+
+    def test_batch68_error_category_consistency(self):
+        """Test batch 68 uses correct error categories"""
+        from backend.api.agent_terminal import (
+            approve_agent_command,
+            delete_agent_terminal_session,
+            execute_agent_command,
+        )
+
+        # All agent_terminal endpoints should use SERVER_ERROR category
+        for func in [
+            delete_agent_terminal_session,
+            execute_agent_command,
+            approve_agent_command,
+        ]:
+            source = inspect.getsource(func)
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+
+    def test_batch68_simple_pattern_compliance(self):
+        """Test batch 68 Simple Pattern endpoints have no error handling code"""
+        from backend.api.agent_terminal import (
+            approve_agent_command,
+            delete_agent_terminal_session,
+            execute_agent_command,
+        )
+
+        for func in [
+            delete_agent_terminal_session,
+            execute_agent_command,
+            approve_agent_command,
+        ]:
+            source = inspect.getsource(func)
+            # Should not have manual error handling
+            self.assertEqual(source.count("    try:"), 0)
+            self.assertEqual(source.count("    except"), 0)
+
+    def test_batch68_httpexception_preservation(self):
+        """Test batch 68 preserves HTTPException business logic"""
+        from backend.api.agent_terminal import delete_agent_terminal_session
+
+        # delete_agent_terminal_session raises HTTPException for session not found
+        source = inspect.getsource(delete_agent_terminal_session)
+        self.assertIn(
+            "HTTPException",
+            source,
+            "delete_agent_terminal_session should preserve HTTPException raises",
+        )
+        self.assertIn('"Session not found"', source)
+
+    def test_batch68_business_logic_preservation(self):
+        """Test batch 68 preserves all business logic"""
+        from backend.api.agent_terminal import (
+            approve_agent_command,
+            delete_agent_terminal_session,
+            execute_agent_command,
+        )
+
+        # delete_agent_terminal_session should close session and check success
+        source = inspect.getsource(delete_agent_terminal_session)
+        self.assertIn("service.close_session", source)
+        self.assertIn("if not success:", source)
+
+        # execute_agent_command should execute command with all parameters
+        source = inspect.getsource(execute_agent_command)
+        self.assertIn("service.execute_command", source)
+        self.assertIn("session_id=session_id", source)
+        self.assertIn("command=request.command", source)
+
+        # approve_agent_command should approve with logging
+        source = inspect.getsource(approve_agent_command)
+        self.assertIn("service.approve_command", source)
+        self.assertIn("logger.info", source)
+
+
 if __name__ == "__main__":
     unittest.main()
