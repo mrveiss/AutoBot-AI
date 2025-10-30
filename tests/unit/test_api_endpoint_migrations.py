@@ -8069,5 +8069,147 @@ class TestBatch51KnowledgeMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="KNOWLEDGE"', source)
 
 
+class TestBatch52TerminalMigrations(unittest.TestCase):
+    """Test batch 52 migrations: terminal.py POST /sessions + GET /sessions"""
+
+    def test_create_terminal_session_decorator_present(self):
+        """Test create_terminal_session has @with_error_handling decorator"""
+        from backend.api.terminal import create_terminal_session
+        import inspect
+
+        source = inspect.getsource(create_terminal_session)
+        # Should have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_create_terminal_session_no_try_catch(self):
+        """Test create_terminal_session try-catch completely removed"""
+        from backend.api.terminal import create_terminal_session
+        import inspect
+
+        source = inspect.getsource(create_terminal_session)
+        lines = source.split("\n")
+
+        # Should NOT have any try-catch blocks (Simple Pattern)
+        # Count indented try statements (not in decorators)
+        try_count = 0
+        for line in lines:
+            if line.strip().startswith("try:"):
+                try_count += 1
+
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+
+    def test_create_terminal_session_business_logic_preserved(self):
+        """Test create_terminal_session business logic preserved"""
+        from backend.api.terminal import create_terminal_session
+        import inspect
+
+        source = inspect.getsource(create_terminal_session)
+
+        # Core business logic should be preserved
+        self.assertIn("session_id = str(uuid.uuid4())", source)
+        self.assertIn("session_config = {", source)
+        self.assertIn('"session_id": session_id', source)
+        self.assertIn('"user_id": request.user_id', source)
+        self.assertIn('"conversation_id": request.conversation_id', source)
+        self.assertIn('"security_level": request.security_level', source)
+        self.assertIn("session_manager.session_configs[session_id] = session_config", source)
+        self.assertIn('logger.info(f"Created terminal session: {session_id}")', source)
+        self.assertIn('"status": "created"', source)
+        self.assertIn('"websocket_url"', source)
+
+    def test_create_terminal_session_error_handling(self):
+        """Test error handling configuration in create_terminal_session"""
+        from backend.api.terminal import create_terminal_session
+        import inspect
+
+        source = inspect.getsource(create_terminal_session)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="create_terminal_session"', source)
+        self.assertIn('error_code_prefix="TERMINAL"', source)
+
+    def test_list_terminal_sessions_decorator_present(self):
+        """Test list_terminal_sessions has @with_error_handling decorator"""
+        from backend.api.terminal import list_terminal_sessions
+        import inspect
+
+        source = inspect.getsource(list_terminal_sessions)
+        # Should have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_list_terminal_sessions_no_try_catch(self):
+        """Test list_terminal_sessions try-catch completely removed"""
+        from backend.api.terminal import list_terminal_sessions
+        import inspect
+
+        source = inspect.getsource(list_terminal_sessions)
+        lines = source.split("\n")
+
+        # Should NOT have any try-catch blocks (Simple Pattern)
+        # Count indented try statements (not in decorators)
+        try_count = 0
+        for line in lines:
+            if line.strip().startswith("try:"):
+                try_count += 1
+
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+
+    def test_list_terminal_sessions_business_logic_preserved(self):
+        """Test list_terminal_sessions business logic preserved"""
+        from backend.api.terminal import list_terminal_sessions
+        import inspect
+
+        source = inspect.getsource(list_terminal_sessions)
+
+        # Core business logic should be preserved
+        self.assertIn("sessions = []", source)
+        self.assertIn("for session_id, config in session_manager.session_configs.items():", source)
+        self.assertIn("is_active = session_manager.has_connection(session_id)", source)
+        self.assertIn("sessions.append(", source)
+        self.assertIn('"session_id": session_id', source)
+        self.assertIn('"user_id": config.get("user_id")', source)
+        self.assertIn('"is_active": is_active', source)
+        self.assertIn('"sessions": sessions', source)
+        self.assertIn('"total": len(sessions)', source)
+        self.assertIn('sum(1 for s in sessions if s["is_active"])', source)
+
+    def test_list_terminal_sessions_error_handling(self):
+        """Test error handling configuration in list_terminal_sessions"""
+        from backend.api.terminal import list_terminal_sessions
+        import inspect
+
+        source = inspect.getsource(list_terminal_sessions)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_terminal_sessions"', source)
+        self.assertIn('error_code_prefix="TERMINAL"', source)
+
+    def test_batch52_all_endpoints_migrated(self):
+        """Verify all Batch 52 endpoints have been migrated"""
+        from backend.api.terminal import create_terminal_session, list_terminal_sessions
+        import inspect
+
+        endpoints = [create_terminal_session, list_terminal_sessions]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have decorator
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch52_consistent_error_category(self):
+        """Verify consistent error category across Batch 52"""
+        from backend.api.terminal import create_terminal_session, list_terminal_sessions
+        import inspect
+
+        endpoints = [create_terminal_session, list_terminal_sessions]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use TERMINAL prefix
+            self.assertIn('error_code_prefix="TERMINAL"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
