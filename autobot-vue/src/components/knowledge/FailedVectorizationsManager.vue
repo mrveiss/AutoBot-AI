@@ -87,6 +87,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import apiClient from '@/utils/ApiClient'
+import { parseApiResponse } from '@/utils/apiResponseHelpers'
 
 interface FailedJob {
   job_id: string
@@ -110,7 +111,7 @@ const fetchFailedJobs = async () => {
 
   try {
     const response = await apiClient.get('/api/knowledge_base/vectorize_jobs/failed')
-    const data = await response.json()
+    const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
       failedJobs.value = data.failed_jobs
@@ -136,7 +137,7 @@ const retryJob = async (jobId: string) => {
 
   try {
     const response = await apiClient.post(`/api/knowledge_base/vectorize_jobs/${jobId}/retry`)
-    const data = await response.json()
+    const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
       // Remove from failed list
@@ -164,7 +165,7 @@ const deleteJob = async (jobId: string) => {
 
   try {
     const response = await apiClient.delete(`/api/knowledge_base/vectorize_jobs/${jobId}`)
-    const data = await response.json()
+    const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
       // Remove from list
@@ -190,7 +191,7 @@ const clearAllFailed = async () => {
 
   try {
     const response = await apiClient.delete('/api/knowledge_base/vectorize_jobs/failed/clear')
-    const data = await response.json()
+    const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
       failedJobs.value = []

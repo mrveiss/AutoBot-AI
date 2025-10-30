@@ -42,6 +42,7 @@ const containerRef = ref<HTMLElement>()
 const terminalRef = ref<HTMLElement>()
 const terminal = ref<Terminal>()
 const fitAddon = ref<FitAddon>()
+const webLinksAddon = ref<WebLinksAddon>()
 
 // Theme configurations
 const themes = {
@@ -117,8 +118,9 @@ const initTerminal = async () => {
 
     // Load addons
     fitAddon.value = new FitAddon()
+    webLinksAddon.value = new WebLinksAddon()
     terminal.value.loadAddon(fitAddon.value)
-    terminal.value.loadAddon(new WebLinksAddon())
+    terminal.value.loadAddon(webLinksAddon.value)
 
     // Open terminal in DOM
     terminal.value.open(terminalRef.value)
@@ -163,12 +165,40 @@ const initTerminal = async () => {
 const disposeTerminal = () => {
   if (terminal.value) {
     try {
+      // Dispose addons first if they exist
+      // Note: XTerm.js will try to dispose loaded addons when terminal.dispose() is called,
+      // but explicitly disposing them first prevents errors if addons weren't fully loaded
+      if (fitAddon.value && typeof fitAddon.value.dispose === 'function') {
+        try {
+          fitAddon.value.dispose()
+        } catch (err) {
+          console.warn('[BaseXTerminal] Error disposing fit addon:', err)
+        }
+      }
+
+      if (webLinksAddon.value && typeof webLinksAddon.value.dispose === 'function') {
+        try {
+          webLinksAddon.value.dispose()
+        } catch (err) {
+          console.warn('[BaseXTerminal] Error disposing web links addon:', err)
+        }
+      }
+
+      // Now dispose the terminal itself
       terminal.value.dispose()
+
+      // Clear all refs
       terminal.value = undefined
       fitAddon.value = undefined
+      webLinksAddon.value = undefined
+
       emit('disposed')
     } catch (error) {
       console.error('[BaseXTerminal] Error disposing terminal:', error)
+      // Continue cleanup despite error
+      terminal.value = undefined
+      fitAddon.value = undefined
+      webLinksAddon.value = undefined
     }
   }
 }
