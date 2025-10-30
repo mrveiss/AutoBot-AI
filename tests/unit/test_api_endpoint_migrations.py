@@ -11850,5 +11850,223 @@ class TestBatch68AgentTerminalMigrations(unittest.TestCase):
         self.assertIn("logger.info", source)
 
 
+class TestBatch69AgentTerminalMigrations(unittest.TestCase):
+    """Test batch 69 migrations: agent_terminal.py final 2 endpoints"""
+
+    # Test 1: interrupt_agent_session decorator presence
+    def test_interrupt_agent_session_decorator_present(self):
+        """Test interrupt_agent_session has @with_error_handling decorator"""
+        from backend.api.agent_terminal import interrupt_agent_session
+
+        source = inspect.getsource(interrupt_agent_session)
+        self.assertIn(
+            "@with_error_handling",
+            source,
+            "interrupt_agent_session should have @with_error_handling decorator",
+        )
+        self.assertIn(
+            "ErrorCategory.SERVER_ERROR",
+            source,
+            "interrupt_agent_session should use SERVER_ERROR category",
+        )
+        self.assertIn(
+            'error_code_prefix="AGENT_TERMINAL"',
+            source,
+            "interrupt_agent_session should use AGENT_TERMINAL error code prefix",
+        )
+
+    # Test 2: interrupt_agent_session Simple Pattern compliance
+    def test_interrupt_agent_session_simple_pattern(self):
+        """Test interrupt_agent_session uses Simple Pattern - no try-catch blocks"""
+        from backend.api.agent_terminal import interrupt_agent_session
+
+        source = inspect.getsource(interrupt_agent_session)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            "interrupt_agent_session should have no try-catch blocks (Simple Pattern)",
+        )
+
+    # Test 3: interrupt_agent_session business logic preserved
+    def test_interrupt_agent_session_business_logic(self):
+        """Test interrupt_agent_session preserves business logic - user interrupt call"""
+        from backend.api.agent_terminal import interrupt_agent_session
+
+        source = inspect.getsource(interrupt_agent_session)
+        self.assertIn(
+            "service.user_interrupt",
+            source,
+            "interrupt_agent_session should call service.user_interrupt",
+        )
+        self.assertIn(
+            "session_id=session_id",
+            source,
+            "interrupt_agent_session should pass session_id parameter",
+        )
+        self.assertIn(
+            "user_id=request.user_id",
+            source,
+            "interrupt_agent_session should pass user_id parameter",
+        )
+
+    # Test 4: resume_agent_session decorator presence
+    def test_resume_agent_session_decorator_present(self):
+        """Test resume_agent_session has @with_error_handling decorator"""
+        from backend.api.agent_terminal import resume_agent_session
+
+        source = inspect.getsource(resume_agent_session)
+        self.assertIn(
+            "@with_error_handling",
+            source,
+            "resume_agent_session should have @with_error_handling decorator",
+        )
+        self.assertIn(
+            "ErrorCategory.SERVER_ERROR",
+            source,
+            "resume_agent_session should use SERVER_ERROR category",
+        )
+        self.assertIn(
+            'error_code_prefix="AGENT_TERMINAL"',
+            source,
+            "resume_agent_session should use AGENT_TERMINAL error code prefix",
+        )
+
+    # Test 5: resume_agent_session Simple Pattern compliance
+    def test_resume_agent_session_simple_pattern(self):
+        """Test resume_agent_session uses Simple Pattern - no try-catch blocks"""
+        from backend.api.agent_terminal import resume_agent_session
+
+        source = inspect.getsource(resume_agent_session)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            "resume_agent_session should have no try-catch blocks (Simple Pattern)",
+        )
+
+    # Test 6: resume_agent_session business logic preserved
+    def test_resume_agent_session_business_logic(self):
+        """Test resume_agent_session preserves business logic - agent resume call"""
+        from backend.api.agent_terminal import resume_agent_session
+
+        source = inspect.getsource(resume_agent_session)
+        self.assertIn(
+            "service.agent_resume",
+            source,
+            "resume_agent_session should call service.agent_resume",
+        )
+        self.assertIn(
+            "session_id=session_id",
+            source,
+            "resume_agent_session should pass session_id parameter",
+        )
+
+    # Test 7: Batch 69 consistency - all endpoints use same error category
+    def test_batch69_error_category_consistency(self):
+        """Test all batch 69 endpoints use SERVER_ERROR category"""
+        from backend.api.agent_terminal import (
+            interrupt_agent_session,
+            resume_agent_session,
+        )
+
+        for endpoint in [interrupt_agent_session, resume_agent_session]:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} should use SERVER_ERROR category",
+            )
+
+    # Test 8: Batch 69 consistency - all endpoints use same error code prefix
+    def test_batch69_error_prefix_consistency(self):
+        """Test all batch 69 endpoints use AGENT_TERMINAL error code prefix"""
+        from backend.api.agent_terminal import (
+            interrupt_agent_session,
+            resume_agent_session,
+        )
+
+        for endpoint in [interrupt_agent_session, resume_agent_session]:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                'error_code_prefix="AGENT_TERMINAL"',
+                source,
+                f"{endpoint.__name__} should use AGENT_TERMINAL error code prefix",
+            )
+
+    # Test 9: Batch 69 consistency - all endpoints follow Simple Pattern
+    def test_batch69_simple_pattern_consistency(self):
+        """Test all batch 69 endpoints follow Simple Pattern (no try-catch)"""
+        from backend.api.agent_terminal import (
+            interrupt_agent_session,
+            resume_agent_session,
+        )
+
+        for endpoint in [interrupt_agent_session, resume_agent_session]:
+            source = inspect.getsource(endpoint)
+            try_count = source.count("    try:")
+            self.assertEqual(
+                try_count,
+                0,
+                f"{endpoint.__name__} should have no try-catch blocks (Simple Pattern)",
+            )
+
+    # Test 10: Batch 69 consistency - all decorators before function definition
+    def test_batch69_decorator_placement(self):
+        """Test all batch 69 decorators are placed before async def"""
+        from backend.api.agent_terminal import (
+            interrupt_agent_session,
+            resume_agent_session,
+        )
+
+        for endpoint in [interrupt_agent_session, resume_agent_session]:
+            source = inspect.getsource(endpoint)
+            decorator_pos = source.find("@with_error_handling")
+            async_def_pos = source.find("async def")
+            self.assertLess(
+                decorator_pos,
+                async_def_pos,
+                f"{endpoint.__name__} decorator should be before async def",
+            )
+
+    # Test 11: Batch 69 consistency - no HTTPException in generic error handling
+    def test_batch69_no_generic_http_exceptions(self):
+        """Test batch 69 endpoints don't use HTTPException for generic error handling"""
+        from backend.api.agent_terminal import (
+            interrupt_agent_session,
+            resume_agent_session,
+        )
+
+        # These endpoints should not have HTTPException in except blocks
+        # (business logic HTTPException is fine, but not in generic error handling)
+        for endpoint in [interrupt_agent_session, resume_agent_session]:
+            source = inspect.getsource(endpoint)
+            # Check there's no "except ... HTTPException" pattern (generic error handling)
+            self.assertNotIn(
+                "except Exception",
+                source,
+                f"{endpoint.__name__} should not have generic exception handling (decorator handles it)",
+            )
+
+    # Test 12: Batch 69 business logic completeness
+    def test_batch69_business_logic_completeness(self):
+        """Test batch 69 endpoints preserve all critical business logic"""
+        from backend.api.agent_terminal import (
+            interrupt_agent_session,
+            resume_agent_session,
+        )
+
+        # interrupt_agent_session should interrupt and pass parameters
+        source = inspect.getsource(interrupt_agent_session)
+        self.assertIn("service.user_interrupt", source)
+        self.assertIn("session_id=session_id", source)
+        self.assertIn("user_id=request.user_id", source)
+
+        # resume_agent_session should resume and pass session_id
+        source = inspect.getsource(resume_agent_session)
+        self.assertIn("service.agent_resume", source)
+        self.assertIn("session_id=session_id", source)
+
+
 if __name__ == "__main__":
     unittest.main()
