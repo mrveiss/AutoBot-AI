@@ -10604,5 +10604,164 @@ class TestBatch61MonitoringMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="MONITORING"', source)
 
 
+class TestBatch62MonitoringMigrations(unittest.TestCase):
+    """Test batch 62 migrations: monitoring.py hardware/services/export endpoints"""
+
+    def test_get_gpu_details_decorator_present(self):
+        """Test get_gpu_details has @with_error_handling decorator"""
+        from backend.api.monitoring import get_gpu_details
+
+        source = inspect.getsource(get_gpu_details)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_get_gpu_details_no_try_catch(self):
+        """Test get_gpu_details has no redundant try-catch blocks"""
+        from backend.api.monitoring import get_gpu_details
+
+        source = inspect.getsource(get_gpu_details)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, f"Expected 0 try blocks in get_gpu_details, found {try_count}"
+        )
+
+    def test_get_gpu_details_business_logic_preserved(self):
+        """Test get_gpu_details business logic is preserved"""
+        from backend.api.monitoring import get_gpu_details
+
+        source = inspect.getsource(get_gpu_details)
+        self.assertIn("await phase9_monitor.collect_gpu_metrics()", source)
+        self.assertIn('"available"', source)
+        self.assertIn('"current_metrics"', source)
+        self.assertIn('"historical_data"', source)
+        self.assertIn('"optimization_status"', source)
+
+    def test_get_npu_details_decorator_present(self):
+        """Test get_npu_details has @with_error_handling decorator"""
+        from backend.api.monitoring import get_npu_details
+
+        source = inspect.getsource(get_npu_details)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_get_npu_details_no_try_catch(self):
+        """Test get_npu_details has no redundant try-catch blocks"""
+        from backend.api.monitoring import get_npu_details
+
+        source = inspect.getsource(get_npu_details)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, f"Expected 0 try blocks in get_npu_details, found {try_count}"
+        )
+
+    def test_get_npu_details_business_logic_preserved(self):
+        """Test get_npu_details business logic is preserved"""
+        from backend.api.monitoring import get_npu_details
+
+        source = inspect.getsource(get_npu_details)
+        self.assertIn("await phase9_monitor.collect_npu_metrics()", source)
+        self.assertIn('"available"', source)
+        self.assertIn('"current_metrics"', source)
+        self.assertIn('"historical_data"', source)
+
+    def test_get_services_health_decorator_present(self):
+        """Test get_services_health has @with_error_handling decorator"""
+        from backend.api.monitoring import get_services_health
+
+        source = inspect.getsource(get_services_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_get_services_health_no_try_catch(self):
+        """Test get_services_health has no redundant try-catch blocks"""
+        from backend.api.monitoring import get_services_health
+
+        source = inspect.getsource(get_services_health)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"Expected 0 try blocks in get_services_health, found {try_count}",
+        )
+
+    def test_get_services_health_business_logic_preserved(self):
+        """Test get_services_health business logic is preserved"""
+        from backend.api.monitoring import get_services_health
+
+        source = inspect.getsource(get_services_health)
+        self.assertIn(
+            "await phase9_monitor.collect_service_performance_metrics()", source
+        )
+        self.assertIn('"total_services"', source)
+        self.assertIn('"healthy_services"', source)
+        self.assertIn('"overall_status"', source)
+
+    def test_export_metrics_decorator_present(self):
+        """Test export_metrics has @with_error_handling decorator"""
+        from backend.api.monitoring import export_metrics
+
+        source = inspect.getsource(export_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_export_metrics_no_try_catch(self):
+        """Test export_metrics has no redundant try-catch blocks"""
+        from backend.api.monitoring import export_metrics
+
+        source = inspect.getsource(export_metrics)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, f"Expected 0 try blocks in export_metrics, found {try_count}"
+        )
+
+    def test_export_metrics_business_logic_preserved(self):
+        """Test export_metrics business logic is preserved"""
+        from backend.api.monitoring import export_metrics
+
+        source = inspect.getsource(export_metrics)
+        self.assertIn("phase9_monitor.gpu_metrics_buffer", source)
+        self.assertIn("phase9_monitor.npu_metrics_buffer", source)
+        self.assertIn("phase9_monitor.system_metrics_buffer", source)
+        self.assertIn('"json"', source)
+        self.assertIn('"csv"', source)
+
+    def test_batch62_decorator_configuration(self):
+        """Verify all batch 62 endpoints have correct decorator configuration"""
+        from backend.api.monitoring import (
+            export_metrics,
+            get_gpu_details,
+            get_npu_details,
+            get_services_health,
+        )
+
+        endpoints = [get_gpu_details, get_npu_details, get_services_health, export_metrics]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("@with_error_handling", source, f"{endpoint.__name__} missing decorator")
+            self.assertIn("ErrorCategory.SERVER_ERROR", source, f"{endpoint.__name__} not using SERVER_ERROR")
+            self.assertIn('error_code_prefix="MONITORING"', source, f"{endpoint.__name__} not using MONITORING prefix")
+
+    def test_batch62_consistent_error_category(self):
+        """Verify consistent error category and prefix for Batch 62"""
+        from backend.api.monitoring import (
+            export_metrics,
+            get_gpu_details,
+            get_npu_details,
+            get_services_health,
+        )
+
+        endpoints = [get_gpu_details, get_npu_details, get_services_health, export_metrics]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            self.assertIn('error_code_prefix="MONITORING"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
