@@ -11232,5 +11232,224 @@ class TestBatch65ResearchBrowserMigrations(unittest.TestCase):
             )
 
 
+class TestBatch66ResearchBrowserMigrations(unittest.TestCase):
+    """Test batch 66 migrations: research_browser.py final 4 endpoints"""
+
+    def test_cleanup_session_decorator_present(self):
+        """Test cleanup_session has @with_error_handling decorator"""
+        from backend.api.research_browser import cleanup_session
+
+        source = inspect.getsource(cleanup_session)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="RESEARCH_BROWSER"', source)
+
+    def test_cleanup_session_simple_pattern(self):
+        """Test cleanup_session uses Simple Pattern - no try-catch blocks"""
+        from backend.api.research_browser import cleanup_session
+
+        source = inspect.getsource(cleanup_session)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            "cleanup_session should have no try-catch blocks (Simple Pattern)",
+        )
+
+    def test_cleanup_session_business_logic(self):
+        """Test cleanup_session preserves business logic"""
+        from backend.api.research_browser import cleanup_session
+
+        source = inspect.getsource(cleanup_session)
+        # Should call cleanup_session on manager
+        self.assertIn("research_browser_manager.cleanup_session", source)
+        # Should return success response
+        self.assertIn("JSONResponse", source)
+        self.assertIn('"success": True', source)
+
+    def test_list_sessions_decorator_present(self):
+        """Test list_sessions has @with_error_handling decorator"""
+        from backend.api.research_browser import list_sessions
+
+        source = inspect.getsource(list_sessions)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="RESEARCH_BROWSER"', source)
+
+    def test_list_sessions_simple_pattern(self):
+        """Test list_sessions uses Simple Pattern - no try-catch blocks"""
+        from backend.api.research_browser import list_sessions
+
+        source = inspect.getsource(list_sessions)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "list_sessions should have no try-catch blocks (Simple Pattern)"
+        )
+
+    def test_list_sessions_business_logic(self):
+        """Test list_sessions preserves business logic"""
+        from backend.api.research_browser import list_sessions
+
+        source = inspect.getsource(list_sessions)
+        # Should iterate over sessions
+        self.assertIn("research_browser_manager.sessions.items()", source)
+        # Should return sessions info with count
+        self.assertIn("sessions_info", source)
+        self.assertIn("total_sessions", source)
+
+    def test_navigate_session_decorator_present(self):
+        """Test navigate_session has @with_error_handling decorator"""
+        from backend.api.research_browser import navigate_session
+
+        source = inspect.getsource(navigate_session)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="RESEARCH_BROWSER"', source)
+
+    def test_navigate_session_simple_pattern(self):
+        """Test navigate_session uses Simple Pattern - no try-catch blocks"""
+        from backend.api.research_browser import navigate_session
+
+        source = inspect.getsource(navigate_session)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            "navigate_session should have no try-catch blocks (Simple Pattern)",
+        )
+
+    def test_navigate_session_httpexception_preserved(self):
+        """Test navigate_session preserves HTTPException for session not found"""
+        from backend.api.research_browser import navigate_session
+
+        source = inspect.getsource(navigate_session)
+        self.assertIn("HTTPException", source)
+        self.assertIn('"Session not found"', source)
+        # Should check session existence
+        self.assertIn("if not session:", source)
+
+    def test_get_browser_info_decorator_present(self):
+        """Test get_browser_info has @with_error_handling decorator"""
+        from backend.api.research_browser import get_browser_info
+
+        source = inspect.getsource(get_browser_info)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="RESEARCH_BROWSER"', source)
+
+    def test_get_browser_info_mixed_pattern(self):
+        """Test get_browser_info uses Mixed Pattern - preserves nested try-catch for VNC detection"""
+        from backend.api.research_browser import get_browser_info
+
+        source = inspect.getsource(get_browser_info)
+        # Should have exactly 1 try-catch for VNC detection
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            1,
+            "get_browser_info should have exactly 1 try-catch (for VNC detection fallback)",
+        )
+        # Should have nested try-catch for VNC configuration
+        self.assertIn("PLAYWRIGHT_VNC_URL", source)
+        self.assertIn("except Exception:", source)
+        self.assertIn('docker_browser_info = {"available": False}', source)
+
+    def test_get_browser_info_httpexception_preserved(self):
+        """Test get_browser_info preserves HTTPException for session not found"""
+        from backend.api.research_browser import get_browser_info
+
+        source = inspect.getsource(get_browser_info)
+        self.assertIn("HTTPException", source)
+        self.assertIn('"Session not found"', source)
+        # Should check session existence (after special chat-browser handling)
+        self.assertIn("if not session:", source)
+
+    def test_batch66_decorator_configuration(self):
+        """Test all batch 66 endpoints have consistent decorator configuration"""
+        from backend.api.research_browser import (
+            cleanup_session,
+            get_browser_info,
+            list_sessions,
+            navigate_session,
+        )
+
+        endpoints = [cleanup_session, list_sessions, navigate_session, get_browser_info]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} should use ErrorCategory.SERVER_ERROR",
+            )
+            self.assertIn(
+                'error_code_prefix="RESEARCH_BROWSER"',
+                source,
+                f"{endpoint.__name__} should use RESEARCH_BROWSER prefix",
+            )
+
+    def test_batch66_error_category_consistency(self):
+        """Test batch 66 uses correct error categories"""
+        from backend.api.research_browser import (
+            cleanup_session,
+            get_browser_info,
+            list_sessions,
+            navigate_session,
+        )
+
+        # All research_browser endpoints should use SERVER_ERROR category
+        for func in [cleanup_session, list_sessions, navigate_session, get_browser_info]:
+            source = inspect.getsource(func)
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+
+    def test_batch66_no_redundant_error_handling(self):
+        """Test batch 66 removes redundant outer try-catch blocks"""
+        from backend.api.research_browser import (
+            cleanup_session,
+            list_sessions,
+            navigate_session,
+        )
+
+        # Simple Pattern endpoints should have NO try-catch
+        for func in [cleanup_session, list_sessions, navigate_session]:
+            source = inspect.getsource(func)
+            try_count = source.count("    try:")
+            self.assertEqual(
+                try_count, 0, f"{func.__name__} should have no try-catch (Simple Pattern)"
+            )
+
+    def test_batch66_simple_pattern_compliance(self):
+        """Test batch 66 Simple Pattern endpoints have no error handling code"""
+        from backend.api.research_browser import (
+            cleanup_session,
+            list_sessions,
+            navigate_session,
+        )
+
+        for func in [cleanup_session, list_sessions, navigate_session]:
+            source = inspect.getsource(func)
+            # Should not have manual error handling
+            self.assertEqual(source.count("    try:"), 0)
+            self.assertEqual(source.count("    except"), 0)
+
+    def test_batch66_httpexception_preservation(self):
+        """Test batch 66 preserves HTTPException business logic"""
+        from backend.api.research_browser import get_browser_info, navigate_session
+
+        # These endpoints raise HTTPException for session not found
+        for func in [navigate_session, get_browser_info]:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "HTTPException",
+                source,
+                f"{func.__name__} should preserve HTTPException raises",
+            )
+            self.assertIn(
+                '"Session not found"',
+                source,
+                f"{func.__name__} should check for session existence",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
