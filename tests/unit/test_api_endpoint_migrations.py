@@ -8349,5 +8349,142 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="TERMINAL"', source)
 
 
+class TestBatch54TerminalMigrations(unittest.TestCase):
+    """Test batch 54 migrations: terminal.py POST /command + POST /sessions/{id}/input"""
+
+    def test_execute_single_command_decorator_present(self):
+        """Test execute_single_command has @with_error_handling decorator"""
+        from backend.api.terminal import execute_single_command
+        import inspect
+
+        source = inspect.getsource(execute_single_command)
+        # Should have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_execute_single_command_no_try_catch(self):
+        """Test execute_single_command try-catch completely removed"""
+        from backend.api.terminal import execute_single_command
+        import inspect
+
+        source = inspect.getsource(execute_single_command)
+        lines = source.split("\n")
+
+        # Should NOT have any try-catch blocks (Simple Pattern)
+        try_count = 0
+        for line in lines:
+            if line.strip().startswith("try:"):
+                try_count += 1
+
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+
+    def test_execute_single_command_business_logic_preserved(self):
+        """Test execute_single_command business logic preserved"""
+        from backend.api.terminal import execute_single_command
+        import inspect
+
+        source = inspect.getsource(execute_single_command)
+
+        # Core business logic should be preserved
+        self.assertIn("risk_level = CommandRiskLevel.SAFE", source)
+        self.assertIn("command_lower = request.command.lower().strip()", source)
+        self.assertIn("for pattern in RISKY_COMMAND_PATTERNS:", source)
+        self.assertIn("risk_level = CommandRiskLevel.DANGEROUS", source)
+        self.assertIn("for pattern in MODERATE_RISK_PATTERNS:", source)
+        self.assertIn("risk_level = CommandRiskLevel.MODERATE", source)
+        self.assertIn('"command": request.command', source)
+        self.assertIn('"risk_level": risk_level.value', source)
+        self.assertIn('"requires_confirmation"', source)
+
+    def test_execute_single_command_error_handling(self):
+        """Test error handling configuration in execute_single_command"""
+        from backend.api.terminal import execute_single_command
+        import inspect
+
+        source = inspect.getsource(execute_single_command)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="execute_single_command"', source)
+        self.assertIn('error_code_prefix="TERMINAL"', source)
+
+    def test_send_terminal_input_decorator_present(self):
+        """Test send_terminal_input has @with_error_handling decorator"""
+        from backend.api.terminal import send_terminal_input
+        import inspect
+
+        source = inspect.getsource(send_terminal_input)
+        # Should have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_send_terminal_input_no_try_catch(self):
+        """Test send_terminal_input try-catch completely removed"""
+        from backend.api.terminal import send_terminal_input
+        import inspect
+
+        source = inspect.getsource(send_terminal_input)
+        lines = source.split("\n")
+
+        # Should NOT have any try-catch blocks (Simple Pattern)
+        try_count = 0
+        for line in lines:
+            if line.strip().startswith("try:"):
+                try_count += 1
+
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+
+    def test_send_terminal_input_business_logic_preserved(self):
+        """Test send_terminal_input business logic preserved"""
+        from backend.api.terminal import send_terminal_input
+        import inspect
+
+        source = inspect.getsource(send_terminal_input)
+
+        # Core business logic should be preserved
+        self.assertIn("if not session_manager.has_connection(session_id):", source)
+        self.assertIn('raise HTTPException(status_code=404, detail="Session not active")', source)
+        self.assertIn("success = await session_manager.send_input(session_id, request.text)", source)
+        self.assertIn("if success:", source)
+        self.assertIn('"session_id": session_id', source)
+        self.assertIn('"status": "sent"', source)
+        self.assertIn("request.text if not request.is_password else", source)
+        self.assertIn('raise HTTPException(status_code=500, detail="Failed to send input")', source)
+
+    def test_send_terminal_input_error_handling(self):
+        """Test error handling configuration in send_terminal_input"""
+        from backend.api.terminal import send_terminal_input
+        import inspect
+
+        source = inspect.getsource(send_terminal_input)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="send_terminal_input"', source)
+        self.assertIn('error_code_prefix="TERMINAL"', source)
+
+    def test_batch54_all_endpoints_migrated(self):
+        """Verify all Batch 54 endpoints have been migrated"""
+        from backend.api.terminal import execute_single_command, send_terminal_input
+        import inspect
+
+        endpoints = [execute_single_command, send_terminal_input]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have decorator
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch54_consistent_error_category(self):
+        """Verify consistent error category across Batch 54"""
+        from backend.api.terminal import execute_single_command, send_terminal_input
+        import inspect
+
+        endpoints = [execute_single_command, send_terminal_input]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use TERMINAL prefix
+            self.assertIn('error_code_prefix="TERMINAL"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
