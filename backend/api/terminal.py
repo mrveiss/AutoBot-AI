@@ -896,67 +896,67 @@ session_manager = ConsolidatedTerminalManager()
 
 
 @router.post("/sessions")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_terminal_session",
+    error_code_prefix="TERMINAL",
+)
 async def create_terminal_session(request: TerminalSessionRequest):
     """Create a new terminal session with enhanced security options"""
-    try:
-        session_id = str(uuid.uuid4())
+    session_id = str(uuid.uuid4())
 
-        # Store session configuration for WebSocket connection
-        session_config = {
-            "session_id": session_id,
-            "user_id": request.user_id,
-            "conversation_id": request.conversation_id,  # For linking chat to terminal logging
-            "security_level": request.security_level,
-            "enable_logging": request.enable_logging,
-            "enable_workflow_control": request.enable_workflow_control,
-            "initial_directory": request.initial_directory,
-            "created_at": datetime.now().isoformat(),
-        }
+    # Store session configuration for WebSocket connection
+    session_config = {
+        "session_id": session_id,
+        "user_id": request.user_id,
+        "conversation_id": request.conversation_id,  # For linking chat to terminal logging
+        "security_level": request.security_level,
+        "enable_logging": request.enable_logging,
+        "enable_workflow_control": request.enable_workflow_control,
+        "initial_directory": request.initial_directory,
+        "created_at": datetime.now().isoformat(),
+    }
 
-        # Store in session manager (you would use a proper store in production)
-        session_manager.session_configs[session_id] = session_config
+    # Store in session manager (you would use a proper store in production)
+    session_manager.session_configs[session_id] = session_config
 
-        logger.info(f"Created terminal session: {session_id}")
+    logger.info(f"Created terminal session: {session_id}")
 
-        return {
-            "session_id": session_id,
-            "status": "created",
-            "security_level": request.security_level.value,
-            "websocket_url": f"/api/terminal/ws/{session_id}",
-            "created_at": session_config["created_at"],
-        }
-
-    except Exception as e:
-        logger.error(f"Error creating terminal session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "session_id": session_id,
+        "status": "created",
+        "security_level": request.security_level.value,
+        "websocket_url": f"/api/terminal/ws/{session_id}",
+        "created_at": session_config["created_at"],
+    }
 
 
 @router.get("/sessions")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_terminal_sessions",
+    error_code_prefix="TERMINAL",
+)
 async def list_terminal_sessions():
     """List all active terminal sessions"""
-    try:
-        sessions = []
-        for session_id, config in session_manager.session_configs.items():
-            is_active = session_manager.has_connection(session_id)
-            sessions.append(
-                {
-                    "session_id": session_id,
-                    "user_id": config.get("user_id"),
-                    "security_level": config.get("security_level"),
-                    "created_at": config.get("created_at"),
-                    "is_active": is_active,
-                }
-            )
+    sessions = []
+    for session_id, config in session_manager.session_configs.items():
+        is_active = session_manager.has_connection(session_id)
+        sessions.append(
+            {
+                "session_id": session_id,
+                "user_id": config.get("user_id"),
+                "security_level": config.get("security_level"),
+                "created_at": config.get("created_at"),
+                "is_active": is_active,
+            }
+        )
 
-        return {
-            "sessions": sessions,
-            "total": len(sessions),
-            "active": sum(1 for s in sessions if s["is_active"]),
-        }
-
-    except Exception as e:
-        logger.error(f"Error listing sessions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "sessions": sessions,
+        "total": len(sessions),
+        "active": sum(1 for s in sessions if s["is_active"]),
+    }
 
 
 @router.get("/sessions/{session_id}")
