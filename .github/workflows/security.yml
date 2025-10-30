@@ -58,10 +58,12 @@ jobs:
 
     - name: Install Frontend dependencies
       run: |
+        cd autobot-vue
         npm ci
 
     - name: Node.js Dependency Audit
       run: |
+        cd autobot-vue
         echo "## Node.js Dependency Security Report" >> $GITHUB_STEP_SUMMARY
         npm audit --audit-level=moderate --json > npm-audit.json || true
         npm audit --audit-level=moderate || true
