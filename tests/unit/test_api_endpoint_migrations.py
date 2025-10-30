@@ -7781,5 +7781,137 @@ class TestBatch49KnowledgeMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="KNOWLEDGE"', source)
 
 
+# ============================================================================
+# BATCH 50: Knowledge Base Endpoints (POST populate_man_pages + POST refresh_system_knowledge)
+# ============================================================================
+
+
+class TestBatch50KnowledgeMigrations(unittest.TestCase):
+    """Test suite for Batch 50 knowledge base endpoints"""
+
+    def test_populate_man_pages_decorator_present(self):
+        """Verify @with_error_handling decorator on populate_man_pages"""
+        from backend.api.knowledge import populate_man_pages
+        import inspect
+
+        source = inspect.getsource(populate_man_pages)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="populate_man_pages"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_populate_man_pages_no_try_catch(self):
+        """Verify try-catch removed from populate_man_pages (Simple Pattern)"""
+        from backend.api.knowledge import populate_man_pages
+        import inspect
+
+        source = inspect.getsource(populate_man_pages)
+        # Simple pattern: no try-catch blocks
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0)
+
+    def test_populate_man_pages_business_logic_preserved(self):
+        """Verify business logic preserved in populate_man_pages"""
+        from backend.api.knowledge import populate_man_pages
+        import inspect
+
+        source = inspect.getsource(populate_man_pages)
+        # Key business logic should be present
+        self.assertIn("get_or_create_knowledge_base", source)
+        self.assertIn("background_tasks.add_task", source)
+        self.assertIn("_populate_man_pages_background", source)
+        self.assertIn("background", source)
+
+    def test_populate_man_pages_error_handling(self):
+        """Test error handling configuration in populate_man_pages"""
+        from backend.api.knowledge import populate_man_pages
+        import inspect
+
+        source = inspect.getsource(populate_man_pages)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="populate_man_pages"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_refresh_system_knowledge_decorator_present(self):
+        """Verify @with_error_handling decorator on refresh_system_knowledge"""
+        from backend.api.knowledge import refresh_system_knowledge
+        import inspect
+
+        source = inspect.getsource(refresh_system_knowledge)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="refresh_system_knowledge"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_refresh_system_knowledge_nested_try_catch_preserved(self):
+        """Verify nested try-catch block preserved in refresh_system_knowledge (Mixed Pattern)"""
+        from backend.api.knowledge import refresh_system_knowledge
+        import inspect
+
+        source = inspect.getsource(refresh_system_knowledge)
+        # Mixed pattern: nested try-catch block should be preserved for subprocess timeout
+        try_count = source.count("try:")
+        # Should have 1 nested try-catch block (subprocess TimeoutExpired)
+        self.assertEqual(try_count, 1)
+        # Should have TimeoutExpired handling
+        self.assertIn("TimeoutExpired", source)
+
+    def test_refresh_system_knowledge_business_logic_preserved(self):
+        """Verify business logic preserved in refresh_system_knowledge"""
+        from backend.api.knowledge import refresh_system_knowledge
+        import inspect
+
+        source = inspect.getsource(refresh_system_knowledge)
+        # Key business logic should be present
+        self.assertIn("subprocess.run", source)
+        self.assertIn("index_all_man_pages.py", source)
+        self.assertIn("commands_indexed", source)
+        self.assertIn("total_facts", source)
+
+    def test_refresh_system_knowledge_error_handling(self):
+        """Test error handling configuration in refresh_system_knowledge"""
+        from backend.api.knowledge import refresh_system_knowledge
+        import inspect
+
+        source = inspect.getsource(refresh_system_knowledge)
+        # Verify decorator configuration
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="refresh_system_knowledge"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_batch50_all_endpoints_migrated(self):
+        """Verify all Batch 50 endpoints have been migrated"""
+        from backend.api.knowledge import (
+            populate_man_pages,
+            refresh_system_knowledge,
+        )
+        import inspect
+
+        endpoints = [populate_man_pages, refresh_system_knowledge]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have decorator
+            self.assertIn("@with_error_handling", source)
+
+    def test_batch50_consistent_error_category(self):
+        """Verify consistent error category across Batch 50"""
+        from backend.api.knowledge import (
+            populate_man_pages,
+            refresh_system_knowledge,
+        )
+        import inspect
+
+        endpoints = [populate_man_pages, refresh_system_knowledge]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should use SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use KNOWLEDGE prefix
+            self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
