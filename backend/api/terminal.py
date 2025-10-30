@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 from src.chat_history_manager import ChatHistoryManager
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
