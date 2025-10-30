@@ -376,6 +376,7 @@ import MessageStatus from '@/components/ui/MessageStatus.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
 import appConfig from '@/config/AppConfig.js'
+import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 
 // Disable automatic attribute inheritance
 defineOptions({
@@ -519,13 +520,7 @@ const getContentClass = (message: ChatMessage): string => {
   return classes.join(' ')
 }
 
-const formatTime = (timestamp: Date | string): string => {
-  const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp
-  if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
-    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
+// NOTE: formatTime removed - now using shared utility from @/utils/formatHelpers
 
 const formatMessageContent = (content: string): string => {
   // Basic markdown-like formatting
@@ -629,13 +624,7 @@ const getAttachmentIcon = (type: string): string => {
   return 'fas fa-file'
 }
 
-const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes'
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
+// NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
 
 const viewAttachment = (attachment: any) => {
   // Handle attachment viewing

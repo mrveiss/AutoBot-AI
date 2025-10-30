@@ -7,6 +7,12 @@
 
 import { ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
+import { parseApiResponse } from '@/utils/apiResponseHelpers'
+import {
+  formatDate as formatDateHelper,
+  formatFileSize as formatFileSizeHelper,
+  formatCategoryName as formatCategoryHelper
+} from '@/utils/formatHelpers'
 import appConfig from '@/config/AppConfig.js'
 import type {
   KnowledgeStatsResponse,
@@ -68,49 +74,9 @@ export interface ProgressMessage {
 }
 
 export function useKnowledgeBase() {
-  // ==================== HELPER FUNCTIONS ====================
-
-  /**
-   * Safely parse JSON from response - handles both Response objects and already-parsed data
-   * Enhanced with better error handling and logging
-   */
-  const parseResponse = async <T = any>(response: unknown): Promise<T> => {
-    try {
-      // Check if response is already parsed data
-      if (response && typeof response === 'object' && (response as Response).json === undefined) {
-        return response as T
-      }
-
-      // Check if response has json() method (fetch Response object)
-      if (typeof (response as Response).json === 'function') {
-        // Clone the response to avoid consuming the body if we need to debug
-        const clonedResponse = (response as Response).clone()
-
-        try {
-          const data = await (response as Response).json()
-          return data as T
-        } catch (jsonError) {
-          // If JSON parsing fails, try to get text for debugging
-          console.error('Failed to parse JSON response:', jsonError)
-          try {
-            const text = await clonedResponse.text()
-            console.error('Response text:', text)
-          } catch (textError) {
-            console.error('Failed to get response text:', textError)
-          }
-          throw new Error('Invalid JSON response from server')
-        }
-      }
-
-      // Fallback: return as-is
-      return response as T
-    } catch (error) {
-      console.error('Error in parseResponse:', error)
-      throw error
-    }
-  }
-
   // ==================== API CALLS ====================
+  // NOTE: Now using shared parseApiResponse from @/utils/apiResponseHelpers
+  // Removed duplicate parseApiResponse implementation (was 40 lines)
 
   /**
    * Fetch knowledge base statistics
@@ -123,7 +89,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to fetch stats: No response from server');
       }
 
-      const data = await parseResponse<KnowledgeStatsResponse>(response)
+      const data = await parseApiResponse<KnowledgeStatsResponse>(response)
       return data as KnowledgeStats
     } catch (error) {
       console.error('Error fetching stats:', error)
@@ -142,7 +108,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to fetch category: No response from server');
       }
 
-      const data = await parseResponse<CategoryResponse>(response)
+      const data = await parseApiResponse<CategoryResponse>(response)
       return data
     } catch (error) {
       console.error('Error fetching category:', error)
@@ -161,7 +127,7 @@ export function useKnowledgeBase() {
         throw new Error('Search failed: No response from server');
       }
 
-      const data = await parseResponse<SearchResponse>(response)
+      const data = await parseApiResponse<SearchResponse>(response)
       return data
     } catch (error) {
       console.error('Error searching knowledge:', error)
@@ -184,7 +150,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to add fact: No response from server');
       }
 
-      const data = await parseResponse<AddFactResponse>(response)
+      const data = await parseApiResponse<AddFactResponse>(response)
       return data
     } catch (error) {
       console.error('Error adding fact:', error)
@@ -211,7 +177,7 @@ export function useKnowledgeBase() {
         throw new Error(`Upload failed: ${response.status} ${response.statusText}`)
       }
 
-      const data = await parseResponse<UploadResponse>(response)
+      const data = await parseApiResponse<UploadResponse>(response)
       return data
     } catch (error) {
       console.error('Error uploading file:', error)
@@ -230,7 +196,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to fetch machine profiles: No response from server');
       }
 
-      const data = await parseResponse<MachineProfileResponse[]>(response)
+      const data = await parseApiResponse<MachineProfileResponse[]>(response)
       return Array.isArray(data) ? data : []
     } catch (error) {
       console.error('Error fetching machine profiles:', error)
@@ -249,7 +215,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to fetch man pages summary: No response from server');
       }
 
-      const data = await parseResponse<ManPagesSummaryResponse>(response)
+      const data = await parseApiResponse<ManPagesSummaryResponse>(response)
       return data
     } catch (error) {
       console.error('Error fetching man pages summary:', error)
@@ -270,7 +236,7 @@ export function useKnowledgeBase() {
         throw new Error('Integration failed: No response from server');
       }
 
-      const data = await parseResponse<IntegrationResponse>(response)
+      const data = await parseApiResponse<IntegrationResponse>(response)
       return data
     } catch (error) {
       console.error('Error integrating man pages:', error)
@@ -289,7 +255,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to get vectorization status: No response from server');
       }
 
-      const data = await parseResponse<VectorizationStatusResponse>(response)
+      const data = await parseApiResponse<VectorizationStatusResponse>(response)
       return data
     } catch (error) {
       console.error('Error getting vectorization status:', error)
@@ -329,7 +295,7 @@ export function useKnowledgeBase() {
       }
 
       // Parse successful response
-      const data = await parseResponse<VectorizationResponse>(response)
+      const data = await parseApiResponse<VectorizationResponse>(response)
 
       return data
     } catch (error) {
@@ -365,7 +331,7 @@ export function useKnowledgeBase() {
         throw new Error('Machine knowledge initialization failed: No response from server');
       }
 
-      const data = await parseResponse<MachineKnowledgeResponse>(response)
+      const data = await parseApiResponse<MachineKnowledgeResponse>(response)
       return data
     } catch (error) {
       console.error('[initializeMachineKnowledge] Error:', error)
@@ -392,7 +358,7 @@ export function useKnowledgeBase() {
         throw new Error('System knowledge refresh failed: No response from server');
       }
 
-      const data = await parseResponse<SystemKnowledgeResponse>(response)
+      const data = await parseApiResponse<SystemKnowledgeResponse>(response)
       return data
     } catch (error) {
       console.error('[refreshSystemKnowledge] Error:', error)
@@ -421,7 +387,7 @@ export function useKnowledgeBase() {
         throw new Error('Man pages population failed: No response from server');
       }
 
-      const data = await parseResponse<ManPagesPopulateResponse>(response)
+      const data = await parseApiResponse<ManPagesPopulateResponse>(response)
       return data
     } catch (error) {
       console.error('[populateManPages] Error:', error)
@@ -448,7 +414,7 @@ export function useKnowledgeBase() {
         throw new Error('AutoBot docs population failed: No response from server');
       }
 
-      const data = await parseResponse<AutoBotDocsResponse>(response)
+      const data = await parseApiResponse<AutoBotDocsResponse>(response)
       return data
     } catch (error) {
       console.error('[populateAutoBotDocs] Error:', error)
@@ -477,7 +443,7 @@ export function useKnowledgeBase() {
         throw new Error('Machine profile fetch failed: No response from server');
       }
 
-      const data = await parseResponse<MachineProfileResponse>(response)
+      const data = await parseApiResponse<MachineProfileResponse>(response)
       return data as MachineProfile
     } catch (error) {
       console.error('[fetchMachineProfile] Error:', error)
@@ -504,7 +470,7 @@ export function useKnowledgeBase() {
         throw new Error('Basic stats fetch failed: No response from server');
       }
 
-      const data = await parseResponse<BasicStatsResponse>(response)
+      const data = await parseApiResponse<BasicStatsResponse>(response)
       return data as KnowledgeStats
     } catch (error) {
       console.error('[fetchBasicStats] Error:', error)
@@ -513,30 +479,8 @@ export function useKnowledgeBase() {
   }
 
   // ==================== FORMATTING FUNCTIONS ====================
-
-  /**
-   * Format date string to localized date
-   */
-  const formatDate = (dateString: string | Date | undefined): string => {
-    if (!dateString) return ''
-
-    try {
-      const date = typeof dateString === 'string' ? new Date(dateString) : dateString
-      return date.toLocaleDateString()
-    } catch {
-      return ''
-    }
-  }
-
-  /**
-   * Format category name for display
-   */
-  const formatCategory = (category: string): string => {
-    return category
-      .split('_')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ')
-  }
+  // NOTE: Now using shared formatHelpers from @/utils/formatHelpers
+  // Removed duplicate formatDate, formatCategory implementations (was 23 lines)
 
   /**
    * Get icon for category
@@ -635,16 +579,7 @@ export function useKnowledgeBase() {
     return 'fas fa-file text-gray-600'
   }
 
-  /**
-   * Format file size in human-readable format
-   */
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }
+  // NOTE: formatFileSize removed (was 7 lines) - now using formatFileSizeHelper from @/utils/formatHelpers
 
   // ==================== EXPORTS ====================
 
@@ -667,17 +602,17 @@ export function useKnowledgeBase() {
     populateAutoBotDocs,
     fetchMachineProfile,
     fetchBasicStats,
-    // Formatting helpers
-    formatDate,
-    formatCategory,
-    formatCategoryName: formatCategory, // Alias for backward compatibility
-    formatFileSize,
+    // Formatting helpers (using shared utilities)
+    formatDate: formatDateHelper,
+    formatCategory: formatCategoryHelper,
+    formatCategoryName: formatCategoryHelper, // Alias for backward compatibility
+    formatFileSize: formatFileSizeHelper,
     // Icon helpers
     getCategoryIcon,
     getTypeIcon,
     getFileIcon,
-    formatDateOnly: formatDate, // Alias for backward compatibility
+    formatDateOnly: formatDateHelper, // Alias for backward compatibility
     // Helper function
-    parseResponse
+    parseApiResponse
   }
 }

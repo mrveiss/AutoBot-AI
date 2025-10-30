@@ -166,7 +166,7 @@
           </div>
           <div class="detail-item">
             <label>Last Updated:</label>
-            <span>{{ formatDateTime(vectorStats.last_updated) }}</span>
+            <span>{{ formatDateTimeHelper(vectorStats.last_updated) }}</span>
           </div>
           <div class="detail-item">
             <label>Indexed Documents:</label>
@@ -298,7 +298,7 @@
           </div>
           <div class="activity-content">
             <p class="activity-description">{{ activity.description }}</p>
-            <p class="activity-time">{{ formatRelativeTime(activity.timestamp) }}</p>
+            <p class="activity-time">{{ formatTimeAgo(activity.timestamp) }}</p>
           </div>
         </div>
         <div v-if="recentActivities.length === 0" class="no-activity">
@@ -359,6 +359,12 @@ import type { KnowledgeCategory } from '@/stores/useKnowledgeStore'
 import ManPageManager from '@/components/ManPageManager.vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
+import {
+  formatFileSize,
+  formatTimeAgo,
+  formatDateTime as formatDateTimeHelper,
+  formatCategoryName
+} from '@/utils/formatHelpers'
 
 // TypeScript Interfaces
 interface VectorStats {
@@ -641,13 +647,7 @@ ${(popularTags.value || []).slice(0, 10).map(tag => `- ${tag.name}: ${tag.count}
 }
 
 // Utility functions
-const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes'
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
+// NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
 
 const estimateTextSize = (text: string): number => {
   // Rough estimate: 1 character = 1 byte
@@ -679,21 +679,7 @@ const getActivityIcon = (type: string): string => {
   return icons[type] || 'fas fa-circle'
 }
 
-const formatRelativeTime = (date: Date | string): string => {
-  const d = typeof date === 'string' ? new Date(date) : date
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(diff / 3600000)
-  const days = Math.floor(diff / 86400000)
-
-  if (minutes < 60) return `${minutes} minutes ago`
-  if (hours < 24) return `${hours} hours ago`
-  if (days < 7) return `${days} days ago`
-
-  return d.toLocaleDateString()
-}
+// NOTE: formatRelativeTime removed - now using formatTimeAgo from @/utils/formatHelpers
 
 const capitalize = (str: string): string => {
   return str && str.length > 0 ? str.charAt(0).toUpperCase() + str.slice(1) : str || ''
@@ -767,13 +753,7 @@ const refreshVectorStats = async () => {
   }
 }
 
-const formatCategoryName = (category: string): string => {
-  if (!category) return ''
-  return category
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
-}
+// NOTE: formatCategoryName removed - now using shared utility from @/utils/formatHelpers
 
 const getCategoryFactCount = (category: string): number => {
   return categoryFactCounts.value[category] || 0
@@ -790,15 +770,7 @@ const getCategoryColor = (index: number): string => {
   return colors[index % colors.length]
 }
 
-const formatDateTime = (dateString: string): string => {
-  if (!dateString) return 'Never'
-  try {
-    const date = new Date(dateString)
-    return date.toLocaleString()
-  } catch {
-    return 'Invalid date'
-  }
-}
+// NOTE: formatDateTime removed - now using formatDateTimeHelper from @/utils/formatHelpers
 
 const getEmbeddingModelDisplay = (): string => {
   if (!vectorStats.value) return 'Loading...'
