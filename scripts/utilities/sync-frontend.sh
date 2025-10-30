@@ -43,28 +43,44 @@ fi
 
 log_info "SSH connection verified ✓"
 
-# Sync specific component or all
+# Step 1: Stop Vite dev server first (to clear in-memory cache)
+log_info "Stopping Vite dev server..."
+ssh -T -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" \
+    "pkill -9 -f 'vite.*--host.*5173' 2>/dev/null || true; pkill -9 -f 'npm.*dev' 2>/dev/null || true"
+sleep 1
+log_info "Vite dev server stopped ✓"
+
+# Step 2: Clean caches and temp files on remote (while Vite is stopped)
+log_info "Cleaning Vite caches and temp files on remote..."
+ssh -T -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" \
+    "cd /home/autobot/autobot-vue && rm -rf .vite node_modules/.cache node_modules/.vite dist .vite-temp && echo 'Caches cleared'"
+log_info "Remote caches cleaned ✓"
+
+# Step 3: Sync specific component or all
 SYNC_TARGET="${1:-all}"
 
 case "$SYNC_TARGET" in
     "component"|"components")
         log_info "Syncing components directory..."
-        scp -i "$SSH_KEY" -r \
-            "$LOCAL_SRC/components/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DEST/"
+        rsync -avz --delete -e "ssh -i $SSH_KEY" \
+            "$LOCAL_SRC/components/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DEST/components/"
         ;;
     "all")
-        log_info "Syncing entire src directory..."
-        scp -i "$SSH_KEY" -r \
-            "$LOCAL_SRC/" "$REMOTE_USER@$REMOTE_HOST:/home/autobot/autobot-vue/"
+        log_info "Syncing entire src directory (with deletion of removed files)..."
+        rsync -avz --delete -e "ssh -i $SSH_KEY" \
+            --exclude 'node_modules' \
+            --exclude '.DS_Store' \
+            --exclude '*.log' \
+            "$LOCAL_SRC/" "$REMOTE_USER@$REMOTE_HOST:/home/autobot/autobot-vue/src/"
         ;;
     *)
         log_info "Syncing specific file/directory: $SYNC_TARGET"
         if [ -f "$LOCAL_SRC/$SYNC_TARGET" ] || [ -d "$LOCAL_SRC/$SYNC_TARGET" ]; then
             if [ -d "$LOCAL_SRC/$SYNC_TARGET" ]; then
-                scp -i "$SSH_KEY" -r \
-                    "$LOCAL_SRC/$SYNC_TARGET" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DEST/"
+                rsync -avz --delete -e "ssh -i $SSH_KEY" \
+                    "$LOCAL_SRC/$SYNC_TARGET/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DEST/$SYNC_TARGET/"
             else
-                scp -i "$SSH_KEY" \
+                rsync -avz -e "ssh -i $SSH_KEY" \
                     "$LOCAL_SRC/$SYNC_TARGET" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DEST/$SYNC_TARGET"
             fi
         else
@@ -76,10 +92,10 @@ esac
 
 log_info "Sync completed successfully! ✓"
 
-# Optional: Restart Vite dev server if needed
-if [ "$2" == "--restart" ]; then
-    log_info "Restarting Vite dev server..."
-    ssh -T -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" \
-        "pkill -f 'vite.*--host.*5173' || true; sleep 2; cd /home/autobot/autobot-vue && VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20} VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001} npm run dev -- --host 0.0.0.0 --port 5173 > /dev/null 2>&1 &"
-    log_info "Vite dev server restarted ✓"
-fi
+# Step 4: Start Vite dev server with clean cache and fresh files
+log_info "Starting Vite dev server..."
+ssh -T -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" \
+    "cd /home/autobot/autobot-vue && VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20} VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001} nohup npm run dev -- --host 0.0.0.0 --port 5173 > /tmp/vite.log 2>&1 < /dev/null &"
+sleep 3
+log_info "Vite dev server started ✓"
+log_info "Frontend sync complete - all caches cleared, files synced, server restarted ✓"

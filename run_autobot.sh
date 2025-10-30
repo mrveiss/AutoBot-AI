@@ -903,43 +903,28 @@ start_frontend_dev() {
     if [ "$DEV_MODE" = true ]; then
         echo -e "${CYAN}🔧 Starting Frontend Development Mode...${NC}"
 
-        # Development mode: Sync code and start Vite dev server manually
+        # Development mode: Sync code to VM (sync script handles: Stop → Clean → Sync → Start)
         echo "  📦 Syncing frontend code to VM..."
+        echo "  🔄 Process: Stop Vite → Clear cache → Sync files → Start Vite"
 
-        # Check if sync script exists
+        # Check if sync script exists and run it
         if [ -f "scripts/utilities/sync-frontend.sh" ]; then
-            ./scripts/utilities/sync-frontend.sh
+            ./scripts/utilities/sync-frontend.sh all
         elif [ -f "sync-frontend.sh" ]; then
-            ./sync-frontend.sh
+            ./sync-frontend.sh all
         else
             echo -e "${YELLOW}  ⚠️  Sync script not found - code may be outdated on frontend VM${NC}"
+            echo -e "${YELLOW}  ⚠️  Attempting manual frontend startup...${NC}"
+
+            # Fallback: manual startup if sync script missing
+            timeout 3 ssh -T -i "$SSH_KEY" "$SSH_USER@${VMS["frontend"]}" "pkill -f 'npm.*dev' 2>/dev/null || true; pkill -f 'vite.*5173' 2>/dev/null || true" 2>/dev/null
+            sleep 1
+            timeout 5 ssh -T -i "$SSH_KEY" "$SSH_USER@${VMS["frontend"]}" "cd autobot-vue && VITE_BACKEND_HOST=$BACKEND_HOST VITE_BACKEND_PORT=$BACKEND_PORT nohup npm run dev -- --host 0.0.0.0 --port $FRONTEND_PORT > /tmp/vite.log 2>&1 < /dev/null &"
         fi
 
-        # Check if frontend is already running
-        if timeout 5 curl -s "http://${VMS["frontend"]}:$FRONTEND_PORT" >/dev/null 2>&1; then
-            echo -e "${GREEN}  ✅ Frontend development server already running${NC}"
-            echo -e "${BLUE}  🌐 Frontend URL: http://172.16.168.21:5173${NC}"
-            echo -e "${CYAN}  📝 Logs: ssh autobot@172.16.168.21 'tail -f /tmp/vite.log'${NC}"
-            return 0
-        fi
-
-        # Optimized process cleanup
-        echo "  🧹 Cleaning up existing processes..."
-        timeout 3 ssh -T -i "$SSH_KEY" "$SSH_USER@${VMS["frontend"]}" "pkill -f 'npm.*dev' 2>/dev/null || true; pkill -f 'vite.*5173' 2>/dev/null || true" 2>/dev/null || echo "    Process cleanup completed"
-        sleep 1  # Reduced from 2 seconds
-
-        # Start Vite dev server in background
-        echo "  🚀 Starting Vite dev server on frontend VM..."
-
-        # Start Vite with optimized timing
-        timeout 5 ssh -T -i "$SSH_KEY" "$SSH_USER@${VMS["frontend"]}" "cd autobot-vue && VITE_BACKEND_HOST=$BACKEND_HOST VITE_BACKEND_PORT=$BACKEND_PORT nohup npm run dev -- --host 0.0.0.0 --port $FRONTEND_PORT > /tmp/vite.log 2>&1 < /dev/null & sleep 1" || echo "  📤 Vite startup command sent"
-
-        # Optimized wait times
-        echo "  ⏳ Starting npm process..."
-        sleep 1  # Reduced from 2 seconds
-        echo "  📦 Loading dependencies and building..."
-        sleep 2  # Reduced from 3 seconds
-        echo "  🔍 Testing server response..."
+        # Wait for Vite to start
+        echo "  ⏳ Waiting for Vite to start..."
+        sleep 3
 
         # Check if frontend is now running with reduced timeout
         if timeout 10 bash -c 'while ! curl -s "http://172.16.168.21:5173" >/dev/null 2>&1; do sleep 0.5; done'; then
