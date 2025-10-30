@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 # Import AutoBot monitoring system
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.performance_monitor import (
     add_phase9_alert_callback,
     collect_phase9_metrics,
@@ -172,99 +173,96 @@ ws_manager = MonitoringWebSocketManager()
 
 
 @router.get("/status", response_model=MonitoringStatus)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_monitoring_status",
+    error_code_prefix="MONITORING",
+)
 async def get_monitoring_status():
     """Get current monitoring system status"""
-    try:
-        dashboard = get_phase9_performance_dashboard()
+    dashboard = get_phase9_performance_dashboard()
 
-        # Calculate uptime
-        uptime_seconds = 0
-        if phase9_monitor.monitoring_active:
-            uptime_seconds = time.time() - getattr(
-                phase9_monitor, "start_time", time.time()
-            )
-
-        # Count metrics collected
-        metrics_collected = (
-            len(phase9_monitor.gpu_metrics_buffer)
-            + len(phase9_monitor.npu_metrics_buffer)
-            + len(phase9_monitor.multimodal_metrics_buffer)
-            + len(phase9_monitor.system_metrics_buffer)
+    # Calculate uptime
+    uptime_seconds = 0
+    if phase9_monitor.monitoring_active:
+        uptime_seconds = time.time() - getattr(
+            phase9_monitor, "start_time", time.time()
         )
 
-        return MonitoringStatus(
-            active=phase9_monitor.monitoring_active,
-            uptime_seconds=uptime_seconds,
-            collection_interval=phase9_monitor.collection_interval,
-            hardware_acceleration=dashboard.get("hardware_acceleration", {}),
-            metrics_collected=metrics_collected,
-            alerts_count=len(phase9_monitor.performance_alerts),
-        )
+    # Count metrics collected
+    metrics_collected = (
+        len(phase9_monitor.gpu_metrics_buffer)
+        + len(phase9_monitor.npu_metrics_buffer)
+        + len(phase9_monitor.multimodal_metrics_buffer)
+        + len(phase9_monitor.system_metrics_buffer)
+    )
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get monitoring status: {str(e)}"
-        )
+    return MonitoringStatus(
+        active=phase9_monitor.monitoring_active,
+        uptime_seconds=uptime_seconds,
+        collection_interval=phase9_monitor.collection_interval,
+        hardware_acceleration=dashboard.get("hardware_acceleration", {}),
+        metrics_collected=metrics_collected,
+        alerts_count=len(phase9_monitor.performance_alerts),
+    )
 
 
 @router.post("/start")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_monitoring",
+    error_code_prefix="MONITORING",
+)
 async def start_monitoring_endpoint(background_tasks: BackgroundTasks):
     """Start AutoBot performance monitoring"""
-    try:
-        if phase9_monitor.monitoring_active:
-            return {
-                "status": "already_running",
-                "message": "AutoBot monitoring is already active",
-            }
-
-        # Start monitoring in background
-        background_tasks.add_task(start_monitoring)
-
-        # Add alert callback for WebSocket broadcasting
-        async def alert_callback(alerts: List[Dict[str, Any]]):
-            await ws_manager.broadcast_update(
-                {
-                    "type": "performance_alerts",
-                    "timestamp": time.time(),
-                    "alerts": alerts,
-                }
-            )
-
-        add_phase9_alert_callback(alert_callback)
-
+    if phase9_monitor.monitoring_active:
         return {
-            "status": "started",
-            "message": "AutoBot comprehensive performance monitoring started",
-            "collection_interval": phase9_monitor.collection_interval,
+            "status": "already_running",
+            "message": "AutoBot monitoring is already active",
         }
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start monitoring: {str(e)}"
+    # Start monitoring in background
+    background_tasks.add_task(start_monitoring)
+
+    # Add alert callback for WebSocket broadcasting
+    async def alert_callback(alerts: List[Dict[str, Any]]):
+        await ws_manager.broadcast_update(
+            {
+                "type": "performance_alerts",
+                "timestamp": time.time(),
+                "alerts": alerts,
+            }
         )
+
+    add_phase9_alert_callback(alert_callback)
+
+    return {
+        "status": "started",
+        "message": "AutoBot comprehensive performance monitoring started",
+        "collection_interval": phase9_monitor.collection_interval,
+    }
 
 
 @router.post("/stop")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_monitoring",
+    error_code_prefix="MONITORING",
+)
 async def stop_monitoring_endpoint():
     """Stop AutoBot performance monitoring"""
-    try:
-        if not phase9_monitor.monitoring_active:
-            return {
-                "status": "not_running",
-                "message": "AutoBot monitoring is not currently active",
-            }
-
-        await stop_monitoring()
-
+    if not phase9_monitor.monitoring_active:
         return {
-            "status": "stopped",
-            "message": "AutoBot performance monitoring stopped",
+            "status": "not_running",
+            "message": "AutoBot monitoring is not currently active",
         }
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to stop monitoring: {str(e)}"
-        )
+    await stop_monitoring()
+
+    return {
+        "status": "stopped",
+        "message": "AutoBot performance monitoring stopped",
+    }
 
 
 @router.get("/dashboard")
