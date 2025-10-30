@@ -10373,5 +10373,236 @@ class TestBatch60MonitoringMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="MONITORING"', source)
 
 
+class TestBatch61MonitoringMigrations(unittest.TestCase):
+    """Test batch 61 migrations: monitoring.py optimization/alerts endpoints"""
+
+    def test_get_optimization_recommendations_decorator_present(self):
+        """Test get_optimization_recommendations has @with_error_handling decorator"""
+        from backend.api.monitoring import get_optimization_recommendations
+
+        source = inspect.getsource(get_optimization_recommendations)
+
+        # Decorator should be present
+        self.assertIn("@with_error_handling", source)
+        # Category should be SERVER_ERROR
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        # Prefix should be MONITORING
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_get_optimization_recommendations_no_try_catch(self):
+        """Test get_optimization_recommendations has no redundant try-catch blocks"""
+        from backend.api.monitoring import get_optimization_recommendations
+
+        source = inspect.getsource(get_optimization_recommendations)
+
+        # Count try blocks - should be 0 (all redundant ones removed)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"Expected 0 try blocks in get_optimization_recommendations, found {try_count}",
+        )
+
+    def test_get_optimization_recommendations_business_logic_preserved(self):
+        """Test get_optimization_recommendations business logic is preserved"""
+        from backend.api.monitoring import get_optimization_recommendations
+
+        source = inspect.getsource(get_optimization_recommendations)
+
+        # Key business logic should be preserved
+        self.assertIn("get_phase9_optimization_recommendations()", source)
+        self.assertIn("OptimizationRecommendation", source)
+        self.assertIn('"category"', source)
+        self.assertIn('"priority"', source)
+        self.assertIn('"recommendation"', source)
+        self.assertIn('"action"', source)
+        self.assertIn('"expected_improvement"', source)
+
+    def test_get_performance_alerts_decorator_present(self):
+        """Test get_performance_alerts has @with_error_handling decorator"""
+        from backend.api.monitoring import get_performance_alerts
+
+        source = inspect.getsource(get_performance_alerts)
+
+        # Decorator should be present
+        self.assertIn("@with_error_handling", source)
+        # Category should be SERVER_ERROR
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        # Prefix should be MONITORING
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_get_performance_alerts_no_try_catch(self):
+        """Test get_performance_alerts has no redundant try-catch blocks"""
+        from backend.api.monitoring import get_performance_alerts
+
+        source = inspect.getsource(get_performance_alerts)
+
+        # Count try blocks - should be 0 (all redundant ones removed)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"Expected 0 try blocks in get_performance_alerts, found {try_count}",
+        )
+
+    def test_get_performance_alerts_business_logic_preserved(self):
+        """Test get_performance_alerts business logic is preserved"""
+        from backend.api.monitoring import get_performance_alerts
+
+        source = inspect.getsource(get_performance_alerts)
+
+        # Key business logic should be preserved
+        self.assertIn("phase9_monitor.performance_alerts", source)
+        self.assertIn("if severity:", source)
+        self.assertIn("if category:", source)
+        self.assertIn("alerts.sort", source)
+        self.assertIn("PerformanceAlert", source)
+
+    def test_check_alerts_decorator_present(self):
+        """Test check_alerts has @with_error_handling decorator"""
+        from backend.api.monitoring import check_alerts
+
+        source = inspect.getsource(check_alerts)
+
+        # Decorator should be present
+        self.assertIn("@with_error_handling", source)
+        # Category should be SERVER_ERROR
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        # Prefix should be MONITORING
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_check_alerts_no_try_catch(self):
+        """Test check_alerts has no redundant try-catch blocks"""
+        from backend.api.monitoring import check_alerts
+
+        source = inspect.getsource(check_alerts)
+
+        # Count try blocks - should be 0 (all redundant ones removed)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, f"Expected 0 try blocks in check_alerts, found {try_count}"
+        )
+
+    def test_check_alerts_business_logic_preserved(self):
+        """Test check_alerts business logic is preserved"""
+        from backend.api.monitoring import check_alerts
+
+        source = inspect.getsource(check_alerts)
+
+        # Key business logic should be preserved
+        self.assertIn("phase9_monitor.performance_alerts", source)
+        self.assertIn('"timestamp"', source)
+        self.assertIn('"alerts"', source)
+        self.assertIn('"total_count"', source)
+        self.assertIn('"critical_count"', source)
+        self.assertIn('"warning_count"', source)
+
+    def test_update_performance_threshold_decorator_present(self):
+        """Test update_performance_threshold has @with_error_handling decorator"""
+        from backend.api.monitoring import update_performance_threshold
+
+        source = inspect.getsource(update_performance_threshold)
+
+        # Decorator should be present
+        self.assertIn("@with_error_handling", source)
+        # Category should be SERVER_ERROR
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        # Prefix should be MONITORING
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+    def test_update_performance_threshold_no_try_catch(self):
+        """Test update_performance_threshold has no redundant try-catch blocks"""
+        from backend.api.monitoring import update_performance_threshold
+
+        source = inspect.getsource(update_performance_threshold)
+
+        # Count try blocks - should be 0 (all redundant ones removed)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"Expected 0 try blocks in update_performance_threshold, found {try_count}",
+        )
+
+    def test_update_performance_threshold_business_logic_preserved(self):
+        """Test update_performance_threshold business logic is preserved"""
+        from backend.api.monitoring import update_performance_threshold
+
+        source = inspect.getsource(update_performance_threshold)
+
+        # Key business logic should be preserved
+        self.assertIn("threshold_key", source)
+        self.assertIn("phase9_monitor.performance_baselines", source)
+        self.assertIn('"status"', source)
+        self.assertIn('"updated"', source)
+        self.assertIn('"created"', source)
+        self.assertIn('"old_value"', source)
+        self.assertIn('"new_value"', source)
+
+    def test_batch61_decorator_configuration(self):
+        """Verify all batch 61 endpoints have correct decorator configuration"""
+        from backend.api.monitoring import (
+            check_alerts,
+            get_optimization_recommendations,
+            get_performance_alerts,
+            update_performance_threshold,
+        )
+
+        endpoints = [
+            get_optimization_recommendations,
+            get_performance_alerts,
+            check_alerts,
+            update_performance_threshold,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+
+            # All should have @with_error_handling decorator
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} missing decorator",
+            )
+
+            # All should use SERVER_ERROR category
+            self.assertIn(
+                "ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} not using SERVER_ERROR",
+            )
+
+            # All should use MONITORING prefix
+            self.assertIn(
+                'error_code_prefix="MONITORING"',
+                source,
+                f"{endpoint.__name__} not using MONITORING prefix",
+            )
+
+    def test_batch61_consistent_error_category(self):
+        """Verify consistent error category and prefix for Batch 61"""
+        from backend.api.monitoring import (
+            check_alerts,
+            get_optimization_recommendations,
+            get_performance_alerts,
+            update_performance_threshold,
+        )
+
+        endpoints = [
+            get_optimization_recommendations,
+            get_performance_alerts,
+            check_alerts,
+            update_performance_threshold,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+
+            # All batch 61 endpoints should use SERVER_ERROR
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should use MONITORING prefix
+            self.assertIn('error_code_prefix="MONITORING"', source)
+
+
 if __name__ == "__main__":
     unittest.main()

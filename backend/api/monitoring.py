@@ -422,115 +422,112 @@ async def query_metrics(query: MetricsQuery):
 @router.get(
     "/optimization/recommendations", response_model=List[OptimizationRecommendation]
 )
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_optimization_recommendations",
+    error_code_prefix="MONITORING",
+)
 async def get_optimization_recommendations():
     """Get performance optimization recommendations"""
-    try:
-        recommendations = get_phase9_optimization_recommendations()
+    recommendations = get_phase9_optimization_recommendations()
 
-        return [
-            OptimizationRecommendation(
-                category=rec["category"],
-                priority=rec["priority"],
-                recommendation=rec["recommendation"],
-                action=rec["action"],
-                expected_improvement=rec["expected_improvement"],
-            )
-            for rec in recommendations
-        ]
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get optimization recommendations: {str(e)}",
+    return [
+        OptimizationRecommendation(
+            category=rec["category"],
+            priority=rec["priority"],
+            recommendation=rec["recommendation"],
+            action=rec["action"],
+            expected_improvement=rec["expected_improvement"],
         )
+        for rec in recommendations
+    ]
 
 
 @router.get("/alerts", response_model=List[PerformanceAlert])
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_performance_alerts",
+    error_code_prefix="MONITORING",
+)
 async def get_performance_alerts(
     severity: Optional[str] = Query(None, description="Filter by severity"),
     category: Optional[str] = Query(None, description="Filter by category"),
     limit: int = Query(50, ge=1, le=500, description="Maximum number of alerts"),
 ):
     """Get performance alerts with optional filtering"""
-    try:
-        alerts = list(phase9_monitor.performance_alerts)
+    alerts = list(phase9_monitor.performance_alerts)
 
-        # Apply filters
-        if severity:
-            alerts = [a for a in alerts if a.get("severity") == severity]
+    # Apply filters
+    if severity:
+        alerts = [a for a in alerts if a.get("severity") == severity]
 
-        if category:
-            alerts = [a for a in alerts if a.get("category") == category]
+    if category:
+        alerts = [a for a in alerts if a.get("category") == category]
 
-        # Sort by timestamp (most recent first) and limit
-        alerts.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
-        alerts = alerts[:limit]
+    # Sort by timestamp (most recent first) and limit
+    alerts.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+    alerts = alerts[:limit]
 
-        return [
-            PerformanceAlert(
-                category=alert["category"],
-                severity=alert["severity"],
-                message=alert["message"],
-                recommendation=alert["recommendation"],
-                timestamp=alert["timestamp"],
-            )
-            for alert in alerts
-        ]
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get performance alerts: {str(e)}"
+    return [
+        PerformanceAlert(
+            category=alert["category"],
+            severity=alert["severity"],
+            message=alert["message"],
+            recommendation=alert["recommendation"],
+            timestamp=alert["timestamp"],
         )
+        for alert in alerts
+    ]
 
 
 @router.get("/alerts/check")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_alerts",
+    error_code_prefix="MONITORING",
+)
 async def check_alerts():
     """Check for performance alerts"""
-    try:
-        alerts = list(phase9_monitor.performance_alerts)
+    alerts = list(phase9_monitor.performance_alerts)
 
-        return {
-            "timestamp": time.time(),
-            "alerts": alerts,
-            "total_count": len(alerts),
-            "critical_count": sum(1 for a in alerts if a.get("severity") == "critical"),
-            "warning_count": sum(1 for a in alerts if a.get("severity") == "warning"),
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to check alerts: {str(e)}")
+    return {
+        "timestamp": time.time(),
+        "alerts": alerts,
+        "total_count": len(alerts),
+        "critical_count": sum(1 for a in alerts if a.get("severity") == "critical"),
+        "warning_count": sum(1 for a in alerts if a.get("severity") == "warning"),
+    }
 
 
 @router.post("/thresholds/update")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_performance_threshold",
+    error_code_prefix="MONITORING",
+)
 async def update_performance_threshold(threshold: ThresholdUpdate):
     """Update performance monitoring thresholds"""
-    try:
-        # Update threshold in monitoring system
-        threshold_key = f"{threshold.category}_{threshold.metric}"
+    # Update threshold in monitoring system
+    threshold_key = f"{threshold.category}_{threshold.metric}"
 
-        if threshold_key in phase9_monitor.performance_baselines:
-            old_value = phase9_monitor.performance_baselines[threshold_key]
-            phase9_monitor.performance_baselines[threshold_key] = threshold.threshold
+    if threshold_key in phase9_monitor.performance_baselines:
+        old_value = phase9_monitor.performance_baselines[threshold_key]
+        phase9_monitor.performance_baselines[threshold_key] = threshold.threshold
 
-            return {
-                "status": "updated",
-                "threshold_key": threshold_key,
-                "old_value": old_value,
-                "new_value": threshold.threshold,
-                "comparison": threshold.comparison,
-            }
-        else:
-            return {
-                "status": "created",
-                "threshold_key": threshold_key,
-                "new_value": threshold.threshold,
-                "comparison": threshold.comparison,
-            }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to update threshold: {str(e)}"
-        )
+        return {
+            "status": "updated",
+            "threshold_key": threshold_key,
+            "old_value": old_value,
+            "new_value": threshold.threshold,
+            "comparison": threshold.comparison,
+        }
+    else:
+        return {
+            "status": "created",
+            "threshold_key": threshold_key,
+            "new_value": threshold.threshold,
+            "comparison": threshold.comparison,
+        }
 
 
 @router.get("/hardware/gpu")
