@@ -45,15 +45,15 @@ log_info "SSH connection verified ✓"
 
 # Step 1: Stop Vite dev server first (to clear in-memory cache)
 log_info "Stopping Vite dev server..."
-ssh -T -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" \
-    "pkill -9 -f 'vite.*--host.*5173' 2>/dev/null || true; pkill -9 -f 'npm.*dev' 2>/dev/null || true"
+timeout 10 ssh -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" \
+    "pkill -9 -f 'vite.*--host.*5173' 2>/dev/null || true; pkill -9 -f 'npm.*dev' 2>/dev/null || true" || echo "  (timeout or already stopped)"
 sleep 1
 log_info "Vite dev server stopped ✓"
 
 # Step 2: Clean caches and temp files on remote (while Vite is stopped)
 log_info "Cleaning Vite caches and temp files on remote..."
-ssh -T -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" \
-    "cd /home/autobot/autobot-vue && rm -rf .vite node_modules/.cache node_modules/.vite dist .vite-temp && echo 'Caches cleared'"
+timeout 15 ssh -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" \
+    "cd /home/autobot/autobot-vue && rm -rf .vite node_modules/.cache node_modules/.vite dist .vite-temp && echo 'Caches cleared'" || log_warn "Cache cleanup timed out"
 log_info "Remote caches cleaned ✓"
 
 # Step 3: Sync specific component or all
@@ -94,8 +94,8 @@ log_info "Sync completed successfully! ✓"
 
 # Step 4: Start Vite dev server with clean cache and fresh files
 log_info "Starting Vite dev server..."
-ssh -T -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" \
-    "cd /home/autobot/autobot-vue && VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20} VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001} nohup npm run dev -- --host 0.0.0.0 --port 5173 > /tmp/vite.log 2>&1 < /dev/null &"
+timeout 10 ssh -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" \
+    "cd /home/autobot/autobot-vue && VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20} VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001} nohup npm run dev -- --host 0.0.0.0 --port 5173 > /tmp/vite.log 2>&1 < /dev/null &" || log_warn "Vite startup command may have timed out"
 sleep 3
 log_info "Vite dev server started ✓"
 log_info "Frontend sync complete - all caches cleared, files synced, server restarted ✓"
