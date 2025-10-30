@@ -579,6 +579,30 @@ export function useKnowledgeBase() {
     return 'fas fa-file text-gray-600'
   }
 
+  const getOSBadgeClass = (osType: string): string => {
+    switch (osType) {
+      case 'linux': return 'badge-success'
+      case 'windows': return 'badge-info'
+      case 'macos': return 'badge-warning'
+      default: return 'badge-secondary'
+    }
+  }
+
+  const getMessageIcon = (type: string): string => {
+    const icons: Record<string, string> = {
+      'info': 'fas fa-info-circle text-blue-500',
+      'success': 'fas fa-check-circle text-green-500',
+      'warning': 'fas fa-exclamation-triangle text-yellow-500',
+      'error': 'fas fa-times-circle text-red-500'
+    }
+    return icons[type] || icons.info
+  }
+
+  const formatTime = (timestamp: string | Date): string => {
+    const date = new Date(timestamp)
+    return date.toLocaleTimeString()
+  }
+
   // NOTE: formatFileSize removed (was 7 lines) - now using formatFileSizeHelper from @/utils/formatHelpers
 
   // ==================== EXPORTS ====================
@@ -611,6 +635,9 @@ export function useKnowledgeBase() {
     getCategoryIcon,
     getTypeIcon,
     getFileIcon,
+    getOSBadgeClass,
+    getMessageIcon,
+    formatTime,
     formatDateOnly: formatDateHelper, // Alias for backward compatibility
     // Helper function
     parseApiResponse
