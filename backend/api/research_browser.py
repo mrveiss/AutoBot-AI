@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
 from src.research_browser_manager import research_browser_manager
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -35,51 +36,45 @@ class SessionAction(BaseModel):
 
 
 @router.get("/health")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 async def health_check():
     """Health check endpoint for research browser service"""
+    # Check if browser manager is initialized
+    status = "healthy" if research_browser_manager else "not_initialized"
+
+    # Get browser service URL from config
     try:
-        # Check if browser manager is initialized
-        status = "healthy" if research_browser_manager else "not_initialized"
+        browser_service_url = cfg.get_service_url("browser_service")
+    except Exception:
+        browser_service_url = (
+            f"http://localhost:{NetworkConstants.BROWSER_SERVICE_PORT}"
+        )
 
-        # Get browser service URL from config
-        try:
-            browser_service_url = cfg.get_service_url("browser_service")
-        except Exception:
-            browser_service_url = (
-                f"http://localhost:{NetworkConstants.BROWSER_SERVICE_PORT}"
-            )
-
-        return {
-            "status": status,
-            "service": "research_browser",
-            "browser_service_url": browser_service_url,
-            "timestamp": datetime.now().isoformat(),
-        }
-    except Exception as e:
-        logger.error(f"Research browser health check failed: {e}")
-        return {
-            "status": "error",
-            "service": "research_browser",
-            "error": str(e),
-            "timestamp": datetime.now().isoformat(),
-        }
+    return {
+        "status": status,
+        "service": "research_browser",
+        "browser_service_url": browser_service_url,
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.post("/url")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="research_url",
+    error_code_prefix="RESEARCH_BROWSER",
+)
 async def research_url(request: ResearchRequest):
     """Research a URL with automatic fallbacks and interaction handling"""
-    try:
-        result = await research_browser_manager.research_url(
-            request.conversation_id, request.url, request.extract_content
-        )
+    result = await research_browser_manager.research_url(
+        request.conversation_id, request.url, request.extract_content
+    )
 
-        return JSONResponse(status_code=200, content=result)
-
-    except Exception as e:
-        logger.error(f"Research URL failed: {e}")
-        return JSONResponse(
-            status_code=500, content={"success": False, "error": str(e)}
-        )
+    return JSONResponse(status_code=200, content=result)
 
 
 @router.post("/session/action")
