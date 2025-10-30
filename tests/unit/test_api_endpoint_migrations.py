@@ -9981,5 +9981,170 @@ class TestBatch58ChatMigrations(unittest.TestCase):
         self.assertIn('error_code_prefix="CHAT"', source)
 
 
+class TestBatch59MonitoringMigrations(unittest.TestCase):
+    """Test batch 59 migrations: monitoring.py first 3 endpoints"""
+
+    def test_get_monitoring_status_decorator_present(self):
+        """Test get_monitoring_status has @with_error_handling decorator"""
+        import inspect
+
+        from backend.api.monitoring import get_monitoring_status
+
+        source = inspect.getsource(get_monitoring_status)
+        self.assertIn(
+            "@with_error_handling",
+            source,
+            "get_monitoring_status should have @with_error_handling decorator",
+        )
+
+    def test_get_monitoring_status_no_try_catch(self):
+        """Test get_monitoring_status has no try-catch blocks"""
+        import inspect
+
+        from backend.api.monitoring import get_monitoring_status
+
+        source = inspect.getsource(get_monitoring_status)
+        try_count = source.count("try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"get_monitoring_status should have 0 try blocks, found {try_count}",
+        )
+
+    def test_get_monitoring_status_business_logic_preserved(self):
+        """Test get_monitoring_status business logic preserved"""
+        import inspect
+
+        from backend.api.monitoring import get_monitoring_status
+
+        source = inspect.getsource(get_monitoring_status)
+        # Verify key business logic remains
+        self.assertIn("get_phase9_performance_dashboard", source)
+        self.assertIn("MonitoringStatus", source)
+        self.assertIn("phase9_monitor.monitoring_active", source)
+
+    def test_start_monitoring_endpoint_decorator_present(self):
+        """Test start_monitoring_endpoint has @with_error_handling decorator"""
+        import inspect
+
+        from backend.api.monitoring import start_monitoring_endpoint
+
+        source = inspect.getsource(start_monitoring_endpoint)
+        self.assertIn(
+            "@with_error_handling",
+            source,
+            "start_monitoring_endpoint should have @with_error_handling decorator",
+        )
+
+    def test_start_monitoring_endpoint_no_try_catch(self):
+        """Test start_monitoring_endpoint has no try-catch blocks"""
+        import inspect
+
+        from backend.api.monitoring import start_monitoring_endpoint
+
+        source = inspect.getsource(start_monitoring_endpoint)
+        try_count = source.count("try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"start_monitoring_endpoint should have 0 try blocks, found {try_count}",
+        )
+
+    def test_start_monitoring_endpoint_business_logic_preserved(self):
+        """Test start_monitoring_endpoint business logic preserved"""
+        import inspect
+
+        from backend.api.monitoring import start_monitoring_endpoint
+
+        source = inspect.getsource(start_monitoring_endpoint)
+        # Verify key business logic remains
+        self.assertIn("background_tasks.add_task", source)
+        self.assertIn("add_phase9_alert_callback", source)
+        self.assertIn("already_running", source)
+
+    def test_stop_monitoring_endpoint_decorator_present(self):
+        """Test stop_monitoring_endpoint has @with_error_handling decorator"""
+        import inspect
+
+        from backend.api.monitoring import stop_monitoring_endpoint
+
+        source = inspect.getsource(stop_monitoring_endpoint)
+        self.assertIn(
+            "@with_error_handling",
+            source,
+            "stop_monitoring_endpoint should have @with_error_handling decorator",
+        )
+
+    def test_stop_monitoring_endpoint_no_try_catch(self):
+        """Test stop_monitoring_endpoint has no try-catch blocks"""
+        import inspect
+
+        from backend.api.monitoring import stop_monitoring_endpoint
+
+        source = inspect.getsource(stop_monitoring_endpoint)
+        try_count = source.count("try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"stop_monitoring_endpoint should have 0 try blocks, found {try_count}",
+        )
+
+    def test_stop_monitoring_endpoint_business_logic_preserved(self):
+        """Test stop_monitoring_endpoint business logic preserved"""
+        import inspect
+
+        from backend.api.monitoring import stop_monitoring_endpoint
+
+        source = inspect.getsource(stop_monitoring_endpoint)
+        # Verify key business logic remains
+        self.assertIn("stop_monitoring()", source)
+        self.assertIn("not_running", source)
+        self.assertIn("phase9_monitor.monitoring_active", source)
+
+    def test_batch59_decorator_configuration(self):
+        """Verify all batch 59 endpoints have correct decorator configuration"""
+        import inspect
+
+        from backend.api.monitoring import (
+            get_monitoring_status,
+            start_monitoring_endpoint,
+            stop_monitoring_endpoint,
+        )
+
+        endpoints = [
+            get_monitoring_status,
+            start_monitoring_endpoint,
+            stop_monitoring_endpoint,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # Should use SERVER_ERROR category
+            self.assertIn(
+                "ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} should use SERVER_ERROR category",
+            )
+            # Should use MONITORING prefix
+            self.assertIn(
+                'error_code_prefix="MONITORING"',
+                source,
+                f'{endpoint.__name__} should use error_code_prefix="MONITORING"',
+            )
+
+    def test_batch59_consistent_error_category(self):
+        """Verify consistent error category for Batch 59"""
+        import inspect
+
+        from backend.api.monitoring import get_monitoring_status
+
+        source = inspect.getsource(get_monitoring_status)
+
+        # Should use SERVER_ERROR category
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        # Should use MONITORING prefix
+        self.assertIn('error_code_prefix="MONITORING"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
