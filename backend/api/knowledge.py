@@ -1564,66 +1564,70 @@ def extract_category_from_path(doc_file: str) -> str:
 
 
 @router.post("/populate_autobot_docs")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="populate_autobot_docs",
+    error_code_prefix="KNOWLEDGE",
+)
 async def populate_autobot_docs(request: dict, req: Request):
     """Populate knowledge base with AutoBot-specific documentation"""
-    try:
-        from backend.models.knowledge_import_tracking import ImportTracker
+    from backend.models.knowledge_import_tracking import ImportTracker
 
-        # Check if force reindex is requested
-        force_reindex = request.get("force", False) if request else False
+    # Check if force reindex is requested
+    force_reindex = request.get("force", False) if request else False
 
-        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
-        if kb_to_use is None:
-            return {
-                "status": "error",
-                "message": "Knowledge base not initialized - please check logs for errors",
-                "items_added": 0,
-            }
+    if kb_to_use is None:
+        return {
+            "status": "error",
+            "message": "Knowledge base not initialized - please check logs for errors",
+            "items_added": 0,
+        }
 
-        logger.info("Starting AutoBot documentation population with import tracking...")
+    logger.info("Starting AutoBot documentation population with import tracking...")
 
-        tracker = ImportTracker()
-        # Use project-relative path instead of absolute path
-        autobot_base_path = PathLib(__file__).parent.parent.parent
+    tracker = ImportTracker()
+    # Use project-relative path instead of absolute path
+    autobot_base_path = PathLib(__file__).parent.parent.parent
 
-        # Scan for all markdown files recursively in docs/ ONLY
-        doc_files = []
+    # Scan for all markdown files recursively in docs/ ONLY
+    doc_files = []
 
-        # Initialize counters before any loops
-        items_added = 0
-        items_skipped = 0
-        items_failed = 0
+    # Initialize counters before any loops
+    items_added = 0
+    items_skipped = 0
+    items_failed = 0
 
-        # Recursively find all .md files in docs/ folder ONLY
-        # AutoBot documentation should ONLY include files from docs/ folder
-        # Root files like CLAUDE.md, README.md are NOT documentation
-        docs_path = autobot_base_path / "docs"
-        if docs_path.exists():
-            for md_file in docs_path.rglob("*.md"):
-                rel_path = md_file.relative_to(autobot_base_path)
-                # Skip if already imported and unchanged (unless force reindex)
-                if not force_reindex and not tracker.needs_reimport(str(md_file)):
-                    logger.info(f"Skipping unchanged file: {rel_path}")
-                    items_skipped += 1
-                    continue
-                doc_files.append(str(rel_path))
+    # Recursively find all .md files in docs/ folder ONLY
+    # AutoBot documentation should ONLY include files from docs/ folder
+    # Root files like CLAUDE.md, README.md are NOT documentation
+    docs_path = autobot_base_path / "docs"
+    if docs_path.exists():
+        for md_file in docs_path.rglob("*.md"):
+            rel_path = md_file.relative_to(autobot_base_path)
+            # Skip if already imported and unchanged (unless force reindex)
+            if not force_reindex and not tracker.needs_reimport(str(md_file)):
+                logger.info(f"Skipping unchanged file: {rel_path}")
+                items_skipped += 1
+                continue
+            doc_files.append(str(rel_path))
 
-        for doc_file in doc_files:
-            try:
-                file_path = autobot_base_path / doc_file
+    for doc_file in doc_files:
+        try:
+            file_path = autobot_base_path / doc_file
 
-                if file_path.exists() and file_path.is_file():
-                    # Read file content
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        content = f.read()
+            if file_path.exists() and file_path.is_file():
+                # Read file content
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content = f.read()
 
-                    if content.strip():
-                        # Extract category from path
-                        category = extract_category_from_path(doc_file)
+                if content.strip():
+                    # Extract category from path
+                    category = extract_category_from_path(doc_file)
 
-                        # Create structured content
-                        structured_content = f"""AutoBot Documentation: {doc_file}
+                    # Create structured content
+                    structured_content = f"""AutoBot Documentation: {doc_file}
 
 File Path: {file_path}
 
@@ -1635,74 +1639,74 @@ Category: {category}
 Type: Documentation
 """
 
-                        # Store in knowledge base
-                        if hasattr(kb_to_use, "store_fact"):
-                            result = await kb_to_use.store_fact(
-                                content=structured_content,
-                                metadata={
-                                    "title": f"AutoBot: {doc_file}",
-                                    "source": "autobot_docs_population",
-                                    "category": category,
-                                    "filename": doc_file,
-                                    "type": f"{category}_documentation",
-                                    "file_path": str(file_path),
-                                },
-                            )
-                        else:
-                            result = await kb_to_use.store_fact(
-                                text=structured_content,
-                                metadata={
-                                    "title": f"AutoBot: {doc_file}",
-                                    "source": "autobot_docs_population",
-                                    "category": category,
-                                    "filename": doc_file,
-                                    "type": f"{category}_documentation",
-                                    "file_path": str(file_path),
-                                },
-                            )
-
-                        if result and result.get("fact_id"):
-                            items_added += 1
-                            # Mark as imported with tracker
-                            tracker.mark_imported(
-                                file_path=str(file_path),
-                                category=category,
-                                facts_count=1,
-                                metadata={
-                                    "fact_id": result.get("fact_id"),
-                                    "title": f"AutoBot: {doc_file}",
-                                    "content_length": len(content),
-                                },
-                            )
-                            logger.info(f"Added AutoBot doc: {doc_file}")
-                        else:
-                            items_failed += 1
-                            tracker.mark_failed(
-                                str(file_path), "Failed to store in knowledge base"
-                            )
-                            logger.warning(f"Failed to store AutoBot doc: {doc_file}")
+                    # Store in knowledge base
+                    if hasattr(kb_to_use, "store_fact"):
+                        result = await kb_to_use.store_fact(
+                            content=structured_content,
+                            metadata={
+                                "title": f"AutoBot: {doc_file}",
+                                "source": "autobot_docs_population",
+                                "category": category,
+                                "filename": doc_file,
+                                "type": f"{category}_documentation",
+                                "file_path": str(file_path),
+                            },
+                        )
                     else:
-                        items_skipped += 1
-                        logger.warning(f"Empty file: {doc_file}")
+                        result = await kb_to_use.store_fact(
+                            text=structured_content,
+                            metadata={
+                                "title": f"AutoBot: {doc_file}",
+                                "source": "autobot_docs_population",
+                                "category": category,
+                                "filename": doc_file,
+                                "type": f"{category}_documentation",
+                                "file_path": str(file_path),
+                            },
+                        )
+
+                    if result and result.get("fact_id"):
+                        items_added += 1
+                        # Mark as imported with tracker
+                        tracker.mark_imported(
+                            file_path=str(file_path),
+                            category=category,
+                            facts_count=1,
+                            metadata={
+                                "fact_id": result.get("fact_id"),
+                                "title": f"AutoBot: {doc_file}",
+                                "content_length": len(content),
+                            },
+                        )
+                        logger.info(f"Added AutoBot doc: {doc_file}")
+                    else:
+                        items_failed += 1
+                        tracker.mark_failed(
+                            str(file_path), "Failed to store in knowledge base"
+                        )
+                        logger.warning(f"Failed to store AutoBot doc: {doc_file}")
                 else:
                     items_skipped += 1
-                    logger.warning(f"File not found: {doc_file}")
+                    logger.warning(f"Empty file: {doc_file}")
+            else:
+                items_skipped += 1
+                logger.warning(f"File not found: {doc_file}")
 
-            except Exception as e:
-                items_failed += 1
-                tracker.mark_failed(str(autobot_base_path / doc_file), str(e))
-                logger.error(f"Error processing AutoBot doc {doc_file}: {e}")
+        except Exception as e:
+            items_failed += 1
+            tracker.mark_failed(str(autobot_base_path / doc_file), str(e))
+            logger.error(f"Error processing AutoBot doc {doc_file}: {e}")
 
-            # Small delay between files
-            await asyncio.sleep(0.1)
+        # Small delay between files
+        await asyncio.sleep(0.1)
 
-        # Add AutoBot configuration information
-        try:
-            # Import constants for network configuration reference
-            from src.constants.network_constants import NetworkConstants
-            from src.constants.path_constants import PATH
+    # Add AutoBot configuration information
+    try:
+        # Import constants for network configuration reference
+        from src.constants.network_constants import NetworkConstants
+        from src.constants.path_constants import PATH
 
-            config_info = f"""AutoBot System Configuration
+        config_info = f"""AutoBot System Configuration
 
 Network Layout:
 - Main Machine (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API (port {NetworkConstants.BACKEND_PORT}) + NPU Worker (port 8082) + Desktop/Terminal VNC (port 6080)
@@ -1728,54 +1732,48 @@ Category: AutoBot
 Type: System Configuration
 """
 
-            if hasattr(kb_to_use, "store_fact"):
-                result = await kb_to_use.store_fact(
-                    content=config_info,
-                    metadata={
-                        "title": "AutoBot System Configuration",
-                        "source": "autobot_docs_population",
-                        "category": "configuration",
-                        "type": "system_configuration",
-                    },
-                )
-            else:
-                result = await kb_to_use.store_fact(
-                    text=config_info,
-                    metadata={
-                        "title": "AutoBot System Configuration",
-                        "source": "autobot_docs_population",
-                        "category": "configuration",
-                        "type": "system_configuration",
-                    },
-                )
+        if hasattr(kb_to_use, "store_fact"):
+            result = await kb_to_use.store_fact(
+                content=config_info,
+                metadata={
+                    "title": "AutoBot System Configuration",
+                    "source": "autobot_docs_population",
+                    "category": "configuration",
+                    "type": "system_configuration",
+                },
+            )
+        else:
+            result = await kb_to_use.store_fact(
+                text=config_info,
+                metadata={
+                    "title": "AutoBot System Configuration",
+                    "source": "autobot_docs_population",
+                    "category": "configuration",
+                    "type": "system_configuration",
+                },
+            )
 
-            if result and result.get("fact_id"):
-                items_added += 1
-                logger.info("Added AutoBot system configuration")
-
-        except Exception as e:
-            logger.error(f"Error adding AutoBot configuration: {e}")
-
-        logger.info(
-            f"AutoBot documentation population completed. Added {items_added} documents ({items_skipped} skipped, {items_failed} failed)."
-        )
-
-        mode = "Force reindex" if force_reindex else "Incremental update"
-        return {
-            "status": "success",
-            "message": f"{mode}: Successfully imported {items_added} AutoBot documents ({items_skipped} skipped, {items_failed} failed)",
-            "items_added": items_added,
-            "items_skipped": items_skipped,
-            "items_failed": items_failed,
-            "total_files": len(doc_files) + 1,  # +1 for config info
-            "force_reindex": force_reindex,
-        }
+        if result and result.get("fact_id"):
+            items_added += 1
+            logger.info("Added AutoBot system configuration")
 
     except Exception as e:
-        logger.error(f"Error populating AutoBot docs: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"AutoBot docs population failed: {str(e)}"
-        )
+        logger.error(f"Error adding AutoBot configuration: {e}")
+
+    logger.info(
+        f"AutoBot documentation population completed. Added {items_added} documents ({items_skipped} skipped, {items_failed} failed)."
+    )
+
+    mode = "Force reindex" if force_reindex else "Incremental update"
+    return {
+        "status": "success",
+        "message": f"{mode}: Successfully imported {items_added} AutoBot documents ({items_skipped} skipped, {items_failed} failed)",
+        "items_added": items_added,
+        "items_skipped": items_skipped,
+        "items_failed": items_failed,
+        "total_files": len(doc_files) + 1,  # +1 for config info
+        "force_reindex": force_reindex,
+    }
 
 
 @router.get("/entries")
@@ -2694,18 +2692,19 @@ async def get_import_status(
 
 
 @router.get("/import/statistics")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_import_statistics",
+    error_code_prefix="KNOWLEDGE",
+)
 async def get_import_statistics(req: Request):
     """Get import statistics"""
-    try:
-        from backend.models.knowledge_import_tracking import ImportTracker
+    from backend.models.knowledge_import_tracking import ImportTracker
 
-        tracker = ImportTracker()
-        stats = tracker.get_statistics()
+    tracker = ImportTracker()
+    stats = tracker.get_statistics()
 
-        return {"status": "success", "statistics": stats}
-    except Exception as e:
-        logger.error(f"Error getting import statistics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "success", "statistics": stats}
 
 
 # ===== INDIVIDUAL DOCUMENT VECTORIZATION =====
