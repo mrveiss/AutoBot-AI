@@ -25,6 +25,7 @@ from backend.services.agent_terminal_service import (
     AgentTerminalService,
 )
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,11 @@ def get_agent_terminal_service(
 
 
 @router.post("/sessions")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_agent_terminal_session",
+    error_code_prefix="AGENT_TERMINAL",
+)
 async def create_agent_terminal_session(
     request: CreateSessionRequest,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
@@ -126,46 +132,44 @@ async def create_agent_terminal_session(
     - All agents subject to RBAC (no god mode)
     - Session linked to conversation for audit trail
     """
+    # Parse agent role
     try:
-        # Parse agent role
-        try:
-            agent_role = AgentRole[request.agent_role.upper()]
-        except KeyError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid agent_role: {request.agent_role}. "
-                f"Must be one of: {[role.name.lower() for role in AgentRole]}",
-            )
-
-        # Create session
-        session = await service.create_session(
-            agent_id=request.agent_id,
-            agent_role=agent_role,
-            conversation_id=request.conversation_id,
-            host=request.host,
-            metadata=request.metadata,
+        agent_role = AgentRole[request.agent_role.upper()]
+    except KeyError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid agent_role: {request.agent_role}. "
+            f"Must be one of: {[role.name.lower() for role in AgentRole]}",
         )
 
-        return {
-            "status": "created",
-            "session_id": session.session_id,
-            "agent_id": session.agent_id,
-            "agent_role": session.agent_role.value,
-            "conversation_id": session.conversation_id,
-            "host": session.host,
-            "state": session.state.value,
-            "created_at": session.created_at,
-            "pty_session_id": session.pty_session_id,  # CRITICAL: Frontend needs this for WebSocket connection
-        }
+    # Create session
+    session = await service.create_session(
+        agent_id=request.agent_id,
+        agent_role=agent_role,
+        conversation_id=request.conversation_id,
+        host=request.host,
+        metadata=request.metadata,
+    )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating agent terminal session: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "created",
+        "session_id": session.session_id,
+        "agent_id": session.agent_id,
+        "agent_role": session.agent_role.value,
+        "conversation_id": session.conversation_id,
+        "host": session.host,
+        "state": session.state.value,
+        "created_at": session.created_at,
+        "pty_session_id": session.pty_session_id,  # CRITICAL: Frontend needs this for WebSocket connection
+    }
 
 
 @router.get("/sessions")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_agent_terminal_sessions",
+    error_code_prefix="AGENT_TERMINAL",
+)
 async def list_agent_terminal_sessions(
     agent_id: Optional[str] = None,
     conversation_id: Optional[str] = None,
@@ -178,38 +182,38 @@ async def list_agent_terminal_sessions(
     - agent_id: Filter by agent ID
     - conversation_id: Filter by conversation ID
     """
-    try:
-        sessions = await service.list_sessions(
-            agent_id=agent_id,
-            conversation_id=conversation_id,
-        )
+    sessions = await service.list_sessions(
+        agent_id=agent_id,
+        conversation_id=conversation_id,
+    )
 
-        return {
-            "status": "success",
-            "total": len(sessions),
-            "sessions": [
-                {
-                    "session_id": s.session_id,
-                    "agent_id": s.agent_id,
-                    "agent_role": s.agent_role.value,
-                    "conversation_id": s.conversation_id,
-                    "host": s.host,
-                    "state": s.state.value,
-                    "created_at": s.created_at,
-                    "last_activity": s.last_activity,
-                    "command_count": len(s.command_history),
-                    "pty_session_id": s.pty_session_id,  # CRITICAL: Frontend needs this for WebSocket connection
-                }
-                for s in sessions
-            ],
-        }
-
-    except Exception as e:
-        logger.error(f"Error listing agent terminal sessions: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "success",
+        "total": len(sessions),
+        "sessions": [
+            {
+                "session_id": s.session_id,
+                "agent_id": s.agent_id,
+                "agent_role": s.agent_role.value,
+                "conversation_id": s.conversation_id,
+                "host": s.host,
+                "state": s.state.value,
+                "created_at": s.created_at,
+                "last_activity": s.last_activity,
+                "command_count": len(s.command_history),
+                "pty_session_id": s.pty_session_id,  # CRITICAL: Frontend needs this for WebSocket connection
+            }
+            for s in sessions
+        ],
+    }
 
 
 @router.get("/sessions/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_terminal_session",
+    error_code_prefix="AGENT_TERMINAL",
+)
 async def get_agent_terminal_session(
     session_id: str,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
@@ -217,22 +221,15 @@ async def get_agent_terminal_session(
     """
     Get detailed information about an agent terminal session.
     """
-    try:
-        session_info = await service.get_session_info(session_id)
+    session_info = await service.get_session_info(session_id)
 
-        if not session_info:
-            raise HTTPException(status_code=404, detail="Session not found")
+    if not session_info:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-        return {
-            "status": "success",
-            **session_info,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting agent terminal session: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "success",
+        **session_info,
+    }
 
 
 @router.delete("/sessions/{session_id}")
