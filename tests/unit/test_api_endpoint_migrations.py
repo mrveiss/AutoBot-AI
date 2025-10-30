@@ -9828,5 +9828,158 @@ class TestBatch57TerminalMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="TERMINAL"', source)
 
 
+class TestBatch58ChatMigrations(unittest.TestCase):
+    """Test batch 58 migrations: chat.py list_chats endpoint + process_chat_message helper redundant try-catch removal"""
+
+    def test_list_chats_decorator_present(self):
+        """Test list_chats still has @with_error_handling decorator"""
+        import inspect
+
+        from backend.api.chat import list_chats
+
+        source = inspect.getsource(list_chats)
+        # Should have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_list_chats_redundant_try_catch_removed(self):
+        """Test list_chats redundant try-catch blocks were removed"""
+        import inspect
+
+        from backend.api.chat import list_chats
+
+        source = inspect.getsource(list_chats)
+        lines = source.split("\n")
+
+        # Count try blocks - should be ZERO (all redundant ones removed)
+        try_count = 0
+        for line in lines:
+            if line.strip().startswith("try:"):
+                try_count += 1
+
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (redundant ones removed, decorator handles errors)"
+        )
+
+    def test_list_chats_business_logic_preserved(self):
+        """Test list_chats business logic preserved after try-catch removal"""
+        import inspect
+
+        from backend.api.chat import list_chats
+
+        source = inspect.getsource(list_chats)
+
+        # Core business logic should be preserved
+        self.assertIn("chat_history_manager = getattr(request.app.state", source)
+        self.assertIn("if chat_history_manager is None:", source)
+        self.assertIn("list_sessions_fast()", source)
+        self.assertIn("return JSONResponse(status_code=200, content=sessions)", source)
+
+    def test_list_chats_decorator_configuration(self):
+        """Test list_chats decorator has correct configuration"""
+        import inspect
+
+        from backend.api.chat import list_chats
+
+        source = inspect.getsource(list_chats)
+
+        # Verify decorator configuration
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_chats"', source)
+        self.assertIn('error_code_prefix="CHAT"', source)
+
+    def test_process_chat_message_outer_try_catch_removed(self):
+        """Test process_chat_message outer try-catch removed, inner LLM fallback preserved"""
+        import inspect
+
+        # Import the helper function directly (not an endpoint)
+        from backend.api.chat import process_chat_message
+
+        source = inspect.getsource(process_chat_message)
+
+        # Count try blocks - should be ONLY 2:
+        # 1. Inner try for chat context retrieval (optional, graceful failure)
+        # 2. Inner try for LLM generation (MUST keep - fallback logic)
+        try_count = source.count("    try:")  # Function-level try blocks
+
+        # Should have 2 try blocks (context retrieval + LLM fallback), not 3 (no outer wrapper)
+        self.assertEqual(
+            try_count,
+            2,
+            "Should have 2 try blocks: context retrieval + LLM fallback (outer wrapper removed)",
+        )
+
+    def test_process_chat_message_llm_fallback_preserved(self):
+        """Test process_chat_message LLM generation fallback try-catch preserved"""
+        import inspect
+
+        from backend.api.chat import process_chat_message
+
+        source = inspect.getsource(process_chat_message)
+
+        # Verify LLM generation fallback is still present
+        self.assertIn("# Generate AI response", source)
+        self.assertIn("try:", source)
+        self.assertIn("if hasattr(llm_service, \"generate_response\"):", source)
+        self.assertIn("except Exception as e:", source)
+        self.assertIn('logger.error(f"LLM generation failed: {e}")', source)
+        # Fallback response
+        self.assertIn('"content": "I encountered an error processing your message', source)
+
+    def test_process_chat_message_business_logic_preserved(self):
+        """Test process_chat_message business logic preserved after outer try-catch removal"""
+        import inspect
+
+        from backend.api.chat import process_chat_message
+
+        source = inspect.getsource(process_chat_message)
+
+        # Core business logic should be preserved
+        self.assertIn("if message.session_id and not validate_chat_session_id", source)
+        self.assertIn("session_id = message.session_id or generate_chat_session_id()", source)
+        self.assertIn("user_message_id = generate_message_id()", source)
+        self.assertIn("await chat_history_manager.add_message", source)
+        self.assertIn("await log_chat_event", source)
+        self.assertIn("ai_message_id = generate_message_id()", source)
+        self.assertIn('return {', source)
+
+    def test_process_chat_message_no_outer_except(self):
+        """Verify outer except block that re-raised InternalError was removed"""
+        import inspect
+
+        from backend.api.chat import process_chat_message
+
+        source = inspect.getsource(process_chat_message)
+
+        # Should NOT have InternalError re-raising pattern from outer try-catch
+        # Note: InternalError still exists for ValidationError in session_id check (that's fine)
+        # But should NOT have: "Failed to process chat message" with request_id in details
+
+        # Check that the specific outer exception pattern is gone
+        has_outer_except_pattern = (
+            'raise InternalError(' in source
+            and '"Failed to process chat message"' in source
+            and '"request_id": request_id' in source
+        )
+
+        self.assertFalse(
+            has_outer_except_pattern,
+            "Outer except block with 'Failed to process chat message' should be removed"
+        )
+
+    def test_batch58_consistent_error_category(self):
+        """Verify consistent error category for Batch 58"""
+        import inspect
+
+        from backend.api.chat import list_chats
+
+        # Only check endpoint (helper function doesn't have decorator)
+        source = inspect.getsource(list_chats)
+
+        # Should use SERVER_ERROR category
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        # Should use CHAT prefix
+        self.assertIn('error_code_prefix="CHAT"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
