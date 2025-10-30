@@ -32,6 +32,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { formatFileSize } from '@/utils/formatHelpers'
 
 interface Props {
   progress: number // 0-100
@@ -88,12 +89,8 @@ const progressStyle = computed(() => {
 })
 
 // Utility functions
-const formatSize = (bytes: number): string => {
-  if (bytes === 0) return '0 B'
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i]
-}
+// Use shared file size formatting utility
+const formatSize = formatFileSize
 
 const formatTime = (seconds: number): string => {
   if (seconds < 60) return `${Math.round(seconds)}s`

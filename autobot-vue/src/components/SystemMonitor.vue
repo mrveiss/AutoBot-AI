@@ -235,6 +235,7 @@ import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useServiceMonitor } from '@/composables/useServiceMonitor.js'
 import MultiMachineHealth from './MultiMachineHealth.vue'
+import { formatFileSize as formatBytes } from '@/utils/formatHelpers'
 
 const appStore = useAppStore()
 const chatStore = useChatStore()
@@ -404,13 +405,6 @@ const totalEndpoints = computed(() => {
   }, 0)
 })
 
-const formatBytes = (bytes: number): string => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
-}
 
 const performanceChart = ref<HTMLCanvasElement | null>(null)
 

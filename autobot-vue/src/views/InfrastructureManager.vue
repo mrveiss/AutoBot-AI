@@ -224,6 +224,7 @@ import AddHostModal from '@/components/infrastructure/AddHostModal.vue'
 import DeploymentProgressModal from '@/components/infrastructure/DeploymentProgressModal.vue'
 import ServiceStatusIndicator from '@/components/infrastructure/ServiceStatusIndicator.vue'
 import type { Host, Deployment } from '@/composables/useInfrastructure'
+import { formatDate } from '@/utils/formatHelpers'
 
 const {
   hosts,
@@ -342,12 +343,4 @@ function startDeploymentPolling(deploymentId: string) {
   }, 2000) as unknown as number
 }
 
-function formatDate(dateString: string): string {
-  try {
-    const date = new Date(dateString)
-    return date.toLocaleDateString()
-  } catch {
-    return dateString
-  }
-}
 </script>

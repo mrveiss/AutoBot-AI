@@ -233,6 +233,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { formatFileSize as formatBytes } from '@/utils/formatHelpers'
 interface CacheActivity {
   id: string
   timestamp: string
@@ -296,13 +297,6 @@ const updateCacheConfig = (key: string, value: any) => {
   emit('cache-config-changed', key, value)
 }
 
-const formatBytes = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes'
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
 </script>
 
 <style scoped>

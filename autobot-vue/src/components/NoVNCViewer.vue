@@ -198,6 +198,7 @@ import { ref, onMounted, computed, onUnmounted } from 'vue'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import appConfig from '@/config/AppConfig.js'
 import { NetworkConstants } from '@/constants/network-constants.js'
+import { formatTime } from '@/utils/formatHelpers'
 
 // Component state
 const vncHost = ref('')  // Will be loaded from appConfig
@@ -423,9 +424,6 @@ const toggleFullscreen = async () => {
   }
 }
 
-const formatTime = (date: Date) => {
-  return date.toLocaleTimeString()
-}
 
 // Refs for cleanup
 const loadingTimeout = ref<number | null>(null)

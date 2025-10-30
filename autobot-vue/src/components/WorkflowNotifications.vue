@@ -50,6 +50,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { apiService } from '../services/api.js'
+import { formatTime } from '@/utils/formatHelpers'
 
 // Props
 const props = defineProps({
@@ -73,9 +74,6 @@ const getNotificationIcon = (type) => {
   return icons[type] || 'fas fa-bell'
 }
 
-const formatTime = (timestamp) => {
-  return new Date(timestamp).toLocaleTimeString()
-}
 
 const addNotification = (notification) => {
   notifications.value.unshift({

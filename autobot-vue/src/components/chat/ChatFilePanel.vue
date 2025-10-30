@@ -160,6 +160,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useConversationFiles } from '@/composables/useConversationFiles'
+import { formatTimeAgo } from '@/utils/formatHelpers'
 
 const props = defineProps<{
   sessionId: string
@@ -230,23 +231,8 @@ const handleDelete = async (fileId: string, filename: string) => {
   }
 }
 
-const formatDate = (timestamp: string): string => {
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-
-  const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours}h ago`
-
-  const diffDays = Math.floor(diffHours / 24)
-  if (diffDays < 7) return `${diffDays}d ago`
-
-  return date.toLocaleDateString()
-}
+// Use shared time formatting utility
+const formatDate = formatTimeAgo
 
 // Load files on mount and when session changes
 onMounted(() => {
