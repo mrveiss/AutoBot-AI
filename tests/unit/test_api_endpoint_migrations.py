@@ -12068,5 +12068,279 @@ class TestBatch69AgentTerminalMigrations(unittest.TestCase):
         self.assertIn("session_id=session_id", source)
 
 
+class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
+    """Test batch 70 migrations: agent_enhanced.py first 3 endpoints"""
+
+    # Test 1: execute_enhanced_goal decorator presence
+    def test_execute_enhanced_goal_decorator_present(self):
+        """Test execute_enhanced_goal has @with_error_handling decorator"""
+        from backend.api.agent_enhanced import execute_enhanced_goal
+
+        source = inspect.getsource(execute_enhanced_goal)
+        self.assertIn(
+            "@with_error_handling",
+            source,
+            "execute_enhanced_goal should have @with_error_handling decorator",
+        )
+        self.assertIn(
+            "ErrorCategory.SERVER_ERROR",
+            source,
+            "execute_enhanced_goal should use SERVER_ERROR category",
+        )
+        self.assertIn(
+            'error_code_prefix="AGENT_ENHANCED"',
+            source,
+            "execute_enhanced_goal should use AGENT_ENHANCED error code prefix",
+        )
+
+    # Test 2: execute_enhanced_goal Mixed Pattern compliance
+    def test_execute_enhanced_goal_mixed_pattern(self):
+        """Test execute_enhanced_goal uses Mixed Pattern - preserves nested try-catches"""
+        from backend.api.agent_enhanced import execute_enhanced_goal
+
+        source = inspect.getsource(execute_enhanced_goal)
+        # Should have nested try-catches for: agent list, KB enhancement, AIStackError
+        try_count = source.count("    try:")
+        self.assertGreaterEqual(
+            try_count,
+            3,
+            "execute_enhanced_goal should have at least 3 nested try-catch blocks (agent list, KB, AIStackError)",
+        )
+        # Should have AIStackError handling
+        self.assertIn("except AIStackError", source)
+        # Should have fallback for agent list
+        self.assertIn('available_agents = ["chat", "rag", "research"]', source)
+
+    # Test 3: execute_enhanced_goal business logic preserved
+    def test_execute_enhanced_goal_business_logic(self):
+        """Test execute_enhanced_goal preserves business logic - HTTPException for unavailable agents"""
+        from backend.api.agent_enhanced import execute_enhanced_goal
+
+        source = inspect.getsource(execute_enhanced_goal)
+        # Should raise HTTPException for unavailable agents
+        self.assertIn("if not selected_agents:", source)
+        self.assertIn("raise HTTPException", source)
+        self.assertIn("status_code=400", source)
+        # Should call create_success_response
+        self.assertIn("create_success_response", source)
+        # Should integrate knowledge base
+        self.assertIn("knowledge_base.search", source)
+
+    # Test 4: coordinate_multi_agent_task decorator presence
+    def test_coordinate_multi_agent_task_decorator_present(self):
+        """Test coordinate_multi_agent_task has @with_error_handling decorator"""
+        from backend.api.agent_enhanced import coordinate_multi_agent_task
+
+        source = inspect.getsource(coordinate_multi_agent_task)
+        self.assertIn(
+            "@with_error_handling",
+            source,
+            "coordinate_multi_agent_task should have @with_error_handling decorator",
+        )
+        self.assertIn(
+            "ErrorCategory.SERVER_ERROR",
+            source,
+            "coordinate_multi_agent_task should use SERVER_ERROR category",
+        )
+        self.assertIn(
+            'error_code_prefix="AGENT_ENHANCED"',
+            source,
+            "coordinate_multi_agent_task should use AGENT_ENHANCED error code prefix",
+        )
+
+    # Test 5: coordinate_multi_agent_task Mixed Pattern compliance
+    def test_coordinate_multi_agent_task_mixed_pattern(self):
+        """Test coordinate_multi_agent_task uses Mixed Pattern - preserves AIStackError handling"""
+        from backend.api.agent_enhanced import coordinate_multi_agent_task
+
+        source = inspect.getsource(coordinate_multi_agent_task)
+        # Should have try-except AIStackError
+        self.assertIn("try:", source)
+        self.assertIn("except AIStackError", source)
+        self.assertIn("handle_ai_stack_error", source)
+
+    # Test 6: coordinate_multi_agent_task business logic preserved
+    def test_coordinate_multi_agent_task_business_logic(self):
+        """Test coordinate_multi_agent_task preserves business logic - validates agent availability"""
+        from backend.api.agent_enhanced import coordinate_multi_agent_task
+
+        source = inspect.getsource(coordinate_multi_agent_task)
+        # Should validate agent availability
+        self.assertIn("unavailable_agents", source)
+        self.assertIn("if unavailable_agents:", source)
+        self.assertIn("raise HTTPException", source)
+        self.assertIn("status_code=400", source)
+        # Should call multi_agent_query
+        self.assertIn("multi_agent_query", source)
+
+    # Test 7: comprehensive_research_task decorator presence
+    def test_comprehensive_research_task_decorator_present(self):
+        """Test comprehensive_research_task has @with_error_handling decorator"""
+        from backend.api.agent_enhanced import comprehensive_research_task
+
+        source = inspect.getsource(comprehensive_research_task)
+        self.assertIn(
+            "@with_error_handling",
+            source,
+            "comprehensive_research_task should have @with_error_handling decorator",
+        )
+        self.assertIn(
+            "ErrorCategory.SERVER_ERROR",
+            source,
+            "comprehensive_research_task should use SERVER_ERROR category",
+        )
+        self.assertIn(
+            'error_code_prefix="AGENT_ENHANCED"',
+            source,
+            "comprehensive_research_task should use AGENT_ENHANCED error code prefix",
+        )
+
+    # Test 8: comprehensive_research_task Mixed Pattern compliance
+    def test_comprehensive_research_task_mixed_pattern(self):
+        """Test comprehensive_research_task uses Mixed Pattern - preserves nested try-catches"""
+        from backend.api.agent_enhanced import comprehensive_research_task
+
+        source = inspect.getsource(comprehensive_research_task)
+        # Should have outer try-except AIStackError
+        self.assertIn("try:", source)
+        self.assertIn("except AIStackError", source)
+        # Should have nested try-catch for KB context
+        try_count = source.count("try:")
+        self.assertGreaterEqual(
+            try_count,
+            2,
+            "comprehensive_research_task should have at least 2 try blocks (outer + KB context)",
+        )
+
+    # Test 9: comprehensive_research_task business logic preserved
+    def test_comprehensive_research_task_business_logic(self):
+        """Test comprehensive_research_task preserves business logic - research agents and KB integration"""
+        from backend.api.agent_enhanced import comprehensive_research_task
+
+        source = inspect.getsource(comprehensive_research_task)
+        # Should setup research agents
+        self.assertIn('research_agents = ["research"]', source)
+        self.assertIn("web_research_assistant", source)
+        self.assertIn("npu_code_search", source)
+        # Should integrate knowledge base
+        self.assertIn("knowledge_base.search", source)
+        # Should call multi_agent_query
+        self.assertIn("multi_agent_query", source)
+
+    # Test 10: Batch 70 consistency - all endpoints use same error category
+    def test_batch70_error_category_consistency(self):
+        """Test all batch 70 endpoints use SERVER_ERROR category"""
+        from backend.api.agent_enhanced import (
+            comprehensive_research_task,
+            coordinate_multi_agent_task,
+            execute_enhanced_goal,
+        )
+
+        for endpoint in [
+            execute_enhanced_goal,
+            coordinate_multi_agent_task,
+            comprehensive_research_task,
+        ]:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} should use SERVER_ERROR category",
+            )
+
+    # Test 11: Batch 70 consistency - all endpoints use same error code prefix
+    def test_batch70_error_prefix_consistency(self):
+        """Test all batch 70 endpoints use AGENT_ENHANCED error code prefix"""
+        from backend.api.agent_enhanced import (
+            comprehensive_research_task,
+            coordinate_multi_agent_task,
+            execute_enhanced_goal,
+        )
+
+        for endpoint in [
+            execute_enhanced_goal,
+            coordinate_multi_agent_task,
+            comprehensive_research_task,
+        ]:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                'error_code_prefix="AGENT_ENHANCED"',
+                source,
+                f"{endpoint.__name__} should use AGENT_ENHANCED error code prefix",
+            )
+
+    # Test 12: Batch 70 consistency - all endpoints follow Mixed Pattern
+    def test_batch70_mixed_pattern_consistency(self):
+        """Test all batch 70 endpoints follow Mixed Pattern (have nested error handling)"""
+        from backend.api.agent_enhanced import (
+            comprehensive_research_task,
+            coordinate_multi_agent_task,
+            execute_enhanced_goal,
+        )
+
+        for endpoint in [
+            execute_enhanced_goal,
+            coordinate_multi_agent_task,
+            comprehensive_research_task,
+        ]:
+            source = inspect.getsource(endpoint)
+            # All should have at least one try block (nested error handling)
+            self.assertIn(
+                "try:",
+                source,
+                f"{endpoint.__name__} should have try blocks for Mixed Pattern",
+            )
+
+    # Test 13: Batch 70 consistency - all decorators before function definition
+    def test_batch70_decorator_placement(self):
+        """Test all batch 70 decorators are placed before async def"""
+        from backend.api.agent_enhanced import (
+            comprehensive_research_task,
+            coordinate_multi_agent_task,
+            execute_enhanced_goal,
+        )
+
+        for endpoint in [
+            execute_enhanced_goal,
+            coordinate_multi_agent_task,
+            comprehensive_research_task,
+        ]:
+            source = inspect.getsource(endpoint)
+            decorator_pos = source.find("@with_error_handling")
+            async_def_pos = source.find("async def")
+            self.assertLess(
+                decorator_pos,
+                async_def_pos,
+                f"{endpoint.__name__} decorator should be before async def",
+            )
+
+    # Test 14: Batch 70 AIStackError handling preservation
+    def test_batch70_ai_stack_error_handling(self):
+        """Test batch 70 endpoints preserve AIStackError specific handling"""
+        from backend.api.agent_enhanced import (
+            comprehensive_research_task,
+            coordinate_multi_agent_task,
+            execute_enhanced_goal,
+        )
+
+        for endpoint in [
+            execute_enhanced_goal,
+            coordinate_multi_agent_task,
+            comprehensive_research_task,
+        ]:
+            source = inspect.getsource(endpoint)
+            # All should have AIStackError handling
+            self.assertIn(
+                "except AIStackError",
+                source,
+                f"{endpoint.__name__} should preserve AIStackError handling",
+            )
+            self.assertIn(
+                "handle_ai_stack_error",
+                source,
+                f"{endpoint.__name__} should call handle_ai_stack_error",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
