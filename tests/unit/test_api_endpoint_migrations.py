@@ -14471,5 +14471,240 @@ class TestBatch83CodebaseAnalyticsMigrations(unittest.TestCase):
         )
 
 
+class TestBatch84CodebaseAnalyticsMigrations(unittest.TestCase):
+    """Test batch 84 migrations: codebase_analytics.py next 3 endpoints (get_hardcoded_values, get_codebase_problems, get_code_declarations)"""
+
+    def test_get_hardcoded_values_decorator_present(self):
+        """Test get_hardcoded_values has @with_error_handling decorator"""
+        from backend.api.codebase_analytics import get_hardcoded_values
+
+        source = inspect.getsource(get_hardcoded_values)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="CODEBASE"', source)
+
+    def test_get_hardcoded_values_simple_pattern(self):
+        """Test get_hardcoded_values uses Simple Pattern (no try-catch)"""
+        from backend.api.codebase_analytics import get_hardcoded_values
+
+        source = inspect.getsource(get_hardcoded_values)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_get_hardcoded_values_business_logic_preserved(self):
+        """Test get_hardcoded_values preserves business logic (Redis/memory fallback)"""
+        from backend.api.codebase_analytics import get_hardcoded_values
+
+        source = inspect.getsource(get_hardcoded_values)
+        # Should preserve Redis client logic
+        self.assertIn("get_redis_connection()", source)
+        # Should preserve in-memory fallback
+        self.assertIn("_in_memory_storage", source)
+        # Should preserve hardcode type filtering
+        self.assertIn("hardcode_type", source)
+
+    def test_get_codebase_problems_decorator_present(self):
+        """Test get_codebase_problems has @with_error_handling decorator"""
+        from backend.api.codebase_analytics import get_codebase_problems
+
+        source = inspect.getsource(get_codebase_problems)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="CODEBASE"', source)
+
+    def test_get_codebase_problems_mixed_pattern(self):
+        """Test get_codebase_problems uses Mixed Pattern (decorator + preserved inner try-catch)"""
+        from backend.api.codebase_analytics import get_codebase_problems
+
+        source = inspect.getsource(get_codebase_problems)
+        # Should have inner try-catch for ChromaDB query preserved
+        try_count = source.count("    try:")
+        self.assertGreater(
+            try_count,
+            0,
+            "Mixed Pattern should preserve inner try-catch for ChromaDB query",
+        )
+        # Should still have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_get_codebase_problems_chromadb_try_catch_preserved(self):
+        """Test get_codebase_problems preserves ChromaDB try-catch (business logic)"""
+        from backend.api.codebase_analytics import get_codebase_problems
+
+        source = inspect.getsource(get_codebase_problems)
+        # Should have ChromaDB error handling preserved
+        self.assertIn("except Exception as chroma_error:", source)
+        self.assertIn("falling back to Redis", source)
+        # Should NOT have outer catch that raises HTTPException
+        if "except Exception as e:" in source:
+            # Check it's only the inner chroma_error catch
+            exception_count = source.count("except Exception")
+            self.assertEqual(
+                exception_count,
+                1,
+                "Should only have inner ChromaDB exception handler, not outer generic handler",
+            )
+
+    def test_get_codebase_problems_business_logic_preserved(self):
+        """Test get_codebase_problems preserves business logic (ChromaDB, Redis fallback, severity sorting)"""
+        from backend.api.codebase_analytics import get_codebase_problems
+
+        source = inspect.getsource(get_codebase_problems)
+        # Should preserve ChromaDB collection access
+        self.assertIn("get_code_collection()", source)
+        # Should preserve Redis fallback
+        self.assertIn("get_redis_connection()", source)
+        # Should preserve severity sorting logic
+        self.assertIn("severity_order", source)
+
+    def test_get_code_declarations_decorator_present(self):
+        """Test get_code_declarations has @with_error_handling decorator"""
+        from backend.api.codebase_analytics import get_code_declarations
+
+        source = inspect.getsource(get_code_declarations)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="CODEBASE"', source)
+
+    def test_get_code_declarations_mixed_pattern(self):
+        """Test get_code_declarations uses Mixed Pattern (decorator + preserved inner try-catch)"""
+        from backend.api.codebase_analytics import get_code_declarations
+
+        source = inspect.getsource(get_code_declarations)
+        # Should have inner try-catch for ChromaDB query preserved
+        try_count = source.count("    try:")
+        self.assertGreater(
+            try_count,
+            0,
+            "Mixed Pattern should preserve inner try-catch for ChromaDB query",
+        )
+        # Should still have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_get_code_declarations_chromadb_try_catch_preserved(self):
+        """Test get_code_declarations preserves ChromaDB try-catch (business logic)"""
+        from backend.api.codebase_analytics import get_code_declarations
+
+        source = inspect.getsource(get_code_declarations)
+        # Should have ChromaDB error handling preserved
+        self.assertIn("except Exception as chroma_error:", source)
+        # Should NOT have outer catch that raises HTTPException
+        if "except Exception as e:" in source:
+            # Check it's only the inner chroma_error catch
+            exception_count = source.count("except Exception")
+            self.assertEqual(
+                exception_count,
+                1,
+                "Should only have inner ChromaDB exception handler, not outer generic handler",
+            )
+
+    def test_get_code_declarations_business_logic_preserved(self):
+        """Test get_code_declarations preserves business logic (ChromaDB query, type counting)"""
+        from backend.api.codebase_analytics import get_code_declarations
+
+        source = inspect.getsource(get_code_declarations)
+        # Should preserve ChromaDB collection access
+        self.assertIn("get_code_collection()", source)
+        # Should preserve type counting logic
+        self.assertIn("functions = sum", source)
+        self.assertIn("classes = sum", source)
+        self.assertIn("variables = sum", source)
+
+    def test_batch_84_all_endpoints_have_decorator(self):
+        """Test all batch 84 endpoints have @with_error_handling decorator"""
+        from backend.api.codebase_analytics import (
+            get_code_declarations,
+            get_codebase_problems,
+            get_hardcoded_values,
+        )
+
+        endpoints = [
+            ("get_hardcoded_values", get_hardcoded_values),
+            ("get_codebase_problems", get_codebase_problems),
+            ("get_code_declarations", get_code_declarations),
+        ]
+
+        for name, endpoint in endpoints:
+            with self.subTest(endpoint=name):
+                source = inspect.getsource(endpoint)
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} missing @with_error_handling decorator",
+                )
+                self.assertIn(
+                    'error_code_prefix="CODEBASE"',
+                    source,
+                    f'{name} should use error_code_prefix="CODEBASE"',
+                )
+
+    def test_batch_84_pattern_validation(self):
+        """Test batch 84 endpoints use correct patterns (1 Simple, 2 Mixed)"""
+        from backend.api.codebase_analytics import (
+            get_code_declarations,
+            get_codebase_problems,
+            get_hardcoded_values,
+        )
+
+        # Simple Pattern endpoint (should have 0 try-catch)
+        source = inspect.getsource(get_hardcoded_values)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"get_hardcoded_values should use Simple Pattern (0 try-catch blocks), found {try_count}",
+        )
+
+        # Mixed Pattern endpoints (should have try-catch blocks preserved)
+        mixed_pattern_endpoints = [
+            ("get_codebase_problems", get_codebase_problems),
+            ("get_code_declarations", get_code_declarations),
+        ]
+
+        for name, endpoint in mixed_pattern_endpoints:
+            with self.subTest(endpoint=name, pattern="Mixed"):
+                source = inspect.getsource(endpoint)
+                try_count = source.count("    try:")
+                self.assertGreater(
+                    try_count,
+                    0,
+                    f"{name} should use Mixed Pattern (preserve try-catch blocks), found {try_count}",
+                )
+
+    def test_batch_84_no_generic_exception_raises(self):
+        """Test batch 84 endpoints removed generic exception handlers that raise HTTPException"""
+        from backend.api.codebase_analytics import (
+            get_code_declarations,
+            get_codebase_problems,
+            get_hardcoded_values,
+        )
+
+        endpoints = [
+            ("get_hardcoded_values", get_hardcoded_values),
+            ("get_codebase_problems", get_codebase_problems),
+            ("get_code_declarations", get_code_declarations),
+        ]
+
+        for name, endpoint in endpoints:
+            with self.subTest(endpoint=name):
+                source = inspect.getsource(endpoint)
+                # Should not have pattern: except Exception as e: ... raise HTTPException
+                # The decorator handles all exceptions now
+                if "except Exception as chroma_error:" in source:
+                    # Mixed pattern endpoints have inner ChromaDB exception - this is OK
+                    # Just verify no outer exception handler
+                    lines_after_chroma = source.split("except Exception as chroma_error:")
+                    if len(lines_after_chroma) > 1:
+                        after_block = lines_after_chroma[-1]
+                        # Should not have another "except Exception" after the chroma_error
+                        self.assertNotIn(
+                            "except Exception as e:",
+                            after_block,
+                            f"{name} should not have outer generic exception handler",
+                        )
+
+
 if __name__ == "__main__":
     unittest.main()

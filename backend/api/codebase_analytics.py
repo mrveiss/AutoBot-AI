@@ -1111,234 +1111,228 @@ async def get_codebase_stats():
 
 
 @router.get("/hardcodes")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_hardcoded_values",
+    error_code_prefix="CODEBASE",
+)
 async def get_hardcoded_values(hardcode_type: Optional[str] = None):
     """Get real hardcoded values found in the codebase"""
-    try:
-        redis_client = await get_redis_connection()
+    redis_client = await get_redis_connection()
 
-        all_hardcodes = []
+    all_hardcodes = []
 
-        if redis_client:
-            if hardcode_type:
-                hardcodes_data = redis_client.get(f"codebase:hardcodes:{hardcode_type}")
-                if hardcodes_data:
-                    all_hardcodes = json.loads(hardcodes_data)
-            else:
-                for key in redis_client.scan_iter(match="codebase:hardcodes:*"):
-                    hardcodes_data = redis_client.get(key)
-                    if hardcodes_data:
-                        all_hardcodes.extend(json.loads(hardcodes_data))
-            storage_type = "redis"
+    if redis_client:
+        if hardcode_type:
+            hardcodes_data = redis_client.get(f"codebase:hardcodes:{hardcode_type}")
+            if hardcodes_data:
+                all_hardcodes = json.loads(hardcodes_data)
         else:
-            global _in_memory_storage
-            if not _in_memory_storage:
-                return JSONResponse(
-                    {
-                        "status": "no_data",
-                        "message": "No codebase data found. Run indexing first.",
-                        "hardcodes": [],
-                    }
-                )
-
-            storage = _in_memory_storage
-            if hardcode_type:
-                hardcodes_data = storage.get(f"codebase:hardcodes:{hardcode_type}")
+            for key in redis_client.scan_iter(match="codebase:hardcodes:*"):
+                hardcodes_data = redis_client.get(key)
                 if hardcodes_data:
-                    all_hardcodes = json.loads(hardcodes_data)
-            else:
-                for key in storage.scan_iter("codebase:hardcodes:*"):
-                    hardcodes_data = storage.get(key)
-                    if hardcodes_data:
-                        all_hardcodes.extend(json.loads(hardcodes_data))
-            storage_type = "memory"
+                    all_hardcodes.extend(json.loads(hardcodes_data))
+        storage_type = "redis"
+    else:
+        global _in_memory_storage
+        if not _in_memory_storage:
+            return JSONResponse(
+                {
+                    "status": "no_data",
+                    "message": "No codebase data found. Run indexing first.",
+                    "hardcodes": [],
+                }
+            )
 
-        # Sort by file and line number
-        all_hardcodes.sort(key=lambda x: (x.get("file_path", ""), x.get("line", 0)))
+        storage = _in_memory_storage
+        if hardcode_type:
+            hardcodes_data = storage.get(f"codebase:hardcodes:{hardcode_type}")
+            if hardcodes_data:
+                all_hardcodes = json.loads(hardcodes_data)
+        else:
+            for key in storage.scan_iter("codebase:hardcodes:*"):
+                hardcodes_data = storage.get(key)
+                if hardcodes_data:
+                    all_hardcodes.extend(json.loads(hardcodes_data))
+        storage_type = "memory"
 
-        return JSONResponse(
-            {
-                "status": "success",
-                "hardcodes": all_hardcodes,
-                "total_count": len(all_hardcodes),
-                "hardcode_types": list(
-                    set(h.get("type", "unknown") for h in all_hardcodes)
-                ),
-                "storage_type": storage_type,
-            }
-        )
+    # Sort by file and line number
+    all_hardcodes.sort(key=lambda x: (x.get("file_path", ""), x.get("line", 0)))
 
-    except Exception as e:
-        logger.error(f"Failed to get hardcoded values: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Hardcodes retrieval failed: {str(e)}"
-        )
+    return JSONResponse(
+        {
+            "status": "success",
+            "hardcodes": all_hardcodes,
+            "total_count": len(all_hardcodes),
+            "hardcode_types": list(
+                set(h.get("type", "unknown") for h in all_hardcodes)
+            ),
+            "storage_type": storage_type,
+        }
+    )
 
 
 @router.get("/problems")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_codebase_problems",
+    error_code_prefix="CODEBASE",
+)
 async def get_codebase_problems(problem_type: Optional[str] = None):
     """Get real code problems detected during analysis"""
-    try:
-        # Try ChromaDB first
-        code_collection = get_code_collection()
+    # Try ChromaDB first
+    code_collection = get_code_collection()
 
-        all_problems = []
+    all_problems = []
 
-        if code_collection:
-            try:
-                # Query ChromaDB for problems
-                where_filter = {"type": "problem"}
-                if problem_type:
-                    where_filter["problem_type"] = problem_type
+    if code_collection:
+        try:
+            # Query ChromaDB for problems
+            where_filter = {"type": "problem"}
+            if problem_type:
+                where_filter["problem_type"] = problem_type
 
-                results = code_collection.get(
-                    where=where_filter,
-                    include=["metadatas"]
-                )
-
-                # Extract problems from metadata
-                for metadata in results.get("metadatas", []):
-                    all_problems.append({
-                        "type": metadata.get("problem_type", ""),
-                        "severity": metadata.get("severity", ""),
-                        "file_path": metadata.get("file_path", ""),
-                        "line_number": int(metadata.get("line_number", 0)) if metadata.get("line_number") else None,
-                        "description": metadata.get("description", ""),
-                        "suggestion": metadata.get("suggestion", "")
-                    })
-
-                storage_type = "chromadb"
-                logger.info(f"Retrieved {len(all_problems)} problems from ChromaDB")
-
-            except Exception as chroma_error:
-                logger.warning(f"ChromaDB query failed: {chroma_error}, falling back to Redis")
-                code_collection = None
-
-        # Fallback to Redis if ChromaDB fails
-        if not code_collection:
-            redis_client = await get_redis_connection()
-
-            if redis_client:
-                if problem_type:
-                    problems_data = redis_client.get(f"codebase:problems:{problem_type}")
-                    if problems_data:
-                        all_problems = json.loads(problems_data)
-                else:
-                    for key in redis_client.scan_iter(match="codebase:problems:*"):
-                        problems_data = redis_client.get(key)
-                        if problems_data:
-                            all_problems.extend(json.loads(problems_data))
-                storage_type = "redis"
-            else:
-                return JSONResponse(
-                    {
-                        "status": "no_data",
-                        "message": "No codebase data found. Run indexing first.",
-                        "problems": [],
-                    }
-                )
-
-        # Sort by severity (high, medium, low)
-        severity_order = {"high": 0, "medium": 1, "low": 2}
-        all_problems.sort(
-            key=lambda x: (
-                severity_order.get(x.get("severity", "low"), 3),
-                x.get("file_path", ""),
+            results = code_collection.get(
+                where=where_filter,
+                include=["metadatas"]
             )
-        )
 
-        return JSONResponse(
-            {
-                "status": "success",
-                "problems": all_problems,
-                "total_count": len(all_problems),
-                "problem_types": list(
-                    set(p.get("type", "unknown") for p in all_problems)
-                ),
-                "storage_type": storage_type,
-            }
-        )
+            # Extract problems from metadata
+            for metadata in results.get("metadatas", []):
+                all_problems.append({
+                    "type": metadata.get("problem_type", ""),
+                    "severity": metadata.get("severity", ""),
+                    "file_path": metadata.get("file_path", ""),
+                    "line_number": int(metadata.get("line_number", 0)) if metadata.get("line_number") else None,
+                    "description": metadata.get("description", ""),
+                    "suggestion": metadata.get("suggestion", "")
+                })
 
-    except Exception as e:
-        logger.error(f"Failed to get codebase problems: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Problems retrieval failed: {str(e)}"
-        )
+            storage_type = "chromadb"
+            logger.info(f"Retrieved {len(all_problems)} problems from ChromaDB")
 
+        except Exception as chroma_error:
+            logger.warning(f"ChromaDB query failed: {chroma_error}, falling back to Redis")
+            code_collection = None
 
-@router.get("/declarations")
-async def get_code_declarations(declaration_type: Optional[str] = None):
-    """Get code declarations (functions, classes, variables) detected during analysis"""
-    try:
-        # Try ChromaDB first
-        code_collection = get_code_collection()
+    # Fallback to Redis if ChromaDB fails
+    if not code_collection:
+        redis_client = await get_redis_connection()
 
-        all_declarations = []
-
-        if code_collection:
-            try:
-                # Query ChromaDB for functions and classes
-                where_filter = {"type": {"$in": ["function", "class"]}}
-
-                results = code_collection.get(
-                    where=where_filter,
-                    include=["metadatas"]
-                )
-
-                # Extract declarations from metadata
-                for metadata in results.get("metadatas", []):
-                    decl = {
-                        "name": metadata.get("name", ""),
-                        "type": metadata.get("type", ""),
-                        "file_path": metadata.get("file_path", ""),
-                        "line_number": int(metadata.get("start_line", 0)) if metadata.get("start_line") else 0,
-                        "usage_count": 1,  # Default, can be calculated later
-                        "is_exported": True,  # Default
-                        "parameters": metadata.get("parameters", "").split(",") if metadata.get("parameters") else []
-                    }
-                    all_declarations.append(decl)
-
-                storage_type = "chromadb"
-                logger.info(f"Retrieved {len(all_declarations)} declarations from ChromaDB")
-
-            except Exception as chroma_error:
-                logger.warning(f"ChromaDB query failed: {chroma_error}, returning empty declarations")
-                # Declarations don't exist in old Redis structure, so just return empty
-                storage_type = "chromadb"
-
+        if redis_client:
+            if problem_type:
+                problems_data = redis_client.get(f"codebase:problems:{problem_type}")
+                if problems_data:
+                    all_problems = json.loads(problems_data)
+            else:
+                for key in redis_client.scan_iter(match="codebase:problems:*"):
+                    problems_data = redis_client.get(key)
+                    if problems_data:
+                        all_problems.extend(json.loads(problems_data))
+            storage_type = "redis"
         else:
             return JSONResponse(
                 {
                     "status": "no_data",
                     "message": "No codebase data found. Run indexing first.",
-                    "declarations": [],
+                    "problems": [],
                 }
             )
 
-        # Count by type
-        functions = sum(1 for d in all_declarations if d.get("type") == "function")
-        classes = sum(1 for d in all_declarations if d.get("type") == "class")
-        variables = sum(1 for d in all_declarations if d.get("type") == "variable")
+    # Sort by severity (high, medium, low)
+    severity_order = {"high": 0, "medium": 1, "low": 2}
+    all_problems.sort(
+        key=lambda x: (
+            severity_order.get(x.get("severity", "low"), 3),
+            x.get("file_path", ""),
+        )
+    )
 
-        # Sort by usage count (most used first)
-        all_declarations.sort(key=lambda x: x.get("usage_count", 0), reverse=True)
+    return JSONResponse(
+        {
+            "status": "success",
+            "problems": all_problems,
+            "total_count": len(all_problems),
+            "problem_types": list(
+                set(p.get("type", "unknown") for p in all_problems)
+            ),
+            "storage_type": storage_type,
+        }
+    )
 
+
+@router.get("/declarations")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_code_declarations",
+    error_code_prefix="CODEBASE",
+)
+async def get_code_declarations(declaration_type: Optional[str] = None):
+    """Get code declarations (functions, classes, variables) detected during analysis"""
+    # Try ChromaDB first
+    code_collection = get_code_collection()
+
+    all_declarations = []
+
+    if code_collection:
+        try:
+            # Query ChromaDB for functions and classes
+            where_filter = {"type": {"$in": ["function", "class"]}}
+
+            results = code_collection.get(
+                where=where_filter,
+                include=["metadatas"]
+            )
+
+            # Extract declarations from metadata
+            for metadata in results.get("metadatas", []):
+                decl = {
+                    "name": metadata.get("name", ""),
+                    "type": metadata.get("type", ""),
+                    "file_path": metadata.get("file_path", ""),
+                    "line_number": int(metadata.get("start_line", 0)) if metadata.get("start_line") else 0,
+                    "usage_count": 1,  # Default, can be calculated later
+                    "is_exported": True,  # Default
+                    "parameters": metadata.get("parameters", "").split(",") if metadata.get("parameters") else []
+                }
+                all_declarations.append(decl)
+
+            storage_type = "chromadb"
+            logger.info(f"Retrieved {len(all_declarations)} declarations from ChromaDB")
+
+        except Exception as chroma_error:
+            logger.warning(f"ChromaDB query failed: {chroma_error}, returning empty declarations")
+            # Declarations don't exist in old Redis structure, so just return empty
+            storage_type = "chromadb"
+
+    else:
         return JSONResponse(
             {
-                "status": "success",
-                "declarations": all_declarations,
-                "total_count": len(all_declarations),
-                "functions": functions,
-                "classes": classes,
-                "variables": variables,
-                "storage_type": storage_type,
+                "status": "no_data",
+                "message": "No codebase data found. Run indexing first.",
+                "declarations": [],
             }
         )
 
-    except Exception as e:
-        logger.error(f"Failed to get code declarations: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Declarations retrieval failed: {str(e)}"
-        )
+    # Count by type
+    functions = sum(1 for d in all_declarations if d.get("type") == "function")
+    classes = sum(1 for d in all_declarations if d.get("type") == "class")
+    variables = sum(1 for d in all_declarations if d.get("type") == "variable")
+
+    # Sort by usage count (most used first)
+    all_declarations.sort(key=lambda x: x.get("usage_count", 0), reverse=True)
+
+    return JSONResponse(
+        {
+            "status": "success",
+            "declarations": all_declarations,
+            "total_count": len(all_declarations),
+            "functions": functions,
+            "classes": classes,
+            "variables": variables,
+            "storage_type": storage_type,
+        }
+    )
 
 
 @router.get("/duplicates")
