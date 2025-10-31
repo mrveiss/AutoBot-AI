@@ -284,67 +284,61 @@ async def update_agent_model(agent_id: str, update: AgentModelUpdate):
 
 
 @router.post("/agents/{agent_id}/enable")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enable_agent",
+    error_code_prefix="AGENT_CONFIG",
+)
 async def enable_agent(agent_id: str):
     """Enable a specific agent"""
-    try:
-        if agent_id not in DEFAULT_AGENT_CONFIGS:
-            raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
+    if agent_id not in DEFAULT_AGENT_CONFIGS:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-        from src.unified_config_manager import unified_config_manager
+    from src.unified_config_manager import unified_config_manager
 
-        unified_config_manager.set_nested(f"agents.{agent_id}.enabled", True)
-        unified_config_manager.save_settings()
-        ConfigService.clear_cache()
+    unified_config_manager.set_nested(f"agents.{agent_id}.enabled", True)
+    unified_config_manager.save_settings()
+    ConfigService.clear_cache()
 
-        logger.info(f"Enabled agent {agent_id}")
+    logger.info(f"Enabled agent {agent_id}")
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "message": f"Agent {agent_id} enabled successfully",
-                "agent_name": DEFAULT_AGENT_CONFIGS[agent_id]["name"],
-            },
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to enable agent {agent_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to enable agent: {str(e)}")
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "message": f"Agent {agent_id} enabled successfully",
+            "agent_name": DEFAULT_AGENT_CONFIGS[agent_id]["name"],
+        },
+    )
 
 
 @router.post("/agents/{agent_id}/disable")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="disable_agent",
+    error_code_prefix="AGENT_CONFIG",
+)
 async def disable_agent(agent_id: str):
     """Disable a specific agent"""
-    try:
-        if agent_id not in DEFAULT_AGENT_CONFIGS:
-            raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
+    if agent_id not in DEFAULT_AGENT_CONFIGS:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-        from src.unified_config_manager import unified_config_manager
+    from src.unified_config_manager import unified_config_manager
 
-        unified_config_manager.set_nested(f"agents.{agent_id}.enabled", False)
-        unified_config_manager.save_settings()
-        ConfigService.clear_cache()
+    unified_config_manager.set_nested(f"agents.{agent_id}.enabled", False)
+    unified_config_manager.save_settings()
+    ConfigService.clear_cache()
 
-        logger.info(f"Disabled agent {agent_id}")
+    logger.info(f"Disabled agent {agent_id}")
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "message": f"Agent {agent_id} disabled successfully",
-                "agent_name": DEFAULT_AGENT_CONFIGS[agent_id]["name"],
-            },
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to disable agent {agent_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to disable agent: {str(e)}"
-        )
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "message": f"Agent {agent_id} disabled successfully",
+            "agent_name": DEFAULT_AGENT_CONFIGS[agent_id]["name"],
+        },
+    )
 
 
 @router.get("/agents/{agent_id}/health")
