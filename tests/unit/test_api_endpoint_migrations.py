@@ -14036,5 +14036,220 @@ class TestBatch81SystemMigrations(unittest.TestCase):
                 )
 
 
+class TestBatch82SystemMigrations(unittest.TestCase):
+    """Test batch 82 migrations: system.py final 3 endpoints (get_cache_stats, get_cache_activity, get_system_metrics) - FINAL BATCH"""
+
+    def test_get_cache_stats_decorator_present(self):
+        """Test get_cache_stats has @with_error_handling decorator"""
+        from backend.api.system import get_cache_stats
+
+        source = inspect.getsource(get_cache_stats)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="SYSTEM"', source)
+
+    def test_get_cache_stats_mixed_pattern(self):
+        """Test get_cache_stats uses Mixed Pattern (decorator + preserved try-catch)"""
+        from backend.api.system import get_cache_stats
+
+        source = inspect.getsource(get_cache_stats)
+        # Should have try-catch blocks preserved (returns error dict, not HTTPException)
+        try_count = source.count("    try:")
+        self.assertGreater(
+            try_count,
+            0,
+            "Mixed Pattern should preserve try-catch blocks for error dict return",
+        )
+        # Should still have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_get_cache_stats_returns_dict_on_error(self):
+        """Test get_cache_stats returns error dict on error (not HTTPException)"""
+        from backend.api.system import get_cache_stats
+
+        source = inspect.getsource(get_cache_stats)
+        # Should return error dict on outer catch
+        self.assertIn('return {', source)
+        self.assertIn('"error":', source)
+        # Should NOT raise HTTPException in outer catch
+        self.assertNotIn('raise HTTPException', source.split('except Exception as e:')[-1].split('return')[0] if 'except Exception as e:' in source else source)
+
+    def test_get_cache_activity_decorator_present(self):
+        """Test get_cache_activity has @with_error_handling decorator"""
+        from backend.api.system import get_cache_activity
+
+        source = inspect.getsource(get_cache_activity)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="SYSTEM"', source)
+
+    def test_get_cache_activity_mixed_pattern(self):
+        """Test get_cache_activity uses Mixed Pattern (decorator + preserved try-catch)"""
+        from backend.api.system import get_cache_activity
+
+        source = inspect.getsource(get_cache_activity)
+        # Should have try-catch blocks preserved (returns error dict, not HTTPException)
+        try_count = source.count("    try:")
+        self.assertGreater(
+            try_count,
+            0,
+            "Mixed Pattern should preserve try-catch blocks for error dict return",
+        )
+        # Should still have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_get_cache_activity_returns_dict_on_error(self):
+        """Test get_cache_activity returns error dict on error (not HTTPException)"""
+        from backend.api.system import get_cache_activity
+
+        source = inspect.getsource(get_cache_activity)
+        # Should return error dict on outer catch
+        self.assertIn('return {', source)
+        self.assertIn('"error":', source)
+        # Should NOT raise HTTPException in outer catch
+        self.assertNotIn('raise HTTPException', source.split('except Exception as e:')[-1] if 'except Exception as e:' in source else source)
+
+    def test_get_system_metrics_decorator_present(self):
+        """Test get_system_metrics has @with_error_handling decorator"""
+        from backend.api.system import get_system_metrics
+
+        source = inspect.getsource(get_system_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="SYSTEM"', source)
+
+    def test_get_system_metrics_mixed_pattern(self):
+        """Test get_system_metrics uses Mixed Pattern (decorator + preserved ImportError + inner cache try-catch)"""
+        from backend.api.system import get_system_metrics
+
+        source = inspect.getsource(get_system_metrics)
+        # Should have ImportError handling preserved (business logic - graceful degradation)
+        self.assertIn("except ImportError:", source)
+        # Should have inner try-catch for cache stats preserved
+        self.assertIn("# Add cache statistics if available", source)
+        # Should still have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_get_system_metrics_no_generic_exception_raise(self):
+        """Test get_system_metrics removed outer generic exception handler that raises HTTPException"""
+        from backend.api.system import get_system_metrics
+
+        source = inspect.getsource(get_system_metrics)
+        # Should NOT have outer catch that raises HTTPException after ImportError
+        lines_after_importerror = source.split("except ImportError:")[-1]
+        # Check there's no "except Exception as e:" followed by "raise HTTPException"
+        if "except Exception as e:" in lines_after_importerror:
+            exception_block = lines_after_importerror.split("except Exception as e:")[-1]
+            self.assertNotIn(
+                "raise HTTPException",
+                exception_block,
+                "Should not raise HTTPException in outer catch - decorator handles this",
+            )
+
+    def test_get_system_metrics_business_logic_preserved(self):
+        """Test get_system_metrics preserves business logic (ImportError handling + inner cache try-catch)"""
+        from backend.api.system import get_system_metrics
+
+        source = inspect.getsource(get_system_metrics)
+        # Should have ImportError handling returning basic info
+        self.assertIn("except ImportError:", source)
+        self.assertIn('"error": "psutil not available"', source)
+        # Should have inner cache try-catch for graceful degradation
+        self.assertIn('metrics["cache"]', source)
+        self.assertIn('{"status": "unavailable"}', source)
+
+    def test_batch_82_all_endpoints_have_decorator(self):
+        """Test all batch 82 endpoints have @with_error_handling decorator"""
+        from backend.api.system import (
+            get_cache_activity,
+            get_cache_stats,
+            get_system_metrics,
+        )
+
+        endpoints = [
+            ("get_cache_stats", get_cache_stats),
+            ("get_cache_activity", get_cache_activity),
+            ("get_system_metrics", get_system_metrics),
+        ]
+
+        for name, endpoint in endpoints:
+            with self.subTest(endpoint=name):
+                source = inspect.getsource(endpoint)
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} missing @with_error_handling decorator",
+                )
+                self.assertIn(
+                    'error_code_prefix="SYSTEM"',
+                    source,
+                    f'{name} should use error_code_prefix="SYSTEM"',
+                )
+
+    def test_batch_82_pattern_validation(self):
+        """Test batch 82 endpoints use correct patterns (all 3 Mixed Pattern)"""
+        from backend.api.system import (
+            get_cache_activity,
+            get_cache_stats,
+            get_system_metrics,
+        )
+
+        # All Mixed Pattern endpoints (should have try-catch blocks preserved)
+        mixed_pattern_endpoints = [
+            ("get_cache_stats", get_cache_stats),
+            ("get_cache_activity", get_cache_activity),
+            ("get_system_metrics", get_system_metrics),
+        ]
+
+        for name, endpoint in mixed_pattern_endpoints:
+            with self.subTest(endpoint=name, pattern="Mixed"):
+                source = inspect.getsource(endpoint)
+                try_count = source.count("    try:")
+                self.assertGreater(
+                    try_count,
+                    0,
+                    f"{name} should use Mixed Pattern (preserve try-catch blocks), found {try_count}",
+                )
+
+    def test_system_py_100_percent_complete(self):
+        """Test system.py is 100% complete - all 11 endpoints migrated"""
+        from backend.api.system import (
+            admin_check,
+            dynamic_import,
+            get_cache_activity,
+            get_cache_stats,
+            get_detailed_health,
+            get_frontend_config,
+            get_system_health,
+            get_system_info,
+            get_system_metrics,
+            reload_prompts,
+            reload_system_config,
+        )
+
+        endpoints = [
+            ("get_frontend_config", get_frontend_config),
+            ("get_system_health", get_system_health),
+            ("get_system_info", get_system_info),
+            ("reload_system_config", reload_system_config),
+            ("reload_prompts", reload_prompts),
+            ("admin_check", admin_check),
+            ("dynamic_import", dynamic_import),
+            ("get_detailed_health", get_detailed_health),
+            ("get_cache_stats", get_cache_stats),
+            ("get_cache_activity", get_cache_activity),
+            ("get_system_metrics", get_system_metrics),
+        ]
+
+        for name, endpoint in endpoints:
+            with self.subTest(endpoint=name):
+                source = inspect.getsource(endpoint)
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} missing @with_error_handling decorator - system.py not 100% complete",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
