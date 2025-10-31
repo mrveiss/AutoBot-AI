@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from backend.dependencies import get_config, get_knowledge_base
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,11 @@ def create_success_response(
 
 
 @router.get("/health")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="ai_stack_health_check",
+    error_code_prefix="AI_STACK",
+)
 async def ai_stack_health_check():
     """Check AI Stack health and connectivity."""
     try:
@@ -171,15 +177,17 @@ async def ai_stack_health_check():
 
 
 @router.get("/agents")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_ai_agents",
+    error_code_prefix="AI_STACK",
+)
 async def list_ai_agents():
     """List all available AI agents."""
-    try:
-        ai_client = await get_ai_stack_client()
-        agents = await ai_client.list_available_agents()
+    ai_client = await get_ai_stack_client()
+    agents = await ai_client.list_available_agents()
 
-        return create_success_response(agents, "AI agents retrieved successfully")
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "List AI agents")
+    return create_success_response(agents, "AI agents retrieved successfully")
 
 
 # ====================================================================
@@ -188,6 +196,11 @@ async def list_ai_agents():
 
 
 @router.post("/rag/query")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rag_query",
+    error_code_prefix="AI_STACK",
+)
 async def rag_query(
     request: RAGQueryRequest, knowledge_base=Depends(get_knowledge_base)
 ):
@@ -197,44 +210,43 @@ async def rag_query(
     This endpoint combines the AutoBot knowledge base with AI Stack's
     RAG agent for enhanced retrieval and generation capabilities.
     """
-    try:
-        ai_client = await get_ai_stack_client()
+    ai_client = await get_ai_stack_client()
 
-        # First, search local knowledge base if no documents provided
-        documents = request.documents
-        if not documents and knowledge_base:
-            try:
-                kb_results = await knowledge_base.search(
-                    query=request.query, top_k=request.max_results
-                )
-                documents = kb_results if isinstance(kb_results, list) else []
-            except Exception as e:
-                logger.warning(f"Knowledge base search failed: {e}")
-                documents = []
+    # First, search local knowledge base if no documents provided
+    documents = request.documents
+    if not documents and knowledge_base:
+        try:
+            kb_results = await knowledge_base.search(
+                query=request.query, top_k=request.max_results
+            )
+            documents = kb_results if isinstance(kb_results, list) else []
+        except Exception as e:
+            logger.warning(f"Knowledge base search failed: {e}")
+            documents = []
 
-        # Perform RAG query with AI Stack
-        rag_result = await ai_client.rag_query(
-            query=request.query,
-            documents=documents,
-            context=request.context,
-            max_results=request.max_results,
-        )
+    # Perform RAG query with AI Stack
+    rag_result = await ai_client.rag_query(
+        query=request.query,
+        documents=documents,
+        context=request.context,
+        max_results=request.max_results,
+    )
 
-        return create_success_response(rag_result, "RAG query completed successfully")
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "RAG query")
+    return create_success_response(rag_result, "RAG query completed successfully")
 
 
 @router.post("/rag/reformulate")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reformulate_query",
+    error_code_prefix="AI_STACK",
+)
 async def reformulate_query(query: str, context: Optional[str] = None):
     """Reformulate query for better retrieval results."""
-    try:
-        ai_client = await get_ai_stack_client()
-        result = await ai_client.reformulate_query(query, context)
+    ai_client = await get_ai_stack_client()
+    result = await ai_client.reformulate_query(query, context)
 
-        return create_success_response(result, "Query reformulated successfully")
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "Query reformulation")
+    return create_success_response(result, "Query reformulated successfully")
 
 
 @router.post("/rag/analyze-documents")
