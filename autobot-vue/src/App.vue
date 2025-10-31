@@ -563,11 +563,27 @@ export default {
         // Update app store with health status
         if (appStore && typeof appStore.setBackendStatus === 'function') {
           const backendStatus = healthData.status.backend;
+          const initStatus = healthData.status.initialization;
+
+          // Determine status text based on backend health and initialization state
+          let statusText = 'Disconnected';
+          let statusClass = 'error';
+
+          if (backendStatus === 'healthy') {
+            statusText = 'Connected';
+            statusClass = 'success';
+          } else if (backendStatus === 'degraded') {
+            statusText = 'Degraded';
+            statusClass = 'warning';
+          } else if (initStatus && (initStatus.status === 'phase1' || initStatus.status === 'phase2' || initStatus.status === 'starting')) {
+            // Backend is initializing - show helpful message instead of "Disconnected"
+            statusText = initStatus.message || 'Initializing...';
+            statusClass = 'warning';
+          }
+
           appStore.setBackendStatus({
-            text: backendStatus === 'healthy' ? 'Connected' :
-                  backendStatus === 'degraded' ? 'Degraded' : 'Disconnected',
-            class: backendStatus === 'healthy' ? 'success' :
-                   backendStatus === 'degraded' ? 'warning' : 'error'
+            text: statusText,
+            class: statusClass
           });
         }
 

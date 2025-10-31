@@ -21,7 +21,11 @@ class OptimizedHealthMonitor {
             backend: 'unknown',
             frontend: 'healthy',
             websocket: 'unknown',
-            router: 'healthy'
+            router: 'healthy',
+            initialization: {
+                status: 'unknown',
+                message: ''
+            }
         };
 
         // Adaptive monitoring configuration
@@ -266,7 +270,7 @@ class OptimizedHealthMonitor {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
 
-            const response = await fetch('/api/health', {
+            const response = await fetch('/api/system/health', {
                 signal: controller.signal,
                 headers: cacheBuster.getBustHeaders()
             });
@@ -274,6 +278,16 @@ class OptimizedHealthMonitor {
             clearTimeout(timeoutId);
 
             if (response.ok) {
+                const healthData = await response.json();
+
+                // Extract initialization status if available
+                if (healthData.initialization) {
+                    this.healthStatus.initialization = {
+                        status: healthData.initialization.status || 'unknown',
+                        message: healthData.initialization.message || ''
+                    };
+                }
+
                 this.healthStatus.backend = 'healthy';
                 this.consecutiveFailures.backend = 0;
                 return { status: 'healthy', responseTime: performance.now() - startTime };
