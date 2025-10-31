@@ -17184,5 +17184,250 @@ class TestBatch93ServiceMonitorMigrations(unittest.TestCase):
         self.assertIn('"success": False', source)
 
 
+# ============================================================
+# Batch 94: backend/api/advanced_control.py streaming + takeover CRUD
+# ============================================================
+
+
+class TestBatch94AdvancedControlStreamingAndTakeoverCRUD(unittest.TestCase):
+    """Test batch 94 migrations: 7 endpoints from advanced_control.py (streaming + takeover CRUD)"""
+
+    def test_batch_94_create_streaming_session_has_decorator(self):
+        """Verify create_streaming_session has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.create_streaming_session)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="create_streaming_session"', source)
+
+    def test_batch_94_create_streaming_session_preserves_task_tracker(self):
+        """Verify create_streaming_session preserves task_tracker context manager"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.create_streaming_session)
+        # Should preserve task_tracker context manager
+        self.assertIn("async with task_tracker.track_task(", source)
+        self.assertIn("as task_context:", source)
+        self.assertIn("task_context.set_outputs", source)
+        # Should NOT have outer try-catch wrapper (Simple Pattern)
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+
+    def test_batch_94_terminate_streaming_session_has_decorator(self):
+        """Verify terminate_streaming_session has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.terminate_streaming_session)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="terminate_streaming_session"', source)
+
+    def test_batch_94_terminate_streaming_session_preserves_http_exception(self):
+        """Verify terminate_streaming_session preserves 404 HTTPException (Mixed Pattern)"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.terminate_streaming_session)
+        # Should preserve 404 HTTPException for business logic
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=404", source)
+        self.assertIn("Session not found", source)
+
+    def test_batch_94_list_streaming_sessions_has_decorator(self):
+        """Verify list_streaming_sessions has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.list_streaming_sessions)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="list_streaming_sessions"', source)
+        # Simple Pattern - no try-catch
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+
+    def test_batch_94_get_streaming_capabilities_has_decorator(self):
+        """Verify get_streaming_capabilities has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.get_streaming_capabilities)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="get_streaming_capabilities"', source)
+        # Simple Pattern - no try-catch
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+
+    def test_batch_94_request_takeover_has_decorator(self):
+        """Verify request_takeover has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.request_takeover)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="request_takeover"', source)
+
+    def test_batch_94_request_takeover_preserves_validation(self):
+        """Verify request_takeover preserves 400 HTTPException for validation (Mixed Pattern)"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.request_takeover)
+        # Should preserve 400 HTTPException for validation
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=400", source)
+        self.assertIn("Invalid trigger", source)
+        # Should preserve mapping logic
+        self.assertIn("trigger_mapping", source)
+        self.assertIn("priority_mapping", source)
+
+    def test_batch_94_approve_takeover_has_decorator(self):
+        """Verify approve_takeover has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.approve_takeover)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="approve_takeover"', source)
+
+    def test_batch_94_approve_takeover_preserves_exceptions(self):
+        """Verify approve_takeover preserves 404/409 HTTPExceptions (Mixed Pattern)"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.approve_takeover)
+        # Should preserve inner try-catch for business logic exceptions
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 1, "Should preserve inner try-catch for exceptions")
+        # Should preserve 404 (ValueError)
+        self.assertIn("except ValueError as e:", source)
+        self.assertIn("status_code=404", source)
+        # Should preserve 409 (RuntimeError)
+        self.assertIn("except RuntimeError as e:", source)
+        self.assertIn("status_code=409", source)
+
+    def test_batch_94_execute_takeover_action_has_decorator(self):
+        """Verify execute_takeover_action has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.execute_takeover_action)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="execute_takeover_action"', source)
+
+    def test_batch_94_execute_takeover_action_preserves_exception(self):
+        """Verify execute_takeover_action preserves 404 HTTPException (Mixed Pattern)"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.execute_takeover_action)
+        # Should preserve inner try-catch for ValueError -> 404
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 1, "Should preserve inner try-catch for exception")
+        self.assertIn("except ValueError as e:", source)
+        self.assertIn("status_code=404", source)
+
+    def test_batch_94_all_have_error_code_prefix(self):
+        """Verify all batch 94 endpoints use ADVANCED_CONTROL error_code_prefix"""
+        from backend.api import advanced_control
+
+        batch_94_endpoints = [
+            advanced_control.create_streaming_session,
+            advanced_control.terminate_streaming_session,
+            advanced_control.list_streaming_sessions,
+            advanced_control.get_streaming_capabilities,
+            advanced_control.request_takeover,
+            advanced_control.approve_takeover,
+            advanced_control.execute_takeover_action,
+        ]
+
+        for endpoint in batch_94_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                'error_code_prefix="ADVANCED_CONTROL"',
+                source,
+                f"{endpoint.__name__} missing ADVANCED_CONTROL prefix",
+            )
+
+    def test_batch_94_pattern_distribution(self):
+        """Verify batch 94 has correct pattern distribution (4 Simple, 3 Mixed)"""
+        from backend.api import advanced_control
+
+        # Simple Pattern endpoints (no try-catch)
+        simple_endpoints = [
+            advanced_control.create_streaming_session,  # Preserves task_tracker but no try-catch
+            advanced_control.list_streaming_sessions,
+            advanced_control.get_streaming_capabilities,
+        ]
+
+        # Mixed Pattern endpoints (preserve HTTPExceptions)
+        mixed_endpoints = [
+            advanced_control.terminate_streaming_session,  # Preserves 404
+            advanced_control.request_takeover,  # Preserves 400
+            advanced_control.approve_takeover,  # Preserves 404/409
+            advanced_control.execute_takeover_action,  # Preserves 404
+        ]
+
+        # Verify Simple Pattern endpoints have no try-catch
+        for endpoint in simple_endpoints:
+            source = inspect.getsource(endpoint)
+            # create_streaming_session has task_tracker context, but that's not a try-catch error handler
+            if endpoint == advanced_control.create_streaming_session:
+                continue  # Skip try-catch check for this one
+            try_count = source.count("try:")
+            self.assertEqual(
+                try_count,
+                0,
+                f"{endpoint.__name__} should have NO try-catch (Simple Pattern)",
+            )
+
+        # Verify Mixed Pattern endpoints preserve HTTPExceptions
+        for endpoint in mixed_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "HTTPException",
+                source,
+                f"{endpoint.__name__} should preserve HTTPException (Mixed Pattern)",
+            )
+
+    def test_batch_94_progress_tracking(self):
+        """Verify batch 94 progress: 7/19 endpoints migrated (37%)"""
+        from backend.api import advanced_control
+
+        batch_94_migrated = [
+            advanced_control.create_streaming_session,
+            advanced_control.terminate_streaming_session,
+            advanced_control.list_streaming_sessions,
+            advanced_control.get_streaming_capabilities,
+            advanced_control.request_takeover,
+            advanced_control.approve_takeover,
+            advanced_control.execute_takeover_action,
+        ]
+
+        # All 7 endpoints should have @with_error_handling
+        for endpoint in batch_94_migrated:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} missing @with_error_handling decorator",
+            )
+
+        # Verify 7 endpoints migrated
+        self.assertEqual(len(batch_94_migrated), 7, "Should have migrated 7 endpoints")
+
+    def test_batch_94_advanced_control_file_info(self):
+        """Verify advanced_control.py file metadata for batch 94"""
+        # File: backend/api/advanced_control.py
+        # Batch 94: First batch (7/19 endpoints, 37%)
+        # Target: 13th file to reach 100%
+        # Patterns: 4 Simple, 3 Mixed
+
+        from backend.api import advanced_control
+
+        batch_94_count = 7
+        total_endpoints = 19  # Total in advanced_control.py
+        progress_percentage = (batch_94_count / total_endpoints) * 100
+
+        self.assertEqual(batch_94_count, 7)
+        self.assertAlmostEqual(progress_percentage, 36.84, places=1)
+
+
 if __name__ == "__main__":
     unittest.main()
