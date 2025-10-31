@@ -13249,5 +13249,187 @@ class TestBatch77AgentMigrations(unittest.TestCase):
                 )
 
 
+class TestBatch78IntelligentAgentMigrations(unittest.TestCase):
+    """Test batch 78 migrations: intelligent_agent.py first 3 endpoints (process_natural_language_goal, get_system_info, health_check)"""
+
+    # Endpoint 1: process_natural_language_goal (Simple Pattern)
+    def test_process_natural_language_goal_decorator_present(self):
+        """Test process_natural_language_goal has @with_error_handling decorator"""
+        from backend.api.intelligent_agent import process_natural_language_goal
+
+        source = inspect.getsource(process_natural_language_goal)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="INTELLIGENT_AGENT"', source)
+
+    def test_process_natural_language_goal_simple_pattern(self):
+        """Test process_natural_language_goal uses Simple Pattern (no try-catch)"""
+        from backend.api.intelligent_agent import process_natural_language_goal
+
+        source = inspect.getsource(process_natural_language_goal)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_process_natural_language_goal_prometheus_preserved(self):
+        """Test process_natural_language_goal preserves Prometheus metrics"""
+        from backend.api.intelligent_agent import process_natural_language_goal
+
+        source = inspect.getsource(process_natural_language_goal)
+        self.assertIn("prometheus_metrics.record_task_execution", source)
+        self.assertIn("task_type=task_type", source)
+        self.assertIn("agent_type=agent_type", source)
+
+    def test_process_natural_language_goal_business_logic_preserved(self):
+        """Test process_natural_language_goal preserves business logic (async streaming)"""
+        from backend.api.intelligent_agent import process_natural_language_goal
+
+        source = inspect.getsource(process_natural_language_goal)
+        self.assertIn("async for chunk in agent.process_natural_language_goal", source)
+        self.assertIn("result_chunks.append", source)
+        self.assertIn("metadata.update", source)
+
+    # Endpoint 2: get_system_info (Simple Pattern)
+    def test_get_system_info_decorator_present(self):
+        """Test get_system_info has @with_error_handling decorator"""
+        from backend.api.intelligent_agent import get_system_info
+
+        source = inspect.getsource(get_system_info)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="INTELLIGENT_AGENT"', source)
+
+    def test_get_system_info_simple_pattern(self):
+        """Test get_system_info uses Simple Pattern (no try-catch)"""
+        from backend.api.intelligent_agent import get_system_info
+
+        source = inspect.getsource(get_system_info)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_get_system_info_business_logic_preserved(self):
+        """Test get_system_info preserves business logic (system status handling)"""
+        from backend.api.intelligent_agent import get_system_info
+
+        source = inspect.getsource(get_system_info)
+        self.assertIn("await agent.get_system_status()", source)
+        self.assertIn("not_initialized", source)
+        self.assertIn("SystemInfoResponse", source)
+
+    # Endpoint 3: health_check (Mixed Pattern)
+    def test_health_check_decorator_present(self):
+        """Test health_check has @with_error_handling decorator"""
+        from backend.api.intelligent_agent import health_check
+
+        source = inspect.getsource(health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="INTELLIGENT_AGENT"', source)
+
+    def test_health_check_mixed_pattern(self):
+        """Test health_check uses Mixed Pattern (decorator + preserved try-catch)"""
+        from backend.api.intelligent_agent import health_check
+
+        source = inspect.getsource(health_check)
+        # Should have exactly 1 try-catch block (preserved for health check behavior)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            1,
+            "Mixed Pattern should have exactly 1 try-catch block for health check logic",
+        )
+        # Should still have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_health_check_error_response_preserved(self):
+        """Test health_check preserves error response behavior (returns HealthResponse on exception)"""
+        from backend.api.intelligent_agent import health_check
+
+        source = inspect.getsource(health_check)
+        # Health check should return HealthResponse on error, not raise
+        self.assertIn("except Exception as e:", source)
+        self.assertIn('status="unhealthy"', source)
+        self.assertIn("HealthResponse", source)
+
+    def test_health_check_business_logic_preserved(self):
+        """Test health_check preserves business logic (component health checks)"""
+        from backend.api.intelligent_agent import health_check
+
+        source = inspect.getsource(health_check)
+        self.assertIn("await get_agent()", source)
+        self.assertIn("components", source)
+        self.assertIn("uptime", source)
+
+    # Batch verification
+    def test_batch_78_all_endpoints_have_decorator(self):
+        """Test all batch 78 endpoints have @with_error_handling decorator with correct configuration"""
+        from backend.api.intelligent_agent import (
+            get_system_info,
+            health_check,
+            process_natural_language_goal,
+        )
+
+        endpoints = [
+            ("process_natural_language_goal", process_natural_language_goal),
+            ("get_system_info", get_system_info),
+            ("health_check", health_check),
+        ]
+
+        for name, endpoint in endpoints:
+            with self.subTest(endpoint=name):
+                source = inspect.getsource(endpoint)
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} missing @with_error_handling decorator",
+                )
+                self.assertIn(
+                    "ErrorCategory.SERVER_ERROR",
+                    source,
+                    f"{name} missing ErrorCategory.SERVER_ERROR",
+                )
+                self.assertIn(
+                    'error_code_prefix="INTELLIGENT_AGENT"',
+                    source,
+                    f'{name} missing error_code_prefix="INTELLIGENT_AGENT"',
+                )
+
+    def test_batch_78_pattern_validation(self):
+        """Test batch 78 endpoints use correct patterns (2 Simple, 1 Mixed)"""
+        from backend.api.intelligent_agent import (
+            get_system_info,
+            health_check,
+            process_natural_language_goal,
+        )
+
+        # Simple Pattern endpoints (should have 0 try-catch)
+        simple_pattern_endpoints = [
+            ("process_natural_language_goal", process_natural_language_goal),
+            ("get_system_info", get_system_info),
+        ]
+
+        for name, endpoint in simple_pattern_endpoints:
+            with self.subTest(endpoint=name, pattern="Simple"):
+                source = inspect.getsource(endpoint)
+                try_count = source.count("    try:")
+                self.assertEqual(
+                    try_count,
+                    0,
+                    f"{name} should use Simple Pattern (0 try-catch blocks), found {try_count}",
+                )
+
+        # Mixed Pattern endpoint (should have exactly 1 try-catch)
+        source = inspect.getsource(health_check)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            1,
+            f"health_check should use Mixed Pattern (1 try-catch block), found {try_count}",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
