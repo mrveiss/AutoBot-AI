@@ -12963,5 +12963,143 @@ class TestBatch75AgentConfigMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="AGENT_CONFIG"', source)
 
 
+class TestBatch76AgentMigrations(unittest.TestCase):
+    """Test batch 76 migrations: agent.py first 3 endpoints (receive_goal, pause_agent_api, resume_agent_api)"""
+
+    def test_receive_goal_decorator_present(self):
+        """Test receive_goal has @with_error_handling decorator"""
+        from backend.api.agent import receive_goal
+
+        source = inspect.getsource(receive_goal)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT"', source)
+
+    def test_receive_goal_simple_pattern(self):
+        """Test receive_goal uses Simple Pattern (no try-catch)"""
+        from backend.api.agent import receive_goal
+
+        source = inspect.getsource(receive_goal)
+        # Simple Pattern: no try-catch blocks
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_receive_goal_http_exception_preserved(self):
+        """Test receive_goal preserves HTTPException for 403 permission denied"""
+        from backend.api.agent import receive_goal
+
+        source = inspect.getsource(receive_goal)
+        # Should have permission check with 403 response
+        self.assertIn("check_permission", source)
+        self.assertIn("status_code=403", source)
+        self.assertIn("Permission denied", source)
+
+    def test_receive_goal_business_logic_preserved(self):
+        """Test receive_goal preserves business logic (Prometheus metrics, event publishing)"""
+        from backend.api.agent import receive_goal
+
+        source = inspect.getsource(receive_goal)
+        # Business logic: Prometheus metrics
+        self.assertIn("prometheus_metrics.record_task_execution", source)
+        self.assertIn("task_type", source)
+        self.assertIn("agent_type", source)
+        # Business logic: Event publishing
+        self.assertIn("event_manager.publish", source)
+        self.assertIn("goal_completed", source)
+        # Business logic: Security audit
+        self.assertIn("security_layer.audit_log", source)
+
+    def test_pause_agent_api_decorator_present(self):
+        """Test pause_agent_api has @with_error_handling decorator"""
+        from backend.api.agent import pause_agent_api
+
+        source = inspect.getsource(pause_agent_api)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT"', source)
+
+    def test_pause_agent_api_simple_pattern(self):
+        """Test pause_agent_api uses Simple Pattern (no try-catch)"""
+        from backend.api.agent import pause_agent_api
+
+        source = inspect.getsource(pause_agent_api)
+        # Simple Pattern: no try-catch blocks
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_pause_agent_api_http_exception_preserved(self):
+        """Test pause_agent_api preserves HTTPException for 403 permission denied"""
+        from backend.api.agent import pause_agent_api
+
+        source = inspect.getsource(pause_agent_api)
+        # Should have permission check with 403 response
+        self.assertIn("check_permission", source)
+        self.assertIn("status_code=403", source)
+        self.assertIn("Permission denied", source)
+
+    def test_resume_agent_api_decorator_present(self):
+        """Test resume_agent_api has @with_error_handling decorator"""
+        from backend.api.agent import resume_agent_api
+
+        source = inspect.getsource(resume_agent_api)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT"', source)
+
+    def test_resume_agent_api_simple_pattern(self):
+        """Test resume_agent_api uses Simple Pattern (no try-catch)"""
+        from backend.api.agent import resume_agent_api
+
+        source = inspect.getsource(resume_agent_api)
+        # Simple Pattern: no try-catch blocks
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_resume_agent_api_http_exception_preserved(self):
+        """Test resume_agent_api preserves HTTPException for 403 permission denied"""
+        from backend.api.agent import resume_agent_api
+
+        source = inspect.getsource(resume_agent_api)
+        # Should have permission check with 403 response
+        self.assertIn("check_permission", source)
+        self.assertIn("status_code=403", source)
+        self.assertIn("Permission denied", source)
+
+    def test_batch_76_all_endpoints_migrated(self):
+        """Test all batch 76 endpoints have been successfully migrated"""
+        from backend.api.agent import pause_agent_api, receive_goal, resume_agent_api
+
+        endpoints = [
+            ("receive_goal", receive_goal),
+            ("pause_agent_api", pause_agent_api),
+            ("resume_agent_api", resume_agent_api),
+        ]
+
+        for name, endpoint in endpoints:
+            with self.subTest(endpoint=name):
+                source = inspect.getsource(endpoint)
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} missing @with_error_handling decorator",
+                )
+                self.assertIn(
+                    "ErrorCategory.SERVER_ERROR",
+                    source,
+                    f"{name} missing ErrorCategory.SERVER_ERROR",
+                )
+                self.assertIn(
+                    'error_code_prefix="AGENT"',
+                    source,
+                    f'{name} missing error_code_prefix="AGENT"',
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
