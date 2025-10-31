@@ -13101,5 +13101,153 @@ class TestBatch76AgentMigrations(unittest.TestCase):
                 )
 
 
+class TestBatch77AgentMigrations(unittest.TestCase):
+    """Test batch 77 migrations: agent.py final 2 endpoints (command_approval, execute_command) - FINAL BATCH"""
+
+    def test_command_approval_decorator_present(self):
+        """Test command_approval has @with_error_handling decorator"""
+        from backend.api.agent import command_approval
+
+        source = inspect.getsource(command_approval)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT"', source)
+
+    def test_command_approval_simple_pattern(self):
+        """Test command_approval uses Simple Pattern (no try-catch)"""
+        from backend.api.agent import command_approval
+
+        source = inspect.getsource(command_approval)
+        # Simple Pattern: no try-catch blocks
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_command_approval_http_exception_preserved(self):
+        """Test command_approval preserves HTTPException for 403 permission denied"""
+        from backend.api.agent import command_approval
+
+        source = inspect.getsource(command_approval)
+        # Should have permission check with 403 response
+        self.assertIn("check_permission", source)
+        self.assertIn("status_code=403", source)
+        self.assertIn("Permission denied", source)
+
+    def test_command_approval_business_logic_preserved(self):
+        """Test command_approval preserves business logic (Redis pub/sub, audit logging)"""
+        from backend.api.agent import command_approval
+
+        source = inspect.getsource(command_approval)
+        # Business logic: Redis pub/sub
+        self.assertIn("main_redis_client", source)
+        self.assertIn("publish", source)
+        self.assertIn("approval_message", source)
+        # Business logic: Security audit
+        self.assertIn("security_layer.audit_log", source)
+
+    def test_execute_command_decorator_present(self):
+        """Test execute_command has @with_error_handling decorator"""
+        from backend.api.agent import execute_command
+
+        source = inspect.getsource(execute_command)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT"', source)
+
+    def test_execute_command_simple_pattern(self):
+        """Test execute_command uses Simple Pattern (no try-catch)"""
+        from backend.api.agent import execute_command
+
+        source = inspect.getsource(execute_command)
+        # Simple Pattern: no try-catch blocks
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_execute_command_http_exception_preserved(self):
+        """Test execute_command preserves HTTPException for 400/403 errors"""
+        from backend.api.agent import execute_command
+
+        source = inspect.getsource(execute_command)
+        # Should have permission check with 403 response
+        self.assertIn("check_permission", source)
+        self.assertIn("status_code=403", source)
+        # Should have validation check with 400 response
+        self.assertIn("status_code=400", source)
+        self.assertIn("No command provided", source)
+
+    def test_execute_command_business_logic_preserved(self):
+        """Test execute_command preserves business logic (subprocess, event publishing, audit)"""
+        from backend.api.agent import execute_command
+
+        source = inspect.getsource(execute_command)
+        # Business logic: Subprocess execution
+        self.assertIn("create_subprocess_shell", source)
+        self.assertIn("process.returncode", source)
+        # Business logic: Event publishing
+        self.assertIn("event_manager.publish", source)
+        self.assertIn("command_execution_start", source)
+        self.assertIn("command_execution_end", source)
+        # Business logic: Security audit
+        self.assertIn("security_layer.audit_log", source)
+
+    def test_batch_77_all_endpoints_migrated(self):
+        """Test all batch 77 endpoints have been successfully migrated"""
+        from backend.api.agent import command_approval, execute_command
+
+        endpoints = [
+            ("command_approval", command_approval),
+            ("execute_command", execute_command),
+        ]
+
+        for name, endpoint in endpoints:
+            with self.subTest(endpoint=name):
+                source = inspect.getsource(endpoint)
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} missing @with_error_handling decorator",
+                )
+                self.assertIn(
+                    "ErrorCategory.SERVER_ERROR",
+                    source,
+                    f"{name} missing ErrorCategory.SERVER_ERROR",
+                )
+                self.assertIn(
+                    'error_code_prefix="AGENT"',
+                    source,
+                    f'{name} missing error_code_prefix="AGENT"',
+                )
+
+    def test_agent_py_100_percent_complete(self):
+        """Test agent.py is 100% complete - all 5 endpoints migrated"""
+        from backend.api.agent import (
+            command_approval,
+            execute_command,
+            pause_agent_api,
+            receive_goal,
+            resume_agent_api,
+        )
+
+        endpoints = [
+            ("receive_goal", receive_goal),
+            ("pause_agent_api", pause_agent_api),
+            ("resume_agent_api", resume_agent_api),
+            ("command_approval", command_approval),
+            ("execute_command", execute_command),
+        ]
+
+        for name, endpoint in endpoints:
+            with self.subTest(endpoint=name):
+                source = inspect.getsource(endpoint)
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} missing @with_error_handling decorator - agent.py not 100% complete",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
