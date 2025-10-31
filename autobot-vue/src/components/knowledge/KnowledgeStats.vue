@@ -696,22 +696,37 @@ const showErrorNotification = (message: string) => {
 }
 
 // Vector Stats Functions
+// NEW: Use shared store's refreshStats action (consolidates API calls)
 const refreshVectorStats = async () => {
   isRefreshingVectorStats.value = true
   errorMessage.value = '' // Clear any previous errors
 
   try {
-    const statsResponse = await apiClient.get('/api/knowledge_base/stats')
-    const stats: VectorStats = await parseApiResponse(statsResponse)
+    // Use shared store instead of direct API call - reduces duplicate requests
+    await store.refreshStats()
 
-    // Validate stats response
-    if (typeof stats.total_facts !== 'number' || typeof stats.total_documents !== 'number') {
-      throw new Error('Invalid statistics response format')
+    // Map store stats to local vectorStats format
+    const storeStats = store.stats
+    vectorStats.value = {
+      total_facts: storeStats.total_facts || 0,
+      total_documents: storeStats.total_documents || 0,
+      total_vectors: storeStats.total_vectors || 0,
+      indexed_documents: storeStats.total_documents || 0,
+      db_size: storeStats.db_size || 0,
+      status: storeStats.status || 'offline',
+      rag_available: storeStats.rag_available || false,
+      initialized: storeStats.initialized || false,
+      llama_index_configured: storeStats.initialized || false,
+      index_available: storeStats.initialized || false,
+      redis_db: storeStats.redis_db ? parseInt(storeStats.redis_db) : 0,
+      index_name: storeStats.index_name || 'unknown',
+      last_updated: storeStats.last_updated || undefined,
+      categories: storeStats.categories || [],
+      embedding_model: 'nomic-embed-text',  // From detailed stats
+      embedding_dimensions: 768  // From detailed stats
     }
 
-    vectorStats.value = stats
-
-    // Fetch category fact counts
+    // Fetch category fact counts (secondary API call - only when needed)
     try {
       const factsResponse = await apiClient.get('/api/knowledge_base/facts/by_category')
       const factsData = await parseApiResponse(factsResponse)
