@@ -111,10 +111,17 @@ async def get_frontend_config():
 async def get_system_health(request: Request = None):
     """Get system health status"""
     try:
+        # Import app_state to get initialization status
+        from backend.app_factory import app_state
+
         # Check various system components
         health_status = {
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
+            "initialization": {
+                "status": app_state.get("initialization_status", "unknown"),
+                "message": app_state.get("initialization_message", "Status unavailable")
+            },
             "components": {
                 "backend": "healthy",
                 "config": "healthy",
