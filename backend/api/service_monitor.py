@@ -15,6 +15,8 @@ import redis
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
+
 # Import unified configuration system - NO HARDCODED VALUES
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants, ServiceURLs
@@ -666,24 +668,33 @@ def get_monitor():
 
 
 @router.get("/services/status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_service_status",
+    error_code_prefix="SERVICE_MONITOR",
+)
 async def get_service_status():
     """Get comprehensive service status for dashboard"""
-    try:
-        return await get_monitor().get_all_services()
-    except Exception as e:
-        logger.error(f"Service monitoring failed: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Service monitoring error: {str(e)}"
-        )
+    return await get_monitor().get_all_services()
 
 
 @router.get("/services/ping")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="ping",
+    error_code_prefix="SERVICE_MONITOR",
+)
 async def ping():
     """Ultra simple ping endpoint"""
     return {"ping": "pong", "timestamp": datetime.now().isoformat()}
 
 
 @router.get("/services/health")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_service_health",
+    error_code_prefix="SERVICE_MONITOR",
+)
 async def get_service_health():
     """Get ultra-lightweight health check - just return that backend is responding"""
     try:
@@ -709,6 +720,11 @@ async def get_service_health():
 
 
 @router.get("/resources")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_resources",
+    error_code_prefix="SERVICE_MONITOR",
+)
 async def get_system_resources():
     """Get system resource utilization (CPU, memory, disk)"""
     try:

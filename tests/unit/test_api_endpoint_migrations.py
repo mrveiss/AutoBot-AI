@@ -16508,5 +16508,205 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
         self.assertEqual(len(all_endpoints), 17)
 
 
+class TestBatch91ServiceMonitorMigrations(unittest.TestCase):
+    """Test batch 91 migrations for service_monitor.py (batch 1 of 3)"""
+
+    def test_batch_91_progress_validation(self):
+        """Verify batch 91 brings service_monitor.py to 4/10 endpoints (40%)"""
+        from backend.api import service_monitor
+
+        batch_91_endpoints = [
+            service_monitor.get_service_status,
+            service_monitor.ping,
+            service_monitor.get_service_health,
+            service_monitor.get_system_resources,
+        ]
+
+        # All 4 endpoints should have @with_error_handling
+        for endpoint in batch_91_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_91_pattern_validation(self):
+        """Verify batch 91 pattern distribution: 1 Simple, 1 Clean, 2 Mixed"""
+        from backend.api import service_monitor
+
+        # Simple Pattern: get_service_status (no try-catch)
+        source = inspect.getsource(service_monitor.get_service_status)
+        self.assertNotIn("try:", source, "get_service_status should have no try-catch")
+
+        # Clean Pattern: ping (no try-catch, never had any)
+        source = inspect.getsource(service_monitor.ping)
+        self.assertNotIn("try:", source, "ping should have no try-catch")
+
+        # Mixed Pattern: get_service_health (preserves error dict return)
+        source = inspect.getsource(service_monitor.get_service_health)
+        try_count = source.count("try:")
+        self.assertEqual(
+            try_count, 1, "get_service_health should preserve 1 try-catch"
+        )
+
+        # Mixed Pattern: get_system_resources (preserves ImportError + network fallback)
+        source = inspect.getsource(service_monitor.get_system_resources)
+        try_count = source.count("try:")
+        self.assertGreaterEqual(
+            try_count, 2, "get_system_resources should preserve at least 2 try-catches"
+        )
+
+    def test_batch_91_get_service_status_has_decorator(self):
+        """Verify get_service_status has @with_error_handling decorator"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.get_service_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SERVICE_MONITOR"', source)
+        self.assertIn('operation="get_service_status"', source)
+
+    def test_batch_91_get_service_status_removes_error_handling(self):
+        """Verify get_service_status removed outer try-catch (Simple Pattern)"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.get_service_status)
+        # Should have NO try-catch blocks
+        self.assertNotIn("try:", source)
+        self.assertNotIn("HTTPException", source)
+
+    def test_batch_91_ping_has_decorator(self):
+        """Verify ping has @with_error_handling decorator"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.ping)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SERVICE_MONITOR"', source)
+        self.assertIn('operation="ping"', source)
+
+    def test_batch_91_ping_clean_pattern(self):
+        """Verify ping is Clean Pattern (never had error handling)"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.ping)
+        # Should have NO try-catch blocks
+        self.assertNotIn("try:", source)
+        self.assertNotIn("HTTPException", source)
+
+    def test_batch_91_get_service_health_has_decorator(self):
+        """Verify get_service_health has @with_error_handling decorator"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.get_service_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SERVICE_MONITOR"', source)
+        self.assertIn('operation="get_service_health"', source)
+
+    def test_batch_91_get_service_health_preserves_error_dict(self):
+        """Verify get_service_health preserves try-catch that returns error dict"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.get_service_health)
+        # Should preserve 1 try-catch for error dict return
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 1, "Should preserve error dict try-catch")
+        # Should have error return dict
+        self.assertIn('"status": "error"', source)
+        self.assertIn('"healthy": 0', source)
+
+    def test_batch_91_get_system_resources_has_decorator(self):
+        """Verify get_system_resources has @with_error_handling decorator"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.get_system_resources)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SERVICE_MONITOR"', source)
+        self.assertIn('operation="get_system_resources"', source)
+
+    def test_batch_91_get_system_resources_preserves_fallbacks(self):
+        """Verify get_system_resources preserves ImportError + network fallbacks"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.get_system_resources)
+        # Should preserve multiple try-catches
+        try_count = source.count("try:")
+        self.assertGreaterEqual(
+            try_count, 2, "Should preserve ImportError + network fallback"
+        )
+        # Should have ImportError handler
+        self.assertIn("ImportError", source)
+        # Should have network fallback
+        self.assertIn('"error": "Network info not available"', source)
+
+    def test_batch_91_line_count_reductions(self):
+        """Verify batch 91 endpoints are concise after migration"""
+        from backend.api import service_monitor
+
+        # Test endpoints with expected max line counts
+        simple_endpoints = [
+            ("get_service_status", service_monitor.get_service_status, 10),
+            ("ping", service_monitor.ping, 10),
+        ]
+
+        mixed_endpoints = [
+            ("get_service_health", service_monitor.get_service_health, 30),
+            ("get_system_resources", service_monitor.get_system_resources, 65),
+        ]
+
+        for name, endpoint, max_lines in simple_endpoints + mixed_endpoints:
+            source = inspect.getsource(endpoint)
+            line_count = len([line for line in source.split("\n") if line.strip()])
+            self.assertLessEqual(
+                line_count,
+                max_lines,
+                f"{name} should be concise (≤{max_lines} lines), got {line_count}",
+            )
+
+    def test_batch_91_no_bare_httpexception(self):
+        """Verify batch 91 endpoints don't raise HTTPException directly"""
+        from backend.api import service_monitor
+
+        batch_91_endpoints = [
+            service_monitor.get_service_status,
+            service_monitor.ping,
+            service_monitor.get_service_health,
+            service_monitor.get_system_resources,
+        ]
+
+        for endpoint in batch_91_endpoints:
+            source = inspect.getsource(endpoint)
+            # Should not have direct HTTPException raises (decorator handles it)
+            # But may appear in preserved inner blocks for Mixed Pattern
+            if endpoint in [
+                service_monitor.get_service_status,
+                service_monitor.ping,
+            ]:
+                # Simple/Clean Pattern - should have NO HTTPException
+                self.assertNotIn(
+                    "raise HTTPException",
+                    source,
+                    f"{endpoint.__name__} should not raise HTTPException",
+                )
+
+    def test_batch_91_all_have_error_code_prefix(self):
+        """Verify all batch 91 endpoints use SERVICE_MONITOR error_code_prefix"""
+        from backend.api import service_monitor
+
+        batch_91_endpoints = [
+            service_monitor.get_service_status,
+            service_monitor.ping,
+            service_monitor.get_service_health,
+            service_monitor.get_system_resources,
+        ]
+
+        for endpoint in batch_91_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                'error_code_prefix="SERVICE_MONITOR"',
+                source,
+                f"{endpoint.__name__} missing SERVICE_MONITOR prefix",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
