@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
 from src.llm_interface import LLMInterface
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/codebase", tags=["codebase-analytics"])
@@ -939,6 +940,11 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
 
 
 @router.post("/index")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="index_codebase",
+    error_code_prefix="CODEBASE",
+)
 async def index_codebase():
     """
     Start background indexing of the AutoBot codebase
@@ -952,39 +958,37 @@ async def index_codebase():
     root_path = str(project_root)
     logger.info(f"📁 project_root = {root_path}")
 
-    try:
-        # Generate unique task ID
-        task_id = str(uuid.uuid4())
-        logger.info(f"🆔 Generated task_id = {task_id}")
+    # Generate unique task ID
+    task_id = str(uuid.uuid4())
+    logger.info(f"🆔 Generated task_id = {task_id}")
 
-        # Add async background task using asyncio and store reference
-        logger.info(f"🔄 About to create_task")
-        task = asyncio.create_task(do_indexing_with_progress(task_id, root_path))
-        logger.info(f"✅ Task created: {task}")
-        _active_tasks[task_id] = task
-        logger.info(f"💾 Task stored in _active_tasks")
+    # Add async background task using asyncio and store reference
+    logger.info(f"🔄 About to create_task")
+    task = asyncio.create_task(do_indexing_with_progress(task_id, root_path))
+    logger.info(f"✅ Task created: {task}")
+    _active_tasks[task_id] = task
+    logger.info(f"💾 Task stored in _active_tasks")
 
-        # Clean up task reference when done
-        def cleanup_task(t):
-            _active_tasks.pop(task_id, None)
-        task.add_done_callback(cleanup_task)
-        logger.info(f"🧹 Cleanup callback added")
+    # Clean up task reference when done
+    def cleanup_task(t):
+        _active_tasks.pop(task_id, None)
+    task.add_done_callback(cleanup_task)
+    logger.info(f"🧹 Cleanup callback added")
 
-        logger.info(f"📤 About to return JSONResponse")
-        return JSONResponse({
-            "task_id": task_id,
-            "status": "started",
-            "message": "Indexing started in background. Poll /api/analytics/codebase/index/status/{task_id} for progress."
-        })
-
-    except Exception as e:
-        logger.error(f"❌ Failed to start indexing task: {e}")
-        import traceback
-        logger.error(f"❌ Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Failed to start indexing: {str(e)}")
+    logger.info(f"📤 About to return JSONResponse")
+    return JSONResponse({
+        "task_id": task_id,
+        "status": "started",
+        "message": "Indexing started in background. Poll /api/analytics/codebase/index/status/{task_id} for progress."
+    })
 
 
 @router.get("/index/status/{task_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_indexing_status",
+    error_code_prefix="CODEBASE",
+)
 async def get_indexing_status(task_id: str):
     """
     Get the status of a background indexing task
@@ -1025,66 +1029,60 @@ async def get_indexing_status(task_id: str):
 
 
 @router.get("/stats")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_codebase_stats",
+    error_code_prefix="CODEBASE",
+)
 async def get_codebase_stats():
     """Get real codebase statistics from storage"""
-    try:
-        # Try ChromaDB first
-        code_collection = get_code_collection()
+    # Try ChromaDB first
+    code_collection = get_code_collection()
 
-        if code_collection:
-            try:
-                # Query ChromaDB for stats
-                results = code_collection.get(
-                    ids=["codebase_stats"],
-                    include=["metadatas"]
+    if code_collection:
+        try:
+            # Query ChromaDB for stats
+            results = code_collection.get(
+                ids=["codebase_stats"],
+                include=["metadatas"]
+            )
+
+            if results.get("metadatas") and len(results["metadatas"]) > 0:
+                stats_metadata = results["metadatas"][0]
+
+                # Extract stats from metadata
+                stats = {}
+                numeric_fields = [
+                    "total_files",
+                    "python_files",
+                    "javascript_files",
+                    "vue_files",
+                    "config_files",
+                    "other_files",
+                    "total_lines",
+                    "total_functions",
+                    "total_classes",
+                ]
+
+                for field in numeric_fields:
+                    if field in stats_metadata:
+                        stats[field] = int(stats_metadata[field])
+
+                if "average_file_size" in stats_metadata:
+                    stats["average_file_size"] = float(stats_metadata["average_file_size"])
+
+                timestamp = stats_metadata.get("last_indexed", "Never")
+                storage_type = "chromadb"
+
+                return JSONResponse(
+                    {
+                        "status": "success",
+                        "stats": stats,
+                        "last_indexed": timestamp,
+                        "storage_type": storage_type,
+                    }
                 )
-
-                if results.get("metadatas") and len(results["metadatas"]) > 0:
-                    stats_metadata = results["metadatas"][0]
-
-                    # Extract stats from metadata
-                    stats = {}
-                    numeric_fields = [
-                        "total_files",
-                        "python_files",
-                        "javascript_files",
-                        "vue_files",
-                        "config_files",
-                        "other_files",
-                        "total_lines",
-                        "total_functions",
-                        "total_classes",
-                    ]
-
-                    for field in numeric_fields:
-                        if field in stats_metadata:
-                            stats[field] = int(stats_metadata[field])
-
-                    if "average_file_size" in stats_metadata:
-                        stats["average_file_size"] = float(stats_metadata["average_file_size"])
-
-                    timestamp = stats_metadata.get("last_indexed", "Never")
-                    storage_type = "chromadb"
-
-                    return JSONResponse(
-                        {
-                            "status": "success",
-                            "stats": stats,
-                            "last_indexed": timestamp,
-                            "storage_type": storage_type,
-                        }
-                    )
-                else:
-                    return JSONResponse(
-                        {
-                            "status": "no_data",
-                            "message": "No codebase data found. Run indexing first.",
-                            "stats": None,
-                        }
-                    )
-
-            except Exception as chroma_error:
-                logger.warning(f"ChromaDB stats query failed: {chroma_error}")
+            else:
                 return JSONResponse(
                     {
                         "status": "no_data",
@@ -1092,18 +1090,24 @@ async def get_codebase_stats():
                         "stats": None,
                     }
                 )
-        else:
+
+        except Exception as chroma_error:
+            logger.warning(f"ChromaDB stats query failed: {chroma_error}")
             return JSONResponse(
                 {
                     "status": "no_data",
-                    "message": "ChromaDB connection failed.",
+                    "message": "No codebase data found. Run indexing first.",
                     "stats": None,
                 }
             )
-
-    except Exception as e:
-        logger.error(f"Failed to get codebase stats: {e}")
-        raise HTTPException(status_code=500, detail=f"Stats retrieval failed: {str(e)}")
+    else:
+        return JSONResponse(
+            {
+                "status": "no_data",
+                "message": "ChromaDB connection failed.",
+                "stats": None,
+            }
+        )
 
 
 @router.get("/hardcodes")
