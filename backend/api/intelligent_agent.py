@@ -254,20 +254,26 @@ async def health_check():
 
 
 @router.post("/reload")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reload_agent",
+    error_code_prefix="INTELLIGENT_AGENT",
+)
 async def reload_agent():
     """Reload the intelligent agent (development endpoint)."""
-    try:
-        global _agent_instance
-        _agent_instance = None
-        await get_agent()
+    global _agent_instance
+    _agent_instance = None
+    await get_agent()
 
-        return {"status": "reloaded", "message": "Agent reloaded successfully"}
-    except Exception as e:
-        logger.error(f"Error reloading agent: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "reloaded", "message": "Agent reloaded successfully"}
 
 
 @router.websocket("/stream")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="websocket_stream",
+    error_code_prefix="INTELLIGENT_AGENT",
+)
 async def websocket_stream(websocket: WebSocket):
     """
     WebSocket endpoint for real-time streaming interaction with the agent.

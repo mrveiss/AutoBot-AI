@@ -13431,5 +13431,170 @@ class TestBatch78IntelligentAgentMigrations(unittest.TestCase):
         )
 
 
+class TestBatch79IntelligentAgentMigrations(unittest.TestCase):
+    """Test batch 79 migrations: intelligent_agent.py final 2 endpoints (reload_agent, websocket_stream) - FINAL BATCH"""
+
+    # Endpoint 4: reload_agent (Simple Pattern)
+    def test_reload_agent_decorator_present(self):
+        """Test reload_agent has @with_error_handling decorator"""
+        from backend.api.intelligent_agent import reload_agent
+
+        source = inspect.getsource(reload_agent)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="INTELLIGENT_AGENT"', source)
+
+    def test_reload_agent_simple_pattern(self):
+        """Test reload_agent uses Simple Pattern (no try-catch)"""
+        from backend.api.intelligent_agent import reload_agent
+
+        source = inspect.getsource(reload_agent)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_reload_agent_business_logic_preserved(self):
+        """Test reload_agent preserves business logic (agent instance reset)"""
+        from backend.api.intelligent_agent import reload_agent
+
+        source = inspect.getsource(reload_agent)
+        self.assertIn("global _agent_instance", source)
+        self.assertIn("_agent_instance = None", source)
+        self.assertIn("await get_agent()", source)
+
+    # Endpoint 5: websocket_stream (Mixed Pattern)
+    def test_websocket_stream_decorator_present(self):
+        """Test websocket_stream has @with_error_handling decorator"""
+        from backend.api.intelligent_agent import websocket_stream
+
+        source = inspect.getsource(websocket_stream)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="INTELLIGENT_AGENT"', source)
+
+    def test_websocket_stream_mixed_pattern(self):
+        """Test websocket_stream uses Mixed Pattern (decorator + preserved try-catch)"""
+        from backend.api.intelligent_agent import websocket_stream
+
+        source = inspect.getsource(websocket_stream)
+        # Should have multiple try-catch blocks for WebSocket lifecycle
+        try_count = source.count("    try:")
+        self.assertGreater(
+            try_count,
+            0,
+            "Mixed Pattern should preserve try-catch blocks for WebSocket handling",
+        )
+        # Should still have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_websocket_stream_websocket_handling_preserved(self):
+        """Test websocket_stream preserves WebSocket lifecycle handling"""
+        from backend.api.intelligent_agent import websocket_stream
+
+        source = inspect.getsource(websocket_stream)
+        # WebSocket lifecycle components
+        self.assertIn("await websocket.accept()", source)
+        self.assertIn("WebSocketDisconnect", source)
+        self.assertIn("await websocket.send_json", source)
+        self.assertIn("await websocket.receive_json", source)
+
+    def test_websocket_stream_error_handling_preserved(self):
+        """Test websocket_stream preserves error handling (sends errors through WebSocket)"""
+        from backend.api.intelligent_agent import websocket_stream
+
+        source = inspect.getsource(websocket_stream)
+        # Should send errors through WebSocket, not raise HTTPException
+        self.assertIn('{"type": "error"', source)
+        self.assertIn("except Exception as e:", source)
+
+    def test_websocket_stream_business_logic_preserved(self):
+        """Test websocket_stream preserves business logic (goal processing)"""
+        from backend.api.intelligent_agent import websocket_stream
+
+        source = inspect.getsource(websocket_stream)
+        self.assertIn("agent.process_natural_language_goal", source)
+        self.assertIn("async for chunk in", source)
+        self.assertIn('{"type": "complete"', source)
+
+    # Batch verification
+    def test_batch_79_all_endpoints_have_decorator(self):
+        """Test all batch 79 endpoints have @with_error_handling decorator with correct configuration"""
+        from backend.api.intelligent_agent import reload_agent, websocket_stream
+
+        endpoints = [
+            ("reload_agent", reload_agent),
+            ("websocket_stream", websocket_stream),
+        ]
+
+        for name, endpoint in endpoints:
+            with self.subTest(endpoint=name):
+                source = inspect.getsource(endpoint)
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} missing @with_error_handling decorator",
+                )
+                self.assertIn(
+                    "ErrorCategory.SERVER_ERROR",
+                    source,
+                    f"{name} missing ErrorCategory.SERVER_ERROR",
+                )
+                self.assertIn(
+                    'error_code_prefix="INTELLIGENT_AGENT"',
+                    source,
+                    f'{name} missing error_code_prefix="INTELLIGENT_AGENT"',
+                )
+
+    def test_batch_79_pattern_validation(self):
+        """Test batch 79 endpoints use correct patterns (1 Simple, 1 Mixed)"""
+        from backend.api.intelligent_agent import reload_agent, websocket_stream
+
+        # Simple Pattern endpoint (should have 0 try-catch)
+        source = inspect.getsource(reload_agent)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"reload_agent should use Simple Pattern (0 try-catch blocks), found {try_count}",
+        )
+
+        # Mixed Pattern endpoint (should have try-catch blocks preserved)
+        source = inspect.getsource(websocket_stream)
+        try_count = source.count("    try:")
+        self.assertGreater(
+            try_count,
+            0,
+            f"websocket_stream should use Mixed Pattern (preserve try-catch blocks), found {try_count}",
+        )
+
+    def test_intelligent_agent_py_100_percent_complete(self):
+        """Test intelligent_agent.py is 100% complete - all 5 endpoints migrated"""
+        from backend.api.intelligent_agent import (
+            get_system_info,
+            health_check,
+            process_natural_language_goal,
+            reload_agent,
+            websocket_stream,
+        )
+
+        endpoints = [
+            ("process_natural_language_goal", process_natural_language_goal),
+            ("get_system_info", get_system_info),
+            ("health_check", health_check),
+            ("reload_agent", reload_agent),
+            ("websocket_stream", websocket_stream),
+        ]
+
+        for name, endpoint in endpoints:
+            with self.subTest(endpoint=name):
+                source = inspect.getsource(endpoint)
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} missing @with_error_handling decorator - intelligent_agent.py not 100% complete",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
