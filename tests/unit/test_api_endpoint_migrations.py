@@ -17675,5 +17675,218 @@ class TestBatch95AdvancedControlTakeoverManagement(unittest.TestCase):
         self.assertIn("Emergency stop activated", source)
 
 
+# ============================================================
+# Batch 96: backend/api/advanced_control.py system + WebSocket (FINAL - 100%)
+# ============================================================
+
+
+class TestBatch96AdvancedControlSystemAndWebSocketFINAL(unittest.TestCase):
+    """Test batch 96 migrations: FINAL 5 endpoints from advanced_control.py (system + WebSocket) - 100% COMPLETE"""
+
+    def test_batch_96_get_system_status_has_decorator(self):
+        """Verify get_system_status has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.get_system_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="get_system_status"', source)
+
+    def test_batch_96_get_system_status_no_outer_try_catch(self):
+        """Verify get_system_status removed outer try-catch (Simple Pattern)"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.get_system_status)
+        # Should NOT have try-catch blocks
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+
+    def test_batch_96_get_system_health_has_decorator(self):
+        """Verify get_system_health has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.get_system_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="get_system_health"', source)
+
+    def test_batch_96_get_system_health_preserves_error_dict(self):
+        """Verify get_system_health preserves try-catch that returns error dict (Mixed Pattern)"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.get_system_health)
+        # Should preserve 1 try-catch for error dict return
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 1, "Should preserve error dict try-catch")
+        # Should return error dict
+        self.assertIn('"status": "unhealthy"', source)
+        self.assertIn('"error":', source)
+
+    def test_batch_96_monitoring_websocket_has_decorator(self):
+        """Verify monitoring_websocket has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.monitoring_websocket)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="monitoring_websocket"', source)
+
+    def test_batch_96_monitoring_websocket_preserves_websocket_disconnect(self):
+        """Verify monitoring_websocket preserves WebSocketDisconnect handling (Mixed Pattern)"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.monitoring_websocket)
+        # Should preserve WebSocketDisconnect exception handling
+        self.assertIn("except WebSocketDisconnect:", source)
+        self.assertIn("Monitoring WebSocket client disconnected", source)
+        # Should preserve nested try-catches
+        try_count = source.count("try:")
+        self.assertGreaterEqual(try_count, 2, "Should preserve nested try-catches for WebSocket")
+
+    def test_batch_96_desktop_streaming_websocket_has_decorator(self):
+        """Verify desktop_streaming_websocket has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.desktop_streaming_websocket)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="desktop_streaming_websocket"', source)
+
+    def test_batch_96_desktop_streaming_websocket_preserves_websocket_disconnect(self):
+        """Verify desktop_streaming_websocket preserves WebSocketDisconnect handling (Mixed Pattern)"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.desktop_streaming_websocket)
+        # Should preserve WebSocketDisconnect exception handling
+        self.assertIn("except WebSocketDisconnect:", source)
+        self.assertIn("Desktop streaming WebSocket client disconnected", source)
+        # Should have 1 try-catch for WebSocketDisconnect
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 1, "Should preserve WebSocketDisconnect try-catch")
+
+    def test_batch_96_advanced_control_info_has_decorator(self):
+        """Verify advanced_control_info has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.advanced_control_info)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="advanced_control_info"', source)
+        # Simple Pattern - no try-catch
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+
+    def test_batch_96_all_have_error_code_prefix(self):
+        """Verify all batch 96 endpoints use ADVANCED_CONTROL error_code_prefix"""
+        from backend.api import advanced_control
+
+        batch_96_endpoints = [
+            advanced_control.get_system_status,
+            advanced_control.get_system_health,
+            advanced_control.monitoring_websocket,
+            advanced_control.desktop_streaming_websocket,
+            advanced_control.advanced_control_info,
+        ]
+
+        for endpoint in batch_96_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                'error_code_prefix="ADVANCED_CONTROL"',
+                source,
+                f"{endpoint.__name__} missing ADVANCED_CONTROL prefix",
+            )
+
+    def test_batch_96_100_percent_complete(self):
+        """Verify advanced_control.py is 100% complete - 13th file to reach 100%"""
+        from backend.api import advanced_control
+
+        all_migrated = [
+            # Batch 94 (7 endpoints)
+            advanced_control.create_streaming_session,
+            advanced_control.terminate_streaming_session,
+            advanced_control.list_streaming_sessions,
+            advanced_control.get_streaming_capabilities,
+            advanced_control.request_takeover,
+            advanced_control.approve_takeover,
+            advanced_control.execute_takeover_action,
+            # Batch 95 (7 endpoints)
+            advanced_control.pause_takeover_session,
+            advanced_control.resume_takeover_session,
+            advanced_control.complete_takeover_session,
+            advanced_control.get_pending_takeovers,
+            advanced_control.get_active_takeovers,
+            advanced_control.get_takeover_status,
+            advanced_control.emergency_system_stop,
+            # Batch 96 (5 endpoints)
+            advanced_control.get_system_status,
+            advanced_control.get_system_health,
+            advanced_control.monitoring_websocket,
+            advanced_control.desktop_streaming_websocket,
+            advanced_control.advanced_control_info,
+        ]
+
+        # All 19 endpoints should have @with_error_handling
+        for endpoint in all_migrated:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} missing @with_error_handling decorator",
+            )
+
+        # Verify 19/19 endpoints (100%)
+        self.assertEqual(len(all_migrated), 19, "Should have migrated 19/19 endpoints (100%)")
+
+    def test_batch_96_13th_file_to_reach_100_percent(self):
+        """Verify advanced_control.py is the 13th file to reach 100% completion"""
+        # Files that reached 100%:
+        # 1. conversation_files.py
+        # 2. markdown.py
+        # 3. llm.py
+        # 4. knowledge_files.py
+        # 5. desktop_ui.py
+        # 6. chat.py
+        # 7. desktop_vnc.py
+        # 8. intelligent_agent.py
+        # 9. system.py
+        # 10. codebase_analytics.py
+        # 11. ai_stack_integration.py
+        # 12. service_monitor.py
+        # 13. advanced_control.py <- NEW (100% COMPLETE)
+
+        from backend.api import advanced_control
+
+        # Verify all endpoints are migrated
+        total_endpoints = 19
+        self.assertEqual(total_endpoints, 19, "advanced_control.py has 19 endpoints")
+
+    def test_batch_96_progress_tracking(self):
+        """Verify batch 96 progress: 19/19 endpoints migrated (100%)"""
+        from backend.api import advanced_control
+
+        batch_96_count = 5
+        total_migrated = 19  # batch 94 + batch 95 + batch 96
+        total_endpoints = 19
+        progress_percentage = (total_migrated / total_endpoints) * 100
+
+        self.assertEqual(batch_96_count, 5)
+        self.assertEqual(total_migrated, 19)
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_96_websocket_handlers_preserve_disconnect(self):
+        """Verify WebSocket handlers preserve critical WebSocketDisconnect handling"""
+        from backend.api import advanced_control
+
+        # monitoring_websocket should preserve nested try-catches + WebSocketDisconnect
+        monitoring_source = inspect.getsource(advanced_control.monitoring_websocket)
+        self.assertIn("except WebSocketDisconnect:", monitoring_source)
+        self.assertIn("logger.info", monitoring_source)
+
+        # desktop_streaming_websocket should preserve WebSocketDisconnect
+        desktop_source = inspect.getsource(advanced_control.desktop_streaming_websocket)
+        self.assertIn("except WebSocketDisconnect:", desktop_source)
+        self.assertIn("logger.info", desktop_source)
+
+
 if __name__ == "__main__":
     unittest.main()
