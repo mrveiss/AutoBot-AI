@@ -325,48 +325,48 @@ async def get_takeover_status():
 
 # System Monitoring and Control
 @router.get("/system/status", response_model=SystemMonitoringResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_status",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def get_system_status():
     """Get comprehensive system monitoring status"""
-    try:
-        # Get resource usage
-        import psutil
+    # Get resource usage
+    import psutil
 
-        resource_usage = {
-            "cpu_percent": psutil.cpu_percent(),
-            "memory_percent": psutil.virtual_memory().percent,
-            "disk_usage": psutil.disk_usage("/").percent,
-            "process_count": len(psutil.pids()),
-            "load_average": (
-                psutil.getloadavg() if hasattr(psutil, "getloadavg") else None
-            ),
-        }
+    resource_usage = {
+        "cpu_percent": psutil.cpu_percent(),
+        "memory_percent": psutil.virtual_memory().percent,
+        "disk_usage": psutil.disk_usage("/").percent,
+        "process_count": len(psutil.pids()),
+        "load_average": (
+            psutil.getloadavg() if hasattr(psutil, "getloadavg") else None
+        ),
+    }
 
-        # Get streaming sessions
-        streaming_sessions = desktop_streaming.vnc_manager.list_active_sessions()
+    # Get streaming sessions
+    streaming_sessions = desktop_streaming.vnc_manager.list_active_sessions()
 
-        # Get takeover data
-        pending_takeovers = takeover_manager.get_pending_requests()
-        active_takeovers = takeover_manager.get_active_sessions()
-        system_status = {
-            "status": "healthy",
-            "timestamp": psutil.boot_time(),
-            "uptime_seconds": psutil.boot_time(),
-            "streaming_capabilities": desktop_streaming.get_system_capabilities(),
-        }
+    # Get takeover data
+    pending_takeovers = takeover_manager.get_pending_requests()
+    active_takeovers = takeover_manager.get_active_sessions()
+    system_status = {
+        "status": "healthy",
+        "timestamp": psutil.boot_time(),
+        "uptime_seconds": psutil.boot_time(),
+        "streaming_capabilities": desktop_streaming.get_system_capabilities(),
+    }
 
-        response = SystemMonitoringResponse(
-            system_status=system_status,
-            active_sessions=streaming_sessions,
-            pending_takeovers=pending_takeovers,
-            active_takeovers=active_takeovers,
-            resource_usage=resource_usage,
-        )
+    response = SystemMonitoringResponse(
+        system_status=system_status,
+        active_sessions=streaming_sessions,
+        pending_takeovers=pending_takeovers,
+        active_takeovers=active_takeovers,
+        resource_usage=resource_usage,
+    )
 
-        return response
-
-    except Exception as e:
-        logger.error(f"Failed to get system status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return response
 
 
 @router.post("/system/emergency-stop")
@@ -395,6 +395,11 @@ async def emergency_system_stop():
 
 
 @router.get("/system/health")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_health",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def get_system_health():
     """Quick health check endpoint"""
     try:
@@ -419,6 +424,11 @@ async def get_system_health():
 
 # WebSocket endpoint for real-time monitoring
 @router.websocket("/ws/monitoring")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="monitoring_websocket",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def monitoring_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time system monitoring"""
     await websocket.accept()
@@ -445,8 +455,6 @@ async def monitoring_websocket(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("Monitoring WebSocket client disconnected")
-    except Exception as e:
-        logger.error(f"Monitoring WebSocket error: {e}")
     finally:
         try:
             await websocket.close()
@@ -456,6 +464,11 @@ async def monitoring_websocket(websocket: WebSocket):
 
 # WebSocket handler for desktop streaming
 @router.websocket("/ws/desktop/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="desktop_streaming_websocket",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for desktop streaming control"""
     await websocket.accept()
@@ -467,11 +480,14 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
         )
     except WebSocketDisconnect:
         logger.info(f"Desktop streaming WebSocket client disconnected: {session_id}")
-    except Exception as e:
-        logger.error(f"Desktop streaming WebSocket error: {e}")
 
 
 @router.get("/")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="advanced_control_info",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def advanced_control_info():
     """Get information about advanced control capabilities"""
     return {
