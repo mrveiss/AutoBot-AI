@@ -14251,5 +14251,225 @@ class TestBatch82SystemMigrations(unittest.TestCase):
                 )
 
 
+class TestBatch83CodebaseAnalyticsMigrations(unittest.TestCase):
+    """Test batch 83 migrations: codebase_analytics.py first 3 endpoints (index_codebase, get_indexing_status, get_codebase_stats)"""
+
+    def test_index_codebase_decorator_present(self):
+        """Test index_codebase has @with_error_handling decorator"""
+        from backend.api.codebase_analytics import index_codebase
+
+        source = inspect.getsource(index_codebase)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="CODEBASE"', source)
+
+    def test_index_codebase_simple_pattern(self):
+        """Test index_codebase uses Simple Pattern (no try-catch)"""
+        from backend.api.codebase_analytics import index_codebase
+
+        source = inspect.getsource(index_codebase)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_index_codebase_business_logic_preserved(self):
+        """Test index_codebase preserves business logic (task creation, cleanup)"""
+        from backend.api.codebase_analytics import index_codebase
+
+        source = inspect.getsource(index_codebase)
+        # Should preserve task creation logic
+        self.assertIn("asyncio.create_task", source)
+        self.assertIn("_active_tasks[task_id]", source)
+        # Should preserve cleanup callback
+        self.assertIn("cleanup_task", source)
+        self.assertIn("add_done_callback", source)
+
+    def test_get_indexing_status_decorator_present(self):
+        """Test get_indexing_status has @with_error_handling decorator"""
+        from backend.api.codebase_analytics import get_indexing_status
+
+        source = inspect.getsource(get_indexing_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="CODEBASE"', source)
+
+    def test_get_indexing_status_simple_pattern(self):
+        """Test get_indexing_status uses Simple Pattern (no try-catch)"""
+        from backend.api.codebase_analytics import get_indexing_status
+
+        source = inspect.getsource(get_indexing_status)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_get_indexing_status_business_logic_preserved(self):
+        """Test get_indexing_status preserves business logic (task status checks)"""
+        from backend.api.codebase_analytics import get_indexing_status
+
+        source = inspect.getsource(get_indexing_status)
+        # Should preserve task lookup logic
+        self.assertIn("indexing_tasks", source)
+        self.assertIn("task_id not in indexing_tasks", source)
+        # Should preserve JSONResponse returns
+        self.assertIn("JSONResponse", source)
+
+    def test_get_codebase_stats_decorator_present(self):
+        """Test get_codebase_stats has @with_error_handling decorator"""
+        from backend.api.codebase_analytics import get_codebase_stats
+
+        source = inspect.getsource(get_codebase_stats)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="CODEBASE"', source)
+
+    def test_get_codebase_stats_mixed_pattern(self):
+        """Test get_codebase_stats uses Mixed Pattern (decorator + preserved inner try-catch)"""
+        from backend.api.codebase_analytics import get_codebase_stats
+
+        source = inspect.getsource(get_codebase_stats)
+        # Should have inner try-catch for ChromaDB query preserved
+        try_count = source.count("    try:")
+        self.assertGreater(
+            try_count,
+            0,
+            "Mixed Pattern should preserve inner try-catch for ChromaDB query",
+        )
+        # Should still have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_get_codebase_stats_chromadb_try_catch_preserved(self):
+        """Test get_codebase_stats preserves ChromaDB try-catch (business logic)"""
+        from backend.api.codebase_analytics import get_codebase_stats
+
+        source = inspect.getsource(get_codebase_stats)
+        # Should have ChromaDB error handling preserved
+        self.assertIn("except Exception as chroma_error:", source)
+        self.assertIn("logger.warning", source)
+        # Should NOT have outer catch that raises HTTPException
+        if "except Exception as e:" in source:
+            # Check it's only the inner chroma_error catch
+            exception_count = source.count("except Exception")
+            self.assertEqual(
+                exception_count,
+                1,
+                "Should only have inner ChromaDB exception handler, not outer generic handler",
+            )
+
+    def test_get_codebase_stats_business_logic_preserved(self):
+        """Test get_codebase_stats preserves business logic (ChromaDB query, stats extraction)"""
+        from backend.api.codebase_analytics import get_codebase_stats
+
+        source = inspect.getsource(get_codebase_stats)
+        # Should preserve ChromaDB collection access
+        self.assertIn("get_code_collection()", source)
+        # Should preserve stats extraction logic
+        self.assertIn("numeric_fields", source)
+        self.assertIn("stats_metadata", source)
+
+    def test_batch_83_all_endpoints_have_decorator(self):
+        """Test all batch 83 endpoints have @with_error_handling decorator"""
+        from backend.api.codebase_analytics import (
+            get_codebase_stats,
+            get_indexing_status,
+            index_codebase,
+        )
+
+        endpoints = [
+            ("index_codebase", index_codebase),
+            ("get_indexing_status", get_indexing_status),
+            ("get_codebase_stats", get_codebase_stats),
+        ]
+
+        for name, endpoint in endpoints:
+            with self.subTest(endpoint=name):
+                source = inspect.getsource(endpoint)
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} missing @with_error_handling decorator",
+                )
+                self.assertIn(
+                    'error_code_prefix="CODEBASE"',
+                    source,
+                    f'{name} should use error_code_prefix="CODEBASE"',
+                )
+
+    def test_batch_83_pattern_validation(self):
+        """Test batch 83 endpoints use correct patterns (2 Simple, 1 Mixed)"""
+        from backend.api.codebase_analytics import (
+            get_codebase_stats,
+            get_indexing_status,
+            index_codebase,
+        )
+
+        # Simple Pattern endpoints (should have 0 try-catch)
+        simple_pattern_endpoints = [
+            ("index_codebase", index_codebase),
+            ("get_indexing_status", get_indexing_status),
+        ]
+
+        for name, endpoint in simple_pattern_endpoints:
+            with self.subTest(endpoint=name, pattern="Simple"):
+                source = inspect.getsource(endpoint)
+                try_count = source.count("    try:")
+                self.assertEqual(
+                    try_count,
+                    0,
+                    f"{name} should use Simple Pattern (0 try-catch blocks), found {try_count}",
+                )
+
+        # Mixed Pattern endpoint (should have try-catch blocks preserved)
+        source = inspect.getsource(get_codebase_stats)
+        try_count = source.count("    try:")
+        self.assertGreater(
+            try_count,
+            0,
+            f"get_codebase_stats should use Mixed Pattern (preserve try-catch blocks), found {try_count}",
+        )
+
+    def test_batch_83_no_generic_exception_raises(self):
+        """Test batch 83 endpoints removed generic exception handlers that raise HTTPException"""
+        from backend.api.codebase_analytics import (
+            get_codebase_stats,
+            get_indexing_status,
+            index_codebase,
+        )
+
+        endpoints = [
+            ("index_codebase", index_codebase),
+            ("get_codebase_stats", get_codebase_stats),
+        ]
+
+        for name, endpoint in endpoints:
+            with self.subTest(endpoint=name):
+                source = inspect.getsource(endpoint)
+                # Should not have pattern: except Exception as e: ... raise HTTPException
+                # The decorator handles all exceptions now
+                if "except Exception as chroma_error:" in source:
+                    # get_codebase_stats has inner ChromaDB exception - this is OK
+                    # Just verify no outer exception handler
+                    lines_after_chroma = source.split("except Exception as chroma_error:")
+                    if len(lines_after_chroma) > 1:
+                        after_block = lines_after_chroma[-1]
+                        # Should not have another "except Exception" after the chroma_error
+                        self.assertNotIn(
+                            "except Exception as e:",
+                            after_block,
+                            f"{name} should not have outer generic exception handler",
+                        )
+
+    def test_codebase_analytics_import_present(self):
+        """Test codebase_analytics.py has error_boundaries import"""
+        with open("backend/api/codebase_analytics.py", "r") as f:
+            content = f.read()
+        self.assertIn(
+            "from src.utils.error_boundaries import ErrorCategory, with_error_handling",
+            content,
+            "codebase_analytics.py missing error_boundaries import",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
