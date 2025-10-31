@@ -15548,5 +15548,309 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
                     self.assertIn("try:", source, f"{name} should preserve inner try")
 
 
+class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
+    """Test batch 88 migrations: ai_stack_integration.py next 4 endpoints (enhanced_knowledge_search, get_system_knowledge, comprehensive_research, web_research)"""
+
+    def test_batch_88_progress_validation(self):
+        """Test batch 88 brings ai_stack_integration.py to 11/17 endpoints (65%)"""
+        from backend.api.ai_stack_integration import (
+            ai_stack_health_check,
+            analyze_documents,
+            comprehensive_research,
+            enhanced_chat,
+            enhanced_knowledge_search,
+            extract_knowledge,
+            get_system_knowledge,
+            list_ai_agents,
+            rag_query,
+            reformulate_query,
+            web_research,
+        )
+
+        # All migrated endpoints should have decorator
+        migrated_endpoints = [
+            ai_stack_health_check,
+            list_ai_agents,
+            rag_query,
+            reformulate_query,
+            analyze_documents,
+            enhanced_chat,
+            extract_knowledge,
+            enhanced_knowledge_search,
+            get_system_knowledge,
+            comprehensive_research,
+            web_research,
+        ]
+
+        for endpoint in migrated_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("@with_error_handling", source)
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_88_pattern_validation(self):
+        """Test batch 88 endpoints use correct patterns (2 Simple, 2 Mixed)"""
+        from backend.api.ai_stack_integration import (
+            comprehensive_research,
+            enhanced_knowledge_search,
+            get_system_knowledge,
+            web_research,
+        )
+
+        # Simple Pattern endpoints (should have 0 try-catch)
+        simple_pattern_endpoints = [
+            ("get_system_knowledge", get_system_knowledge),
+            ("web_research", web_research),
+        ]
+
+        for name, endpoint in simple_pattern_endpoints:
+            source = inspect.getsource(endpoint)
+            try_count = source.count("    try:")
+            self.assertEqual(
+                try_count, 0, f"{name} should have 0 try-catch (Simple Pattern)"
+            )
+
+        # Mixed Pattern endpoints (should have try-catch blocks preserved)
+        mixed_pattern_endpoints = [
+            ("enhanced_knowledge_search", enhanced_knowledge_search),
+            ("comprehensive_research", comprehensive_research),
+        ]
+
+        for name, endpoint in mixed_pattern_endpoints:
+            source = inspect.getsource(endpoint)
+            try_count = source.count("    try:")
+            self.assertGreater(
+                try_count, 0, f"{name} should preserve inner try-catch (Mixed Pattern)"
+            )
+
+    def test_batch_88_enhanced_knowledge_search_has_decorator(self):
+        """Test enhanced_knowledge_search has @with_error_handling decorator"""
+        from backend.api.ai_stack_integration import enhanced_knowledge_search
+
+        source = inspect.getsource(enhanced_knowledge_search)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="enhanced_knowledge_search"', source)
+        self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_88_enhanced_knowledge_search_preserves_kb_fallback(self):
+        """Test enhanced_knowledge_search preserves KB search fallback (Mixed Pattern)"""
+        from backend.api.ai_stack_integration import enhanced_knowledge_search
+
+        source = inspect.getsource(enhanced_knowledge_search)
+        # Should preserve inner try-catch for KB fallback
+        self.assertIn("try:", source)
+        self.assertIn("Local KB search failed", source)
+        # Should preserve AIStackError fallback
+        self.assertIn("AIStackError", source)
+        self.assertIn("AI Stack enhanced search failed", source)
+
+    def test_batch_88_get_system_knowledge_has_decorator(self):
+        """Test get_system_knowledge has @with_error_handling decorator"""
+        from backend.api.ai_stack_integration import get_system_knowledge
+
+        source = inspect.getsource(get_system_knowledge)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_system_knowledge"', source)
+        self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_88_get_system_knowledge_removed_error_handling(self):
+        """Test get_system_knowledge removed handle_ai_stack_error (Simple Pattern)"""
+        from backend.api.ai_stack_integration import get_system_knowledge
+
+        source = inspect.getsource(get_system_knowledge)
+        # Simple pattern should have no try-catch
+        try_count = source.count("    try:")
+        self.assertEqual(try_count, 0)
+        # Should not have handle_ai_stack_error call
+        self.assertNotIn("handle_ai_stack_error", source)
+
+    def test_batch_88_comprehensive_research_has_decorator(self):
+        """Test comprehensive_research has @with_error_handling decorator"""
+        from backend.api.ai_stack_integration import comprehensive_research
+
+        source = inspect.getsource(comprehensive_research)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="comprehensive_research"', source)
+        self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_88_comprehensive_research_preserves_web_fallback(self):
+        """Test comprehensive_research preserves web research fallback (Mixed Pattern)"""
+        from backend.api.ai_stack_integration import comprehensive_research
+
+        source = inspect.getsource(comprehensive_research)
+        # Should preserve inner try-catch for web research fallback
+        self.assertIn("try:", source)
+        self.assertIn("Web research failed", source)
+        self.assertIn("AIStackError", source)
+
+    def test_batch_88_web_research_has_decorator(self):
+        """Test web_research has @with_error_handling decorator"""
+        from backend.api.ai_stack_integration import web_research
+
+        source = inspect.getsource(web_research)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="web_research"', source)
+        self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_88_web_research_removed_error_handling(self):
+        """Test web_research removed handle_ai_stack_error (Simple Pattern)"""
+        from backend.api.ai_stack_integration import web_research
+
+        source = inspect.getsource(web_research)
+        # Simple pattern should have no try-catch
+        try_count = source.count("    try:")
+        self.assertEqual(try_count, 0)
+        # Should not have handle_ai_stack_error call
+        self.assertNotIn("handle_ai_stack_error", source)
+
+    def test_batch_88_all_endpoints_use_ai_stack_prefix(self):
+        """Test all batch 88 endpoints use AI_STACK error code prefix"""
+        from backend.api.ai_stack_integration import (
+            comprehensive_research,
+            enhanced_knowledge_search,
+            get_system_knowledge,
+            web_research,
+        )
+
+        endpoints = [
+            enhanced_knowledge_search,
+            get_system_knowledge,
+            comprehensive_research,
+            web_research,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_88_endpoints_removed_outer_try_catch(self):
+        """Test batch 88 endpoints removed outer try-catch blocks"""
+        from backend.api.ai_stack_integration import (
+            comprehensive_research,
+            enhanced_knowledge_search,
+            get_system_knowledge,
+            web_research,
+        )
+
+        # All endpoints should have decorator at function level, not nested in try
+        endpoints_info = [
+            ("enhanced_knowledge_search", enhanced_knowledge_search),
+            ("get_system_knowledge", get_system_knowledge),
+            ("comprehensive_research", comprehensive_research),
+            ("web_research", web_research),
+        ]
+
+        for name, endpoint in endpoints_info:
+            source = inspect.getsource(endpoint)
+            lines = source.split("\n")
+
+            # Find the function definition line
+            func_def_index = next(
+                i for i, line in enumerate(lines) if f"async def {name}" in line
+            )
+
+            # Check that @with_error_handling appears before function definition
+            decorator_found = False
+            for i in range(func_def_index):
+                if "@with_error_handling" in lines[i]:
+                    decorator_found = True
+                    break
+
+            self.assertTrue(
+                decorator_found, f"{name} should have @with_error_handling decorator"
+            )
+
+    def test_batch_88_line_count_reductions(self):
+        """Test batch 88 reduced line counts by removing error handling"""
+        from backend.api.ai_stack_integration import (
+            comprehensive_research,
+            enhanced_knowledge_search,
+            get_system_knowledge,
+            web_research,
+        )
+
+        # Simple Pattern endpoints should be concise (no error handling code)
+        simple_endpoints = [
+            ("get_system_knowledge", get_system_knowledge, 15),
+            ("web_research", web_research, 15),
+        ]
+
+        for name, endpoint, max_lines in simple_endpoints:
+            source = inspect.getsource(endpoint)
+            line_count = len([l for l in source.split("\n") if l.strip()])
+            self.assertLessEqual(
+                line_count,
+                max_lines,
+                f"{name} should be concise (≤{max_lines} lines) after removing error handling",
+            )
+
+    def test_batch_88_comprehensive_validation(self):
+        """Test all batch 88 endpoints comprehensively"""
+        from backend.api.ai_stack_integration import (
+            comprehensive_research,
+            enhanced_knowledge_search,
+            get_system_knowledge,
+            web_research,
+        )
+
+        endpoints_info = [
+            ("enhanced_knowledge_search", enhanced_knowledge_search, "Mixed"),
+            ("get_system_knowledge", get_system_knowledge, "Simple"),
+            ("comprehensive_research", comprehensive_research, "Mixed"),
+            ("web_research", web_research, "Simple"),
+        ]
+
+        for name, endpoint, pattern in endpoints_info:
+            with self.subTest(endpoint=name, pattern=pattern):
+                source = inspect.getsource(endpoint)
+
+                # 1. Must have @with_error_handling decorator
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} must have @with_error_handling decorator",
+                )
+
+                # 2. Must have ErrorCategory.SERVER_ERROR
+                self.assertIn(
+                    "ErrorCategory.SERVER_ERROR",
+                    source,
+                    f"{name} must use ErrorCategory.SERVER_ERROR",
+                )
+
+                # 3. Must have correct operation name
+                self.assertIn(
+                    f'operation="{name}"',
+                    source,
+                    f"{name} must have operation='{name}'",
+                )
+
+                # 4. Must have AI_STACK error code prefix
+                self.assertIn(
+                    'error_code_prefix="AI_STACK"',
+                    source,
+                    f"{name} must have error_code_prefix='AI_STACK'",
+                )
+
+                # 5. Pattern-specific checks
+                if pattern == "Simple":
+                    # Simple pattern should have 0 try-catch
+                    try_count = source.count("    try:")
+                    self.assertEqual(try_count, 0, f"{name} should have 0 try-catch")
+                    # Should not have handle_ai_stack_error
+                    self.assertNotIn(
+                        "handle_ai_stack_error",
+                        source,
+                        f"{name} should not have handle_ai_stack_error",
+                    )
+                elif pattern == "Mixed":
+                    # Mixed pattern should preserve inner try-catch
+                    self.assertIn("try:", source, f"{name} should preserve inner try")
+
+
 if __name__ == "__main__":
     unittest.main()
