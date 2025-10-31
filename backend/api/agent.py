@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
 from src.monitoring.prometheus_metrics import get_metrics_manager
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -29,6 +30,11 @@ class CommandApprovalPayload(BaseModel):
 
 
 @router.post("/goal")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="receive_goal",
+    error_code_prefix="AGENT",
+)
 async def receive_goal(request: Request, payload: GoalPayload):
     """
     Receives a goal from the user to be executed by the orchestrator.
@@ -73,113 +79,96 @@ async def receive_goal(request: Request, payload: GoalPayload):
     task_type = "goal_execution"
     agent_type = "orchestrator"
 
-    try:
-        orchestrator_result = await orchestrator.execute_goal(
-            goal, [{"role": "user", "content": goal}]
+    orchestrator_result = await orchestrator.execute_goal(
+        goal, [{"role": "user", "content": goal}]
+    )
+
+    if isinstance(orchestrator_result, dict):
+        result_dict = orchestrator_result
+    else:
+        result_dict = {"message": str(orchestrator_result)}
+
+    response_message = "An unexpected response format was received."
+    tool_output_content = None
+    tool_name = None
+
+    tool_name = result_dict.get("tool_name")
+    tool_args = result_dict.get("tool_args", {})
+
+    # Ensure tool_args is a dictionary
+    if not isinstance(tool_args, dict):
+        tool_args = {}
+
+    if tool_name == "respond_conversationally":
+        default_text = "No response text provided."
+        response_message = result_dict.get("response_text") or tool_args.get(
+            "response_text", default_text
         )
-
-        if isinstance(orchestrator_result, dict):
-            result_dict = orchestrator_result
-        else:
-            result_dict = {"message": str(orchestrator_result)}
-
-        response_message = "An unexpected response format was received."
         tool_output_content = None
-        tool_name = None
+    elif tool_name == "execute_system_command":
+        command_output = tool_args.get("output", "")
+        command_error = tool_args.get("error", "")
+        command_status = tool_args.get("status", "unknown")
 
-        tool_name = result_dict.get("tool_name")
-        tool_args = result_dict.get("tool_args", {})
-
-        # Ensure tool_args is a dictionary
-        if not isinstance(tool_args, dict):
-            tool_args = {}
-
-        if tool_name == "respond_conversationally":
-            default_text = "No response text provided."
-            response_message = result_dict.get("response_text") or tool_args.get(
-                "response_text", default_text
+        if command_status == "success":
+            response_message = (
+                f"Command executed successfully.\nOutput:\n{command_output}"
             )
-            tool_output_content = None
-        elif tool_name == "execute_system_command":
-            command_output = tool_args.get("output", "")
-            command_error = tool_args.get("error", "")
-            command_status = tool_args.get("status", "unknown")
-
-            if command_status == "success":
-                response_message = (
-                    f"Command executed successfully.\nOutput:\n{command_output}"
-                )
-                tool_output_content = command_output
-            else:
-                response_message = (
-                    f"Command failed ({command_status}).\nError:\n{command_error}"
-                    f"\nOutput:\n{command_output}"
-                )
-                tool_output_content = (
-                    f"ERROR: {command_error}\nOUTPUT: {command_output}"
-                )
-        elif tool_name:
-            tool_output_content = tool_args.get(
-                "output", tool_args.get("message", str(tool_args))
-            )
-            response_message = f"Tool Used: {tool_name}\nOutput: {tool_output_content}"
-        elif result_dict.get("output"):
-            response_message = result_dict["output"]
-            tool_output_content = result_dict["output"]
-        elif result_dict.get("message"):
-            response_message = result_dict["message"]
-            tool_output_content = result_dict["message"]
+            tool_output_content = command_output
         else:
-            response_message = str(result_dict)
-            tool_output_content = str(result_dict)
-
-        if tool_output_content and tool_name != "respond_conversationally":
-            await event_manager.publish("tool_output", {"output": tool_output_content})
-
-        security_layer.audit_log(
-            "submit_goal",
-            user_role,
-            "success",
-            {"goal": goal, "result": response_message},
+            response_message = (
+                f"Command failed ({command_status}).\nError:\n{command_error}"
+                f"\nOutput:\n{command_output}"
+            )
+            tool_output_content = (
+                f"ERROR: {command_error}\nOUTPUT: {command_output}"
+            )
+    elif tool_name:
+        tool_output_content = tool_args.get(
+            "output", tool_args.get("message", str(tool_args))
         )
-        await event_manager.publish(
-            "goal_completed", {"goal": goal, "result": response_message}
-        )
+        response_message = f"Tool Used: {tool_name}\nOutput: {tool_output_content}"
+    elif result_dict.get("output"):
+        response_message = result_dict["output"]
+        tool_output_content = result_dict["output"]
+    elif result_dict.get("message"):
+        response_message = result_dict["message"]
+        tool_output_content = result_dict["message"]
+    else:
+        response_message = str(result_dict)
+        tool_output_content = str(result_dict)
 
-        # Record Prometheus task execution metric (success)
-        duration = time.time() - task_start_time
-        prometheus_metrics.record_task_execution(
-            task_type=task_type,
-            agent_type=agent_type,
-            status="success",
-            duration=duration,
-        )
+    if tool_output_content and tool_name != "respond_conversationally":
+        await event_manager.publish("tool_output", {"output": tool_output_content})
 
-        return {"message": response_message}
-    except Exception as e:
-        error_message = f"Internal Server Error during goal execution: {str(e)}"
-        logging.error(error_message, exc_info=True)
-        security_layer.audit_log(
-            "submit_goal", user_role, "failure", {"goal": goal, "error": str(e)}
-        )
-        await event_manager.publish("error", {"message": error_message})
+    security_layer.audit_log(
+        "submit_goal",
+        user_role,
+        "success",
+        {"goal": goal, "result": response_message},
+    )
+    await event_manager.publish(
+        "goal_completed", {"goal": goal, "result": response_message}
+    )
 
-        # Record Prometheus task execution metric (failed)
-        duration = time.time() - task_start_time
-        prometheus_metrics.record_task_execution(
-            task_type=task_type,
-            agent_type=agent_type,
-            status="failed",
-            duration=duration,
-        )
+    # Record Prometheus task execution metric (success)
+    duration = time.time() - task_start_time
+    prometheus_metrics.record_task_execution(
+        task_type=task_type,
+        agent_type=agent_type,
+        status="success",
+        duration=duration,
+    )
 
-        return JSONResponse(
-            status_code=500,
-            content={"message": "Internal Server Error", "detail": str(e)},
-        )
+    return {"message": response_message}
 
 
 @router.post("/pause")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="pause_agent",
+    error_code_prefix="AGENT",
+)
 async def pause_agent_api(request: Request, user_role: str = Form("user")):
     """
     Pauses the agent's current operation.
@@ -206,6 +195,11 @@ async def pause_agent_api(request: Request, user_role: str = Form("user")):
 
 
 @router.post("/resume")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="resume_agent",
+    error_code_prefix="AGENT",
+)
 async def resume_agent_api(request: Request, user_role: str = Form("user")):
     """
     Resumes the agent's operation if paused.
