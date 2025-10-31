@@ -1498,53 +1498,91 @@ async def populate_man_pages(
 )
 async def refresh_system_knowledge(request: dict, req: Request):
     """
-    Refresh ALL system knowledge (man pages + AutoBot docs)
-    Use this after system updates, package installations, or documentation changes
-    """
-    logger.info("Starting comprehensive system knowledge refresh...")
+    Refresh ALL system knowledge (man pages + AutoBot docs) - BACKGROUND JOB
 
-    # Run the comprehensive indexing script
-    try:
-        result = subprocess.run(
-            [sys.executable, "scripts/utilities/index_all_man_pages.py"],
-            capture_output=True,
-            text=True,
-            timeout=600,  # 10 minute timeout for comprehensive indexing
-        )
-    except subprocess.TimeoutExpired:
-        logger.error("System knowledge refresh timed out")
-        raise HTTPException(
-            status_code=504, detail="Knowledge refresh timed out (>10 minutes)"
-        )
+    This endpoint starts a background Celery task that can take up to 10 minutes.
+    Returns immediately with a task_id that can be used to poll job status.
 
-    if result.returncode == 0:
-        # Parse output for statistics
-        output_lines = result.stdout.split("\n")
-        indexed_count = 0
-        total_facts = 0
+    Use this after system updates, package installations, or documentation changes.
 
-        for line in output_lines:
-            if "Successfully indexed:" in line:
-                indexed_count = int(line.split(":")[1].strip())
-            elif "Total facts in KB:" in line:
-                total_facts = int(line.split(":")[1].strip())
-
-        logger.info(
-            f"System knowledge refresh complete: {indexed_count} commands indexed"
-        )
-
-        return {
-            "status": "success",
-            "message": f"System knowledge refreshed successfully",
-            "commands_indexed": indexed_count,
-            "total_facts": total_facts,
+    Returns:
+        {
+            "task_id": "uuid-string",
+            "status": "PENDING",
+            "message": "Knowledge refresh started in background",
+            "poll_url": "/api/knowledge_base/job_status/{task_id}"
         }
+    """
+    logger.info("Starting comprehensive system knowledge refresh (background)...")
+
+    # Import here to avoid circular dependency
+    from backend.tasks.knowledge_tasks import refresh_system_knowledge as refresh_task
+
+    # Start background Celery task
+    task = refresh_task.apply_async()
+
+    logger.info(f"Knowledge refresh task started: {task.id}")
+
+    return {
+        "task_id": task.id,
+        "status": "PENDING",
+        "message": "Knowledge refresh started in background",
+        "poll_url": f"/api/knowledge_base/job_status/{task.id}",
+    }
+
+
+@router.get("/job_status/{task_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_job_status",
+    error_code_prefix="KNOWLEDGE",
+)
+async def get_job_status(task_id: str, req: Request):
+    """
+    Get status of a background knowledge base job.
+
+    Polls Celery task status for long-running operations like:
+    - System knowledge refresh
+    - Knowledge base reindexing
+    - Bulk vectorization
+
+    Args:
+        task_id: Celery task ID returned from job start endpoint
+
+    Returns:
+        {
+            "task_id": "uuid",
+            "status": "PENDING|PROGRESS|SUCCESS|FAILURE",
+            "result": {...},  # Only present when SUCCESS
+            "error": "...",   # Only present when FAILURE
+            "meta": {...}     # Progress info when PROGRESS
+        }
+    """
+    from celery.result import AsyncResult
+
+    # Get task status from Celery
+    task_result = AsyncResult(task_id)
+
+    response = {
+        "task_id": task_id,
+        "status": task_result.state,
+    }
+
+    if task_result.state == 'PENDING':
+        response["message"] = "Task is queued and waiting to start"
+    elif task_result.state == 'PROGRESS':
+        response["meta"] = task_result.info
+        response["message"] = task_result.info.get('status', 'In progress...')
+    elif task_result.state == 'SUCCESS':
+        response["result"] = task_result.result
+        response["message"] = task_result.result.get('message', 'Task completed successfully')
+    elif task_result.state == 'FAILURE':
+        response["error"] = str(task_result.info)
+        response["message"] = f"Task failed: {str(task_result.info)}"
     else:
-        logger.error(f"System knowledge refresh failed: {result.stderr}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Knowledge refresh failed: {result.stderr[:500]}",
-        )
+        response["message"] = f"Task status: {task_result.state}"
+
+    return response
 
 
 def extract_category_from_path(doc_file: str) -> str:
