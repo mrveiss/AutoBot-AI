@@ -784,6 +784,11 @@ async def get_system_resources():
 
 
 @router.get("/services")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_all_services",
+    error_code_prefix="SERVICE_MONITOR",
+)
 async def get_all_services():
     """Get status of all AutoBot services"""
     try:
@@ -865,6 +870,11 @@ async def get_all_services():
 
 
 @router.get("/health")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_redirect",
+    error_code_prefix="SERVICE_MONITOR",
+)
 async def health_redirect():
     """Redirect common /health requests to correct /services/health endpoint"""
     return {
@@ -876,36 +886,37 @@ async def health_redirect():
 
 
 @router.get("/vms/status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_vm_status",
+    error_code_prefix="SERVICE_MONITOR",
+)
 async def get_vm_status():
     """Get comprehensive VM infrastructure status for dashboard"""
-    try:
-        vm_statuses = await get_monitor().check_all_vms()
+    vm_statuses = await get_monitor().check_all_vms()
 
-        # Calculate VM overall status
-        vm_statuses_list = [vm.status for vm in vm_statuses]
-        overall_vm_status = "online"
-        if "error" in vm_statuses_list:
-            overall_vm_status = "error"
-        elif "warning" in vm_statuses_list:
-            overall_vm_status = "warning"
-        elif "offline" in vm_statuses_list:
-            overall_vm_status = "warning"
+    # Calculate VM overall status
+    vm_statuses_list = [vm.status for vm in vm_statuses]
+    overall_vm_status = "online"
+    if "error" in vm_statuses_list:
+        overall_vm_status = "error"
+    elif "warning" in vm_statuses_list:
+        overall_vm_status = "warning"
+    elif "offline" in vm_statuses_list:
+        overall_vm_status = "warning"
 
-        return {
-            "overall_status": overall_vm_status,
-            "timestamp": datetime.now().isoformat(),
-            "vms": [vm.dict() for vm in vm_statuses],
-            "summary": {
-                "total_vms": len(vm_statuses),
-                "online": len([vm for vm in vm_statuses if vm.status == "online"]),
-                "warning": len([vm for vm in vm_statuses if vm.status == "warning"]),
-                "error": len([vm for vm in vm_statuses if vm.status == "error"]),
-                "offline": len([vm for vm in vm_statuses if vm.status == "offline"]),
-            },
-        }
-    except Exception as e:
-        logger.error(f"VM status monitoring failed: {e}")
-        raise HTTPException(status_code=500, detail=f"VM monitoring error: {str(e)}")
+    return {
+        "overall_status": overall_vm_status,
+        "timestamp": datetime.now().isoformat(),
+        "vms": [vm.dict() for vm in vm_statuses],
+        "summary": {
+            "total_vms": len(vm_statuses),
+            "online": len([vm for vm in vm_statuses if vm.status == "online"]),
+            "warning": len([vm for vm in vm_statuses if vm.status == "warning"]),
+            "error": len([vm for vm in vm_statuses if vm.status == "error"]),
+            "offline": len([vm for vm in vm_statuses if vm.status == "offline"]),
+        },
+    }
 
 
 @router.get("/vms/{vm_name}/status")
