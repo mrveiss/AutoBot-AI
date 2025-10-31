@@ -690,6 +690,8 @@ app_state = {
     "chat_history_manager": None,
     "background_llm_sync": None,
     "config": None,
+    "initialization_status": "starting",  # starting, phase1, phase2, ready, error
+    "initialization_message": "Backend starting..."
 }
 
 
@@ -727,6 +729,8 @@ class AppFactory:
             # ================================================================
             # PHASE 1: CRITICAL INITIALIZATION (BLOCKING - Must complete before serving requests)
             # ================================================================
+            app_state["initialization_status"] = "phase1"
+            app_state["initialization_message"] = "Initializing critical services..."
             logger.info("=== PHASE 1: Critical Services Initialization ===")
 
             try:
@@ -843,6 +847,8 @@ class AppFactory:
             async def background_init():
                 """Initialize non-critical services in background"""
                 try:
+                    app_state["initialization_status"] = "phase2"
+                    app_state["initialization_message"] = "Loading knowledge base and AI models..."
                     logger.info("=== PHASE 2: Background Services Initialization ===")
 
                     # Initialize Knowledge Base - NON-CRITICAL (slow, can fail gracefully)
@@ -932,6 +938,8 @@ class AppFactory:
                             f"Background LLM sync initialization failed: {sync_error}"
                         )
 
+                    app_state["initialization_status"] = "ready"
+                    app_state["initialization_message"] = "All services ready"
                     logger.info(
                         "✅ [100%] PHASE 2 COMPLETE: All background services initialized"
                     )
