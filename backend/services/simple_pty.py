@@ -31,34 +31,68 @@ class SimplePTY:
         self.reader_thread = None
         self.writer_thread = None
 
+    @staticmethod
+    def configure_terminal_echo(fd: int, enable: bool = True) -> bool:
+        """
+        Configure terminal echo settings on a PTY file descriptor.
+
+        This is a reusable function that can be called on any PTY fd
+        to enable/disable echo and related interactive terminal features.
+
+        Args:
+            fd: PTY file descriptor (usually slave fd)
+            enable: True to enable echo, False to disable
+
+        Returns:
+            True if configuration succeeded, False otherwise
+
+        Technical details:
+            - ECHO: Echo input characters to output
+            - ECHOE: Visual erase for backspace (erase character)
+            - ECHOK: Visual erase for kill (erase line)
+            - ECHOCTL: Echo control characters visually (^C, ^D, etc.)
+        """
+        try:
+            import termios
+
+            # Get current terminal settings
+            attrs = termios.tcgetattr(fd)
+
+            # Local flags are at index 3
+            if enable:
+                # Enable echo flags for interactive terminal behavior
+                attrs[3] = attrs[3] | termios.ECHO
+                attrs[3] = attrs[3] | termios.ECHOE
+                attrs[3] = attrs[3] | termios.ECHOK
+                attrs[3] = attrs[3] | termios.ECHOCTL
+            else:
+                # Disable echo flags (useful for password input, silent mode)
+                attrs[3] = attrs[3] & ~termios.ECHO
+                attrs[3] = attrs[3] & ~termios.ECHOE
+                attrs[3] = attrs[3] & ~termios.ECHOK
+                attrs[3] = attrs[3] & ~termios.ECHOCTL
+
+            # Apply settings immediately
+            termios.tcsetattr(fd, termios.TCSANOW, attrs)
+
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to configure terminal echo: {e}")
+            return False
+
     def start(self, initial_cwd: str = None):
         """Start the PTY"""
         try:
             # Create PTY pair
             self.master_fd, slave_fd = pty.openpty()
 
-            # Configure terminal attributes to enable echo
+            # Configure terminal echo using reusable function
             # This makes the PTY behave like a real interactive terminal
-            import termios
-
-            try:
-                # Get current terminal settings
-                attrs = termios.tcgetattr(slave_fd)
-
-                # Enable ECHO in local flags (lflag is index 3)
-                # ECHO makes input characters echo to output
-                attrs[3] = attrs[3] | termios.ECHO
-
-                # Also enable ECHOE (erase), ECHOK (kill), ECHOCTL (control chars)
-                # for complete interactive terminal behavior
-                attrs[3] = attrs[3] | termios.ECHOE | termios.ECHOK | termios.ECHOCTL
-
-                # Apply settings immediately
-                termios.tcsetattr(slave_fd, termios.TCSANOW, attrs)
-
+            if self.configure_terminal_echo(slave_fd, enable=True):
                 logger.info(f"Terminal echo enabled for PTY session {self.session_id}")
-            except Exception as e:
-                logger.warning(f"Failed to enable terminal echo: {e} (continuing anyway)")
+            else:
+                logger.warning(f"Terminal echo configuration failed for PTY session {self.session_id} (continuing anyway)")
 
             # Start bash process
             env = os.environ.copy()
@@ -177,6 +211,35 @@ class SimplePTY:
             return self.output_queue.get_nowait()
         except queue.Empty:
             return None
+
+    def set_echo(self, enable: bool) -> bool:
+        """
+        Dynamically change echo setting on running PTY.
+
+        Useful for scenarios where you need to temporarily disable echo
+        (e.g., custom password input handling, silent command execution).
+
+        Args:
+            enable: True to enable echo, False to disable
+
+        Returns:
+            True if successful, False otherwise
+
+        Example:
+            pty.set_echo(False)  # Disable echo for password
+            pty.write_input("secret_password\\n")
+            pty.set_echo(True)   # Re-enable echo
+        """
+        if not self.running or not self.master_fd:
+            logger.warning("Cannot set echo: PTY not running")
+            return False
+
+        try:
+            # Use the reusable static method on master_fd
+            return self.configure_terminal_echo(self.master_fd, enable)
+        except Exception as e:
+            logger.error(f"Error setting echo: {e}")
+            return False
 
     def resize(self, rows: int, cols: int) -> bool:
         """Resize PTY"""
