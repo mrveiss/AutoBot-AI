@@ -632,6 +632,11 @@ async def get_agents_status():
 
 
 @router.post("/goal")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="receive_goal_compat",
+    error_code_prefix="AGENT_ENHANCED",
+)
 async def receive_goal_compat(
     goal: str = Form(...),
     use_phi2: bool = Form(False),
@@ -691,6 +696,11 @@ async def receive_goal_compat(
 
 
 @router.get("/health/enhanced")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enhanced_agent_health",
+    error_code_prefix="AGENT_ENHANCED",
+)
 async def enhanced_agent_health():
     """Enhanced health check for agent services."""
     try:
