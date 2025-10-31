@@ -59,7 +59,7 @@
         title="Batched vector generation: Processes 50 facts per batch with 0.5s delay. Skips already vectorized facts. Safe to run periodically to vectorize new facts."
       >
         <span class="icon">🧬</span>
-        {{ isVectorizing ? 'Vectorizing...' : `Vectorize Facts (${stats.total_facts - (stats.total_vectors || 0)} pending)` }}
+        {{ isVectorizing ? 'Vectorizing...' : getVectorizeButtonText() }}
       </button>
 
       <button
@@ -678,6 +678,22 @@ export default {
       }
     };
 
+    // Helper function for vectorization button text
+    const getVectorizeButtonText = () => {
+      const totalFacts = stats.value?.total_facts || 0;
+      const totalVectors = stats.value?.total_vectors || 0;
+
+      // Facts are chunked into multiple vectors (typically 5-6 vectors per fact)
+      // If vectors > facts, system is working correctly (chunking enabled)
+      if (totalVectors >= totalFacts) {
+        return `Vectorize Facts (✓ ${totalVectors.toLocaleString()} vectors from ${totalFacts.toLocaleString()} facts)`;
+      }
+
+      // If vectors < facts, some facts need vectorization
+      const pending = totalFacts - totalVectors;
+      return `Vectorize Facts (${pending.toLocaleString()} pending)`;
+    };
+
     onMounted(async () => {
       // Load infrastructure machines from appConfig
       try {
@@ -714,6 +730,7 @@ export default {
       populateManPages,
       populateAutoBotDocs,
       generateVectorEmbeddings,
+      getVectorizeButtonText,  // NEW: Helper for button text
       formatKey
     };
   }
