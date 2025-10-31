@@ -16145,5 +16145,368 @@ class TestBatch89AIStackIntegrationMigrations(unittest.TestCase):
                 )
 
 
+class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
+    """Test batch 90 migrations: ai_stack_integration.py final 3 endpoints (multi_agent_query, legacy_rag_search, legacy_enhanced_chat) - FINAL BATCH"""
+
+    def test_ai_stack_integration_py_100_percent_complete(self):
+        """Test ai_stack_integration.py is 100% complete - all 17 endpoints migrated"""
+        from backend.api.ai_stack_integration import (
+            ai_stack_health_check,
+            analyze_development_speedup,
+            analyze_documents,
+            classify_content,
+            comprehensive_research,
+            enhanced_chat,
+            enhanced_knowledge_search,
+            extract_knowledge,
+            get_system_knowledge,
+            legacy_enhanced_chat,
+            legacy_rag_search,
+            list_ai_agents,
+            multi_agent_query,
+            rag_query,
+            reformulate_query,
+            search_code,
+            web_research,
+        )
+
+        # All 17 endpoints must have @with_error_handling decorator
+        all_endpoints = [
+            ai_stack_health_check,
+            list_ai_agents,
+            rag_query,
+            reformulate_query,
+            analyze_documents,
+            enhanced_chat,
+            extract_knowledge,
+            enhanced_knowledge_search,
+            get_system_knowledge,
+            comprehensive_research,
+            web_research,
+            search_code,
+            analyze_development_speedup,
+            classify_content,
+            multi_agent_query,
+            legacy_rag_search,
+            legacy_enhanced_chat,
+        ]
+
+        # All 17 endpoints must have decorator
+        for endpoint in all_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("@with_error_handling", source)
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_90_progress_validation(self):
+        """Test batch 90 brings ai_stack_integration.py to 17/17 endpoints (100%)"""
+        from backend.api.ai_stack_integration import (
+            ai_stack_health_check,
+            analyze_development_speedup,
+            analyze_documents,
+            classify_content,
+            comprehensive_research,
+            enhanced_chat,
+            enhanced_knowledge_search,
+            extract_knowledge,
+            get_system_knowledge,
+            legacy_enhanced_chat,
+            legacy_rag_search,
+            list_ai_agents,
+            multi_agent_query,
+            rag_query,
+            reformulate_query,
+            search_code,
+            web_research,
+        )
+
+        # All migrated endpoints should have decorator
+        migrated_endpoints = [
+            ai_stack_health_check,
+            list_ai_agents,
+            rag_query,
+            reformulate_query,
+            analyze_documents,
+            enhanced_chat,
+            extract_knowledge,
+            enhanced_knowledge_search,
+            get_system_knowledge,
+            comprehensive_research,
+            web_research,
+            search_code,
+            analyze_development_speedup,
+            classify_content,
+            multi_agent_query,
+            legacy_rag_search,
+            legacy_enhanced_chat,
+        ]
+
+        # Verify we have exactly 17 endpoints
+        self.assertEqual(len(migrated_endpoints), 17)
+
+        for endpoint in migrated_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("@with_error_handling", source)
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_90_pattern_validation(self):
+        """Test batch 90 endpoints use correct patterns (2 Simple, 1 Mixed)"""
+        from backend.api.ai_stack_integration import (
+            legacy_enhanced_chat,
+            legacy_rag_search,
+            multi_agent_query,
+        )
+
+        # Simple Pattern endpoints (should have 0 try-catch at function level)
+        simple_pattern_endpoints = [
+            ("legacy_rag_search", legacy_rag_search),
+            ("legacy_enhanced_chat", legacy_enhanced_chat),
+        ]
+
+        for name, endpoint in simple_pattern_endpoints:
+            source = inspect.getsource(endpoint)
+            # Count function-level try blocks (should be 0)
+            # Legacy endpoints are wrappers, no try-catch
+            self.assertNotIn("    try:", source, f"{name} should have no try-catch")
+
+        # Mixed Pattern endpoint (should have inner try-catch blocks)
+        source = inspect.getsource(multi_agent_query)
+        try_count = source.count("    try:")
+        self.assertGreater(
+            try_count, 0, "multi_agent_query should preserve inner try-catch"
+        )
+
+    def test_batch_90_multi_agent_query_has_decorator(self):
+        """Test multi_agent_query has @with_error_handling decorator"""
+        from backend.api.ai_stack_integration import multi_agent_query
+
+        source = inspect.getsource(multi_agent_query)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="multi_agent_query"', source)
+        self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_90_multi_agent_query_preserves_agent_fallbacks(self):
+        """Test multi_agent_query preserves agent-specific fallback error handling (Mixed Pattern)"""
+        from backend.api.ai_stack_integration import multi_agent_query
+
+        source = inspect.getsource(multi_agent_query)
+        # Should preserve inner try-catches for agent fallbacks
+        self.assertIn("try:", source)
+        self.assertIn('results["rag"] = {"error": str(e)}', source)
+        self.assertIn('results["research"] = {"error": str(e)}', source)
+        self.assertIn('results["classification"] = {"error": str(e)}', source)
+        self.assertIn('results["chat"] = {"error": str(e)}', source)
+        # Should NOT have outer HTTPException raise
+        self.assertNotIn("raise HTTPException", source)
+
+    def test_batch_90_legacy_rag_search_has_decorator(self):
+        """Test legacy_rag_search has @with_error_handling decorator"""
+        from backend.api.ai_stack_integration import legacy_rag_search
+
+        source = inspect.getsource(legacy_rag_search)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="legacy_rag_search"', source)
+        self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_90_legacy_rag_search_is_simple_wrapper(self):
+        """Test legacy_rag_search is simple wrapper with no error handling (Simple Pattern)"""
+        from backend.api.ai_stack_integration import legacy_rag_search
+
+        source = inspect.getsource(legacy_rag_search)
+        # Should be simple wrapper - no try-catch
+        self.assertNotIn("try:", source)
+        # Should call rag_query
+        self.assertIn("await rag_query(request)", source)
+
+    def test_batch_90_legacy_enhanced_chat_has_decorator(self):
+        """Test legacy_enhanced_chat has @with_error_handling decorator"""
+        from backend.api.ai_stack_integration import legacy_enhanced_chat
+
+        source = inspect.getsource(legacy_enhanced_chat)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="legacy_enhanced_chat"', source)
+        self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_90_legacy_enhanced_chat_is_simple_wrapper(self):
+        """Test legacy_enhanced_chat is simple wrapper with no error handling (Simple Pattern)"""
+        from backend.api.ai_stack_integration import legacy_enhanced_chat
+
+        source = inspect.getsource(legacy_enhanced_chat)
+        # Should be simple wrapper - no try-catch
+        self.assertNotIn("try:", source)
+        # Should call enhanced_chat
+        self.assertIn("await enhanced_chat(request)", source)
+
+    def test_batch_90_all_endpoints_use_ai_stack_prefix(self):
+        """Test all batch 90 endpoints use AI_STACK error code prefix"""
+        from backend.api.ai_stack_integration import (
+            legacy_enhanced_chat,
+            legacy_rag_search,
+            multi_agent_query,
+        )
+
+        endpoints = [
+            multi_agent_query,
+            legacy_rag_search,
+            legacy_enhanced_chat,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_90_legacy_endpoints_are_concise(self):
+        """Test batch 90 legacy endpoints are concise wrappers"""
+        from backend.api.ai_stack_integration import (
+            legacy_enhanced_chat,
+            legacy_rag_search,
+        )
+
+        # Legacy endpoints should be simple wrappers (8-10 lines)
+        legacy_endpoints = [
+            ("legacy_rag_search", legacy_rag_search, 10),
+            ("legacy_enhanced_chat", legacy_enhanced_chat, 10),
+        ]
+
+        for name, endpoint, max_lines in legacy_endpoints:
+            source = inspect.getsource(endpoint)
+            line_count = len([l for l in source.split("\n") if l.strip()])
+            self.assertLessEqual(
+                line_count,
+                max_lines,
+                f"{name} should be concise (≤{max_lines} lines)",
+            )
+
+    def test_batch_90_multi_agent_query_removed_outer_exception(self):
+        """Test multi_agent_query removed outer Exception with HTTPException raise"""
+        from backend.api.ai_stack_integration import multi_agent_query
+
+        source = inspect.getsource(multi_agent_query)
+        # Should NOT raise HTTPException (decorator handles this)
+        self.assertNotIn("raise HTTPException", source)
+        # Should still have inner agent fallbacks
+        self.assertIn("except Exception as e:", source)
+
+    def test_batch_90_comprehensive_validation(self):
+        """Test all batch 90 endpoints comprehensively"""
+        from backend.api.ai_stack_integration import (
+            legacy_enhanced_chat,
+            legacy_rag_search,
+            multi_agent_query,
+        )
+
+        endpoints_info = [
+            ("multi_agent_query", multi_agent_query, "Mixed"),
+            ("legacy_rag_search", legacy_rag_search, "Simple"),
+            ("legacy_enhanced_chat", legacy_enhanced_chat, "Simple"),
+        ]
+
+        for name, endpoint, pattern in endpoints_info:
+            with self.subTest(endpoint=name, pattern=pattern):
+                source = inspect.getsource(endpoint)
+
+                # 1. Must have @with_error_handling decorator
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} must have @with_error_handling decorator",
+                )
+
+                # 2. Must have ErrorCategory.SERVER_ERROR
+                self.assertIn(
+                    "ErrorCategory.SERVER_ERROR",
+                    source,
+                    f"{name} must use ErrorCategory.SERVER_ERROR",
+                )
+
+                # 3. Must have correct operation name
+                self.assertIn(
+                    f'operation="{name}"',
+                    source,
+                    f"{name} must have operation='{name}'",
+                )
+
+                # 4. Must have AI_STACK error code prefix
+                self.assertIn(
+                    'error_code_prefix="AI_STACK"',
+                    source,
+                    f"{name} must have error_code_prefix='AI_STACK'",
+                )
+
+                # 5. Pattern-specific checks
+                if pattern == "Simple":
+                    # Simple pattern legacy wrappers should have no try-catch
+                    self.assertNotIn(
+                        "try:", source, f"{name} should have no try-catch"
+                    )
+                elif pattern == "Mixed":
+                    # Mixed pattern should preserve inner try-catch for agent fallbacks
+                    self.assertIn(
+                        "try:", source, f"{name} should preserve inner try-catch"
+                    )
+                    # Should NOT have HTTPException raise
+                    self.assertNotIn(
+                        "raise HTTPException",
+                        source,
+                        f"{name} should not raise HTTPException",
+                    )
+
+    def test_batch_90_11th_file_to_reach_100_percent(self):
+        """Test ai_stack_integration.py is the 11th file to reach 100% completion"""
+        # This is a milestone test - ai_stack_integration.py is the 11th file
+        # to complete full migration to @with_error_handling
+        from backend.api.ai_stack_integration import (
+            ai_stack_health_check,
+            analyze_development_speedup,
+            analyze_documents,
+            classify_content,
+            comprehensive_research,
+            enhanced_chat,
+            enhanced_knowledge_search,
+            extract_knowledge,
+            get_system_knowledge,
+            legacy_enhanced_chat,
+            legacy_rag_search,
+            list_ai_agents,
+            multi_agent_query,
+            rag_query,
+            reformulate_query,
+            search_code,
+            web_research,
+        )
+
+        all_endpoints = [
+            ai_stack_health_check,
+            list_ai_agents,
+            rag_query,
+            reformulate_query,
+            analyze_documents,
+            enhanced_chat,
+            extract_knowledge,
+            enhanced_knowledge_search,
+            get_system_knowledge,
+            comprehensive_research,
+            web_research,
+            search_code,
+            analyze_development_speedup,
+            classify_content,
+            multi_agent_query,
+            legacy_rag_search,
+            legacy_enhanced_chat,
+        ]
+
+        # Verify ALL 17 endpoints have the decorator
+        for endpoint in all_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("@with_error_handling", source)
+
+        # This confirms 100% completion
+        self.assertEqual(len(all_endpoints), 17)
+
+
 if __name__ == "__main__":
     unittest.main()

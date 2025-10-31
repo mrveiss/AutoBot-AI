@@ -529,6 +529,11 @@ async def classify_content(request: ContentClassificationRequest):
 
 
 @router.post("/orchestrate/multi-agent-query")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="multi_agent_query",
+    error_code_prefix="AI_STACK",
+)
 async def multi_agent_query(
     query: str, agents: List[str], coordination_mode: str = "parallel"
 ):
@@ -540,83 +545,78 @@ async def multi_agent_query(
         agents: List of agent names to use
         coordination_mode: How to coordinate agents (parallel, sequential)
     """
-    try:
-        ai_client = await get_ai_stack_client()
-        results = {}
+    ai_client = await get_ai_stack_client()
+    results = {}
 
-        if coordination_mode == "parallel":
-            # Run agents in parallel
-            agent_tasks = {}
+    if coordination_mode == "parallel":
+        # Run agents in parallel
+        agent_tasks = {}
 
-            if "rag" in agents:
-                try:
-                    rag_result = await ai_client.rag_query(query=query, max_results=5)
-                    results["rag"] = rag_result
-                except Exception as e:
-                    results["rag"] = {"error": str(e)}
+        if "rag" in agents:
+            try:
+                rag_result = await ai_client.rag_query(query=query, max_results=5)
+                results["rag"] = rag_result
+            except Exception as e:
+                results["rag"] = {"error": str(e)}
 
-            if "research" in agents:
-                try:
-                    research_result = await ai_client.research_query(query=query)
-                    results["research"] = research_result
-                except Exception as e:
-                    results["research"] = {"error": str(e)}
+        if "research" in agents:
+            try:
+                research_result = await ai_client.research_query(query=query)
+                results["research"] = research_result
+            except Exception as e:
+                results["research"] = {"error": str(e)}
 
-            if "classification" in agents:
-                try:
-                    classification_result = await ai_client.classify_content(
-                        content=query
-                    )
-                    results["classification"] = classification_result
-                except Exception as e:
-                    results["classification"] = {"error": str(e)}
+        if "classification" in agents:
+            try:
+                classification_result = await ai_client.classify_content(
+                    content=query
+                )
+                results["classification"] = classification_result
+            except Exception as e:
+                results["classification"] = {"error": str(e)}
 
-            if "chat" in agents:
-                try:
-                    chat_result = await ai_client.chat_message(message=query)
-                    results["chat"] = chat_result
-                except Exception as e:
-                    results["chat"] = {"error": str(e)}
+        if "chat" in agents:
+            try:
+                chat_result = await ai_client.chat_message(message=query)
+                results["chat"] = chat_result
+            except Exception as e:
+                results["chat"] = {"error": str(e)}
 
-        else:  # sequential mode
-            # Run agents sequentially, each building on previous results
-            context = query
+    else:  # sequential mode
+        # Run agents sequentially, each building on previous results
+        context = query
 
-            for agent in agents:
-                try:
-                    if agent == "rag":
-                        result = await ai_client.rag_query(query=context, max_results=5)
-                    elif agent == "research":
-                        result = await ai_client.research_query(query=context)
-                    elif agent == "classification":
-                        result = await ai_client.classify_content(content=context)
-                    elif agent == "chat":
-                        result = await ai_client.chat_message(message=context)
-                    else:
-                        result = {"error": f"Unknown agent: {agent}"}
+        for agent in agents:
+            try:
+                if agent == "rag":
+                    result = await ai_client.rag_query(query=context, max_results=5)
+                elif agent == "research":
+                    result = await ai_client.research_query(query=context)
+                elif agent == "classification":
+                    result = await ai_client.classify_content(content=context)
+                elif agent == "chat":
+                    result = await ai_client.chat_message(message=context)
+                else:
+                    result = {"error": f"Unknown agent: {agent}"}
 
-                    results[agent] = result
+                results[agent] = result
 
-                    # Update context for next agent
-                    if result.get("content"):
-                        context = f"{context}\n\nPrevious result: {result['content']}"
+                # Update context for next agent
+                if result.get("content"):
+                    context = f"{context}\n\nPrevious result: {result['content']}"
 
-                except Exception as e:
-                    results[agent] = {"error": str(e)}
+            except Exception as e:
+                results[agent] = {"error": str(e)}
 
-        return create_success_response(
-            {
-                "query": query,
-                "coordination_mode": coordination_mode,
-                "agents_used": agents,
-                "results": results,
-            },
-            "Multi-agent query completed successfully",
-        )
-
-    except Exception as e:
-        logger.error(f"Multi-agent query failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return create_success_response(
+        {
+            "query": query,
+            "coordination_mode": coordination_mode,
+            "agents_used": agents,
+            "results": results,
+        },
+        "Multi-agent query completed successfully",
+    )
 
 
 # ====================================================================
@@ -625,6 +625,11 @@ async def multi_agent_query(
 
 
 @router.post("/legacy/rag-search")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="legacy_rag_search",
+    error_code_prefix="AI_STACK",
+)
 async def legacy_rag_search(query: str, max_results: int = 10):
     """Legacy RAG search endpoint for backward compatibility."""
     request = RAGQueryRequest(query=query, max_results=max_results)
@@ -632,6 +637,11 @@ async def legacy_rag_search(query: str, max_results: int = 10):
 
 
 @router.post("/legacy/enhanced-chat")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="legacy_enhanced_chat",
+    error_code_prefix="AI_STACK",
+)
 async def legacy_enhanced_chat(message: str, context: Optional[str] = None):
     """Legacy enhanced chat endpoint for backward compatibility."""
     request = EnhancedChatRequest(message=message, context=context)
