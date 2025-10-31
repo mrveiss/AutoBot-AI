@@ -874,7 +874,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
         async with httpx.AsyncClient(timeout=60.0) as interp_client:
             if streaming:
                 interp_response = await interp_client.post(
-                    ollama_endpoint,
+                    f"{ollama_endpoint}/api/generate",
                     json={
                         "model": selected_model,
                         "prompt": interpretation_prompt,
@@ -908,7 +908,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                             continue
             else:
                 interp_response = await interp_client.post(
-                    ollama_endpoint,
+                    f"{ollama_endpoint}/api/generate",
                     json={
                         "model": selected_model,
                         "prompt": interpretation_prompt,
