@@ -344,6 +344,11 @@ async def extract_knowledge(request: KnowledgeExtractionRequest):
 
 
 @router.post("/knowledge/enhanced-search")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enhanced_knowledge_search",
+    error_code_prefix="AI_STACK",
+)
 async def enhanced_knowledge_search(
     query: str,
     search_type: str = "comprehensive",
@@ -353,51 +358,49 @@ async def enhanced_knowledge_search(
     """
     Enhanced knowledge search combining local KB and AI Stack capabilities.
     """
-    try:
-        ai_client = await get_ai_stack_client()
+    ai_client = await get_ai_stack_client()
 
-        # Parallel search: local KB + AI Stack enhanced search
-        results = {}
+    # Parallel search: local KB + AI Stack enhanced search
+    results = {}
 
-        # Local knowledge base search
-        if knowledge_base:
-            try:
-                local_results = await knowledge_base.search(
-                    query=query, top_k=max_results
-                )
-                results["local_kb"] = local_results
-            except Exception as e:
-                logger.warning(f"Local KB search failed: {e}")
-                results["local_kb"] = []
-
-        # AI Stack enhanced search
+    # Local knowledge base search
+    if knowledge_base:
         try:
-            enhanced_results = await ai_client.search_knowledge_enhanced(
-                query=query, search_type=search_type, max_results=max_results
+            local_results = await knowledge_base.search(
+                query=query, top_k=max_results
             )
-            results["enhanced"] = enhanced_results
-        except AIStackError as e:
-            logger.warning(f"AI Stack enhanced search failed: {e}")
-            results["enhanced"] = {}
+            results["local_kb"] = local_results
+        except Exception as e:
+            logger.warning(f"Local KB search failed: {e}")
+            results["local_kb"] = []
 
-        return create_success_response(results, "Enhanced knowledge search completed")
-    except Exception as e:
-        logger.error(f"Enhanced knowledge search failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # AI Stack enhanced search
+    try:
+        enhanced_results = await ai_client.search_knowledge_enhanced(
+            query=query, search_type=search_type, max_results=max_results
+        )
+        results["enhanced"] = enhanced_results
+    except AIStackError as e:
+        logger.warning(f"AI Stack enhanced search failed: {e}")
+        results["enhanced"] = {}
+
+    return create_success_response(results, "Enhanced knowledge search completed")
 
 
 @router.get("/knowledge/system")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_knowledge",
+    error_code_prefix="AI_STACK",
+)
 async def get_system_knowledge(knowledge_category: Optional[str] = None):
     """Get system-wide knowledge insights."""
-    try:
-        ai_client = await get_ai_stack_client()
-        result = await ai_client.get_system_knowledge(knowledge_category)
+    ai_client = await get_ai_stack_client()
+    result = await ai_client.get_system_knowledge(knowledge_category)
 
-        return create_success_response(
-            result, "System knowledge retrieved successfully"
-        )
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "System knowledge retrieval")
+    return create_success_response(
+        result, "System knowledge retrieved successfully"
+    )
 
 
 # ====================================================================
@@ -406,50 +409,54 @@ async def get_system_knowledge(knowledge_category: Optional[str] = None):
 
 
 @router.post("/research/comprehensive")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="comprehensive_research",
+    error_code_prefix="AI_STACK",
+)
 async def comprehensive_research(request: ResearchRequest):
     """Perform comprehensive research with multiple AI agents."""
-    try:
-        ai_client = await get_ai_stack_client()
-        results = {}
+    ai_client = await get_ai_stack_client()
+    results = {}
 
-        # Core research
-        research_result = await ai_client.research_query(
-            query=request.query,
-            research_depth=request.research_depth,
-            sources=request.sources,
-        )
-        results["research"] = research_result
+    # Core research
+    research_result = await ai_client.research_query(
+        query=request.query,
+        research_depth=request.research_depth,
+        sources=request.sources,
+    )
+    results["research"] = research_result
 
-        # Web research if requested
-        if request.include_web:
-            try:
-                web_result = await ai_client.web_research(
-                    query=request.query, max_pages=10, include_analysis=True
-                )
-                results["web_research"] = web_result
-            except AIStackError as e:
-                logger.warning(f"Web research failed: {e}")
-                results["web_research"] = {"error": str(e)}
+    # Web research if requested
+    if request.include_web:
+        try:
+            web_result = await ai_client.web_research(
+                query=request.query, max_pages=10, include_analysis=True
+            )
+            results["web_research"] = web_result
+        except AIStackError as e:
+            logger.warning(f"Web research failed: {e}")
+            results["web_research"] = {"error": str(e)}
 
-        return create_success_response(
-            results, "Comprehensive research completed successfully"
-        )
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "Comprehensive research")
+    return create_success_response(
+        results, "Comprehensive research completed successfully"
+    )
 
 
 @router.post("/research/web")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="web_research",
+    error_code_prefix="AI_STACK",
+)
 async def web_research(query: str, max_pages: int = 10, include_analysis: bool = True):
     """Perform web research with analysis."""
-    try:
-        ai_client = await get_ai_stack_client()
-        result = await ai_client.web_research(
-            query=query, max_pages=max_pages, include_analysis=include_analysis
-        )
+    ai_client = await get_ai_stack_client()
+    result = await ai_client.web_research(
+        query=query, max_pages=max_pages, include_analysis=include_analysis
+    )
 
-        return create_success_response(result, "Web research completed successfully")
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "Web research")
+    return create_success_response(result, "Web research completed successfully")
 
 
 # ====================================================================
