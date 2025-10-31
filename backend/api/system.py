@@ -448,6 +448,11 @@ async def get_detailed_health(request: Request):
 
 @router.get("/cache/stats")
 @cache_response(cache_key="cache_stats", ttl=15)  # Cache for 15 seconds
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cache_stats",
+    error_code_prefix="SYSTEM",
+)
 async def get_cache_stats():
     """Get cache statistics and performance metrics"""
     try:
@@ -502,6 +507,11 @@ async def get_cache_stats():
 
 @router.get("/cache/activity")
 @cache_response(cache_key="cache_activity", ttl=10)  # Cache for 10 seconds
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cache_activity",
+    error_code_prefix="SYSTEM",
+)
 async def get_cache_activity():
     """Get recent cache activity and key information"""
     try:
@@ -571,6 +581,11 @@ async def get_cache_activity():
 
 @router.get("/metrics")
 @cache_response(cache_key="system_metrics", ttl=15)  # Cache for 15 seconds
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_metrics",
+    error_code_prefix="SYSTEM",
+)
 async def get_system_metrics():
     """Get system performance metrics"""
     try:
@@ -627,8 +642,3 @@ async def get_system_metrics():
                 "executable": sys.executable,
             },
         }
-    except Exception as e:
-        logger.error(f"Failed to get system metrics: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get system metrics: {str(e)}"
-        )
