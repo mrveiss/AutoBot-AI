@@ -15,6 +15,7 @@ from src.desktop_streaming_manager import desktop_streaming
 from src.enhanced_memory_manager_async import TaskPriority
 from src.takeover_manager import TakeoverTrigger, takeover_manager
 from src.task_execution_tracker import task_tracker
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["advanced_control"])
@@ -67,121 +68,129 @@ class SystemMonitoringResponse(BaseModel):
 
 # Desktop Streaming Endpoints
 @router.post("/streaming/create", response_model=StreamingSessionResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_streaming_session",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def create_streaming_session(request: StreamingSessionRequest):
     """Create a new desktop streaming session"""
-    try:
-        async with task_tracker.track_task(
-            "Create Desktop Streaming Session",
-            f"Creating streaming session for user {request.user_id}",
-            agent_type="advanced_control",
-            priority=TaskPriority.HIGH,
-            inputs={"user_id": request.user_id, "resolution": request.resolution},
-        ) as task_context:
-            session_config = {"resolution": request.resolution, "depth": request.depth}
+    async with task_tracker.track_task(
+        "Create Desktop Streaming Session",
+        f"Creating streaming session for user {request.user_id}",
+        agent_type="advanced_control",
+        priority=TaskPriority.HIGH,
+        inputs={"user_id": request.user_id, "resolution": request.resolution},
+    ) as task_context:
+        session_config = {"resolution": request.resolution, "depth": request.depth}
 
-            result = await desktop_streaming.create_streaming_session(
-                user_id=request.user_id, session_config=session_config
-            )
+        result = await desktop_streaming.create_streaming_session(
+            user_id=request.user_id, session_config=session_config
+        )
 
-            response = StreamingSessionResponse(**result)
-            task_context.set_outputs({"session_id": response.session_id})
+        response = StreamingSessionResponse(**result)
+        task_context.set_outputs({"session_id": response.session_id})
 
-            logger.info(f"Desktop streaming session created: {response.session_id}")
-            return response
-
-    except Exception as e:
-        logger.error(f"Failed to create streaming session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.info(f"Desktop streaming session created: {response.session_id}")
+        return response
 
 
 @router.delete("/streaming/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="terminate_streaming_session",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def terminate_streaming_session(session_id: str):
     """Terminate a desktop streaming session"""
-    try:
-        success = await desktop_streaming.terminate_streaming_session(session_id)
-        if success:
-            logger.info(f"Desktop streaming session terminated: {session_id}")
-            return {"success": True, "session_id": session_id}
-        else:
-            raise HTTPException(status_code=404, detail="Session not found")
-    except Exception as e:
-        logger.error(f"Failed to terminate streaming session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    success = await desktop_streaming.terminate_streaming_session(session_id)
+    if success:
+        logger.info(f"Desktop streaming session terminated: {session_id}")
+        return {"success": True, "session_id": session_id}
+    else:
+        raise HTTPException(status_code=404, detail="Session not found")
 
 
 @router.get("/streaming/sessions")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_streaming_sessions",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def list_streaming_sessions():
     """List all active streaming sessions"""
-    try:
-        sessions = desktop_streaming.vnc_manager.list_active_sessions()
-        return {"sessions": sessions, "count": len(sessions)}
-    except Exception as e:
-        logger.error(f"Failed to list streaming sessions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    sessions = desktop_streaming.vnc_manager.list_active_sessions()
+    return {"sessions": sessions, "count": len(sessions)}
 
 
 @router.get("/streaming/capabilities")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_streaming_capabilities",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def get_streaming_capabilities():
     """Get desktop streaming system capabilities"""
-    try:
-        capabilities = desktop_streaming.get_system_capabilities()
-        return capabilities
-    except Exception as e:
-        logger.error(f"Failed to get streaming capabilities: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    capabilities = desktop_streaming.get_system_capabilities()
+    return capabilities
 
 
 # Takeover Management Endpoints
 @router.post("/takeover/request")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="request_takeover",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def request_takeover(request: TakeoverRequest):
     """Request human takeover of autonomous operations"""
-    try:
-        # Convert string enum to TakeoverTrigger
-        trigger_mapping = {
-            "MANUAL_REQUEST": TakeoverTrigger.MANUAL_REQUEST,
-            "CRITICAL_ERROR": TakeoverTrigger.CRITICAL_ERROR,
-            "SECURITY_CONCERN": TakeoverTrigger.SECURITY_CONCERN,
-            "USER_INTERVENTION_REQUIRED": TakeoverTrigger.USER_INTERVENTION_REQUIRED,
-            "SYSTEM_OVERLOAD": TakeoverTrigger.SYSTEM_OVERLOAD,
-            "APPROVAL_REQUIRED": TakeoverTrigger.APPROVAL_REQUIRED,
-            "TIMEOUT_EXCEEDED": TakeoverTrigger.TIMEOUT_EXCEEDED,
-        }
+    # Convert string enum to TakeoverTrigger
+    trigger_mapping = {
+        "MANUAL_REQUEST": TakeoverTrigger.MANUAL_REQUEST,
+        "CRITICAL_ERROR": TakeoverTrigger.CRITICAL_ERROR,
+        "SECURITY_CONCERN": TakeoverTrigger.SECURITY_CONCERN,
+        "USER_INTERVENTION_REQUIRED": TakeoverTrigger.USER_INTERVENTION_REQUIRED,
+        "SYSTEM_OVERLOAD": TakeoverTrigger.SYSTEM_OVERLOAD,
+        "APPROVAL_REQUIRED": TakeoverTrigger.APPROVAL_REQUIRED,
+        "TIMEOUT_EXCEEDED": TakeoverTrigger.TIMEOUT_EXCEEDED,
+    }
 
-        trigger = trigger_mapping.get(request.trigger.upper())
-        if not trigger:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid trigger: {request.trigger}"
-            )
-
-        # Convert priority string to TaskPriority
-        priority_mapping = {
-            "LOW": TaskPriority.LOW,
-            "MEDIUM": TaskPriority.MEDIUM,
-            "HIGH": TaskPriority.HIGH,
-            "CRITICAL": TaskPriority.CRITICAL,
-        }
-
-        priority = priority_mapping.get(request.priority.upper(), TaskPriority.HIGH)
-
-        request_id = await takeover_manager.request_takeover(
-            trigger=trigger,
-            reason=request.reason,
-            requesting_agent=request.requesting_agent,
-            affected_tasks=request.affected_tasks,
-            priority=priority,
-            timeout_minutes=request.timeout_minutes,
-            auto_approve=request.auto_approve,
+    trigger = trigger_mapping.get(request.trigger.upper())
+    if not trigger:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid trigger: {request.trigger}"
         )
 
-        logger.info(f"Takeover requested: {request_id}")
-        return {"success": True, "request_id": request_id}
+    # Convert priority string to TaskPriority
+    priority_mapping = {
+        "LOW": TaskPriority.LOW,
+        "MEDIUM": TaskPriority.MEDIUM,
+        "HIGH": TaskPriority.HIGH,
+        "CRITICAL": TaskPriority.CRITICAL,
+    }
 
-    except Exception as e:
-        logger.error(f"Failed to request takeover: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    priority = priority_mapping.get(request.priority.upper(), TaskPriority.HIGH)
+
+    request_id = await takeover_manager.request_takeover(
+        trigger=trigger,
+        reason=request.reason,
+        requesting_agent=request.requesting_agent,
+        affected_tasks=request.affected_tasks,
+        priority=priority,
+        timeout_minutes=request.timeout_minutes,
+        auto_approve=request.auto_approve,
+    )
+
+    logger.info(f"Takeover requested: {request_id}")
+    return {"success": True, "request_id": request_id}
 
 
 @router.post("/takeover/{request_id}/approve")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="approve_takeover",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def approve_takeover(request_id: str, approval: TakeoverApprovalRequest):
     """Approve a takeover request and start session"""
     try:
@@ -198,12 +207,14 @@ async def approve_takeover(request_id: str, approval: TakeoverApprovalRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
-    except Exception as e:
-        logger.error(f"Failed to approve takeover: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/takeover/sessions/{session_id}/action")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_takeover_action",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def execute_takeover_action(session_id: str, action: TakeoverActionRequest):
     """Execute an action during a takeover session"""
     try:
@@ -220,9 +231,6 @@ async def execute_takeover_action(session_id: str, action: TakeoverActionRequest
 
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"Failed to execute takeover action: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/takeover/sessions/{session_id}/pause")
