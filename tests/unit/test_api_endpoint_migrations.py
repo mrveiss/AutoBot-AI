@@ -12801,5 +12801,88 @@ class TestBatch73AgentConfigMigrations(unittest.TestCase):
             self.assertIn('error_code_prefix="AGENT_CONFIG"', source)
 
 
+class TestBatch74AgentConfigMigrations(unittest.TestCase):
+    """Test batch 74 migrations: agent_config.py next 2 endpoints (enable_agent, disable_agent)"""
+
+    def test_enable_agent_decorator_present(self):
+        """Test enable_agent has @with_error_handling decorator"""
+        from backend.api.agent_config import enable_agent
+
+        source = inspect.getsource(enable_agent)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT_CONFIG"', source)
+
+    def test_enable_agent_simple_pattern(self):
+        """Test enable_agent uses Simple Pattern (no nested try-catch)"""
+        from backend.api.agent_config import enable_agent
+
+        source = inspect.getsource(enable_agent)
+        # Simple Pattern: no try-catch blocks
+        try_count = source.count("    try:")
+        self.assertEqual(try_count, 0, "Simple Pattern should have no nested try-catch")
+
+    def test_enable_agent_httpexception_preserved(self):
+        """Test enable_agent preserves HTTPException for 404 (business logic)"""
+        from backend.api.agent_config import enable_agent
+
+        source = inspect.getsource(enable_agent)
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=404", source)
+        self.assertIn("not found", source)
+
+    def test_enable_agent_operation_name(self):
+        """Test enable_agent has correct operation parameter"""
+        from backend.api.agent_config import enable_agent
+
+        source = inspect.getsource(enable_agent)
+        self.assertIn('operation="enable_agent"', source)
+
+    def test_disable_agent_decorator_present(self):
+        """Test disable_agent has @with_error_handling decorator"""
+        from backend.api.agent_config import disable_agent
+
+        source = inspect.getsource(disable_agent)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT_CONFIG"', source)
+
+    def test_disable_agent_simple_pattern(self):
+        """Test disable_agent uses Simple Pattern (no nested try-catch)"""
+        from backend.api.agent_config import disable_agent
+
+        source = inspect.getsource(disable_agent)
+        # Simple Pattern: no try-catch blocks
+        try_count = source.count("    try:")
+        self.assertEqual(try_count, 0, "Simple Pattern should have no nested try-catch")
+
+    def test_disable_agent_httpexception_preserved(self):
+        """Test disable_agent preserves HTTPException for 404 (business logic)"""
+        from backend.api.agent_config import disable_agent
+
+        source = inspect.getsource(disable_agent)
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=404", source)
+        self.assertIn("not found", source)
+
+    def test_disable_agent_operation_name(self):
+        """Test disable_agent has correct operation parameter"""
+        from backend.api.agent_config import disable_agent
+
+        source = inspect.getsource(disable_agent)
+        self.assertIn('operation="disable_agent"', source)
+
+    def test_batch74_all_endpoints_migrated(self):
+        """Test all batch 74 endpoints have been migrated to @with_error_handling"""
+        from backend.api.agent_config import disable_agent, enable_agent
+
+        endpoints = [enable_agent, disable_agent]
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("@with_error_handling", source)
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            self.assertIn('error_code_prefix="AGENT_CONFIG"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
