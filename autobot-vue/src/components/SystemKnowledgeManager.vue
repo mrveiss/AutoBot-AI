@@ -205,6 +205,7 @@ export default {
       fetchStats: fetchStatsAPI,
       initializeMachineKnowledge: initializeMachineKnowledgeAPI,
       refreshSystemKnowledge: refreshSystemKnowledgeAPI,
+      pollJobStatus: pollJobStatusAPI,  // NEW: Job status polling
       populateManPages: populateManPagesAPI,
       populateAutoBotDocs: populateAutoBotDocsAPI,
       vectorizeFacts: vectorizeFactsAPI,
@@ -390,50 +391,98 @@ export default {
       }
 
       isRefreshing.value = true;
-      progressMessage.value = 'Scanning system for all available commands...';
+      progressMessage.value = 'Starting background job...';
       progressPercent.value = 0;
       lastResult.value = null;
 
+      let pollInterval = null;
+
       try {
-        addLogEntry('Starting comprehensive system knowledge refresh', 'info');
+        addLogEntry('Starting comprehensive system knowledge refresh (background job)', 'info');
 
-        // Simulate progress updates
-        const progressInterval = setInterval(() => {
-          if (progressPercent.value < 90) {
-            progressPercent.value += 5;
-            if (progressPercent.value < 30) {
-              progressMessage.value = 'Scanning system for commands...';
-            } else if (progressPercent.value < 60) {
-              progressMessage.value = 'Indexing man pages...';
-            } else {
-              progressMessage.value = 'Creating vector embeddings...';
+        // Start background job (returns immediately with task_id)
+        const jobResponse = await refreshSystemKnowledgeAPI();
+
+        if (!jobResponse.task_id) {
+          throw new Error('No task_id returned from server');
+        }
+
+        const taskId = jobResponse.task_id;
+        progressMessage.value = 'Background job started. Polling for completion...';
+        addLogEntry(`Background job started: ${taskId}`, 'info');
+
+        // Poll job status every 2 seconds
+        pollInterval = setInterval(async () => {
+          try {
+            const statusResponse = await pollJobStatusAPI(taskId);
+
+            console.log('[refreshSystemKnowledge] Poll status:', statusResponse.status);
+
+            if (statusResponse.status === 'PENDING') {
+              progressMessage.value = 'Task queued, waiting to start...';
+              progressPercent.value = 5;
+
+            } else if (statusResponse.status === 'PROGRESS') {
+              // Update progress from backend
+              const meta = statusResponse.meta || {};
+              progressMessage.value = meta.status || 'Processing...';
+              progressPercent.value = meta.current || 10;
+
+            } else if (statusResponse.status === 'SUCCESS') {
+              // Job completed successfully
+              clearInterval(pollInterval);
+              progressPercent.value = 100;
+              progressMessage.value = 'Refresh complete!';
+
+              const result = statusResponse.result || {};
+              lastResult.value = {
+                status: 'success',
+                message: result.message || 'System knowledge refreshed successfully',
+                details: {
+                  'Commands Indexed': result.commands_indexed || 0,
+                  'Total Facts': result.total_facts || 0
+                }
+              };
+
+              commandsIndexed.value = result.commands_indexed || 0;
+              addLogEntry(`Indexed ${result.commands_indexed || 0} commands`, 'success');
+
+              // Refresh stats
+              await fetchStats();
+
+              // Clean up UI after 3 seconds
+              setTimeout(() => {
+                progressMessage.value = '';
+                progressPercent.value = 0;
+                isRefreshing.value = false;
+              }, 3000);
+
+            } else if (statusResponse.status === 'FAILURE') {
+              // Job failed
+              clearInterval(pollInterval);
+              const errorMsg = statusResponse.error || 'Unknown error';
+
+              lastResult.value = {
+                status: 'error',
+                message: `System knowledge refresh failed: ${errorMsg}`
+              };
+              addLogEntry(`System knowledge refresh failed: ${errorMsg}`, 'error');
+
+              isRefreshing.value = false;
+              progressMessage.value = '';
+              progressPercent.value = 0;
             }
+
+          } catch (pollError) {
+            console.error('[refreshSystemKnowledge] Polling error:', pollError);
+            // Don't stop polling on transient errors - backend may be busy
           }
-        }, 3000);
-
-        const response = await refreshSystemKnowledgeAPI();
-
-        clearInterval(progressInterval);
-        progressPercent.value = 100;
-        progressMessage.value = 'Refresh complete!';
-
-        lastResult.value = {
-          status: 'success',
-          message: response.message || 'System knowledge refreshed successfully',
-          details: {
-            'Commands Indexed': response.commands_indexed || 0,
-            'Total Facts': response.total_facts || 0
-          }
-        };
-
-        commandsIndexed.value = response.commands_indexed || 0;
-        addLogEntry(`Indexed ${commandsIndexed.value} commands`, 'success');
-
-        // Refresh stats
-        await fetchStats();
+        }, 2000); // Poll every 2 seconds
 
       } catch (error) {
-        let errorMessage = 'Failed to refresh system knowledge';
+        if (pollInterval) clearInterval(pollInterval);
+
+        let errorMessage = 'Failed to start system knowledge refresh';
         if (error instanceof Error) {
           errorMessage = error.message;
         }
@@ -444,12 +493,10 @@ export default {
           message: errorMessage
         };
         addLogEntry(`System knowledge refresh failed: ${errorMessage}`, 'error');
-      } finally {
+
         isRefreshing.value = false;
-        setTimeout(() => {
-          progressMessage.value = '';
-          progressPercent.value = 0;
-        }, 3000);
+        progressMessage.value = '';
+        progressPercent.value = 0;
       }
     };
 

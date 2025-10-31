@@ -340,8 +340,10 @@ export function useKnowledgeBase() {
   }
 
   /**
-   * Refresh system knowledge (rescan and update all system information)
+   * Refresh system knowledge (rescan and update all system information) - ASYNC JOB
    * POST /api/knowledge_base/refresh_system_knowledge
+   *
+   * Returns immediately with task_id. Use pollJobStatus to check completion.
    */
   const refreshSystemKnowledge = async (): Promise<SystemKnowledgeResponse> => {
     try {
@@ -362,6 +364,34 @@ export function useKnowledgeBase() {
       return data
     } catch (error) {
       console.error('[refreshSystemKnowledge] Error:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Poll status of a background job (e.g., knowledge refresh, reindexing)
+   * GET /api/knowledge_base/job_status/{task_id}
+   *
+   * Returns current status: PENDING, PROGRESS, SUCCESS, or FAILURE
+   */
+  const pollJobStatus = async (taskId: string): Promise<any> => {
+    try {
+      const response = await apiClient.get(`/api/knowledge_base/job_status/${taskId}`)
+
+      console.log('[pollJobStatus] Response received:', {
+        ok: response.ok,
+        status: response.status,
+        taskId
+      })
+
+      if (!response) {
+        throw new Error('Job status check failed: No response from server');
+      }
+
+      const data = await parseApiResponse<any>(response)
+      return data
+    } catch (error) {
+      console.error('[pollJobStatus] Error:', error)
       throw error
     }
   }
@@ -622,6 +652,7 @@ export function useKnowledgeBase() {
     // New API calls
     initializeMachineKnowledge,
     refreshSystemKnowledge,
+    pollJobStatus,  // NEW: Poll background job status
     populateManPages,
     populateAutoBotDocs,
     fetchMachineProfile,
