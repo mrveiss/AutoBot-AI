@@ -436,6 +436,11 @@ async def comprehensive_research_task(
 
 
 @router.post("/development/analyze")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_development_task",
+    error_code_prefix="AGENT_ENHANCED",
+)
 async def analyze_development_task(request_data: AgentAnalysisRequest):
     """
     Analyze codebase using development-focused AI agents.
@@ -472,6 +477,11 @@ async def analyze_development_task(request_data: AgentAnalysisRequest):
 
 
 @router.get("/agents/available")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_available_agents",
+    error_code_prefix="AGENT_ENHANCED",
+)
 async def list_available_agents():
     """List all available AI Stack agents with their capabilities."""
     try:
@@ -580,6 +590,11 @@ async def list_available_agents():
 
 
 @router.get("/agents/status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agents_status",
+    error_code_prefix="AGENT_ENHANCED",
+)
 async def get_agents_status():
     """Get comprehensive status of all AI Stack agents."""
     try:
