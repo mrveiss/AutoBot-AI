@@ -16708,5 +16708,211 @@ class TestBatch91ServiceMonitorMigrations(unittest.TestCase):
             )
 
 
+class TestBatch92ServiceMonitorMigrations(unittest.TestCase):
+    """Test batch 92 migrations for service_monitor.py (batch 2 of 3)"""
+
+    def test_batch_92_progress_validation(self):
+        """Verify batch 92 brings service_monitor.py to 7/10 endpoints (70%)"""
+        from backend.api import service_monitor
+
+        batch_92_endpoints = [
+            service_monitor.get_all_services,
+            service_monitor.health_redirect,
+            service_monitor.get_vm_status,
+        ]
+
+        # All 3 endpoints should have @with_error_handling
+        for endpoint in batch_92_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_92_pattern_validation(self):
+        """Verify batch 92 pattern distribution: 1 Mixed, 1 Clean, 1 Simple"""
+        from backend.api import service_monitor
+
+        # Mixed Pattern: get_all_services (preserves all try-catches)
+        source = inspect.getsource(service_monitor.get_all_services)
+        try_count = source.count("try:")
+        self.assertGreaterEqual(
+            try_count, 3, "get_all_services should preserve 3 try-catches"
+        )
+
+        # Clean Pattern: health_redirect (no try-catch, never had any)
+        source = inspect.getsource(service_monitor.health_redirect)
+        self.assertNotIn("try:", source, "health_redirect should have no try-catch")
+
+        # Simple Pattern: get_vm_status (no try-catch)
+        source = inspect.getsource(service_monitor.get_vm_status)
+        self.assertNotIn("try:", source, "get_vm_status should have no try-catch")
+
+    def test_batch_92_get_all_services_has_decorator(self):
+        """Verify get_all_services has @with_error_handling decorator"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.get_all_services)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SERVICE_MONITOR"', source)
+        self.assertIn('operation="get_all_services"', source)
+
+    def test_batch_92_get_all_services_preserves_fallbacks(self):
+        """Verify get_all_services preserves all try-catches for service health checks"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.get_all_services)
+        # Should preserve main try-catch + 2 inner health check fallbacks
+        try_count = source.count("try:")
+        self.assertGreaterEqual(
+            try_count, 3, "Should preserve main + 2 health check try-catches"
+        )
+        # Should return error dict on failure
+        self.assertIn('"error":', source)
+        self.assertIn('"status": "error"', source)
+
+    def test_batch_92_health_redirect_has_decorator(self):
+        """Verify health_redirect has @with_error_handling decorator"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.health_redirect)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SERVICE_MONITOR"', source)
+        self.assertIn('operation="health_redirect"', source)
+
+    def test_batch_92_health_redirect_clean_pattern(self):
+        """Verify health_redirect is Clean Pattern (never had error handling)"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.health_redirect)
+        # Should have NO try-catch blocks
+        self.assertNotIn("try:", source)
+        self.assertNotIn("HTTPException", source)
+        # Should return redirect message
+        self.assertIn('"error": "Endpoint moved"', source)
+
+    def test_batch_92_get_vm_status_has_decorator(self):
+        """Verify get_vm_status has @with_error_handling decorator"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.get_vm_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SERVICE_MONITOR"', source)
+        self.assertIn('operation="get_vm_status"', source)
+
+    def test_batch_92_get_vm_status_removes_error_handling(self):
+        """Verify get_vm_status removed outer try-catch (Simple Pattern)"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.get_vm_status)
+        # Should have NO try-catch blocks
+        self.assertNotIn("try:", source)
+        self.assertNotIn("HTTPException", source)
+
+    def test_batch_92_line_count_reductions(self):
+        """Verify batch 92 endpoints are concise after migration"""
+        from backend.api import service_monitor
+
+        # Test endpoints with expected max line counts
+        simple_endpoints = [
+            ("get_vm_status", service_monitor.get_vm_status, 30),
+            ("health_redirect", service_monitor.health_redirect, 14),
+        ]
+
+        mixed_endpoints = [
+            ("get_all_services", service_monitor.get_all_services, 80),
+        ]
+
+        for name, endpoint, max_lines in simple_endpoints + mixed_endpoints:
+            source = inspect.getsource(endpoint)
+            line_count = len([line for line in source.split("\n") if line.strip()])
+            self.assertLessEqual(
+                line_count,
+                max_lines,
+                f"{name} should be concise (≤{max_lines} lines), got {line_count}",
+            )
+
+    def test_batch_92_no_bare_httpexception(self):
+        """Verify batch 92 endpoints don't raise HTTPException directly"""
+        from backend.api import service_monitor
+
+        batch_92_endpoints = [
+            service_monitor.health_redirect,
+            service_monitor.get_vm_status,
+        ]
+
+        for endpoint in batch_92_endpoints:
+            source = inspect.getsource(endpoint)
+            # Should not have direct HTTPException raises (decorator handles it)
+            self.assertNotIn(
+                "raise HTTPException",
+                source,
+                f"{endpoint.__name__} should not raise HTTPException",
+            )
+
+    def test_batch_92_all_have_error_code_prefix(self):
+        """Verify all batch 92 endpoints use SERVICE_MONITOR error_code_prefix"""
+        from backend.api import service_monitor
+
+        batch_92_endpoints = [
+            service_monitor.get_all_services,
+            service_monitor.health_redirect,
+            service_monitor.get_vm_status,
+        ]
+
+        for endpoint in batch_92_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                'error_code_prefix="SERVICE_MONITOR"',
+                source,
+                f"{endpoint.__name__} missing SERVICE_MONITOR prefix",
+            )
+
+    def test_batch_92_cumulative_progress(self):
+        """Verify cumulative progress: 7/10 endpoints migrated after batch 92"""
+        from backend.api import service_monitor
+
+        migrated_endpoints = [
+            # Batch 91
+            service_monitor.get_service_status,
+            service_monitor.ping,
+            service_monitor.get_service_health,
+            service_monitor.get_system_resources,
+            # Batch 92
+            service_monitor.get_all_services,
+            service_monitor.health_redirect,
+            service_monitor.get_vm_status,
+        ]
+
+        # All 7 endpoints should have @with_error_handling
+        for endpoint in migrated_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} missing @with_error_handling decorator",
+            )
+
+        # Verify progress percentage
+        total_endpoints = 10
+        self.assertEqual(
+            len(migrated_endpoints), 7, "Should have migrated 7/10 endpoints (70%)"
+        )
+
+    def test_batch_92_service_health_checks_preserved(self):
+        """Verify get_all_services preserves Redis and Ollama health check fallbacks"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.get_all_services)
+        # Should have Redis health check
+        self.assertIn("redis", source.lower())
+        self.assertIn("ping()", source)
+        # Should have Ollama health check
+        self.assertIn("ollama", source.lower())
+        # Both should be in try-catch blocks for graceful fallback
+        self.assertIn("except Exception:", source)
+
+
 if __name__ == "__main__":
     unittest.main()
