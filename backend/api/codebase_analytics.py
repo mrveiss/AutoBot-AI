@@ -1336,111 +1336,109 @@ async def get_code_declarations(declaration_type: Optional[str] = None):
 
 
 @router.get("/duplicates")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_duplicate_code",
+    error_code_prefix="CODEBASE",
+)
 async def get_duplicate_code():
     """Get duplicate code detected during analysis (using semantic similarity in ChromaDB)"""
-    try:
-        # Try ChromaDB first
-        code_collection = get_code_collection()
+    # Try ChromaDB first
+    code_collection = get_code_collection()
 
-        all_duplicates = []
+    all_duplicates = []
 
-        if code_collection:
-            try:
-                # Query ChromaDB for duplicate markers
-                # Note: Duplicates will be detected via semantic similarity when we regenerate
-                results = code_collection.get(
-                    where={"type": "duplicate"},
-                    include=["metadatas"]
-                )
-
-                # Extract duplicates from metadata
-                for metadata in results.get("metadatas", []):
-                    duplicate = {
-                        "code_snippet": metadata.get("code_snippet", ""),
-                        "files": metadata.get("files", "").split(",") if metadata.get("files") else [],
-                        "similarity_score": float(metadata.get("similarity_score", 0.0)) if metadata.get("similarity_score") else 0.0,
-                        "line_numbers": metadata.get("line_numbers", "")
-                    }
-                    all_duplicates.append(duplicate)
-
-                storage_type = "chromadb"
-                logger.info(f"Retrieved {len(all_duplicates)} duplicates from ChromaDB")
-
-            except Exception as chroma_error:
-                logger.warning(f"ChromaDB query failed: {chroma_error}, returning empty duplicates")
-                # Duplicates don't exist yet, will be generated during reindexing
-                storage_type = "chromadb"
-
-        else:
-            return JSONResponse(
-                {
-                    "status": "no_data",
-                    "message": "No codebase data found. Run indexing first.",
-                    "duplicates": [],
-                }
+    if code_collection:
+        try:
+            # Query ChromaDB for duplicate markers
+            # Note: Duplicates will be detected via semantic similarity when we regenerate
+            results = code_collection.get(
+                where={"type": "duplicate"},
+                include=["metadatas"]
             )
 
-        # Sort by number of files affected (most duplicated first)
-        all_duplicates.sort(
-            key=lambda x: len(x.get("files", [])), reverse=True
-        )
+            # Extract duplicates from metadata
+            for metadata in results.get("metadatas", []):
+                duplicate = {
+                    "code_snippet": metadata.get("code_snippet", ""),
+                    "files": metadata.get("files", "").split(",") if metadata.get("files") else [],
+                    "similarity_score": float(metadata.get("similarity_score", 0.0)) if metadata.get("similarity_score") else 0.0,
+                    "line_numbers": metadata.get("line_numbers", "")
+                }
+                all_duplicates.append(duplicate)
 
+            storage_type = "chromadb"
+            logger.info(f"Retrieved {len(all_duplicates)} duplicates from ChromaDB")
+
+        except Exception as chroma_error:
+            logger.warning(f"ChromaDB query failed: {chroma_error}, returning empty duplicates")
+            # Duplicates don't exist yet, will be generated during reindexing
+            storage_type = "chromadb"
+
+    else:
         return JSONResponse(
             {
-                "status": "success",
-                "duplicates": all_duplicates,
-                "total_count": len(all_duplicates),
-                "storage_type": storage_type,
+                "status": "no_data",
+                "message": "No codebase data found. Run indexing first.",
+                "duplicates": [],
             }
         )
 
-    except Exception as e:
-        logger.error(f"Failed to get duplicate code: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Duplicates retrieval failed: {str(e)}"
-        )
+    # Sort by number of files affected (most duplicated first)
+    all_duplicates.sort(
+        key=lambda x: len(x.get("files", [])), reverse=True
+    )
+
+    return JSONResponse(
+        {
+            "status": "success",
+            "duplicates": all_duplicates,
+            "total_count": len(all_duplicates),
+            "storage_type": storage_type,
+        }
+    )
 
 
 @router.delete("/cache")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_codebase_cache",
+    error_code_prefix="CODEBASE",
+)
 async def clear_codebase_cache():
     """Clear codebase analysis cache from storage"""
-    try:
-        redis_client = await get_redis_connection()
+    redis_client = await get_redis_connection()
 
-        if redis_client:
-            # Get all codebase keys
+    if redis_client:
+        # Get all codebase keys
+        keys_to_delete = []
+        for key in redis_client.scan_iter(match="codebase:*"):
+            keys_to_delete.append(key)
+
+        if keys_to_delete:
+            redis_client.delete(*keys_to_delete)
+
+        storage_type = "redis"
+    else:
+        # Clear in-memory storage
+        global _in_memory_storage
+        if _in_memory_storage:
             keys_to_delete = []
-            for key in redis_client.scan_iter(match="codebase:*"):
+            for key in _in_memory_storage.scan_iter("codebase:*"):
                 keys_to_delete.append(key)
 
-            if keys_to_delete:
-                redis_client.delete(*keys_to_delete)
-
-            storage_type = "redis"
+            _in_memory_storage.delete(*keys_to_delete)
+            deleted_count = len(keys_to_delete)
         else:
-            # Clear in-memory storage
-            global _in_memory_storage
-            if _in_memory_storage:
-                keys_to_delete = []
-                for key in _in_memory_storage.scan_iter("codebase:*"):
-                    keys_to_delete.append(key)
+            deleted_count = 0
 
-                _in_memory_storage.delete(*keys_to_delete)
-                deleted_count = len(keys_to_delete)
-            else:
-                deleted_count = 0
+        storage_type = "memory"
 
-            storage_type = "memory"
-
-        return JSONResponse(
-            {
-                "status": "success",
-                "message": f"Cleared {len(keys_to_delete) if redis_client else deleted_count} cache entries from {storage_type}",
-                "deleted_keys": len(keys_to_delete) if redis_client else deleted_count,
-                "storage_type": storage_type,
-            }
-        )
-
-    except Exception as e:
-        logger.error(f"Failed to clear cache: {e}")
-        raise HTTPException(status_code=500, detail=f"Cache clear failed: {str(e)}")
+    return JSONResponse(
+        {
+            "status": "success",
+            "message": f"Cleared {len(keys_to_delete) if redis_client else deleted_count} cache entries from {storage_type}",
+            "deleted_keys": len(keys_to_delete) if redis_client else deleted_count,
+            "storage_type": storage_type,
+        }
+    )

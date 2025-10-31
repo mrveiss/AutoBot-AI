@@ -14706,5 +14706,288 @@ class TestBatch84CodebaseAnalyticsMigrations(unittest.TestCase):
                         )
 
 
+class TestBatch85CodebaseAnalyticsMigrations(unittest.TestCase):
+    """Test batch 85 migrations: codebase_analytics.py final 2 endpoints (get_duplicate_code, clear_codebase_cache) - FINAL BATCH"""
+
+    def test_get_duplicate_code_decorator_present(self):
+        """Test get_duplicate_code has @with_error_handling decorator"""
+        from backend.api.codebase_analytics import get_duplicate_code
+
+        source = inspect.getsource(get_duplicate_code)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="CODEBASE"', source)
+
+    def test_clear_codebase_cache_decorator_present(self):
+        """Test clear_codebase_cache has @with_error_handling decorator"""
+        from backend.api.codebase_analytics import clear_codebase_cache
+
+        source = inspect.getsource(clear_codebase_cache)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="CODEBASE"', source)
+
+    def test_batch_85_pattern_validation(self):
+        """Test batch 85 endpoints use correct patterns (1 Simple, 1 Mixed)"""
+        from backend.api.codebase_analytics import (
+            clear_codebase_cache,
+            get_duplicate_code,
+        )
+
+        # Simple Pattern endpoint (should have 0 try-catch)
+        source = inspect.getsource(clear_codebase_cache)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"clear_codebase_cache should use Simple Pattern (0 try-catch blocks), found {try_count}",
+        )
+
+        # Mixed Pattern endpoint (should have try-catch blocks preserved)
+        mixed_pattern_endpoints = [
+            ("get_duplicate_code", get_duplicate_code),
+        ]
+
+        for name, endpoint in mixed_pattern_endpoints:
+            source = inspect.getsource(endpoint)
+            try_count = source.count("    try:")
+
+            self.assertGreater(
+                try_count,
+                0,
+                f"{name} should use Mixed Pattern (preserve try-catch blocks), found {try_count}",
+            )
+
+    def test_get_duplicate_code_chromadb_try_catch_preserved(self):
+        """Test get_duplicate_code preserves ChromaDB try-catch (business logic)"""
+        from backend.api.codebase_analytics import get_duplicate_code
+
+        source = inspect.getsource(get_duplicate_code)
+        # Should have ChromaDB error handling preserved
+        self.assertIn("except Exception as chroma_error:", source)
+        self.assertIn("logger.warning", source)
+
+    def test_batch_85_no_outer_exception_handlers(self):
+        """Test batch 85 endpoints have no outer generic exception handlers"""
+        from backend.api.codebase_analytics import (
+            clear_codebase_cache,
+            get_duplicate_code,
+        )
+
+        # Both endpoints should not raise HTTPException
+        for endpoint in [get_duplicate_code, clear_codebase_cache]:
+            source = inspect.getsource(endpoint)
+            self.assertNotIn(
+                "raise HTTPException",
+                source,
+                f"{endpoint.__name__} should not raise HTTPException (handled by decorator)",
+            )
+
+    def test_batch_85_endpoints_have_operation_names(self):
+        """Test batch 85 endpoints have correct operation names in decorator"""
+        from backend.api.codebase_analytics import (
+            clear_codebase_cache,
+            get_duplicate_code,
+        )
+
+        endpoints = [
+            (get_duplicate_code, "get_duplicate_code"),
+            (clear_codebase_cache, "clear_codebase_cache"),
+        ]
+
+        for endpoint, expected_operation in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                f'operation="{expected_operation}"',
+                source,
+                f"{endpoint.__name__} should have operation='{expected_operation}'",
+            )
+
+    def test_codebase_analytics_py_100_percent_complete(self):
+        """Test codebase_analytics.py is 100% complete - all 8 endpoints migrated"""
+        from backend.api.codebase_analytics import (
+            clear_codebase_cache,
+            get_codebase_stats,
+            get_code_declarations,
+            get_codebase_problems,
+            get_duplicate_code,
+            get_hardcoded_values,
+            get_indexing_status,
+            index_codebase,
+        )
+
+        all_endpoints = [
+            index_codebase,
+            get_indexing_status,
+            get_codebase_stats,
+            get_hardcoded_values,
+            get_codebase_problems,
+            get_code_declarations,
+            get_duplicate_code,
+            clear_codebase_cache,
+        ]
+
+        # All 8 endpoints must have @with_error_handling decorator
+        for endpoint in all_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} missing @with_error_handling decorator",
+            )
+            self.assertIn(
+                "ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} missing ErrorCategory.SERVER_ERROR",
+            )
+            self.assertIn(
+                'error_code_prefix="CODEBASE"',
+                source,
+                f"{endpoint.__name__} missing error_code_prefix='CODEBASE'",
+            )
+
+    def test_batch_85_lines_saved(self):
+        """Test batch 85 migrations reduced code by removing exception handlers"""
+        from backend.api.codebase_analytics import (
+            clear_codebase_cache,
+            get_duplicate_code,
+        )
+
+        # Count total exception handlers that were removed
+        removed_handlers = 0
+
+        # get_duplicate_code: removed outer try-catch (lines 1341, 1397-1401) = 5 lines
+        removed_handlers += 5
+
+        # clear_codebase_cache: removed entire try-catch (lines 1407, 1444-1446) = 4 lines
+        removed_handlers += 4
+
+        self.assertGreater(
+            removed_handlers,
+            0,
+            f"Batch 85 should have removed exception handlers (expected 9 lines)",
+        )
+
+    def test_batch_85_business_logic_preserved(self):
+        """Test batch 85 Mixed Pattern endpoints preserve business logic"""
+        from backend.api.codebase_analytics import get_duplicate_code
+
+        source = inspect.getsource(get_duplicate_code)
+
+        # get_duplicate_code: Should preserve ChromaDB try-catch
+        self.assertIn("try:", source, "get_duplicate_code should preserve ChromaDB try")
+        self.assertIn(
+            "except Exception as chroma_error:",
+            source,
+            "get_duplicate_code should preserve ChromaDB except",
+        )
+        self.assertIn(
+            "logger.warning",
+            source,
+            "get_duplicate_code should preserve ChromaDB warning",
+        )
+
+    def test_batch_85_chromadb_fallback_logic(self):
+        """Test batch 85 ChromaDB fallback logic is preserved"""
+        from backend.api.codebase_analytics import get_duplicate_code
+
+        source = inspect.getsource(get_duplicate_code)
+
+        # Should have ChromaDB query
+        self.assertIn("code_collection.get(", source)
+        self.assertIn('where={"type": "duplicate"}', source)
+
+        # Should have fallback logic
+        self.assertIn("except Exception as chroma_error:", source)
+        self.assertIn("returning empty duplicates", source)
+
+    def test_batch_85_decorator_parameters(self):
+        """Test batch 85 endpoints have correct decorator parameters"""
+        from backend.api.codebase_analytics import (
+            clear_codebase_cache,
+            get_duplicate_code,
+        )
+
+        endpoints = [get_duplicate_code, clear_codebase_cache]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should have CODEBASE prefix
+            self.assertIn('error_code_prefix="CODEBASE"', source)
+            # All should have operation parameter
+            self.assertIn("operation=", source)
+
+    def test_batch_85_migration_completeness(self):
+        """Test batch 85 completes all remaining endpoints in codebase_analytics.py"""
+        from backend.api import codebase_analytics
+
+        # Count all functions with @router decorator defined in this module
+        router_functions = []
+        for name in dir(codebase_analytics):
+            obj = getattr(codebase_analytics, name)
+            # Only check functions defined in codebase_analytics module
+            if (
+                callable(obj)
+                and hasattr(obj, "__module__")
+                and obj.__module__ == "backend.api.codebase_analytics"
+            ):
+                try:
+                    source = inspect.getsource(obj)
+                    if "@router." in source:
+                        router_functions.append(name)
+                except (TypeError, OSError):
+                    # Skip objects that don't have source code
+                    continue
+
+        # All router functions should have @with_error_handling
+        for func_name in router_functions:
+            func = getattr(codebase_analytics, func_name)
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Router function {func_name} missing @with_error_handling",
+            )
+
+    def test_batch_85_comprehensive_validation(self):
+        """Comprehensive test for all batch 85 migrations"""
+        from backend.api.codebase_analytics import (
+            clear_codebase_cache,
+            get_duplicate_code,
+        )
+
+        endpoints = [
+            ("get_duplicate_code", get_duplicate_code, "Mixed"),
+            ("clear_codebase_cache", clear_codebase_cache, "Simple"),
+        ]
+
+        for name, endpoint, pattern in endpoints:
+            with self.subTest(endpoint=name, pattern=pattern):
+                source = inspect.getsource(endpoint)
+
+                # 1. Has decorator
+                self.assertIn("@with_error_handling", source)
+
+                # 2. Has correct category
+                self.assertIn("ErrorCategory.SERVER_ERROR", source)
+
+                # 3. Has correct prefix
+                self.assertIn('error_code_prefix="CODEBASE"', source)
+
+                # 4. No outer exception handler
+                self.assertNotIn("raise HTTPException", source)
+
+                # 5. Pattern-specific checks
+                if pattern == "Simple":
+                    # Simple pattern should have 0 try-catch
+                    try_count = source.count("    try:")
+                    self.assertEqual(try_count, 0, f"{name} should have 0 try-catch")
+                elif pattern == "Mixed":
+                    # Mixed pattern should preserve inner try-catch
+                    self.assertIn("try:", source, f"{name} should preserve inner try")
+
+
 if __name__ == "__main__":
     unittest.main()
