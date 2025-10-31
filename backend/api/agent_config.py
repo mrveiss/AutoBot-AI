@@ -342,133 +342,127 @@ async def disable_agent(agent_id: str):
 
 
 @router.get("/agents/{agent_id}/health")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_agent_health",
+    error_code_prefix="AGENT_CONFIG",
+)
 async def check_agent_health(agent_id: str):
     """Perform health check on a specific agent"""
+    if agent_id not in DEFAULT_AGENT_CONFIGS:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
+
+    from src.unified_config_manager import unified_config_manager
+
+    enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", True)
+    model = unified_config_manager.get_nested(
+        f"agents.{agent_id}.model", DEFAULT_AGENT_CONFIGS[agent_id]["default_model"]
+    )
+
+    # Check provider availability using ProviderHealthManager
+    provider_available = False
+    start_time = datetime.now()
+
     try:
-        if agent_id not in DEFAULT_AGENT_CONFIGS:
-            raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
+        from backend.services.provider_health import ProviderHealthManager
 
-        from src.unified_config_manager import unified_config_manager
+        provider_config = DEFAULT_AGENT_CONFIGS[agent_id].get("provider", "ollama")
 
-        enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", True)
-        model = unified_config_manager.get_nested(
-            f"agents.{agent_id}.model", DEFAULT_AGENT_CONFIGS[agent_id]["default_model"]
+        # Check provider health using unified health manager
+        health_result = await ProviderHealthManager.check_provider_health(
+            provider=provider_config,
+            timeout=3.0,  # Quick check for agent status endpoint
+            use_cache=True,  # Use caching to avoid excessive checks
         )
 
-        # Check provider availability using ProviderHealthManager
-        provider_available = False
-        start_time = datetime.now()
+        provider_available = health_result.available
 
-        try:
-            from backend.services.provider_health import ProviderHealthManager
-
-            provider_config = DEFAULT_AGENT_CONFIGS[agent_id].get("provider", "ollama")
-
-            # Check provider health using unified health manager
-            health_result = await ProviderHealthManager.check_provider_health(
-                provider=provider_config,
-                timeout=3.0,  # Quick check for agent status endpoint
-                use_cache=True,  # Use caching to avoid excessive checks
-            )
-
-            provider_available = health_result.available
-
-            # Log if provider is unavailable
-            if not provider_available:
-                logger.warning(
-                    f"Provider {provider_config} unavailable for agent {agent_id}: "
-                    f"{health_result.message}"
-                )
-
-        except Exception as e:
+        # Log if provider is unavailable
+        if not provider_available:
             logger.warning(
-                f"Provider availability check failed for agent {agent_id}: {str(e)}"
+                f"Provider {provider_config} unavailable for agent {agent_id}: "
+                f"{health_result.message}"
             )
-            provider_available = False
 
-        response_time = (datetime.now() - start_time).total_seconds()
-
-        # Health check: enabled + model configured + provider available
-        is_healthy = enabled and bool(model) and provider_available
-
-        health_status = {
-            "agent_id": agent_id,
-            "agent_name": DEFAULT_AGENT_CONFIGS[agent_id]["name"],
-            "status": "healthy" if is_healthy else "unhealthy",
-            "enabled": enabled,
-            "model": model,
-            "checks": {
-                "enabled": enabled,
-                "model_configured": bool(model),
-                "provider_available": provider_available,
-            },
-            "timestamp": datetime.now().isoformat(),
-            "response_time": response_time,
-        }
-
-        return JSONResponse(status_code=200, content=health_status)
-
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Failed to check health for agent {agent_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to check agent health: {str(e)}"
+        logger.warning(
+            f"Provider availability check failed for agent {agent_id}: {str(e)}"
         )
+        provider_available = False
+
+    response_time = (datetime.now() - start_time).total_seconds()
+
+    # Health check: enabled + model configured + provider available
+    is_healthy = enabled and bool(model) and provider_available
+
+    health_status = {
+        "agent_id": agent_id,
+        "agent_name": DEFAULT_AGENT_CONFIGS[agent_id]["name"],
+        "status": "healthy" if is_healthy else "unhealthy",
+        "enabled": enabled,
+        "model": model,
+        "checks": {
+            "enabled": enabled,
+            "model_configured": bool(model),
+            "provider_available": provider_available,
+        },
+        "timestamp": datetime.now().isoformat(),
+        "response_time": response_time,
+    }
+
+    return JSONResponse(status_code=200, content=health_status)
 
 
 @router.get("/status/overview")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agents_overview",
+    error_code_prefix="AGENT_CONFIG",
+)
 async def get_agents_overview():
     """Get overview of all agents' status for dashboard"""
-    try:
-        from src.unified_config_manager import unified_config_manager
+    from src.unified_config_manager import unified_config_manager
 
-        total_agents = len(DEFAULT_AGENT_CONFIGS)
-        enabled_agents = 0
-        healthy_agents = 0
+    total_agents = len(DEFAULT_AGENT_CONFIGS)
+    enabled_agents = 0
+    healthy_agents = 0
 
-        agent_summary = []
+    agent_summary = []
 
-        for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-            enabled = unified_config_manager.get_nested(
-                f"agents.{agent_id}.enabled", config["enabled"]
-            )
-            model = unified_config_manager.get_nested(
-                f"agents.{agent_id}.model", config["default_model"]
-            )
-
-            if enabled:
-                enabled_agents += 1
-                if model:
-                    healthy_agents += 1
-
-            agent_summary.append(
-                {
-                    "id": agent_id,
-                    "name": config["name"],
-                    "enabled": enabled,
-                    "status": "healthy" if enabled and model else "unhealthy",
-                    "priority": config["priority"],
-                }
-            )
-
-        overview = {
-            "total_agents": total_agents,
-            "enabled_agents": enabled_agents,
-            "healthy_agents": healthy_agents,
-            "unhealthy_agents": enabled_agents - healthy_agents,
-            "disabled_agents": total_agents - enabled_agents,
-            "overall_health": (
-                "good" if healthy_agents >= enabled_agents * 0.8 else "warning"
-            ),
-            "agents": agent_summary,
-            "timestamp": datetime.now().isoformat(),
-        }
-
-        return JSONResponse(status_code=200, content=overview)
-
-    except Exception as e:
-        logger.error(f"Failed to get agents overview: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get agents overview: {str(e)}"
+    for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
+        enabled = unified_config_manager.get_nested(
+            f"agents.{agent_id}.enabled", config["enabled"]
         )
+        model = unified_config_manager.get_nested(
+            f"agents.{agent_id}.model", config["default_model"]
+        )
+
+        if enabled:
+            enabled_agents += 1
+            if model:
+                healthy_agents += 1
+
+        agent_summary.append(
+            {
+                "id": agent_id,
+                "name": config["name"],
+                "enabled": enabled,
+                "status": "healthy" if enabled and model else "unhealthy",
+                "priority": config["priority"],
+            }
+        )
+
+    overview = {
+        "total_agents": total_agents,
+        "enabled_agents": enabled_agents,
+        "healthy_agents": healthy_agents,
+        "unhealthy_agents": enabled_agents - healthy_agents,
+        "disabled_agents": total_agents - enabled_agents,
+        "overall_health": (
+            "good" if healthy_agents >= enabled_agents * 0.8 else "warning"
+        ),
+        "agents": agent_summary,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    return JSONResponse(status_code=200, content=overview)
