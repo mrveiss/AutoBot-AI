@@ -228,6 +228,11 @@ async def resume_agent_api(request: Request, user_role: str = Form("user")):
 
 
 @router.post("/command_approval")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="command_approval",
+    error_code_prefix="AGENT",
+)
 async def command_approval(request: Request, payload: CommandApprovalPayload):
     """
     Receives user approval/denial for a command execution.
@@ -251,37 +256,33 @@ async def command_approval(request: Request, payload: CommandApprovalPayload):
             content={"message": "Permission denied to approve/deny commands."},
         )
 
-    try:
-        if main_redis_client:
-            approval_message = {"task_id": task_id, "approved": approved}
-            main_redis_client.publish(
-                f"command_approval_{task_id}", json.dumps(approval_message)
-            )
-            logging.info(
-                f"Published command approval for task {task_id}: Approved={approved}"
-            )
-            return {
-                "message": "Approval status received and forwarded.",
-                "task_id": task_id,
-                "approved": approved,
-            }
-        else:
-            error_message = (
-                "Redis client not initialized. Cannot process command approval."
-            )
-            logging.error(error_message)
-            return JSONResponse(status_code=500, content={"message": error_message})
-    except Exception as e:
-        logging.error(
-            f"Error publishing command approval for task {task_id}: {e}", exc_info=True
+    if main_redis_client:
+        approval_message = {"task_id": task_id, "approved": approved}
+        main_redis_client.publish(
+            f"command_approval_{task_id}", json.dumps(approval_message)
         )
-        return JSONResponse(
-            status_code=500,
-            content={"message": f"Failed to process command approval: {e}"},
+        logging.info(
+            f"Published command approval for task {task_id}: Approved={approved}"
         )
+        return {
+            "message": "Approval status received and forwarded.",
+            "task_id": task_id,
+            "approved": approved,
+        }
+    else:
+        error_message = (
+            "Redis client not initialized. Cannot process command approval."
+        )
+        logging.error(error_message)
+        return JSONResponse(status_code=500, content={"message": error_message})
 
 
 @router.post("/execute_command")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_command",
+    error_code_prefix="AGENT",
+)
 async def execute_command(
     request: Request, command_data: dict, user_role: str = Form("user")
 ):
@@ -337,70 +338,56 @@ async def execute_command(
     await event_manager.publish("command_execution_start", {"command": command})
     logging.info(f"Executing command: {command}")
 
-    try:
-        process = await asyncio.create_subprocess_shell(
-            command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    process = await asyncio.create_subprocess_shell(
+        command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await process.communicate()
+
+    output = stdout.decode().strip()
+    error = stderr.decode().strip()
+
+    if process.returncode == 0:
+        message = f"Command executed successfully.\nOutput:\n{output}"
+        security_layer.audit_log(
+            "execute_command",
+            user_role,
+            "success",
+            {"command": command, "output": output},
         )
-        stdout, stderr = await process.communicate()
-
-        output = stdout.decode().strip()
-        error = stderr.decode().strip()
-
-        if process.returncode == 0:
-            message = f"Command executed successfully.\nOutput:\n{output}"
-            security_layer.audit_log(
-                "execute_command",
-                user_role,
-                "success",
-                {"command": command, "output": output},
-            )
-            await event_manager.publish(
-                "command_execution_end",
-                {"command": command, "status": "success", "output": output},
-            )
-            logging.info(message)
-            return {"message": message, "output": output, "status": "success"}
-        else:
-            message = (
-                f"Command failed with exit code {process.returncode}."
-                f"\nError:\n{error}\nOutput:\n{output}"
-            )
-            security_layer.audit_log(
-                "execute_command",
-                user_role,
-                "failure",
-                {"command": command, "error": error, "returncode": process.returncode},
-            )
-            await event_manager.publish(
-                "command_execution_end",
-                {
-                    "command": command,
-                    "status": "error",
-                    "error": error,
-                    "output": output,
-                    "returncode": process.returncode,
-                },
-            )
-            logging.error(message)
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "message": message,
-                    "error": error,
-                    "output": output,
-                    "status": "error",
-                },
-            )
-    except Exception as e:
-        message = f"Error during command execution: {str(e)}"
+        await event_manager.publish(
+            "command_execution_end",
+            {"command": command, "status": "success", "output": output},
+        )
+        logging.info(message)
+        return {"message": message, "output": output, "status": "success"}
+    else:
+        message = (
+            f"Command failed with exit code {process.returncode}."
+            f"\nError:\n{error}\nOutput:\n{output}"
+        )
         security_layer.audit_log(
             "execute_command",
             user_role,
             "failure",
-            {"command": command, "error": str(e)},
+            {"command": command, "error": error, "returncode": process.returncode},
         )
-        await event_manager.publish("error", {"message": message})
-        logging.error(message, exc_info=True)
+        await event_manager.publish(
+            "command_execution_end",
+            {
+                "command": command,
+                "status": "error",
+                "error": error,
+                "output": output,
+                "returncode": process.returncode,
+            },
+        )
+        logging.error(message)
         return JSONResponse(
-            status_code=500, content={"message": message, "status": "error"}
+            status_code=500,
+            content={
+                "message": message,
+                "error": error,
+                "output": output,
+                "status": "error",
+            },
         )
