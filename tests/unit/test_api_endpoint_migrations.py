@@ -12342,5 +12342,205 @@ class TestBatch70AgentEnhancedMigrations(unittest.TestCase):
             )
 
 
+class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
+    """Test batch 71 migrations: agent_enhanced.py next 3 endpoints"""
+
+    def test_analyze_development_task_decorator_present(self):
+        """Test analyze_development_task has @with_error_handling decorator"""
+        from backend.api.agent_enhanced import analyze_development_task
+
+        source = inspect.getsource(analyze_development_task)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+
+    def test_analyze_development_task_mixed_pattern(self):
+        """Test analyze_development_task uses Mixed Pattern - preserves nested try-catch"""
+        from backend.api.agent_enhanced import analyze_development_task
+
+        source = inspect.getsource(analyze_development_task)
+        # Should have nested try-catch for AIStackError
+        try_count = source.count("    try:")
+        self.assertGreaterEqual(
+            try_count, 1, "Should preserve nested try-catch for AIStackError"
+        )
+        self.assertIn("except AIStackError", source)
+
+    def test_analyze_development_task_ai_stack_error_handling(self):
+        """Test analyze_development_task preserves AIStackError specific handling"""
+        from backend.api.agent_enhanced import analyze_development_task
+
+        source = inspect.getsource(analyze_development_task)
+        self.assertIn("except AIStackError", source)
+        self.assertIn("handle_ai_stack_error", source)
+
+    def test_list_available_agents_decorator_present(self):
+        """Test list_available_agents has @with_error_handling decorator"""
+        from backend.api.agent_enhanced import list_available_agents
+
+        source = inspect.getsource(list_available_agents)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+
+    def test_list_available_agents_mixed_pattern(self):
+        """Test list_available_agents uses Mixed Pattern - preserves nested try-catch"""
+        from backend.api.agent_enhanced import list_available_agents
+
+        source = inspect.getsource(list_available_agents)
+        # Should have nested try-catch for AIStackError
+        try_count = source.count("    try:")
+        self.assertGreaterEqual(
+            try_count, 1, "Should preserve nested try-catch for AIStackError"
+        )
+        self.assertIn("except AIStackError", source)
+
+    def test_list_available_agents_ai_stack_error_handling(self):
+        """Test list_available_agents preserves AIStackError specific handling"""
+        from backend.api.agent_enhanced import list_available_agents
+
+        source = inspect.getsource(list_available_agents)
+        self.assertIn("except AIStackError", source)
+        self.assertIn("handle_ai_stack_error", source)
+
+    def test_get_agents_status_decorator_present(self):
+        """Test get_agents_status has @with_error_handling decorator"""
+        from backend.api.agent_enhanced import get_agents_status
+
+        source = inspect.getsource(get_agents_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+
+    def test_get_agents_status_mixed_pattern(self):
+        """Test get_agents_status uses Mixed Pattern - preserves nested try-catch"""
+        from backend.api.agent_enhanced import get_agents_status
+
+        source = inspect.getsource(get_agents_status)
+        # Should have nested try-catch for AIStackError
+        try_count = source.count("    try:")
+        self.assertGreaterEqual(
+            try_count, 1, "Should preserve nested try-catch for AIStackError"
+        )
+        self.assertIn("except AIStackError", source)
+
+    def test_get_agents_status_ai_stack_error_handling(self):
+        """Test get_agents_status preserves AIStackError specific handling"""
+        from backend.api.agent_enhanced import get_agents_status
+
+        source = inspect.getsource(get_agents_status)
+        self.assertIn("except AIStackError", source)
+        self.assertIn("handle_ai_stack_error", source)
+
+    def test_batch71_decorator_placement(self):
+        """Test batch 71 endpoints have decorators in correct order"""
+        from backend.api.agent_enhanced import (
+            analyze_development_task,
+            get_agents_status,
+            list_available_agents,
+        )
+
+        for endpoint in [
+            analyze_development_task,
+            list_available_agents,
+            get_agents_status,
+        ]:
+            source = inspect.getsource(endpoint)
+            # Router decorator should come before error handling decorator
+            router_pos = source.find("@router")
+            error_handling_pos = source.find("@with_error_handling")
+            self.assertLess(
+                router_pos,
+                error_handling_pos,
+                f"{endpoint.__name__}: @router should come before @with_error_handling",
+            )
+
+    def test_batch71_error_category_consistency(self):
+        """Test batch 71 endpoints all use ErrorCategory.SERVER_ERROR"""
+        from backend.api.agent_enhanced import (
+            analyze_development_task,
+            get_agents_status,
+            list_available_agents,
+        )
+
+        for endpoint in [
+            analyze_development_task,
+            list_available_agents,
+            get_agents_status,
+        ]:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} should use ErrorCategory.SERVER_ERROR",
+            )
+
+    def test_batch71_error_prefix_consistency(self):
+        """Test batch 71 endpoints all use AGENT_ENHANCED prefix"""
+        from backend.api.agent_enhanced import (
+            analyze_development_task,
+            get_agents_status,
+            list_available_agents,
+        )
+
+        for endpoint in [
+            analyze_development_task,
+            list_available_agents,
+            get_agents_status,
+        ]:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                'error_code_prefix="AGENT_ENHANCED"',
+                source,
+                f"{endpoint.__name__} should use AGENT_ENHANCED prefix",
+            )
+
+    def test_batch71_mixed_pattern_consistency(self):
+        """Test batch 71 endpoints all use Mixed Pattern (preserve nested try-catch)"""
+        from backend.api.agent_enhanced import (
+            analyze_development_task,
+            get_agents_status,
+            list_available_agents,
+        )
+
+        for endpoint in [
+            analyze_development_task,
+            list_available_agents,
+            get_agents_status,
+        ]:
+            source = inspect.getsource(endpoint)
+            try_count = source.count("    try:")
+            self.assertGreaterEqual(
+                try_count,
+                1,
+                f"{endpoint.__name__} should preserve nested try-catch (Mixed Pattern)",
+            )
+
+    def test_batch71_ai_stack_error_handling(self):
+        """Test batch 71 endpoints preserve AIStackError specific handling"""
+        from backend.api.agent_enhanced import (
+            analyze_development_task,
+            get_agents_status,
+            list_available_agents,
+        )
+
+        for endpoint in [
+            analyze_development_task,
+            list_available_agents,
+            get_agents_status,
+        ]:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "except AIStackError",
+                source,
+                f"{endpoint.__name__} should handle AIStackError",
+            )
+            self.assertIn(
+                "handle_ai_stack_error",
+                source,
+                f"{endpoint.__name__} should call handle_ai_stack_error",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
