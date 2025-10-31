@@ -13809,5 +13809,232 @@ class TestBatch80SystemMigrations(unittest.TestCase):
         )
 
 
+class TestBatch81SystemMigrations(unittest.TestCase):
+    """Test batch 81 migrations: system.py next 4 endpoints (reload_prompts, admin_check, dynamic_import, get_detailed_health)"""
+
+    # Endpoint 5: reload_prompts (Mixed Pattern)
+    def test_reload_prompts_decorator_present(self):
+        """Test reload_prompts has @with_error_handling decorator"""
+        from backend.api.system import reload_prompts
+
+        source = inspect.getsource(reload_prompts)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="SYSTEM"', source)
+
+    def test_reload_prompts_mixed_pattern(self):
+        """Test reload_prompts uses Mixed Pattern (decorator + preserved try-catch for ImportError)"""
+        from backend.api.system import reload_prompts
+
+        source = inspect.getsource(reload_prompts)
+        # Should have 1 try-catch block for ImportError handling (business logic)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            1,
+            "Mixed Pattern should have 1 try-catch block for ImportError handling",
+        )
+        # Should still have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_reload_prompts_business_logic_preserved(self):
+        """Test reload_prompts preserves business logic (import error handling, success messages)"""
+        from backend.api.system import reload_prompts
+
+        source = inspect.getsource(reload_prompts)
+        self.assertIn("except ImportError:", source)
+        self.assertIn("prompt_manager.reload_prompts()", source)
+        self.assertIn('"Prompts reloaded successfully"', source)
+
+    # Endpoint 6: admin_check (Simple Pattern)
+    def test_admin_check_decorator_present(self):
+        """Test admin_check has @with_error_handling decorator"""
+        from backend.api.system import admin_check
+
+        source = inspect.getsource(admin_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="SYSTEM"', source)
+
+    def test_admin_check_simple_pattern(self):
+        """Test admin_check uses Simple Pattern (no try-catch)"""
+        from backend.api.system import admin_check
+
+        source = inspect.getsource(admin_check)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_admin_check_business_logic_preserved(self):
+        """Test admin_check preserves business logic (admin status checks)"""
+        from backend.api.system import admin_check
+
+        source = inspect.getsource(admin_check)
+        self.assertIn("os.getenv", source)
+        self.assertIn("os.getuid", source)
+        self.assertIn("admin_status", source)
+
+    # Endpoint 7: dynamic_import (Simple Pattern with preserved HTTPException)
+    def test_dynamic_import_decorator_present(self):
+        """Test dynamic_import has @with_error_handling decorator"""
+        from backend.api.system import dynamic_import
+
+        source = inspect.getsource(dynamic_import)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="SYSTEM"', source)
+
+    def test_dynamic_import_mixed_pattern(self):
+        """Test dynamic_import uses Mixed Pattern (decorator + preserved ImportError handling)"""
+        from backend.api.system import dynamic_import
+
+        source = inspect.getsource(dynamic_import)
+        # Should have 1 try-catch block for ImportError (business logic - raises 400)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            1,
+            "Mixed Pattern should have 1 try-catch block for ImportError handling",
+        )
+        # Should still have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_dynamic_import_security_check_preserved(self):
+        """Test dynamic_import preserves security check (403 HTTPException for disallowed modules)"""
+        from backend.api.system import dynamic_import
+
+        source = inspect.getsource(dynamic_import)
+        # Security check with 403 should be preserved
+        self.assertIn("allowed_modules", source)
+        self.assertIn("status_code=403", source)
+        self.assertIn("security reasons", source)
+
+    def test_dynamic_import_business_logic_preserved(self):
+        """Test dynamic_import preserves business logic (module import, ImportError handling)"""
+        from backend.api.system import dynamic_import
+
+        source = inspect.getsource(dynamic_import)
+        self.assertIn("importlib.import_module", source)
+        self.assertIn("except ImportError", source)
+        self.assertIn("status_code=400", source)
+
+    # Endpoint 8: get_detailed_health (Mixed Pattern)
+    def test_get_detailed_health_decorator_present(self):
+        """Test get_detailed_health has @with_error_handling decorator"""
+        from backend.api.system import get_detailed_health
+
+        source = inspect.getsource(get_detailed_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="SYSTEM"', source)
+
+    def test_get_detailed_health_mixed_pattern(self):
+        """Test get_detailed_health uses Mixed Pattern (decorator + preserved try-catch)"""
+        from backend.api.system import get_detailed_health
+
+        source = inspect.getsource(get_detailed_health)
+        # Should have multiple try-catch blocks for component health checks
+        try_count = source.count("    try:")
+        self.assertGreater(
+            try_count,
+            0,
+            "Mixed Pattern should preserve try-catch blocks for health check logic",
+        )
+        # Should still have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_get_detailed_health_returns_dict_on_error(self):
+        """Test get_detailed_health preserves error response behavior (returns health dict on exception)"""
+        from backend.api.system import get_detailed_health
+
+        source = inspect.getsource(get_detailed_health)
+        # Health check should return health status dict on error, not raise
+        self.assertIn("except Exception as e:", source)
+        self.assertIn('"status": "unhealthy"', source)
+        self.assertIn('"detailed": True', source)
+
+    def test_get_detailed_health_business_logic_preserved(self):
+        """Test get_detailed_health preserves business logic (detailed component checks)"""
+        from backend.api.system import get_detailed_health
+
+        source = inspect.getsource(get_detailed_health)
+        self.assertIn("await get_system_health()", source)
+        self.assertIn("detailed_components", source)
+        self.assertIn('"redis"', source)
+        self.assertIn('"llm"', source)
+
+    # Batch verification
+    def test_batch_81_all_endpoints_have_decorator(self):
+        """Test all batch 81 endpoints have @with_error_handling decorator with correct configuration"""
+        from backend.api.system import (
+            admin_check,
+            dynamic_import,
+            get_detailed_health,
+            reload_prompts,
+        )
+
+        endpoints = [
+            ("reload_prompts", reload_prompts),
+            ("admin_check", admin_check),
+            ("dynamic_import", dynamic_import),
+            ("get_detailed_health", get_detailed_health),
+        ]
+
+        for name, endpoint in endpoints:
+            with self.subTest(endpoint=name):
+                source = inspect.getsource(endpoint)
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} missing @with_error_handling decorator",
+                )
+                self.assertIn(
+                    "ErrorCategory.SERVER_ERROR",
+                    source,
+                    f"{name} missing ErrorCategory.SERVER_ERROR",
+                )
+                self.assertIn(
+                    'error_code_prefix="SYSTEM"',
+                    source,
+                    f'{name} missing error_code_prefix="SYSTEM"',
+                )
+
+    def test_batch_81_pattern_validation(self):
+        """Test batch 81 endpoints use correct patterns (1 Simple, 3 Mixed)"""
+        from backend.api.system import (
+            admin_check,
+            dynamic_import,
+            get_detailed_health,
+            reload_prompts,
+        )
+
+        # Simple Pattern endpoint (should have 0 try-catch)
+        source = inspect.getsource(admin_check)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count,
+            0,
+            f"admin_check should use Simple Pattern (0 try-catch blocks), found {try_count}",
+        )
+
+        # Mixed Pattern endpoints (should have try-catch blocks preserved)
+        mixed_pattern_endpoints = [
+            ("reload_prompts", reload_prompts),
+            ("dynamic_import", dynamic_import),
+            ("get_detailed_health", get_detailed_health),
+        ]
+
+        for name, endpoint in mixed_pattern_endpoints:
+            with self.subTest(endpoint=name, pattern="Mixed"):
+                source = inspect.getsource(endpoint)
+                try_count = source.count("    try:")
+                self.assertGreater(
+                    try_count,
+                    0,
+                    f"{name} should use Mixed Pattern (preserve try-catch blocks), found {try_count}",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
