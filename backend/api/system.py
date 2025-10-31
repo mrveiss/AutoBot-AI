@@ -248,99 +248,103 @@ async def reload_system_config():
 
 
 @router.get("/prompt_reload")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reload_prompts",
+    error_code_prefix="SYSTEM",
+)
 async def reload_prompts():
     """Reload prompt templates"""
+    logger.info("Reloading prompt templates...")
+
+    # Try to reload prompts if available
     try:
-        logger.info("Reloading prompt templates...")
+        from src.prompt_manager import prompt_manager
 
-        # Try to reload prompts if available
-        try:
-            from src.prompt_manager import prompt_manager
-
-            prompt_manager.reload_prompts()
-            message = "Prompts reloaded successfully"
-        except ImportError:
-            message = "Prompt manager not available"
-        except Exception as e:
-            message = f"Prompt reload error: {str(e)}"
-
-        return {
-            "status": "success",
-            "message": message,
-            "timestamp": datetime.now().isoformat(),
-        }
-
+        prompt_manager.reload_prompts()
+        message = "Prompts reloaded successfully"
+    except ImportError:
+        message = "Prompt manager not available"
     except Exception as e:
-        logger.error(f"Failed to reload prompts: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to reload prompts: {str(e)}"
-        )
+        message = f"Prompt reload error: {str(e)}"
+
+    return {
+        "status": "success",
+        "message": message,
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.get("/admin_check")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="admin_check",
+    error_code_prefix="SYSTEM",
+)
 async def admin_check():
     """Check admin status and permissions"""
-    try:
-        import os
+    import os
 
-        admin_status = {
-            "user": os.getenv("USER", "unknown"),
-            "admin": os.getuid() == 0 if hasattr(os, "getuid") else False,
-            "timestamp": datetime.now().isoformat(),
-        }
+    admin_status = {
+        "user": os.getenv("USER", "unknown"),
+        "admin": os.getuid() == 0 if hasattr(os, "getuid") else False,
+        "timestamp": datetime.now().isoformat(),
+    }
 
-        return admin_status
-
-    except Exception as e:
-        logger.error(f"Admin check failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Admin check failed: {str(e)}")
+    return admin_status
 
 
 @router.post("/dynamic_import")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="dynamic_import",
+    error_code_prefix="SYSTEM",
+)
 async def dynamic_import(request: Request, module_name: str = Form(...)):
     """Dynamically import a module (admin only)"""
+    logger.info(f"Dynamic import requested for module: {module_name}")
+
+    # Security check - only allow specific modules
+    allowed_modules = [
+        "src.config",
+        "src.llm_interface",
+        "backend.services",
+        "backend.utils",
+    ]
+
+    if not any(module_name.startswith(allowed) for allowed in allowed_modules):
+        raise HTTPException(
+            status_code=403, detail="Module import not allowed for security reasons"
+        )
+
+    # Attempt import
     try:
-        logger.info(f"Dynamic import requested for module: {module_name}")
-
-        # Security check - only allow specific modules
-        allowed_modules = [
-            "src.config",
-            "src.llm_interface",
-            "backend.services",
-            "backend.utils",
-        ]
-
-        if not any(module_name.startswith(allowed) for allowed in allowed_modules):
-            raise HTTPException(
-                status_code=403, detail="Module import not allowed for security reasons"
-            )
-
-        # Attempt import
         imported_module = importlib.import_module(module_name)
-
-        return {
-            "status": "success",
-            "message": f"Module {module_name} imported successfully",
-            "module_info": {
-                "name": getattr(imported_module, "__name__", "unknown"),
-                "file": getattr(imported_module, "__file__", "unknown"),
-                "doc": getattr(imported_module, "__doc__", "No documentation"),
-            },
-            "timestamp": datetime.now().isoformat(),
-        }
-
     except ImportError as e:
         logger.error(f"Import failed for {module_name}: {str(e)}")
         raise HTTPException(
             status_code=400, detail=f"Failed to import module: {str(e)}"
         )
-    except Exception as e:
-        logger.error(f"Dynamic import error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Import error: {str(e)}")
+
+    return {
+        "status": "success",
+        "message": f"Module {module_name} imported successfully",
+        "module_info": {
+            "name": getattr(imported_module, "__name__", "unknown"),
+            "file": getattr(imported_module, "__file__", "unknown"),
+            "doc": getattr(imported_module, "__doc__", "No documentation"),
+        },
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.get("/health/detailed")
 @cache_response(cache_key="system_health_detailed", ttl=30)  # Cache for 30 seconds
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_detailed_health",
+    error_code_prefix="SYSTEM",
+)
 async def get_detailed_health(request: Request):
     """Get detailed system health status including all components"""
     try:
