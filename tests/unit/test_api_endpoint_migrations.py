@@ -12542,5 +12542,150 @@ class TestBatch71AgentEnhancedMigrations(unittest.TestCase):
             )
 
 
+class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
+    """Test batch 72 migrations: agent_enhanced.py final 2 endpoints"""
+
+    def test_receive_goal_compat_decorator_present(self):
+        """Test receive_goal_compat has @with_error_handling decorator"""
+        from backend.api.agent_enhanced import receive_goal_compat
+
+        source = inspect.getsource(receive_goal_compat)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+
+    def test_receive_goal_compat_mixed_pattern(self):
+        """Test receive_goal_compat uses Mixed Pattern - preserves outer try-catch"""
+        from backend.api.agent_enhanced import receive_goal_compat
+
+        source = inspect.getsource(receive_goal_compat)
+        # Should preserve outer try-catch for fallback behavior
+        try_count = source.count("    try:")
+        self.assertGreaterEqual(
+            try_count, 1, "Should preserve outer try-catch for fallback logic"
+        )
+        self.assertIn("except Exception", source)
+
+    def test_receive_goal_compat_fallback_logic(self):
+        """Test receive_goal_compat preserves fallback business logic"""
+        from backend.api.agent_enhanced import receive_goal_compat
+
+        source = inspect.getsource(receive_goal_compat)
+        # Should have fallback behavior on exception
+        self.assertIn("except Exception", source)
+        self.assertIn("fallback", source.lower())
+
+    def test_enhanced_agent_health_decorator_present(self):
+        """Test enhanced_agent_health has @with_error_handling decorator"""
+        from backend.api.agent_enhanced import enhanced_agent_health
+
+        source = inspect.getsource(enhanced_agent_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AGENT_ENHANCED"', source)
+
+    def test_enhanced_agent_health_mixed_pattern(self):
+        """Test enhanced_agent_health uses Mixed Pattern - preserves outer try-catch"""
+        from backend.api.agent_enhanced import enhanced_agent_health
+
+        source = inspect.getsource(enhanced_agent_health)
+        # Should preserve outer try-catch for degraded status business logic
+        try_count = source.count("    try:")
+        self.assertGreaterEqual(
+            try_count, 1, "Should preserve outer try-catch for degraded status logic"
+        )
+        self.assertIn("except Exception", source)
+
+    def test_enhanced_agent_health_degraded_logic(self):
+        """Test enhanced_agent_health preserves degraded status business logic"""
+        from backend.api.agent_enhanced import enhanced_agent_health
+
+        source = inspect.getsource(enhanced_agent_health)
+        # Should return degraded status on exception
+        self.assertIn("except Exception", source)
+        self.assertIn('"status": "degraded"', source)
+
+    def test_batch72_decorator_placement(self):
+        """Test batch 72 endpoints have decorators in correct order"""
+        from backend.api.agent_enhanced import (
+            enhanced_agent_health,
+            receive_goal_compat,
+        )
+
+        for endpoint in [receive_goal_compat, enhanced_agent_health]:
+            source = inspect.getsource(endpoint)
+            # Router decorator should come before error handling decorator
+            router_pos = source.find("@router")
+            error_handling_pos = source.find("@with_error_handling")
+            self.assertLess(
+                router_pos,
+                error_handling_pos,
+                f"{endpoint.__name__}: @router should come before @with_error_handling",
+            )
+
+    def test_batch72_error_category_consistency(self):
+        """Test batch 72 endpoints all use ErrorCategory.SERVER_ERROR"""
+        from backend.api.agent_enhanced import (
+            enhanced_agent_health,
+            receive_goal_compat,
+        )
+
+        for endpoint in [receive_goal_compat, enhanced_agent_health]:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} should use ErrorCategory.SERVER_ERROR",
+            )
+
+    def test_batch72_error_prefix_consistency(self):
+        """Test batch 72 endpoints all use AGENT_ENHANCED prefix"""
+        from backend.api.agent_enhanced import (
+            enhanced_agent_health,
+            receive_goal_compat,
+        )
+
+        for endpoint in [receive_goal_compat, enhanced_agent_health]:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                'error_code_prefix="AGENT_ENHANCED"',
+                source,
+                f"{endpoint.__name__} should use AGENT_ENHANCED prefix",
+            )
+
+    def test_batch72_mixed_pattern_consistency(self):
+        """Test batch 72 endpoints all use Mixed Pattern (preserve outer try-catch)"""
+        from backend.api.agent_enhanced import (
+            enhanced_agent_health,
+            receive_goal_compat,
+        )
+
+        for endpoint in [receive_goal_compat, enhanced_agent_health]:
+            source = inspect.getsource(endpoint)
+            try_count = source.count("    try:")
+            self.assertGreaterEqual(
+                try_count,
+                1,
+                f"{endpoint.__name__} should preserve outer try-catch (Mixed Pattern)",
+            )
+
+    def test_batch72_business_logic_preservation(self):
+        """Test batch 72 endpoints preserve business logic (fallback/degraded responses)"""
+        from backend.api.agent_enhanced import (
+            enhanced_agent_health,
+            receive_goal_compat,
+        )
+
+        # receive_goal_compat should have fallback logic
+        compat_source = inspect.getsource(receive_goal_compat)
+        self.assertIn("except Exception", compat_source)
+        self.assertIn("fallback", compat_source.lower())
+
+        # enhanced_agent_health should have degraded status logic
+        health_source = inspect.getsource(enhanced_agent_health)
+        self.assertIn("except Exception", health_source)
+        self.assertIn('"status": "degraded"', health_source)
+
+
 if __name__ == "__main__":
     unittest.main()
