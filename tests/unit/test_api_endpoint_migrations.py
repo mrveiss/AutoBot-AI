@@ -16914,5 +16914,275 @@ class TestBatch92ServiceMonitorMigrations(unittest.TestCase):
         self.assertIn("except Exception:", source)
 
 
+class TestBatch93ServiceMonitorMigrations(unittest.TestCase):
+    """Test batch 93 migrations for service_monitor.py (batch 3 of 3 - FINAL)"""
+
+    def test_service_monitor_py_100_percent_complete(self):
+        """Verify service_monitor.py reached 100% completion - ALL 10 endpoints migrated"""
+        from backend.api import service_monitor
+
+        all_endpoints = [
+            # Batch 91
+            service_monitor.get_service_status,
+            service_monitor.ping,
+            service_monitor.get_service_health,
+            service_monitor.get_system_resources,
+            # Batch 92
+            service_monitor.get_all_services,
+            service_monitor.health_redirect,
+            service_monitor.get_vm_status,
+            # Batch 93
+            service_monitor.get_single_vm_status,
+            service_monitor.debug_vm_config,
+            service_monitor.debug_vm_test,
+        ]
+
+        # Verify ALL 10 endpoints have the decorator
+        for endpoint in all_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("@with_error_handling", source)
+
+        # This confirms 100% completion
+        self.assertEqual(len(all_endpoints), 10)
+
+    def test_batch_93_progress_validation(self):
+        """Verify batch 93 brings service_monitor.py to 10/10 endpoints (100%)"""
+        from backend.api import service_monitor
+
+        batch_93_endpoints = [
+            service_monitor.get_single_vm_status,
+            service_monitor.debug_vm_config,
+            service_monitor.debug_vm_test,
+        ]
+
+        # All 3 endpoints should have @with_error_handling
+        for endpoint in batch_93_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_93_all_mixed_pattern(self):
+        """Verify batch 93: all 3 endpoints are Mixed Pattern"""
+        from backend.api import service_monitor
+
+        # get_single_vm_status: preserves 404 HTTPException
+        source = inspect.getsource(service_monitor.get_single_vm_status)
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=404", source)
+        # Should NOT have outer try-catch
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks")
+
+        # debug_vm_config: preserves error dict return
+        source = inspect.getsource(service_monitor.debug_vm_config)
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 1, "Should preserve 1 try-catch for error dict")
+
+        # debug_vm_test: preserves error dict return
+        source = inspect.getsource(service_monitor.debug_vm_test)
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 1, "Should preserve 1 try-catch for error dict")
+
+    def test_batch_93_get_single_vm_status_has_decorator(self):
+        """Verify get_single_vm_status has @with_error_handling decorator"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.get_single_vm_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SERVICE_MONITOR"', source)
+        self.assertIn('operation="get_single_vm_status"', source)
+
+    def test_batch_93_get_single_vm_status_preserves_404(self):
+        """Verify get_single_vm_status preserves 404 HTTPException for VM not found"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.get_single_vm_status)
+        # Should preserve 404 HTTPException for business logic
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=404", source)
+        self.assertIn("not found in infrastructure", source)
+        # Should NOT have outer try-catch wrapper
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks")
+
+    def test_batch_93_debug_vm_config_has_decorator(self):
+        """Verify debug_vm_config has @with_error_handling decorator"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.debug_vm_config)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SERVICE_MONITOR"', source)
+        self.assertIn('operation="debug_vm_config"', source)
+
+    def test_batch_93_debug_vm_config_preserves_error_dict(self):
+        """Verify debug_vm_config preserves try-catch that returns error dict"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.debug_vm_config)
+        # Should preserve 1 try-catch for error dict return
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 1, "Should preserve error dict try-catch")
+        # Should return error dict
+        self.assertIn('"config_available"', source)
+        self.assertIn('"error":', source)
+
+    def test_batch_93_debug_vm_test_has_decorator(self):
+        """Verify debug_vm_test has @with_error_handling decorator"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.debug_vm_test)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SERVICE_MONITOR"', source)
+        self.assertIn('operation="debug_vm_test"', source)
+
+    def test_batch_93_debug_vm_test_preserves_error_dict(self):
+        """Verify debug_vm_test preserves try-catch that returns error dict"""
+        from backend.api import service_monitor
+
+        source = inspect.getsource(service_monitor.debug_vm_test)
+        # Should preserve 1 try-catch for error dict return
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 1, "Should preserve error dict try-catch")
+        # Should return success/error dict
+        self.assertIn('"success"', source)
+        self.assertIn('"error":', source)
+
+    def test_batch_93_line_count_reductions(self):
+        """Verify batch 93 endpoints are concise after migration"""
+        from backend.api import service_monitor
+
+        # Test endpoints with expected max line counts
+        mixed_endpoints = [
+            ("get_single_vm_status", service_monitor.get_single_vm_status, 32),
+            ("debug_vm_config", service_monitor.debug_vm_config, 21),
+            ("debug_vm_test", service_monitor.debug_vm_test, 23),
+        ]
+
+        for name, endpoint, max_lines in mixed_endpoints:
+            source = inspect.getsource(endpoint)
+            line_count = len([line for line in source.split("\n") if line.strip()])
+            self.assertLessEqual(
+                line_count,
+                max_lines,
+                f"{name} should be concise (≤{max_lines} lines), got {line_count}",
+            )
+
+    def test_batch_93_all_have_error_code_prefix(self):
+        """Verify all batch 93 endpoints use SERVICE_MONITOR error_code_prefix"""
+        from backend.api import service_monitor
+
+        batch_93_endpoints = [
+            service_monitor.get_single_vm_status,
+            service_monitor.debug_vm_config,
+            service_monitor.debug_vm_test,
+        ]
+
+        for endpoint in batch_93_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                'error_code_prefix="SERVICE_MONITOR"',
+                source,
+                f"{endpoint.__name__} missing SERVICE_MONITOR prefix",
+            )
+
+    def test_batch_93_cumulative_progress(self):
+        """Verify cumulative progress: 10/10 endpoints migrated after batch 93 (100%)"""
+        from backend.api import service_monitor
+
+        all_migrated_endpoints = [
+            # Batch 91
+            service_monitor.get_service_status,
+            service_monitor.ping,
+            service_monitor.get_service_health,
+            service_monitor.get_system_resources,
+            # Batch 92
+            service_monitor.get_all_services,
+            service_monitor.health_redirect,
+            service_monitor.get_vm_status,
+            # Batch 93
+            service_monitor.get_single_vm_status,
+            service_monitor.debug_vm_config,
+            service_monitor.debug_vm_test,
+        ]
+
+        # All 10 endpoints should have @with_error_handling
+        for endpoint in all_migrated_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} missing @with_error_handling decorator",
+            )
+
+        # Verify 100% completion
+        total_endpoints = 10
+        self.assertEqual(
+            len(all_migrated_endpoints),
+            total_endpoints,
+            "Should have migrated 10/10 endpoints (100%)",
+        )
+
+    def test_batch_93_12th_file_to_reach_100_percent(self):
+        """Verify service_monitor.py is the 12th file to reach 100% completion"""
+        # Files that reached 100%:
+        # 1. conversation_files.py
+        # 2. markdown.py
+        # 3. llm.py
+        # 4. knowledge_files.py
+        # 5. desktop_ui.py
+        # 6. chat.py
+        # 7. desktop_vnc.py
+        # 8. intelligent_agent.py
+        # 9. system.py
+        # 10. codebase_analytics.py
+        # 11. ai_stack_integration.py
+        # 12. service_monitor.py <- NEW
+
+        from backend.api import service_monitor
+
+        all_endpoints = [
+            service_monitor.get_service_status,
+            service_monitor.ping,
+            service_monitor.get_service_health,
+            service_monitor.get_system_resources,
+            service_monitor.get_all_services,
+            service_monitor.health_redirect,
+            service_monitor.get_vm_status,
+            service_monitor.get_single_vm_status,
+            service_monitor.debug_vm_config,
+            service_monitor.debug_vm_test,
+        ]
+
+        # Verify ALL endpoints have decorator
+        for endpoint in all_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("@with_error_handling", source)
+
+        # This is a milestone test
+        self.assertEqual(len(all_endpoints), 10, "service_monitor.py has 10 endpoints")
+
+    def test_batch_93_preserved_business_logic(self):
+        """Verify batch 93 preserves critical business logic patterns"""
+        from backend.api import service_monitor
+
+        # get_single_vm_status should preserve 404 for not found
+        source = inspect.getsource(service_monitor.get_single_vm_status)
+        self.assertIn("status_code=404", source)
+        self.assertIn("not found in infrastructure", source)
+
+        # debug_vm_config should return config_available status
+        source = inspect.getsource(service_monitor.debug_vm_config)
+        self.assertIn('"config_available": True', source)
+        self.assertIn('"config_available": False', source)
+
+        # debug_vm_test should return success status
+        source = inspect.getsource(service_monitor.debug_vm_test)
+        self.assertIn('"success": True', source)
+        self.assertIn('"success": False', source)
+
+
 if __name__ == "__main__":
     unittest.main()

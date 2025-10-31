@@ -920,45 +920,48 @@ async def get_vm_status():
 
 
 @router.get("/vms/{vm_name}/status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_single_vm_status",
+    error_code_prefix="SERVICE_MONITOR",
+)
 async def get_single_vm_status(vm_name: str):
     """Get status of a specific VM"""
-    try:
-        # Get VM definitions from config
-        vm_hosts = cfg.get("infrastructure.hosts", {})
+    # Get VM definitions from config
+    vm_hosts = cfg.get("infrastructure.hosts", {})
 
-        if vm_name not in vm_hosts:
-            raise HTTPException(
-                status_code=404, detail=f"VM '{vm_name}' not found in infrastructure"
-            )
+    if vm_name not in vm_hosts:
+        raise HTTPException(
+            status_code=404, detail=f"VM '{vm_name}' not found in infrastructure"
+        )
 
-        host = vm_hosts[vm_name]
+    host = vm_hosts[vm_name]
 
-        # Special case for main machine
-        if host in [NetworkConstants.LOCALHOST_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.MAIN_MACHINE_IP]:
-            return VMStatus(
-                name="Main Machine (WSL)",
-                host=host,
-                status="online",
-                message="Backend running",
-                response_time=0,
-                last_check=datetime.now(),
-                icon="fas fa-desktop",
-                services=["autobot-backend"],
-                details={"role": "Backend API + VNC Desktop"},
-            ).dict()
+    # Special case for main machine
+    if host in [NetworkConstants.LOCALHOST_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.MAIN_MACHINE_IP]:
+        return VMStatus(
+            name="Main Machine (WSL)",
+            host=host,
+            status="online",
+            message="Backend running",
+            response_time=0,
+            last_check=datetime.now(),
+            icon="fas fa-desktop",
+            services=["autobot-backend"],
+            details={"role": "Backend API + VNC Desktop"},
+        ).dict()
 
-        # Check remote VM
-        vm_status = await get_monitor().check_vm_ssh(vm_name, host)
-        return vm_status.dict()
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Single VM status check failed: {e}")
-        raise HTTPException(status_code=500, detail=f"VM check error: {str(e)}")
+    # Check remote VM
+    vm_status = await get_monitor().check_vm_ssh(vm_name, host)
+    return vm_status.dict()
 
 
 @router.get("/debug/vm-config")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="debug_vm_config",
+    error_code_prefix="SERVICE_MONITOR",
+)
 async def debug_vm_config():
     """Debug endpoint to check VM configuration"""
     try:
@@ -977,6 +980,11 @@ async def debug_vm_config():
 
 
 @router.get("/debug/vm-test")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="debug_vm_test",
+    error_code_prefix="SERVICE_MONITOR",
+)
 async def debug_vm_test():
     """Debug endpoint to test VM monitoring directly"""
     try:
