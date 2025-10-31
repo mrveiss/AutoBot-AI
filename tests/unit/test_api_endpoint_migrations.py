@@ -13596,5 +13596,218 @@ class TestBatch79IntelligentAgentMigrations(unittest.TestCase):
                 )
 
 
+class TestBatch80SystemMigrations(unittest.TestCase):
+    """Test batch 80 migrations: system.py first 4 endpoints (get_frontend_config, get_system_health, get_system_info, reload_system_config)"""
+
+    # Endpoint 1: get_frontend_config (Simple Pattern)
+    def test_get_frontend_config_decorator_present(self):
+        """Test get_frontend_config has @with_error_handling decorator"""
+        from backend.api.system import get_frontend_config
+
+        source = inspect.getsource(get_frontend_config)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="SYSTEM"', source)
+
+    def test_get_frontend_config_simple_pattern(self):
+        """Test get_frontend_config uses Simple Pattern (no try-catch)"""
+        from backend.api.system import get_frontend_config
+
+        source = inspect.getsource(get_frontend_config)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_get_frontend_config_business_logic_preserved(self):
+        """Test get_frontend_config preserves business logic (frontend config building)"""
+        from backend.api.system import get_frontend_config
+
+        source = inspect.getsource(get_frontend_config)
+        self.assertIn("ollama_url = config.get_service_url", source)
+        self.assertIn("redis_config = config.get_redis_config()", source)
+        self.assertIn("frontend_config = {", source)
+
+    def test_get_frontend_config_cache_decorator_preserved(self):
+        """Test get_frontend_config preserves @cache_response decorator"""
+        from backend.api.system import get_frontend_config
+
+        source = inspect.getsource(get_frontend_config)
+        self.assertIn("@cache_response", source)
+
+    # Endpoint 2: get_system_health (Mixed Pattern)
+    def test_get_system_health_decorator_present(self):
+        """Test get_system_health has @with_error_handling decorator"""
+        from backend.api.system import get_system_health
+
+        source = inspect.getsource(get_system_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="SYSTEM"', source)
+
+    def test_get_system_health_mixed_pattern(self):
+        """Test get_system_health uses Mixed Pattern (decorator + preserved try-catch)"""
+        from backend.api.system import get_system_health
+
+        source = inspect.getsource(get_system_health)
+        # Should have multiple try-catch blocks for health check logic
+        try_count = source.count("    try:")
+        self.assertGreater(
+            try_count,
+            0,
+            "Mixed Pattern should preserve try-catch blocks for health check logic",
+        )
+        # Should still have decorator
+        self.assertIn("@with_error_handling", source)
+
+    def test_get_system_health_returns_dict_on_error(self):
+        """Test get_system_health preserves error response behavior (returns health dict on exception)"""
+        from backend.api.system import get_system_health
+
+        source = inspect.getsource(get_system_health)
+        # Health check should return health status dict on error, not raise
+        self.assertIn("except Exception as e:", source)
+        self.assertIn('"status": "unhealthy"', source)
+        self.assertIn("return {", source)
+
+    def test_get_system_health_business_logic_preserved(self):
+        """Test get_system_health preserves business logic (component health checks)"""
+        from backend.api.system import get_system_health
+
+        source = inspect.getsource(get_system_health)
+        self.assertIn("health_status", source)
+        self.assertIn('"components"', source)
+        self.assertIn("app_state", source)
+
+    # Endpoint 3: get_system_info (Simple Pattern)
+    def test_get_system_info_decorator_present(self):
+        """Test get_system_info has @with_error_handling decorator"""
+        from backend.api.system import get_system_info
+
+        source = inspect.getsource(get_system_info)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="SYSTEM"', source)
+
+    def test_get_system_info_simple_pattern(self):
+        """Test get_system_info uses Simple Pattern (no try-catch)"""
+        from backend.api.system import get_system_info
+
+        source = inspect.getsource(get_system_info)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_get_system_info_business_logic_preserved(self):
+        """Test get_system_info preserves business logic (system info building)"""
+        from backend.api.system import get_system_info
+
+        source = inspect.getsource(get_system_info)
+        self.assertIn("python_version", source)
+        self.assertIn("system_info", source)
+        self.assertIn('"features"', source)
+
+    # Endpoint 4: reload_system_config (Simple Pattern)
+    def test_reload_system_config_decorator_present(self):
+        """Test reload_system_config has @with_error_handling decorator"""
+        from backend.api.system import reload_system_config
+
+        source = inspect.getsource(reload_system_config)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="SYSTEM"', source)
+
+    def test_reload_system_config_simple_pattern(self):
+        """Test reload_system_config uses Simple Pattern (no try-catch)"""
+        from backend.api.system import reload_system_config
+
+        source = inspect.getsource(reload_system_config)
+        try_count = source.count("    try:")
+        self.assertEqual(
+            try_count, 0, "Simple Pattern should have no try-catch blocks"
+        )
+
+    def test_reload_system_config_business_logic_preserved(self):
+        """Test reload_system_config preserves business logic (config reload and cache clearing)"""
+        from backend.api.system import reload_system_config
+
+        source = inspect.getsource(reload_system_config)
+        self.assertIn("config.reload()", source)
+        self.assertIn("cache_manager.clear_pattern", source)
+        self.assertIn('"frontend_config*"', source)
+
+    # Batch verification
+    def test_batch_80_all_endpoints_have_decorator(self):
+        """Test all batch 80 endpoints have @with_error_handling decorator with correct configuration"""
+        from backend.api.system import (
+            get_frontend_config,
+            get_system_health,
+            get_system_info,
+            reload_system_config,
+        )
+
+        endpoints = [
+            ("get_frontend_config", get_frontend_config),
+            ("get_system_health", get_system_health),
+            ("get_system_info", get_system_info),
+            ("reload_system_config", reload_system_config),
+        ]
+
+        for name, endpoint in endpoints:
+            with self.subTest(endpoint=name):
+                source = inspect.getsource(endpoint)
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} missing @with_error_handling decorator",
+                )
+                self.assertIn(
+                    "ErrorCategory.SERVER_ERROR",
+                    source,
+                    f"{name} missing ErrorCategory.SERVER_ERROR",
+                )
+                self.assertIn(
+                    'error_code_prefix="SYSTEM"',
+                    source,
+                    f'{name} missing error_code_prefix="SYSTEM"',
+                )
+
+    def test_batch_80_pattern_validation(self):
+        """Test batch 80 endpoints use correct patterns (3 Simple, 1 Mixed)"""
+        from backend.api.system import (
+            get_frontend_config,
+            get_system_health,
+            get_system_info,
+            reload_system_config,
+        )
+
+        # Simple Pattern endpoints (should have 0 try-catch)
+        simple_pattern_endpoints = [
+            ("get_frontend_config", get_frontend_config),
+            ("get_system_info", get_system_info),
+            ("reload_system_config", reload_system_config),
+        ]
+
+        for name, endpoint in simple_pattern_endpoints:
+            with self.subTest(endpoint=name, pattern="Simple"):
+                source = inspect.getsource(endpoint)
+                try_count = source.count("    try:")
+                self.assertEqual(
+                    try_count,
+                    0,
+                    f"{name} should use Simple Pattern (0 try-catch blocks), found {try_count}",
+                )
+
+        # Mixed Pattern endpoint (should have try-catch blocks preserved)
+        source = inspect.getsource(get_system_health)
+        try_count = source.count("    try:")
+        self.assertGreater(
+            try_count,
+            0,
+            f"get_system_health should use Mixed Pattern (preserve try-catch blocks), found {try_count}",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

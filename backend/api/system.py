@@ -14,6 +14,7 @@ from backend.utils.connection_utils import ModelManager
 from src.constants.network_constants import NetworkConstants
 from src.constants.model_constants import ModelConstants as ModelConsts
 from src.unified_config import config
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 
@@ -22,92 +23,95 @@ logger = logging.getLogger(__name__)
 
 @router.get("/frontend-config")
 @cache_response(cache_key="frontend_config", ttl=60)  # Cache for 1 minute
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_frontend_config",
+    error_code_prefix="SYSTEM",
+)
 async def get_frontend_config():
     """Get configuration values needed by the frontend.
 
     This endpoint provides all service URLs and configuration that the frontend needs,
     eliminating the need for hardcoded values in the frontend code.
     """
-    try:
-        # Get configuration from the config manager
-        ollama_url = config.get_service_url("ollama")
-        redis_config = config.get_redis_config()
-        backend_config = config.get("backend", {})
+    # Get configuration from the config manager
+    ollama_url = config.get_service_url("ollama")
+    redis_config = config.get_redis_config()
+    backend_config = config.get("backend", {})
 
-        # Build frontend configuration
-        frontend_config = {
-            "services": {
-                "ollama": {
-                    "url": ollama_url,
-                    "endpoint": config.get(
-                        "backend.llm.local.providers.ollama.endpoint",
-                        f"{ollama_url}/api/generate",
-                    ),
-                    "embedding_endpoint": config.get(
-                        "backend.llm.embedding.providers.ollama.endpoint",
-                        f"{ollama_url}/api/embeddings",
-                    ),
-                },
-                "playwright": {
-                    "vnc_url": config.get_service_url("playwright-vnc"),
-                    "api_url": config.get_service_url("playwright"),
-                },
-                "redis": {
-                    "host": redis_config.get("host", config.get_host("redis")),
-                    "port": redis_config.get("port", config.get_port("redis")),
-                    "enabled": redis_config.get("enabled", True),
-                },
-                "lmstudio": {
-                    "url": config.get(
-                        "backend.llm.local.providers.lmstudio.endpoint",
-                        config.get_service_url("lmstudio"),
-                    ),
-                },
-            },
-            "api": {
-                "timeout": config.get("backend.timeout", 60)
-                * 1000,  # Convert to milliseconds
-                "retry_attempts": config.get("backend.max_retries", 3),
-                "streaming": config.get("backend.streaming", False),
-            },
-            "features": {
-                "voice_enabled": config.get("voice_interface.enabled", False),
-                "knowledge_base_enabled": config.get("knowledge_base.enabled", True),
-                "developer_mode": config.get("developer.enabled", True),
-            },
-            "ui": {
-                "theme": config.get("ui.theme", "light"),
-                "animations": config.get("ui.animations", True),
-                "font_size": config.get("ui.font_size", "medium"),
-            },
-            "defaults": {
-                "welcome_message": config.get(
-                    "chat.default_welcome_message", "Hello! How can I assist you today?"
+    # Build frontend configuration
+    frontend_config = {
+        "services": {
+            "ollama": {
+                "url": ollama_url,
+                "endpoint": config.get(
+                    "backend.llm.local.providers.ollama.endpoint",
+                    f"{ollama_url}/api/generate",
                 ),
-                "model_name": config.get(
-                    "backend.llm.local.providers.ollama.selected_model",
-                    ModelConsts.DEFAULT_OLLAMA_MODEL,
+                "embedding_endpoint": config.get(
+                    "backend.llm.embedding.providers.ollama.endpoint",
+                    f"{ollama_url}/api/embeddings",
                 ),
-                "max_chat_messages": config.get("chat.max_messages", 100),
             },
-        }
+            "playwright": {
+                "vnc_url": config.get_service_url("playwright-vnc"),
+                "api_url": config.get_service_url("playwright"),
+            },
+            "redis": {
+                "host": redis_config.get("host", config.get_host("redis")),
+                "port": redis_config.get("port", config.get_port("redis")),
+                "enabled": redis_config.get("enabled", True),
+            },
+            "lmstudio": {
+                "url": config.get(
+                    "backend.llm.local.providers.lmstudio.endpoint",
+                    config.get_service_url("lmstudio"),
+                ),
+            },
+        },
+        "api": {
+            "timeout": config.get("backend.timeout", 60)
+            * 1000,  # Convert to milliseconds
+            "retry_attempts": config.get("backend.max_retries", 3),
+            "streaming": config.get("backend.streaming", False),
+        },
+        "features": {
+            "voice_enabled": config.get("voice_interface.enabled", False),
+            "knowledge_base_enabled": config.get("knowledge_base.enabled", True),
+            "developer_mode": config.get("developer.enabled", True),
+        },
+        "ui": {
+            "theme": config.get("ui.theme", "light"),
+            "animations": config.get("ui.animations", True),
+            "font_size": config.get("ui.font_size", "medium"),
+        },
+        "defaults": {
+            "welcome_message": config.get(
+                "chat.default_welcome_message", "Hello! How can I assist you today?"
+            ),
+            "model_name": config.get(
+                "backend.llm.local.providers.ollama.selected_model",
+                ModelConsts.DEFAULT_OLLAMA_MODEL,
+            ),
+            "max_chat_messages": config.get("chat.max_messages", 100),
+        },
+    }
 
-        return {
-            "status": "success",
-            "config": frontend_config,
-            "timestamp": datetime.now().isoformat(),
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to get frontend config: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get frontend config: {str(e)}"
-        )
+    return {
+        "status": "success",
+        "config": frontend_config,
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.get("/health")
 @router.get("/system/health")  # Frontend compatibility alias
 @cache_response(cache_key="system_health", ttl=30)  # Cache for 30 seconds
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_health",
+    error_code_prefix="SYSTEM",
+)
 async def get_system_health(request: Request = None):
     """Get system health status"""
     try:
@@ -188,63 +192,59 @@ async def get_system_health(request: Request = None):
 
 @router.get("/info")
 @cache_response(cache_key="system_info", ttl=300)  # Cache for 5 minutes
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_info",
+    error_code_prefix="SYSTEM",
+)
 async def get_system_info():
     """Get system information"""
-    try:
-        python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
-        system_info = {
-            "name": "AutoBot Backend",
-            "version": "Phase 9.0",
-            "python_version": python_version,
-            "timestamp": datetime.now().isoformat(),
-            "features": {
-                "llm_integration": True,
-                "knowledge_base": True,
-                "chat_system": True,
-                "caching": True,  # Now enabled!
-                "websockets": True,
-            },
-        }
+    system_info = {
+        "name": "AutoBot Backend",
+        "version": "Phase 9.0",
+        "python_version": python_version,
+        "timestamp": datetime.now().isoformat(),
+        "features": {
+            "llm_integration": True,
+            "knowledge_base": True,
+            "chat_system": True,
+            "caching": True,  # Now enabled!
+            "websockets": True,
+        },
+    }
 
-        return system_info
-
-    except Exception as e:
-        logger.error(f"Failed to get system info: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get system info: {str(e)}"
-        )
+    return system_info
 
 
 @router.post("/reload_config")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reload_system_config",
+    error_code_prefix="SYSTEM",
+)
 async def reload_system_config():
     """Reload system configuration and clear caches"""
-    try:
-        logger.info("Reloading system configuration...")
+    logger.info("Reloading system configuration...")
 
-        # Reload configuration
-        config.reload()
+    # Reload configuration
+    config.reload()
 
-        # Clear configuration-related caches
-        from backend.utils.cache_manager import cache_manager
+    # Clear configuration-related caches
+    from backend.utils.cache_manager import cache_manager
 
-        await cache_manager.clear_pattern("frontend_config*")
-        await cache_manager.clear_pattern("system_*")
-        await cache_manager.clear_pattern("llm_*")
+    await cache_manager.clear_pattern("frontend_config*")
+    await cache_manager.clear_pattern("system_*")
+    await cache_manager.clear_pattern("llm_*")
 
-        logger.info("System configuration reloaded and caches cleared")
+    logger.info("System configuration reloaded and caches cleared")
 
-        return {
-            "status": "success",
-            "message": "System configuration reloaded successfully",
-            "timestamp": datetime.now().isoformat(),
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to reload config: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to reload config: {str(e)}"
-        )
+    return {
+        "status": "success",
+        "message": "System configuration reloaded successfully",
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.get("/prompt_reload")
