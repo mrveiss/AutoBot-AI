@@ -14989,5 +14989,288 @@ class TestBatch85CodebaseAnalyticsMigrations(unittest.TestCase):
                     self.assertIn("try:", source, f"{name} should preserve inner try")
 
 
+class TestBatch86AIStackIntegrationMigrations(unittest.TestCase):
+    """Test batch 86 migrations: ai_stack_integration.py first 4 endpoints (ai_stack_health_check, list_ai_agents, rag_query, reformulate_query)"""
+
+    def test_ai_stack_health_check_decorator_present(self):
+        """Test ai_stack_health_check has @with_error_handling decorator"""
+        from backend.api.ai_stack_integration import ai_stack_health_check
+
+        source = inspect.getsource(ai_stack_health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_list_ai_agents_decorator_present(self):
+        """Test list_ai_agents has @with_error_handling decorator"""
+        from backend.api.ai_stack_integration import list_ai_agents
+
+        source = inspect.getsource(list_ai_agents)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_rag_query_decorator_present(self):
+        """Test rag_query has @with_error_handling decorator"""
+        from backend.api.ai_stack_integration import rag_query
+
+        source = inspect.getsource(rag_query)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_reformulate_query_decorator_present(self):
+        """Test reformulate_query has @with_error_handling decorator"""
+        from backend.api.ai_stack_integration import reformulate_query
+
+        source = inspect.getsource(reformulate_query)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_86_pattern_validation(self):
+        """Test batch 86 endpoints use correct patterns (2 Simple, 2 Mixed)"""
+        from backend.api.ai_stack_integration import (
+            ai_stack_health_check,
+            list_ai_agents,
+            rag_query,
+            reformulate_query,
+        )
+
+        # Simple Pattern endpoints (should have 0 try-catch)
+        simple_pattern_endpoints = [
+            ("list_ai_agents", list_ai_agents),
+            ("reformulate_query", reformulate_query),
+        ]
+
+        for name, endpoint in simple_pattern_endpoints:
+            source = inspect.getsource(endpoint)
+            try_count = source.count("    try:")
+            self.assertEqual(
+                try_count,
+                0,
+                f"{name} should use Simple Pattern (0 try-catch blocks), found {try_count}",
+            )
+
+        # Mixed Pattern endpoints (should have try-catch blocks preserved)
+        mixed_pattern_endpoints = [
+            ("ai_stack_health_check", ai_stack_health_check),
+            ("rag_query", rag_query),
+        ]
+
+        for name, endpoint in mixed_pattern_endpoints:
+            source = inspect.getsource(endpoint)
+            try_count = source.count("    try:")
+
+            self.assertGreater(
+                try_count,
+                0,
+                f"{name} should use Mixed Pattern (preserve try-catch blocks), found {try_count}",
+            )
+
+    def test_ai_stack_health_check_exception_handling_preserved(self):
+        """Test ai_stack_health_check preserves custom exception handling (returns JSONResponse)"""
+        from backend.api.ai_stack_integration import ai_stack_health_check
+
+        source = inspect.getsource(ai_stack_health_check)
+        # Should have custom exception handler that returns JSONResponse
+        self.assertIn("except Exception as e:", source)
+        self.assertIn("JSONResponse", source)
+        self.assertIn("AI Stack unavailable", source)
+
+    def test_rag_query_kb_fallback_preserved(self):
+        """Test rag_query preserves knowledge base fallback logic"""
+        from backend.api.ai_stack_integration import rag_query
+
+        source = inspect.getsource(rag_query)
+        # Should have KB search try-catch preserved
+        self.assertIn("try:", source)
+        self.assertIn("knowledge_base.search", source)
+        self.assertIn("except Exception as e:", source)
+        self.assertIn("logger.warning", source)
+
+    def test_batch_86_no_outer_exception_handlers(self):
+        """Test batch 86 Simple Pattern endpoints have no try-catch blocks"""
+        from backend.api.ai_stack_integration import (
+            list_ai_agents,
+            reformulate_query,
+        )
+
+        # Simple Pattern endpoints should not have any try-catch
+        for endpoint in [list_ai_agents, reformulate_query]:
+            source = inspect.getsource(endpoint)
+            try_count = source.count("    try:")
+            self.assertEqual(
+                try_count,
+                0,
+                f"{endpoint.__name__} should have 0 try-catch blocks, found {try_count}",
+            )
+
+    def test_batch_86_endpoints_have_operation_names(self):
+        """Test batch 86 endpoints have correct operation names in decorator"""
+        from backend.api.ai_stack_integration import (
+            ai_stack_health_check,
+            list_ai_agents,
+            rag_query,
+            reformulate_query,
+        )
+
+        endpoints = [
+            (ai_stack_health_check, "ai_stack_health_check"),
+            (list_ai_agents, "list_ai_agents"),
+            (rag_query, "rag_query"),
+            (reformulate_query, "reformulate_query"),
+        ]
+
+        for endpoint, expected_operation in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                f'operation="{expected_operation}"',
+                source,
+                f"{endpoint.__name__} should have operation='{expected_operation}'",
+            )
+
+    def test_batch_86_lines_saved(self):
+        """Test batch 86 migrations reduced code by removing exception handlers"""
+        from backend.api.ai_stack_integration import (
+            list_ai_agents,
+            rag_query,
+            reformulate_query,
+        )
+
+        # Count total exception handlers that were removed
+        removed_handlers = 0
+
+        # list_ai_agents: removed try-catch (lines 176-183) = ~8 lines
+        removed_handlers += 8
+
+        # rag_query: removed outer try-catch (lines 200, 224-225) = ~3 lines
+        removed_handlers += 3
+
+        # reformulate_query: removed try-catch (lines 231-238) = ~8 lines
+        removed_handlers += 8
+
+        self.assertGreater(
+            removed_handlers,
+            0,
+            f"Batch 86 should have removed exception handlers (expected ~19 lines)",
+        )
+
+    def test_batch_86_business_logic_preserved(self):
+        """Test batch 86 Mixed Pattern endpoints preserve business logic"""
+        from backend.api.ai_stack_integration import (
+            ai_stack_health_check,
+            rag_query,
+        )
+
+        # ai_stack_health_check: Should preserve exception handler that returns JSONResponse
+        source_health = inspect.getsource(ai_stack_health_check)
+        self.assertIn("try:", source_health)
+        self.assertIn("except Exception as e:", source_health)
+        self.assertIn("JSONResponse", source_health)
+
+        # rag_query: Should preserve KB search fallback
+        source_rag = inspect.getsource(rag_query)
+        self.assertIn("try:", source_rag)
+        self.assertIn("knowledge_base.search", source_rag)
+        self.assertIn("except Exception as e:", source_rag)
+
+    def test_batch_86_kb_fallback_logic(self):
+        """Test batch 86 knowledge base fallback logic is preserved"""
+        from backend.api.ai_stack_integration import rag_query
+
+        source = inspect.getsource(rag_query)
+
+        # Should have KB search
+        self.assertIn("knowledge_base.search", source)
+        self.assertIn("query=request.query", source)
+
+        # Should have fallback logic
+        self.assertIn("except Exception as e:", source)
+        self.assertIn("Knowledge base search failed", source)
+        self.assertIn("documents = []", source)
+
+    def test_batch_86_decorator_parameters(self):
+        """Test batch 86 endpoints have correct decorator parameters"""
+        from backend.api.ai_stack_integration import (
+            ai_stack_health_check,
+            list_ai_agents,
+            rag_query,
+            reformulate_query,
+        )
+
+        endpoints = [
+            ai_stack_health_check,
+            list_ai_agents,
+            rag_query,
+            reformulate_query,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # All should have SERVER_ERROR category
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            # All should have AI_STACK prefix
+            self.assertIn('error_code_prefix="AI_STACK"', source)
+            # All should have operation parameter
+            self.assertIn("operation=", source)
+
+    def test_batch_86_no_handle_ai_stack_error_calls(self):
+        """Test batch 86 Simple Pattern endpoints don't call handle_ai_stack_error"""
+        from backend.api.ai_stack_integration import (
+            list_ai_agents,
+            reformulate_query,
+        )
+
+        # Simple Pattern endpoints should not call handle_ai_stack_error
+        for endpoint in [list_ai_agents, reformulate_query]:
+            source = inspect.getsource(endpoint)
+            self.assertNotIn(
+                "handle_ai_stack_error",
+                source,
+                f"{endpoint.__name__} should not call handle_ai_stack_error (handled by decorator)",
+            )
+
+    def test_batch_86_comprehensive_validation(self):
+        """Comprehensive test for all batch 86 migrations"""
+        from backend.api.ai_stack_integration import (
+            ai_stack_health_check,
+            list_ai_agents,
+            rag_query,
+            reformulate_query,
+        )
+
+        endpoints = [
+            ("ai_stack_health_check", ai_stack_health_check, "Mixed"),
+            ("list_ai_agents", list_ai_agents, "Simple"),
+            ("rag_query", rag_query, "Mixed"),
+            ("reformulate_query", reformulate_query, "Simple"),
+        ]
+
+        for name, endpoint, pattern in endpoints:
+            with self.subTest(endpoint=name, pattern=pattern):
+                source = inspect.getsource(endpoint)
+
+                # 1. Has decorator
+                self.assertIn("@with_error_handling", source)
+
+                # 2. Has correct category
+                self.assertIn("ErrorCategory.SERVER_ERROR", source)
+
+                # 3. Has correct prefix
+                self.assertIn('error_code_prefix="AI_STACK"', source)
+
+                # 4. Pattern-specific checks
+                if pattern == "Simple":
+                    # Simple pattern should have 0 try-catch
+                    try_count = source.count("    try:")
+                    self.assertEqual(try_count, 0, f"{name} should have 0 try-catch")
+                    # Should not call handle_ai_stack_error
+                    self.assertNotIn("handle_ai_stack_error", source)
+                elif pattern == "Mixed":
+                    # Mixed pattern should preserve inner try-catch
+                    self.assertIn("try:", source, f"{name} should preserve inner try")
+
+
 if __name__ == "__main__":
     unittest.main()
