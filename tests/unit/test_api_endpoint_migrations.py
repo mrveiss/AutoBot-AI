@@ -15852,5 +15852,298 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
                     self.assertIn("try:", source, f"{name} should preserve inner try")
 
 
+class TestBatch89AIStackIntegrationMigrations(unittest.TestCase):
+    """Test batch 89 migrations: ai_stack_integration.py next 3 endpoints (search_code, analyze_development_speedup, classify_content)"""
+
+    def test_batch_89_progress_validation(self):
+        """Test batch 89 brings ai_stack_integration.py to 14/17 endpoints (82%)"""
+        from backend.api.ai_stack_integration import (
+            ai_stack_health_check,
+            analyze_development_speedup,
+            analyze_documents,
+            classify_content,
+            comprehensive_research,
+            enhanced_chat,
+            enhanced_knowledge_search,
+            extract_knowledge,
+            get_system_knowledge,
+            list_ai_agents,
+            rag_query,
+            reformulate_query,
+            search_code,
+            web_research,
+        )
+
+        # All migrated endpoints should have decorator
+        migrated_endpoints = [
+            ai_stack_health_check,
+            list_ai_agents,
+            rag_query,
+            reformulate_query,
+            analyze_documents,
+            enhanced_chat,
+            extract_knowledge,
+            enhanced_knowledge_search,
+            get_system_knowledge,
+            comprehensive_research,
+            web_research,
+            search_code,
+            analyze_development_speedup,
+            classify_content,
+        ]
+
+        for endpoint in migrated_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("@with_error_handling", source)
+            self.assertIn("ErrorCategory.SERVER_ERROR", source)
+            self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_89_all_simple_pattern(self):
+        """Test all batch 89 endpoints use Simple Pattern (0 try-catch)"""
+        from backend.api.ai_stack_integration import (
+            analyze_development_speedup,
+            classify_content,
+            search_code,
+        )
+
+        # All batch 89 endpoints are Simple Pattern
+        simple_pattern_endpoints = [
+            ("search_code", search_code),
+            ("analyze_development_speedup", analyze_development_speedup),
+            ("classify_content", classify_content),
+        ]
+
+        for name, endpoint in simple_pattern_endpoints:
+            source = inspect.getsource(endpoint)
+            try_count = source.count("    try:")
+            self.assertEqual(
+                try_count, 0, f"{name} should have 0 try-catch (Simple Pattern)"
+            )
+
+    def test_batch_89_search_code_has_decorator(self):
+        """Test search_code has @with_error_handling decorator"""
+        from backend.api.ai_stack_integration import search_code
+
+        source = inspect.getsource(search_code)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="search_code"', source)
+        self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_89_search_code_removed_error_handling(self):
+        """Test search_code removed handle_ai_stack_error (Simple Pattern)"""
+        from backend.api.ai_stack_integration import search_code
+
+        source = inspect.getsource(search_code)
+        # Simple pattern should have no try-catch
+        try_count = source.count("    try:")
+        self.assertEqual(try_count, 0)
+        # Should not have handle_ai_stack_error call
+        self.assertNotIn("handle_ai_stack_error", source)
+        # Should not have AIStackError exception handling
+        self.assertNotIn("except AIStackError", source)
+
+    def test_batch_89_analyze_development_speedup_has_decorator(self):
+        """Test analyze_development_speedup has @with_error_handling decorator"""
+        from backend.api.ai_stack_integration import analyze_development_speedup
+
+        source = inspect.getsource(analyze_development_speedup)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="analyze_development_speedup"', source)
+        self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_89_analyze_development_speedup_removed_error_handling(self):
+        """Test analyze_development_speedup removed handle_ai_stack_error (Simple Pattern)"""
+        from backend.api.ai_stack_integration import analyze_development_speedup
+
+        source = inspect.getsource(analyze_development_speedup)
+        # Simple pattern should have no try-catch
+        try_count = source.count("    try:")
+        self.assertEqual(try_count, 0)
+        # Should not have handle_ai_stack_error call
+        self.assertNotIn("handle_ai_stack_error", source)
+        # Should not have AIStackError exception handling
+        self.assertNotIn("except AIStackError", source)
+
+    def test_batch_89_classify_content_has_decorator(self):
+        """Test classify_content has @with_error_handling decorator"""
+        from backend.api.ai_stack_integration import classify_content
+
+        source = inspect.getsource(classify_content)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="classify_content"', source)
+        self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_89_classify_content_removed_error_handling(self):
+        """Test classify_content removed handle_ai_stack_error (Simple Pattern)"""
+        from backend.api.ai_stack_integration import classify_content
+
+        source = inspect.getsource(classify_content)
+        # Simple pattern should have no try-catch
+        try_count = source.count("    try:")
+        self.assertEqual(try_count, 0)
+        # Should not have handle_ai_stack_error call
+        self.assertNotIn("handle_ai_stack_error", source)
+        # Should not have AIStackError exception handling
+        self.assertNotIn("except AIStackError", source)
+
+    def test_batch_89_all_endpoints_use_ai_stack_prefix(self):
+        """Test all batch 89 endpoints use AI_STACK error code prefix"""
+        from backend.api.ai_stack_integration import (
+            analyze_development_speedup,
+            classify_content,
+            search_code,
+        )
+
+        endpoints = [
+            search_code,
+            analyze_development_speedup,
+            classify_content,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn('error_code_prefix="AI_STACK"', source)
+
+    def test_batch_89_endpoints_removed_outer_try_catch(self):
+        """Test batch 89 endpoints removed outer try-catch blocks"""
+        from backend.api.ai_stack_integration import (
+            analyze_development_speedup,
+            classify_content,
+            search_code,
+        )
+
+        # All endpoints should have decorator at function level, not nested in try
+        endpoints_info = [
+            ("search_code", search_code),
+            ("analyze_development_speedup", analyze_development_speedup),
+            ("classify_content", classify_content),
+        ]
+
+        for name, endpoint in endpoints_info:
+            source = inspect.getsource(endpoint)
+            lines = source.split("\n")
+
+            # Find the function definition line
+            func_def_index = next(
+                i for i, line in enumerate(lines) if f"async def {name}" in line
+            )
+
+            # Check that @with_error_handling appears before function definition
+            decorator_found = False
+            for i in range(func_def_index):
+                if "@with_error_handling" in lines[i]:
+                    decorator_found = True
+                    break
+
+            self.assertTrue(
+                decorator_found, f"{name} should have @with_error_handling decorator"
+            )
+
+    def test_batch_89_line_count_reductions(self):
+        """Test batch 89 reduced line counts by removing error handling"""
+        from backend.api.ai_stack_integration import (
+            analyze_development_speedup,
+            classify_content,
+            search_code,
+        )
+
+        # All batch 89 endpoints are Simple Pattern (should be concise)
+        simple_endpoints = [
+            ("search_code", search_code, 15),
+            ("analyze_development_speedup", analyze_development_speedup, 15),
+            ("classify_content", classify_content, 15),
+        ]
+
+        for name, endpoint, max_lines in simple_endpoints:
+            source = inspect.getsource(endpoint)
+            line_count = len([l for l in source.split("\n") if l.strip()])
+            self.assertLessEqual(
+                line_count,
+                max_lines,
+                f"{name} should be concise (≤{max_lines} lines) after removing error handling",
+            )
+
+    def test_batch_89_no_handle_ai_stack_error_calls(self):
+        """Test batch 89 endpoints don't call handle_ai_stack_error"""
+        from backend.api.ai_stack_integration import (
+            analyze_development_speedup,
+            classify_content,
+            search_code,
+        )
+
+        endpoints = [
+            ("search_code", search_code),
+            ("analyze_development_speedup", analyze_development_speedup),
+            ("classify_content", classify_content),
+        ]
+
+        for name, endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertNotIn(
+                "handle_ai_stack_error",
+                source,
+                f"{name} should not call handle_ai_stack_error",
+            )
+
+    def test_batch_89_comprehensive_validation(self):
+        """Test all batch 89 endpoints comprehensively"""
+        from backend.api.ai_stack_integration import (
+            analyze_development_speedup,
+            classify_content,
+            search_code,
+        )
+
+        endpoints_info = [
+            ("search_code", search_code, "Simple"),
+            ("analyze_development_speedup", analyze_development_speedup, "Simple"),
+            ("classify_content", classify_content, "Simple"),
+        ]
+
+        for name, endpoint, pattern in endpoints_info:
+            with self.subTest(endpoint=name, pattern=pattern):
+                source = inspect.getsource(endpoint)
+
+                # 1. Must have @with_error_handling decorator
+                self.assertIn(
+                    "@with_error_handling",
+                    source,
+                    f"{name} must have @with_error_handling decorator",
+                )
+
+                # 2. Must have ErrorCategory.SERVER_ERROR
+                self.assertIn(
+                    "ErrorCategory.SERVER_ERROR",
+                    source,
+                    f"{name} must use ErrorCategory.SERVER_ERROR",
+                )
+
+                # 3. Must have correct operation name
+                self.assertIn(
+                    f'operation="{name}"',
+                    source,
+                    f"{name} must have operation='{name}'",
+                )
+
+                # 4. Must have AI_STACK error code prefix
+                self.assertIn(
+                    'error_code_prefix="AI_STACK"',
+                    source,
+                    f"{name} must have error_code_prefix='AI_STACK'",
+                )
+
+                # 5. All batch 89 are Simple Pattern
+                try_count = source.count("    try:")
+                self.assertEqual(try_count, 0, f"{name} should have 0 try-catch")
+                # Should not have handle_ai_stack_error
+                self.assertNotIn(
+                    "handle_ai_stack_error",
+                    source,
+                    f"{name} should not have handle_ai_stack_error",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

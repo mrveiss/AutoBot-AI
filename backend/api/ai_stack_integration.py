@@ -465,35 +465,39 @@ async def web_research(query: str, max_pages: int = 10, include_analysis: bool =
 
 
 @router.post("/development/search-code")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_code",
+    error_code_prefix="AI_STACK",
+)
 async def search_code(request: CodeSearchRequest):
     """Search codebase using NPU-accelerated AI."""
-    try:
-        ai_client = await get_ai_stack_client()
-        result = await ai_client.search_code(
-            query=request.query,
-            search_scope=request.search_scope,
-            include_npu=request.include_npu,
-        )
+    ai_client = await get_ai_stack_client()
+    result = await ai_client.search_code(
+        query=request.query,
+        search_scope=request.search_scope,
+        include_npu=request.include_npu,
+    )
 
-        return create_success_response(result, "Code search completed successfully")
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "Code search")
+    return create_success_response(result, "Code search completed successfully")
 
 
 @router.post("/development/analyze-speedup")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_development_speedup",
+    error_code_prefix="AI_STACK",
+)
 async def analyze_development_speedup(request: DevelopmentAnalysisRequest):
     """Analyze codebase for development speedup opportunities."""
-    try:
-        ai_client = await get_ai_stack_client()
-        result = await ai_client.analyze_development_speedup(
-            code_path=request.code_path, analysis_type=request.analysis_type
-        )
+    ai_client = await get_ai_stack_client()
+    result = await ai_client.analyze_development_speedup(
+        code_path=request.code_path, analysis_type=request.analysis_type
+    )
 
-        return create_success_response(
-            result, "Development speedup analysis completed successfully"
-        )
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "Development speedup analysis")
+    return create_success_response(
+        result, "Development speedup analysis completed successfully"
+    )
 
 
 # ====================================================================
@@ -502,19 +506,21 @@ async def analyze_development_speedup(request: DevelopmentAnalysisRequest):
 
 
 @router.post("/classification/classify")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="classify_content",
+    error_code_prefix="AI_STACK",
+)
 async def classify_content(request: ContentClassificationRequest):
     """Classify content using AI classification agents."""
-    try:
-        ai_client = await get_ai_stack_client()
-        result = await ai_client.classify_content(
-            content=request.content, classification_types=request.classification_types
-        )
+    ai_client = await get_ai_stack_client()
+    result = await ai_client.classify_content(
+        content=request.content, classification_types=request.classification_types
+    )
 
-        return create_success_response(
-            result, "Content classification completed successfully"
-        )
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "Content classification")
+    return create_success_response(
+        result, "Content classification completed successfully"
+    )
 
 
 # ====================================================================
