@@ -42,32 +42,49 @@ MAX_FILE_SIZE = 50 * 1024 * 1024
 
 # Allowed file extensions for security
 ALLOWED_EXTENSIONS = {
+    # Text and data formats
     ".txt",
     ".md",
     ".json",
     ".yaml",
     ".yml",
-    ".py",
-    ".js",
-    ".ts",
-    ".html",
-    ".css",
     ".xml",
     ".csv",
     ".log",
-    ".con",
     ".cfg",
     ".ini",
+    ".con",
+    # Code files
+    ".py",
+    ".js",
+    ".ts",
     ".sh",
     ".bat",
     ".sql",
-    ".pd",
+    # Web files
+    ".html",
+    ".css",
+    # Office document formats (Microsoft)
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
+    # Office document formats (OpenDocument/LibreOffice)
+    ".odt",   # OpenDocument Text (Writer)
+    ".ods",   # OpenDocument Spreadsheet (Calc)
+    ".odp",   # OpenDocument Presentation (Impress)
+    ".odg",   # OpenDocument Graphics (Draw)
+    # Image formats
     ".png",
     ".jpg",
     ".jpeg",
-    ".gi",
+    ".gif",
     ".svg",
     ".ico",
+    ".pd",
+    ".gi",
 }
 
 
@@ -337,7 +354,16 @@ def validate_file_content(content: bytes, filename: str) -> bool:
     if b"\x00" in content:
         # Only allow null bytes in known binary formats
         extension = Path(filename).suffix.lower()
-        binary_formats = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf"}
+        binary_formats = {
+            # Images
+            ".png", ".jpg", ".jpeg", ".gif", ".ico",
+            # Documents (PDF)
+            ".pdf",
+            # Microsoft Office (ZIP-based binary formats)
+            ".doc", ".docx", ".xlsx", ".ppt", ".pptx",
+            # OpenDocument (ZIP-based binary formats)
+            ".odt", ".ods", ".odp", ".odg"
+        }
         if extension not in binary_formats:
             return False
 
