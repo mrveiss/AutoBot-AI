@@ -37,6 +37,29 @@ class SimplePTY:
             # Create PTY pair
             self.master_fd, slave_fd = pty.openpty()
 
+            # Configure terminal attributes to enable echo
+            # This makes the PTY behave like a real interactive terminal
+            import termios
+
+            try:
+                # Get current terminal settings
+                attrs = termios.tcgetattr(slave_fd)
+
+                # Enable ECHO in local flags (lflag is index 3)
+                # ECHO makes input characters echo to output
+                attrs[3] = attrs[3] | termios.ECHO
+
+                # Also enable ECHOE (erase), ECHOK (kill), ECHOCTL (control chars)
+                # for complete interactive terminal behavior
+                attrs[3] = attrs[3] | termios.ECHOE | termios.ECHOK | termios.ECHOCTL
+
+                # Apply settings immediately
+                termios.tcsetattr(slave_fd, termios.TCSANOW, attrs)
+
+                logger.info(f"Terminal echo enabled for PTY session {self.session_id}")
+            except Exception as e:
+                logger.warning(f"Failed to enable terminal echo: {e} (continuing anyway)")
+
             # Start bash process
             env = os.environ.copy()
             env["TERM"] = "xterm-256color"
