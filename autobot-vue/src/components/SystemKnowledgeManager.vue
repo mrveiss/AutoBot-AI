@@ -192,8 +192,9 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase';
+import { useKnowledgeStore } from '@/stores/useKnowledgeStore';  // NEW: Use shared store
 import appConfig from '@/config/AppConfig.js';
 
 export default {
@@ -202,7 +203,6 @@ export default {
   setup() {
     // Use the shared composable
     const {
-      fetchStats: fetchStatsAPI,
       initializeMachineKnowledge: initializeMachineKnowledgeAPI,
       refreshSystemKnowledge: refreshSystemKnowledgeAPI,
       pollJobStatus: pollJobStatusAPI,  // NEW: Job status polling
@@ -212,7 +212,11 @@ export default {
       formatKey
     } = useKnowledgeBase();
 
-    const stats = ref({});
+    // NEW: Use shared Pinia store instead of local state
+    const knowledgeStore = useKnowledgeStore();
+
+    // Use computed properties from store instead of local refs
+    const stats = computed(() => knowledgeStore.stats);
     const commandsIndexed = ref(0);
     const docsIndexed = ref(0);
     const selectedHost = ref('all');
@@ -237,29 +241,22 @@ export default {
       }
     };
 
+    // NEW: Use shared store's refreshStats action (consolidates API calls)
     const fetchStats = async () => {
       isLoading.value = true;
       try {
-        const response = await fetchStatsAPI();
+        // Call store's refreshStats - this makes the API call and updates shared state
+        await knowledgeStore.refreshStats();
 
-        if (response) {
-          // Ensure we're not storing a Promise
-          if (response instanceof Promise) {
-            console.error('[SystemKnowledgeManager] Response is a Promise!', response);
-            const resolved = await response;
-            stats.value = resolved;
-          } else {
-            stats.value = response;
-          }
-
-          // Extract command and doc counts from categories if available
-          if (stats.value.categories) {
-            commandsIndexed.value = stats.value.categories.system_commands || 0;
-            docsIndexed.value = stats.value.categories.autobot_documentation || 0;
-          }
-
-          addLogEntry('Stats refreshed successfully', 'success');
+        // Extract command and doc counts from categories if available
+        const statsValue = knowledgeStore.stats;
+        if (statsValue.categories && Array.isArray(statsValue.categories)) {
+          // categories is string[] according to store type
+          commandsIndexed.value = statsValue.categories.includes('system_commands') ? 1 : 0;
+          docsIndexed.value = statsValue.categories.includes('autobot_documentation') ? 1 : 0;
         }
+
+        addLogEntry('Stats refreshed successfully', 'success');
       } catch (error) {
         console.error('Failed to fetch stats:', error);
         addLogEntry('Failed to fetch stats', 'error');
