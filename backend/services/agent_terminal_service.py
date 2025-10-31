@@ -28,6 +28,10 @@ from src.secure_command_executor import (
     SecureCommandExecutor,
     SecurityPolicy,
 )
+from backend.services.command_approval_manager import (
+    AgentRole,
+    CommandApprovalManager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,15 +43,6 @@ class AgentSessionState(Enum):
     USER_INTERRUPT = "user_interrupt"  # User requesting control
     USER_CONTROL = "user_control"  # User has control
     AGENT_RESUME = "agent_resume"  # Agent resuming after user
-
-
-class AgentRole(Enum):
-    """Agent roles with different privilege levels"""
-
-    CHAT_AGENT = "chat_agent"  # Chat agents (lowest privilege)
-    AUTOMATION_AGENT = "automation_agent"  # Workflow automation agents
-    SYSTEM_AGENT = "system_agent"  # System monitoring agents
-    ADMIN_AGENT = "admin_agent"  # Administrative agents (highest privilege)
 
 
 @dataclass
@@ -104,42 +99,8 @@ class AgentTerminalService:
         # CRITICAL FIX: Initialize ChatWorkflowManager for LLM interpretation
         self.chat_workflow_manager = ChatWorkflowManager()
 
-        # Auto-approve rules storage
-        # Format: {user_id: [{command_pattern, risk_level, created_at}, ...]}
-        self.auto_approve_rules: Dict[str, List[Dict[str, Any]]] = {}
-
-        # Agent-specific security policy
-        self.agent_permissions = {
-            AgentRole.CHAT_AGENT: {
-                "max_risk": CommandRisk.MODERATE,
-                "auto_approve_safe": True,
-                "auto_approve_moderate": False,  # Requires user approval
-                "allow_high": False,
-                "allow_dangerous": False,
-                "supervised_mode": True,  # Allows FORBIDDEN commands with approval for guided dangerous actions
-            },
-            AgentRole.AUTOMATION_AGENT: {
-                "max_risk": CommandRisk.HIGH,
-                "auto_approve_safe": True,
-                "auto_approve_moderate": True,
-                "allow_high": True,  # Requires approval
-                "allow_dangerous": False,
-            },
-            AgentRole.SYSTEM_AGENT: {
-                "max_risk": CommandRisk.HIGH,
-                "auto_approve_safe": True,
-                "auto_approve_moderate": True,
-                "allow_high": True,  # Requires approval
-                "allow_dangerous": False,
-            },
-            AgentRole.ADMIN_AGENT: {
-                "max_risk": CommandRisk.CRITICAL,
-                "auto_approve_safe": True,
-                "auto_approve_moderate": True,
-                "allow_high": True,  # Requires approval
-                "allow_dangerous": True,  # ALWAYS requires approval
-            },
-        }
+        # REFACTOR: Use CommandApprovalManager for reusable approval logic
+        self.approval_manager = CommandApprovalManager()
 
         logger.info("AgentTerminalService initialized with security controls")
 
@@ -427,6 +388,8 @@ class AgentTerminalService:
         """
         Check if agent has permission to execute command at given risk level.
 
+        REFACTORED: Now uses CommandApprovalManager static method for reusability.
+
         Args:
             agent_role: Role of the agent
             command_risk: Risk level of the command
@@ -434,51 +397,11 @@ class AgentTerminalService:
         Returns:
             Tuple of (allowed, reason)
         """
-        permissions = self.agent_permissions.get(agent_role)
-        if not permissions:
-            return False, f"Unknown agent role: {agent_role}"
-
-        # Check supervised mode - allows FORBIDDEN commands with approval
-        supervised_mode = permissions.get("supervised_mode", False)
-
-        # Check max risk level
-        max_risk = permissions["max_risk"]
-
-        # Map risk levels to numerical values for comparison
-        risk_levels = {
-            CommandRisk.SAFE: 0,
-            CommandRisk.MODERATE: 1,
-            CommandRisk.HIGH: 2,
-            CommandRisk.CRITICAL: 3,
-            CommandRisk.FORBIDDEN: 4,
-        }
-
-        # In supervised mode, allow up to FORBIDDEN but require approval for all dangerous commands
-        effective_max_risk = CommandRisk.FORBIDDEN if supervised_mode else max_risk
-
-        if risk_levels.get(command_risk, 999) > risk_levels.get(effective_max_risk, 0):
-            if supervised_mode:
-                return (
-                    False,
-                    f"Command risk {command_risk.value} exceeds supervised mode limit (try enabling supervised mode)",
-                )
-            else:
-                return (
-                    False,
-                    f"Command risk {command_risk.value} exceeds agent max risk {max_risk.value} (enable supervised mode for guided dangerous actions)",
-                )
-
-        # Check specific risk permissions (not needed in supervised mode - approval handles it)
-        if not supervised_mode:
-            if command_risk == CommandRisk.HIGH and not permissions.get("allow_high"):
-                return False, "Agent not permitted to execute HIGH risk commands"
-
-            if command_risk == CommandRisk.CRITICAL and not permissions.get(
-                "allow_dangerous"
-            ):
-                return False, "Agent not permitted to execute DANGEROUS commands"
-
-        return True, "Permission granted"
+        return CommandApprovalManager.check_permission(
+            agent_role=agent_role,
+            command_risk=command_risk,
+            permissions=self.approval_manager.agent_permissions,
+        )
 
     def _needs_approval(
         self,
@@ -487,6 +410,8 @@ class AgentTerminalService:
     ) -> bool:
         """
         Check if command needs user approval.
+
+        REFACTORED: Now uses CommandApprovalManager static method for reusability.
 
         In supervised mode: HIGH/CRITICAL/FORBIDDEN commands are allowed but ALWAYS require approval
         In normal mode: Only commands up to max_risk are allowed, HIGH+ require approval
@@ -498,27 +423,11 @@ class AgentTerminalService:
         Returns:
             True if approval is required
         """
-        permissions = self.agent_permissions.get(agent_role, {})
-        supervised_mode = permissions.get("supervised_mode", False)
-
-        # In supervised mode, HIGH/CRITICAL/FORBIDDEN always need approval (for guided dangerous actions)
-        if supervised_mode and command_risk in [
-            CommandRisk.HIGH,
-            CommandRisk.CRITICAL,
-            CommandRisk.FORBIDDEN,
-        ]:
-            return True
-
-        # SAFE commands can be auto-approved if permitted
-        if command_risk == CommandRisk.SAFE:
-            return not permissions.get("auto_approve_safe", False)
-
-        # MODERATE commands need approval unless auto-approved
-        if command_risk == CommandRisk.MODERATE:
-            return not permissions.get("auto_approve_moderate", False)
-
-        # HIGH/CRITICAL/FORBIDDEN always need approval
-        return True
+        return CommandApprovalManager.needs_approval(
+            agent_role=agent_role,
+            command_risk=command_risk,
+            permissions=self.approval_manager.agent_permissions,
+        )
 
     def _write_to_pty(self, session: AgentTerminalSession, text: str) -> bool:
         """
@@ -1152,70 +1061,18 @@ class AgentTerminalService:
         """
         Store an auto-approve rule for future similar commands.
 
+        REFACTORED: Now uses CommandApprovalManager for reusability.
+
         Args:
             user_id: User who created the rule
             command: Command that was approved
             risk_level: Risk level of the command
         """
-        try:
-            # Extract command pattern (first word + arguments pattern)
-            pattern = self._extract_command_pattern(command)
-
-            # Create rule
-            rule = {
-                "pattern": pattern,
-                "risk_level": risk_level,
-                "created_at": time.time(),
-                "original_command": command,
-            }
-
-            # Store in memory (could be persisted to Redis later)
-            if user_id not in self.auto_approve_rules:
-                self.auto_approve_rules[user_id] = []
-
-            self.auto_approve_rules[user_id].append(rule)
-
-            logger.info(
-                f"Auto-approve rule stored for user {user_id}: "
-                f"pattern='{pattern}', risk={risk_level}"
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to store auto-approve rule: {e}")
-
-    def _extract_command_pattern(self, command: str) -> str:
-        """
-        Extract a pattern from a command for auto-approve matching.
-
-        Examples:
-            "ls -la /home" -> "ls *"
-            "cat file.txt" -> "cat *"
-            "git status" -> "git status"
-
-        Args:
-            command: Full command string
-
-        Returns:
-            Command pattern for matching
-        """
-        parts = command.split()
-        if len(parts) == 0:
-            return command
-
-        # First word is the base command
-        base_cmd = parts[0]
-
-        # If there are arguments, use wildcard pattern
-        if len(parts) > 1:
-            # For commands with subcommands (like git status), preserve them
-            if base_cmd in ["git", "docker", "kubectl", "npm", "yarn"]:
-                if len(parts) >= 2:
-                    return f"{base_cmd} {parts[1]} *"
-            # For simple commands, use wildcard
-            return f"{base_cmd} *"
-
-        # No arguments - exact match
-        return base_cmd
+        await self.approval_manager.store_auto_approve_rule(
+            user_id=user_id,
+            command=command,
+            risk_level=risk_level,
+        )
 
     async def _check_auto_approve_rules(
         self,
@@ -1226,6 +1083,8 @@ class AgentTerminalService:
         """
         Check if command matches any auto-approve rules.
 
+        REFACTORED: Now uses CommandApprovalManager for reusability.
+
         Args:
             user_id: User ID to check rules for
             command: Command to check
@@ -1234,27 +1093,11 @@ class AgentTerminalService:
         Returns:
             True if command should be auto-approved
         """
-        try:
-            if user_id not in self.auto_approve_rules:
-                return False
-
-            pattern = self._extract_command_pattern(command)
-            rules = self.auto_approve_rules[user_id]
-
-            for rule in rules:
-                # Match pattern and risk level
-                if rule["pattern"] == pattern and rule["risk_level"] == risk_level:
-                    logger.info(
-                        f"Auto-approve rule matched for user {user_id}: "
-                        f"pattern='{pattern}', risk={risk_level}"
-                    )
-                    return True
-
-            return False
-
-        except Exception as e:
-            logger.error(f"Failed to check auto-approve rules: {e}")
-            return False
+        return await self.approval_manager.check_auto_approve_rules(
+            user_id=user_id,
+            command=command,
+            risk_level=risk_level,
+        )
 
     async def _broadcast_approval_status(
         self,
