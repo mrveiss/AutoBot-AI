@@ -17429,5 +17429,251 @@ class TestBatch94AdvancedControlStreamingAndTakeoverCRUD(unittest.TestCase):
         self.assertAlmostEqual(progress_percentage, 36.84, places=1)
 
 
+# ============================================================
+# Batch 95: backend/api/advanced_control.py takeover management
+# ============================================================
+
+
+class TestBatch95AdvancedControlTakeoverManagement(unittest.TestCase):
+    """Test batch 95 migrations: 7 endpoints from advanced_control.py (takeover management)"""
+
+    def test_batch_95_pause_takeover_session_has_decorator(self):
+        """Verify pause_takeover_session has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.pause_takeover_session)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="pause_takeover_session"', source)
+
+    def test_batch_95_pause_takeover_session_preserves_http_exception(self):
+        """Verify pause_takeover_session preserves 404 HTTPException (Mixed Pattern)"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.pause_takeover_session)
+        # Should preserve 404 HTTPException for business logic
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=404", source)
+        self.assertIn("Session not found or not pausable", source)
+        # Should NOT have outer try-catch wrapper
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)")
+
+    def test_batch_95_resume_takeover_session_has_decorator(self):
+        """Verify resume_takeover_session has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.resume_takeover_session)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="resume_takeover_session"', source)
+
+    def test_batch_95_resume_takeover_session_preserves_http_exception(self):
+        """Verify resume_takeover_session preserves 404 HTTPException (Mixed Pattern)"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.resume_takeover_session)
+        # Should preserve 404 HTTPException for business logic
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=404", source)
+        self.assertIn("Session not found or not resumable", source)
+        # Should NOT have outer try-catch wrapper
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)")
+
+    def test_batch_95_complete_takeover_session_has_decorator(self):
+        """Verify complete_takeover_session has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.complete_takeover_session)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="complete_takeover_session"', source)
+
+    def test_batch_95_complete_takeover_session_preserves_http_exception(self):
+        """Verify complete_takeover_session preserves 404 HTTPException (Mixed Pattern)"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.complete_takeover_session)
+        # Should preserve 404 HTTPException for business logic
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=404", source)
+        self.assertIn("Session not found", source)
+        # Should NOT have outer try-catch wrapper
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)")
+
+    def test_batch_95_get_pending_takeovers_has_decorator(self):
+        """Verify get_pending_takeovers has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.get_pending_takeovers)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="get_pending_takeovers"', source)
+        # Simple Pattern - no try-catch
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+
+    def test_batch_95_get_active_takeovers_has_decorator(self):
+        """Verify get_active_takeovers has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.get_active_takeovers)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="get_active_takeovers"', source)
+        # Simple Pattern - no try-catch
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+
+    def test_batch_95_get_takeover_status_has_decorator(self):
+        """Verify get_takeover_status has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.get_takeover_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="get_takeover_status"', source)
+        # Simple Pattern - no try-catch
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+
+    def test_batch_95_emergency_system_stop_has_decorator(self):
+        """Verify emergency_system_stop has @with_error_handling decorator"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.emergency_system_stop)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="ADVANCED_CONTROL"', source)
+        self.assertIn('operation="emergency_system_stop"', source)
+        # Simple Pattern - no try-catch
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+
+    def test_batch_95_all_have_error_code_prefix(self):
+        """Verify all batch 95 endpoints use ADVANCED_CONTROL error_code_prefix"""
+        from backend.api import advanced_control
+
+        batch_95_endpoints = [
+            advanced_control.pause_takeover_session,
+            advanced_control.resume_takeover_session,
+            advanced_control.complete_takeover_session,
+            advanced_control.get_pending_takeovers,
+            advanced_control.get_active_takeovers,
+            advanced_control.get_takeover_status,
+            advanced_control.emergency_system_stop,
+        ]
+
+        for endpoint in batch_95_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                'error_code_prefix="ADVANCED_CONTROL"',
+                source,
+                f"{endpoint.__name__} missing ADVANCED_CONTROL prefix",
+            )
+
+    def test_batch_95_pattern_distribution(self):
+        """Verify batch 95 has correct pattern distribution (3 Mixed, 4 Simple)"""
+        from backend.api import advanced_control
+
+        # Mixed Pattern endpoints (preserve HTTPExceptions)
+        mixed_endpoints = [
+            advanced_control.pause_takeover_session,  # Preserves 404
+            advanced_control.resume_takeover_session,  # Preserves 404
+            advanced_control.complete_takeover_session,  # Preserves 404
+        ]
+
+        # Simple Pattern endpoints (no HTTPExceptions)
+        simple_endpoints = [
+            advanced_control.get_pending_takeovers,
+            advanced_control.get_active_takeovers,
+            advanced_control.get_takeover_status,
+            advanced_control.emergency_system_stop,
+        ]
+
+        # Verify Mixed Pattern endpoints preserve HTTPExceptions
+        for endpoint in mixed_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "HTTPException",
+                source,
+                f"{endpoint.__name__} should preserve HTTPException (Mixed Pattern)",
+            )
+            self.assertIn("status_code=404", source)
+
+        # Verify Simple Pattern endpoints have no try-catch
+        for endpoint in simple_endpoints:
+            source = inspect.getsource(endpoint)
+            try_count = source.count("try:")
+            self.assertEqual(
+                try_count,
+                0,
+                f"{endpoint.__name__} should have NO try-catch (Simple Pattern)",
+            )
+
+    def test_batch_95_cumulative_progress(self):
+        """Verify cumulative progress: 14/19 endpoints migrated (74%)"""
+        from backend.api import advanced_control
+
+        batch_94_migrated = [
+            advanced_control.create_streaming_session,
+            advanced_control.terminate_streaming_session,
+            advanced_control.list_streaming_sessions,
+            advanced_control.get_streaming_capabilities,
+            advanced_control.request_takeover,
+            advanced_control.approve_takeover,
+            advanced_control.execute_takeover_action,
+        ]
+
+        batch_95_migrated = [
+            advanced_control.pause_takeover_session,
+            advanced_control.resume_takeover_session,
+            advanced_control.complete_takeover_session,
+            advanced_control.get_pending_takeovers,
+            advanced_control.get_active_takeovers,
+            advanced_control.get_takeover_status,
+            advanced_control.emergency_system_stop,
+        ]
+
+        all_migrated = batch_94_migrated + batch_95_migrated
+
+        # All 14 endpoints should have @with_error_handling
+        for endpoint in all_migrated:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} missing @with_error_handling decorator",
+            )
+
+        # Verify 14 endpoints migrated
+        self.assertEqual(len(all_migrated), 14, "Should have migrated 14 endpoints")
+
+    def test_batch_95_progress_tracking(self):
+        """Verify batch 95 progress: 14/19 endpoints migrated (74%)"""
+        from backend.api import advanced_control
+
+        batch_95_count = 7
+        total_migrated = 14  # batch 94 + batch 95
+        total_endpoints = 19
+        progress_percentage = (total_migrated / total_endpoints) * 100
+
+        self.assertEqual(batch_95_count, 7)
+        self.assertEqual(total_migrated, 14)
+        self.assertAlmostEqual(progress_percentage, 73.68, places=1)
+
+    def test_batch_95_emergency_stop_logic(self):
+        """Verify emergency_system_stop preserves critical business logic"""
+        from backend.api import advanced_control
+
+        source = inspect.getsource(advanced_control.emergency_system_stop)
+        # Should preserve emergency takeover logic
+        self.assertIn("TakeoverTrigger.CRITICAL_ERROR", source)
+        self.assertIn("TaskPriority.CRITICAL", source)
+        self.assertIn("auto_approve=True", source)
+        self.assertIn("Emergency stop activated", source)
+
+
 if __name__ == "__main__":
     unittest.main()

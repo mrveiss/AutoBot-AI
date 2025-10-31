@@ -234,87 +234,93 @@ async def execute_takeover_action(session_id: str, action: TakeoverActionRequest
 
 
 @router.post("/takeover/sessions/{session_id}/pause")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="pause_takeover_session",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def pause_takeover_session(session_id: str):
     """Pause an active takeover session"""
-    try:
-        success = await takeover_manager.pause_takeover_session(session_id)
-        if success:
-            return {"success": True, "session_id": session_id, "status": "paused"}
-        else:
-            raise HTTPException(
-                status_code=404, detail="Session not found or not pausable"
-            )
-    except Exception as e:
-        logger.error(f"Failed to pause takeover session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    success = await takeover_manager.pause_takeover_session(session_id)
+    if success:
+        return {"success": True, "session_id": session_id, "status": "paused"}
+    else:
+        raise HTTPException(
+            status_code=404, detail="Session not found or not pausable"
+        )
 
 
 @router.post("/takeover/sessions/{session_id}/resume")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="resume_takeover_session",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def resume_takeover_session(session_id: str):
     """Resume a paused takeover session"""
-    try:
-        success = await takeover_manager.resume_takeover_session(session_id)
-        if success:
-            return {"success": True, "session_id": session_id, "status": "active"}
-        else:
-            raise HTTPException(
-                status_code=404, detail="Session not found or not resumable"
-            )
-    except Exception as e:
-        logger.error(f"Failed to resume takeover session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    success = await takeover_manager.resume_takeover_session(session_id)
+    if success:
+        return {"success": True, "session_id": session_id, "status": "active"}
+    else:
+        raise HTTPException(
+            status_code=404, detail="Session not found or not resumable"
+        )
 
 
 @router.post("/takeover/sessions/{session_id}/complete")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="complete_takeover_session",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def complete_takeover_session(session_id: str, completion_data: Dict[str, Any]):
     """Complete a takeover session and return control"""
-    try:
-        success = await takeover_manager.complete_takeover_session(
-            session_id=session_id,
-            resolution=completion_data.get("resolution", "Session completed"),
-            handback_notes=completion_data.get("handback_notes"),
-        )
+    success = await takeover_manager.complete_takeover_session(
+        session_id=session_id,
+        resolution=completion_data.get("resolution", "Session completed"),
+        handback_notes=completion_data.get("handback_notes"),
+    )
 
-        if success:
-            return {"success": True, "session_id": session_id, "status": "completed"}
-        else:
-            raise HTTPException(status_code=404, detail="Session not found")
-    except Exception as e:
-        logger.error(f"Failed to complete takeover session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    if success:
+        return {"success": True, "session_id": session_id, "status": "completed"}
+    else:
+        raise HTTPException(status_code=404, detail="Session not found")
 
 
 @router.get("/takeover/pending")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pending_takeovers",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def get_pending_takeovers():
     """Get all pending takeover requests"""
-    try:
-        pending = takeover_manager.get_pending_requests()
-        return {"pending_requests": pending, "count": len(pending)}
-    except Exception as e:
-        logger.error(f"Failed to get pending takeovers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    pending = takeover_manager.get_pending_requests()
+    return {"pending_requests": pending, "count": len(pending)}
 
 
 @router.get("/takeover/active")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_active_takeovers",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def get_active_takeovers():
     """Get all active takeover sessions"""
-    try:
-        active = takeover_manager.get_active_sessions()
-        return {"active_sessions": active, "count": len(active)}
-    except Exception as e:
-        logger.error(f"Failed to get active takeovers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    active = takeover_manager.get_active_sessions()
+    return {"active_sessions": active, "count": len(active)}
 
 
 @router.get("/takeover/status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_takeover_status",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def get_takeover_status():
     """Get takeover system status"""
-    try:
-        status = takeover_manager.get_system_status()
-        return status
-    except Exception as e:
-        logger.error(f"Failed to get takeover status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    status = takeover_manager.get_system_status()
+    return status
 
 
 # System Monitoring and Control
@@ -364,28 +370,28 @@ async def get_system_status():
 
 
 @router.post("/system/emergency-stop")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="emergency_system_stop",
+    error_code_prefix="ADVANCED_CONTROL",
+)
 async def emergency_system_stop():
     """Emergency stop for all autonomous operations"""
-    try:
-        # Request emergency takeover
-        request_id = await takeover_manager.request_takeover(
-            trigger=TakeoverTrigger.CRITICAL_ERROR,
-            reason="Emergency stop activated",
-            requesting_agent="emergency_system",
-            priority=TaskPriority.CRITICAL,
-            auto_approve=True,
-        )
+    # Request emergency takeover
+    request_id = await takeover_manager.request_takeover(
+        trigger=TakeoverTrigger.CRITICAL_ERROR,
+        reason="Emergency stop activated",
+        requesting_agent="emergency_system",
+        priority=TaskPriority.CRITICAL,
+        auto_approve=True,
+    )
 
-        logger.warning(f"Emergency stop activated: {request_id}")
-        return {
-            "success": True,
-            "message": "Emergency stop activated",
-            "takeover_request_id": request_id,
-        }
-
-    except Exception as e:
-        logger.error(f"Emergency stop failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    logger.warning(f"Emergency stop activated: {request_id}")
+    return {
+        "success": True,
+        "message": "Emergency stop activated",
+        "takeover_request_id": request_id,
+    }
 
 
 @router.get("/system/health")
