@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
 from src.monitoring.prometheus_metrics import get_metrics_manager
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
 logger = logging.getLogger(__name__)
@@ -135,6 +136,11 @@ router = APIRouter(tags=["intelligent-agent"])
 
 
 @router.post("/process", response_model=GoalResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="process_natural_language_goal",
+    error_code_prefix="INTELLIGENT_AGENT",
+)
 async def process_natural_language_goal(request: GoalRequest):
     """
     Process a natural language goal and return the complete result.
@@ -146,92 +152,82 @@ async def process_natural_language_goal(request: GoalRequest):
     task_type = "natural_language_goal"
     agent_type = "intelligent_agent"
 
-    try:
-        agent = await get_agent()
+    agent = await get_agent()
 
-        start_time = time.time()
+    start_time = time.time()
 
-        # Collect all chunks into a complete result
-        result_chunks = []
-        metadata = {}
+    # Collect all chunks into a complete result
+    result_chunks = []
+    metadata = {}
 
-        async for chunk in agent.process_natural_language_goal(
-            request.goal, context=request.context
-        ):
-            result_chunks.append(f"[{chunk.chunk_type}] {chunk.content}")
+    async for chunk in agent.process_natural_language_goal(
+        request.goal, context=request.context
+    ):
+        result_chunks.append(f"[{chunk.chunk_type}] {chunk.content}")
 
-            # Collect metadata from chunks
-            if hasattr(chunk, "metadata") and chunk.metadata:
-                metadata.update(chunk.metadata)
+        # Collect metadata from chunks
+        if hasattr(chunk, "metadata") and chunk.metadata:
+            metadata.update(chunk.metadata)
 
-        execution_time = time.time() - start_time
-        result = "\n".join(result_chunks)
+    execution_time = time.time() - start_time
+    result = "\n".join(result_chunks)
 
-        # Record Prometheus task execution metric (success)
-        prometheus_metrics.record_task_execution(
-            task_type=task_type,
-            agent_type=agent_type,
-            status="success",
-            duration=execution_time,
-        )
+    # Record Prometheus task execution metric (success)
+    prometheus_metrics.record_task_execution(
+        task_type=task_type,
+        agent_type=agent_type,
+        status="success",
+        duration=execution_time,
+    )
 
-        return GoalResponse(
-            success=True,
-            result=result,
-            execution_time=execution_time,
-            metadata=metadata,
-        )
-
-    except Exception as e:
-        logger.error(f"Error processing goal '{request.goal}': {e}")
-
-        # Record Prometheus task execution metric (failed)
-        duration = time.time() - start_time if "start_time" in locals() else 0
-        prometheus_metrics.record_task_execution(
-            task_type=task_type,
-            agent_type=agent_type,
-            status="failed",
-            duration=duration,
-        )
-
-        raise HTTPException(status_code=500, detail=str(e))
+    return GoalResponse(
+        success=True,
+        result=result,
+        execution_time=execution_time,
+        metadata=metadata,
+    )
 
 
 @router.get("/system-info", response_model=SystemInfoResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_info",
+    error_code_prefix="INTELLIGENT_AGENT",
+)
 async def get_system_info():
     """Get comprehensive system information and capabilities."""
-    try:
-        agent = await get_agent()
-        system_info = await agent.get_system_status()
+    agent = await get_agent()
+    system_info = await agent.get_system_status()
 
-        # Handle both initialized and uninitialized states
-        if system_info.get("status") == "not_initialized":
-            return SystemInfoResponse(
-                os_type="unknown",
-                distro="",
-                user="",
-                capabilities=[],
-                available_tools=[],
-            )
-
-        # Extract from nested os_info
-        os_info = system_info.get("os_info", {})
-        capabilities_info = system_info.get("capabilities", {})
-
+    # Handle both initialized and uninitialized states
+    if system_info.get("status") == "not_initialized":
         return SystemInfoResponse(
-            os_type=os_info.get("os_type", "unknown"),
-            distro=os_info.get("distro", ""),
-            user=os_info.get("user", ""),
-            capabilities=list(capabilities_info.get("available_tools", {}).keys()),
-            available_tools=list(capabilities_info.get("installed_tools", [])),
+            os_type="unknown",
+            distro="",
+            user="",
+            capabilities=[],
+            available_tools=[],
         )
 
-    except Exception as e:
-        logger.error(f"Error getting system info: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # Extract from nested os_info
+    os_info = system_info.get("os_info", {})
+    capabilities_info = system_info.get("capabilities", {})
+
+    return SystemInfoResponse(
+        os_type=os_info.get("os_type", "unknown"),
+        distro=os_info.get("distro", ""),
+        user=os_info.get("user", ""),
+        capabilities=list(capabilities_info.get("available_tools", {}).keys()),
+        available_tools=list(capabilities_info.get("installed_tools", [])),
+    )
 
 
 @router.get("/health", response_model=HealthResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="INTELLIGENT_AGENT",
+)
 async def health_check():
     """Health check for the intelligent agent system."""
     try:
