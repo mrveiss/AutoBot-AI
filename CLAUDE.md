@@ -82,73 +82,20 @@ This document contains development guidelines, project setup instructions, and a
 
 **⚠️ MANDATORY RULE: NO HARDCODED VALUES**
 
-### **What Constitutes Hardcoding:**
-
+**What constitutes hardcoding:**
 - IP addresses (use `NetworkConstants` or `.env`)
 - Port numbers (use `NetworkConstants` or `.env`)
 - LLM model names (use `config.get_default_llm_model()` or `AUTOBOT_DEFAULT_LLM_MODEL`)
 - URLs (use environment variables)
 - API keys, passwords, secrets (use environment variables, NEVER commit)
 
-### **Automated Detection:**
-
-**Pre-Commit Hook**: Automatically scans staged files before every commit
+**Pre-commit hook**: Automatically scans for violations before every commit
 ```bash
 # Runs automatically on git commit
 ./scripts/detect-hardcoded-values.sh
 ```
 
-**Manual Scan**:
-```bash
-# Scan entire codebase for violations
-./scripts/detect-hardcoded-values.sh
-
-# Get detailed report
-./scripts/detect-hardcoded-values.sh | less
-```
-
-### **How to Fix Violations:**
-
-1. **For IPs/Ports**: Use `NetworkConstants` class
-   ```python
-   # ❌ BAD
-   url = "http://172.16.168.20:8001/api/chat"
-
-   # ✅ GOOD
-   from src.constants.network_constants import NetworkConstants
-   url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/api/chat"
-   ```
-
-2. **For LLM Models**: Use config methods
-   ```python
-   # ❌ BAD
-   model = "llama3.2:1b-instruct-q4_K_M"
-
-   # ✅ GOOD
-   model = config.get_default_llm_model()
-   # OR
-   model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:1b")
-   ```
-
-3. **For Other Values**: Use `.env` file
-   ```bash
-   # Add to .env
-   AUTOBOT_MY_SETTING=value
-
-   # Use in code
-   setting = os.getenv("AUTOBOT_MY_SETTING")
-   ```
-
-### **Override (Emergency Only):**
-
-If hardcoding is ABSOLUTELY necessary (rare):
-1. Document WHY in code comments
-2. Add entry to `.hardcode-exceptions` file
-3. Get approval in code review
-4. Bypass pre-commit: `git commit --no-verify` (NOT RECOMMENDED)
-
-**Detection script location**: `scripts/detect-hardcoded-values.sh`
-**Pre-commit hook**: `.git/hooks/pre-commit-hardcode-check`
+👉 **Full guide**: [`docs/developer/HARDCODING_PREVENTION.md`](docs/developer/HARDCODING_PREVENTION.md)
 
 ---
 
@@ -156,9 +103,7 @@ If hardcoding is ABSOLUTELY necessary (rare):
 
 **⚠️ MANDATORY RULE: ALWAYS USE CANONICAL REDIS UTILITY**
 
-### **Canonical Redis Client**
-
-**ALWAYS use**: `src/utils/redis_client.py::get_redis_client()`
+**Canonical pattern**: `src/utils/redis_client.py::get_redis_client()`
 
 ```python
 # ✅ CORRECT - Use canonical utility
@@ -169,72 +114,19 @@ redis_client = get_redis_client(async_client=False, database="main")
 
 # Get async client for 'knowledge' database
 async_redis = await get_redis_client(async_client=True, database="knowledge")
-```
 
-### **❌ FORBIDDEN PATTERNS**
-
-**NEVER instantiate Redis directly** - This violates the DRY principle and causes configuration drift:
-
-```python
-# ❌ WRONG - Direct instantiation (67 files still violate this!)
+# ❌ FORBIDDEN - Direct instantiation
 import redis
-client = redis.Redis(host="172.16.168.23", port=6379, db=0)
-
-# ❌ WRONG - Custom connection pooling
-pool = redis.ConnectionPool(host=..., port=...)
-client = redis.Redis(connection_pool=pool)
-
-# ❌ WRONG - Using deprecated utilities
-from src.utils.redis_consolidated import ...  # Archived 2025-10-26
-from src.utils.redis_database_manager_fixed import ...  # Archived 2025-10-26
+client = redis.Redis(host="172.16.168.23", port=6379, db=0)  # NEVER DO THIS
 ```
 
-### **Database Separation**
+**Use named databases** (self-documenting):
+- `main` - General cache/queues
+- `knowledge` - Knowledge base vectors
+- `prompts` - LLM prompts/templates
+- `analytics` - Analytics data
 
-**Use named databases** instead of DB numbers:
-
-```python
-# ✅ CORRECT - Named databases (self-documenting)
-main_db = get_redis_client(database="main")          # General cache/queues
-knowledge_db = get_redis_client(database="knowledge")  # Knowledge base vectors
-prompts_db = get_redis_client(database="prompts")     # LLM prompts/templates
-analytics_db = get_redis_client(database="analytics")  # Analytics data
-
-# ❌ WRONG - Database numbers (unclear purpose)
-db0 = redis.Redis(host=..., db=0)
-db1 = redis.Redis(host=..., db=1)
-```
-
-### **Backend Infrastructure**
-
-- **`redis_client.py`**: High-level API for getting Redis connections (66 files use this)
-- **`redis_database_manager.py`**: Backend connection pooling manager (28 files use this)
-- **NetworkConstants**: Provides `REDIS_VM_IP` and `REDIS_PORT` configuration
-
-### **Deprecated Utilities (DO NOT USE)**
-
-The following utilities were archived on **2025-10-26** and must NOT be used:
-
-| File | Status | Reason |
-|------|--------|--------|
-| `redis_consolidated.py` | ❌ ARCHIVED | 521 lines, 0 users, failed consolidation attempt |
-| `redis_database_manager_fixed.py` | ❌ ARCHIVED | "Temporary patch" violating NO TEMP FIXES policy |
-| `redis_helper.py` | ⚠️ LOW PRIORITY | Only 1 test file uses it, migrate later |
-
-**Archive location**: `archives/code/redis-utilities-2025-10-26/`
-
-### **Migration Status**
-
-**Current state** (as of 2025-10-26):
-- ✅ **66 files** correctly use `get_redis_client()`
-- ❌ **67 files** still use direct `redis.Redis()` instantiation (MUST MIGRATE)
-- 📋 **5-phase migration plan** stored in Memory MCP entity "Redis Utilities Audit 2025-10-26"
-
-**When refactoring Redis code:**
-1. Search Memory MCP for "Redis Utilities Audit" before starting
-2. Use `get_redis_client()` for all new Redis connections
-3. Replace direct instantiation patterns during code changes
-4. Reference archived utilities README for migration guidance
+👉 **Full guide**: [`docs/developer/REDIS_CLIENT_USAGE.md`](docs/developer/REDIS_CLIENT_USAGE.md)
 
 ---
 
@@ -323,7 +215,7 @@ mcp__memory__create_relations --relations '[{"from": "Task B", "to": "Task A", "
 - **Track each subtask** in TodoWrite with clear status
 - **Never execute monolithic tasks** - Always decompose first
 
-### **✅ How to Execute Tasks as Subtasks:**
+### **Workflow:**
 
 1. **Receive Task** - Understand the overall goal
 2. **Break Down** - Decompose into 3-10 smaller subtasks
@@ -332,50 +224,15 @@ mcp__memory__create_relations --relations '[{"from": "Task B", "to": "Task A", "
 5. **Mark Progress** - Update TodoWrite after each subtask completion
 6. **Verify Completion** - Ensure each subtask is truly done
 
-### **📋 Subtask Breakdown Guidelines:**
+### **Subtask Guidelines:**
 
-**Each subtask should be:**
+Each subtask should be:
 - **Atomic** - Single, well-defined action
 - **Testable** - Clear success criteria
 - **Independent** - Can be executed without waiting on other tasks (when possible)
 - **Trackable** - Can mark as in_progress/completed in TodoWrite
 
-**Examples of proper subtask breakdown:**
-
-**❌ BAD (Monolithic):**
-```
-Task: "Fix the authentication system"
-```
-
-**✅ GOOD (Subtasks):**
-```
-1. Research: Identify authentication bug in codebase
-2. Analysis: Determine root cause of authentication failure
-3. Implementation: Fix authentication logic in backend/auth.py
-4. Testing: Verify authentication works with test users
-5. Review: Run code-reviewer agent on changes
-6. Documentation: Update API docs with authentication changes
-```
-
-### **🎯 Subtask Execution Workflow:**
-
-```
-1. Break down main task → Create subtasks in TodoWrite
-2. Mark subtask #1 as in_progress
-3. Execute subtask #1 completely
-4. Mark subtask #1 as completed
-5. Mark subtask #2 as in_progress
-6. Execute subtask #2 completely
-7. Mark subtask #2 as completed
-... (continue until all subtasks done)
-```
-
-### **⚠️ When Tasks Seem Simple:**
-
-Even "simple" tasks should be broken down:
-- **Minimum 2-3 subtasks** for any task
-- Common subtasks: research, implement, test, review
-- If task truly is single-step, create subtasks for verification and documentation
+**Even "simple" tasks need 2-3 subtasks minimum** (research, implement, test, review)
 
 **THIS POLICY ENSURES QUALITY, TRACKING, AND PREVENTS SKIPPED STEPS - NO EXCEPTIONS**
 
@@ -437,14 +294,7 @@ Even "simple" tasks should be broken down:
 - ❌ **VMs are ephemeral** - can be reinstalled anytime, **PERMANENT WORK LOSS**
 - ❌ **No recovery mechanism** - cannot track or recover remote changes
 
-### **Network Configuration**
-
-**Service binding:**
-- ✅ Bind services on `0.0.0.0:PORT` (accessible from network)
-- ❌ NEVER use `localhost` or `127.0.0.1` (not accessible from remote VMs)
-- ✅ Use actual IPs `172.16.168.x` for inter-VM communication
-
-**Example**: Backend binds `0.0.0.0:8001`, accessed via `172.16.168.20:8001`
+👉 **Full guide**: [`docs/developer/INFRASTRUCTURE_DEPLOYMENT.md`](docs/developer/INFRASTRUCTURE_DEPLOYMENT.md)
 
 ---
 
@@ -452,23 +302,14 @@ Even "simple" tasks should be broken down:
 
 ### Service Layout - Distributed VM Infrastructure
 
-**Infrastructure Overview:**
-- 📡 **Main Machine (WSL)**: `172.16.168.20` - Backend API (port 8001) + Desktop/Terminal VNC (port 6080)
-- 🌐 **Remote VMs:**
-  - **VM1 Frontend**: `172.16.168.21:5173` - Web interface (SINGLE FRONTEND SERVER)
-  - **VM2 NPU Worker**: `172.16.168.22:8081` - Hardware AI acceleration
-  - **VM3 Redis**: `172.16.168.23:6379` - Data layer
-  - **VM4 AI Stack**: `172.16.168.24:8080` - AI processing
-  - **VM5 Browser**: `172.16.168.25:3000` - Web automation (Playwright)
-
-### Key Files
-
-- `setup.sh`: Standardized setup and installation script
-- `run_autobot.sh`: Main startup script (replaces all other run methods)
-- `backend/fast_app_factory_fix.py`: Fast backend with Redis timeout fix
-- `compose.yml`: Distributed VM configuration
-- `.env`: Main environment configuration for distributed infrastructure
-- `config/config.yaml`: Central configuration file
+| Service | IP:Port | Purpose |
+|---------|---------|---------|
+| **Main Machine (WSL)** | 172.16.168.20:8001 | Backend API + VNC Desktop (6080) |
+| **VM1 Frontend** | 172.16.168.21:5173 | Web interface (SINGLE FRONTEND SERVER) |
+| **VM2 NPU Worker** | 172.16.168.22:8081 | Hardware AI acceleration |
+| **VM3 Redis** | 172.16.168.23:6379 | Data layer |
+| **VM4 AI Stack** | 172.16.168.24:8080 | AI processing |
+| **VM5 Browser** | 172.16.168.25:3000 | Web automation (Playwright) |
 
 ---
 
@@ -627,6 +468,11 @@ This includes:
 ## Documentation
 
 **Key docs**: [`docs/developer/PHASE_5_DEVELOPER_SETUP.md`](docs/developer/PHASE_5_DEVELOPER_SETUP.md) (setup) | [`docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`](docs/api/COMPREHENSIVE_API_DOCUMENTATION.md) (API) | [`docs/system-state.md`](docs/system-state.md) (status)
+
+**Technical guides**:
+- [`docs/developer/HARDCODING_PREVENTION.md`](docs/developer/HARDCODING_PREVENTION.md) - No hardcoded values policy
+- [`docs/developer/REDIS_CLIENT_USAGE.md`](docs/developer/REDIS_CLIENT_USAGE.md) - Redis client patterns
+- [`docs/developer/INFRASTRUCTURE_DEPLOYMENT.md`](docs/developer/INFRASTRUCTURE_DEPLOYMENT.md) - VM infrastructure & deployment
 
 **All docs**: `docs/` contains api/, architecture/, developer/, features/, security/, troubleshooting/
 
