@@ -250,17 +250,19 @@ async def reformulate_query(query: str, context: Optional[str] = None):
 
 
 @router.post("/rag/analyze-documents")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_documents",
+    error_code_prefix="AI_STACK",
+)
 async def analyze_documents(documents: List[Dict[str, Any]]):
     """Analyze and synthesize multiple documents."""
-    try:
-        ai_client = await get_ai_stack_client()
-        result = await ai_client.analyze_documents(documents)
+    ai_client = await get_ai_stack_client()
+    result = await ai_client.analyze_documents(documents)
 
-        return create_success_response(
-            result, "Document analysis completed successfully"
-        )
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "Document analysis")
+    return create_success_response(
+        result, "Document analysis completed successfully"
+    )
 
 
 # ====================================================================
@@ -269,6 +271,11 @@ async def analyze_documents(documents: List[Dict[str, Any]]):
 
 
 @router.post("/chat/enhanced")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enhanced_chat",
+    error_code_prefix="AI_STACK",
+)
 async def enhanced_chat(
     request: EnhancedChatRequest, knowledge_base=Depends(get_knowledge_base)
 ):
@@ -278,40 +285,37 @@ async def enhanced_chat(
     This endpoint provides intelligent conversation with access to
     knowledge base and advanced AI reasoning capabilities.
     """
-    try:
-        ai_client = await get_ai_stack_client()
+    ai_client = await get_ai_stack_client()
 
-        # Enhance context with knowledge base if requested
-        enhanced_context = request.context
-        if request.use_knowledge_base and knowledge_base:
-            try:
-                # Search knowledge base for relevant context
-                kb_context = await knowledge_base.search(query=request.message, top_k=5)
-                if kb_context:
-                    kb_summary = "\n".join(
-                        [
-                            f"- {item.get('content', '')[:200]}..."
-                            for item in kb_context[:3]
-                        ]
-                    )
-                    enhanced_context = (
-                        f"{request.context or ''}\n\nRelevant knowledge:\n{kb_summary}"
-                    )
-            except Exception as e:
-                logger.warning(f"Knowledge base context enhancement failed: {e}")
+    # Enhance context with knowledge base if requested
+    enhanced_context = request.context
+    if request.use_knowledge_base and knowledge_base:
+        try:
+            # Search knowledge base for relevant context
+            kb_context = await knowledge_base.search(query=request.message, top_k=5)
+            if kb_context:
+                kb_summary = "\n".join(
+                    [
+                        f"- {item.get('content', '')[:200]}..."
+                        for item in kb_context[:3]
+                    ]
+                )
+                enhanced_context = (
+                    f"{request.context or ''}\n\nRelevant knowledge:\n{kb_summary}"
+                )
+        except Exception as e:
+            logger.warning(f"Knowledge base context enhancement failed: {e}")
 
-        # Get response from AI Stack chat agent
-        chat_result = await ai_client.chat_message(
-            message=request.message,
-            context=enhanced_context,
-            chat_history=request.chat_history,
-        )
+    # Get response from AI Stack chat agent
+    chat_result = await ai_client.chat_message(
+        message=request.message,
+        context=enhanced_context,
+        chat_history=request.chat_history,
+    )
 
-        return create_success_response(
-            chat_result, "Enhanced chat completed successfully"
-        )
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "Enhanced chat")
+    return create_success_response(
+        chat_result, "Enhanced chat completed successfully"
+    )
 
 
 # ====================================================================
@@ -320,21 +324,23 @@ async def enhanced_chat(
 
 
 @router.post("/knowledge/extract")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="extract_knowledge",
+    error_code_prefix="AI_STACK",
+)
 async def extract_knowledge(request: KnowledgeExtractionRequest):
     """Extract structured knowledge from content."""
-    try:
-        ai_client = await get_ai_stack_client()
-        result = await ai_client.extract_knowledge(
-            content=request.content,
-            content_type=request.content_type,
-            extraction_mode=request.extraction_mode,
-        )
+    ai_client = await get_ai_stack_client()
+    result = await ai_client.extract_knowledge(
+        content=request.content,
+        content_type=request.content_type,
+        extraction_mode=request.extraction_mode,
+    )
 
-        return create_success_response(
-            result, "Knowledge extraction completed successfully"
-        )
-    except AIStackError as e:
-        await handle_ai_stack_error(e, "Knowledge extraction")
+    return create_success_response(
+        result, "Knowledge extraction completed successfully"
+    )
 
 
 @router.post("/knowledge/enhanced-search")
