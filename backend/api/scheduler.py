@@ -367,20 +367,24 @@ async def start_scheduler():
 
 
 @router.post("/stop")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_scheduler",
+    error_code_prefix="SCHEDULER",
+)
 async def stop_scheduler():
     """Stop the workflow scheduler"""
-    try:
-        await workflow_scheduler.stop()
+    await workflow_scheduler.stop()
 
-        return {"success": True, "message": "Workflow scheduler stopped"}
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to stop scheduler: {str(e)}"
-        )
+    return {"success": True, "message": "Workflow scheduler stopped"}
 
 
 @router.get("/templates/schedule/{template_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="schedule_template_workflow",
+    error_code_prefix="SCHEDULER",
+)
 async def schedule_template_workflow(
     template_id: str,
     scheduled_time: str = Query(..., description="When to execute the workflow"),
@@ -392,175 +396,167 @@ async def schedule_template_workflow(
     user_id: Optional[str] = Query(None, description="User ID for the workflow"),
 ):
     """Schedule a workflow from a template"""
-    try:
-        # Parse variables if provided
-        template_variables = {}
-        if variables:
-            import json
+    # Parse variables if provided
+    template_variables = {}
+    if variables:
+        import json
 
-            try:
-                template_variables = json.loads(variables)
-            except json.JSONDecodeError:
-                raise HTTPException(
-                    status_code=400, detail="Invalid JSON in variables parameter"
-                )
+        try:
+            template_variables = json.loads(variables)
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=400, detail="Invalid JSON in variables parameter"
+            )
 
-        # Validate template exists
-        from src.workflow_templates import workflow_template_manager
+    # Validate template exists
+    from src.workflow_templates import workflow_template_manager
 
-        template = workflow_template_manager.get_template(template_id)
-        if not template:
-            raise HTTPException(status_code=404, detail="Template not found")
+    template = workflow_template_manager.get_template(template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
 
-        # Create user message from template
-        user_message = f"Execute template: {template.name}"
-        if template_variables:
-            user_message += f" with variables: {template_variables}"
+    # Create user message from template
+    user_message = f"Execute template: {template.name}"
+    if template_variables:
+        user_message += f" with variables: {template_variables}"
 
-        # Schedule the workflow
-        workflow_id = workflow_scheduler.schedule_workflow(
-            user_message=user_message,
-            scheduled_time=scheduled_time,
-            priority=priority,
-            complexity=(
-                template.complexity.value
-                if hasattr(template, "complexity")
-                else "simple"
-            ),
-            template_id=template_id,
-            variables=template_variables,
-            auto_approve=auto_approve,
-            user_id=user_id,
-            estimated_duration_minutes=template.estimated_duration_minutes,
-            tags=template.tags.copy(),
-        )
+    # Schedule the workflow
+    workflow_id = workflow_scheduler.schedule_workflow(
+        user_message=user_message,
+        scheduled_time=scheduled_time,
+        priority=priority,
+        complexity=(
+            template.complexity.value
+            if hasattr(template, "complexity")
+            else "simple"
+        ),
+        template_id=template_id,
+        variables=template_variables,
+        auto_approve=auto_approve,
+        user_id=user_id,
+        estimated_duration_minutes=template.estimated_duration_minutes,
+        tags=template.tags.copy(),
+    )
 
-        # Get the created workflow
-        workflow = workflow_scheduler.get_workflow(workflow_id)
+    # Get the created workflow
+    workflow = workflow_scheduler.get_workflow(workflow_id)
 
-        return {
-            "success": True,
-            "workflow_id": workflow_id,
-            "template_info": {
-                "template_id": template_id,
-                "template_name": template.name,
-                "category": template.category.value,
-            },
-            "scheduled_workflow": {
-                "id": workflow.id,
-                "name": workflow.name,
-                "scheduled_time": workflow.scheduled_time.isoformat(),
-                "priority": workflow.priority.name,
-                "status": workflow.status.name,
-                "complexity": workflow.complexity.value,
-            },
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to schedule template workflow: {str(e)}"
-        )
+    return {
+        "success": True,
+        "workflow_id": workflow_id,
+        "template_info": {
+            "template_id": template_id,
+            "template_name": template.name,
+            "category": template.category.value,
+        },
+        "scheduled_workflow": {
+            "id": workflow.id,
+            "name": workflow.name,
+            "scheduled_time": workflow.scheduled_time.isoformat(),
+            "priority": workflow.priority.name,
+            "status": workflow.status.name,
+            "complexity": workflow.complexity.value,
+        },
+    }
 
 
 @router.get("/stats")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_scheduler_statistics",
+    error_code_prefix="SCHEDULER",
+)
 async def get_scheduler_statistics():
     """Get detailed scheduler statistics"""
-    try:
-        status = workflow_scheduler.get_scheduler_status()
+    status = workflow_scheduler.get_scheduler_status()
 
-        # Get additional statistics
-        all_workflows = workflow_scheduler.list_scheduled_workflows()
+    # Get additional statistics
+    all_workflows = workflow_scheduler.list_scheduled_workflows()
 
-        # Priority distribution
-        priority_stats = {}
-        for priority in WorkflowPriority:
-            priority_stats[priority.name] = len(
-                [w for w in all_workflows if w.priority == priority]
-            )
-
-        # Status distribution
-        status_stats = {}
-        for status in WorkflowStatus:
-            status_stats[status.name] = len(
-                [w for w in all_workflows if w.status == status]
-            )
-
-        # Template usage
-        template_usage = {}
-        for workflow in all_workflows:
-            if workflow.template_id:
-                template_usage[workflow.template_id] = (
-                    template_usage.get(workflow.template_id, 0) + 1
-                )
-
-        # Average durations
-        durations = [w.estimated_duration_minutes for w in all_workflows]
-        avg_duration = sum(durations) / len(durations) if durations else 0
-
-        return {
-            "success": True,
-            "statistics": {
-                **status,
-                "priority_distribution": priority_stats,
-                "status_distribution": status_stats,
-                "template_usage": template_usage,
-                "average_duration_minutes": round(avg_duration, 1),
-                "duration_range": {
-                    "min": min(durations) if durations else 0,
-                    "max": max(durations) if durations else 0,
-                },
-            },
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get scheduler statistics: {str(e)}"
+    # Priority distribution
+    priority_stats = {}
+    for priority in WorkflowPriority:
+        priority_stats[priority.name] = len(
+            [w for w in all_workflows if w.priority == priority]
         )
+
+    # Status distribution
+    status_stats = {}
+    for status in WorkflowStatus:
+        status_stats[status.name] = len(
+            [w for w in all_workflows if w.status == status]
+        )
+
+    # Template usage
+    template_usage = {}
+    for workflow in all_workflows:
+        if workflow.template_id:
+            template_usage[workflow.template_id] = (
+                template_usage.get(workflow.template_id, 0) + 1
+            )
+
+    # Average durations
+    durations = [w.estimated_duration_minutes for w in all_workflows]
+    avg_duration = sum(durations) / len(durations) if durations else 0
+
+    return {
+        "success": True,
+        "statistics": {
+            **status,
+            "priority_distribution": priority_stats,
+            "status_distribution": status_stats,
+            "template_usage": template_usage,
+            "average_duration_minutes": round(avg_duration, 1),
+            "duration_range": {
+                "min": min(durations) if durations else 0,
+                "max": max(durations) if durations else 0,
+            },
+        },
+    }
 
 
 @router.post("/batch-schedule")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_schedule_workflows",
+    error_code_prefix="SCHEDULER",
+)
 async def batch_schedule_workflows(workflows: List[ScheduleWorkflowRequest]):
     """Schedule multiple workflows in batch"""
-    try:
-        scheduled_workflows = []
-        errors = []
+    scheduled_workflows = []
+    errors = []
 
-        for i, request in enumerate(workflows):
-            try:
-                # Validate priority
-                priority = WorkflowPriority[request.priority.upper()]
+    for i, request in enumerate(workflows):
+        try:
+            # Validate priority
+            priority = WorkflowPriority[request.priority.upper()]
 
-                # Schedule the workflow
-                workflow_id = workflow_scheduler.schedule_workflow(
-                    user_message=request.user_message,
-                    scheduled_time=request.scheduled_time,
-                    priority=priority,
-                    complexity=request.complexity,
-                    template_id=request.template_id,
-                    variables=request.variables,
-                    auto_approve=request.auto_approve,
-                    tags=request.tags,
-                    dependencies=request.dependencies,
-                    user_id=request.user_id,
-                    estimated_duration_minutes=request.estimated_duration_minutes,
-                    timeout_minutes=request.timeout_minutes,
-                    max_retries=request.max_retries,
-                )
+            # Schedule the workflow
+            workflow_id = workflow_scheduler.schedule_workflow(
+                user_message=request.user_message,
+                scheduled_time=request.scheduled_time,
+                priority=priority,
+                complexity=request.complexity,
+                template_id=request.template_id,
+                variables=request.variables,
+                auto_approve=request.auto_approve,
+                tags=request.tags,
+                dependencies=request.dependencies,
+                user_id=request.user_id,
+                estimated_duration_minutes=request.estimated_duration_minutes,
+                timeout_minutes=request.timeout_minutes,
+                max_retries=request.max_retries,
+            )
 
-                scheduled_workflows.append(workflow_id)
+            scheduled_workflows.append(workflow_id)
 
-            except Exception as e:
-                errors.append(f"Workflow {i}: {str(e)}")
+        except Exception as e:
+            errors.append(f"Workflow {i}: {str(e)}")
 
-        return {
-            "success": True,
-            "scheduled_workflows": scheduled_workflows,
-            "errors": errors,
-            "total_scheduled": len(scheduled_workflows),
-            "total_errors": len(errors),
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to batch schedule workflows: {str(e)}"
-        )
+    return {
+        "success": True,
+        "scheduled_workflows": scheduled_workflows,
+        "errors": errors,
+        "total_scheduled": len(scheduled_workflows),
+        "total_errors": len(errors),
+    }
