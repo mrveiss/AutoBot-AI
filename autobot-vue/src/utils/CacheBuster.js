@@ -168,6 +168,19 @@ class CacheBuster {
     }
 
     async handleCachePoisoning() {
+        // CRITICAL FIX: Prevent infinite reload loop
+        // Check if we've already reloaded recently (within last 10 seconds)
+        const reloadKey = 'cachebuster_last_reload';
+        const lastReload = sessionStorage.getItem(reloadKey);
+        const now = Date.now();
+
+        if (lastReload && (now - parseInt(lastReload)) < 10000) {
+            console.warn('[CacheBuster] Skipping reload - already reloaded recently to prevent infinite loop');
+            return;
+        }
+
+        // Store reload timestamp
+        sessionStorage.setItem(reloadKey, now.toString());
 
         // Clear all caches
         await this.clearAllCaches();

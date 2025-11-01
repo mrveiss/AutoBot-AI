@@ -222,9 +222,17 @@ export function useChatInterface() {
 
   // Helper function to ensure sender is valid type
   const normalizeSender = (sender: string | undefined): "user" | "assistant" | "system" => {
+    if (!sender) return 'system'
+
+    // Normalize terminal-related senders to 'system'
+    if (sender === 'agent_terminal' || sender === 'terminal') {
+      return 'system'
+    }
+
     if (sender === 'user' || sender === 'assistant' || sender === 'system') {
       return sender
     }
+
     return 'assistant' // Default fallback
   }
 
@@ -369,31 +377,85 @@ export function useChatInterface() {
     localStorage.setItem('lastChatId', chatId)
     await loadChatMessages(chatId)
     await loadChatContext(chatId)
+
+    // Start polling for real-time message updates
+    startMessagePolling(chatId)
   }
 
-  const loadChatMessages = async (chatId: string): Promise<void> => {
+  // Cleanup on unmount
+  onUnmounted(() => {
+    stopMessagePolling()
+  })
+
+  // Message polling for real-time updates
+  let messagePollingInterval: number | null = null
+  let lastMessageCount = 0
+
+  const loadChatMessages = async (chatId: string, silent: boolean = false): Promise<void> => {
     try {
       const data = await apiService.getChatMessages(chatId)
-      const history = data.data?.history || []
+      // Backend returns 'messages' field, not 'history'
+      const history = data.data?.messages || []
 
-      messages.value = history.map((message: any) => ({
-        ...message,
+      // Transform backend message format to frontend format
+      const newMessages = history.map((message: any) => ({
+        id: message.id || generateChatId(),
+        sender: normalizeSender(message.sender),
+        content: message.text || message.content || '', // Backend uses 'text', frontend uses 'content'
+        timestamp: message.timestamp || new Date().toISOString(),
         type: message.messageType || message.type || 'default'
       }))
 
-      await nextTick()
-      if (chatMessages.value) {
-        chatMessages.value.scrollTop = chatMessages.value.scrollHeight
+      // Only update if messages changed (prevents unnecessary re-renders)
+      if (newMessages.length !== messages.value.length || !silent) {
+        const previousLength = messages.value.length
+        messages.value = newMessages
+        lastMessageCount = newMessages.length
+
+        // Auto-scroll only if new messages appeared
+        if (newMessages.length > previousLength) {
+          await nextTick()
+          if (chatMessages.value && settings.value.chat.auto_scroll) {
+            chatMessages.value.scrollTop = chatMessages.value.scrollHeight
+          }
+        }
       }
     } catch (error) {
-      console.error('Error loading chat messages:', error)
-      messages.value = [{
-        id: generateChatId(),
-        sender: 'system',
-        content: 'Failed to load chat messages',
-        timestamp: new Date().toISOString(),
-        type: 'error'
-      }]
+      if (!silent) {
+        console.error('Error loading chat messages:', error)
+        messages.value = [{
+          id: generateChatId(),
+          sender: 'system',
+          content: 'Failed to load chat messages',
+          timestamp: new Date().toISOString(),
+          type: 'error'
+        }]
+      }
+    }
+  }
+
+  const startMessagePolling = (chatId: string) => {
+    // Clear any existing polling
+    stopMessagePolling()
+
+    // Poll every 2 seconds for new messages
+    messagePollingInterval = window.setInterval(async () => {
+      if (currentChatId.value === chatId) {
+        await loadChatMessages(chatId, true) // silent=true to avoid error spam
+      } else {
+        // Chat switched, stop polling
+        stopMessagePolling()
+      }
+    }, 2000)
+
+    console.log(`[ChatInterface] Started message polling for chat ${chatId}`)
+  }
+
+  const stopMessagePolling = () => {
+    if (messagePollingInterval) {
+      clearInterval(messagePollingInterval)
+      messagePollingInterval = null
+      console.log('[ChatInterface] Stopped message polling')
     }
   }
 

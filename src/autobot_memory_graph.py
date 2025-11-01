@@ -31,7 +31,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-import aioredis
+import redis.asyncio as async_redis  # Modern async Redis with JSON support
 import numpy as np
 from cachetools import LRUCache
 
@@ -106,7 +106,7 @@ class AutoBotMemoryGraph:
         self.redis_db = database
 
         # Connection clients
-        self.redis_client: Optional[aioredis.Redis] = None
+        self.redis_client: Optional[async_redis.Redis] = None
 
         # Chat history integration
         self.chat_history_manager = chat_history_manager
@@ -155,21 +155,20 @@ class AutoBotMemoryGraph:
                 return False
 
     async def _init_redis_connection(self):
-        """Initialize Redis connection to DB 9"""
-        try:
-            from src.redis_pool_manager import get_redis_async
+        """
+        Initialize Redis connection to DB 9.
 
-            # Get async Redis client for DB 9
-            redis_config = config.get_redis_config()
-            self.redis_client = aioredis.Redis(
-                host=redis_config["host"],
-                port=redis_config["port"],
-                db=self.redis_db,
-                password=redis_config.get("password"),
-                decode_responses=True,
-                socket_timeout=redis_config["socket_timeout"],
-                socket_connect_timeout=redis_config["socket_connect_timeout"],
-                retry_on_timeout=redis_config["retry_on_timeout"],
+        USES CANONICAL PATTERN: get_redis_client() from src/utils/redis_client.py
+        This ensures Redis Stack JSON support is properly configured.
+        """
+        try:
+            from src.utils.redis_client import get_redis_client
+
+            # CANONICAL: Use get_redis_client for proper Redis Stack support
+            # Database 9 is used for Memory Graph entities
+            self.redis_client = await get_redis_client(
+                async_client=True,
+                database="memory"  # Will map to DB 9 via redis_database_manager
             )
 
             # Test connection

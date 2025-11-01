@@ -38,10 +38,14 @@ except ImportError:
     KNOWLEDGE_BASE_AVAILABLE = False
     logger.warning("KnowledgeBase not available - auto-documentation features disabled")
 
-# Import task classification
+# Import TaskComplexity from correct location (always available)
+from src.autobot_types import TaskComplexity
+
+# Import task classification (optional)
 try:
     from src.agents.gemma_classification_agent import GemmaClassificationAgent
-    from src.task_classification import TaskClassificationResult, TaskComplexity
+    # Note: TaskClassificationResult doesn't exist yet, using quoted type annotations
+    # from src.task_classification import TaskClassificationResult
 
     CLASSIFICATION_AVAILABLE = True
 except ImportError:
@@ -243,8 +247,10 @@ class ConsolidatedOrchestrator:
     Integrates all orchestrator features into a single, comprehensive system
     """
 
-    def __init__(self, config_manager=None):
-        self.config_manager = config_manager or config_manager
+    def __init__(self, config_mgr=None):
+        # Use provided config_manager or fall back to global config_manager
+        from src.unified_config_manager import config_manager as global_config_manager
+        self.config_manager = config_mgr or global_config_manager
         self.config = OrchestratorConfig(self.config_manager)
 
         # Core components
@@ -613,7 +619,7 @@ class ConsolidatedOrchestrator:
         user_message: str,
         task_id: str,
         model: str,
-        classification: Optional[TaskClassificationResult],
+        classification: Optional["TaskClassificationResult"],
         context: Optional[Dict],
     ) -> Dict[str, Any]:
         """Process request with enhanced orchestration features"""
@@ -704,7 +710,7 @@ class ConsolidatedOrchestrator:
         user_message: str,
         agent_names: List[str],
         context: Optional[Dict],
-        classification: Optional[TaskClassificationResult],
+        classification: Optional["TaskClassificationResult"],
     ) -> Dict[str, Any]:
         """Coordinate execution across multiple agents"""
 

@@ -124,7 +124,7 @@ const session = computed(() => {
 
 // Control state
 const controlState = computed(() => {
-  return session.value?.controlState || 'agent'  // Default to agent control mode
+  return session.value?.controlState || 'user'  // Default to user control mode for chat terminals (agent can take over when needed)
 })
 
 const isAgentControlled = computed(() => {

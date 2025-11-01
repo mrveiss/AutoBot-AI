@@ -333,6 +333,8 @@ class ChatWorkflowManager:
         """
         Parse tool calls from LLM response using XML-style markers.
 
+        Supports both uppercase and lowercase tags, and handles HTML entities.
+
         Args:
             text: LLM response text
 
@@ -340,28 +342,35 @@ class ChatWorkflowManager:
             List of tool call dictionaries
         """
         import re
+        import html
 
         logger.debug(
             f"[_parse_tool_calls] Searching for TOOL_CALL markers in text of length {len(text)}"
         )
+
+        # Decode HTML entities (e.g., &quot; -> ")
+        text = html.unescape(text)
+
         logger.debug(
-            f"[_parse_tool_calls] Checking if '<TOOL_CALL' exists in text: {'<TOOL_CALL' in text}"
+            f"[_parse_tool_calls] Checking if '<TOOL_CALL' or '<tool_call' exists in text: {('<TOOL_CALL' in text) or ('<tool_call' in text)}"
         )
 
         tool_calls = []
+        # Match both single and double quotes, and both TOOL_CALL and tool_call (case-insensitive)
+        # Format: <TOOL_CALL name="..." params='...' OR params="...">...</TOOL_CALL>
         pattern = (
-            r'<TOOL_CALL\s+name="([^"]+)"\s+params=\'({[^}]+})\'>([^<]*)</TOOL_CALL>'
+            r'<tool_call\s+name="([^"]+)"\s+params=(["\'])({[^}]+})\2>([^<]*)</tool_call>'
         )
 
         logger.debug(f"[_parse_tool_calls] Using regex pattern: {pattern}")
 
-        matches = re.finditer(pattern, text)
+        matches = re.finditer(pattern, text, re.IGNORECASE)
         match_count = 0
         for match in matches:
             match_count += 1
             tool_name = match.group(1)
-            params_str = match.group(2)
-            description = match.group(3)
+            params_str = match.group(3)  # Group 2 is the quote character, group 3 is the JSON
+            description = match.group(4)
 
             try:
                 import json
@@ -375,6 +384,7 @@ class ChatWorkflowManager:
                 )
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse tool call params: {e}")
+                logger.error(f"Params string was: {params_str}")
                 continue
 
         logger.info(
@@ -1040,7 +1050,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
             Approval result dict or None if timeout
         """
         # Send approval request to frontend
-        yield WorkflowMessage(
+        approval_msg = WorkflowMessage(
             type="command_approval_request",
             content=result.get(
                 "approval_ui_message",
@@ -1057,6 +1067,25 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
             },
         )
 
+        # Yield approval request
+        yield approval_msg
+
+        # CRITICAL: Persist approval request IMMEDIATELY to prevent data loss on restart
+        # Don't wait until end of streaming - approval requests must survive backend restarts
+        try:
+            from src.chat_history_manager import ChatHistoryManager
+            chat_mgr = ChatHistoryManager()
+            await chat_mgr.add_message(
+                sender="assistant",
+                text=approval_msg.content,
+                message_type="command_approval_request",
+                raw_data=approval_msg.metadata,  # Preserve terminal_session_id!
+                session_id=session_id
+            )
+            logger.info(f"✅ Persisted approval request immediately: session={session_id}, terminal={terminal_session_id}")
+        except Exception as persist_error:
+            logger.error(f"Failed to persist approval request immediately: {persist_error}", exc_info=True)
+
         # Yield waiting message
         yield WorkflowMessage(
             type="response",
@@ -1069,23 +1098,35 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
 
         # Wait for approval with timeout (poll terminal session)
         logger.info(
-            f"Waiting for approval of command: {command} (terminal_session: {terminal_session_id})"
+            f"🔍 [APPROVAL POLLING] Waiting for approval of command: {command}"
+        )
+        logger.info(
+            f"🔍 [APPROVAL POLLING] Chat session: {session_id}, Terminal session: {terminal_session_id}"
         )
 
         max_wait_time = 3600  # 1 hour timeout
         poll_interval = 0.5  # Poll every 500ms
         elapsed_time = 0
+        poll_count = 0
 
         approval_result = None
         while elapsed_time < max_wait_time:
             await asyncio.sleep(poll_interval)
             elapsed_time += poll_interval
+            poll_count += 1
 
             # Check if approval has been processed
             try:
                 session_info = await self.terminal_tool.agent_terminal_service.get_session_info(
                     terminal_session_id
                 )
+
+                # Log polling attempts every 10 seconds
+                if poll_count % 20 == 0:
+                    logger.info(
+                        f"🔍 [APPROVAL POLLING] Still waiting... (elapsed: {elapsed_time:.1f}s, "
+                        f"session: {terminal_session_id}, pending_approval: {session_info.get('pending_approval') is not None if session_info else 'NO SESSION INFO'})"
+                    )
 
                 # If pending_approval is None, command was either approved or denied
                 if (
@@ -1100,7 +1141,9 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                             # Found the execution result
                             approval_result = last_command.get("result", {})
                             logger.info(
-                                f"Command approval completed: {approval_result.get('status')}"
+                                f"✅ [APPROVAL POLLING] Completion detected! "
+                                f"Command: {command}, Status: {approval_result.get('status')}, "
+                                f"Approved by: {last_command.get('approved_by')}"
                             )
 
                             # Send approval status update to frontend
@@ -1330,18 +1373,40 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
 
         This refactored version delegates to specialized helper methods for each stage
         of the workflow, improving maintainability and testability.
+
+        Now also persists WorkflowMessages to chat history to fix approval workflow persistence.
         """
+        # Import ChatHistoryManager for message persistence
+        from src.chat_history_manager import ChatHistoryManager
+
+        # Collect all workflow messages for persistence
+        workflow_messages = []
+
         try:
             # Stage 1: Initialize session and check for exit intent
             session, terminal_session_id, user_wants_exit = await self._initialize_chat_session(
                 session_id, message
             )
 
+            # CRITICAL: Persist user message IMMEDIATELY at start to prevent data loss on restart
+            # This ensures user's question is saved even if backend crashes during processing
+            try:
+                chat_mgr = ChatHistoryManager()
+                await chat_mgr.add_message(
+                    sender="user",
+                    text=message,
+                    message_type="default",
+                    session_id=session_id
+                )
+                logger.debug(f"✅ Persisted user message immediately: session={session_id}")
+            except Exception as persist_error:
+                logger.error(f"Failed to persist user message immediately: {persist_error}")
+
             if user_wants_exit:
                 logger.info(
                     f"[ChatWorkflowManager] User explicitly requested to exit conversation: {session_id}"
                 )
-                yield WorkflowMessage(
+                exit_msg = WorkflowMessage(
                     type="response",
                     content="Goodbye! Feel free to return anytime if you need assistance. Take care!",
                     metadata={
@@ -1349,6 +1414,21 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                         "exit_detected": True,
                     },
                 )
+                workflow_messages.append(exit_msg)
+                yield exit_msg
+
+                # Persist exit response (user message already persisted above)
+                try:
+                    chat_mgr = ChatHistoryManager()
+                    await chat_mgr.add_message(
+                        sender="assistant",
+                        text=exit_msg.content,
+                        message_type="exit_acknowledgment",
+                        session_id=session_id
+                    )
+                except Exception as persist_error:
+                    logger.error(f"Failed to persist exit message: {persist_error}")
+
                 return
 
             # Stage 2: Prepare LLM request parameters
@@ -1411,7 +1491,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
 
                                             llm_response += chunk_text
 
-                                            yield WorkflowMessage(
+                                            chunk_msg = WorkflowMessage(
                                                 type="response",
                                                 content=chunk_text,
                                                 metadata={
@@ -1421,6 +1501,8 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                                     "terminal_session_id": terminal_session_id,
                                                 },
                                             )
+                                            # Don't collect streaming chunks - only collect complete messages
+                                            yield chunk_msg
 
                                         if chunk_data.get("done", False):
                                             break
@@ -1448,33 +1530,80 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                     ollama_endpoint,
                                     selected_model,
                                 ):
+                                    # Collect important WorkflowMessages for persistence
+                                    # NOTE: command_approval_request is persisted immediately, don't collect it here
+                                    # Collect terminal commands, terminal output, and errors for end-of-stream persistence
+                                    if tool_msg.type in ["terminal_command", "terminal_output", "error"]:
+                                        workflow_messages.append(tool_msg)
+                                        logger.debug(f"Collected WorkflowMessage for persistence: type={tool_msg.type}")
+
                                     yield tool_msg
 
-                            # Stage 5: Persist conversation
+                            # Stage 5: Persist conversation (OLD METHOD - keeps for conversation_history)
                             await self._persist_conversation(
                                 session_id, session, message, llm_response
                             )
+
+                            # Stage 6: NEW - Persist WorkflowMessages and assistant response to chat history
+                            # (User message already persisted immediately at start)
+                            try:
+                                chat_mgr = ChatHistoryManager()
+
+                                # Persist all collected WorkflowMessages
+                                for wf_msg in workflow_messages:
+                                    # Map WorkflowMessage type to chat message type
+                                    message_type = wf_msg.type  # e.g., "command_approval_request", "terminal_command"
+
+                                    # Determine sender based on message type
+                                    sender = "assistant"  # Most messages are from assistant
+                                    if message_type == "terminal_output":
+                                        sender = "system"
+
+                                    await chat_mgr.add_message(
+                                        sender=sender,
+                                        text=wf_msg.content,
+                                        message_type=message_type,
+                                        raw_data=wf_msg.metadata,  # Include metadata as rawData
+                                        session_id=session_id
+                                    )
+                                    logger.debug(f"Persisted WorkflowMessage to chat history: type={message_type}, session={session_id}")
+
+                                # Persist final assistant response
+                                await chat_mgr.add_message(
+                                    sender="assistant",
+                                    text=llm_response,
+                                    message_type="llm_response",
+                                    session_id=session_id
+                                )
+                                logger.info(f"✅ Persisted complete conversation to chat history: session={session_id}, workflow_messages={len(workflow_messages)}")
+
+                            except Exception as persist_error:
+                                logger.error(f"Failed to persist WorkflowMessages to chat history: {persist_error}", exc_info=True)
                         else:
                             logger.error(
                                 f"[ChatWorkflowManager] Ollama request failed: {response.status_code}"
                             )
 
-                            yield WorkflowMessage(
+                            error_msg = WorkflowMessage(
                                 type="error",
                                 content=f"LLM service error: {response.status_code}",
                                 metadata={"error": True},
                             )
+                            workflow_messages.append(error_msg)
+                            yield error_msg
 
             except Exception as llm_error:
                 logger.error(
                     f"[ChatWorkflowManager] Direct LLM call failed: {llm_error}"
                 )
 
-                yield WorkflowMessage(
+                error_msg = WorkflowMessage(
                     type="error",
                     content=f"Failed to connect to LLM: {str(llm_error)}",
                     metadata={"error": True},
                 )
+                workflow_messages.append(error_msg)
+                yield error_msg
 
         except Exception as e:
             logger.error(
@@ -1483,11 +1612,13 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
             )
             # Yield error message
 
-            yield WorkflowMessage(
+            error_msg = WorkflowMessage(
                 type="error",
                 content=f"Error processing message: {str(e)}",
                 metadata={"error": True, "session_id": session_id},
             )
+            workflow_messages.append(error_msg)
+            yield error_msg
 
     async def get_session_info(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get information about a session."""

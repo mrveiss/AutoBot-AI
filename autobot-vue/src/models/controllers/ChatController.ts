@@ -223,6 +223,23 @@ export class ChatController {
 
               if (data.type === 'start') {
                 console.log('[ChatController] Stream started:', data.session_id)
+              } else if (data.type === 'command_approval_request') {
+                // CRITICAL FIX: Stop typing indicator when approval is requested
+                // Backend is waiting for user approval - no more streaming until approved/denied
+                console.log('[ChatController] Approval request detected - stopping typing indicator')
+                this.chatStore.setTyping(false)
+
+                // Add approval request message to chat
+                accumulatedContent += data.content || 'Command approval required'
+                this.chatStore.updateMessage(assistantMessageId, {
+                  content: accumulatedContent,
+                  type: 'command_approval_request',
+                  metadata: {
+                    ...data.metadata,
+                    requires_approval: true,
+                    approval_status: 'pending'
+                  }
+                })
               } else if (data.type === 'end') {
                 console.log('[ChatController] Stream ended')
               } else if (data.type === 'error') {
@@ -386,20 +403,26 @@ export class ChatController {
 
   async loadChatMessages(sessionId: string): Promise<void> {
     try {
+      console.log(`[ChatController] 🔍 Loading messages for session: ${sessionId}`)
       this.getAppStore()?.setLoading(true, 'Loading messages...')
 
       const messages = await chatRepository.getChatMessages(sessionId)
+      console.log(`[ChatController] 📦 Received ${messages.length} messages from repository`)
 
       // Update session with loaded messages
       const session = this.chatStore.sessions.find(s => s.id === sessionId)
       if (session) {
+        console.log(`[ChatController] 📝 Found session in store, updating messages (before: ${session.messages.length}, after: ${messages.length})`)
         session.messages = messages
         this.chatStore.switchToSession(sessionId)
-        console.log(`Loaded ${messages.length} messages for session ${sessionId}`)
+        console.log(`[ChatController] ✅ Loaded ${messages.length} messages for session ${sessionId}`)
+        console.log(`[ChatController] 🔍 Store currentMessages count: ${this.chatStore.currentMessages.length}`)
+      } else {
+        console.error(`[ChatController] ❌ Session ${sessionId} not found in store! Store has ${this.chatStore.sessions.length} sessions:`, this.chatStore.sessions.map(s => s.id))
       }
 
     } catch (error: any) {
-      console.error('Failed to load messages:', error)
+      console.error('[ChatController] ❌ Failed to load messages:', error)
       this.getAppStore()?.setGlobalError(`Failed to load messages: ${error.message}`)
     } finally {
       this.getAppStore()?.setLoading(false)
@@ -531,8 +554,13 @@ export class ChatController {
     this.chatStore.toggleSidebar()
   }
 
-  switchToSession(sessionId: string): void {
+  async switchToSession(sessionId: string): Promise<void> {
+    console.log(`[ChatController] 🔀 Switching to session: ${sessionId}`)
     this.chatStore.switchToSession(sessionId)
+    console.log(`[ChatController] 📲 Calling loadChatMessages...`)
+    // Load messages from backend when switching sessions
+    await this.loadChatMessages(sessionId)
+    console.log(`[ChatController] ✅ Switch complete, currentSessionId: ${this.chatStore.currentSessionId}`)
   }
 
   updateSessionTitle(sessionId: string, title: string): void {

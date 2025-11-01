@@ -229,14 +229,29 @@ export class ChatRepository {
     }
   }
 
-  // Get chat sessions
+  // Get chat sessions (alias for getChatList)
   async getSessions(): Promise<ChatSession[]> {
+    return this.getChatList()
+  }
+
+  // Get list of all chat sessions (for compatibility with controller)
+  async getChatList(): Promise<any[]> {
     try {
       const response = await this.get('/api/chat/sessions')
-      return response.data?.sessions || []
+      const sessions = response.data?.sessions || []
+
+      // Transform backend session format to frontend store format
+      return sessions.map((session: any) => ({
+        id: session.id || session.chatId,
+        title: session.title || session.name || `Chat ${session.id?.slice(0, 8)}`,
+        messages: [], // Sessions list doesn't include messages - loaded separately
+        createdAt: new Date(session.createdAt || session.createdTime),
+        updatedAt: new Date(session.updatedAt || session.lastModified),
+        isActive: false // Will be set by store when session is selected
+      }))
     } catch (error: any) {
-      console.error('Failed to get sessions:', error)
-      throw error
+      console.error('Failed to get chat list:', error)
+      return [] // Return empty array on error to prevent app crash
     }
   }
 
@@ -249,6 +264,59 @@ export class ChatRepository {
       console.error('Failed to get session:', error)
       throw error
     }
+  }
+
+  // Get messages for a chat session
+  async getChatMessages(sessionId: string): Promise<ChatMessage[]> {
+    try {
+      console.log(`[ChatRepository] 📥 Fetching messages for session: ${sessionId}`)
+      const response = await this.get(`/api/chat/sessions/${sessionId}`)
+      const data = response.data
+      console.log(`[ChatRepository] 📡 Raw API response:`, JSON.stringify(data).substring(0, 200))
+
+      // Backend returns messages in data.messages
+      const backendMessages = data.data?.messages || data.messages || []
+      console.log(`[ChatRepository] 📋 Backend returned ${backendMessages.length} messages`)
+
+      // Transform backend message format to frontend format
+      const messages = backendMessages.map((msg: any, index: number) => {
+        const transformed = {
+          id: msg.id || `${Date.now()}-${Math.random()}`,
+          sender: this.normalizeSender(msg.sender),
+          content: msg.text || msg.content || '',
+          timestamp: new Date(msg.timestamp || new Date().toISOString()),
+          type: msg.messageType || msg.type || 'message',
+          // CRITICAL FIX: Backend saves approval metadata in rawData, not metadata
+          // Check both rawData (old format) and metadata (new format) for backward compatibility
+          metadata: msg.metadata || msg.rawData || {}
+        }
+        console.log(`[ChatRepository] 🔄 Message ${index + 1}: sender=${msg.sender} → ${transformed.sender}, content length=${transformed.content.length}`)
+        return transformed
+      })
+
+      console.log(`[ChatRepository] ✅ Transformed ${messages.length} messages, returning to controller`)
+      return messages
+    } catch (error: any) {
+      console.error('[ChatRepository] ❌ Failed to get chat messages:', error)
+      // Return empty array on error to prevent UI breakage
+      return []
+    }
+  }
+
+  // Helper to normalize sender field from backend to frontend format
+  private normalizeSender(sender: string | undefined): 'user' | 'assistant' | 'system' {
+    if (!sender) return 'system'
+
+    // Normalize terminal-related senders to 'system'
+    if (sender === 'agent_terminal' || sender === 'terminal') {
+      return 'system'
+    }
+
+    if (sender === 'user' || sender === 'assistant' || sender === 'system') {
+      return sender as 'user' | 'assistant' | 'system'
+    }
+
+    return 'assistant' // Default fallback
   }
 
   // Delete chat session - ENHANCED: Support file_action and file_options
