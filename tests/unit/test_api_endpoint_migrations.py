@@ -18269,5 +18269,221 @@ class TestBatch98SchedulerQueueAndStatus(unittest.TestCase):
         self.assertEqual(progress_percentage, 69.23076923076923)
 
 
+class TestBatch99SchedulerFINAL(unittest.TestCase):
+    """Test batch 99 migrations: FINAL 4 endpoints from scheduler.py - 100% COMPLETE"""
+
+    def test_batch_99_stop_scheduler_has_decorator(self):
+        """Verify stop_scheduler has @with_error_handling decorator"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.stop_scheduler)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SCHEDULER"', source)
+        self.assertIn('operation="stop_scheduler"', source)
+
+    def test_batch_99_stop_scheduler_simple_pattern(self):
+        """Verify stop_scheduler follows Simple Pattern (no try-catch)"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.stop_scheduler)
+        # Should have NO try-catch blocks (Simple Pattern)
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        # Should NOT have status_code=500
+        self.assertNotIn("status_code=500", source)
+
+    def test_batch_99_schedule_template_workflow_has_decorator(self):
+        """Verify schedule_template_workflow has @with_error_handling decorator"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.schedule_template_workflow)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SCHEDULER"', source)
+        self.assertIn('operation="schedule_template_workflow"', source)
+
+    def test_batch_99_schedule_template_workflow_preserves_400_and_404(self):
+        """Verify schedule_template_workflow preserves 400 JSON + 404 template errors (Mixed Pattern)"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.schedule_template_workflow)
+        # Should preserve 400 HTTPException for JSON validation
+        self.assertIn("status_code=400", source)
+        self.assertIn("Invalid JSON in variables parameter", source)
+        # Should preserve 404 HTTPException for template not found
+        self.assertIn("status_code=404", source)
+        self.assertIn("Template not found", source)
+        # Should have 1 inner try-catch for JSON parsing
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 1, "Should have 1 inner try-catch for JSON parsing")
+        # Should NOT have status_code=500
+        self.assertNotIn("status_code=500", source)
+
+    def test_batch_99_get_scheduler_statistics_has_decorator(self):
+        """Verify get_scheduler_statistics has @with_error_handling decorator"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.get_scheduler_statistics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SCHEDULER"', source)
+        self.assertIn('operation="get_scheduler_statistics"', source)
+
+    def test_batch_99_get_scheduler_statistics_simple_pattern(self):
+        """Verify get_scheduler_statistics follows Simple Pattern (no try-catch)"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.get_scheduler_statistics)
+        # Should have NO try-catch blocks (Simple Pattern)
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        # Should NOT have status_code=500
+        self.assertNotIn("status_code=500", source)
+
+    def test_batch_99_batch_schedule_workflows_has_decorator(self):
+        """Verify batch_schedule_workflows has @with_error_handling decorator"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.batch_schedule_workflows)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SCHEDULER"', source)
+        self.assertIn('operation="batch_schedule_workflows"', source)
+
+    def test_batch_99_batch_schedule_workflows_preserves_inner_loop_errors(self):
+        """Verify batch_schedule_workflows preserves inner loop error collection (Mixed Pattern)"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.batch_schedule_workflows)
+        # Should preserve inner try-catch for error collection
+        self.assertIn("try:", source)
+        self.assertIn("except Exception as e:", source)
+        self.assertIn("errors.append", source)
+        # Should have 1 inner try-catch for loop error collection
+        try_count = source.count("try:")
+        self.assertEqual(
+            try_count, 1, "Should have 1 inner try-catch for loop error collection"
+        )
+        # Should NOT have status_code=500
+        self.assertNotIn("status_code=500", source)
+
+    def test_batch_99_all_endpoints_have_error_category_server_error(self):
+        """Verify all batch 99 endpoints use ErrorCategory.SERVER_ERROR"""
+        from backend.api import scheduler
+
+        endpoints = [
+            scheduler.stop_scheduler,
+            scheduler.schedule_template_workflow,
+            scheduler.get_scheduler_statistics,
+            scheduler.batch_schedule_workflows,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "category=ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} should use ErrorCategory.SERVER_ERROR",
+            )
+
+    def test_batch_99_pattern_distribution(self):
+        """Verify batch 99 pattern distribution: 2 Simple, 2 Mixed"""
+        from backend.api import scheduler
+
+        # Simple Pattern endpoints (no try-catch at top level)
+        simple_endpoints = [
+            scheduler.stop_scheduler,
+            scheduler.get_scheduler_statistics,
+        ]
+
+        for endpoint in simple_endpoints:
+            source = inspect.getsource(endpoint)
+            try_count = source.count("try:")
+            self.assertEqual(
+                try_count,
+                0,
+                f"{endpoint.__name__} should have NO try-catch (Simple Pattern)",
+            )
+
+        # Mixed Pattern endpoints (preserve business logic)
+        # schedule_template_workflow has 1 try-catch for JSON parsing
+        template_source = inspect.getsource(scheduler.schedule_template_workflow)
+        self.assertIn("HTTPException", template_source)
+        self.assertIn("status_code=400", template_source)
+        self.assertIn("status_code=404", template_source)
+
+        # batch_schedule_workflows has 1 try-catch for loop error collection
+        batch_source = inspect.getsource(scheduler.batch_schedule_workflows)
+        self.assertIn("except Exception as e:", batch_source)
+        self.assertIn("errors.append", batch_source)
+
+    def test_batch_99_100_percent_complete(self):
+        """Verify scheduler.py is 100% complete - 14th file to reach 100%"""
+        from backend.api import scheduler
+
+        all_migrated = [
+            # Batch 97 (5 endpoints)
+            scheduler.schedule_workflow,
+            scheduler.list_scheduled_workflows,
+            scheduler.get_workflow_details,
+            scheduler.reschedule_workflow,
+            scheduler.cancel_workflow,
+            # Batch 98 (4 endpoints)
+            scheduler.get_scheduler_status,
+            scheduler.get_queue_status,
+            scheduler.control_queue,
+            scheduler.start_scheduler,
+            # Batch 99 (4 endpoints)
+            scheduler.stop_scheduler,
+            scheduler.schedule_template_workflow,
+            scheduler.get_scheduler_statistics,
+            scheduler.batch_schedule_workflows,
+        ]
+
+        # All 13 endpoints should have @with_error_handling
+        for endpoint in all_migrated:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} missing @with_error_handling decorator",
+            )
+
+        # Verify 13/13 endpoints (100%)
+        self.assertEqual(len(all_migrated), 13, "Should have migrated 13/13 endpoints (100%)")
+
+    def test_batch_99_progress_tracking(self):
+        """Track progress: 13/13 endpoints migrated in scheduler.py (100% COMPLETE)"""
+        from backend.api import scheduler
+
+        # Count all decorated endpoints
+        all_endpoints = [
+            # Batch 97
+            scheduler.schedule_workflow,
+            scheduler.list_scheduled_workflows,
+            scheduler.get_workflow_details,
+            scheduler.reschedule_workflow,
+            scheduler.cancel_workflow,
+            # Batch 98
+            scheduler.get_scheduler_status,
+            scheduler.get_queue_status,
+            scheduler.control_queue,
+            scheduler.start_scheduler,
+            # Batch 99
+            scheduler.stop_scheduler,
+            scheduler.schedule_template_workflow,
+            scheduler.get_scheduler_statistics,
+            scheduler.batch_schedule_workflows,
+        ]
+
+        migrated_count = sum(
+            1 for ep in all_endpoints if "@with_error_handling" in inspect.getsource(ep)
+        )
+
+        # scheduler.py has 13 total endpoints
+        total_endpoints = 13
+        progress_percentage = (migrated_count / total_endpoints) * 100
+
+        self.assertEqual(migrated_count, 13)
+        self.assertEqual(progress_percentage, 100.0)
+
+
 if __name__ == "__main__":
     unittest.main()
