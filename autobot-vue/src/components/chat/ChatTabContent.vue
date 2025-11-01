@@ -98,7 +98,17 @@ const props = defineProps<Props>()
 // Terminal mounting state - only mount terminal when first accessed
 const terminalMounted = ref(false)
 
-// Watch for terminal tab activation
+// CRITICAL FIX: Mount terminal immediately when session exists
+// This ensures terminal WebSocket connects BEFORE commands execute
+// Previously: terminal only mounted when switching to terminal tab → commands lost
+watch(() => props.currentSessionId, (sessionId) => {
+  if (sessionId && !terminalMounted.value) {
+    console.log('[ChatTabContent] Session created - mounting terminal immediately:', sessionId)
+    terminalMounted.value = true
+  }
+}, { immediate: true })
+
+// Also watch for terminal tab activation (keeps existing behavior for manual switching)
 watch(() => props.activeTab, (newTab) => {
   if (newTab === 'terminal' && !terminalMounted.value) {
     terminalMounted.value = true

@@ -43,6 +43,8 @@ const terminalRef = ref<HTMLElement>()
 const terminal = ref<Terminal>()
 const fitAddon = ref<FitAddon>()
 const webLinksAddon = ref<WebLinksAddon>()
+// Track if addons were successfully loaded
+const addonsLoaded = ref(false)
 
 // Theme configurations
 const themes = {
@@ -121,6 +123,7 @@ const initTerminal = async () => {
     webLinksAddon.value = new WebLinksAddon()
     terminal.value.loadAddon(fitAddon.value)
     terminal.value.loadAddon(webLinksAddon.value)
+    addonsLoaded.value = true // Mark addons as successfully loaded
 
     // Open terminal in DOM
     terminal.value.open(terminalRef.value)
@@ -165,22 +168,23 @@ const initTerminal = async () => {
 const disposeTerminal = () => {
   if (terminal.value) {
     try {
-      // Dispose addons first if they exist
-      // Note: XTerm.js will try to dispose loaded addons when terminal.dispose() is called,
-      // but explicitly disposing them first prevents errors if addons weren't fully loaded
-      if (fitAddon.value && typeof fitAddon.value.dispose === 'function') {
-        try {
-          fitAddon.value.dispose()
-        } catch (err) {
-          console.warn('[BaseXTerminal] Error disposing fit addon:', err)
+      // Only dispose addons if they were successfully loaded
+      // Disposing unloaded addons throws "Could not dispose an addon that has not been loaded" error
+      if (addonsLoaded.value) {
+        if (fitAddon.value && typeof fitAddon.value.dispose === 'function') {
+          try {
+            fitAddon.value.dispose()
+          } catch (err) {
+            console.warn('[BaseXTerminal] Error disposing fit addon:', err)
+          }
         }
-      }
 
-      if (webLinksAddon.value && typeof webLinksAddon.value.dispose === 'function') {
-        try {
-          webLinksAddon.value.dispose()
-        } catch (err) {
-          console.warn('[BaseXTerminal] Error disposing web links addon:', err)
+        if (webLinksAddon.value && typeof webLinksAddon.value.dispose === 'function') {
+          try {
+            webLinksAddon.value.dispose()
+          } catch (err) {
+            console.warn('[BaseXTerminal] Error disposing web links addon:', err)
+          }
         }
       }
 
@@ -191,6 +195,7 @@ const disposeTerminal = () => {
       terminal.value = undefined
       fitAddon.value = undefined
       webLinksAddon.value = undefined
+      addonsLoaded.value = false
 
       emit('disposed')
     } catch (error) {
@@ -199,6 +204,7 @@ const disposeTerminal = () => {
       terminal.value = undefined
       fitAddon.value = undefined
       webLinksAddon.value = undefined
+      addonsLoaded.value = false
     }
   }
 }
@@ -292,6 +298,9 @@ const handleResize = () => {
   }
 }
 
+// Visibility observer for tab switching
+let visibilityObserver: IntersectionObserver | null = null
+
 // Lifecycle
 onMounted(async () => {
   await initTerminal()
@@ -305,10 +314,46 @@ onMounted(async () => {
       fitAddon.value.fit()
     }
   }, 100)
+
+  // CRITICAL FIX: Detect when terminal becomes visible (e.g., tab switch)
+  // and refit to proper container dimensions
+  if (containerRef.value) {
+    visibilityObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio > 0) {
+            // Container is now visible - refit terminal
+            console.log('[BaseXTerminal] Container became visible - refitting terminal')
+            setTimeout(() => {
+              if (fitAddon.value) {
+                fitAddon.value.fit()
+                console.log('[BaseXTerminal] Terminal refitted:', {
+                  cols: terminal.value?.cols,
+                  rows: terminal.value?.rows
+                })
+              }
+            }, 50)
+          }
+        })
+      },
+      {
+        threshold: [0, 0.1] // Trigger when even 10% visible
+      }
+    )
+
+    visibilityObserver.observe(containerRef.value)
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+
+  // Disconnect visibility observer
+  if (visibilityObserver) {
+    visibilityObserver.disconnect()
+    visibilityObserver = null
+  }
+
   disposeTerminal()
 })
 </script>
