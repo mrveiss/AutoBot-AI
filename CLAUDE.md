@@ -130,6 +130,60 @@ client = redis.Redis(host="172.16.168.23", port=6379, db=0)  # NEVER DO THIS
 
 ---
 
+## 📝 UTF-8 ENCODING (MANDATORY STANDARD)
+
+**⚠️ MANDATORY RULE: ALWAYS USE UTF-8 ENCODING EXPLICITLY**
+
+**Canonical utilities**: `src/utils/encoding_utils.py`
+
+### Why UTF-8 Matters
+
+- ✅ Prevents ANSI escape codes bleeding (terminal control sequences)
+- ✅ Proper box-drawing characters (terminal prompts: ┌──, └─)
+- ✅ Emoji support in UI and responses
+- ✅ International text (Cyrillic, Chinese, Arabic, etc.)
+- ✅ Consistent JSON serialization
+
+### Quick Reference
+
+```python
+# ✅ CORRECT - File I/O with UTF-8
+from src.utils.encoding_utils import async_read_utf8_file, async_write_utf8_file
+
+content = await async_read_utf8_file("path/to/file.txt")
+await async_write_utf8_file("path/to/file.txt", content)
+
+# ✅ CORRECT - JSON with UTF-8 (no ASCII escaping)
+from src.utils.encoding_utils import json_dumps_utf8
+
+json_str = json_dumps_utf8({"emoji": "🤖"})  # Not escaped to \ud83e\udd16
+
+# ✅ CORRECT - FastAPI responses
+from fastapi.responses import JSONResponse
+
+return JSONResponse(
+    content={"message": "Hello 🤖"},
+    media_type="application/json; charset=utf-8"
+)
+
+# ✅ CORRECT - Terminal output stripping
+from src.utils.encoding_utils import strip_ansi_codes
+
+clean_text = strip_ansi_codes(terminal_output)
+```
+
+### Critical Rules
+
+- **File I/O**: Always use `encoding='utf-8'` parameter
+- **aiofiles**: Always specify `encoding='utf-8'`
+- **FastAPI**: Always set `media_type="application/json; charset=utf-8"`
+- **JSON**: Always use `ensure_ascii=False`
+- **subprocess**: Always decode with UTF-8: `text=True, encoding='utf-8'`
+
+👉 **Full guide**: [`docs/developer/UTF8_ENFORCEMENT.md`](docs/developer/UTF8_ENFORCEMENT.md)
+
+---
+
 ## 🚨 STANDARDIZED PROCEDURES
 
 ### Setup (Required First Time)
@@ -472,6 +526,7 @@ This includes:
 **Technical guides**:
 - [`docs/developer/HARDCODING_PREVENTION.md`](docs/developer/HARDCODING_PREVENTION.md) - No hardcoded values policy
 - [`docs/developer/REDIS_CLIENT_USAGE.md`](docs/developer/REDIS_CLIENT_USAGE.md) - Redis client patterns
+- [`docs/developer/UTF8_ENFORCEMENT.md`](docs/developer/UTF8_ENFORCEMENT.md) - UTF-8 encoding requirements
 - [`docs/developer/INFRASTRUCTURE_DEPLOYMENT.md`](docs/developer/INFRASTRUCTURE_DEPLOYMENT.md) - VM infrastructure & deployment
 
 **All docs**: `docs/` contains api/, architecture/, developer/, features/, security/, troubleshooting/
@@ -506,6 +561,7 @@ Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
 | **Process Control** | ⚠️ ALWAYS ask user approval before start/stop/restart |
 | **TodoWrite** | ✅ MANDATORY for all tasks |
 | **Code Review** | ✅ MANDATORY for all code changes |
+| **UTF-8 Encoding** | ✅ MANDATORY - Always specify encoding='utf-8' explicitly |
 | **Frontend Server** | ⚠️ ONLY on VM1 (172.16.168.21:5173) |
 | **Remote VM Edits** | ❌ FORBIDDEN - Edit locally, sync immediately |
 | **Blockers** | 🔧 Fix blockers first, never work around them |
