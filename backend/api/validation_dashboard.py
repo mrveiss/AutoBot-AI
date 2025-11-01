@@ -563,16 +563,21 @@ async def get_system_alerts():
 
 
 @router.get("/recommendations")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_recommendations",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 async def get_system_recommendations():
     """Get current system recommendations"""
+    generator = get_dashboard_generator()
+
+    if generator is None:
+        raise HTTPException(
+            status_code=503, detail="Validation dashboard generator not available"
+        )
+
     try:
-        generator = get_dashboard_generator()
-
-        if generator is None:
-            raise HTTPException(
-                status_code=503, detail="Validation dashboard generator not available"
-            )
-
         # Get current report
         report = await generator.generate_real_time_report()
 
@@ -598,9 +603,6 @@ async def get_system_recommendations():
             f"Error getting system recommendations due to missing dependency: {e}"
         )
         raise HTTPException(status_code=503, detail="Dashboard generator not available")
-    except Exception as e:
-        logger.error(f"Error getting system recommendations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Health check moved to consolidated health service
@@ -609,6 +611,11 @@ async def get_system_recommendations():
 
 
 @router.post("/judge_workflow_step")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="judge_workflow_step",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 async def judge_workflow_step(request: dict):
     """Use LLM judges to evaluate a workflow step"""
     try:
@@ -660,30 +667,32 @@ async def judge_workflow_step(request: dict):
     except ValueError as e:
         logger.error(f"Error in workflow step judgment due to invalid input: {e}")
         raise HTTPException(status_code=400, detail="Invalid workflow step data")
-    except Exception as e:
-        logger.error(f"Error in workflow step judgment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/judge_agent_response")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="judge_agent_response",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 async def judge_agent_response(request: dict):
     """Use LLM judges to evaluate an agent response"""
+    judges = get_validation_judges()
+
+    if judges is None:
+        raise HTTPException(
+            status_code=503, detail="Validation judges not available"
+        )
+
+    user_request = request.get("request", {})
+    response = request.get("response", {})
+    agent_type = request.get("agent_type", "unknown")
+    context = request.get("context", {})
+
+    if not response:
+        raise HTTPException(status_code=400, detail="response is required")
+
     try:
-        judges = get_validation_judges()
-
-        if judges is None:
-            raise HTTPException(
-                status_code=503, detail="Validation judges not available"
-            )
-
-        user_request = request.get("request", {})
-        response = request.get("response", {})
-        agent_type = request.get("agent_type", "unknown")
-        context = request.get("context", {})
-
-        if not response:
-            raise HTTPException(status_code=400, detail="response is required")
-
         # Evaluate with agent response judge
         response_judge = judges["agent_response_judge"]
         judgment = await response_judge.evaluate_agent_response(
@@ -718,58 +727,52 @@ async def judge_agent_response(request: dict):
     except ValueError as e:
         logger.error(f"Error in agent response judgment due to invalid input: {e}")
         raise HTTPException(status_code=400, detail="Invalid agent response data")
-    except Exception as e:
-        logger.error(f"Error in agent response judgment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/judge_status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_judge_status",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 async def get_judge_status():
     """Get status of validation judges"""
-    try:
-        judges = get_validation_judges()
+    judges = get_validation_judges()
 
-        if judges is None:
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "status": "unavailable",
-                    "service": "validation_judges",
-                    "error": "Judges not available",
-                    "timestamp": datetime.now().isoformat(),
-                },
+    if judges is None:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unavailable",
+                "service": "validation_judges",
+                "error": "Judges not available",
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
+
+    # Get performance metrics for judges
+    judge_metrics = {}
+    for judge_name, judge in judges.items():
+        try:
+            metrics = judge.get_performance_metrics()
+            judge_metrics[judge_name] = metrics
+        except (ImportError, AttributeError) as e:
+            logger.error(
+                f"Error getting metrics for {judge_name} due to "
+                f"missing dependency: {e}"
             )
+            judge_metrics[judge_name] = {
+                "error": "Judge not available",
+                "details": str(e),
+            }
+        except Exception as e:
+            logger.error(f"Error getting metrics for {judge_name}: {e}")
+            judge_metrics[judge_name] = {"error": str(e)}
 
-        # Get performance metrics for judges
-        judge_metrics = {}
-        for judge_name, judge in judges.items():
-            try:
-                metrics = judge.get_performance_metrics()
-                judge_metrics[judge_name] = metrics
-            except (ImportError, AttributeError) as e:
-                logger.error(
-                    f"Error getting metrics for {judge_name} due to "
-                    f"missing dependency: {e}"
-                )
-                judge_metrics[judge_name] = {
-                    "error": "Judge not available",
-                    "details": str(e),
-                }
-            except Exception as e:
-                logger.error(f"Error getting metrics for {judge_name}: {e}")
-                judge_metrics[judge_name] = {"error": str(e)}
-
-        return {
-            "status": "healthy",
-            "service": "validation_judges",
-            "available_judges": list(judges.keys()),
-            "judge_metrics": judge_metrics,
-            "timestamp": datetime.now().isoformat(),
-        }
-
-    except (ImportError, AttributeError) as e:
-        logger.error(f"Error getting judge status due to missing dependency: {e}")
-        raise HTTPException(status_code=503, detail="Validation judges not available")
-    except Exception as e:
-        logger.error(f"Error getting judge status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "healthy",
+        "service": "validation_judges",
+        "available_judges": list(judges.keys()),
+        "judge_metrics": judge_metrics,
+        "timestamp": datetime.now().isoformat(),
+    }

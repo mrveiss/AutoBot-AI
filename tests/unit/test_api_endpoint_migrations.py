@@ -18820,5 +18820,296 @@ class TestBatch101ValidationDashboardData(unittest.TestCase):
         self.assertAlmostEqual(progress_percentage, 66.7, places=1)
 
 
+class TestBatch102ValidationDashboardJudgesFINAL(unittest.TestCase):
+    """Test batch 102 migrations: 4 endpoints from validation_dashboard.py (Validation Judges - 100% COMPLETE)"""
+
+    def test_batch_102_get_system_recommendations_preserves_503(self):
+        """Verify get_system_recommendations preserves 503 for missing dependencies (Mixed Pattern)"""
+        from backend.api import validation_dashboard
+
+        source = inspect.getsource(validation_dashboard.get_system_recommendations)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should preserve 503 HTTPException for missing dependencies
+        self.assertIn("status_code=503", source)
+        self.assertIn("Dashboard generator not available", source)
+        # Should preserve inner try-catch for ImportError/AttributeError
+        self.assertIn("try:", source)
+        self.assertIn("except (ImportError, AttributeError)", source)
+        # Should NOT have generic 500 exception
+        self.assertNotIn('status_code=500', source)
+
+    def test_batch_102_judge_workflow_step_preserves_503_and_400(self):
+        """Verify judge_workflow_step preserves 503 + 400 validation errors (Mixed Pattern)"""
+        from backend.api import validation_dashboard
+
+        source = inspect.getsource(validation_dashboard.judge_workflow_step)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should preserve 503 for missing dependencies
+        self.assertIn("status_code=503", source)
+        self.assertIn("Validation judges not available", source)
+        # Should preserve 400 for validation errors (ValueError)
+        self.assertIn("status_code=400", source)
+        self.assertIn("Invalid workflow step data", source)
+        # Should preserve inner try-catch for multiple exception types
+        self.assertIn("try:", source)
+        self.assertIn("except (ImportError, AttributeError)", source)
+        self.assertIn("except ValueError", source)
+        # Should NOT have generic 500 exception
+        self.assertNotIn('status_code=500', source)
+
+    def test_batch_102_judge_agent_response_preserves_503_and_400(self):
+        """Verify judge_agent_response preserves 503 + 400 validation errors (Mixed Pattern)"""
+        from backend.api import validation_dashboard
+
+        source = inspect.getsource(validation_dashboard.judge_agent_response)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should preserve 503 for missing dependencies
+        self.assertIn("status_code=503", source)
+        self.assertIn("Validation judges not available", source)
+        # Should preserve 400 for validation errors
+        self.assertIn("status_code=400", source)
+        validation_errors = ["response is required", "Invalid agent response data"]
+        has_validation_error = any(err in source for err in validation_errors)
+        self.assertTrue(
+            has_validation_error, "Should preserve 400 validation error messages"
+        )
+        # Should preserve inner try-catch for multiple exception types
+        self.assertIn("try:", source)
+        self.assertIn("except (ImportError, AttributeError)", source)
+        self.assertIn("except ValueError", source)
+        # Should NOT have generic 500 exception
+        self.assertNotIn('status_code=500', source)
+
+    def test_batch_102_get_judge_status_preserves_503_and_inner_loop(self):
+        """Verify get_judge_status preserves 503 JSONResponse + inner loop error handling (Mixed Pattern)"""
+        from backend.api import validation_dashboard
+
+        source = inspect.getsource(validation_dashboard.get_judge_status)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should preserve 503 JSONResponse for unavailable service
+        self.assertIn("JSONResponse", source)
+        self.assertIn("status_code=503", source)
+        self.assertIn("Judges not available", source)
+        # Should preserve inner loop with try-catch for judge metrics
+        self.assertIn("for judge_name, judge in judges.items():", source)
+        self.assertIn("try:", source)
+        self.assertIn("except (ImportError, AttributeError)", source)
+        self.assertIn("except Exception", source)
+        # Should NOT have outer generic 500 exception
+        outer_500_count = source.count('status_code=500')
+        self.assertEqual(
+            outer_500_count, 0, "Should not have outer 500 exception handler"
+        )
+
+    def test_batch_102_all_endpoints_have_decorator(self):
+        """Verify all batch 102 endpoints have @with_error_handling decorator"""
+        from backend.api import validation_dashboard
+
+        batch_102_endpoints = [
+            validation_dashboard.get_system_recommendations,
+            validation_dashboard.judge_workflow_step,
+            validation_dashboard.judge_agent_response,
+            validation_dashboard.get_judge_status,
+        ]
+
+        for endpoint in batch_102_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} should have @with_error_handling decorator",
+            )
+
+    def test_batch_102_all_endpoints_use_correct_error_code_prefix(self):
+        """Verify all batch 102 endpoints use VALIDATION_DASHBOARD error_code_prefix"""
+        from backend.api import validation_dashboard
+
+        batch_102_endpoints = [
+            validation_dashboard.get_system_recommendations,
+            validation_dashboard.judge_workflow_step,
+            validation_dashboard.judge_agent_response,
+            validation_dashboard.get_judge_status,
+        ]
+
+        for endpoint in batch_102_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                'error_code_prefix="VALIDATION_DASHBOARD"',
+                source,
+                f"{endpoint.__name__} should use VALIDATION_DASHBOARD error_code_prefix",
+            )
+
+    def test_batch_102_mixed_pattern_endpoints_preserve_business_logic(self):
+        """Verify all batch 102 endpoints preserve business logic (all Mixed Pattern)"""
+        from backend.api import validation_dashboard
+
+        # All 4 endpoints are Mixed Pattern
+        mixed_pattern_endpoints = [
+            validation_dashboard.get_system_recommendations,  # Preserve 503
+            validation_dashboard.judge_workflow_step,  # Preserve 503 + 400
+            validation_dashboard.judge_agent_response,  # Preserve 503 + 400
+            validation_dashboard.get_judge_status,  # Preserve 503 JSONResponse + inner loop
+        ]
+
+        # All should have inner try-catch and 503 HTTPException
+        for endpoint in mixed_pattern_endpoints:
+            source = inspect.getsource(endpoint)
+            has_inner_try = "try:" in source
+            has_503 = "status_code=503" in source
+            self.assertTrue(
+                has_inner_try and has_503,
+                f"{endpoint.__name__} should preserve 503 and inner try-catch (Mixed Pattern)",
+            )
+
+    def test_batch_102_progress_tracking(self):
+        """Verify batch 102 progress: 12/12 endpoints migrated (100% COMPLETE)"""
+        from backend.api import validation_dashboard
+
+        all_endpoints = [
+            # Batch 100 (4 endpoints)
+            validation_dashboard.get_dashboard_status,
+            validation_dashboard.get_validation_report,
+            validation_dashboard.get_dashboard_html,
+            validation_dashboard.get_dashboard_file,
+            # Batch 101 (4 endpoints)
+            validation_dashboard.generate_dashboard,
+            validation_dashboard.get_dashboard_metrics,
+            validation_dashboard.get_trend_data,
+            validation_dashboard.get_system_alerts,
+            # Batch 102 (4 endpoints)
+            validation_dashboard.get_system_recommendations,
+            validation_dashboard.judge_workflow_step,
+            validation_dashboard.judge_agent_response,
+            validation_dashboard.get_judge_status,
+        ]
+
+        migrated_count = sum(
+            1 for ep in all_endpoints if "@with_error_handling" in inspect.getsource(ep)
+        )
+
+        # validation_dashboard.py has 12 total endpoints
+        total_endpoints = 12
+        progress_percentage = (migrated_count / total_endpoints) * 100
+
+        self.assertEqual(migrated_count, 12)
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_102_validation_dashboard_100_percent_complete(self):
+        """🎉 VERIFY validation_dashboard.py is 100% COMPLETE - 15th file to reach 100% 🎉"""
+        from backend.api import validation_dashboard
+
+        # Get all endpoint functions from the router
+        all_endpoints = [
+            # Batch 100
+            validation_dashboard.get_dashboard_status,
+            validation_dashboard.get_validation_report,
+            validation_dashboard.get_dashboard_html,
+            validation_dashboard.get_dashboard_file,
+            # Batch 101
+            validation_dashboard.generate_dashboard,
+            validation_dashboard.get_dashboard_metrics,
+            validation_dashboard.get_trend_data,
+            validation_dashboard.get_system_alerts,
+            # Batch 102
+            validation_dashboard.get_system_recommendations,
+            validation_dashboard.judge_workflow_step,
+            validation_dashboard.judge_agent_response,
+            validation_dashboard.get_judge_status,
+        ]
+
+        # Verify all endpoints have @with_error_handling
+        migrated_endpoints = [
+            ep for ep in all_endpoints if "@with_error_handling" in inspect.getsource(ep)
+        ]
+
+        self.assertEqual(
+            len(migrated_endpoints),
+            12,
+            "All 12 endpoints should have @with_error_handling",
+        )
+
+        # Verify 100% completion
+        completion_percentage = (len(migrated_endpoints) / len(all_endpoints)) * 100
+        self.assertEqual(
+            completion_percentage,
+            100.0,
+            "🎉 validation_dashboard.py should be 100% COMPLETE 🎉",
+        )
+
+    def test_batch_102_no_generic_500_exceptions(self):
+        """Verify batch 102 endpoints removed generic 500 exception handlers"""
+        from backend.api import validation_dashboard
+
+        batch_102_endpoints = [
+            validation_dashboard.get_system_recommendations,
+            validation_dashboard.judge_workflow_step,
+            validation_dashboard.judge_agent_response,
+            validation_dashboard.get_judge_status,
+        ]
+
+        for endpoint in batch_102_endpoints:
+            source = inspect.getsource(endpoint)
+            # Check that generic 500 exception handlers were removed
+            # (except ValueError should exist for 400 validation errors)
+            has_generic_500 = (
+                'except Exception as e:' in source and 'status_code=500' in source
+            )
+            self.assertFalse(
+                has_generic_500,
+                f"{endpoint.__name__} should not have generic 500 exception handler",
+            )
+
+    def test_batch_102_validation_errors_preserved(self):
+        """Verify batch 102 endpoints preserve 400 validation error handling"""
+        from backend.api import validation_dashboard
+
+        # Endpoints with validation errors
+        validation_endpoints = [
+            (
+                validation_dashboard.judge_workflow_step,
+                "Invalid workflow step data",
+            ),
+            (validation_dashboard.judge_agent_response, "response is required"),
+        ]
+
+        for endpoint, expected_message in validation_endpoints:
+            source = inspect.getsource(endpoint)
+            # Should preserve 400 validation errors
+            self.assertIn("status_code=400", source)
+            self.assertIn(expected_message, source)
+
+    def test_batch_102_service_unavailable_preserved(self):
+        """Verify batch 102 endpoints preserve 503 service unavailable handling"""
+        from backend.api import validation_dashboard
+
+        batch_102_endpoints = [
+            validation_dashboard.get_system_recommendations,
+            validation_dashboard.judge_workflow_step,
+            validation_dashboard.judge_agent_response,
+            validation_dashboard.get_judge_status,
+        ]
+
+        for endpoint in batch_102_endpoints:
+            source = inspect.getsource(endpoint)
+            # All should preserve 503 for service unavailable
+            self.assertIn("status_code=503", source)
+            # Should have appropriate unavailable messages
+            unavailable_indicators = [
+                "not available",
+                "unavailable",
+                "Judges not available",
+                "Dashboard generator not available",
+            ]
+            has_unavailable = any(indicator in source for indicator in unavailable_indicators)
+            self.assertTrue(
+                has_unavailable,
+                f"{endpoint.__name__} should preserve service unavailable messages",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
