@@ -19111,5 +19111,219 @@ class TestBatch102ValidationDashboardJudgesFINAL(unittest.TestCase):
             )
 
 
+class TestBatch103MonitoringAlertsHealthStatus(unittest.TestCase):
+    """Test batch 103 migrations: 5 endpoints from monitoring_alerts.py (Alerts Health & Status)"""
+
+    def test_batch_103_alerts_health_check_simple_pattern(self):
+        """Verify alerts_health_check uses Simple Pattern (no preserved exceptions)"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.alerts_health_check)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should NOT have any try-except blocks (Simple Pattern)
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except", source)
+        # Should NOT have any HTTPException raises
+        self.assertNotIn("HTTPException", source)
+
+    def test_batch_103_get_alerts_status_simple_pattern(self):
+        """Verify get_alerts_status uses Simple Pattern (no preserved exceptions)"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.get_alerts_status)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should NOT have any try-except blocks (Simple Pattern)
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except", source)
+
+    def test_batch_103_get_active_alerts_simple_pattern(self):
+        """Verify get_active_alerts uses Simple Pattern (no preserved exceptions)"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.get_active_alerts)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should NOT have any try-except blocks (Simple Pattern)
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except", source)
+
+    def test_batch_103_acknowledge_alert_preserves_404(self):
+        """Verify acknowledge_alert preserves 404 error (Mixed Pattern)"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.acknowledge_alert)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should preserve 404 HTTPException
+        self.assertIn("status_code=404", source)
+        self.assertIn("Alert not found or not active", source)
+        # Should NOT have except HTTPException: raise pattern (removed)
+        self.assertNotIn("except HTTPException:", source)
+        # Should NOT have generic 500 exception
+        self.assertNotIn("status_code=500", source)
+
+    def test_batch_103_get_alert_rules_simple_pattern(self):
+        """Verify get_alert_rules uses Simple Pattern (no preserved exceptions)"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.get_alert_rules)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should NOT have any try-except blocks (Simple Pattern)
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except", source)
+
+    def test_batch_103_all_endpoints_have_decorator(self):
+        """Verify all batch 103 endpoints have @with_error_handling decorator"""
+        from backend.api import monitoring_alerts
+
+        batch_103_endpoints = [
+            monitoring_alerts.alerts_health_check,
+            monitoring_alerts.get_alerts_status,
+            monitoring_alerts.get_active_alerts,
+            monitoring_alerts.acknowledge_alert,
+            monitoring_alerts.get_alert_rules,
+        ]
+
+        for endpoint in batch_103_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} should have @with_error_handling decorator",
+            )
+
+    def test_batch_103_all_endpoints_use_correct_error_code_prefix(self):
+        """Verify all batch 103 endpoints use MONITORING_ALERTS error_code_prefix"""
+        from backend.api import monitoring_alerts
+
+        batch_103_endpoints = [
+            monitoring_alerts.alerts_health_check,
+            monitoring_alerts.get_alerts_status,
+            monitoring_alerts.get_active_alerts,
+            monitoring_alerts.acknowledge_alert,
+            monitoring_alerts.get_alert_rules,
+        ]
+
+        for endpoint in batch_103_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                'error_code_prefix="MONITORING_ALERTS"',
+                source,
+                f"{endpoint.__name__} should use MONITORING_ALERTS error_code_prefix",
+            )
+
+    def test_batch_103_simple_pattern_endpoints_no_try_catch(self):
+        """Verify Simple Pattern endpoints have no try-catch blocks"""
+        from backend.api import monitoring_alerts
+
+        simple_pattern_endpoints = [
+            monitoring_alerts.alerts_health_check,
+            monitoring_alerts.get_alerts_status,
+            monitoring_alerts.get_active_alerts,
+            monitoring_alerts.get_alert_rules,
+        ]
+
+        for endpoint in simple_pattern_endpoints:
+            source = inspect.getsource(endpoint)
+            # Should NOT have try-catch blocks
+            self.assertNotIn(
+                "try:",
+                source,
+                f"{endpoint.__name__} should not have try-catch blocks (Simple Pattern)",
+            )
+
+    def test_batch_103_mixed_pattern_preserves_business_logic(self):
+        """Verify Mixed Pattern endpoint (acknowledge_alert) preserves 404 business logic"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.acknowledge_alert)
+        # Should preserve 404 for "Alert not found or not active"
+        self.assertIn("status_code=404", source)
+        self.assertIn("Alert not found or not active", source)
+        # Should NOT have except HTTPException: raise (removed in migration)
+        self.assertNotIn("except HTTPException:", source)
+
+    def test_batch_103_progress_tracking(self):
+        """Verify batch 103 progress: 5/14 endpoints migrated (36%)"""
+        from backend.api import monitoring_alerts
+
+        all_endpoints = [
+            # Batch 103 (5 endpoints)
+            monitoring_alerts.alerts_health_check,
+            monitoring_alerts.get_alerts_status,
+            monitoring_alerts.get_active_alerts,
+            monitoring_alerts.acknowledge_alert,
+            monitoring_alerts.get_alert_rules,
+        ]
+
+        migrated_count = sum(
+            1 for ep in all_endpoints if "@with_error_handling" in inspect.getsource(ep)
+        )
+
+        # monitoring_alerts.py has 14 total endpoints
+        total_endpoints = 14
+        progress_percentage = (migrated_count / total_endpoints) * 100
+
+        self.assertEqual(migrated_count, 5)
+        self.assertAlmostEqual(progress_percentage, 35.7, places=1)
+
+    def test_batch_103_no_generic_500_exceptions(self):
+        """Verify batch 103 endpoints removed generic 500 exception handlers"""
+        from backend.api import monitoring_alerts
+
+        batch_103_endpoints = [
+            monitoring_alerts.alerts_health_check,
+            monitoring_alerts.get_alerts_status,
+            monitoring_alerts.get_active_alerts,
+            monitoring_alerts.acknowledge_alert,
+            monitoring_alerts.get_alert_rules,
+        ]
+
+        for endpoint in batch_103_endpoints:
+            source = inspect.getsource(endpoint)
+            # Should NOT have generic 500 exception handlers
+            has_generic_500 = (
+                'except Exception as e:' in source and 'status_code=500' in source
+            )
+            self.assertFalse(
+                has_generic_500,
+                f"{endpoint.__name__} should not have generic 500 exception handler",
+            )
+
+    def test_batch_103_pattern_classification(self):
+        """Verify pattern classification for batch 103 endpoints"""
+        from backend.api import monitoring_alerts
+
+        # Simple Pattern (4 endpoints)
+        simple_endpoints = [
+            monitoring_alerts.alerts_health_check,
+            monitoring_alerts.get_alerts_status,
+            monitoring_alerts.get_active_alerts,
+            monitoring_alerts.get_alert_rules,
+        ]
+
+        # Mixed Pattern (1 endpoint)
+        mixed_endpoints = [
+            monitoring_alerts.acknowledge_alert,
+        ]
+
+        # Simple Pattern should have no try-catch
+        for endpoint in simple_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertNotIn("try:", source, f"{endpoint.__name__} should be Simple Pattern")
+
+        # Mixed Pattern should preserve business logic HTTPException
+        for endpoint in mixed_endpoints:
+            source = inspect.getsource(endpoint)
+            has_http_exception = "HTTPException" in source
+            self.assertTrue(
+                has_http_exception,
+                f"{endpoint.__name__} should preserve HTTPException (Mixed Pattern)",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
