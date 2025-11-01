@@ -17888,5 +17888,219 @@ class TestBatch96AdvancedControlSystemAndWebSocketFINAL(unittest.TestCase):
         self.assertIn("logger.info", desktop_source)
 
 
+class TestBatch97SchedulerWorkflowCRUD(unittest.TestCase):
+    """Test batch 97 migrations: 5 endpoints from scheduler.py (workflow CRUD operations)"""
+
+    def test_batch_97_schedule_workflow_has_decorator(self):
+        """Verify schedule_workflow has @with_error_handling decorator"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.schedule_workflow)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SCHEDULER"', source)
+        self.assertIn('operation="schedule_workflow"', source)
+
+    def test_batch_97_schedule_workflow_preserves_400_validation(self):
+        """Verify schedule_workflow preserves 400 priority validation (Mixed Pattern)"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.schedule_workflow)
+        # Should preserve 400 HTTPException for priority validation
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=400", source)
+        self.assertIn("Invalid priority", source)
+        # Should have inner try-catch for priority validation
+        try_count = source.count("try:")
+        self.assertEqual(
+            try_count, 1, "Should have 1 inner try-catch for priority validation"
+        )
+
+    def test_batch_97_list_scheduled_workflows_has_decorator(self):
+        """Verify list_scheduled_workflows has @with_error_handling decorator"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.list_scheduled_workflows)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SCHEDULER"', source)
+        self.assertIn('operation="list_scheduled_workflows"', source)
+
+    def test_batch_97_list_scheduled_workflows_preserves_400_status_validation(self):
+        """Verify list_scheduled_workflows preserves 400 status validation (Mixed Pattern)"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.list_scheduled_workflows)
+        # Should preserve 400 HTTPException for status validation
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=400", source)
+        self.assertIn("Invalid status", source)
+        # Should have inner try-catch for status validation
+        try_count = source.count("try:")
+        self.assertEqual(
+            try_count, 1, "Should have 1 inner try-catch for status validation"
+        )
+
+    def test_batch_97_get_workflow_details_has_decorator(self):
+        """Verify get_workflow_details has @with_error_handling decorator"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.get_workflow_details)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SCHEDULER"', source)
+        self.assertIn('operation="get_workflow_details"', source)
+
+    def test_batch_97_get_workflow_details_preserves_404(self):
+        """Verify get_workflow_details preserves 404 not found (Mixed Pattern)"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.get_workflow_details)
+        # Should preserve 404 HTTPException
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=404", source)
+        self.assertIn("Workflow not found", source)
+        # Should have NO try-catch blocks (Mixed Pattern with direct checks)
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)")
+
+    def test_batch_97_reschedule_workflow_has_decorator(self):
+        """Verify reschedule_workflow has @with_error_handling decorator"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.reschedule_workflow)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SCHEDULER"', source)
+        self.assertIn('operation="reschedule_workflow"', source)
+
+    def test_batch_97_reschedule_workflow_preserves_400_and_404(self):
+        """Verify reschedule_workflow preserves both 400 validation and 404 not found (Mixed Pattern)"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.reschedule_workflow)
+        # Should preserve 400 HTTPException for priority validation
+        self.assertIn("status_code=400", source)
+        self.assertIn("Invalid priority", source)
+        # Should preserve 404 HTTPException
+        self.assertIn("status_code=404", source)
+        self.assertIn("Workflow not found or cannot be rescheduled", source)
+        # Should have inner try-catch for priority validation
+        try_count = source.count("try:")
+        self.assertEqual(
+            try_count, 1, "Should have 1 inner try-catch for priority validation"
+        )
+
+    def test_batch_97_cancel_workflow_has_decorator(self):
+        """Verify cancel_workflow has @with_error_handling decorator"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.cancel_workflow)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SCHEDULER"', source)
+        self.assertIn('operation="cancel_workflow"', source)
+
+    def test_batch_97_cancel_workflow_preserves_404(self):
+        """Verify cancel_workflow preserves 404 not found (Mixed Pattern)"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.cancel_workflow)
+        # Should preserve 404 HTTPException
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=404", source)
+        self.assertIn("Workflow not found or cannot be cancelled", source)
+        # Should have NO try-catch blocks (Mixed Pattern with direct checks)
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)")
+
+    def test_batch_97_all_endpoints_have_error_category_server_error(self):
+        """Verify all batch 97 endpoints use ErrorCategory.SERVER_ERROR"""
+        from backend.api import scheduler
+
+        endpoints = [
+            scheduler.schedule_workflow,
+            scheduler.list_scheduled_workflows,
+            scheduler.get_workflow_details,
+            scheduler.reschedule_workflow,
+            scheduler.cancel_workflow,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "category=ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} should use ErrorCategory.SERVER_ERROR",
+            )
+
+    def test_batch_97_no_generic_500_exceptions(self):
+        """Verify batch 97 endpoints no longer raise generic 500 exceptions"""
+        from backend.api import scheduler
+
+        endpoints = [
+            scheduler.schedule_workflow,
+            scheduler.list_scheduled_workflows,
+            scheduler.get_workflow_details,
+            scheduler.reschedule_workflow,
+            scheduler.cancel_workflow,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # Should NOT have "status_code=500" anywhere (decorator handles that)
+            self.assertNotIn(
+                "status_code=500",
+                source,
+                f"{endpoint.__name__} should not have status_code=500",
+            )
+            # Should NOT have "except Exception as e:" for generic handling
+            if "schedule_workflow" in endpoint.__name__:
+                # schedule_workflow has 1 inner exception handler for priority validation
+                self.assertEqual(
+                    source.count("except"), 1, "Should have 1 specific exception handler"
+                )
+            elif "list_scheduled_workflows" in endpoint.__name__:
+                # list_scheduled_workflows has 1 inner exception handler for status validation
+                self.assertEqual(
+                    source.count("except"), 1, "Should have 1 specific exception handler"
+                )
+            elif "reschedule_workflow" in endpoint.__name__:
+                # reschedule_workflow has 1 inner exception handler for priority validation
+                self.assertEqual(
+                    source.count("except"), 1, "Should have 1 specific exception handler"
+                )
+            else:
+                # get_workflow_details and cancel_workflow should have NO exception handlers
+                self.assertEqual(
+                    source.count("except"),
+                    0,
+                    f"{endpoint.__name__} should have NO exception handlers",
+                )
+
+    def test_batch_97_progress_tracking(self):
+        """Track progress: 5/13 endpoints migrated in scheduler.py (38%)"""
+        from backend.api import scheduler
+
+        # Count decorated endpoints in batch 97
+        batch_97_endpoints = [
+            scheduler.schedule_workflow,
+            scheduler.list_scheduled_workflows,
+            scheduler.get_workflow_details,
+            scheduler.reschedule_workflow,
+            scheduler.cancel_workflow,
+        ]
+
+        batch_97_count = sum(
+            1
+            for ep in batch_97_endpoints
+            if "@with_error_handling" in inspect.getsource(ep)
+        )
+
+        # scheduler.py has 13 total endpoints
+        total_endpoints = 13
+        total_migrated = batch_97_count
+        progress_percentage = (total_migrated / total_endpoints) * 100
+
+        self.assertEqual(batch_97_count, 5)
+        self.assertEqual(total_migrated, 5)
+        self.assertEqual(progress_percentage, 38.46153846153847)
+
+
 if __name__ == "__main__":
     unittest.main()
