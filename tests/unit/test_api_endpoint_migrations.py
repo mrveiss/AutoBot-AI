@@ -18652,5 +18652,173 @@ class TestBatch100ValidationDashboardCore(unittest.TestCase):
         self.assertAlmostEqual(progress_percentage, 33.3, places=1)
 
 
+class TestBatch101ValidationDashboardData(unittest.TestCase):
+    """Test batch 101 migrations: 4 endpoints from validation_dashboard.py (Dashboard Data)"""
+
+    def test_batch_101_generate_dashboard_has_decorator(self):
+        """Verify generate_dashboard has @with_error_handling decorator"""
+        from backend.api import validation_dashboard
+
+        source = inspect.getsource(validation_dashboard.generate_dashboard)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="VALIDATION_DASHBOARD"', source)
+        self.assertIn('operation="generate_dashboard"', source)
+
+    def test_batch_101_generate_dashboard_preserves_503_and_background_task(self):
+        """Verify generate_dashboard preserves 503 + inner background task try-catch (Mixed Pattern)"""
+        from backend.api import validation_dashboard
+
+        source = inspect.getsource(validation_dashboard.generate_dashboard)
+        # Should preserve 503 HTTPException for missing dependencies
+        self.assertIn("status_code=503", source)
+        self.assertIn("Dashboard generator not available", source)
+        # Should preserve inner try-catch for background task
+        self.assertIn("async def generate_background():", source)
+        self.assertIn("try:", source)
+        self.assertIn("except (ImportError, AttributeError)", source)
+        self.assertIn("except (OSError, IOError)", source)
+        # Should NOT have outer generic 500 exception
+        outer_500_count = source.count('status_code=500')
+        self.assertEqual(outer_500_count, 0, "Should not have outer 500 exception handler")
+
+    def test_batch_101_get_dashboard_metrics_has_decorator(self):
+        """Verify get_dashboard_metrics has @with_error_handling decorator"""
+        from backend.api import validation_dashboard
+
+        source = inspect.getsource(validation_dashboard.get_dashboard_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="VALIDATION_DASHBOARD"', source)
+        self.assertIn('operation="get_dashboard_metrics"', source)
+
+    def test_batch_101_get_dashboard_metrics_preserves_503(self):
+        """Verify get_dashboard_metrics preserves 503 for missing dependencies (Mixed Pattern)"""
+        from backend.api import validation_dashboard
+
+        source = inspect.getsource(validation_dashboard.get_dashboard_metrics)
+        # Should preserve 503 HTTPException
+        self.assertIn("status_code=503", source)
+        self.assertIn("Dashboard generator not available", source)
+        # Should preserve inner try-catch
+        self.assertIn("try:", source)
+        self.assertIn("except (ImportError, AttributeError)", source)
+        # Should NOT have generic 500 exception
+        self.assertNotIn('status_code=500', source)
+
+    def test_batch_101_get_trend_data_has_decorator(self):
+        """Verify get_trend_data has @with_error_handling decorator"""
+        from backend.api import validation_dashboard
+
+        source = inspect.getsource(validation_dashboard.get_trend_data)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="VALIDATION_DASHBOARD"', source)
+        self.assertIn('operation="get_trend_data"', source)
+
+    def test_batch_101_get_trend_data_preserves_503(self):
+        """Verify get_trend_data preserves 503 for missing dependencies (Mixed Pattern)"""
+        from backend.api import validation_dashboard
+
+        source = inspect.getsource(validation_dashboard.get_trend_data)
+        # Should preserve 503 HTTPException
+        self.assertIn("status_code=503", source)
+        self.assertIn("Dashboard generator not available", source)
+        # Should preserve inner try-catch
+        self.assertIn("try:", source)
+        self.assertIn("except (ImportError, AttributeError)", source)
+        # Should NOT have generic 500 exception
+        self.assertNotIn('status_code=500', source)
+
+    def test_batch_101_get_system_alerts_has_decorator(self):
+        """Verify get_system_alerts has @with_error_handling decorator"""
+        from backend.api import validation_dashboard
+
+        source = inspect.getsource(validation_dashboard.get_system_alerts)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="VALIDATION_DASHBOARD"', source)
+        self.assertIn('operation="get_system_alerts"', source)
+
+    def test_batch_101_get_system_alerts_preserves_503(self):
+        """Verify get_system_alerts preserves 503 for missing dependencies (Mixed Pattern)"""
+        from backend.api import validation_dashboard
+
+        source = inspect.getsource(validation_dashboard.get_system_alerts)
+        # Should preserve 503 HTTPException
+        self.assertIn("status_code=503", source)
+        self.assertIn("Dashboard generator not available", source)
+        # Should preserve inner try-catch
+        self.assertIn("try:", source)
+        self.assertIn("except (ImportError, AttributeError)", source)
+        # Should NOT have generic 500 exception
+        self.assertNotIn('status_code=500', source)
+
+    def test_batch_101_all_endpoints_have_error_category_server_error(self):
+        """Verify all batch 101 endpoints use ErrorCategory.SERVER_ERROR"""
+        from backend.api import validation_dashboard
+
+        endpoints = [
+            validation_dashboard.generate_dashboard,
+            validation_dashboard.get_dashboard_metrics,
+            validation_dashboard.get_trend_data,
+            validation_dashboard.get_system_alerts,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} should use ErrorCategory.SERVER_ERROR",
+            )
+
+    def test_batch_101_pattern_distribution(self):
+        """Verify batch 101 has correct pattern distribution: 4 Mixed Pattern"""
+        from backend.api import validation_dashboard
+
+        # All 4 endpoints are Mixed Pattern (preserve 503 for missing dependencies)
+        mixed_pattern_endpoints = [
+            validation_dashboard.generate_dashboard,  # Preserve 503 + background task try-catch
+            validation_dashboard.get_dashboard_metrics,  # Preserve 503
+            validation_dashboard.get_trend_data,  # Preserve 503
+            validation_dashboard.get_system_alerts,  # Preserve 503
+        ]
+
+        # All should have inner try-catch and 503 HTTPException
+        for endpoint in mixed_pattern_endpoints:
+            source = inspect.getsource(endpoint)
+            has_inner_try = "try:" in source
+            has_503 = "status_code=503" in source
+            self.assertTrue(
+                has_inner_try and has_503,
+                f"{endpoint.__name__} should preserve 503 and inner try-catch (Mixed Pattern)",
+            )
+
+    def test_batch_101_progress_tracking(self):
+        """Verify batch 101 progress: 8/12 endpoints migrated (67%)"""
+        from backend.api import validation_dashboard
+
+        all_endpoints = [
+            # Batch 100 (4 endpoints)
+            validation_dashboard.get_dashboard_status,
+            validation_dashboard.get_validation_report,
+            validation_dashboard.get_dashboard_html,
+            validation_dashboard.get_dashboard_file,
+            # Batch 101 (4 endpoints)
+            validation_dashboard.generate_dashboard,
+            validation_dashboard.get_dashboard_metrics,
+            validation_dashboard.get_trend_data,
+            validation_dashboard.get_system_alerts,
+        ]
+
+        migrated_count = sum(
+            1 for ep in all_endpoints if "@with_error_handling" in inspect.getsource(ep)
+        )
+
+        # validation_dashboard.py has 12 total endpoints
+        total_endpoints = 12
+        progress_percentage = (migrated_count / total_endpoints) * 100
+
+        self.assertEqual(migrated_count, 8)
+        self.assertAlmostEqual(progress_percentage, 66.7, places=1)
+
+
 if __name__ == "__main__":
     unittest.main()
