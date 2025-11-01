@@ -372,6 +372,11 @@ async def get_dashboard_file():
 
 
 @router.post("/generate")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="generate_dashboard",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 async def generate_dashboard(
     request: DashboardGenerateRequest, background_tasks: BackgroundTasks
 ):
@@ -425,22 +430,24 @@ async def generate_dashboard(
             f"Error initiating dashboard generation due to missing dependency: {e}"
         )
         raise HTTPException(status_code=503, detail="Dashboard generator not available")
-    except Exception as e:
-        logger.error(f"Error initiating dashboard generation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/metrics")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dashboard_metrics",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 async def get_dashboard_metrics():
     """Get dashboard-specific metrics"""
+    generator = get_dashboard_generator()
+
+    if generator is None:
+        raise HTTPException(
+            status_code=503, detail="Validation dashboard generator not available"
+        )
+
     try:
-        generator = get_dashboard_generator()
-
-        if generator is None:
-            raise HTTPException(
-                status_code=503, detail="Validation dashboard generator not available"
-            )
-
         # Get basic metrics
         report = await generator.generate_real_time_report()
 
@@ -484,22 +491,24 @@ async def get_dashboard_metrics():
     except (ImportError, AttributeError) as e:
         logger.error(f"Error getting dashboard metrics due to missing dependency: {e}")
         raise HTTPException(status_code=503, detail="Dashboard generator not available")
-    except Exception as e:
-        logger.error(f"Error getting dashboard metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/trends")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_trend_data",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 async def get_trend_data():
     """Get trend data for charts"""
+    generator = get_dashboard_generator()
+
+    if generator is None:
+        raise HTTPException(
+            status_code=503, detail="Validation dashboard generator not available"
+        )
+
     try:
-        generator = get_dashboard_generator()
-
-        if generator is None:
-            raise HTTPException(
-                status_code=503, detail="Validation dashboard generator not available"
-            )
-
         # Get trend data
         trend_data = await generator._generate_trend_data()
 
@@ -512,22 +521,24 @@ async def get_trend_data():
     except (ImportError, AttributeError) as e:
         logger.error(f"Error getting trend data due to missing dependency: {e}")
         raise HTTPException(status_code=503, detail="Dashboard generator not available")
-    except Exception as e:
-        logger.error(f"Error getting trend data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/alerts")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_alerts",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 async def get_system_alerts():
     """Get current system alerts"""
+    generator = get_dashboard_generator()
+
+    if generator is None:
+        raise HTTPException(
+            status_code=503, detail="Validation dashboard generator not available"
+        )
+
     try:
-        generator = get_dashboard_generator()
-
-        if generator is None:
-            raise HTTPException(
-                status_code=503, detail="Validation dashboard generator not available"
-            )
-
         # Get current report
         report = await generator.generate_real_time_report()
 
@@ -549,9 +560,6 @@ async def get_system_alerts():
     except (ImportError, AttributeError) as e:
         logger.error(f"Error getting system alerts due to missing dependency: {e}")
         raise HTTPException(status_code=503, detail="Dashboard generator not available")
-    except Exception as e:
-        logger.error(f"Error getting system alerts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/recommendations")
