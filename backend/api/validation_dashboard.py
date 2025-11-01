@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
@@ -202,22 +203,27 @@ class DashboardGenerateRequest(BaseModel):
 
 
 @router.get("/status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dashboard_status",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 async def get_dashboard_status():
     """Get validation dashboard service status"""
+    generator = get_dashboard_generator()
+
+    if generator is None:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unavailable",
+                "service": "validation_dashboard",
+                "error": "Dashboard generator not available",
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
+
     try:
-        generator = get_dashboard_generator()
-
-        if generator is None:
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "status": "unavailable",
-                    "service": "validation_dashboard",
-                    "error": "Dashboard generator not available",
-                    "timestamp": datetime.now().isoformat(),
-                },
-            )
-
         return {
             "status": "healthy",
             "service": "validation_dashboard",
@@ -229,12 +235,14 @@ async def get_dashboard_status():
     except (ImportError, AttributeError) as e:
         logger.error(f"Error getting dashboard status due to missing dependency: {e}")
         raise HTTPException(status_code=503, detail="Dashboard generator not available")
-    except Exception as e:
-        logger.error(f"Error getting dashboard status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/report")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_validation_report",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 async def get_validation_report():
     """Get current validation report data"""
     try:
@@ -273,23 +281,28 @@ async def get_validation_report():
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dashboard_html",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 async def get_dashboard_html():
     """Get HTML validation dashboard"""
-    try:
-        generator = get_dashboard_generator()
+    generator = get_dashboard_generator()
 
-        if generator is None:
-            return HTMLResponse(
-                content="""
+    if generator is None:
+        return HTMLResponse(
+            content="""
                 <html><body>
                     <h1>Validation Dashboard Unavailable</h1>
                     <p>The validation dashboard generator is not available.</p>
                     <p>Please check the system configuration.</p>
                 </body></html>
                 """,
-                status_code=503,
-            )
+            status_code=503,
+        )
 
+    try:
         # Generate dashboard
         dashboard_path = await generator.generate_html_dashboard()
 
@@ -323,30 +336,24 @@ async def get_dashboard_html():
             """,
             status_code=500,
         )
-    except Exception as e:
-        logger.error(f"Error generating dashboard HTML: {e}")
-        return HTMLResponse(
-            content=f"""
-            <html><body>
-                <h1>Dashboard Error</h1>
-                <p>Error generating validation dashboard: {str(e)}</p>
-            </body></html>
-            """,
-            status_code=500,
-        )
 
 
 @router.get("/dashboard/file")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dashboard_file",
+    error_code_prefix="VALIDATION_DASHBOARD",
+)
 async def get_dashboard_file():
     """Get dashboard HTML file for download"""
+    generator = get_dashboard_generator()
+
+    if generator is None:
+        raise HTTPException(
+            status_code=503, detail="Validation dashboard generator not available"
+        )
+
     try:
-        generator = get_dashboard_generator()
-
-        if generator is None:
-            raise HTTPException(
-                status_code=503, detail="Validation dashboard generator not available"
-            )
-
         # Generate dashboard
         dashboard_path = await generator.generate_html_dashboard()
 
@@ -362,9 +369,6 @@ async def get_dashboard_file():
     except (OSError, IOError) as e:
         logger.error(f"Error serving dashboard file due to file system error: {e}")
         raise HTTPException(status_code=500, detail="File system error")
-    except Exception as e:
-        logger.error(f"Error serving dashboard file: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/generate")
