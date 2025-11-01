@@ -135,9 +135,16 @@ class AgentTerminalService:
             # Use conversation_id as PTY session ID if available, otherwise use agent session_id
             pty_session_id = conversation_id or session_id
 
-            # Check if PTY session already exists
+            # Check if PTY session already exists AND is alive
             existing_pty = simple_pty_manager.get_session(pty_session_id)
-            if not existing_pty:
+            if not existing_pty or not existing_pty.is_alive():
+                if existing_pty and not existing_pty.is_alive():
+                    logger.warning(
+                        f"PTY session {pty_session_id} exists but is dead (killed during restart). Recreating..."
+                    )
+                    # Clean up dead PTY first
+                    simple_pty_manager.close_session(pty_session_id)
+
                 # Create new PTY session
                 pty = simple_pty_manager.create_session(
                     pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT)
@@ -153,7 +160,7 @@ class AgentTerminalService:
                     pty_session_id = None
             else:
                 logger.info(
-                    f"Reusing existing PTY session {pty_session_id} for agent terminal {session_id}"
+                    f"Reusing existing ALIVE PTY session {pty_session_id} for agent terminal {session_id}"
                 )
 
             # CRITICAL: Register PTY session with terminal session_manager for WebSocket logging
@@ -216,11 +223,26 @@ class AgentTerminalService:
                 "last_activity": session.last_activity,
                 "metadata": session.metadata,
                 "pty_session_id": session.pty_session_id,  # CRITICAL: Store PTY session ID
+                "pending_approval": session.pending_approval,  # CRITICAL: Persist pending approvals for page reload
             }
 
             import json
 
-            self.redis_client.setex(key, 3600, json.dumps(session_data))  # 1 hour TTL
+            # DEBUG: Log pending_approval before saving
+            logger.warning(
+                f"[PERSIST DEBUG] Session {session.session_id}: "
+                f"pending_approval={session.pending_approval}"
+            )
+
+            json_data = json.dumps(session_data)
+            await self.redis_client.setex(key, 3600, json_data)  # 1 hour TTL
+            logger.debug(f"Persisted session {session.session_id} to Redis with key {key}")
+
+            # DEBUG: Verify what was saved
+            logger.warning(
+                f"[PERSIST DEBUG] Saved to Redis: "
+                f"pending_approval={session_data.get('pending_approval')}"
+            )
         except Exception as e:
             logger.error(f"Failed to persist session to Redis: {e}")
 
@@ -251,8 +273,12 @@ class AgentTerminalService:
             )
 
             # Save output (if any)
+            logger.warning(f"[CHAT INTEGRATION] Result keys: {result.keys()}")
+            logger.warning(f"[CHAT INTEGRATION] stdout: {result.get('stdout', 'MISSING')[:100]}")
+            logger.warning(f"[CHAT INTEGRATION] stderr: {result.get('stderr', 'MISSING')[:100]}")
             if result.get("stdout") or result.get("stderr"):
                 output_text = (result.get("stdout", "") + result.get("stderr", "")).strip()
+                logger.warning(f"[CHAT INTEGRATION] Output text length: {len(output_text)}")
                 if output_text:
                     await self.chat_history_manager.add_message(
                         sender="agent_terminal",
@@ -260,6 +286,11 @@ class AgentTerminalService:
                         message_type="terminal_output",
                         session_id=conversation_id,
                     )
+                    logger.warning(f"[CHAT INTEGRATION] Output message saved successfully")
+                else:
+                    logger.warning(f"[CHAT INTEGRATION] Output text is empty after stripping")
+            else:
+                logger.warning(f"[CHAT INTEGRATION] No stdout or stderr in result")
 
             logger.warning(f"[CHAT INTEGRATION] {command_type.capitalize()} command saved to chat successfully")
         except Exception as e:
@@ -280,6 +311,10 @@ class AgentTerminalService:
         # Fast path: check in-memory sessions first
         session = self.sessions.get(session_id)
         if session:
+            logger.warning(
+                f"[GET_SESSION DEBUG] Returning in-memory session {session_id}: "
+                f"pending_approval={session.pending_approval}"
+            )
             return session
 
         # Slow path: try loading from Redis if available
@@ -312,6 +347,7 @@ class AgentTerminalService:
                     session.state = SessionState(session_data["state"])
                     session.created_at = session_data["created_at"]
                     session.last_activity = session_data["last_activity"]
+                    session.pending_approval = session_data.get("pending_approval")  # CRITICAL: Restore pending approvals
 
                     # Add back to memory cache
                     self.sessions[session_id] = session
@@ -570,9 +606,9 @@ class AgentTerminalService:
             }
 
         # Check if approval is needed
-        needs_approval = (
-            self._needs_approval(session.agent_role, risk) or force_approval
-        )
+        # CRITICAL FIX: Force ALL commands through approval workflow
+        # User wants to see and approve every command, regardless of risk level
+        needs_approval = True  # Always require approval (auto-approve rules still apply)
 
         if needs_approval:
             # Check auto-approve rules (use conversation_id as user_id proxy)
@@ -599,6 +635,10 @@ class AgentTerminalService:
                     "reasons": reasons,
                     "timestamp": time.time(),
                 }
+
+                # CRITICAL: Persist session to Redis so pending approval survives page reload
+                if self.redis_client:
+                    await self._persist_session(session)
 
                 logger.info(
                     f"Command requires approval: {command} "
@@ -637,9 +677,6 @@ class AgentTerminalService:
                     user_id=None,
                 )
 
-            # Write command to PTY terminal for visibility
-            self._write_to_pty(session, f"{command}\n")
-
             # Execute the command
             result = await executor.run_shell_command(command, force_approval=False)
 
@@ -674,8 +711,26 @@ class AgentTerminalService:
                 except Exception as e:
                     logger.error(f"[INTERPRETATION] Failed to interpret command results: {e}")
 
-            # NOTE: PTY session automatically sends output to terminal WebSocket via _read_pty_output()
-            # No manual send needed - PTY handles it!
+            # CRITICAL FIX: Write formatted command and output to PTY terminal for display
+            # The command executes via subprocess (NOT in PTY shell), so we write
+            # a formatted display to PTY for users to see it in the terminal tab.
+            #
+            # IMPORTANT: We write the OUTPUT, not the command itself, to prevent double execution.
+            # Writing "command\n" would cause PTY shell to execute it again.
+
+            # Format output for terminal display
+            terminal_output = f"\r\n$ {command}\r\n"
+            if result.get("stdout"):
+                terminal_output += result["stdout"]
+                if not result["stdout"].endswith("\n"):
+                    terminal_output += "\r\n"
+            if result.get("stderr"):
+                terminal_output += result["stderr"]
+                if not result["stderr"].endswith("\n"):
+                    terminal_output += "\r\n"
+
+            # Write formatted output to PTY (for terminal tab display)
+            self._write_to_pty(session, terminal_output)
 
             # Add to command history
             session.command_history.append(
@@ -698,14 +753,6 @@ class AgentTerminalService:
                 comment=f"Auto-approved ({risk.value} risk)",
                 pre_approved=True,
             )
-
-            # NOTE: Don't write stdout/stderr to PTY - the command already executed in PTY
-            # and produced its output naturally. Writing it again via write_input() would
-            # treat the output as keyboard input (commands), causing duplication.
-            # if result.get("stdout"):
-            #     self._write_to_pty(session, result["stdout"])
-            # if result.get("stderr"):
-            #     self._write_to_pty(session, result["stderr"])
 
             # Add approval metadata to result for UI display
             result["approval_status"] = "pre_approved"
@@ -754,14 +801,16 @@ class AgentTerminalService:
                 "error": "Session not found",
             }
 
-        logger.warning(
-            f"approve_command: session_id={session_id}, pending_approval={session.pending_approval is not None}, approved={approved}, comment={comment}"
+        logger.info(
+            f"🎯 [APPROVAL RECEIVED] Session: {session_id}, Approved: {approved}, "
+            f"Pending: {session.pending_approval is not None}, Comment: {comment}"
         )
-        logger.warning(
-            f"approve_command: Session state={session.state.value}, agent_id={session.agent_id}"
+        logger.info(
+            f"🎯 [APPROVAL RECEIVED] Session state: {session.state.value}, "
+            f"Agent ID: {session.agent_id}, Conversation ID: {session.conversation_id}"
         )
-        logger.warning(
-            f"approve_command: pending_approval content={session.pending_approval}"
+        logger.info(
+            f"🎯 [APPROVAL RECEIVED] Pending approval: {session.pending_approval}"
         )
 
         if not session.pending_approval:
@@ -799,9 +848,6 @@ class AgentTerminalService:
                         user_id=user_id,
                     )
 
-                # Write command to PTY terminal for visibility
-                self._write_to_pty(session, f"{command}\n")
-
                 # Execute the command
                 result = await executor.run_shell_command(command, force_approval=False)
 
@@ -838,8 +884,26 @@ class AgentTerminalService:
                     except Exception as e:
                         logger.error(f"[INTERPRETATION] Failed to interpret approved command results: {e}")
 
-                # NOTE: PTY session automatically sends output to terminal WebSocket via _read_pty_output()
-                # No manual send needed - PTY handles it!
+                # CRITICAL FIX: Write formatted command and output to PTY terminal for display
+                # The command executes via subprocess (NOT in PTY shell), so we write
+                # a formatted display to PTY for users to see it in the terminal tab.
+                #
+                # IMPORTANT: We write the OUTPUT, not the command itself, to prevent double execution.
+                # Writing "command\n" would cause PTY shell to execute it again.
+
+                # Format output for terminal display
+                terminal_output = f"\r\n$ {command}\r\n"
+                if result.get("stdout"):
+                    terminal_output += result["stdout"]
+                    if not result["stdout"].endswith("\n"):
+                        terminal_output += "\r\n"
+                if result.get("stderr"):
+                    terminal_output += result["stderr"]
+                    if not result["stderr"].endswith("\n"):
+                        terminal_output += "\r\n"
+
+                # Write formatted output to PTY (for terminal tab display)
+                self._write_to_pty(session, terminal_output)
 
                 # Add to command history
                 session.command_history.append(
@@ -858,8 +922,13 @@ class AgentTerminalService:
                 session.last_activity = time.time()
 
                 logger.info(
-                    f"Command approved and executed: {command}"
+                    f"✅ [APPROVAL EXECUTED] Command approved and executed: {command}"
                     + (f" with comment: {comment}" if comment else "")
+                )
+                logger.info(
+                    f"✅ [APPROVAL EXECUTED] Session {session_id} updated: "
+                    f"pending_approval=None, state=AGENT_CONTROL, "
+                    f"command_history length={len(session.command_history)}"
                 )
 
                 # Store auto-approve rule if requested
@@ -877,14 +946,6 @@ class AgentTerminalService:
                     approved=True,
                     comment=comment,
                 )
-
-                # NOTE: Don't write stdout/stderr to PTY - the command already executed in PTY
-                # and produced its output naturally. Writing it again via write_input() would
-                # treat the output as keyboard input (commands), causing duplication.
-                # if result.get("stdout"):
-                #     self._write_to_pty(session, result["stdout"])
-                # if result.get("stderr"):
-                #     self._write_to_pty(session, result["stderr"])
 
                 return {
                     "status": "approved",
@@ -1037,6 +1098,17 @@ class AgentTerminalService:
         if not session:
             return None
 
+        # Check if PTY session is alive
+        pty_alive = False
+        if session.pty_session_id:
+            try:
+                from backend.services.simple_pty import simple_pty_manager
+                pty = simple_pty_manager.get_session(session.pty_session_id)
+                pty_alive = pty is not None and pty.is_alive()
+            except Exception as e:
+                logger.error(f"Error checking PTY alive status: {e}")
+                pty_alive = False
+
         return {
             "session_id": session.session_id,
             "agent_id": session.agent_id,
@@ -1050,6 +1122,7 @@ class AgentTerminalService:
             "command_count": len(session.command_history),
             "pending_approval": session.pending_approval,
             "metadata": session.metadata,
+            "pty_alive": pty_alive,  # CRITICAL FIX: Add pty_alive to prevent auto-recreation
         }
 
     async def _store_auto_approve_rule(
