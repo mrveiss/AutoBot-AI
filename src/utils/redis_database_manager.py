@@ -34,6 +34,7 @@ class RedisDatabase(Enum):
     WORKFLOWS = cfg.get("redis.databases.workflows", 7)
     VECTORS = cfg.get("redis.databases.vectors", 8)
     MODELS = cfg.get("redis.databases.models", 9)
+    MEMORY = cfg.get("redis.databases.memory", 9)  # Memory Graph (shares DB 9 with models)
     TESTING = cfg.get("redis.databases.testing", 15)
 
 
@@ -136,6 +137,10 @@ class RedisDatabaseManager:
                 "models": {
                     "db": cfg.get("redis.databases.models", 9),
                     "description": "Model metadata",
+                },
+                "memory": {
+                    "db": cfg.get("redis.databases.memory", 9),
+                    "description": "Memory Graph entities and relationships",
                 },
                 "analytics": {
                     "db": cfg.get("redis.databases.analytics", 11),

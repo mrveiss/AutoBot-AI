@@ -523,17 +523,33 @@ const getContentClass = (message: ChatMessage): string => {
 // NOTE: formatTime removed - now using shared utility from @/utils/formatHelpers
 
 const formatMessageContent = (content: string): string => {
-  // Basic markdown-like formatting
+  // Strip ANSI escape codes FIRST (terminal color codes, cursor movements, etc.)
+  // This removes sequences like: \x1b[31m (red), \x1b[0m (reset), \x1b]0;... (set title), [?2004h, etc.
   let formatted = content
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences: \x1b[...m, \x1b[...H, etc.
+    .replace(/\x1b\][0-9;]*[^\x07]*\x07/g, '') // OSC sequences: \x1b]...BEL
+    .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x1b\\)?/g, '') // OSC sequences: \x1b]...ST
+    .replace(/\x1b[=>]/g, '') // Set numeric keypad mode
+    .replace(/\x1b[()][AB012]/g, '') // Character set selection
+    .replace(/\[[\?\d;]*[hlHJ]/g, '') // Bracket sequences without ESC: [?2004h, etc.
+    .replace(/\]0;[^\x07\n]*\x07?/g, '') // Set title without ESC: ]0;...
+    .trim()
+
+  // Strip TOOL_CALL tags SECOND (internal metadata that shouldn't be displayed)
+  // Removes: <tool_call name="..." params="...">content</tool_call>
+  formatted = formatted.replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
+
+  // Process code blocks THIRD (after ANSI stripping and tool_call removal, before inline code and newlines)
+  formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+    return `<pre class="code-block${lang ? ` language-${lang}` : ''}"><code>${code.trim()}</code></pre>`
+  })
+
+  // Then basic markdown-like formatting
+  formatted = formatted
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`(.*?)`/g, '<code>$1</code>')
     .replace(/\n/g, '<br>')
-
-  // Code blocks
-  formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
-    return `<pre class="code-block${lang ? ` language-${lang}` : ''}"><code>${code.trim()}</code></pre>`
-  })
 
   // Links
   formatted = formatted.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')

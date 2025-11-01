@@ -155,29 +155,51 @@ class LoggingManager:
 
 
 # Convenience functions for common logging patterns
+def get_logger(name: str, category: str = "backend") -> logging.Logger:
+    """
+    Get a logger instance - REUSABLE general-purpose logger function.
+
+    This is the canonical way to get loggers across the codebase.
+    Use specific functions below for clarity, or call this directly.
+
+    Args:
+        name: Logger name (usually __name__)
+        category: Logger category (backend, frontend, llm, debug, audit)
+
+    Returns:
+        Configured logger instance
+
+    Examples:
+        >>> logger = get_logger(__name__)  # Default: backend
+        >>> logger = get_logger(__name__, "llm")  # LLM logger
+        >>> logger = get_logger(__name__, "debug")  # Debug logger
+    """
+    return LoggingManager.get_logger(name, category)
+
+
 def get_backend_logger(name: str) -> logging.Logger:
     """Get backend logger"""
-    return LoggingManager.get_logger(name, "backend")
+    return get_logger(name, "backend")
 
 
 def get_frontend_logger(name: str) -> logging.Logger:
     """Get frontend logger"""
-    return LoggingManager.get_logger(name, "frontend")
+    return get_logger(name, "frontend")
 
 
 def get_llm_logger(name: str) -> logging.Logger:
     """Get LLM logger"""
-    return LoggingManager.get_logger(name, "llm")
+    return get_logger(name, "llm")
 
 
 def get_debug_logger(name: str) -> logging.Logger:
     """Get debug logger"""
-    return LoggingManager.get_logger(name, "debug")
+    return get_logger(name, "debug")
 
 
 def get_audit_logger(name: str) -> logging.Logger:
     """Get audit logger"""
-    return LoggingManager.get_logger(name, "audit")
+    return get_logger(name, "audit")
 
 
 # Maintain backward compatibility with existing logging setup

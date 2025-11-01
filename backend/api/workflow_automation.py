@@ -875,8 +875,24 @@ class WorkflowAutomationManager:
         ]
 
 
-# Global workflow manager instance
-workflow_manager = WorkflowAutomationManager()
+# Global workflow manager instance (lazy initialization)
+# REUSABLE PATTERN: Lazy initialization avoids creating async resources at module import time
+_workflow_manager = None
+
+
+def get_workflow_manager() -> WorkflowAutomationManager:
+    """
+    Get or create the global workflow manager instance.
+
+    REUSABLE PATTERN: Lazy singleton initialization
+    - Avoids creating async resources at module import time
+    - Ensures event loop exists before instantiation
+    - Thread-safe for FastAPI async context
+    """
+    global _workflow_manager
+    if _workflow_manager is None:
+        _workflow_manager = WorkflowAutomationManager()
+    return _workflow_manager
 
 
 # API Endpoints
@@ -899,7 +915,7 @@ async def create_workflow(request: AutomatedWorkflowRequest):
 
         automation_mode = AutomationMode(request.automation_mode)
 
-        workflow_id = await workflow_manager.create_automated_workflow(
+        workflow_id = await get_workflow_manager().create_automated_workflow(
             name=request.name,
             description=request.description or "",
             steps=workflow_steps,
@@ -922,7 +938,7 @@ async def create_workflow(request: AutomatedWorkflowRequest):
 async def start_workflow(workflow_id: str):
     """Start executing automated workflow"""
     try:
-        success = await workflow_manager.start_workflow_execution(workflow_id)
+        success = await get_workflow_manager().start_workflow_execution(workflow_id)
 
         if success:
             return {
@@ -941,7 +957,7 @@ async def start_workflow(workflow_id: str):
 async def control_workflow(request: WorkflowControlRequest):
     """Control workflow execution (pause, resume, cancel, approve, skip)"""
     try:
-        success = await workflow_manager.handle_workflow_control(request)
+        success = await get_workflow_manager().handle_workflow_control(request)
 
         if success:
             return {
@@ -962,7 +978,7 @@ async def control_workflow(request: WorkflowControlRequest):
 async def get_workflow_status(workflow_id: str):
     """Get current workflow status"""
     try:
-        status = workflow_manager.get_workflow_status(workflow_id)
+        status = get_workflow_manager().get_workflow_status(workflow_id)
 
         if status:
             return {"success": True, "workflow": status}
@@ -979,8 +995,8 @@ async def get_active_workflows():
     """Get list of all active workflows"""
     try:
         workflows = []
-        for workflow_id in workflow_manager.active_workflows:
-            status = workflow_manager.get_workflow_status(workflow_id)
+        for workflow_id in get_workflow_manager().active_workflows:
+            status = get_workflow_manager().get_workflow_status(workflow_id)
             if status:
                 workflows.append(status)
 
@@ -1003,13 +1019,13 @@ async def create_workflow_from_chat(request: dict):
                 status_code=400, detail="user_request and session_id are required"
             )
 
-        workflow_id = await workflow_manager.create_workflow_from_chat_request(
+        workflow_id = await get_workflow_manager().create_workflow_from_chat_request(
             user_request, session_id
         )
 
         if workflow_id:
             # Auto-start the workflow
-            await workflow_manager.start_workflow_execution(workflow_id)
+            await get_workflow_manager().start_workflow_execution(workflow_id)
 
             return {
                 "success": True,
@@ -1034,7 +1050,7 @@ async def workflow_websocket(websocket: WebSocket, session_id: str):
     await websocket.accept()
 
     # Register WebSocket connection
-    workflow_manager.terminal_sessions[session_id] = websocket
+    get_workflow_manager().terminal_sessions[session_id] = websocket
 
     try:
         while True:
@@ -1051,14 +1067,14 @@ async def workflow_websocket(websocket: WebSocket, session_id: str):
                     control_request = WorkflowControlRequest(
                         workflow_id=workflow_id, action=action
                     )
-                    await workflow_manager.handle_workflow_control(control_request)
+                    await get_workflow_manager().handle_workflow_control(control_request)
 
     except WebSocketDisconnect:
         # Clean up on disconnect
-        if session_id in workflow_manager.terminal_sessions:
-            del workflow_manager.terminal_sessions[session_id]
+        if session_id in get_workflow_manager().terminal_sessions:
+            del get_workflow_manager().terminal_sessions[session_id]
         logger.info(f"WebSocket disconnected for session {session_id}")
     except Exception as e:
         logger.error(f"WebSocket error for session {session_id}: {e}")
-        if session_id in workflow_manager.terminal_sessions:
-            del workflow_manager.terminal_sessions[session_id]
+        if session_id in get_workflow_manager().terminal_sessions:
+            del get_workflow_manager().terminal_sessions[session_id]
