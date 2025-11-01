@@ -258,116 +258,112 @@ async def cancel_workflow(workflow_id: str):
 
 
 @router.get("/status")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_scheduler_status",
+    error_code_prefix="SCHEDULER",
+)
 async def get_scheduler_status():
     """Get current scheduler and queue status"""
-    try:
-        status = workflow_scheduler.get_scheduler_status()
+    status = workflow_scheduler.get_scheduler_status()
 
-        return {"success": True, "scheduler_status": status}
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get scheduler status: {str(e)}"
-        )
+    return {"success": True, "scheduler_status": status}
 
 
 @router.get("/queue")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_queue_status",
+    error_code_prefix="SCHEDULER",
+)
 async def get_queue_status():
     """Get current queue status and workflows"""
-    try:
-        queue_status = workflow_scheduler.queue.get_queue_status()
-        queued_workflows = workflow_scheduler.queue.list_queued()
-        running_workflows = workflow_scheduler.queue.list_running()
+    queue_status = workflow_scheduler.queue.get_queue_status()
+    queued_workflows = workflow_scheduler.queue.list_queued()
+    running_workflows = workflow_scheduler.queue.list_running()
 
-        # Convert to response format
-        queued_list = []
-        for workflow in queued_workflows:
-            queued_list.append(
-                {
-                    "id": workflow.id,
-                    "name": workflow.name,
-                    "priority": workflow.priority.name,
-                    "complexity": workflow.complexity.value,
-                    "estimated_duration_minutes": workflow.estimated_duration_minutes,
-                }
-            )
-
-        running_list = []
-        for workflow in running_workflows:
-            running_list.append(
-                {
-                    "id": workflow.id,
-                    "name": workflow.name,
-                    "priority": workflow.priority.name,
-                    "complexity": workflow.complexity.value,
-                    "estimated_duration_minutes": workflow.estimated_duration_minutes,
-                }
-            )
-
-        return {
-            "success": True,
-            "queue_status": queue_status,
-            "queued_workflows": queued_list,
-            "running_workflows": running_list,
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get queue status: {str(e)}"
+    # Convert to response format
+    queued_list = []
+    for workflow in queued_workflows:
+        queued_list.append(
+            {
+                "id": workflow.id,
+                "name": workflow.name,
+                "priority": workflow.priority.name,
+                "complexity": workflow.complexity.value,
+                "estimated_duration_minutes": workflow.estimated_duration_minutes,
+            }
         )
+
+    running_list = []
+    for workflow in running_workflows:
+        running_list.append(
+            {
+                "id": workflow.id,
+                "name": workflow.name,
+                "priority": workflow.priority.name,
+                "complexity": workflow.complexity.value,
+                "estimated_duration_minutes": workflow.estimated_duration_minutes,
+            }
+        )
+
+    return {
+        "success": True,
+        "queue_status": queue_status,
+        "queued_workflows": queued_list,
+        "running_workflows": running_list,
+    }
 
 
 @router.post("/queue/control")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="control_queue",
+    error_code_prefix="SCHEDULER",
+)
 async def control_queue(request: QueueControlRequest):
     """Control queue operations (pause, resume, set max concurrent)"""
-    try:
-        if request.action == "pause":
-            workflow_scheduler.queue.pause_queue()
-            message = "Queue paused"
-        elif request.action == "resume":
-            workflow_scheduler.queue.resume_queue()
-            message = "Queue resumed"
-        elif request.action == "set_max_concurrent":
-            if request.value is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail="value required for set_max_concurrent action",
-                )
-            workflow_scheduler.queue.set_max_concurrent(request.value)
-            message = f"Max concurrent workflows set to {request.value}"
-        else:
+    if request.action == "pause":
+        workflow_scheduler.queue.pause_queue()
+        message = "Queue paused"
+    elif request.action == "resume":
+        workflow_scheduler.queue.resume_queue()
+        message = "Queue resumed"
+    elif request.action == "set_max_concurrent":
+        if request.value is None:
             raise HTTPException(
-                status_code=400, detail=f"Invalid action: {request.action}"
+                status_code=400,
+                detail="value required for set_max_concurrent action",
             )
-
-        return {
-            "success": True,
-            "message": message,
-            "queue_status": workflow_scheduler.queue.get_queue_status(),
-        }
-
-    except Exception as e:
+        workflow_scheduler.queue.set_max_concurrent(request.value)
+        message = f"Max concurrent workflows set to {request.value}"
+    else:
         raise HTTPException(
-            status_code=500, detail=f"Failed to control queue: {str(e)}"
+            status_code=400, detail=f"Invalid action: {request.action}"
         )
+
+    return {
+        "success": True,
+        "message": message,
+        "queue_status": workflow_scheduler.queue.get_queue_status(),
+    }
 
 
 @router.post("/start")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_scheduler",
+    error_code_prefix="SCHEDULER",
+)
 async def start_scheduler():
     """Start the workflow scheduler"""
-    try:
-        await workflow_scheduler.start()
+    await workflow_scheduler.start()
 
-        return {
-            "success": True,
-            "message": "Workflow scheduler started",
-            "status": workflow_scheduler.get_scheduler_status(),
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start scheduler: {str(e)}"
-        )
+    return {
+        "success": True,
+        "message": "Workflow scheduler started",
+        "status": workflow_scheduler.get_scheduler_status(),
+    }
 
 
 @router.post("/stop")

@@ -18102,5 +18102,172 @@ class TestBatch97SchedulerWorkflowCRUD(unittest.TestCase):
         self.assertEqual(progress_percentage, 38.46153846153847)
 
 
+class TestBatch98SchedulerQueueAndStatus(unittest.TestCase):
+    """Test batch 98 migrations: 4 endpoints from scheduler.py (queue/status operations)"""
+
+    def test_batch_98_get_scheduler_status_has_decorator(self):
+        """Verify get_scheduler_status has @with_error_handling decorator"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.get_scheduler_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SCHEDULER"', source)
+        self.assertIn('operation="get_scheduler_status"', source)
+
+    def test_batch_98_get_scheduler_status_simple_pattern(self):
+        """Verify get_scheduler_status follows Simple Pattern (no try-catch)"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.get_scheduler_status)
+        # Should have NO try-catch blocks (Simple Pattern)
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        # Should NOT have status_code=500
+        self.assertNotIn("status_code=500", source)
+
+    def test_batch_98_get_queue_status_has_decorator(self):
+        """Verify get_queue_status has @with_error_handling decorator"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.get_queue_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SCHEDULER"', source)
+        self.assertIn('operation="get_queue_status"', source)
+
+    def test_batch_98_get_queue_status_simple_pattern(self):
+        """Verify get_queue_status follows Simple Pattern (no try-catch)"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.get_queue_status)
+        # Should have NO try-catch blocks (Simple Pattern)
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        # Should NOT have status_code=500
+        self.assertNotIn("status_code=500", source)
+
+    def test_batch_98_control_queue_has_decorator(self):
+        """Verify control_queue has @with_error_handling decorator"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.control_queue)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SCHEDULER"', source)
+        self.assertIn('operation="control_queue"', source)
+
+    def test_batch_98_control_queue_preserves_400_validation(self):
+        """Verify control_queue preserves 400 validation errors (Mixed Pattern)"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.control_queue)
+        # Should preserve 400 HTTPException for validation
+        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=400", source)
+        self.assertIn("value required for set_max_concurrent action", source)
+        self.assertIn("Invalid action", source)
+        # Should have NO outer try-catch (Mixed Pattern with direct validation)
+        try_count = source.count("try:")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)"
+        )
+        # Should NOT have status_code=500
+        self.assertNotIn("status_code=500", source)
+
+    def test_batch_98_start_scheduler_has_decorator(self):
+        """Verify start_scheduler has @with_error_handling decorator"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.start_scheduler)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('error_code_prefix="SCHEDULER"', source)
+        self.assertIn('operation="start_scheduler"', source)
+
+    def test_batch_98_start_scheduler_simple_pattern(self):
+        """Verify start_scheduler follows Simple Pattern (no try-catch)"""
+        from backend.api import scheduler
+
+        source = inspect.getsource(scheduler.start_scheduler)
+        # Should have NO try-catch blocks (Simple Pattern)
+        try_count = source.count("try:")
+        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        # Should NOT have status_code=500
+        self.assertNotIn("status_code=500", source)
+
+    def test_batch_98_all_endpoints_have_error_category_server_error(self):
+        """Verify all batch 98 endpoints use ErrorCategory.SERVER_ERROR"""
+        from backend.api import scheduler
+
+        endpoints = [
+            scheduler.get_scheduler_status,
+            scheduler.get_queue_status,
+            scheduler.control_queue,
+            scheduler.start_scheduler,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "category=ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} should use ErrorCategory.SERVER_ERROR",
+            )
+
+    def test_batch_98_pattern_distribution(self):
+        """Verify batch 98 pattern distribution: 3 Simple, 1 Mixed"""
+        from backend.api import scheduler
+
+        # Simple Pattern endpoints (no try-catch, no HTTPException)
+        simple_endpoints = [
+            scheduler.get_scheduler_status,
+            scheduler.get_queue_status,
+            scheduler.start_scheduler,
+        ]
+
+        for endpoint in simple_endpoints:
+            source = inspect.getsource(endpoint)
+            try_count = source.count("try:")
+            self.assertEqual(
+                try_count,
+                0,
+                f"{endpoint.__name__} should have NO try-catch (Simple Pattern)",
+            )
+
+        # Mixed Pattern endpoint (preserves HTTPException validation)
+        mixed_source = inspect.getsource(scheduler.control_queue)
+        self.assertIn("HTTPException", mixed_source)
+        self.assertIn("status_code=400", mixed_source)
+
+    def test_batch_98_progress_tracking(self):
+        """Track progress: 9/13 endpoints migrated in scheduler.py (69%)"""
+        from backend.api import scheduler
+
+        # Count decorated endpoints in batches 97 + 98
+        all_migrated_endpoints = [
+            # Batch 97
+            scheduler.schedule_workflow,
+            scheduler.list_scheduled_workflows,
+            scheduler.get_workflow_details,
+            scheduler.reschedule_workflow,
+            scheduler.cancel_workflow,
+            # Batch 98
+            scheduler.get_scheduler_status,
+            scheduler.get_queue_status,
+            scheduler.control_queue,
+            scheduler.start_scheduler,
+        ]
+
+        migrated_count = sum(
+            1
+            for ep in all_migrated_endpoints
+            if "@with_error_handling" in inspect.getsource(ep)
+        )
+
+        # scheduler.py has 13 total endpoints
+        total_endpoints = 13
+        progress_percentage = (migrated_count / total_endpoints) * 100
+
+        self.assertEqual(migrated_count, 9)
+        self.assertEqual(progress_percentage, 69.23076923076923)
+
+
 if __name__ == "__main__":
     unittest.main()
