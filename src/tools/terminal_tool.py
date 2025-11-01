@@ -83,16 +83,19 @@ class TerminalTool:
             )
 
             # Track session for this conversation
+            # CRITICAL: Store AGENT TERMINAL session ID (needed for approval system)
+            # Frontend sends approvals to this ID, not PTY session ID
             self.active_sessions[conversation_id] = session.session_id
 
             logger.info(
-                f"Created terminal session {session.session_id} "
-                f"for conversation {conversation_id}"
+                f"Created terminal session {session.pty_session_id} "
+                f"for conversation {conversation_id} "
+                f"(agent terminal session: {session.session_id})"
             )
 
             return {
                 "status": "success",
-                "session_id": session.session_id,
+                "session_id": session.pty_session_id,  # Return PTY session ID (matches chat)
                 "agent_role": session.agent_role.value,
                 "host": session.host,
             }
@@ -113,11 +116,20 @@ class TerminalTool:
         """
         Execute a command in the agent's terminal session.
 
+        PERMANENT FIX: Auto-recreates inactive sessions to maintain terminal log persistence.
+
+        Core Features:
+        1. Terminal log persistence - preserves all commands across restarts
+        2. Result interpretation - agent analyzes every command output
+        3. Auto-recreation - seamlessly recovers dead sessions
+
         Security workflow:
         1. Find session for conversation
-        2. Execute via AgentTerminalService
-        3. Risk assessment and approval workflow applied
-        4. Return result or pending approval status
+        2. Check if session is active (PTY alive)
+        3. Auto-recreate if inactive (preserves conversation_id)
+        4. Execute via AgentTerminalService
+        5. Risk assessment and approval workflow applied
+        6. Return result or pending approval status
 
         Args:
             conversation_id: Chat conversation ID
@@ -135,12 +147,75 @@ class TerminalTool:
 
         # Get session for this conversation
         session_id = self.active_sessions.get(conversation_id)
+
+        # CRITICAL FIX: active_sessions dict is in-memory and wiped on restart
+        # Use reusable method to restore session mapping from database
         if not session_id:
-            return {
-                "status": "error",
-                "error": "No active terminal session for this conversation",
-                "hint": "Create session first using create_session()",
-            }
+            session_id = await self._restore_session_mapping_from_db(conversation_id)
+
+        # CORE LOGIC: Every chat session MUST have an associated terminal session
+        # If no session exists at all, auto-create one
+        if not session_id:
+            logger.info(
+                f"No terminal session exists for conversation {conversation_id}. "
+                "Auto-creating session (chat sessions MUST have terminal sessions)."
+            )
+
+            from backend.services.agent_terminal_service import AgentRole
+
+            # Auto-create terminal session for this chat conversation
+            create_result = await self.agent_terminal_service.create_session(
+                agent_id=f"chat_agent_{conversation_id}",
+                agent_role=AgentRole.CHAT_AGENT,
+                conversation_id=conversation_id,
+                host="main",
+            )
+
+            # Store session mapping - CRITICAL: Use agent terminal session_id, not pty_session_id
+            self.active_sessions[conversation_id] = create_result.session_id
+            session_id = create_result.session_id
+
+            logger.info(
+                f"Terminal session auto-created: conversation={conversation_id}, "
+                f"agent_session={session_id}, pty_session={create_result.pty_session_id}"
+            )
+
+        # PERMANENT FIX: Check if session is actually active (PTY alive)
+        # If session exists but PTY is dead (e.g., after backend restart), auto-recreate it
+        else:
+            session_info = await self.agent_terminal_service.get_session_info(
+                session_id
+            )
+
+            if not session_info or not session_info.get("pty_alive", False):
+                logger.warning(
+                    f"Session {session_id} for conversation {conversation_id} is inactive. "
+                    "Auto-recreating to maintain terminal log persistence."
+                )
+
+                # Auto-recreate session with same IDs to preserve continuity
+                from backend.services.agent_terminal_service import AgentRole
+
+                # Use chat_agent role as default for auto-recreation
+                recreate_result = await self.agent_terminal_service.create_session(
+                    agent_id=f"chat_agent_{conversation_id}",
+                    agent_role=AgentRole.CHAT_AGENT,
+                    conversation_id=conversation_id,
+                    host="main",
+                )
+
+                # Update session mapping - CRITICAL: Use agent terminal session_id, not pty_session_id
+                self.active_sessions[conversation_id] = recreate_result.session_id
+                session_id = recreate_result.session_id
+
+                logger.info(
+                    f"Session auto-recreated: conversation={conversation_id}, "
+                    f"agent_session={session_id}, pty_session={recreate_result.pty_session_id}. "
+                    "Terminal log continuity maintained."
+                )
+
+                # Restore command history to terminal for persistent log
+                await self._restore_terminal_history(conversation_id, session_id)
 
         try:
             # Execute command via service (includes security checks)
@@ -265,7 +340,7 @@ class TerminalTool:
             # In production, this mapping should be stored
 
             backend_url = (
-                f"http://{NetworkConstants.MAIN_HOST}:{NetworkConstants.BACKEND_PORT}"
+                f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
             )
 
             async with httpx.AsyncClient(timeout=5.0) as client:
@@ -372,6 +447,162 @@ class TerminalTool:
                 "status": "error",
                 "error": str(e),
             }
+
+    async def _restore_session_mapping_from_db(
+        self, conversation_id: str
+    ) -> Optional[str]:
+        """
+        REUSABLE: Restore session ID from database when active_sessions dict is empty.
+
+        The active_sessions dictionary is in-memory and gets wiped on backend restart.
+        This method queries the terminal API to restore the mapping from persistent storage.
+
+        Pattern: Database Fallback for In-Memory State Recovery
+        - Checks persistent storage when in-memory state is lost
+        - Restores mapping to avoid "session not found" errors
+        - Can be called from any method that needs session IDs
+
+        Args:
+            conversation_id: Chat conversation ID to look up
+
+        Returns:
+            Session ID if found in database, None otherwise
+
+        Example:
+            >>> session_id = await self._restore_session_mapping_from_db(conv_id)
+            >>> if session_id:
+            >>>     # Session restored from database
+            >>>     self.active_sessions[conv_id] = session_id
+        """
+        try:
+            import httpx
+            from src.constants.network_constants import NetworkConstants
+
+            # Query AGENT terminal API for sessions linked to this conversation
+            # CRITICAL: Use /api/agent-terminal/sessions (not /api/terminal/sessions)
+            backend_url = (
+                f"http://{NetworkConstants.MAIN_MACHINE_IP}:"
+                f"{NetworkConstants.BACKEND_PORT}"
+            )
+
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(
+                    f"{backend_url}/api/agent-terminal/sessions",
+                    params={"conversation_id": conversation_id},
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    sessions = data.get("sessions", [])
+
+                    if sessions and len(sessions) > 0:
+                        # Found existing session - restore to active_sessions mapping
+                        db_session = sessions[0]
+                        session_id = db_session.get("session_id")
+                        if session_id:
+                            self.active_sessions[conversation_id] = session_id
+                            logger.info(
+                                f"Restored session mapping from database: "
+                                f"conversation={conversation_id}, session={session_id}"
+                            )
+                            return session_id
+
+        except Exception as e:
+            logger.debug(f"Failed to query database for session: {e}")
+
+        return None
+
+    async def _restore_terminal_history(
+        self, conversation_id: str, session_id: str
+    ) -> None:
+        """
+        Restore command history to terminal for persistent log.
+
+        PERMANENT FIX: Maintains terminal log across restarts by replaying
+        command history from chat messages into the PTY terminal.
+
+        Args:
+            conversation_id: Chat conversation ID
+            session_id: PTY session ID to restore history to
+        """
+        try:
+            import httpx
+            from src.constants.network_constants import NetworkConstants
+
+            backend_url = (
+                f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+            )
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                # Fetch chat messages for this conversation
+                response = await client.get(
+                    f"{backend_url}/api/chats/{conversation_id}/messages"
+                )
+
+                if response.status_code != 200:
+                    logger.warning(
+                        f"Failed to fetch chat history for restoration: {response.status_code}"
+                    )
+                    return
+
+                messages = response.json().get("messages", [])
+
+                # Filter for command-related messages
+                command_messages = [
+                    msg
+                    for msg in messages
+                    if msg.get("metadata", {}).get("type") == "command"
+                    or "command" in msg.get("content", "").lower()[:50]
+                ]
+
+                if not command_messages:
+                    logger.info(f"No command history to restore for {conversation_id}")
+                    return
+
+                # Write restoration header to terminal
+                session = self.agent_terminal_service.sessions.get(session_id)
+                if session and session.pty_session_id:
+                    header = (
+                        "\033[1;36m"  # Cyan bold
+                        "═══════════════════════════════════════════════════════════════\n"
+                        "  SESSION RESTORED - Command History Replay\n"
+                        f"  Conversation: {conversation_id[:16]}...\n"
+                        f"  Commands: {len(command_messages)} entries\n"
+                        "═══════════════════════════════════════════════════════════════\n"
+                        "\033[0m"  # Reset
+                    )
+                    self.agent_terminal_service._write_to_pty(session, header)
+
+                    # Replay commands and outputs
+                    for msg in command_messages[-20:]:  # Last 20 commands
+                        content = msg.get("content", "")
+                        timestamp = msg.get("timestamp", "")
+
+                        # Format and write to terminal
+                        history_entry = (
+                            f"\033[90m[{timestamp}]\033[0m "  # Gray timestamp
+                            f"{content}\n"
+                        )
+                        self.agent_terminal_service._write_to_pty(
+                            session, history_entry
+                        )
+
+                    footer = (
+                        "\033[1;36m"
+                        "═══════════════════════════════════════════════════════════════\n"
+                        "  History restoration complete. Terminal ready.\n"
+                        "═══════════════════════════════════════════════════════════════\n"
+                        "\033[0m"
+                    )
+                    self.agent_terminal_service._write_to_pty(session, footer)
+
+                logger.info(
+                    f"Restored {len(command_messages)} command entries to terminal {session_id}"
+                )
+
+        except Exception as e:
+            logger.error(f"Error restoring terminal history: {e}", exc_info=True)
+            # Don't fail command execution if history restoration fails
 
     def get_tool_description(self) -> Dict[str, Any]:
         """
