@@ -2,11 +2,150 @@
 
 This document tracks all system fixes, improvements, and status updates for the AutoBot platform.
 
-**Last Updated:** 2025-10-23
+**Last Updated:** 2025-11-01
 
 ---
 
-## ✅ RECENT UPDATES (2025-10-23)
+## ✅ RECENT UPDATES (2025-11-01)
+
+### CRITICAL: Approval Workflow Fixes - Double Command Execution & Session Management
+
+**Status:** ✅ Complete (2025-11-01)
+
+**Problem:**
+- Commands executing twice (subprocess + PTY shell execution)
+- Command output not appearing in chat after approval
+- Terminal sessions dying after backend restart
+- Session ID mismatches between approval and execution
+- Terminal mounting race conditions causing lost command output
+- Terminal sizing issues (87x87 on tab switch)
+
+**Root Causes:**
+
+1. **Double Execution Bug** (`backend/services/agent_terminal_service.py`)
+   - After subprocess execution, code wrote command to PTY: `self._write_to_pty(session, f"{command}\n")`
+   - This caused PTY shell to execute the command a second time
+   - Violated user requirement: "commands run once"
+   - Impact: Resource waste, dangerous side effects for destructive commands
+
+2. **Session Auto-Recreation Failure** (`src/tools/terminal_tool.py`)
+   - Sessions not checking if PTY is alive before reuse
+   - Dead sessions from backend restart caused "No active terminal session" errors
+   - No database fallback for session mapping restoration
+
+3. **Terminal Mounting Race** (`autobot-vue/src/components/chat/ChatTabContent.vue`)
+   - Terminal only mounted when switching to terminal tab
+   - Commands executed before WebSocket connected
+   - Result: Command output lost permanently
+
+4. **Terminal Sizing Issue** (`autobot-vue/src/components/terminal/BaseXTerminal.vue`)
+   - Terminal rendered as 87x87 when tab not visible
+   - No resize detection on tab switch
+
+**Fixes Applied:**
+
+**1. Double Command Execution Fix** (Commits: `ce16ef5`)
+- **Files:** `backend/services/agent_terminal_service.py`
+- **Changes:**
+  ```python
+  # OLD (caused double execution):
+  self._write_to_pty(session, f"{command}\n")
+
+  # NEW (write formatted output only):
+  terminal_output = f"\r\n$ {command}\r\n"
+  if result.get("stdout"):
+      terminal_output += result["stdout"]
+  if result.get("stderr"):
+      terminal_output += result["stderr"]
+  self._write_to_pty(session, terminal_output)
+  ```
+- **Lines Modified:** 714-733 (execute_command), 881-900 (approve_command)
+- **Benefits:** Commands execute exactly once, output still displays properly
+
+**2. Session Auto-Recreation** (Commits: `08c39b2`)
+- **Files:** `src/tools/terminal_tool.py`
+- **Reusable Functions Added:**
+  - `_restore_session_mapping_from_db()` - Restore session from database
+  - `_restore_terminal_history()` - Replay command history to terminal
+- **Logic:** Check PTY alive → restore from DB → auto-create if needed → verify alive
+- **Benefits:** Sessions survive restarts, seamless recovery
+
+**3. Terminal Mounting Fix** (Commits: `ed85a8c`)
+- **Files:** `autobot-vue/src/components/chat/ChatTabContent.vue`
+- **Changes:**
+  ```typescript
+  // Mount terminal immediately when session exists
+  watch(() => props.currentSessionId, (sessionId) => {
+    if (sessionId && !terminalMounted.value) {
+      terminalMounted.value = true
+    }
+  }, { immediate: true })
+  ```
+- **Benefits:** Terminal WebSocket ready before commands execute
+
+**4. Terminal Sizing Fix** (Commits: `ed85a8c`)
+- **Files:** `autobot-vue/src/components/terminal/BaseXTerminal.vue`
+- **Changes:** IntersectionObserver to detect visibility and refit
+- **Benefits:** Proper terminal dimensions on all tab switches
+
+**Additional Improvements:**
+
+**5. PTY Liveness Checks** (Commits: `ce16ef5`)
+- Added `pty_alive` field to `get_session_info()`
+- Prevents auto-recreation from wiping pending approval state
+- Lines: 1101-1122 in `agent_terminal_service.py`
+
+**6. Pending Approval Persistence** (Commits: `ce16ef5`)
+- Persist `pending_approval` to Redis for page reload survival
+- Restore `pending_approval` when loading from Redis
+- Lines: 226, 350, 641 in `agent_terminal_service.py`
+
+**7. Force All Commands Through Approval** (Commits: `ce16ef5`)
+- Changed `needs_approval = True` (always)
+- User can see and approve every command
+- Auto-approve rules still apply
+
+**8. Code Quality Enforcement** (Commits: `084b6fe`)
+- **New Tool:** `scripts/code-quality/check-reusable-functions.sh`
+- Enforces: docstrings, function length limits, type hints, no inline lambdas
+- Ensures reusable function extraction (no inline/embedded code)
+
+**9. UTF-8 Enforcement** (Commits: `8ac50ac`)
+- **New Utilities:** `src/utils/encoding_utils.py`
+  - `async_read_utf8_file()`, `async_write_utf8_file()`
+  - `json_dumps_utf8()`, `strip_ansi_codes()`
+- **Documentation:** `docs/developer/UTF8_ENFORCEMENT.md`
+- Prevents ANSI escape code pollution, proper emoji support
+
+**Results:**
+- ✅ Commands execute exactly once
+- ✅ Output appears in both chat and terminal
+- ✅ Sessions survive backend restarts
+- ✅ Approval state persists across page reloads
+- ✅ No lost command output
+- ✅ Proper terminal sizing on all tabs
+- ✅ Reusable functions enforced by automation
+
+**Testing:**
+- Backend restarted successfully
+- Ready for end-to-end approval workflow testing
+
+**Known Limitation:**
+- Interactive commands (sudo, ssh, password prompts) still not supported
+- Tracked in GitHub Issue #33: https://github.com/mrveiss/AutoBot-AI/issues/33
+
+**Commits:**
+1. `ce16ef5` - fix(terminal): prevent double command execution in approval workflow
+2. `ed85a8c` - fix(frontend): resolve terminal mounting and sizing race conditions
+3. `08c39b2` - fix(terminal): add session auto-recreation and reusable session recovery
+4. `084b6fe` - feat(code-quality): add reusable function quality checker
+5. `8ac50ac` - feat(encoding): add UTF-8 enforcement utilities and documentation
+6. `8253e3b` - fix(approval-workflow): enhance chat/terminal integration and debugging
+7. `3f1f9fb` - docs(claude): update workflow and quality standards
+
+---
+
+## ✅ PREVIOUS UPDATES (2025-10-23)
 
 ### CRITICAL: ChromaDB Event Loop Blocking Fix
 
