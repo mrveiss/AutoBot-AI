@@ -373,6 +373,11 @@ async def resume_agent_session(
 
 
 @router.get("/")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="agent_terminal_info",
+    error_code_prefix="AGENT_TERMINAL",
+)
 async def agent_terminal_info():
     """
     Get information about the Agent Terminal API.
