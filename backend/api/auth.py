@@ -11,6 +11,7 @@ from pydantic import BaseModel, validator
 
 from src.auth_middleware import auth_middleware
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -60,6 +61,11 @@ class LogoutRequest(BaseModel):
 
 
 @router.post("/login", response_model=LoginResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="login",
+    error_code_prefix="AUTH",
+)
 async def login(request: Request, login_data: LoginRequest):
     """
     Authenticate user and create session/token
@@ -112,6 +118,11 @@ async def login(request: Request, login_data: LoginRequest):
 
 
 @router.post("/logout")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="logout",
+    error_code_prefix="AUTH",
+)
 async def logout(request: Request, logout_data: LogoutRequest):
     """
     Logout user and invalidate session
@@ -132,6 +143,11 @@ async def logout(request: Request, logout_data: LogoutRequest):
 
 
 @router.get("/me")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_current_user_info",
+    error_code_prefix="AUTH",
+)
 async def get_current_user_info(request: Request):
     """
     Get current authenticated user information
@@ -159,6 +175,11 @@ async def get_current_user_info(request: Request):
 
 
 @router.get("/check")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_authentication",
+    error_code_prefix="AUTH",
+)
 async def check_authentication(request: Request):
     """
     Quick authentication check endpoint
@@ -183,6 +204,11 @@ async def check_authentication(request: Request):
 
 
 @router.get("/permissions/{operation}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_permission",
+    error_code_prefix="AUTH",
+)
 async def check_permission(request: Request, operation: str):
     """
     Check if current user has permission for specific operation
@@ -209,6 +235,11 @@ async def check_permission(request: Request, operation: str):
 
 
 @router.post("/change-password")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="change_password",
+    error_code_prefix="AUTH",
+)
 async def change_password(request: Request, old_password: str, new_password: str):
     """
     Change user password (placeholder - implement based on user store)
