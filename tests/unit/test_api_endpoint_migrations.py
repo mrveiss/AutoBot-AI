@@ -20303,5 +20303,128 @@ class TestBatch108AnalyticsCOMPLETE(unittest.TestCase):
             self.assertIn("discard", source)
 
 
+class TestBatch109MonitoringCOMPLETE(unittest.TestCase):
+    """Test batch 109 migration: monitoring.py completion (1 WebSocket endpoint - FINAL TO 100%)"""
+
+    def test_batch_109_realtime_monitoring_websocket_mixed_pattern(self):
+        """Verify realtime_monitoring_websocket uses Mixed Pattern (decorator + preserved try-catch)"""
+        from backend.api import monitoring
+
+        source = inspect.getsource(monitoring.realtime_monitoring_websocket)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="realtime_monitoring_websocket"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="MONITORING"', source)
+        # Should STILL HAVE try-catch blocks (connection lifecycle management)
+        self.assertIn("try:", source)
+        self.assertIn("except", source)
+        # Should have WebSocketDisconnect handling
+        self.assertIn("WebSocketDisconnect", source)
+
+    def test_batch_109_realtime_monitoring_websocket_connection_handling(self):
+        """Verify realtime_monitoring_websocket has proper WebSocket connection management"""
+        from backend.api import monitoring
+
+        source = inspect.getsource(monitoring.realtime_monitoring_websocket)
+        # Should have ws_manager.connect
+        self.assertIn("ws_manager.connect", source)
+        # Should have ws_manager.disconnect
+        self.assertIn("ws_manager.disconnect", source)
+        # Should handle WebSocketDisconnect
+        self.assertIn("except WebSocketDisconnect:", source)
+
+    def test_batch_109_realtime_monitoring_websocket_message_handling(self):
+        """Verify realtime_monitoring_websocket preserves message handling logic"""
+        from backend.api import monitoring
+
+        source = inspect.getsource(monitoring.realtime_monitoring_websocket)
+        # Should handle client messages
+        self.assertIn("receive_text", source)
+        self.assertIn("send_text", source)
+        # Should handle JSON parsing
+        self.assertIn("json.loads", source)
+        self.assertIn("JSONDecodeError", source)
+        # Should handle commands
+        self.assertIn("get_current_metrics", source)
+        self.assertIn("update_interval", source)
+
+    def test_batch_109_websocket_endpoint_has_decorator(self):
+        """Verify WebSocket endpoint has @with_error_handling decorator"""
+        from backend.api import monitoring
+
+        source = inspect.getsource(monitoring.realtime_monitoring_websocket)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("@router.websocket", source)
+
+    def test_batch_109_monitoring_100_percent_milestone(self):
+        """Verify monitoring.py has reached 100% migration"""
+        from backend.api import monitoring
+
+        # Get all endpoint functions
+        all_functions = [
+            obj
+            for name, obj in inspect.getmembers(monitoring)
+            if inspect.isfunction(obj) and not name.startswith("_")
+        ]
+
+        # Filter to only route handler functions (decorated with @router)
+        endpoint_functions = []
+        for func in all_functions:
+            try:
+                source = inspect.getsource(func)
+                if "@router." in source:
+                    endpoint_functions.append(func)
+            except (OSError, TypeError):
+                continue
+
+        # Count those with @with_error_handling
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        # monitoring.py has 19 total endpoints (including 1 WebSocket endpoint)
+        total_endpoints = 19
+
+        # Should have migrated all endpoints
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_109_migration_preserves_websocket_functionality(self):
+        """Verify WebSocket endpoint preserves key functionality after migration"""
+        from backend.api import monitoring
+
+        source = inspect.getsource(monitoring.realtime_monitoring_websocket)
+        # Should preserve connection management
+        self.assertIn("ws_manager", source)
+        # Should preserve message handling
+        self.assertIn("receive_text", source)
+        self.assertIn("send_text", source)
+        # Should preserve command handling
+        self.assertIn("command.get", source)
+
+    def test_batch_109_websocket_endpoint_error_handling_pattern(self):
+        """Verify WebSocket endpoint follows correct error handling pattern"""
+        from backend.api import monitoring
+
+        source = inspect.getsource(monitoring.realtime_monitoring_websocket)
+        # Should have decorator at top level
+        self.assertIn("@with_error_handling", source)
+        # Should preserve WebSocket-specific error handling
+        self.assertIn("WebSocketDisconnect", source)
+        # Should have connection cleanup
+        self.assertIn("disconnect", source)
+
+
 if __name__ == "__main__":
     unittest.main()
