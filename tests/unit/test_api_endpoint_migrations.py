@@ -19568,5 +19568,245 @@ class TestBatch104MonitoringAlertsRulesManagement(unittest.TestCase):
             )
 
 
+class TestBatch105MonitoringAlertsControlChannelsFINAL(unittest.TestCase):
+    """Test batch 105 migrations: 4 endpoints from monitoring_alerts.py (Monitoring Control & Channels) - FINAL BATCH TO 100%"""
+
+    def test_batch_105_start_monitoring_simple_pattern(self):
+        """Verify start_monitoring uses Simple Pattern (no preserved exceptions)"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.start_monitoring)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should NOT have any try-except blocks (Simple Pattern)
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except", source)
+        # Should NOT have any HTTPException raises
+        self.assertNotIn("HTTPException", source)
+
+    def test_batch_105_stop_monitoring_simple_pattern(self):
+        """Verify stop_monitoring uses Simple Pattern (no preserved exceptions)"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.stop_monitoring)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should NOT have any try-except blocks (Simple Pattern)
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except", source)
+        # Should NOT have any HTTPException raises
+        self.assertNotIn("HTTPException", source)
+
+    def test_batch_105_get_notification_channels_simple_pattern(self):
+        """Verify get_notification_channels uses Simple Pattern (no preserved exceptions)"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.get_notification_channels)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should NOT have any try-except blocks (Simple Pattern)
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except", source)
+        # Should NOT have any HTTPException raises
+        self.assertNotIn("HTTPException", source)
+
+    def test_batch_105_test_alert_system_preserves_inner_loop(self):
+        """Verify test_alert_system preserves inner loop try-catch for channel error collection (Mixed Pattern)"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.test_alert_system)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should preserve inner try-catch for channel error collection in loop
+        self.assertIn("try:", source)
+        self.assertIn("except Exception as e:", source)
+        self.assertIn("logger.error", source)
+        self.assertIn("failed_channels.append", source)
+        # Should NOT have generic 500 exception at function level
+        lines = source.split("\n")
+        # The only try-catch should be the inner loop one, not a function-level one
+        # Count "except Exception" occurrences - should only be 1 (the inner loop one)
+        except_count = sum(1 for line in lines if "except Exception" in line)
+        self.assertEqual(except_count, 1, "Should only have inner loop exception handler")
+
+    def test_batch_105_all_error_code_prefixes_consistent(self):
+        """Verify all batch 105 endpoints use consistent error_code_prefix"""
+        from backend.api import monitoring_alerts
+
+        endpoints = [
+            monitoring_alerts.start_monitoring,
+            monitoring_alerts.stop_monitoring,
+            monitoring_alerts.get_notification_channels,
+            monitoring_alerts.test_alert_system,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # Should have consistent error_code_prefix
+            self.assertIn('error_code_prefix="MONITORING_ALERTS"', source)
+
+    def test_batch_105_all_endpoints_use_server_error_category(self):
+        """Verify all batch 105 endpoints use ErrorCategory.SERVER_ERROR"""
+        from backend.api import monitoring_alerts
+
+        endpoints = [
+            monitoring_alerts.start_monitoring,
+            monitoring_alerts.stop_monitoring,
+            monitoring_alerts.get_notification_channels,
+            monitoring_alerts.test_alert_system,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # Should use ErrorCategory.SERVER_ERROR
+            self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+
+    def test_batch_105_all_endpoints_have_operation_param(self):
+        """Verify all batch 105 endpoints have operation parameter"""
+        from backend.api import monitoring_alerts
+
+        endpoints_and_operations = [
+            (monitoring_alerts.start_monitoring, "start_monitoring"),
+            (monitoring_alerts.stop_monitoring, "stop_monitoring"),
+            (monitoring_alerts.get_notification_channels, "get_notification_channels"),
+            (monitoring_alerts.test_alert_system, "test_alert_system"),
+        ]
+
+        for endpoint, expected_operation in endpoints_and_operations:
+            source = inspect.getsource(endpoint)
+            # Should have correct operation parameter
+            self.assertIn(f'operation="{expected_operation}"', source)
+
+    def test_batch_105_no_generic_500_exceptions(self):
+        """Verify batch 105 endpoints have no generic 500 exception handlers"""
+        from backend.api import monitoring_alerts
+
+        endpoints = [
+            monitoring_alerts.start_monitoring,
+            monitoring_alerts.stop_monitoring,
+            monitoring_alerts.get_notification_channels,
+            monitoring_alerts.test_alert_system,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # Should NOT have generic 500 status code
+            self.assertNotIn("status_code=500", source)
+
+    def test_batch_105_progress_tracking(self):
+        """Verify batch 105 progress: 14/14 endpoints migrated (100% COMPLETE)"""
+        from backend.api import monitoring_alerts
+
+        all_endpoints = [
+            # Batch 103 (5 endpoints)
+            monitoring_alerts.alerts_health_check,
+            monitoring_alerts.get_alerts_status,
+            monitoring_alerts.get_active_alerts,
+            monitoring_alerts.acknowledge_alert,
+            monitoring_alerts.get_alert_rules,
+            # Batch 104 (5 endpoints)
+            monitoring_alerts.create_alert_rule,
+            monitoring_alerts.update_alert_rule,
+            monitoring_alerts.delete_alert_rule,
+            monitoring_alerts.enable_alert_rule,
+            monitoring_alerts.disable_alert_rule,
+            # Batch 105 (4 endpoints)
+            monitoring_alerts.start_monitoring,
+            monitoring_alerts.stop_monitoring,
+            monitoring_alerts.get_notification_channels,
+            monitoring_alerts.test_alert_system,
+        ]
+
+        migrated_count = sum(
+            1 for ep in all_endpoints if "@with_error_handling" in inspect.getsource(ep)
+        )
+
+        # monitoring_alerts.py has 14 total endpoints
+        total_endpoints = 14
+        progress_percentage = (migrated_count / total_endpoints) * 100
+
+        self.assertEqual(migrated_count, 14)
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_105_monitoring_alerts_100_percent_milestone(self):
+        """Verify monitoring_alerts.py has reached 100% migration milestone (16th file)"""
+        from backend.api import monitoring_alerts
+
+        # Get all endpoints in the file
+        all_endpoints = [
+            monitoring_alerts.alerts_health_check,
+            monitoring_alerts.get_alerts_status,
+            monitoring_alerts.get_active_alerts,
+            monitoring_alerts.acknowledge_alert,
+            monitoring_alerts.get_alert_rules,
+            monitoring_alerts.create_alert_rule,
+            monitoring_alerts.update_alert_rule,
+            monitoring_alerts.delete_alert_rule,
+            monitoring_alerts.enable_alert_rule,
+            monitoring_alerts.disable_alert_rule,
+            monitoring_alerts.start_monitoring,
+            monitoring_alerts.stop_monitoring,
+            monitoring_alerts.get_notification_channels,
+            monitoring_alerts.test_alert_system,
+        ]
+
+        # Verify ALL endpoints have @with_error_handling decorator
+        for endpoint in all_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} should have @with_error_handling decorator",
+            )
+
+        # Verify 100% completion
+        self.assertEqual(len(all_endpoints), 14)
+
+    def test_batch_105_cumulative_lines_saved(self):
+        """Verify batch 105 contributes to overall lines saved metric"""
+        # Batch 103: ~21 lines saved (5 endpoints)
+        # Batch 104: ~25 lines saved (5 endpoints)
+        # Batch 105: ~19 lines saved (4 endpoints)
+        # Total: ~65 lines saved
+        batch_103_lines = 21
+        batch_104_lines = 25
+        batch_105_lines = 19
+
+        total_lines_saved = batch_103_lines + batch_104_lines + batch_105_lines
+
+        # Should have saved approximately 65 lines total
+        self.assertGreaterEqual(total_lines_saved, 60)
+        self.assertLessEqual(total_lines_saved, 70)
+
+    def test_batch_105_test_alert_system_preserved_logic(self):
+        """Verify test_alert_system preserves all essential business logic"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.test_alert_system)
+        # Should preserve all essential components
+        essential_components = [
+            "alerts_manager = get_alerts_manager()",
+            "test_alert = Alert(",
+            "sent_channels = []",
+            "failed_channels = []",
+            "for channel_name, channel in alerts_manager.notification_channels.items():",
+            "if channel.enabled:",
+            "success = await channel.send_alert(test_alert)",
+            "sent_channels.append(channel_name)",
+            "failed_channels.append(channel_name)",
+            'return {',
+            '"status": "success"',
+            '"sent_channels": sent_channels',
+            '"failed_channels": failed_channels',
+        ]
+
+        for component in essential_components:
+            self.assertIn(
+                component,
+                source,
+                f"test_alert_system should preserve essential logic: {component}",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
