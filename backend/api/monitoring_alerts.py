@@ -465,119 +465,119 @@ async def disable_alert_rule(rule_id: str):
 
 
 @router.post("/monitoring/start")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_monitoring",
+    error_code_prefix="MONITORING_ALERTS",
+)
 async def start_monitoring(background_tasks: BackgroundTasks):
     """Start the monitoring system"""
-    try:
-        alerts_manager = get_alerts_manager()
+    alerts_manager = get_alerts_manager()
 
-        if alerts_manager.running:
-            return {
-                "status": "already_running",
-                "message": "Monitoring system is already active",
-                "timestamp": datetime.now().isoformat(),
-            }
-
-        # Start monitoring in background
-        background_tasks.add_task(alerts_manager.start_monitoring)
-
+    if alerts_manager.running:
         return {
-            "status": "success",
-            "message": "Monitoring system started",
+            "status": "already_running",
+            "message": "Monitoring system is already active",
             "timestamp": datetime.now().isoformat(),
         }
 
-    except Exception as e:
-        logger.error(f"Error starting monitoring: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # Start monitoring in background
+    background_tasks.add_task(alerts_manager.start_monitoring)
+
+    return {
+        "status": "success",
+        "message": "Monitoring system started",
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.post("/monitoring/stop")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_monitoring",
+    error_code_prefix="MONITORING_ALERTS",
+)
 async def stop_monitoring():
     """Stop the monitoring system"""
-    try:
-        alerts_manager = get_alerts_manager()
-        alerts_manager.stop_monitoring()
+    alerts_manager = get_alerts_manager()
+    alerts_manager.stop_monitoring()
 
-        return {
-            "status": "success",
-            "message": "Monitoring system stopped",
-            "timestamp": datetime.now().isoformat(),
-        }
-
-    except Exception as e:
-        logger.error(f"Error stopping monitoring: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "success",
+        "message": "Monitoring system stopped",
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.get("/channels")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_notification_channels",
+    error_code_prefix="MONITORING_ALERTS",
+)
 async def get_notification_channels():
     """Get all notification channels"""
-    try:
-        alerts_manager = get_alerts_manager()
+    alerts_manager = get_alerts_manager()
 
-        channels_info = []
-        for name, channel in alerts_manager.notification_channels.items():
-            channels_info.append(
-                {
-                    "name": name,
-                    "type": channel.__class__.__name__,
-                    "enabled": channel.enabled,
-                    "config": getattr(channel, "config", {}),
-                }
-            )
+    channels_info = []
+    for name, channel in alerts_manager.notification_channels.items():
+        channels_info.append(
+            {
+                "name": name,
+                "type": channel.__class__.__name__,
+                "enabled": channel.enabled,
+                "config": getattr(channel, "config", {}),
+            }
+        )
 
-        return {"channels": channels_info, "timestamp": datetime.now().isoformat()}
-
-    except Exception as e:
-        logger.error(f"Error getting notification channels: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"channels": channels_info, "timestamp": datetime.now().isoformat()}
 
 
 @router.post("/test-alert")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_alert_system",
+    error_code_prefix="MONITORING_ALERTS",
+)
 async def test_alert_system():
     """Send a test alert through all notification channels"""
-    try:
-        alerts_manager = get_alerts_manager()
+    alerts_manager = get_alerts_manager()
 
-        # Create a test alert
-        test_alert = Alert(
-            rule_id="test_alert",
-            rule_name="Test Alert",
-            metric_path="test.metric",
-            current_value=99.0,
-            threshold=80.0,
-            severity=AlertSeverity.MEDIUM,
-            status=AlertStatus.ACTIVE,
-            message="This is a test alert to verify notification channels are working",
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
-            tags=["test", "verification"],
-        )
+    # Create a test alert
+    test_alert = Alert(
+        rule_id="test_alert",
+        rule_name="Test Alert",
+        metric_path="test.metric",
+        current_value=99.0,
+        threshold=80.0,
+        severity=AlertSeverity.MEDIUM,
+        status=AlertStatus.ACTIVE,
+        message="This is a test alert to verify notification channels are working",
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+        tags=["test", "verification"],
+    )
 
-        # Send through all enabled channels
-        sent_channels = []
-        failed_channels = []
+    # Send through all enabled channels
+    sent_channels = []
+    failed_channels = []
 
-        for channel_name, channel in alerts_manager.notification_channels.items():
-            if channel.enabled:
-                try:
-                    success = await channel.send_alert(test_alert)
-                    if success:
-                        sent_channels.append(channel_name)
-                    else:
-                        failed_channels.append(channel_name)
-                except Exception as e:
-                    logger.error(f"Test alert failed on {channel_name}: {e}")
+    for channel_name, channel in alerts_manager.notification_channels.items():
+        if channel.enabled:
+            try:
+                success = await channel.send_alert(test_alert)
+                if success:
+                    sent_channels.append(channel_name)
+                else:
                     failed_channels.append(channel_name)
+            except Exception as e:
+                logger.error(f"Test alert failed on {channel_name}: {e}")
+                failed_channels.append(channel_name)
 
-        return {
-            "status": "success",
-            "message": "Test alert sent",
-            "sent_channels": sent_channels,
-            "failed_channels": failed_channels,
-            "timestamp": datetime.now().isoformat(),
-        }
-
-    except Exception as e:
-        logger.error(f"Error sending test alert: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "success",
+        "message": "Test alert sent",
+        "sent_channels": sent_channels,
+        "failed_channels": failed_channels,
+        "timestamp": datetime.now().isoformat(),
+    }
