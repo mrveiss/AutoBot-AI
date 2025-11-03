@@ -35,10 +35,12 @@
     </div>
 
     <!-- Empty State -->
-    <div v-else-if="failedJobs.length === 0" class="empty-state">
-      <i class="fas fa-check-circle"></i>
-      <p>No failed vectorizations!</p>
-    </div>
+    <EmptyState
+      v-else-if="failedJobs.length === 0"
+      icon="fas fa-check-circle"
+      message="No failed vectorizations!"
+      variant="success"
+    />
 
     <!-- Failed Jobs List -->
     <div v-else class="failed-jobs-list">
@@ -89,6 +91,7 @@ import { ref, onMounted } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatDateTime } from '@/utils/formatHelpers'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 interface FailedJob {
   job_id: string
@@ -291,16 +294,14 @@ onMounted(() => {
 }
 
 .loading-state,
-.error-state,
-.empty-state {
+.error-state {
   text-align: center;
   padding: 3rem 1rem;
   color: #6b7280;
 }
 
 .loading-state i,
-.error-state i,
-.empty-state i {
+.error-state i {
   font-size: 3rem;
   margin-bottom: 1rem;
   display: block;
@@ -308,10 +309,6 @@ onMounted(() => {
 
 .error-state {
   color: #dc2626;
-}
-
-.empty-state {
-  color: #10b981;
 }
 
 .failed-jobs-list {

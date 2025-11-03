@@ -57,14 +57,18 @@
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="workers.length === 0" class="empty-state">
-        <i class="fas fa-server text-4xl text-gray-400"></i>
-        <p class="text-gray-600 mt-4">No NPU workers registered</p>
-        <button @click="showAddWorkerDialog = true" class="btn-secondary mt-4">
-          <i class="fas fa-plus mr-2"></i>
-          Add Your First Worker
-        </button>
-      </div>
+      <EmptyState
+        v-else-if="workers.length === 0"
+        icon="fas fa-server"
+        message="No NPU workers registered"
+      >
+        <template #actions>
+          <button @click="showAddWorkerDialog = true" class="btn-secondary mt-4">
+            <i class="fas fa-plus mr-2"></i>
+            Add Your First Worker
+          </button>
+        </template>
+      </EmptyState>
 
       <!-- Workers Table -->
       <div v-else class="workers-table-container">
@@ -380,6 +384,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { NetworkConstants } from '@/constants/network-constants.js'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 // ===== TYPE DEFINITIONS =====
 
@@ -1203,8 +1208,8 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-/* Loading & Empty States */
-.loading-state, .empty-state {
+/* Loading State */
+.loading-state {
   display: flex;
   flex-direction: column;
   align-items: center;

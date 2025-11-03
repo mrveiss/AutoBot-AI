@@ -99,10 +99,11 @@
           </div>
 
           <!-- Empty state -->
-          <div v-if="store.sessions.length === 0" class="text-center py-3 text-blueGray-500">
-            <i class="fas fa-comments text-xl mb-1 opacity-50"></i>
-            <p class="text-xs">No chat sessions yet</p>
-          </div>
+          <EmptyState
+            v-if="store.sessions.length === 0"
+            icon="fas fa-comments"
+            message="No chat sessions yet"
+          />
         </div>
 
         <!-- Chat Actions - FIXED: More compact, stays at bottom of scrollable area -->
@@ -247,6 +248,7 @@ import DeleteConversationDialog from './DeleteConversationDialog.vue'
 import type { FileStats } from '@/composables/useConversationFiles'
 import ApiClient from '@/utils/ApiClient.js'
 import { formatDate } from '@/utils/formatHelpers'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 const store = useChatStore()
 const controller = useChatController()

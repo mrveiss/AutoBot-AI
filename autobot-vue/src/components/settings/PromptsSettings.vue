@@ -18,14 +18,17 @@
     </div>
 
     <!-- No Prompts Message -->
-    <div v-if="!promptsSettings.list || promptsSettings.list.length === 0" class="no-prompts">
-      <p>
-        No prompts available.
-        <button @click="$emit('load-prompts')" aria-label="Load prompts">
+    <EmptyState
+      v-if="!promptsSettings.list || promptsSettings.list.length === 0"
+      icon="fas fa-file-code"
+      message="No prompts available."
+    >
+      <template #actions>
+        <button @click="$emit('load-prompts')" aria-label="Load prompts" class="btn-primary">
           Load Prompts
         </button>
-      </p>
-    </div>
+      </template>
+    </EmptyState>
 
     <!-- Prompt Editor -->
     <div
@@ -69,6 +72,8 @@
 </template>
 
 <script setup lang="ts">
+import EmptyState from '@/components/ui/EmptyState.vue'
+
 interface Prompt {
   id: string
   name?: string
@@ -174,31 +179,6 @@ const clearSelectedPrompt = () => {
 }
 
 .prompt-item button:hover {
-  background: #005999;
-}
-
-.no-prompts {
-  text-align: center;
-  padding: 40px 20px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  color: #6c757d;
-  margin-bottom: 20px;
-}
-
-.no-prompts button {
-  background: #007acc;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  margin-left: 8px;
-  transition: background-color 0.2s ease;
-}
-
-.no-prompts button:hover {
   background: #005999;
 }
 
@@ -329,11 +309,6 @@ const clearSelectedPrompt = () => {
   }
 
   .prompt-item p {
-    color: #cccccc;
-  }
-
-  .no-prompts {
-    background: #383838;
     color: #cccccc;
   }
 

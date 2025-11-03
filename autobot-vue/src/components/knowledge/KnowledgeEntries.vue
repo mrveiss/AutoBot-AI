@@ -109,13 +109,12 @@
       <p>Loading entries...</p>
     </div>
 
-    <div v-else-if="filteredDocuments.length === 0" class="empty-state">
-      <i class="fas fa-file-alt empty-icon"></i>
-      <p>No entries found</p>
-      <p class="empty-hint">
-        {{ searchQuery || filterCategory || filterType ? 'Try adjusting your filters' : 'Add your first knowledge entry' }}
-      </p>
-    </div>
+    <EmptyState
+      v-else-if="filteredDocuments.length === 0"
+      icon="fas fa-file-alt"
+      title="No entries found"
+      :message="searchQuery || filterCategory || filterType ? 'Try adjusting your filters' : 'Add your first knowledge entry'"
+    />
 
     <div v-else class="entries-table">
       <table>
@@ -356,6 +355,7 @@ import ManPageManager from '@/components/ManPageManager.vue'
 import FailedVectorizationsManager from '@/components/knowledge/FailedVectorizationsManager.vue'
 import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vue'
 import { formatDate, formatDateTime } from '@/utils/formatHelpers'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
@@ -752,17 +752,10 @@ watch([searchQuery, filterCategory, filterType], () => {
 }
 
 /* Loading and empty states */
-.loading-state,
-.empty-state {
+.loading-state {
   text-align: center;
   padding: 3rem;
   color: #6b7280;
-}
-
-.empty-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
 }
 
 /* Table styles */

@@ -1,27 +1,12 @@
 <template>
-  <Teleport to="body">
-    <div
-      v-if="visible"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
-      @click.self="handleCancel"
-    >
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden" @click.stop>
-        <!-- Header -->
-        <div class="flex items-center justify-between p-4 border-b border-gray-200 bg-red-50">
-          <div class="flex items-center gap-2">
-            <i class="fas fa-trash text-red-600"></i>
-            <h3 class="text-lg font-semibold text-gray-900">Delete Conversation</h3>
-          </div>
-          <button
-            @click="handleCancel"
-            class="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded"
-            title="Close"
-          >
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-
-        <!-- Content -->
+  <BaseModal
+    :model-value="visible"
+    title="Delete Conversation"
+    size="small"
+    @update:model-value="$emit('update:visible', $event)"
+    @close="handleCancel"
+  >
+    <template #default>
         <div class="p-4 space-y-4">
           <!-- Warning Message -->
           <div class="flex items-start gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -176,35 +161,34 @@
             </ul>
           </div>
         </div>
+    </template>
 
-        <!-- Footer Actions -->
-        <div class="flex justify-end gap-3 p-4 border-t border-gray-200 bg-gray-50">
-          <button
-            @click="handleCancel"
-            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-            :disabled="isDeleting"
-          >
-            Cancel
-          </button>
-          <button
-            @click="handleConfirm"
-            class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex items-center gap-2"
-            :disabled="isDeleting"
-          >
-            <i v-if="isDeleting" class="fas fa-spinner fa-spin"></i>
-            <i v-else class="fas fa-trash"></i>
-            {{ isDeleting ? 'Deleting...' : 'Delete Conversation' }}
-          </button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+    <template #actions>
+      <button
+        @click="handleCancel"
+        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        :disabled="isDeleting"
+      >
+        Cancel
+      </button>
+      <button
+        @click="handleConfirm"
+        class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex items-center gap-2"
+        :disabled="isDeleting"
+      >
+        <i v-if="isDeleting" class="fas fa-spinner fa-spin"></i>
+        <i v-else class="fas fa-trash"></i>
+        {{ isDeleting ? 'Deleting...' : 'Delete Conversation' }}
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { FileStats } from '@/composables/useConversationFiles'
 import { formatFileSize } from '@/utils/formatHelpers'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -295,34 +279,5 @@ input[type="radio"] {
 
 input[type="radio"]:checked {
   @apply accent-indigo-600;
-}
-
-/* Animation for dialog */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.fixed.inset-0 {
-  animation: fadeIn 0.2s ease-out;
-}
-
-.bg-white.rounded-lg {
-  animation: slideUp 0.3s ease-out;
 }
 </style>

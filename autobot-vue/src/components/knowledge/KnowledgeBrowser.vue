@@ -135,10 +135,11 @@
         </div>
 
         <div v-else class="tree-container">
-          <div v-if="filteredTree.length === 0" class="empty-state">
-            <i class="fas fa-folder-open"></i>
-            <p>No items found</p>
-          </div>
+          <EmptyState
+            v-if="filteredTree.length === 0"
+            icon="fas fa-folder-open"
+            message="No items found"
+          />
           <TreeNodeComponent
             v-for="node in filteredTree"
             :key="node.id"
@@ -221,6 +222,7 @@ import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
 import TreeNodeComponent, { type TreeNode } from './TreeNodeComponent.vue'
 import VectorizationProgressModal from './VectorizationProgressModal.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 // Use the shared composables
 const {
@@ -1455,7 +1457,6 @@ watch(() => props.mode, () => {
 /* States */
 .loading-state,
 .error-state,
-.empty-state,
 .placeholder-state {
   display: flex;
   flex-direction: column;
@@ -1468,7 +1469,6 @@ watch(() => props.mode, () => {
 
 .loading-state i,
 .error-state i,
-.empty-state i,
 .placeholder-state i {
   font-size: 3rem;
   margin-bottom: 1rem;

@@ -63,12 +63,17 @@
     <div class="secrets-list">
       <div v-if="loading" class="loading-spinner">Loading secrets...</div>
       
-      <div v-else-if="filteredSecrets.length === 0" class="no-secrets">
-        <p>No secrets found matching your criteria.</p>
-        <button @click="showCreateModal = true" class="btn-primary">
-          Create your first secret
-        </button>
-      </div>
+      <EmptyState
+        v-else-if="filteredSecrets.length === 0"
+        icon="fas fa-key"
+        message="No secrets found matching your criteria."
+      >
+        <template #actions>
+          <button @click="showCreateModal = true" class="btn-primary">
+            Create your first secret
+          </button>
+        </template>
+      </EmptyState>
 
       <div v-else class="secrets-grid">
         <div 
@@ -324,9 +329,13 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { secretsApiClient } from '../utils/SecretsApiClient';
 import { useAppStore } from '../stores/useAppStore.ts';
 import { formatDateTime } from '@/utils/formatHelpers';
+import EmptyState from '@/components/ui/EmptyState.vue';
 
 export default {
   name: 'SecretsManager',
+  components: {
+    EmptyState
+  },
   setup() {
     // State
     const secrets = ref([]);
@@ -744,13 +753,6 @@ export default {
   text-align: center;
   padding: 50px;
   color: #666;
-}
-
-.no-secrets {
-  text-align: center;
-  padding: 50px;
-  background: #f8f9fa;
-  border-radius: 8px;
 }
 
 .secrets-grid {

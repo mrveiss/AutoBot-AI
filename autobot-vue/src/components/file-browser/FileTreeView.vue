@@ -40,15 +40,18 @@
         </div>
       </div>
 
-      <div v-if="directoryTree.length === 0" class="empty-tree">
-        <i class="fas fa-folder-open"></i>
-        <p>No directory structure available</p>
-      </div>
+      <EmptyState
+        v-if="directoryTree.length === 0"
+        icon="fas fa-folder-open"
+        message="No directory structure available"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import EmptyState from '@/components/ui/EmptyState.vue'
+
 interface TreeItem {
   name: string
   path: string
@@ -158,17 +161,5 @@ const getFileIcon = (item: TreeItem): string => {
 
 .tree-label {
   @apply text-sm truncate;
-}
-
-.empty-tree {
-  @apply text-center py-8 text-gray-500;
-}
-
-.empty-tree i {
-  @apply block text-2xl mb-2 text-gray-300;
-}
-
-.empty-tree p {
-  @apply text-sm;
 }
 </style>

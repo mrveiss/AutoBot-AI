@@ -157,7 +157,7 @@
             <i class="fas fa-cloud-upload-alt drop-icon"></i>
             <p class="drop-text">
               Drag and drop files here or
-              <button @click="$refs.fileInput.click()" class="browse-btn">browse</button>
+              <button @click="fileInput?.click()" class="browse-btn">browse</button>
             </p>
             <p class="drop-hint">
               Supported: TXT, MD, PDF, DOC, DOCX, JSON, CSV (max 10MB)
@@ -167,7 +167,7 @@
           <div v-if="selectedFiles.length > 0" class="selected-files">
             <h5>Selected Files:</h5>
             <div v-for="(file, index) in selectedFiles" :key="index" class="file-item">
-              <i :class="getFileIcon(file.type)"></i>
+              <i :class="getFileIcon(file.name, false)"></i>
               <span class="file-name">{{ file.name }}</span>
               <span class="file-size">({{ formatFileSize(file.size) }})</span>
               <button @click="removeFile(index)" class="remove-file-btn">
@@ -242,9 +242,15 @@ import { ref, reactive, onMounted } from 'vue'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import { formatFileSize } from '@/utils/formatHelpers'
+import { parseTags } from '@/utils/tagHelpers'
+import { resetFormFields } from '@/utils/formHelpers'
+import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import { useUploadProgress } from '@/composables/useUploadProgress'
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
+const { getFileIcon } = useKnowledgeBase()
+const { progress: uploadProgress, startProgress, updateProgress, completeProgress, hideProgress, simulateProgress, updateFileProgress } = useUploadProgress()
 
 // Form states
 const textEntry = reactive({
@@ -269,16 +275,11 @@ const fileEntry = reactive({
 const isSubmitting = ref(false)
 const isDragging = ref(false)
 const selectedFiles = ref<File[]>([])
-const fileInput = ref<HTMLInputElement>()
+const fileInput = ref<HTMLInputElement | null>(null)
 const successMessage = ref('')
 const errorMessage = ref('')
 
-const uploadProgress = reactive({
-  show: false,
-  title: '',
-  percentage: 0,
-  status: ''
-})
+// uploadProgress now provided by useUploadProgress() composable
 
 // Methods
 const addTextEntry = async () => {
@@ -289,10 +290,7 @@ const addTextEntry = async () => {
   successMessage.value = ''
 
   try {
-    const tags = textEntry.tagsInput
-      .split(',')
-      .map(tag => tag.trim())
-      .filter(tag => tag.length > 0)
+    const tags = parseTags(textEntry.tagsInput)
 
     await controller.addTextDocument(
       textEntry.content,
@@ -304,10 +302,7 @@ const addTextEntry = async () => {
     successMessage.value = 'Text entry added successfully!'
 
     // Reset form
-    textEntry.title = ''
-    textEntry.content = ''
-    textEntry.category = ''
-    textEntry.tagsInput = ''
+    resetFormFields(textEntry)
 
     setTimeout(() => {
       successMessage.value = ''
@@ -327,23 +322,13 @@ const importFromUrl = async () => {
   errorMessage.value = ''
   successMessage.value = ''
 
-  uploadProgress.show = true
-  uploadProgress.title = 'Importing from URL'
-  uploadProgress.percentage = 0
-  uploadProgress.status = 'Fetching content...'
+  startProgress('Importing from URL', 'Fetching content...')
 
   try {
-    const tags = urlEntry.tagsInput
-      .split(',')
-      .map(tag => tag.trim())
-      .filter(tag => tag.length > 0)
+    const tags = parseTags(urlEntry.tagsInput)
 
-    // Simulate progress
-    const progressInterval = setInterval(() => {
-      if (uploadProgress.percentage < 90) {
-        uploadProgress.percentage += 10
-      }
-    }, 200)
+    // Simulate progress (auto-increment to 90%)
+    const progressInterval = simulateProgress(90, 10, 200)
 
     await controller.addUrlDocument(
       urlEntry.url,
@@ -352,24 +337,21 @@ const importFromUrl = async () => {
     )
 
     clearInterval(progressInterval)
-    uploadProgress.percentage = 100
-    uploadProgress.status = 'Import complete!'
+    completeProgress('Import complete!')
 
     successMessage.value = 'URL content imported successfully!'
 
     // Reset form
-    urlEntry.url = ''
-    urlEntry.category = ''
-    urlEntry.tagsInput = ''
+    resetFormFields(urlEntry)
 
     setTimeout(() => {
-      uploadProgress.show = false
+      hideProgress()
       successMessage.value = ''
     }, 3000)
 
   } catch (error: any) {
     errorMessage.value = error.message || 'Failed to import URL'
-    uploadProgress.show = false
+    hideProgress()
   } finally {
     isSubmitting.value = false
   }
@@ -419,20 +401,15 @@ const uploadFiles = async () => {
   errorMessage.value = ''
   successMessage.value = ''
 
-  uploadProgress.show = true
-  uploadProgress.title = 'Uploading files'
-  uploadProgress.percentage = 0
-  uploadProgress.status = `Uploading 0 of ${selectedFiles.value.length} files...`
+  startProgress('Uploading files', `Uploading 0 of ${selectedFiles.value.length} files...`)
 
   try {
-    const tags = fileEntry.tagsInput
-      .split(',')
-      .map(tag => tag.trim())
-      .filter(tag => tag.length > 0)
+    const tags = parseTags(fileEntry.tagsInput)
 
     let uploaded = 0
     for (const file of selectedFiles.value) {
-      uploadProgress.status = `Uploading ${file.name}...`
+      // Update progress with current file name
+      updateFileProgress(uploaded, selectedFiles.value.length, file.name)
 
       await controller.addFileDocument(
         file,
@@ -441,28 +418,27 @@ const uploadFiles = async () => {
       )
 
       uploaded++
-      uploadProgress.percentage = Math.round((uploaded / selectedFiles.value.length) * 100)
-      uploadProgress.status = `Uploaded ${uploaded} of ${selectedFiles.value.length} files`
+      // Update progress with uploaded count
+      updateFileProgress(uploaded, selectedFiles.value.length)
     }
 
     successMessage.value = `Successfully uploaded ${uploaded} file${uploaded > 1 ? 's' : ''}!`
 
     // Reset
     selectedFiles.value = []
-    fileEntry.category = ''
-    fileEntry.tagsInput = ''
+    resetFormFields(fileEntry)
     if (fileInput.value) {
       fileInput.value.value = ''
     }
 
     setTimeout(() => {
-      uploadProgress.show = false
+      hideProgress()
       successMessage.value = ''
     }, 3000)
 
   } catch (error: any) {
     errorMessage.value = error.message || 'Failed to upload files'
-    uploadProgress.show = false
+    hideProgress()
   } finally {
     isSubmitting.value = false
   }
@@ -479,15 +455,7 @@ const isValidUrl = (url: string): boolean => {
 }
 
 // NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
-
-const getFileIcon = (type: string): string => {
-  if (type.includes('pdf')) return 'fas fa-file-pdf'
-  if (type.includes('word') || type.includes('doc')) return 'fas fa-file-word'
-  if (type.includes('json')) return 'fas fa-file-code'
-  if (type.includes('csv')) return 'fas fa-file-csv'
-  if (type.includes('text') || type.includes('plain')) return 'fas fa-file-alt'
-  return 'fas fa-file'
-}
+// NOTE: getFileIcon removed - now using shared utility from @/composables/useKnowledgeBase
 
 // Load categories on mount
 onMounted(() => {
