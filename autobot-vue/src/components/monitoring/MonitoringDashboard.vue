@@ -92,7 +92,12 @@
                   <span class="metric-value">{{ gpuMetrics.power_draw_w }}W</span>
                 </div>
               </div>
-              <div v-else class="no-data">GPU not available</div>
+              <EmptyState
+                v-else
+                icon="fas fa-microchip"
+                message="GPU not available"
+                compact
+              />
             </div>
           </div>
         </div>
@@ -125,7 +130,12 @@
                   <span class="metric-value">{{ npuMetrics.average_inference_time_ms }}ms</span>
                 </div>
               </div>
-              <div v-else class="no-data">NPU not available</div>
+              <EmptyState
+                v-else
+                icon="fas fa-microchip"
+                message="NPU not available"
+                compact
+              />
             </div>
           </div>
         </div>
@@ -158,7 +168,12 @@
                   <span class="metric-value">{{ Math.round((systemMetrics.network?.bytes_sent || 0) / 1024 / 1024) }}MB sent</span>
                 </div>
               </div>
-              <div v-else class="no-data">System data unavailable</div>
+              <EmptyState
+                v-else
+                icon="fas fa-server"
+                message="System data unavailable"
+                compact
+              />
             </div>
           </div>
         </div>
@@ -326,11 +341,15 @@
 <script>
 import { Chart, registerables } from 'chart.js'
 import 'chartjs-adapter-date-fns'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 Chart.register(...registerables)
 
 export default {
   name: 'MonitoringDashboard',
+  components: {
+    EmptyState
+  },
   data() {
     return {
       loading: false,
@@ -1039,13 +1058,6 @@ export default {
 .metric-value {
   font-weight: 600;
   color: #333;
-}
-
-.no-data {
-  color: #999;
-  font-style: italic;
-  text-align: center;
-  margin-top: 20px;
 }
 
 .performance-charts {
