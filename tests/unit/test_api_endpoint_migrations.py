@@ -20575,5 +20575,225 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("session_manager.session_configs", source3)
 
 
+
+    # ==============================================
+    # BATCH 111: auth.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_111_login_mixed_pattern(self):
+        """Verify login endpoint uses Mixed Pattern"""
+        from backend.api import auth
+
+        source = inspect.getsource(auth.login)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="login"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="AUTH"', source)
+        # Mixed Pattern - should preserve try-except for HTTPException handling
+        self.assertIn("try:", source)
+        self.assertIn("except HTTPException:", source)
+        self.assertIn("raise", source)
+
+    def test_batch_111_logout_mixed_pattern(self):
+        """Verify logout endpoint uses Mixed Pattern"""
+        from backend.api import auth
+
+        source = inspect.getsource(auth.logout)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="logout"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="AUTH"', source)
+        # Mixed Pattern - should preserve try-except for error suppression
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+        # Should preserve "don't fail logout" behavior
+        self.assertIn("success", source)
+
+    def test_batch_111_get_current_user_info_mixed_pattern(self):
+        """Verify get_current_user_info endpoint uses Mixed Pattern"""
+        from backend.api import auth
+
+        source = inspect.getsource(auth.get_current_user_info)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="get_current_user_info"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="AUTH"', source)
+        # Mixed Pattern - should preserve try-except for HTTPException handling
+        self.assertIn("try:", source)
+        self.assertIn("except HTTPException:", source)
+        self.assertIn("raise", source)
+
+    def test_batch_111_check_authentication_mixed_pattern(self):
+        """Verify check_authentication endpoint uses Mixed Pattern"""
+        from backend.api import auth
+
+        source = inspect.getsource(auth.check_authentication)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="check_authentication"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="AUTH"', source)
+        # Mixed Pattern - should preserve try-except for error dict return
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+        # Should preserve error dict return behavior
+        self.assertIn("authenticated", source)
+        self.assertIn("error", source)
+
+    def test_batch_111_check_permission_mixed_pattern(self):
+        """Verify check_permission endpoint uses Mixed Pattern"""
+        from backend.api import auth
+
+        source = inspect.getsource(auth.check_permission)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="check_permission"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="AUTH"', source)
+        # Mixed Pattern - should preserve try-except for error dict return
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+        # Should preserve permission check behavior
+        self.assertIn("permitted", source)
+
+    def test_batch_111_change_password_simple_pattern(self):
+        """Verify change_password endpoint uses Simple Pattern"""
+        from backend.api import auth
+
+        source = inspect.getsource(auth.change_password)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="change_password"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="AUTH"', source)
+        # Simple Pattern - just raises HTTPException
+        self.assertIn("HTTPException", source)
+        self.assertIn("501", source)
+
+    def test_batch_111_all_auth_endpoints_have_decorator(self):
+        """Verify all auth endpoints have @with_error_handling decorator"""
+        from backend.api import auth
+
+        # List of all endpoint functions in auth.py
+        endpoint_functions = [
+            auth.login,
+            auth.logout,
+            auth.get_current_user_info,
+            auth.check_authentication,
+            auth.check_permission,
+            auth.change_password,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_111_auth_100_percent_milestone(self):
+        """Verify auth.py has reached 100% migration"""
+        from backend.api import auth
+
+        # List of all endpoint functions
+        endpoint_functions = [
+            auth.login,
+            auth.logout,
+            auth.get_current_user_info,
+            auth.check_authentication,
+            auth.check_permission,
+            auth.change_password,
+        ]
+
+        # Count endpoints with @with_error_handling
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        # auth.py has 6 total endpoints
+        total_endpoints = 6
+
+        # Should have migrated all endpoints
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_111_migration_preserves_authentication_logic(self):
+        """Verify migration preserves authentication logic"""
+        from backend.api import auth
+
+        # Check login preserves authentication flow
+        source_login = inspect.getsource(auth.login)
+        self.assertIn("authenticate_user", source_login)
+        self.assertIn("create_jwt_token", source_login)
+        self.assertIn("create_session", source_login)
+        self.assertIn("LoginResponse", source_login)
+
+        # Check get_current_user_info preserves user data retrieval
+        source_me = inspect.getsource(auth.get_current_user_info)
+        self.assertIn("get_user_from_request", source_me)
+        self.assertIn("username", source_me)
+        self.assertIn("role", source_me)
+
+    def test_batch_111_migration_preserves_security_behavior(self):
+        """Verify migration preserves security-critical behavior"""
+        from backend.api import auth
+
+        # Login should preserve HTTPException re-raise for 401
+        source_login = inspect.getsource(auth.login)
+        self.assertIn("except HTTPException:", source_login)
+        self.assertIn("raise", source_login)
+
+        # check_authentication should preserve error dict return (not raise)
+        source_check = inspect.getsource(auth.check_authentication)
+        self.assertIn("authenticated", source_check)
+        self.assertIn("False", source_check)
+        # Should return dict on error, not raise
+        self.assertIn("return", source_check)
+
+        # check_permission should preserve permission check logic
+        source_perm = inspect.getsource(auth.check_permission)
+        self.assertIn("check_file_permissions", source_perm)
+        self.assertIn("permitted", source_perm)
+
+    def test_batch_111_migration_preserves_logout_graceful_failure(self):
+        """Verify logout preserves graceful failure behavior"""
+        from backend.api import auth
+
+        source = inspect.getsource(auth.logout)
+        # Logout should ALWAYS return success, even on error
+        self.assertIn("success", source)
+        self.assertIn("True", source)
+        # Should have comment about not failing logout
+        self.assertIn("Don't fail logout", source)
+
 if __name__ == "__main__":
     unittest.main()
