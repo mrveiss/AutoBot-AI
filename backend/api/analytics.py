@@ -1310,6 +1310,11 @@ async def get_historical_trends(
 
 
 @router.websocket("/ws/realtime")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="websocket_realtime_analytics",
+    error_code_prefix="ANALYTICS",
+)
 async def websocket_realtime_analytics(websocket: WebSocket):
     """WebSocket endpoint for real-time analytics streaming"""
     await websocket.accept()
@@ -2105,6 +2110,11 @@ async def get_code_quality_score():
 
 
 @router.websocket("/ws/analytics/live")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="websocket_live_analytics",
+    error_code_prefix="ANALYTICS",
+)
 async def websocket_live_analytics(websocket: WebSocket):
     """Enhanced WebSocket endpoint for live analytics with multiple channels"""
     await websocket.accept()
