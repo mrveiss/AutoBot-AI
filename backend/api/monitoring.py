@@ -752,6 +752,11 @@ async def export_metrics(
 
 
 @router.websocket("/realtime")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="realtime_monitoring_websocket",
+    error_code_prefix="MONITORING",
+)
 async def realtime_monitoring_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time performance monitoring updates"""
     await ws_manager.connect(websocket)
