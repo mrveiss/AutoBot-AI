@@ -20118,5 +20118,190 @@ class TestBatch107KnowledgeCOMPLETE(unittest.TestCase):
         self.assertEqual(progress_percentage, 100.0)
 
 
+class TestBatch108AnalyticsCOMPLETE(unittest.TestCase):
+    """Test batch 108 migration: analytics.py completion (2 WebSocket endpoints - FINAL TO 100%)"""
+
+    def test_batch_108_websocket_realtime_analytics_mixed_pattern(self):
+        """Verify websocket_realtime_analytics uses Mixed Pattern (decorator + preserved try-catch)"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.websocket_realtime_analytics)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="websocket_realtime_analytics"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+        # Should STILL HAVE try-catch blocks (connection lifecycle management)
+        self.assertIn("try:", source)
+        self.assertIn("except", source)
+        # Should have finally block for cleanup
+        self.assertIn("finally:", source)
+        # Should have WebSocketDisconnect handling
+        self.assertIn("WebSocketDisconnect", source)
+
+    def test_batch_108_websocket_realtime_analytics_connection_cleanup(self):
+        """Verify websocket_realtime_analytics has proper connection cleanup"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.websocket_realtime_analytics)
+        # Should have cleanup in finally block
+        self.assertIn("finally:", source)
+        self.assertIn("discard", source)
+
+    def test_batch_108_websocket_live_analytics_mixed_pattern(self):
+        """Verify websocket_live_analytics uses Mixed Pattern (decorator + preserved try-catch)"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.websocket_live_analytics)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="websocket_live_analytics"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="ANALYTICS"', source)
+        # Should STILL HAVE try-catch blocks (connection lifecycle management)
+        self.assertIn("try:", source)
+        self.assertIn("except", source)
+        # Should have finally block for cleanup
+        self.assertIn("finally:", source)
+        # Should have WebSocketDisconnect handling
+        self.assertIn("WebSocketDisconnect", source)
+
+    def test_batch_108_websocket_live_analytics_connection_cleanup(self):
+        """Verify websocket_live_analytics has proper connection cleanup"""
+        from backend.api import analytics
+
+        source = inspect.getsource(analytics.websocket_live_analytics)
+        # Should have cleanup in finally block
+        self.assertIn("finally:", source)
+        self.assertIn("discard", source)
+
+    def test_batch_108_websocket_endpoints_have_decorator(self):
+        """Verify both WebSocket endpoints have @with_error_handling decorator"""
+        from backend.api import analytics
+
+        # Get both WebSocket endpoint functions
+        websocket_funcs = [
+            analytics.websocket_realtime_analytics,
+            analytics.websocket_live_analytics,
+        ]
+
+        for func in websocket_funcs:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{func.__name__} should have @with_error_handling decorator",
+            )
+
+    def test_batch_108_websocket_endpoints_preserve_lifecycle_management(self):
+        """Verify WebSocket endpoints preserve connection lifecycle management"""
+        from backend.api import analytics
+
+        websocket_funcs = [
+            analytics.websocket_realtime_analytics,
+            analytics.websocket_live_analytics,
+        ]
+
+        for func in websocket_funcs:
+            source = inspect.getsource(func)
+            # Should preserve try-catch-finally for connection lifecycle
+            self.assertIn(
+                "try:",
+                source,
+                f"{func.__name__} should preserve try block for connection lifecycle",
+            )
+            self.assertIn(
+                "except",
+                source,
+                f"{func.__name__} should preserve except block for error handling",
+            )
+            self.assertIn(
+                "finally:",
+                source,
+                f"{func.__name__} should preserve finally block for cleanup",
+            )
+
+    def test_batch_108_analytics_100_percent_milestone(self):
+        """Verify analytics.py has reached 100% migration (19th file to 100%)"""
+        from backend.api import analytics
+
+        # Get all endpoint functions (include WebSocket endpoints)
+        all_functions = [
+            obj
+            for name, obj in inspect.getmembers(analytics)
+            if inspect.isfunction(obj) and not name.startswith("_")
+        ]
+
+        # Filter to only route handler functions (decorated with @router)
+        endpoint_functions = []
+        for func in all_functions:
+            try:
+                source = inspect.getsource(func)
+                if "@router." in source:
+                    endpoint_functions.append(func)
+            except (OSError, TypeError):
+                continue
+
+        # Count those with @with_error_handling
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        # analytics.py has 28 total endpoints (including 2 WebSocket endpoints)
+        total_endpoints = 28
+
+        # Should have migrated all endpoints
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_108_migration_preserves_websocket_functionality(self):
+        """Verify WebSocket endpoints preserve key functionality after migration"""
+        from backend.api import analytics
+
+        # Check websocket_realtime_analytics
+        source1 = inspect.getsource(analytics.websocket_realtime_analytics)
+        self.assertIn("websocket.accept()", source1)
+        self.assertIn("websocket.send_json", source1)
+        self.assertIn("websocket_connections", source1)
+
+        # Check websocket_live_analytics
+        source2 = inspect.getsource(analytics.websocket_live_analytics)
+        self.assertIn("websocket.accept()", source2)
+        self.assertIn("websocket.send_json", source2)
+        self.assertIn("websocket_connections", source2)
+
+    def test_batch_108_websocket_endpoints_error_handling_pattern(self):
+        """Verify WebSocket endpoints follow correct error handling pattern for WebSocket connections"""
+        from backend.api import analytics
+
+        websocket_funcs = [
+            analytics.websocket_realtime_analytics,
+            analytics.websocket_live_analytics,
+        ]
+
+        for func in websocket_funcs:
+            source = inspect.getsource(func)
+            # Should have decorator at top level
+            self.assertIn("@with_error_handling", source)
+            # Should preserve WebSocket-specific error handling
+            self.assertIn("WebSocketDisconnect", source)
+            # Should have connection cleanup in finally block
+            self.assertIn("finally:", source)
+            self.assertIn("discard", source)
+
+
 if __name__ == "__main__":
     unittest.main()
