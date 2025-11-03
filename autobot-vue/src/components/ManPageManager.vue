@@ -285,10 +285,11 @@
       <div v-if="searchResults" class="search-results">
         <h4>Search Results for "{{ lastSearchQuery }}":</h4>
         
-        <div v-if="searchResults.length === 0" class="no-results">
-          <i class="fas fa-info-circle"></i>
-          No results found. Try different keywords like "network", "file", "process".
-        </div>
+        <EmptyState
+          v-if="searchResults.length === 0"
+          icon="fas fa-info-circle"
+          message='No results found. Try different keywords like "network", "file", "process".'
+        />
 
         <div v-else class="result-list">
           <div v-for="result in searchResults" :key="result.command" class="result-item">
@@ -318,9 +319,13 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import ApiClient from '../utils/ApiClient'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 export default {
   name: 'ManPageManager',
+  components: {
+    EmptyState
+  },
   setup() {
     // Use the shared composable
     const {
@@ -1008,14 +1013,6 @@ export default {
 .search-results h4 {
   margin-bottom: 20px;
   color: #2c3e50;
-}
-
-.no-results {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #7f8c8d;
-  font-style: italic;
 }
 
 .result-list {

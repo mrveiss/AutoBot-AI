@@ -4,13 +4,12 @@
     ref="messagesContainer"
     v-bind="$attrs"
   >
-    <div v-if="store.currentMessages.length === 0" class="empty-state">
-      <div class="text-center py-12">
-        <i class="fas fa-comments text-4xl text-gray-400 mb-4"></i>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">Start a conversation</h3>
-        <p class="text-gray-500">Send a message to begin chatting with the AI assistant.</p>
-      </div>
-    </div>
+    <EmptyState
+      v-if="store.currentMessages.length === 0"
+      icon="fas fa-comments"
+      title="Start a conversation"
+      message="Send a message to begin chatting with the AI assistant."
+    />
 
     <div v-else class="space-y-1">
       <div
@@ -375,6 +374,7 @@ import type { ChatMessage } from '@/stores/useChatStore'
 import MessageStatus from '@/components/ui/MessageStatus.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 import appConfig from '@/config/AppConfig.js'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 
@@ -878,13 +878,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.empty-state {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .message-wrapper {
   @apply rounded-lg shadow-sm border transition-all duration-200;
   max-width: 85%;

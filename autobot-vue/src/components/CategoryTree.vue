@@ -9,9 +9,11 @@
         </div>
       </div>
     </div>
-    <div v-else-if="Object.keys(categories).length === 0" class="empty-state">
-      <i class="fas fa-folder-open"></i> No categories available
-    </div>
+    <EmptyState
+      v-else-if="Object.keys(categories).length === 0"
+      icon="fas fa-folder-open"
+      message="No categories available"
+    />
     <template v-else>
       <CategoryTreeNode
         v-for="(node, key) in categories"
@@ -29,13 +31,15 @@
 <script>
 import { ref, onMounted, watch } from 'vue';
 import CategoryTreeNode from './CategoryTreeNode.vue';
+import EmptyState from '@/components/ui/EmptyState.vue';
 import apiClient from '../utils/ApiClient.js';
 import { useAsyncHandler } from '@/composables/useErrorHandler';
 
 export default {
   name: 'CategoryTree',
   components: {
-    CategoryTreeNode
+    CategoryTreeNode,
+    EmptyState
   },
   props: {
     modelValue: {
@@ -171,14 +175,4 @@ export default {
   }
 }
 
-.empty-state {
-  padding: 20px;
-  text-align: center;
-  color: #6c757d;
-  font-size: 14px;
-}
-
-.empty-state i {
-  margin-right: 8px;
-}
 </style>

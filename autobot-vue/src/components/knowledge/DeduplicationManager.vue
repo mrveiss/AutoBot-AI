@@ -91,10 +91,12 @@
             </button>
           </div>
         </div>
-        <div v-else class="empty-state">
-          <i class="fas fa-check-circle"></i>
-          <p>No duplicates found!</p>
-        </div>
+        <EmptyState
+          v-else
+          icon="fas fa-check-circle"
+          message="No duplicates found!"
+          variant="success"
+        />
       </div>
 
       <!-- Orphans Section -->
@@ -146,10 +148,12 @@
             </button>
           </div>
         </div>
-        <div v-else class="empty-state">
-          <i class="fas fa-check-circle"></i>
-          <p>No orphaned documents found!</p>
-        </div>
+        <EmptyState
+          v-else
+          icon="fas fa-check-circle"
+          message="No orphaned documents found!"
+          variant="success"
+        />
       </div>
     </div>
 
@@ -166,6 +170,7 @@ import { ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatDate } from '@/utils/formatHelpers'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 // Interfaces
 interface DuplicateGroup {
@@ -595,22 +600,5 @@ const cleanupOrphans = async () => {
 .btn-cleanup:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 2rem;
-  color: #10b981;
-}
-
-.empty-state i {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
-  display: block;
-}
-
-.empty-state p {
-  margin: 0;
-  color: #6b7280;
 }
 </style>

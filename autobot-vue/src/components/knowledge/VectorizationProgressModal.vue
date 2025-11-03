@@ -48,10 +48,11 @@
 
         <!-- Document List -->
         <div class="document-list">
-          <div v-if="documentList.length === 0" class="empty-state">
-            <i class="fas fa-inbox"></i>
-            <p>No documents being vectorized</p>
-          </div>
+          <EmptyState
+            v-if="documentList.length === 0"
+            icon="fas fa-inbox"
+            message="No documents being vectorized"
+          />
 
           <div
             v-for="doc in documentList"
@@ -128,6 +129,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import VectorizationStatusBadge from './VectorizationStatusBadge.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 interface DocumentState {
   documentId: string
@@ -344,21 +346,6 @@ const allCompleted = computed(() => {
   overflow-y: auto;
   padding: 1rem;
   max-height: 400px;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem;
-  color: #9ca3af;
-}
-
-.empty-state i {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
 }
 
 .document-item {

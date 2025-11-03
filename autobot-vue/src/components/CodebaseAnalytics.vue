@@ -73,11 +73,15 @@
               </div>
             </div>
           </div>
-          <div v-else class="empty-state">
-            <i class="fas fa-database"></i>
-            <p>No system metrics available</p>
-            <button @click="loadSystemOverview" class="btn-link">Load Metrics</button>
-          </div>
+          <EmptyState
+            v-else
+            icon="fas fa-database"
+            message="No system metrics available"
+          >
+            <template #actions>
+              <button @click="loadSystemOverview" class="btn-link">Load Metrics</button>
+            </template>
+          </EmptyState>
         </div>
       </div>
 
@@ -104,10 +108,11 @@
               <div class="pattern-value">{{ communicationPatterns.data_transfer_rate || 0 }} KB/s</div>
             </div>
           </div>
-          <div v-else class="empty-state">
-            <i class="fas fa-wifi"></i>
-            <p>No communication data</p>
-          </div>
+          <EmptyState
+            v-else
+            icon="fas fa-wifi"
+            message="No communication data"
+          />
         </div>
       </div>
 
@@ -140,10 +145,11 @@
               </div>
             </div>
           </div>
-          <div v-else class="empty-state">
-            <i class="fas fa-star"></i>
-            <p>No quality metrics</p>
-          </div>
+          <EmptyState
+            v-else
+            icon="fas fa-star"
+            message="No quality metrics"
+          />
         </div>
       </div>
 
@@ -176,10 +182,11 @@
               </div>
             </div>
           </div>
-          <div v-else class="empty-state">
-            <i class="fas fa-rocket"></i>
-            <p>No performance data</p>
-          </div>
+          <EmptyState
+            v-else
+            icon="fas fa-rocket"
+            message="No performance data"
+          />
         </div>
       </div>
     </div>
@@ -219,9 +226,11 @@
             <div class="stat-label">Classes</div>
           </div>
         </div>
-        <div v-else class="empty-state">
-          <p>No codebase statistics available. Run analysis to generate data.</p>
-        </div>
+        <EmptyState
+          v-else
+          icon="fas fa-chart-bar"
+          message="No codebase statistics available. Run analysis to generate data."
+        />
       </div>
 
       <!-- Problems Report -->
@@ -250,9 +259,12 @@
             </button>
           </div>
         </div>
-        <div v-else class="empty-state">
-          <p>No code problems detected or analysis not run yet.</p>
-        </div>
+        <EmptyState
+          v-else
+          icon="fas fa-check-circle"
+          message="No code problems detected or analysis not run yet."
+          variant="success"
+        />
       </div>
 
       <!-- Duplicate Code Analysis -->
@@ -274,9 +286,12 @@
             </div>
           </div>
         </div>
-        <div v-else class="empty-state">
-          <p>No duplicate code detected or analysis not run yet.</p>
-        </div>
+        <EmptyState
+          v-else
+          icon="fas fa-check-circle"
+          message="No duplicate code detected or analysis not run yet."
+          variant="success"
+        />
       </div>
 
       <!-- Function Declarations -->
@@ -293,9 +308,11 @@
             <div class="declaration-file">{{ declaration.file_path }}:{{ declaration.line_number }}</div>
           </div>
         </div>
-        <div v-else class="empty-state">
-          <p>No function declarations found or analysis not run yet.</p>
-        </div>
+        <EmptyState
+          v-else
+          icon="fas fa-function"
+          message="No function declarations found or analysis not run yet."
+        />
       </div>
     </div>
   </div>
@@ -304,6 +321,7 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import appConfig from '@/config/AppConfig.js'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 // Reactive data
 // FIXED: Fetch project root from backend config (no hardcoding)
@@ -1286,18 +1304,6 @@ const getQualityClass = (score) => {
 .quality-low, .efficiency-low {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
-}
-
-.empty-state {
-  text-align: center;
-  color: #6b7280;
-  padding: 24px;
-}
-
-.empty-state i {
-  font-size: 2em;
-  margin-bottom: 8px;
-  opacity: 0.5;
 }
 
 .btn-link {

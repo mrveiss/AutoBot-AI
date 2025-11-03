@@ -205,9 +205,11 @@
       </div>
 
       <!-- No Results -->
-      <div v-else class="no-results">
-        <i class="fas fa-search no-results-icon"></i>
-        <p>No documents found matching your search.</p>
+      <EmptyState
+        v-else
+        icon="fas fa-search"
+        message="No documents found matching your search."
+      >
         <p class="no-results-hint">
           {{ useRagSearch
             ? 'Try rephrasing your question or using different keywords.'
@@ -218,7 +220,7 @@
           <p><strong>Need to index your knowledge base?</strong></p>
           <p>Go to <router-link to="/knowledge/manage" class="help-link">Manage → System Knowledge</router-link> and click "Initialize Machine Knowledge" to create search indexes.</p>
         </div>
-      </div>
+      </EmptyState>
 
       <!-- RAG Error Handling -->
       <div v-if="useRagSearch && ragError" class="rag-error">
@@ -236,6 +238,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { KnowledgeRepository, type RagSearchResponse } from '@/models/repositories'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 // Define types
 interface KnowledgeDocument {
@@ -583,18 +586,6 @@ const copyDocument = async () => {
 }
 
 /* No Results */
-.no-results {
-  @apply text-center py-8;
-}
-
-.no-results-icon {
-  @apply text-gray-400 text-3xl mb-4;
-}
-
-.no-results p {
-  @apply text-gray-600;
-}
-
 .no-results-hint {
   @apply text-sm text-gray-500 mt-2;
 }

@@ -176,6 +176,15 @@
       </div>
     </div>
 
+    <!-- Document Change Feed Section (PROMINENT) -->
+    <div class="change-feed-section-wrapper">
+      <div class="section-header prominent">
+        <h3><i class="fas fa-sync-alt"></i> Document Lifecycle & Vectorization</h3>
+        <span class="section-badge">Real-time Tracking</span>
+      </div>
+      <DocumentChangeFeed />
+    </div>
+
     <!-- Overview Cards -->
     <div class="stats-overview" role="region" aria-label="Knowledge base overview statistics">
       <div class="stat-card" role="article" aria-labelledby="facts-title">
@@ -301,9 +310,11 @@
             <p class="activity-time">{{ formatTimeAgo(activity.timestamp) }}</p>
           </div>
         </div>
-        <div v-if="recentActivities.length === 0" class="no-activity">
-          <p>No recent activity</p>
-        </div>
+        <EmptyState
+          v-if="recentActivities.length === 0"
+          icon="fas fa-clock"
+          message="No recent activity"
+        />
       </div>
     </div>
 
@@ -357,6 +368,7 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers/index'
 import type { KnowledgeCategory } from '@/stores/useKnowledgeStore'
 import ManPageManager from '@/components/ManPageManager.vue'
+import DocumentChangeFeed from '@/components/knowledge/DocumentChangeFeed.vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import {
@@ -365,6 +377,10 @@ import {
   formatDateTime as formatDateTimeHelper,
   formatCategoryName
 } from '@/utils/formatHelpers'
+import EmptyState from '@/components/ui/EmptyState.vue'
+
+// Import shared document feed wrapper styles
+import '@/styles/document-feed-wrapper.css'
 
 // TypeScript Interfaces
 interface VectorStats {
@@ -1155,12 +1171,6 @@ onMounted(() => {
   color: #6b7280;
 }
 
-.no-activity {
-  text-align: center;
-  padding: 2rem;
-  color: #6b7280;
-}
-
 /* Tag Cloud */
 .tag-cloud-section {
   background: white;
@@ -1212,6 +1222,8 @@ onMounted(() => {
   color: white;
   box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
 }
+
+/* Document change feed wrapper styles now in shared CSS: @/styles/document-feed-wrapper.css */
 
 .vectorization-notice {
   display: flex;

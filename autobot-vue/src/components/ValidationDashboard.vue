@@ -105,9 +105,12 @@
           <!-- System Alerts -->
           <div class="section alerts-section">
             <h3>🚨 System Alerts</h3>
-            <div v-if="reportData.alerts.length === 0" class="no-alerts">
-              ✅ No active alerts
-            </div>
+            <EmptyState
+              v-if="reportData.alerts.length === 0"
+              icon="fas fa-check-circle"
+              message="No active alerts"
+              variant="success"
+            />
             <div v-else>
               <div v-for="alert in reportData.alerts" :key="alert.timestamp"
                    :class="['alert', 'alert-' + alert.level]">
@@ -121,9 +124,12 @@
           <!-- Recommendations -->
           <div class="section recommendations-section">
             <h3>💡 Recommendations</h3>
-            <div v-if="(reportData.recommendations || []).length === 0" class="no-recommendations">
-              ✅ No recommendations at this time
-            </div>
+            <EmptyState
+              v-if="(reportData.recommendations || []).length === 0"
+              icon="fas fa-check-circle"
+              message="No recommendations at this time"
+              variant="success"
+            />
             <div v-else>
               <div v-for="rec in (reportData.recommendations || []).slice(0, 5)"
                    :key="rec.title" class="recommendation">
@@ -186,11 +192,13 @@
 import apiClient from '../utils/ApiClient.js';
 import errorHandler from '../utils/ErrorHandler.js';
 import PhaseProgressionIndicator from './PhaseProgressionIndicator.vue';
+import EmptyState from '@/components/ui/EmptyState.vue';
 
 export default {
   name: 'ValidationDashboard',
   components: {
-    PhaseProgressionIndicator
+    PhaseProgressionIndicator,
+    EmptyState
   },
   data() {
     return {
@@ -472,14 +480,6 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 20px;
-}
-
-.no-alerts, .no-recommendations {
-  padding: 15px;
-  text-align: center;
-  color: #666;
-  background: #f8f9fa;
-  border-radius: 5px;
 }
 
 .alert {
