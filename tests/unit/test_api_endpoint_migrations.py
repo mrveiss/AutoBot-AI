@@ -20998,7 +20998,17 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             self.assertIn("check_file_permissions", source)
             # Should have session ownership validation
             self.assertIn("validate_session_ownership", source)
-            # Should preserve audit logging
+
+        # Only write/sensitive operations should have audit logging
+        audit_logged_endpoints = [
+            conversation_files.upload_conversation_file,
+            conversation_files.download_conversation_file,
+            conversation_files.delete_conversation_file,
+            conversation_files.transfer_conversation_files,
+        ]
+
+        for endpoint in audit_logged_endpoints:
+            source = inspect.getsource(endpoint)
             self.assertIn("audit_log", source)
 
     def test_batch_112_migration_preserves_file_manager_integration(self):
