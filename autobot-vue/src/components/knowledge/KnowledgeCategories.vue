@@ -8,6 +8,15 @@
         <p class="subtitle">Browse AutoBot's knowledge organized by purpose and source</p>
       </div>
 
+      <!-- Document Change Feed Section (PROMINENT) -->
+      <div class="change-feed-section-wrapper">
+        <div class="section-header prominent">
+          <h3><i class="fas fa-sync-alt"></i> Document Lifecycle & Vectorization</h3>
+          <span class="section-badge">Real-time Tracking</span>
+        </div>
+        <DocumentChangeFeed />
+      </div>
+
       <div class="main-categories-grid">
         <div
           v-for="category in mainCategories"
@@ -63,11 +72,13 @@
       <p>Loading categories...</p>
     </div>
 
-    <div v-else-if="store.categories.length === 0" class="empty-state">
-      <i class="fas fa-folder-open empty-icon"></i>
-      <p>No categories yet</p>
+    <EmptyState
+      v-else-if="store.categories.length === 0"
+      icon="fas fa-folder-open"
+      message="No categories yet"
+    >
       <p class="empty-hint">Create your first category to organize knowledge</p>
-    </div>
+    </EmptyState>
 
     <div v-else class="categories-grid">
       <div
@@ -114,66 +125,60 @@
     </div>
 
     <!-- Create/Edit Category Dialog -->
-    <div v-if="showCreateDialog || showEditDialog" class="dialog-overlay" @click="closeDialogs">
-      <div class="dialog" @click.stop>
-        <div class="dialog-header">
-          <h3>{{ showEditDialog ? 'Edit Category' : 'Create Category' }}</h3>
-          <button @click="closeDialogs" class="close-btn">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
+    <BaseModal
+      v-model="showCategoryDialog"
+      :title="showEditDialog ? 'Edit Category' : 'Create Category'"
+      size="small"
+      @close="closeDialogs"
+    >
+      <div class="form-group">
+        <label for="category-name">Category Name *</label>
+        <input
+          id="category-name"
+          v-model="categoryForm.name"
+          type="text"
+          class="form-input"
+          placeholder="e.g., Technical Documentation"
+          required
+        />
+      </div>
 
-        <div class="dialog-content">
-          <div class="form-group">
-            <label for="category-name">Category Name *</label>
-            <input
-              id="category-name"
-              v-model="categoryForm.name"
-              type="text"
-              class="form-input"
-              placeholder="e.g., Technical Documentation"
-              required
-            />
-          </div>
+      <div class="form-group">
+        <label for="category-description">Description</label>
+        <textarea
+          id="category-description"
+          v-model="categoryForm.description"
+          class="form-textarea"
+          rows="3"
+          placeholder="Brief description of this category..."
+        ></textarea>
+      </div>
 
-          <div class="form-group">
-            <label for="category-description">Description</label>
-            <textarea
-              id="category-description"
-              v-model="categoryForm.description"
-              class="form-textarea"
-              rows="3"
-              placeholder="Brief description of this category..."
-            ></textarea>
-          </div>
-
-          <div class="form-group">
-            <label for="category-color">Color</label>
-            <div class="color-picker">
-              <div
-                v-for="color in colorOptions"
-                :key="color"
-                class="color-option"
-                :class="{ 'selected': categoryForm.color === color }"
-                :style="{ backgroundColor: color }"
-                @click="categoryForm.color = color"
-              ></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="dialog-actions">
-          <button @click="closeDialogs" class="cancel-btn">Cancel</button>
-          <button
-            @click="saveCategory"
-            class="save-btn"
-            :disabled="!categoryForm.name.trim()"
-          >
-            {{ showEditDialog ? 'Update' : 'Create' }}
-          </button>
+      <div class="form-group">
+        <label for="category-color">Color</label>
+        <div class="color-picker">
+          <div
+            v-for="color in colorOptions"
+            :key="color"
+            class="color-option"
+            :class="{ 'selected': categoryForm.color === color }"
+            :style="{ backgroundColor: color }"
+            @click="categoryForm.color = color"
+          ></div>
         </div>
       </div>
-    </div>
+
+      <template #actions>
+        <button @click="closeDialogs" class="cancel-btn">Cancel</button>
+        <button
+          @click="saveCategory"
+          class="save-btn"
+          :disabled="!categoryForm.name.trim()"
+        >
+          {{ showEditDialog ? 'Update' : 'Create' }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Documents View Panel (User Categories) -->
     <div v-if="showDocumentsPanel" class="documents-panel">
@@ -185,9 +190,11 @@
       </div>
 
       <div class="documents-list">
-        <div v-if="categoryDocuments.length === 0" class="no-documents">
-          <p>No documents in this category yet.</p>
-        </div>
+        <EmptyState
+          v-if="categoryDocuments.length === 0"
+          icon="fas fa-file-alt"
+          message="No documents in this category yet."
+        />
 
         <div
           v-for="doc in categoryDocuments"
@@ -209,80 +216,71 @@
     </div>
 
     <!-- System Category Documents Panel -->
-    <div v-if="showCategoryDocuments" class="dialog-overlay" @click="closeCategoryDocuments">
-      <div class="dialog large-dialog" @click.stop>
-        <div class="dialog-header">
-          <h3>{{ formatCategoryName(selectedCategoryPath) }} - Documents</h3>
-          <button @click="closeCategoryDocuments" class="close-btn">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
+    <BaseModal
+      v-model="showCategoryDocuments"
+      :title="`${formatCategoryName(selectedCategoryPath)} - Documents`"
+      size="large"
+      @close="closeCategoryDocuments"
+    >
+      <div v-if="isLoadingCategoryDocs" class="loading-state">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Loading documents...</p>
+      </div>
 
-        <div class="dialog-content">
-          <div v-if="isLoadingCategoryDocs" class="loading-state">
-            <i class="fas fa-spinner fa-spin"></i>
-            <p>Loading documents...</p>
+      <EmptyState
+        v-else-if="categoryDocuments.length === 0"
+        icon="fas fa-file-alt"
+        message="No documents in this category"
+      />
+
+      <div v-else class="documents-grid">
+        <div
+          v-for="doc in categoryDocuments"
+          :key="doc.path"
+          class="document-card"
+          @click="viewDocumentDetails(doc)"
+        >
+          <div class="doc-icon-large">
+            <i :class="getTypeIcon(doc.type || 'document')"></i>
           </div>
-
-          <div v-else-if="categoryDocuments.length === 0" class="empty-state">
-            <i class="fas fa-file-alt empty-icon"></i>
-            <p>No documents in this category</p>
-          </div>
-
-          <div v-else class="documents-grid">
-            <div
-              v-for="doc in categoryDocuments"
-              :key="doc.path"
-              class="document-card"
-              @click="viewDocumentDetails(doc)"
-            >
-              <div class="doc-icon-large">
-                <i :class="getTypeIcon(doc.type || 'document')"></i>
-              </div>
-              <div class="doc-details">
-                <h4>{{ doc.title || doc.filename }}</h4>
-                <p class="doc-path">{{ doc.path }}</p>
-                <div class="doc-meta">
-                  <span><i class="fas fa-file"></i> {{ doc.type || 'document' }}</span>
-                  <span v-if="doc.size"><i class="fas fa-database"></i> {{ formatFileSize(doc.size) }}</span>
-                </div>
-              </div>
+          <div class="doc-details">
+            <h4>{{ doc.title || doc.filename }}</h4>
+            <p class="doc-path">{{ doc.path }}</p>
+            <div class="doc-meta">
+              <span><i class="fas fa-file"></i> {{ doc.type || 'document' }}</span>
+              <span v-if="doc.size"><i class="fas fa-database"></i> {{ formatFileSize(doc.size) }}</span>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </BaseModal>
 
     <!-- Document Details Modal -->
-    <div v-if="showDocumentModal && currentDocument" class="dialog-overlay" @click="closeDocumentModal">
-      <div class="dialog large-dialog" @click.stop>
-        <div class="dialog-header">
-          <h3>{{ currentDocument.title || currentDocument.filename }}</h3>
-          <button @click="closeDocumentModal" class="close-btn">
-            <i class="fas fa-times"></i>
-          </button>
+    <BaseModal
+      v-model="showDocumentModal"
+      :title="currentDocument?.title || currentDocument?.filename || 'Document Details'"
+      size="large"
+      @close="closeDocumentModal"
+    >
+      <div v-if="currentDocument">
+        <div class="document-metadata">
+          <div class="meta-item">
+            <strong>Path:</strong> {{ currentDocument.path }}
+          </div>
+          <div class="meta-item" v-if="currentDocument.type">
+            <strong>Type:</strong> {{ currentDocument.type }}
+          </div>
+          <div class="meta-item" v-if="currentDocument.size">
+            <strong>Size:</strong> {{ formatFileSize(currentDocument.size) }}
+          </div>
         </div>
 
-        <div class="dialog-content">
-          <div class="document-metadata">
-            <div class="meta-item">
-              <strong>Path:</strong> {{ currentDocument.path }}
-            </div>
-            <div class="meta-item" v-if="currentDocument.type">
-              <strong>Type:</strong> {{ currentDocument.type }}
-            </div>
-            <div class="meta-item" v-if="currentDocument.size">
-              <strong>Size:</strong> {{ formatFileSize(currentDocument.size) }}
-            </div>
-          </div>
-
-          <div v-if="currentDocument.content" class="document-content">
-            <h4>Content Preview:</h4>
-            <pre>{{ currentDocument.content.substring(0, 2000) }}{{ currentDocument.content.length > 2000 ? '...' : '' }}</pre>
-          </div>
+        <div v-if="currentDocument.content" class="document-content">
+          <h4>Content Preview:</h4>
+          <pre>{{ currentDocument.content.substring(0, 2000) }}{{ currentDocument.content.length > 2000 ? '...' : '' }}</pre>
         </div>
       </div>
-    </div>
+    </BaseModal>
     </div>
 
   </div>
@@ -300,6 +298,12 @@ import type { KnowledgeCategory, KnowledgeDocument } from '@/stores/useKnowledge
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import KnowledgeBrowser from './KnowledgeBrowser.vue'
 import ManPageManager from '@/components/ManPageManager.vue'
+import DocumentChangeFeed from './DocumentChangeFeed.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+
+// Import shared document feed wrapper styles
+import '@/styles/document-feed-wrapper.css'
 
 // Use the shared composable
 const {
@@ -323,6 +327,15 @@ const appStore = useAppStore()
 // UI state
 const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
+const showCategoryDialog = computed({
+  get: () => showCreateDialog.value || showEditDialog.value,
+  set: (val) => {
+    if (!val) {
+      showCreateDialog.value = false
+      showEditDialog.value = false
+    }
+  }
+})
 const showDocumentsPanel = ref(false)
 const selectedCategory = ref<KnowledgeCategory | null>(null)
 const selectedMainCategory = ref<string | null>(null)
@@ -958,36 +971,6 @@ onUnmounted(() => {
   transform: translateX(0.25rem);
 }
 
-/* Empty State */
-.empty-state {
-  text-align: center;
-  padding: 4rem 2rem;
-  background: white;
-  border-radius: 0.75rem;
-  border: 2px dashed #e5e7eb;
-}
-
-.empty-state i {
-  font-size: 3rem;
-  color: #d1d5db;
-  margin-bottom: 1rem;
-}
-
-.empty-state h4 {
-  font-size: 1.25rem;
-  color: #6b7280;
-  margin-bottom: 0.5rem;
-}
-
-.empty-state p {
-  color: #9ca3af;
-}
-
-.empty-state a {
-  color: #3b82f6;
-  text-decoration: underline;
-}
-
 /* System Categories */
 .system-categories {
   min-height: 400px;
@@ -1166,17 +1149,10 @@ onUnmounted(() => {
   background-color: #2563eb;
 }
 
-.loading-state,
-.empty-state {
+.loading-state {
   text-align: center;
   padding: 3rem;
   color: #6b7280;
-}
-
-.empty-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
 }
 
 .categories-grid {
@@ -1295,40 +1271,7 @@ onUnmounted(() => {
   border-color: #3b82f6;
 }
 
-/* Dialog styles */
-.dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.dialog {
-  background: white;
-  border-radius: 0.5rem;
-  width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.dialog-content {
-  padding: 1.5rem;
-}
+/* Form styles (used in modals) */
 
 .form-group {
   margin-bottom: 1.25rem;
@@ -1384,14 +1327,6 @@ onUnmounted(() => {
   transform: translate(-50%, -50%);
   color: white;
   font-weight: bold;
-}
-
-.dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1.5rem;
-  border-top: 1px solid #e5e7eb;
 }
 
 .cancel-btn,
@@ -1471,12 +1406,6 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 1rem;
-}
-
-.no-documents {
-  text-align: center;
-  padding: 2rem;
-  color: #6b7280;
 }
 
 .document-item {
@@ -1752,25 +1681,6 @@ onUnmounted(() => {
   color: #2d3748;
 }
 
-.close-btn {
-  width: 2.5rem;
-  height: 2.5rem;
-  border: none;
-  background: #f3f4f6;
-  border-radius: 0.375rem;
-  color: #6b7280;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.close-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
-}
-
 /* System Tabs */
 .system-tabs {
   display: flex;
@@ -1887,13 +1797,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-}
-
-/* Large Dialog */
-.large-dialog {
-  max-width: 900px;
-  max-height: 80vh;
-  overflow-y: auto;
 }
 
 /* Document Metadata */

@@ -28,7 +28,11 @@
         </div>
       </div>
 
-      <div v-if="history.length === 0 && !isRefreshing" class="no-history">No chat history available.</div>
+      <EmptyState
+        v-if="history.length === 0 && !isRefreshing"
+        icon="fas fa-history"
+        message="No chat history available."
+      />
       <div v-else-if="!isRefreshing" class="history-entries">
         <div v-for="(entry, index) in history" :key="entry.id || `history-${entry.date}`" class="history-entry" @click="viewHistoryEntry(entry)" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
           <div class="history-summary">
@@ -54,9 +58,13 @@
 import { ref, onMounted } from 'vue';
 import apiClient from '../utils/ApiClient.js';
 import { useAsyncHandler } from '@/composables/useErrorHandler';
+import EmptyState from '@/components/ui/EmptyState.vue';
 
 export default {
   name: 'HistoryView',
+  components: {
+    EmptyState
+  },
   setup() {
     const history = ref([]);
 
@@ -307,13 +315,6 @@ export default {
   margin: 0;
   font-size: 14px;
   font-weight: 500;
-}
-
-.no-history {
-  text-align: center;
-  color: #6c757d;
-  font-style: italic;
-  padding: 20px;
 }
 
 .history-entries {
