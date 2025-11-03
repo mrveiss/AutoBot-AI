@@ -19808,5 +19808,136 @@ class TestBatch105MonitoringAlertsControlChannelsFINAL(unittest.TestCase):
             )
 
 
+class TestBatch106AgentTerminalCOMPLETE(unittest.TestCase):
+    """Test batch 106 migration: agent_terminal.py completion (1 endpoint - FINAL TO 100%)"""
+
+    def test_batch_106_agent_terminal_info_simple_pattern(self):
+        """Verify agent_terminal_info uses Simple Pattern (no try-except blocks)"""
+        from backend.api import agent_terminal
+
+        source = inspect.getsource(agent_terminal.agent_terminal_info)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should NOT have any try-except blocks (Simple Pattern)
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except", source)
+        # Should NOT have any HTTPException raises
+        self.assertNotIn("HTTPException", source)
+
+    def test_batch_106_error_code_prefix_consistent(self):
+        """Verify agent_terminal_info uses consistent error_code_prefix"""
+        from backend.api import agent_terminal
+
+        source = inspect.getsource(agent_terminal.agent_terminal_info)
+        # Should have consistent error_code_prefix
+        self.assertIn('error_code_prefix="AGENT_TERMINAL"', source)
+
+    def test_batch_106_uses_server_error_category(self):
+        """Verify agent_terminal_info uses ErrorCategory.SERVER_ERROR"""
+        from backend.api import agent_terminal
+
+        source = inspect.getsource(agent_terminal.agent_terminal_info)
+        # Should use ErrorCategory.SERVER_ERROR
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+
+    def test_batch_106_has_operation_param(self):
+        """Verify agent_terminal_info has operation parameter"""
+        from backend.api import agent_terminal
+
+        source = inspect.getsource(agent_terminal.agent_terminal_info)
+        # Should have correct operation parameter
+        self.assertIn('operation="agent_terminal_info"', source)
+
+    def test_batch_106_no_generic_500_exception(self):
+        """Verify agent_terminal_info has no generic 500 exception handler"""
+        from backend.api import agent_terminal
+
+        source = inspect.getsource(agent_terminal.agent_terminal_info)
+        # Should NOT have generic 500 status code
+        self.assertNotIn("status_code=500", source)
+
+    def test_batch_106_agent_terminal_100_percent_milestone(self):
+        """Verify agent_terminal.py has reached 100% migration milestone (17th file)"""
+        from backend.api import agent_terminal
+
+        # Get all endpoints in the file
+        all_endpoints = [
+            agent_terminal.create_agent_terminal_session,
+            agent_terminal.list_agent_terminal_sessions,
+            agent_terminal.get_agent_terminal_session,
+            agent_terminal.delete_agent_terminal_session,
+            agent_terminal.execute_agent_command,
+            agent_terminal.approve_agent_command,
+            agent_terminal.interrupt_agent_session,
+            agent_terminal.resume_agent_session,
+            agent_terminal.agent_terminal_info,
+        ]
+
+        # Verify ALL endpoints have @with_error_handling decorator
+        for endpoint in all_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} should have @with_error_handling decorator",
+            )
+
+        # Verify 100% completion
+        self.assertEqual(len(all_endpoints), 9)
+
+    def test_batch_106_progress_tracking(self):
+        """Verify agent_terminal.py progress: 9/9 endpoints migrated (100% COMPLETE)"""
+        from backend.api import agent_terminal
+
+        all_endpoints = [
+            agent_terminal.create_agent_terminal_session,
+            agent_terminal.list_agent_terminal_sessions,
+            agent_terminal.get_agent_terminal_session,
+            agent_terminal.delete_agent_terminal_session,
+            agent_terminal.execute_agent_command,
+            agent_terminal.approve_agent_command,
+            agent_terminal.interrupt_agent_session,
+            agent_terminal.resume_agent_session,
+            agent_terminal.agent_terminal_info,
+        ]
+
+        migrated_count = sum(
+            1 for ep in all_endpoints if "@with_error_handling" in inspect.getsource(ep)
+        )
+
+        # agent_terminal.py has 9 total endpoints
+        total_endpoints = 9
+        progress_percentage = (migrated_count / total_endpoints) * 100
+
+        self.assertEqual(migrated_count, 9)
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_106_info_endpoint_returns_static_data(self):
+        """Verify agent_terminal_info preserves all essential static data"""
+        from backend.api import agent_terminal
+
+        source = inspect.getsource(agent_terminal.agent_terminal_info)
+        # Should preserve all essential API information
+        essential_fields = [
+            '"name"',
+            '"version"',
+            '"description"',
+            '"features"',
+            '"agent_roles"',
+            '"session_states"',
+            '"endpoints"',
+            '"security_features"',
+            'AgentRole',
+            'AgentSessionState',
+        ]
+
+        for field in essential_fields:
+            self.assertIn(
+                field,
+                source,
+                f"agent_terminal_info should preserve essential field: {field}",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
