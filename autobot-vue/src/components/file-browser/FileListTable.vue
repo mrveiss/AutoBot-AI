@@ -1,6 +1,6 @@
 <template>
   <div class="file-list-container">
-    <table class="file-table">
+    <table v-if="files.length > 0" class="file-table">
       <thead>
         <tr>
           <th @click="$emit('sort', 'name')" class="sortable">
@@ -76,20 +76,20 @@
             </div>
           </td>
         </tr>
-        <tr v-if="files.length === 0">
-          <td colspan="5" class="no-files">
-            <i class="fas fa-folder-open"></i>
-            No files or directories found{{ currentPath ? ` in ${currentPath}` : '' }}
-          </td>
-        </tr>
       </tbody>
     </table>
+    <EmptyState
+      v-else
+      icon="fas fa-folder-open"
+      :message="`No files or directories found${currentPath ? ' in ' + currentPath : ''}`"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import { formatDateTime } from '@/utils/formatHelpers'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 interface FileItem {
   name: string
@@ -279,13 +279,5 @@ const formatDate = formatDateTime
 
 .delete-btn:hover {
   @apply text-red-600;
-}
-
-.no-files {
-  @apply text-center py-8 text-gray-500;
-}
-
-.no-files i {
-  @apply block text-3xl mb-2 text-gray-300;
 }
 </style>
