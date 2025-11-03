@@ -21030,5 +21030,206 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             self.assertIn("get_conversation_file_manager", source)
             self.assertIn("file_manager", source)
 
+
+    # ==============================================
+    # BATCH 113: cache.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_113_get_cache_stats_mixed_pattern(self):
+        """Verify get_cache_stats endpoint uses Mixed Pattern"""
+        from backend.api import cache
+
+        source = inspect.getsource(cache.get_cache_stats)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="get_cache_stats"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="CACHE"', source)
+        # Mixed Pattern - should preserve try-except for HTTPException handling
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+
+    def test_batch_113_clear_redis_cache_mixed_pattern(self):
+        """Verify clear_redis_cache endpoint uses Mixed Pattern"""
+        from backend.api import cache
+
+        source = inspect.getsource(cache.clear_redis_cache)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="clear_redis_cache"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="CACHE"', source)
+        # Mixed Pattern - should preserve try-except
+        self.assertIn("try:", source)
+        self.assertIn("except HTTPException:", source)
+
+    def test_batch_113_clear_cache_type_mixed_pattern(self):
+        """Verify clear_cache_type endpoint uses Mixed Pattern"""
+        from backend.api import cache
+
+        source = inspect.getsource(cache.clear_cache_type)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="clear_cache_type"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="CACHE"', source)
+        # Mixed Pattern - should preserve try-except
+        self.assertIn("try:", source)
+        self.assertIn("except HTTPException:", source)
+
+    def test_batch_113_save_cache_config_mixed_pattern(self):
+        """Verify save_cache_config endpoint uses Mixed Pattern"""
+        from backend.api import cache
+
+        source = inspect.getsource(cache.save_cache_config)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="save_cache_config"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="CACHE"', source)
+        # Mixed Pattern - should preserve try-except
+        self.assertIn("try:", source)
+        self.assertIn("except HTTPException:", source)
+
+    def test_batch_113_get_cache_config_mixed_pattern(self):
+        """Verify get_cache_config endpoint uses Mixed Pattern"""
+        from backend.api import cache
+
+        source = inspect.getsource(cache.get_cache_config)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="get_cache_config"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="CACHE"', source)
+        # Mixed Pattern - should preserve try-except
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+
+    def test_batch_113_warmup_caches_mixed_pattern(self):
+        """Verify warmup_caches endpoint uses Mixed Pattern"""
+        from backend.api import cache
+
+        source = inspect.getsource(cache.warmup_caches)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="warmup_caches"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="CACHE"', source)
+        # Mixed Pattern - should preserve try-except
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+
+    def test_batch_113_all_cache_endpoints_have_decorator(self):
+        """Verify all cache endpoints have @with_error_handling decorator"""
+        from backend.api import cache
+
+        # List of all endpoint functions in cache.py
+        endpoint_functions = [
+            cache.get_cache_stats,
+            cache.clear_redis_cache,
+            cache.clear_cache_type,
+            cache.save_cache_config,
+            cache.get_cache_config,
+            cache.warmup_caches,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_113_cache_100_percent_milestone(self):
+        """Verify cache.py has reached 100% migration"""
+        from backend.api import cache
+
+        # List of all endpoint functions
+        endpoint_functions = [
+            cache.get_cache_stats,
+            cache.clear_redis_cache,
+            cache.clear_cache_type,
+            cache.save_cache_config,
+            cache.get_cache_config,
+            cache.warmup_caches,
+        ]
+
+        # Count endpoints with @with_error_handling
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        # cache.py has 6 total endpoints
+        total_endpoints = 6
+
+        # Should have migrated all endpoints
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_113_migration_preserves_redis_operations(self):
+        """Verify migration preserves Redis operations"""
+        from backend.api import cache
+
+        # Check get_cache_stats preserves database iteration
+        source_stats = inspect.getsource(cache.get_cache_stats)
+        self.assertIn("REDIS_DATABASES", source_stats)
+        self.assertIn("get_redis_connection", source_stats)
+
+        # Check clear_redis_cache preserves flushdb
+        source_clear = inspect.getsource(cache.clear_redis_cache)
+        self.assertIn("flushdb", source_clear)
+        self.assertIn("cleared_databases", source_clear)
+
+    def test_batch_113_migration_preserves_config_management(self):
+        """Verify migration preserves cache configuration management"""
+        from backend.api import cache
+
+        # Check save_cache_config preserves validation
+        source_save = inspect.getsource(cache.save_cache_config)
+        self.assertIn("required_fields", source_save)
+        self.assertIn("json.dumps", source_save)
+
+        # Check get_cache_config preserves default fallback
+        source_get = inspect.getsource(cache.get_cache_config)
+        self.assertIn("default_config", source_get)
+        self.assertIn("json.loads", source_get)
+
+    def test_batch_113_migration_preserves_cache_type_handling(self):
+        """Verify migration preserves cache type handling logic"""
+        from backend.api import cache
+
+        source = inspect.getsource(cache.clear_cache_type)
+        # Should preserve cache type checking
+        self.assertIn("llm", source)
+        self.assertIn("knowledge", source)
+        # Should preserve error for unknown types
+        self.assertIn("Unknown cache type", source)
+
 if __name__ == "__main__":
     unittest.main()

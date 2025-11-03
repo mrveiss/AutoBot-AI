@@ -14,6 +14,7 @@ from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import config as global_config_manager
 from src.utils.distributed_service_discovery import get_redis_connection_params_sync
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -94,6 +95,11 @@ def get_redis_connection(db_number: int = 0):
 
 
 @router.get("/stats")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cache_stats",
+    error_code_prefix="CACHE",
+)
 async def get_cache_stats():
     """Get comprehensive cache statistics from all sources"""
     try:
@@ -146,6 +152,11 @@ async def get_cache_stats():
 
 
 @router.post("/redis/clear/{database}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_redis_cache",
+    error_code_prefix="CACHE",
+)
 async def clear_redis_cache(database: str):
     """Clear Redis cache for specific database or all databases"""
     try:
@@ -219,6 +230,11 @@ async def clear_redis_cache(database: str):
 
 
 @router.post("/clear/{cache_type}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_cache_type",
+    error_code_prefix="CACHE",
+)
 async def clear_cache_type(cache_type: str):
     """Clear specific backend cache type"""
     try:
@@ -257,6 +273,11 @@ async def clear_cache_type(cache_type: str):
 
 
 @router.post("/config")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_cache_config",
+    error_code_prefix="CACHE",
+)
 async def save_cache_config(config_data: Dict[str, Any]):
     """Save cache configuration settings"""
     try:
@@ -299,6 +320,11 @@ async def save_cache_config(config_data: Dict[str, Any]):
 
 
 @router.get("/config")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cache_config",
+    error_code_prefix="CACHE",
+)
 async def get_cache_config():
     """Get current cache configuration"""
     try:
@@ -333,6 +359,11 @@ async def get_cache_config():
 
 
 @router.post("/warmup")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="warmup_caches",
+    error_code_prefix="CACHE",
+)
 async def warmup_caches():
     """Warm up commonly used caches"""
     try:
