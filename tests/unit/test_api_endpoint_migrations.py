@@ -20426,5 +20426,154 @@ class TestBatch109MonitoringCOMPLETE(unittest.TestCase):
         self.assertIn("disconnect", source)
 
 
+class TestBatch110TerminalCOMPLETE(unittest.TestCase):
+    """Test batch 110 migration: terminal.py completion (4 endpoints - 3 WebSocket + 1 info - FINAL TO 100%)"""
+
+    def test_batch_110_terminal_info_simple_pattern(self):
+        """Verify terminal_info uses Simple Pattern"""
+        from backend.api import terminal
+
+        source = inspect.getsource(terminal.terminal_info)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="terminal_info"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="TERMINAL"', source)
+        # Simple Pattern - should NOT have try-catch blocks
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except", source)
+
+    def test_batch_110_consolidated_websocket_mixed_pattern(self):
+        """Verify consolidated_terminal_websocket uses Mixed Pattern"""
+        from backend.api import terminal
+
+        source = inspect.getsource(terminal.consolidated_terminal_websocket)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="consolidated_terminal_websocket"', source)
+        # Mixed Pattern - should have try-catch blocks (connection lifecycle)
+        self.assertIn("try:", source)
+        self.assertIn("except", source)
+
+    def test_batch_110_simple_compat_websocket_mixed_pattern(self):
+        """Verify simple_terminal_websocket_compat uses Mixed Pattern"""
+        from backend.api import terminal
+
+        source = inspect.getsource(terminal.simple_terminal_websocket_compat)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have operation parameter
+        self.assertIn('operation="simple_terminal_websocket_compat"', source)
+
+    def test_batch_110_secure_compat_websocket_mixed_pattern(self):
+        """Verify secure_terminal_websocket_compat uses Mixed Pattern"""
+        from backend.api import terminal
+
+        source = inspect.getsource(terminal.secure_terminal_websocket_compat)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have operation parameter
+        self.assertIn('operation="secure_terminal_websocket_compat"', source)
+
+    def test_batch_110_all_websocket_endpoints_have_decorator(self):
+        """Verify all 3 WebSocket endpoints have @with_error_handling decorator"""
+        from backend.api import terminal
+
+        websocket_funcs = [
+            terminal.consolidated_terminal_websocket,
+            terminal.simple_terminal_websocket_compat,
+            terminal.secure_terminal_websocket_compat,
+        ]
+
+        for func in websocket_funcs:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{func.__name__} should have @with_error_handling decorator",
+            )
+            self.assertIn(
+                "@router.websocket",
+                source,
+                f"{func.__name__} should have @router.websocket decorator",
+            )
+
+    def test_batch_110_terminal_100_percent_milestone(self):
+        """Verify terminal.py has reached 100% migration (21st file to 100%)"""
+        from backend.api import terminal
+
+        # Get all endpoint functions
+        all_functions = [
+            obj
+            for name, obj in inspect.getmembers(terminal)
+            if inspect.isfunction(obj) and not name.startswith("_")
+        ]
+
+        # Filter to only route handler functions (decorated with @router)
+        endpoint_functions = []
+        for func in all_functions:
+            try:
+                source = inspect.getsource(func)
+                if "@router." in source:
+                    endpoint_functions.append(func)
+            except (OSError, TypeError):
+                continue
+
+        # Count those with @with_error_handling
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        # terminal.py has 17 total endpoints (including 3 WebSocket endpoints)
+        total_endpoints = 17
+
+        # Should have migrated all endpoints
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_110_migration_preserves_functionality(self):
+        """Verify migration preserves key functionality"""
+        from backend.api import terminal
+
+        # Check terminal_info
+        source_info = inspect.getsource(terminal.terminal_info)
+        self.assertIn("Consolidated Terminal API", source_info)
+        self.assertIn("endpoints", source_info)
+
+        # Check consolidated WebSocket
+        source_ws = inspect.getsource(terminal.consolidated_terminal_websocket)
+        self.assertIn("websocket.accept", source_ws)
+        self.assertIn("session_manager", source_ws)
+
+    def test_batch_110_websocket_endpoints_preserve_security_levels(self):
+        """Verify WebSocket endpoints preserve security level management"""
+        from backend.api import terminal
+
+        # Check consolidated endpoint
+        source1 = inspect.getsource(terminal.consolidated_terminal_websocket)
+        self.assertIn("SecurityLevel", source1)
+        self.assertIn("security_level", source1)
+
+        # Check compatibility endpoints
+        source2 = inspect.getsource(terminal.simple_terminal_websocket_compat)
+        self.assertIn("session_manager.session_configs", source2)
+
+        source3 = inspect.getsource(terminal.secure_terminal_websocket_compat)
+        self.assertIn("session_manager.session_configs", source3)
+
+
 if __name__ == "__main__":
     unittest.main()
