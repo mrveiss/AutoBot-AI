@@ -73,12 +73,11 @@
         </button>
       </h4>
       <div class="activity-log">
-        <div
+        <EmptyState
           v-if="cacheActivity.length === 0"
-          class="no-activity"
-        >
-          No cache activity recorded
-        </div>
+          icon="fas fa-chart-line"
+          message="No cache activity recorded"
+        />
         <div
           v-for="(activity, index) in cacheActivity"
           :key="activity.id || index"
@@ -234,6 +233,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { formatFileSize as formatBytes } from '@/utils/formatHelpers'
+import EmptyState from '@/components/ui/EmptyState.vue'
 interface CacheActivity {
   id: string
   timestamp: string
@@ -476,13 +476,6 @@ const updateCacheConfig = (key: string, value: any) => {
   max-height: 200px;
   overflow-y: auto;
   padding: 10px;
-}
-
-.no-activity {
-  color: #6c757d;
-  font-style: italic;
-  text-align: center;
-  padding: 20px;
 }
 
 .activity-item {

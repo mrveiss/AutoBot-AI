@@ -40,14 +40,14 @@
     </div>
 
     <!-- No Data State -->
-    <div v-if="phases.length === 0 && !loading && !hasLoadError" class="no-data-state">
-      <div class="no-data-content">
-        <i class="fas fa-info-circle"></i>
-        <h3>Phase Validation Ready</h3>
-        <p>Click "Load Validation Data" above to run on-demand system validation and see detailed phase requirements.</p>
-        <p class="performance-note">💡 Validation is now on-demand to improve system performance</p>
-      </div>
-    </div>
+    <EmptyState
+      v-if="phases.length === 0 && !loading && !hasLoadError"
+      icon="fas fa-info-circle"
+      title="Phase Validation Ready"
+      message="Click 'Load Validation Data' above to run on-demand system validation and see detailed phase requirements."
+    >
+      <p class="performance-note">💡 Validation is now on-demand to improve system performance</p>
+    </EmptyState>
 
     <!-- Phase Grid -->
     <div v-if="!hasLoadError && phases.length > 0" class="phases-grid">
@@ -326,9 +326,13 @@
 
 <script>
 import { apiRequest } from '@/config/api.js';
+import EmptyState from '@/components/ui/EmptyState.vue';
 
 export default {
   name: 'PhaseProgressionIndicator',
+  components: {
+    EmptyState
+  },
 
   data() {
     return {
@@ -666,38 +670,6 @@ export default {
 .load-validation-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-.no-data-state {
-  background: white;
-  border: 2px dashed #e5e5e5;
-  border-radius: 10px;
-  padding: 40px;
-  text-align: center;
-  margin: 20px 0;
-}
-
-.no-data-content {
-  max-width: 500px;
-  margin: 0 auto;
-}
-
-.no-data-content i {
-  font-size: 3rem;
-  color: #3b82f6;
-  margin-bottom: 16px;
-}
-
-.no-data-content h3 {
-  color: #374151;
-  margin: 16px 0;
-  font-size: 1.4rem;
-}
-
-.no-data-content p {
-  color: #6b7280;
-  margin: 12px 0;
-  line-height: 1.5;
 }
 
 .performance-note {
