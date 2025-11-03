@@ -20795,5 +20795,230 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         # Should have comment about not failing logout
         self.assertIn("Don't fail logout", source)
 
+
+    # ==============================================
+    # BATCH 112: conversation_files.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_112_upload_conversation_file_mixed_pattern(self):
+        """Verify upload_conversation_file endpoint uses Mixed Pattern"""
+        from backend.api import conversation_files
+
+        source = inspect.getsource(conversation_files.upload_conversation_file)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="upload_conversation_file"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="CONVERSATION_FILES"', source)
+        # Mixed Pattern - should preserve try-except for HTTPException handling
+        self.assertIn("try:", source)
+        self.assertIn("except HTTPException:", source)
+        self.assertIn("raise", source)
+
+    def test_batch_112_list_conversation_files_mixed_pattern(self):
+        """Verify list_conversation_files endpoint uses Mixed Pattern"""
+        from backend.api import conversation_files
+
+        source = inspect.getsource(conversation_files.list_conversation_files)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="list_conversation_files"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="CONVERSATION_FILES"', source)
+        # Mixed Pattern - should preserve try-except
+        self.assertIn("try:", source)
+        self.assertIn("except HTTPException:", source)
+
+    def test_batch_112_download_conversation_file_mixed_pattern(self):
+        """Verify download_conversation_file endpoint uses Mixed Pattern"""
+        from backend.api import conversation_files
+
+        source = inspect.getsource(conversation_files.download_conversation_file)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="download_conversation_file"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="CONVERSATION_FILES"', source)
+        # Mixed Pattern - should preserve try-except
+        self.assertIn("try:", source)
+        self.assertIn("except HTTPException:", source)
+
+    def test_batch_112_preview_conversation_file_mixed_pattern(self):
+        """Verify preview_conversation_file endpoint uses Mixed Pattern"""
+        from backend.api import conversation_files
+
+        source = inspect.getsource(conversation_files.preview_conversation_file)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="preview_conversation_file"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="CONVERSATION_FILES"', source)
+        # Mixed Pattern - should preserve try-except
+        self.assertIn("try:", source)
+        self.assertIn("except HTTPException:", source)
+
+    def test_batch_112_delete_conversation_file_mixed_pattern(self):
+        """Verify delete_conversation_file endpoint uses Mixed Pattern"""
+        from backend.api import conversation_files
+
+        source = inspect.getsource(conversation_files.delete_conversation_file)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="delete_conversation_file"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="CONVERSATION_FILES"', source)
+        # Mixed Pattern - should preserve try-except
+        self.assertIn("try:", source)
+        self.assertIn("except HTTPException:", source)
+
+    def test_batch_112_transfer_conversation_files_mixed_pattern(self):
+        """Verify transfer_conversation_files endpoint uses Mixed Pattern"""
+        from backend.api import conversation_files
+
+        source = inspect.getsource(conversation_files.transfer_conversation_files)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should have category parameter
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        # Should have operation parameter
+        self.assertIn('operation="transfer_conversation_files"', source)
+        # Should have error_code_prefix parameter
+        self.assertIn('error_code_prefix="CONVERSATION_FILES"', source)
+        # Mixed Pattern - should preserve try-except
+        self.assertIn("try:", source)
+        self.assertIn("except HTTPException:", source)
+
+    def test_batch_112_all_conversation_files_endpoints_have_decorator(self):
+        """Verify all conversation_files endpoints have @with_error_handling decorator"""
+        from backend.api import conversation_files
+
+        # List of all endpoint functions in conversation_files.py
+        endpoint_functions = [
+            conversation_files.upload_conversation_file,
+            conversation_files.list_conversation_files,
+            conversation_files.download_conversation_file,
+            conversation_files.preview_conversation_file,
+            conversation_files.delete_conversation_file,
+            conversation_files.transfer_conversation_files,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_112_conversation_files_100_percent_milestone(self):
+        """Verify conversation_files.py has reached 100% migration"""
+        from backend.api import conversation_files
+
+        # List of all endpoint functions
+        endpoint_functions = [
+            conversation_files.upload_conversation_file,
+            conversation_files.list_conversation_files,
+            conversation_files.download_conversation_file,
+            conversation_files.preview_conversation_file,
+            conversation_files.delete_conversation_file,
+            conversation_files.transfer_conversation_files,
+        ]
+
+        # Count endpoints with @with_error_handling
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        # conversation_files.py has 6 total endpoints
+        total_endpoints = 6
+
+        # Should have migrated all endpoints
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_112_migration_preserves_file_operations(self):
+        """Verify migration preserves file operation logic"""
+        from backend.api import conversation_files
+
+        # Check upload preserves file validation
+        source_upload = inspect.getsource(conversation_files.upload_conversation_file)
+        self.assertIn("is_safe_file", source_upload)
+        self.assertIn("validate_session_ownership", source_upload)
+        self.assertIn("file_manager", source_upload)
+
+        # Check download preserves FileResponse
+        source_download = inspect.getsource(conversation_files.download_conversation_file)
+        self.assertIn("FileResponse", source_download)
+        self.assertIn("file_path", source_download)
+
+        # Check delete preserves JSONResponse
+        source_delete = inspect.getsource(conversation_files.delete_conversation_file)
+        self.assertIn("JSONResponse", source_delete)
+        self.assertIn("delete_file", source_delete)
+
+    def test_batch_112_migration_preserves_security_validation(self):
+        """Verify migration preserves security-critical validation"""
+        from backend.api import conversation_files
+
+        # All endpoints should preserve session ownership validation
+        endpoints = [
+            conversation_files.upload_conversation_file,
+            conversation_files.list_conversation_files,
+            conversation_files.download_conversation_file,
+            conversation_files.preview_conversation_file,
+            conversation_files.delete_conversation_file,
+            conversation_files.transfer_conversation_files,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # Should have permission check
+            self.assertIn("check_file_permissions", source)
+            # Should have session ownership validation
+            self.assertIn("validate_session_ownership", source)
+            # Should preserve audit logging
+            self.assertIn("audit_log", source)
+
+    def test_batch_112_migration_preserves_file_manager_integration(self):
+        """Verify migration preserves ConversationFileManager integration"""
+        from backend.api import conversation_files
+
+        # Check that file manager is retrieved in each endpoint
+        endpoints = [
+            conversation_files.upload_conversation_file,
+            conversation_files.list_conversation_files,
+            conversation_files.download_conversation_file,
+            conversation_files.preview_conversation_file,
+            conversation_files.delete_conversation_file,
+            conversation_files.transfer_conversation_files,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("get_conversation_file_manager", source)
+            self.assertIn("file_manager", source)
+
 if __name__ == "__main__":
     unittest.main()
