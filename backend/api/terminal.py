@@ -1200,6 +1200,11 @@ async def get_session_audit_log(session_id: str):
 
 
 @router.websocket("/ws/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="consolidated_terminal_websocket",
+    error_code_prefix="TERMINAL",
+)
 async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str):
     """
     Primary WebSocket endpoint for consolidated terminal access
@@ -1274,6 +1279,11 @@ async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str)
 
 
 @router.websocket("/ws/simple/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="simple_terminal_websocket_compat",
+    error_code_prefix="TERMINAL",
+)
 async def simple_terminal_websocket_compat(websocket: WebSocket, session_id: str):
     """Backward compatibility for simple terminal WebSocket"""
     # Set session to standard security for compatibility
@@ -1291,6 +1301,11 @@ async def simple_terminal_websocket_compat(websocket: WebSocket, session_id: str
 
 
 @router.websocket("/ws/secure/{session_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="secure_terminal_websocket_compat",
+    error_code_prefix="TERMINAL",
+)
 async def secure_terminal_websocket_compat(websocket: WebSocket, session_id: str):
     """Backward compatibility for secure terminal WebSocket"""
     # Set session to elevated security for compatibility
@@ -1390,6 +1405,11 @@ async def get_package_managers():
 
 
 @router.get("/")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="terminal_info",
+    error_code_prefix="TERMINAL",
+)
 async def terminal_info():
     """Get information about the consolidated terminal API"""
     return {
