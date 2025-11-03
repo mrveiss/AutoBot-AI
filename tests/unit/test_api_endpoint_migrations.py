@@ -19939,5 +19939,184 @@ class TestBatch106AgentTerminalCOMPLETE(unittest.TestCase):
             )
 
 
+class TestBatch107KnowledgeCOMPLETE(unittest.TestCase):
+    """Test batch 107 migration: knowledge.py completion (2 endpoints - FINAL TO 100%)"""
+
+    def test_batch_107_add_document_to_knowledge_simple_pattern(self):
+        """Verify add_document_to_knowledge uses Simple Pattern (legacy redirect endpoint)"""
+        from backend.api import knowledge
+
+        source = inspect.getsource(knowledge.add_document_to_knowledge)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should NOT have any try-except blocks (Simple Pattern)
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except", source)
+        # Should redirect to add_text_to_knowledge
+        self.assertIn("add_text_to_knowledge", source)
+        # Should NOT have any HTTPException raises
+        self.assertNotIn("HTTPException", source)
+
+    def test_batch_107_query_knowledge_simple_pattern(self):
+        """Verify query_knowledge uses Simple Pattern (legacy redirect endpoint)"""
+        from backend.api import knowledge
+
+        source = inspect.getsource(knowledge.query_knowledge)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should NOT have any try-except blocks (Simple Pattern)
+        self.assertNotIn("try:", source)
+        self.assertNotIn("except", source)
+        # Should redirect to search_knowledge
+        self.assertIn("search_knowledge", source)
+        # Should NOT have any HTTPException raises
+        self.assertNotIn("HTTPException", source)
+
+    def test_batch_107_error_code_prefix_consistent(self):
+        """Verify batch 107 endpoints use consistent error_code_prefix"""
+        from backend.api import knowledge
+
+        endpoints = [
+            knowledge.add_document_to_knowledge,
+            knowledge.query_knowledge,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # Should have consistent error_code_prefix
+            self.assertIn('error_code_prefix="KNOWLEDGE"', source)
+
+    def test_batch_107_uses_server_error_category(self):
+        """Verify batch 107 endpoints use ErrorCategory.SERVER_ERROR"""
+        from backend.api import knowledge
+
+        endpoints = [
+            knowledge.add_document_to_knowledge,
+            knowledge.query_knowledge,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # Should use ErrorCategory.SERVER_ERROR
+            self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+
+    def test_batch_107_has_operation_params(self):
+        """Verify batch 107 endpoints have operation parameters"""
+        from backend.api import knowledge
+
+        endpoints_and_operations = [
+            (knowledge.add_document_to_knowledge, "add_document_to_knowledge"),
+            (knowledge.query_knowledge, "query_knowledge"),
+        ]
+
+        for endpoint, expected_operation in endpoints_and_operations:
+            source = inspect.getsource(endpoint)
+            # Should have correct operation parameter
+            self.assertIn(f'operation="{expected_operation}"', source)
+
+    def test_batch_107_no_generic_500_exceptions(self):
+        """Verify batch 107 endpoints have no generic 500 exception handlers"""
+        from backend.api import knowledge
+
+        endpoints = [
+            knowledge.add_document_to_knowledge,
+            knowledge.query_knowledge,
+        ]
+
+        for endpoint in endpoints:
+            source = inspect.getsource(endpoint)
+            # Should NOT have generic 500 status code
+            self.assertNotIn("status_code=500", source)
+
+    def test_batch_107_legacy_endpoints_are_redirects(self):
+        """Verify batch 107 endpoints are legacy redirects to current endpoints"""
+        from backend.api import knowledge
+
+        # add_document_to_knowledge should call add_text_to_knowledge
+        add_doc_source = inspect.getsource(knowledge.add_document_to_knowledge)
+        self.assertIn("await add_text_to_knowledge", add_doc_source)
+        self.assertIn("Legacy endpoint", add_doc_source)
+
+        # query_knowledge should call search_knowledge
+        query_source = inspect.getsource(knowledge.query_knowledge)
+        self.assertIn("await search_knowledge", query_source)
+        self.assertIn("Legacy endpoint", query_source)
+
+    def test_batch_107_knowledge_100_percent_milestone(self):
+        """Verify knowledge.py has reached 100% migration milestone (18th file)"""
+        from backend.api import knowledge
+
+        # Verify the two newly migrated legacy endpoints
+        legacy_endpoints = [
+            knowledge.add_document_to_knowledge,
+            knowledge.query_knowledge,
+        ]
+
+        # Verify both legacy endpoints have @with_error_handling decorator
+        for endpoint in legacy_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} should have @with_error_handling decorator",
+            )
+
+        # Verify a sampling of other key endpoints
+        other_endpoints = [
+            knowledge.add_text_to_knowledge,
+            knowledge.search_knowledge,
+            knowledge.get_knowledge_health,
+        ]
+
+        for endpoint in other_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} should have @with_error_handling decorator",
+            )
+
+    def test_batch_107_progress_tracking(self):
+        """Verify knowledge.py progress: 46/46 endpoints migrated (100% COMPLETE)"""
+        from backend.api import knowledge
+        import inspect
+
+        # Get all functions in knowledge module
+        all_functions = [
+            obj
+            for name, obj in inspect.getmembers(knowledge)
+            if inspect.isfunction(obj) or inspect.iscoroutinefunction(obj)
+        ]
+
+        # Filter to only endpoints (those with @router decorator)
+        endpoint_functions = []
+        for func in all_functions:
+            try:
+                source = inspect.getsource(func)
+                if "@router." in source:
+                    endpoint_functions.append(func)
+            except:
+                continue
+
+        # Count those with @with_error_handling
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        # knowledge.py has 46 total endpoints
+        total_endpoints = 46
+
+        # Should have migrated all endpoints
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+
 if __name__ == "__main__":
     unittest.main()
