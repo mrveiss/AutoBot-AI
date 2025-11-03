@@ -19325,5 +19325,248 @@ class TestBatch103MonitoringAlertsHealthStatus(unittest.TestCase):
             )
 
 
+class TestBatch104MonitoringAlertsRulesManagement(unittest.TestCase):
+    """Test batch 104 migrations: 5 endpoints from monitoring_alerts.py (Alert Rules Management)"""
+
+    def test_batch_104_create_alert_rule_preserves_400_validation(self):
+        """Verify create_alert_rule preserves 400 validation errors (Mixed Pattern)"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.create_alert_rule)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should preserve 400 HTTPException for invalid severity
+        self.assertIn("status_code=400", source)
+        self.assertIn("Invalid severity", source)
+        # Should preserve 400 HTTPException for invalid operator
+        self.assertIn("Invalid operator", source)
+        # Should preserve inner try-catch for ValueError
+        self.assertIn("try:", source)
+        self.assertIn("except ValueError:", source)
+        # Should NOT have except HTTPException: raise
+        self.assertNotIn("except HTTPException:", source)
+        # Should NOT have generic 500 exception
+        self.assertNotIn("status_code=500", source)
+
+    def test_batch_104_update_alert_rule_preserves_404_and_400(self):
+        """Verify update_alert_rule preserves 404 + 400 errors (Mixed Pattern)"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.update_alert_rule)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should preserve 404 HTTPException
+        self.assertIn("status_code=404", source)
+        self.assertIn("Alert rule not found", source)
+        # Should preserve 400 validation errors
+        self.assertIn("status_code=400", source)
+        self.assertIn("Invalid severity", source)
+        self.assertIn("Invalid operator", source)
+        # Should preserve inner try-catch for ValueError
+        self.assertIn("try:", source)
+        self.assertIn("except ValueError:", source)
+        # Should NOT have except HTTPException: raise
+        self.assertNotIn("except HTTPException:", source)
+
+    def test_batch_104_delete_alert_rule_preserves_404(self):
+        """Verify delete_alert_rule preserves 404 error (Mixed Pattern)"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.delete_alert_rule)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should preserve 404 HTTPException
+        self.assertIn("status_code=404", source)
+        self.assertIn("Alert rule not found", source)
+        # Should NOT have except HTTPException: raise
+        self.assertNotIn("except HTTPException:", source)
+        # Should NOT have generic 500 exception
+        self.assertNotIn("status_code=500", source)
+
+    def test_batch_104_enable_alert_rule_preserves_404(self):
+        """Verify enable_alert_rule preserves 404 error (Mixed Pattern)"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.enable_alert_rule)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should preserve 404 HTTPException
+        self.assertIn("status_code=404", source)
+        self.assertIn("Alert rule not found", source)
+        # Should NOT have except HTTPException: raise
+        self.assertNotIn("except HTTPException:", source)
+        # Should NOT have generic 500 exception
+        self.assertNotIn("status_code=500", source)
+
+    def test_batch_104_disable_alert_rule_preserves_404(self):
+        """Verify disable_alert_rule preserves 404 error (Mixed Pattern)"""
+        from backend.api import monitoring_alerts
+
+        source = inspect.getsource(monitoring_alerts.disable_alert_rule)
+        # Should have @with_error_handling decorator
+        self.assertIn("@with_error_handling", source)
+        # Should preserve 404 HTTPException
+        self.assertIn("status_code=404", source)
+        self.assertIn("Alert rule not found", source)
+        # Should NOT have except HTTPException: raise
+        self.assertNotIn("except HTTPException:", source)
+        # Should NOT have generic 500 exception
+        self.assertNotIn("status_code=500", source)
+
+    def test_batch_104_all_endpoints_have_decorator(self):
+        """Verify all batch 104 endpoints have @with_error_handling decorator"""
+        from backend.api import monitoring_alerts
+
+        batch_104_endpoints = [
+            monitoring_alerts.create_alert_rule,
+            monitoring_alerts.update_alert_rule,
+            monitoring_alerts.delete_alert_rule,
+            monitoring_alerts.enable_alert_rule,
+            monitoring_alerts.disable_alert_rule,
+        ]
+
+        for endpoint in batch_104_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"{endpoint.__name__} should have @with_error_handling decorator",
+            )
+
+    def test_batch_104_all_endpoints_use_correct_error_code_prefix(self):
+        """Verify all batch 104 endpoints use MONITORING_ALERTS error_code_prefix"""
+        from backend.api import monitoring_alerts
+
+        batch_104_endpoints = [
+            monitoring_alerts.create_alert_rule,
+            monitoring_alerts.update_alert_rule,
+            monitoring_alerts.delete_alert_rule,
+            monitoring_alerts.enable_alert_rule,
+            monitoring_alerts.disable_alert_rule,
+        ]
+
+        for endpoint in batch_104_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn(
+                'error_code_prefix="MONITORING_ALERTS"',
+                source,
+                f"{endpoint.__name__} should use MONITORING_ALERTS error_code_prefix",
+            )
+
+    def test_batch_104_all_mixed_pattern_preserve_business_logic(self):
+        """Verify all batch 104 endpoints preserve business logic (all Mixed Pattern)"""
+        from backend.api import monitoring_alerts
+
+        # All 5 endpoints are Mixed Pattern
+        batch_104_endpoints = [
+            monitoring_alerts.create_alert_rule,
+            monitoring_alerts.update_alert_rule,
+            monitoring_alerts.delete_alert_rule,
+            monitoring_alerts.enable_alert_rule,
+            monitoring_alerts.disable_alert_rule,
+        ]
+
+        # All should have HTTPException (404 or 400)
+        for endpoint in batch_104_endpoints:
+            source = inspect.getsource(endpoint)
+            has_http_exception = "HTTPException" in source
+            self.assertTrue(
+                has_http_exception,
+                f"{endpoint.__name__} should preserve HTTPException (Mixed Pattern)",
+            )
+
+    def test_batch_104_progress_tracking(self):
+        """Verify batch 104 progress: 10/14 endpoints migrated (71%)"""
+        from backend.api import monitoring_alerts
+
+        all_endpoints = [
+            # Batch 103 (5 endpoints)
+            monitoring_alerts.alerts_health_check,
+            monitoring_alerts.get_alerts_status,
+            monitoring_alerts.get_active_alerts,
+            monitoring_alerts.acknowledge_alert,
+            monitoring_alerts.get_alert_rules,
+            # Batch 104 (5 endpoints)
+            monitoring_alerts.create_alert_rule,
+            monitoring_alerts.update_alert_rule,
+            monitoring_alerts.delete_alert_rule,
+            monitoring_alerts.enable_alert_rule,
+            monitoring_alerts.disable_alert_rule,
+        ]
+
+        migrated_count = sum(
+            1 for ep in all_endpoints if "@with_error_handling" in inspect.getsource(ep)
+        )
+
+        # monitoring_alerts.py has 14 total endpoints
+        total_endpoints = 14
+        progress_percentage = (migrated_count / total_endpoints) * 100
+
+        self.assertEqual(migrated_count, 10)
+        self.assertAlmostEqual(progress_percentage, 71.4, places=1)
+
+    def test_batch_104_no_generic_500_exceptions(self):
+        """Verify batch 104 endpoints removed generic 500 exception handlers"""
+        from backend.api import monitoring_alerts
+
+        batch_104_endpoints = [
+            monitoring_alerts.create_alert_rule,
+            monitoring_alerts.update_alert_rule,
+            monitoring_alerts.delete_alert_rule,
+            monitoring_alerts.enable_alert_rule,
+            monitoring_alerts.disable_alert_rule,
+        ]
+
+        for endpoint in batch_104_endpoints:
+            source = inspect.getsource(endpoint)
+            # Should NOT have generic 500 exception handlers
+            has_generic_500 = (
+                'except Exception as e:' in source and 'status_code=500' in source
+            )
+            self.assertFalse(
+                has_generic_500,
+                f"{endpoint.__name__} should not have generic 500 exception handler",
+            )
+
+    def test_batch_104_404_errors_preserved(self):
+        """Verify batch 104 endpoints preserve 404 error handling"""
+        from backend.api import monitoring_alerts
+
+        # All 5 endpoints have 404 for "Alert rule not found"
+        endpoints_with_404 = [
+            monitoring_alerts.update_alert_rule,
+            monitoring_alerts.delete_alert_rule,
+            monitoring_alerts.enable_alert_rule,
+            monitoring_alerts.disable_alert_rule,
+        ]
+
+        for endpoint in endpoints_with_404:
+            source = inspect.getsource(endpoint)
+            # Should preserve 404 errors
+            self.assertIn("status_code=404", source)
+            self.assertIn("Alert rule not found", source)
+
+    def test_batch_104_400_validation_errors_preserved(self):
+        """Verify batch 104 endpoints preserve 400 validation error handling"""
+        from backend.api import monitoring_alerts
+
+        # create_alert_rule and update_alert_rule have validation errors
+        validation_endpoints = [
+            monitoring_alerts.create_alert_rule,
+            monitoring_alerts.update_alert_rule,
+        ]
+
+        for endpoint in validation_endpoints:
+            source = inspect.getsource(endpoint)
+            # Should preserve 400 validation errors
+            self.assertIn("status_code=400", source)
+            validation_messages = ["Invalid severity", "Invalid operator"]
+            has_validation = any(msg in source for msg in validation_messages)
+            self.assertTrue(
+                has_validation,
+                f"{endpoint.__name__} should preserve validation error messages",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

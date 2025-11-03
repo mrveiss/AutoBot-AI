@@ -281,197 +281,187 @@ async def get_alert_rules(
 
 
 @router.post("/rules", response_model=AlertRuleResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_alert_rule",
+    error_code_prefix="MONITORING_ALERTS",
+)
 async def create_alert_rule(rule_request: AlertRuleRequest):
     """Create a new alert rule"""
+    alerts_manager = get_alerts_manager()
+
+    # Generate rule ID
+    rule_id = f"{rule_request.name.lower().replace(' ', '_')}_{int(datetime.now().timestamp())}"
+
+    # Validate severity
     try:
-        alerts_manager = get_alerts_manager()
-
-        # Generate rule ID
-        rule_id = f"{rule_request.name.lower().replace(' ', '_')}_{int(datetime.now().timestamp())}"
-
-        # Validate severity
-        try:
-            severity = AlertSeverity(rule_request.severity.lower())
-        except ValueError:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid severity: {rule_request.severity}"
-            )
-
-        # Validate operator
-        valid_operators = ["gt", "gte", "lt", "lte", "eq"]
-        if rule_request.operator not in valid_operators:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid operator: {rule_request.operator}"
-            )
-
-        # Create alert rule
-        rule = AlertRule(
-            id=rule_id,
-            name=rule_request.name,
-            metric_path=rule_request.metric_path,
-            threshold=rule_request.threshold,
-            operator=rule_request.operator,
-            severity=severity,
-            duration=rule_request.duration,
-            cooldown=rule_request.cooldown,
-            description=rule_request.description,
-            enabled=rule_request.enabled,
-            tags=rule_request.tags,
+        severity = AlertSeverity(rule_request.severity.lower())
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid severity: {rule_request.severity}"
         )
 
-        alerts_manager.add_alert_rule(rule)
-
-        return AlertRuleResponse(
-            id=rule.id,
-            name=rule.name,
-            metric_path=rule.metric_path,
-            threshold=rule.threshold,
-            operator=rule.operator,
-            severity=rule.severity.value,
-            duration=rule.duration,
-            cooldown=rule.cooldown,
-            description=rule.description,
-            enabled=rule.enabled,
-            tags=rule.tags,
+    # Validate operator
+    valid_operators = ["gt", "gte", "lt", "lte", "eq"]
+    if rule_request.operator not in valid_operators:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid operator: {rule_request.operator}"
         )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating alert rule: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # Create alert rule
+    rule = AlertRule(
+        id=rule_id,
+        name=rule_request.name,
+        metric_path=rule_request.metric_path,
+        threshold=rule_request.threshold,
+        operator=rule_request.operator,
+        severity=severity,
+        duration=rule_request.duration,
+        cooldown=rule_request.cooldown,
+        description=rule_request.description,
+        enabled=rule_request.enabled,
+        tags=rule_request.tags,
+    )
+
+    alerts_manager.add_alert_rule(rule)
+
+    return AlertRuleResponse(
+        id=rule.id,
+        name=rule.name,
+        metric_path=rule.metric_path,
+        threshold=rule.threshold,
+        operator=rule.operator,
+        severity=rule.severity.value,
+        duration=rule.duration,
+        cooldown=rule.cooldown,
+        description=rule.description,
+        enabled=rule.enabled,
+        tags=rule.tags,
+    )
 
 
 @router.put("/rules/{rule_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_alert_rule",
+    error_code_prefix="MONITORING_ALERTS",
+)
 async def update_alert_rule(rule_id: str, rule_request: AlertRuleRequest):
     """Update an existing alert rule"""
+    alerts_manager = get_alerts_manager()
+
+    if rule_id not in alerts_manager.alert_rules:
+        raise HTTPException(status_code=404, detail="Alert rule not found")
+
+    # Validate severity
     try:
-        alerts_manager = get_alerts_manager()
-
-        if rule_id not in alerts_manager.alert_rules:
-            raise HTTPException(status_code=404, detail="Alert rule not found")
-
-        # Validate severity
-        try:
-            severity = AlertSeverity(rule_request.severity.lower())
-        except ValueError:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid severity: {rule_request.severity}"
-            )
-
-        # Validate operator
-        valid_operators = ["gt", "gte", "lt", "lte", "eq"]
-        if rule_request.operator not in valid_operators:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid operator: {rule_request.operator}"
-            )
-
-        # Update the rule
-        rule = AlertRule(
-            id=rule_id,
-            name=rule_request.name,
-            metric_path=rule_request.metric_path,
-            threshold=rule_request.threshold,
-            operator=rule_request.operator,
-            severity=severity,
-            duration=rule_request.duration,
-            cooldown=rule_request.cooldown,
-            description=rule_request.description,
-            enabled=rule_request.enabled,
-            tags=rule_request.tags,
+        severity = AlertSeverity(rule_request.severity.lower())
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid severity: {rule_request.severity}"
         )
 
-        alerts_manager.add_alert_rule(rule)  # This will update existing rule
+    # Validate operator
+    valid_operators = ["gt", "gte", "lt", "lte", "eq"]
+    if rule_request.operator not in valid_operators:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid operator: {rule_request.operator}"
+        )
 
-        return {
-            "status": "success",
-            "message": f"Alert rule {rule_id} updated successfully",
-            "timestamp": datetime.now().isoformat(),
-        }
+    # Update the rule
+    rule = AlertRule(
+        id=rule_id,
+        name=rule_request.name,
+        metric_path=rule_request.metric_path,
+        threshold=rule_request.threshold,
+        operator=rule_request.operator,
+        severity=severity,
+        duration=rule_request.duration,
+        cooldown=rule_request.cooldown,
+        description=rule_request.description,
+        enabled=rule_request.enabled,
+        tags=rule_request.tags,
+    )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating alert rule: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    alerts_manager.add_alert_rule(rule)  # This will update existing rule
+
+    return {
+        "status": "success",
+        "message": f"Alert rule {rule_id} updated successfully",
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.delete("/rules/{rule_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_alert_rule",
+    error_code_prefix="MONITORING_ALERTS",
+)
 async def delete_alert_rule(rule_id: str):
     """Delete an alert rule"""
-    try:
-        alerts_manager = get_alerts_manager()
+    alerts_manager = get_alerts_manager()
 
-        if rule_id not in alerts_manager.alert_rules:
-            raise HTTPException(status_code=404, detail="Alert rule not found")
+    if rule_id not in alerts_manager.alert_rules:
+        raise HTTPException(status_code=404, detail="Alert rule not found")
 
-        await alerts_manager.remove_alert_rule(rule_id)
+    await alerts_manager.remove_alert_rule(rule_id)
 
-        return {
-            "status": "success",
-            "message": f"Alert rule {rule_id} deleted successfully",
-            "timestamp": datetime.now().isoformat(),
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting alert rule: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "success",
+        "message": f"Alert rule {rule_id} deleted successfully",
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.post("/rules/{rule_id}/enable")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enable_alert_rule",
+    error_code_prefix="MONITORING_ALERTS",
+)
 async def enable_alert_rule(rule_id: str):
     """Enable an alert rule"""
-    try:
-        alerts_manager = get_alerts_manager()
+    alerts_manager = get_alerts_manager()
 
-        if rule_id not in alerts_manager.alert_rules:
-            raise HTTPException(status_code=404, detail="Alert rule not found")
+    if rule_id not in alerts_manager.alert_rules:
+        raise HTTPException(status_code=404, detail="Alert rule not found")
 
-        rule = alerts_manager.alert_rules[rule_id]
-        rule.enabled = True
+    rule = alerts_manager.alert_rules[rule_id]
+    rule.enabled = True
 
-        return {
-            "status": "success",
-            "message": f"Alert rule {rule_id} enabled",
-            "timestamp": datetime.now().isoformat(),
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error enabling alert rule: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "success",
+        "message": f"Alert rule {rule_id} enabled",
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.post("/rules/{rule_id}/disable")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="disable_alert_rule",
+    error_code_prefix="MONITORING_ALERTS",
+)
 async def disable_alert_rule(rule_id: str):
     """Disable an alert rule"""
-    try:
-        alerts_manager = get_alerts_manager()
+    alerts_manager = get_alerts_manager()
 
-        if rule_id not in alerts_manager.alert_rules:
-            raise HTTPException(status_code=404, detail="Alert rule not found")
+    if rule_id not in alerts_manager.alert_rules:
+        raise HTTPException(status_code=404, detail="Alert rule not found")
 
-        rule = alerts_manager.alert_rules[rule_id]
-        rule.enabled = False
+    rule = alerts_manager.alert_rules[rule_id]
+    rule.enabled = False
 
-        # Resolve any active alerts for this rule
-        if rule_id in alerts_manager.active_alerts:
-            await alerts_manager._resolve_alert(rule_id)
+    # Resolve any active alerts for this rule
+    if rule_id in alerts_manager.active_alerts:
+        await alerts_manager._resolve_alert(rule_id)
 
-        return {
-            "status": "success",
-            "message": f"Alert rule {rule_id} disabled",
-            "timestamp": datetime.now().isoformat(),
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error disabling alert rule: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "success",
+        "message": f"Alert rule {rule_id} disabled",
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 @router.post("/monitoring/start")
