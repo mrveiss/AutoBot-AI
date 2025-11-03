@@ -31,18 +31,18 @@ export function generateMessageId() {
 }
 
 /**
- * Generate a document ID in UUID format
- * For consistency with other system IDs
+ * Generate a category ID in UUID format
+ * For knowledge base category management
  */
-export function generateDocumentId() {
+export function generateCategoryId() {
   return generateChatId();
 }
 
 /**
- * Generate a category ID in UUID format
- * For consistency with other system IDs
+ * Generate a document ID in UUID format
+ * For knowledge base document tracking
  */
-export function generateCategoryId() {
+export function generateDocumentId() {
   return generateChatId();
 }
 

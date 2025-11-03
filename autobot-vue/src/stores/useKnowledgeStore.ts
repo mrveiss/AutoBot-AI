@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import ApiClient from '@/utils/ApiClient'
+import type { KnowledgeStats } from '@/types/knowledgeBase'
 
 export interface KnowledgeDocument {
   id: string
@@ -50,20 +51,7 @@ export interface RagSearchResult {
   message?: string
 }
 
-export interface KnowledgeStats {
-  total_documents: number
-  total_chunks: number
-  total_facts: number
-  total_vectors: number
-  categories: string[]
-  db_size: number
-  status: string
-  last_updated: string | null
-  redis_db: string | null
-  index_name: string | null
-  initialized: boolean
-  rag_available: boolean
-}
+// KnowledgeStats imported from @/types/knowledgeBase (consolidated type definition)
 
 export interface SearchFilters {
   categories: string[]
@@ -235,7 +223,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     try {
       isLoading.value = true
       const response = await ApiClient.get('/api/knowledge_base/stats')
-      stats.value = response
+      stats.value = await response.json()
     } catch (error) {
       console.error('Failed to refresh stats:', error)
       // Set default stats on error

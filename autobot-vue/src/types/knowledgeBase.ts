@@ -1,12 +1,38 @@
 /**
  * Knowledge Base API Response Types
- * Type definitions for knowledge base API responses
+ * Type definitions for knowledge base API responses and state management
  */
+
+// ============================================================================
+// Core Type Definitions (Consolidated from multiple sources)
+// ============================================================================
+
+/**
+ * Comprehensive Knowledge Base Statistics
+ * Consolidates fields from useKnowledgeStore and useKnowledgeBase
+ */
+export interface KnowledgeStats {
+  total_documents?: number
+  total_chunks?: number
+  total_facts?: number
+  total_vectors?: number
+  categories?: string[] | Record<string, number>
+  db_size?: number
+  status?: string
+  last_updated?: string | null
+  redis_db?: string | null
+  index_name?: string | null
+  initialized?: boolean
+  rag_available?: boolean
+}
 
 // ============================================================================
 // Response Interfaces
 // ============================================================================
 
+/**
+ * @deprecated Use KnowledgeStats instead for consistency
+ */
 export interface KnowledgeStatsResponse {
   total_facts?: number
   total_vectors?: number

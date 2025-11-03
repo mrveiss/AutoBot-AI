@@ -15,6 +15,7 @@ import {
 } from '@/utils/formatHelpers'
 import appConfig from '@/config/AppConfig.js'
 import type {
+  KnowledgeStats,
   KnowledgeStatsResponse,
   CategoryResponse,
   SearchResponse,
@@ -32,11 +33,7 @@ import type {
   BasicStatsResponse
 } from '@/types/knowledgeBase'
 
-export interface KnowledgeStats {
-  total_facts?: number
-  total_vectors?: number
-  categories?: Record<string, number> | string[]
-}
+// KnowledgeStats imported from @/types/knowledgeBase (consolidated type definition)
 
 export interface MachineProfile {
   machine_id?: string
