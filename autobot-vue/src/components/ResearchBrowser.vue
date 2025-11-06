@@ -11,7 +11,7 @@
           </div>
         </div>
         <div class="flex items-center space-x-2">
-          <span class="status-badge" :class="statusClass">{{ status || 'Unknown' }}</span>
+          <StatusBadge :variant="statusVariant" size="small">{{ status || 'Unknown' }}</StatusBadge>
           <button @click="refreshStatus" class="btn btn-secondary btn-sm" :disabled="isRefreshingStatus" aria-label="Refresh status">
             <i class="fas fa-sync-alt" :class="{ 'fa-spin': isRefreshingStatus }"></i>
           </button>
@@ -64,7 +64,7 @@
               <h5 class="text-sm font-medium text-gray-900">{{ result.query }}</h5>
               <p class="text-xs text-gray-500 mt-1">{{ result.url }}</p>
             </div>
-            <span class="status-badge" :class="getResultStatusClass(result.status)">{{ result.status }}</span>
+            <StatusBadge :variant="getResultStatusVariant(result.status)" size="small">{{ result.status }}</StatusBadge>
           </div>
 
           <div v-if="result.content && result.content.success" class="content-preview mt-3">
@@ -263,12 +263,14 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import PopoutChromiumBrowser from './PopoutChromiumBrowser.vue'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 
 export default {
   name: 'ResearchBrowser',
   components: {
-    PopoutChromiumBrowser
+    PopoutChromiumBrowser,
+    StatusBadge
   },
   props: {
     sessionId: {
@@ -311,25 +313,25 @@ export default {
       return currentBrowserUrl.value || currentUrl.value || 'about:blank'
     })
 
-    const statusClass = computed(() => {
-      const statusClasses = {
-        'active': 'bg-green-100 text-green-800',
-        'waiting_for_user': 'bg-yellow-100 text-yellow-800',
-        'error': 'bg-red-100 text-red-800',
-        'closed': 'bg-gray-100 text-gray-800',
-        'initializing': 'bg-blue-100 text-blue-800'
+    const statusVariant = computed(() => {
+      const variantMap = {
+        'active': 'success',
+        'waiting_for_user': 'warning',
+        'error': 'danger',
+        'closed': 'secondary',
+        'initializing': 'info'
       }
-      return statusClasses[status.value] || 'bg-gray-100 text-gray-800'
+      return variantMap[status.value] || 'secondary'
     })
 
-    const getResultStatusClass = (resultStatus) => {
-      const statusClasses = {
-        'completed': 'bg-green-100 text-green-800',
-        'interaction_required': 'bg-yellow-100 text-yellow-800',
-        'mhtml_fallback': 'bg-orange-100 text-orange-800',
-        'error': 'bg-red-100 text-red-800'
+    const getResultStatusVariant = (resultStatus) => {
+      const variantMap = {
+        'completed': 'success',
+        'interaction_required': 'warning',
+        'mhtml_fallback': 'warning',
+        'error': 'danger'
       }
-      return statusClasses[resultStatus] || 'bg-gray-100 text-gray-800'
+      return variantMap[resultStatus] || 'secondary'
     }
 
     // 1. Migrate refreshStatus - Complex: 2 sequential API calls
@@ -660,8 +662,8 @@ export default {
       activeSessionId,
       currentUrlForDisplay,
       researchResults,
-      statusClass,
-      getResultStatusClass,
+      statusVariant,
+      getResultStatusVariant,
 
       // Methods
       refreshStatus,
@@ -703,10 +705,6 @@ export default {
   position: relative;
   display: flex;
   flex-direction: column;
-}
-
-.status-badge {
-  @apply px-2 py-1 text-xs font-medium rounded;
 }
 
 .result-card {

@@ -827,11 +827,41 @@ Migrated 3 components to use existing StatusBadge component:
 - ✅ Increased StatusBadge usage from 2 to 5 components (150% adoption increase)
 - ✅ Demonstrates value of leveraging existing components
 
+**📊 Batch 16 StatusBadge Enforcement** (January 2025):
+Continued migration to StatusBadge component with more complex components:
+
+**1. RedisServiceControl.vue** ✅
+- **Before**: 3 status mapping functions (getStatusBadgeClass, getHealthIndicatorClass, getHealthCheckBadgeClass) with switch statements
+- **After**: 3 computed variant mappings (statusVariant, healthVariant, getHealthCheckVariant) + StatusBadge components
+- **Functions Removed**:
+  - `getStatusBadgeClass()` (~14 lines)
+  - `getHealthIndicatorClass()` (~14 lines)
+  - `getHealthCheckBadgeClass()` (~14 lines)
+- **Lines Saved**: ~42 lines (3 functions removed, replaced with 3 compact variant maps)
+- **Location**: `autobot-vue/src/components/services/RedisServiceControl.vue`
+- **Note**: Kept `getStatusDotClass()` and `getHealthCheckCardClass()` - still needed for dot animation and card styling
+
+**2. ResearchBrowser.vue** ✅
+- **Before**: 2 inline status class mappings (statusClass computed, getResultStatusClass function)
+- **After**: 2 variant mapping functions (statusVariant computed, getResultStatusVariant function) + StatusBadge components
+- **Functions Replaced**:
+  - `statusClass` computed property (9 lines) → `statusVariant` computed (7 lines)
+  - `getResultStatusClass` function (9 lines) → `getResultStatusVariant` function (7 lines)
+- **CSS Removed**: `.status-badge` class (3 lines)
+- **Lines Saved**: ~7 lines
+- **Location**: `autobot-vue/src/components/ResearchBrowser.vue`
+
+**Batch 16 Summary**:
+- ✅ 2 components migrated to StatusBadge
+- ✅ ~49 lines saved
+- ✅ Increased StatusBadge usage from 5 to 7 components (40% increase)
+- ✅ Demonstrates value even in complex components with multiple status types
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
-- StatusBadge adoptions: ~14 lines (batch 15)
-- **Total Progress**: ~611 lines / ~1,500-2,000 realistic target (31-41%)
+- StatusBadge adoptions: ~63 lines (batches 15-16)
+- **Total Progress**: ~660 lines / ~1,500-2,000 realistic target (33-44%)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
