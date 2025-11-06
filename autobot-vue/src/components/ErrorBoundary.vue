@@ -22,25 +22,25 @@
         </div>
 
         <div class="error-actions">
-          <button
+          <BaseButton
+            variant="primary"
             @click="retry"
-            class="btn btn-primary"
             :disabled="retrying"
           >
             {{ retrying ? 'Retrying...' : 'Try Again' }}
-          </button>
-          <button
+          </BaseButton>
+          <BaseButton
+            variant="secondary"
             @click="reload"
-            class="btn btn-secondary"
           >
             Reload Page
-          </button>
-          <button
+          </BaseButton>
+          <BaseButton
+            variant="ghost"
             @click="toggleDetails"
-            class="btn btn-ghost"
           >
             {{ showDetails ? 'Hide Details' : 'Show Details' }}
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -52,6 +52,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onErrorCaptured, inject } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 interface Props {
   fallback?: string
@@ -269,54 +270,6 @@ defineExpose({
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
-}
-
-.btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.2s;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 80px;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: #4299e1;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #3182ce;
-}
-
-.btn-secondary {
-  background: #718096;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #4a5568;
-}
-
-.btn-ghost {
-  background: transparent;
-  color: #4a5568;
-  border: 1px solid #cbd5e0;
-}
-
-.btn-ghost:hover {
-  background: #f7fafc;
-  border-color: #a0aec0;
 }
 
 @media (max-width: 640px) {

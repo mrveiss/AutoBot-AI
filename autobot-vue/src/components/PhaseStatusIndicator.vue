@@ -85,18 +85,18 @@
 
       <!-- Action buttons -->
       <div class="phase-actions">
-        <button @click="refreshStatus" class="btn btn-primary" :disabled="isLoading" aria-label="Refresh">
+        <BaseButton variant="primary" @click="refreshStatus" :disabled="isLoading">
           <i class="fas fa-sync" :class="{ 'fa-spin': isLoading }"></i>
           Refresh Status
-        </button>
-        <button @click="runValidation" class="btn btn-secondary" :disabled="isValidating" aria-label="Confirm">
+        </BaseButton>
+        <BaseButton variant="secondary" @click="runValidation" :disabled="isValidating">
           <i class="fas fa-check-circle" :class="{ 'fa-spin': isValidating }"></i>
           Run Validation
-        </button>
-        <button @click="showReport" class="btn btn-info" aria-label="Button">
+        </BaseButton>
+        <BaseButton variant="info" @click="showReport">
           <i class="fas fa-file-alt"></i>
           View Report
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -121,9 +121,13 @@
 import { ref, onMounted, computed } from 'vue';
 import { apiService } from '../services/api';
 import { formatDateTime } from '@/utils/formatHelpers';
+import BaseButton from '@/components/base/BaseButton.vue';
 
 export default {
   name: 'PhaseStatusIndicator',
+  components: {
+    BaseButton
+  },
   setup() {
     const isExpanded = ref(false);
     const isLoading = ref(false);
@@ -552,51 +556,6 @@ export default {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-}
-
-.btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.btn-secondary {
-  background: #6b7280;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #4b5563;
-}
-
-.btn-info {
-  background: #0891b2;
-  color: white;
-}
-
-.btn-info:hover:not(:disabled) {
-  background: #0e7490;
 }
 
 .modal-overlay {

@@ -24,37 +24,37 @@
         </div>
 
         <div class="error-actions">
-          <button
+          <BaseButton
+            variant="primary"
             @click="retry"
-            class="btn btn-primary"
             :disabled="retrying || retryCount >= maxRetries"
           >
             <i class="fas fa-redo" :class="{ 'fa-spin': retrying }"></i>
             {{ retrying ? 'Retrying...' : `Retry${retryCount > 0 ? ` (${retryCount}/${maxRetries})` : ''}` }}
-          </button>
+          </BaseButton>
 
-          <button
+          <BaseButton
+            variant="secondary"
             @click="reload"
-            class="btn btn-secondary"
           >
             <i class="fas fa-refresh"></i>
             Reload Page
-          </button>
+          </BaseButton>
 
-          <button
+          <BaseButton
+            variant="outline"
             @click="goHome"
-            class="btn btn-outline"
           >
             <i class="fas fa-home"></i>
             Go to Home
-          </button>
+          </BaseButton>
 
-          <button
+          <BaseButton
+            variant="ghost"
             @click="toggleDetails"
-            class="btn btn-ghost"
           >
             {{ showDetails ? 'Hide Details' : 'Show Details' }}
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -64,6 +64,7 @@
 <script setup lang="ts">
 import { ref, computed, inject, withDefaults } from 'vue'
 import { useRouter } from 'vue-router'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 interface Props {
   error?: Error
@@ -335,73 +336,6 @@ if (props.error) {
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;
-}
-
-.btn {
-  padding: 0.75rem 1.25rem;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 0.9rem;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  min-width: 100px;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: #2196f3;
-  color: white;
-  box-shadow: 0 2px 4px rgba(33, 150, 243, 0.3);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #1976d2;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(33, 150, 243, 0.4);
-}
-
-.btn-secondary {
-  background: #607d8b;
-  color: white;
-  box-shadow: 0 2px 4px rgba(96, 125, 139, 0.3);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #455a64;
-  transform: translateY(-1px);
-}
-
-.btn-outline {
-  background: transparent;
-  color: #f57c00;
-  border: 2px solid #f57c00;
-}
-
-.btn-outline:hover {
-  background: #f57c00;
-  color: white;
-  transform: translateY(-1px);
-}
-
-.btn-ghost {
-  background: transparent;
-  color: #757575;
-  border: 1px solid #bdbdbd;
-}
-
-.btn-ghost:hover {
-  background: #f5f5f5;
-  border-color: #9e9e9e;
 }
 
 .fa-spin {
