@@ -65,11 +65,14 @@
       <div v-else-if="error" class="error">
         <i class="fas fa-exclamation-triangle"></i> {{ error }}
       </div>
-      
-      <div v-else-if="!selectedSource" class="placeholder">
-        <i class="fas fa-file-alt"></i> Select a log source to view
-      </div>
-      
+
+      <EmptyState
+        v-else-if="!selectedSource"
+        icon="fas fa-file-alt"
+        message="Select a log source to view"
+        compact
+      />
+
       <pre v-else class="log-text">{{ logContent }}</pre>
     </div>
 
@@ -85,9 +88,13 @@
 <script>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useApiService } from '@/composables/useApiService'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 export default {
   name: 'LogViewer',
+  components: {
+    EmptyState
+  },
   setup() {
     const apiService = useApiService()
     const logSources = ref({ file_logs: [], container_logs: [], total_sources: 0 })
@@ -453,8 +460,7 @@ export default {
 }
 
 .loading,
-.error,
-.placeholder {
+.error {
   display: flex;
   align-items: center;
   justify-content: center;
