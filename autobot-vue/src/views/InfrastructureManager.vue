@@ -98,22 +98,24 @@
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="hosts.length === 0" class="text-center py-12">
-        <svg class="mx-auto h-16 w-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path>
-        </svg>
-        <h3 class="mt-4 text-lg font-medium text-gray-900">No hosts configured</h3>
-        <p class="mt-2 text-sm text-gray-600">Get started by adding your first host.</p>
-        <button
-          @click="showAddHostModal = true"
-          class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-        >
-          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-          </svg>
-          Add First Host
-        </button>
-      </div>
+      <EmptyState
+        v-else-if="hosts.length === 0"
+        icon="fas fa-server"
+        title="No hosts configured"
+        message="Get started by adding your first host."
+      >
+        <template #actions>
+          <button
+            @click="showAddHostModal = true"
+            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            Add First Host
+          </button>
+        </template>
+      </EmptyState>
 
       <!-- Grid View -->
       <div v-else-if="viewMode === 'grid'" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -223,6 +225,7 @@ import HostCard from '@/components/infrastructure/HostCard.vue'
 import AddHostModal from '@/components/infrastructure/AddHostModal.vue'
 import DeploymentProgressModal from '@/components/infrastructure/DeploymentProgressModal.vue'
 import ServiceStatusIndicator from '@/components/infrastructure/ServiceStatusIndicator.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 import type { Host, Deployment } from '@/composables/useInfrastructure'
 import { formatDate } from '@/utils/formatHelpers'
 
