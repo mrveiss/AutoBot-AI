@@ -25,6 +25,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -440,6 +441,11 @@ secrets_manager = SecretsManager()
 # API Endpoints
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_secret",
+    error_code_prefix="SECRETS",
+)
 @router.post("/")
 async def create_secret(request: SecretCreateRequest):
     """Create a new secret"""
@@ -471,6 +477,11 @@ async def create_secret(request: SecretCreateRequest):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_secrets",
+    error_code_prefix="SECRETS",
+)
 @router.get("/")
 async def list_secrets(
     chat_id: Optional[str] = Query(None), scope: Optional[SecretScope] = Query(None)
@@ -491,6 +502,11 @@ async def list_secrets(
         raise HTTPException(status_code=500, detail=f"Failed to list secrets: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_secret_types",
+    error_code_prefix="SECRETS",
+)
 @router.get("/types")
 async def get_secret_types():
     """Get available secret types"""
@@ -508,6 +524,11 @@ async def get_secret_types():
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_secrets_status",
+    error_code_prefix="SECRETS",
+)
 @router.get("/status")
 async def get_secrets_status():
     """Get secrets service status"""
@@ -532,6 +553,11 @@ async def get_secrets_status():
         }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_secrets_stats",
+    error_code_prefix="SECRETS",
+)
 @router.get("/stats")
 async def get_secrets_stats():
     """Get secrets statistics"""
@@ -573,6 +599,11 @@ async def get_secrets_stats():
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_secret",
+    error_code_prefix="SECRETS",
+)
 @router.get("/{secret_id}")
 async def get_secret(secret_id: str, chat_id: Optional[str] = Query(None)):
     """Get a specific secret with its value"""
@@ -589,6 +620,11 @@ async def get_secret(secret_id: str, chat_id: Optional[str] = Query(None)):
         raise HTTPException(status_code=500, detail=f"Failed to get secret: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_secret",
+    error_code_prefix="SECRETS",
+)
 @router.put("/{secret_id}")
 async def update_secret(
     secret_id: str, request: SecretUpdateRequest, chat_id: Optional[str] = Query(None)
@@ -625,6 +661,11 @@ async def update_secret(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_secret",
+    error_code_prefix="SECRETS",
+)
 @router.delete("/{secret_id}")
 async def delete_secret(secret_id: str, chat_id: Optional[str] = Query(None)):
     """Delete a secret"""
@@ -646,6 +687,11 @@ async def delete_secret(secret_id: str, chat_id: Optional[str] = Query(None)):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="transfer_secrets",
+    error_code_prefix="SECRETS",
+)
 @router.post("/transfer")
 async def transfer_secrets(
     request: SecretTransferRequest, chat_id: Optional[str] = Query(None)
@@ -671,6 +717,11 @@ async def transfer_secrets(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_chat_cleanup_info",
+    error_code_prefix="SECRETS",
+)
 @router.get("/chat/{chat_id}/cleanup")
 async def get_chat_cleanup_info(chat_id: str):
     """Get information about secrets that would be affected by chat deletion"""
@@ -684,6 +735,11 @@ async def get_chat_cleanup_info(chat_id: str):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_chat_secrets",
+    error_code_prefix="SECRETS",
+)
 @router.delete("/chat/{chat_id}")
 async def delete_chat_secrets(
     chat_id: str, secret_ids: Optional[List[str]] = Query(None)
