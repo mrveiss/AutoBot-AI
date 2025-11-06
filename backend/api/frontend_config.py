@@ -5,11 +5,17 @@ from fastapi import APIRouter, HTTPException
 from backend.services.config_service import ConfigService
 from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PathConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_frontend_config",
+    error_code_prefix="FRONTEND_CONFIG",
+)
 @router.get("/frontend-config")
 async def get_frontend_config():
     """Get frontend-specific configuration"""
