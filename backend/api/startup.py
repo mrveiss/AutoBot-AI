@@ -15,6 +15,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["startup", "status"])
@@ -120,6 +121,11 @@ async def get_startup_status():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="startup_websocket",
+    error_code_prefix="STARTUP",
+)
 @router.websocket("/ws")
 async def startup_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time startup messages"""
@@ -150,6 +156,11 @@ async def startup_websocket(websocket: WebSocket):
         startup_state["websocket_clients"].discard(websocket)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_startup_phase",
+    error_code_prefix="STARTUP",
+)
 @router.post("/phase")
 async def update_startup_phase(
     phase: str, message: str, progress: int, icon: str = "🚀", details: str = None
