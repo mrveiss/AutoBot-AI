@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
 from src.enhanced_security_layer import EnhancedSecurityLayer
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -32,6 +33,11 @@ class SecurityStatusResponse(BaseModel):
     pending_approvals: List[Dict[str, Any]]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_security_status",
+    error_code_prefix="SECURITY",
+)
 @router.get("/status", response_model=SecurityStatusResponse)
 async def get_security_status(request: Request):
     """Get current security configuration and status"""
@@ -73,6 +79,11 @@ async def get_security_status(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="approve_command",
+    error_code_prefix="SECURITY",
+)
 @router.post("/approve-command", response_model=CommandApprovalResponse)
 async def approve_command(request: Request, approval: CommandApprovalRequest):
     """Approve or deny a pending command execution"""
@@ -97,6 +108,11 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pending_approvals",
+    error_code_prefix="SECURITY",
+)
 @router.get("/pending-approvals")
 async def get_pending_approvals(request: Request):
     """Get list of commands waiting for approval"""
@@ -114,6 +130,11 @@ async def get_pending_approvals(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_command_history",
+    error_code_prefix="SECURITY",
+)
 @router.get("/command-history")
 async def get_command_history(request: Request, user: str = None, limit: int = 50):
     """Get command execution history from audit log"""
@@ -131,6 +152,11 @@ async def get_command_history(request: Request, user: str = None, limit: int = 5
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_audit_log",
+    error_code_prefix="SECURITY",
+)
 @router.get("/audit-log")
 async def get_audit_log(request: Request, limit: int = 100):
     """Get recent audit log entries"""
