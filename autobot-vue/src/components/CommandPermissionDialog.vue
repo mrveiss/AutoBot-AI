@@ -25,7 +25,7 @@
             </div>
             <div class="info-item" v-if="riskLevel">
               <span class="label">Risk Level:</span>
-              <span class="risk-badge" :class="riskLevel.toLowerCase()">{{ riskLevel }}</span>
+              <StatusBadge :variant="getRiskVariant(riskLevel)" size="small">{{ riskLevel }}</StatusBadge>
             </div>
           </div>
         </div>
@@ -132,9 +132,13 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { apiService } from '../services/api';
 import appConfig from '@/config/AppConfig.js';
+import StatusBadge from '@/components/ui/StatusBadge.vue';
 
 export default {
   name: 'CommandPermissionDialog',
+  components: {
+    StatusBadge
+  },
   props: {
     show: {
       type: Boolean,
@@ -350,6 +354,17 @@ export default {
       }
     };
 
+    // StatusBadge variant mapping function
+    const getRiskVariant = (riskLevel) => {
+      const variantMap = {
+        'LOW': 'success',
+        'MEDIUM': 'warning',
+        'HIGH': 'danger',
+        'CRITICAL': 'danger'
+      };
+      return variantMap[riskLevel] || 'secondary';
+    };
+
     return {
       showDialog,
       rememberForSession,
@@ -362,7 +377,8 @@ export default {
       handleComment,
       submitComment,
       cancelComment,
-      updateShow
+      updateShow,
+      getRiskVariant
     };
   },
   watch: {
@@ -492,35 +508,6 @@ export default {
 
 .purpose {
   color: #374151;
-}
-
-.risk-badge {
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.risk-badge.low {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.risk-badge.medium {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.risk-badge.high {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.risk-badge.critical {
-  background: #fecaca;
-  color: #7f1d1d;
-  border: 1px solid #f87171;
 }
 
 .command-form {

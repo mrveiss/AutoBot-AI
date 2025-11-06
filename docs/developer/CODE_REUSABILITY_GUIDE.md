@@ -881,11 +881,62 @@ Migrated MonitoringDashboard.vue with 2 badge patterns:
 - ✅ Increased StatusBadge usage from 7 to 9 instances (29% increase)
 - ✅ Demonstrates CSS consolidation benefit
 
+**📊 Batch 18 StatusBadge Enforcement** (January 2025):
+Migrated 4 components with 5 badge patterns total:
+
+**1. SecretsManager.vue** ✅
+- **Before**: 2 badge patterns with scope and type variants
+- **After**: `getScopeVariant()` and `getTypeVariant()` mapping functions + StatusBadge components
+- **Badges Removed**:
+  - `.badge` base class + `.badge-chat`, `.badge-general` scope variants - 8 lines CSS
+  - `.badge-ssh_key`, `.badge-password`, `.badge-api_key` type variants - 9 lines CSS
+- **Template Updates**: Lines 87-90 replaced inline badges with StatusBadge
+- **Lines Saved**: ~17 lines
+- **Location**: `autobot-vue/src/components/SecretsManager.vue`
+
+**2. CommandPermissionDialog.vue** ✅
+- **Before**: Risk level badge with 4 variants (low/medium/high/critical)
+- **After**: `getRiskVariant()` mapping function + StatusBadge component
+- **Badges Removed**: `.risk-badge` with 4 variants - 28 lines CSS
+- **Function Added**: `getRiskVariant()` maps LOW/MEDIUM/HIGH/CRITICAL to success/warning/danger/danger
+- **Template Updates**: Line 28 replaced risk-badge with StatusBadge
+- **Lines Saved**: ~28 lines
+- **Location**: `autobot-vue/src/components/CommandPermissionDialog.vue`
+
+**3. ElevationDialog.vue** ✅
+- **Before**: Risk level badge with 4 variants (identical pattern to CommandPermissionDialog)
+- **After**: `getRiskVariant()` mapping function + StatusBadge component
+- **Badges Removed**: `.risk-badge` with 4 variants - 28 lines CSS
+- **Function Added**: Same getRiskVariant() pattern for consistency
+- **Template Updates**: Line 28 replaced risk-badge with StatusBadge
+- **Lines Saved**: ~28 lines
+- **Location**: `autobot-vue/src/components/ElevationDialog.vue`
+
+**4. KnowledgeStats.vue** ✅
+- **Before**: Status badge with 2 variants (online/offline)
+- **After**: `getStatusVariant()` TypeScript function + StatusBadge component
+- **Badges Removed**: `.status-badge` with online/offline variants - 17 lines CSS
+- **Function Added**: `getStatusVariant()` maps online/offline/unknown to success/danger/secondary
+- **Template Updates**: Line 68 replaced status-badge with StatusBadge
+- **Lines Saved**: ~17 lines
+- **Location**: `autobot-vue/src/components/knowledge/KnowledgeStats.vue`
+
+**Batch 18 Summary**:
+- ✅ 4 components migrated (5 badge patterns total)
+- ✅ ~90 lines saved (CSS + template simplification)
+- ✅ Increased StatusBadge usage from 9 to 14 instances (56% increase)
+- ✅ Demonstrates pattern consistency: Both CommandPermissionDialog and ElevationDialog use identical risk badge mapping
+- ✅ Covers diverse contexts: Secrets management, command permissions, elevation dialogs, knowledge stats
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
-- StatusBadge adoptions: ~78 lines (batches 15-17)
-- **Total Progress**: ~675 lines / ~1,500-2,000 realistic target (34-45%)
+- StatusBadge adoptions: ~168 lines (batches 15-18)
+  - Batch 15: ~14 lines (3 components)
+  - Batch 16: ~49 lines (2 components)
+  - Batch 17: ~15 lines (1 component, 2 patterns)
+  - Batch 18: ~90 lines (4 components, 5 patterns)
+- **Total Progress**: ~765 lines / ~1,500-2,000 realistic target (38-51%)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
@@ -898,10 +949,12 @@ During batch 14 final sweep, discovered several well-designed reusable component
 - **Estimated Potential**: ~100-200 lines if widely adopted across forms and modals
 
 **2. StatusBadge.vue** (`autobot-vue/src/components/ui/`)
-- **Current Usage**: 2 components (VectorizationProgressModal, TreeNodeComponent)
+- **Current Usage**: 14 instances across 10 components (batches 15-18 migrations)
+  - Original: VectorizationProgressModal, TreeNodeComponent
+  - Batch 15-18: KnowledgePersistenceDialog, HostsManager, ResearchBrowser, MonitoringDashboard, SecretsManager, CommandPermissionDialog, ElevationDialog, KnowledgeStats
 - **Features**: Variant styles (success/danger/warning/info/primary/secondary), sizes (small/medium/large), icon support, dark mode
-- **Recommendation**: ✅ **Medium adoption opportunity** - Many components use inline badge patterns
-- **Estimated Potential**: ~50-100 lines if adopted across status indicators
+- **Recommendation**: ✅ **Active adoption in progress** - Successfully migrated 10 components
+- **Results**: ~168 lines saved (batches 15-18), 600% usage increase (2 → 14 instances)
 
 **3. useToast Composable** (`autobot-vue/src/composables/useToast.js`)
 - **Current Usage**: 2 components (KnowledgePersistenceDialog + examples)
