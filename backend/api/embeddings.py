@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from backend.services.config_service import ConfigService
 from src.constants.network_constants import NetworkConstants, ServiceURLs
 from src.unified_config_manager import unified_config_manager
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,11 @@ class EmbeddingUpdate(BaseModel):
     endpoint: Optional[str] = None
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_embedding_settings",
+    error_code_prefix="EMBEDDINGS",
+)
 @router.get("/settings")
 async def get_embedding_settings():
     """Get current embedding configuration settings"""
@@ -84,6 +90,11 @@ async def get_embedding_settings():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_embedding_settings",
+    error_code_prefix="EMBEDDINGS",
+)
 @router.put("/settings")
 async def update_embedding_settings(update: EmbeddingUpdate):
     """Update embedding configuration settings"""
@@ -132,6 +143,11 @@ async def update_embedding_settings(update: EmbeddingUpdate):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_available_embedding_models",
+    error_code_prefix="EMBEDDINGS",
+)
 @router.get("/models")
 async def get_available_embedding_models():
     """Get available embedding models from all providers"""
@@ -172,6 +188,11 @@ async def get_available_embedding_models():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="refresh_embedding_models",
+    error_code_prefix="EMBEDDINGS",
+)
 @router.post("/providers/{provider_name}/refresh-models")
 async def refresh_embedding_models(provider_name: str):
     """Refresh available models for a specific embedding provider"""
@@ -220,6 +241,11 @@ async def refresh_embedding_models(provider_name: str):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_embedding_status",
+    error_code_prefix="EMBEDDINGS",
+)
 @router.get("/status")
 async def get_embedding_status():
     """Get current embedding system status"""

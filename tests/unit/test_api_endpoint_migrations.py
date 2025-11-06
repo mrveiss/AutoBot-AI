@@ -23072,6 +23072,159 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('@router.get("/chat-init")', source)
         self.assertIn('@router.post("/chat-init")', source)
 
+    # ==============================================
+    # BATCH 126: embeddings.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_126_get_embedding_settings_simple_pattern(self):
+        """Verify get_embedding_settings endpoint uses Simple Pattern"""
+        from backend.api import embeddings
+
+        source = inspect.getsource(embeddings.get_embedding_settings)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_embedding_settings"', source)
+        self.assertIn('error_code_prefix="EMBEDDINGS"', source)
+
+    def test_batch_126_update_embedding_settings_simple_pattern(self):
+        """Verify update_embedding_settings endpoint uses Simple Pattern"""
+        from backend.api import embeddings
+
+        source = inspect.getsource(embeddings.update_embedding_settings)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="update_embedding_settings"', source)
+        self.assertIn('error_code_prefix="EMBEDDINGS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_126_get_available_embedding_models_simple_pattern(self):
+        """Verify get_available_embedding_models endpoint uses Simple Pattern"""
+        from backend.api import embeddings
+
+        source = inspect.getsource(embeddings.get_available_embedding_models)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_available_embedding_models"', source)
+        self.assertIn('error_code_prefix="EMBEDDINGS"', source)
+
+    def test_batch_126_refresh_embedding_models_simple_pattern(self):
+        """Verify refresh_embedding_models endpoint uses Simple Pattern"""
+        from backend.api import embeddings
+
+        source = inspect.getsource(embeddings.refresh_embedding_models)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="refresh_embedding_models"', source)
+        self.assertIn('error_code_prefix="EMBEDDINGS"', source)
+
+    def test_batch_126_get_embedding_status_simple_pattern(self):
+        """Verify get_embedding_status endpoint uses Simple Pattern"""
+        from backend.api import embeddings
+
+        source = inspect.getsource(embeddings.get_embedding_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_embedding_status"', source)
+        self.assertIn('error_code_prefix="EMBEDDINGS"', source)
+
+    def test_batch_126_all_embeddings_endpoints_have_decorator(self):
+        """Verify all embeddings endpoints have @with_error_handling decorator"""
+        from backend.api import embeddings
+
+        endpoint_functions = [
+            embeddings.get_embedding_settings,
+            embeddings.update_embedding_settings,
+            embeddings.get_available_embedding_models,
+            embeddings.refresh_embedding_models,
+            embeddings.get_embedding_status,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_126_embeddings_100_percent_milestone(self):
+        """Verify embeddings.py has reached 100% migration"""
+        from backend.api import embeddings
+
+        endpoint_functions = [
+            embeddings.get_embedding_settings,
+            embeddings.update_embedding_settings,
+            embeddings.get_available_embedding_models,
+            embeddings.refresh_embedding_models,
+            embeddings.get_embedding_status,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 5
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_126_migration_preserves_config_manager_operations(self):
+        """Verify migration preserves unified_config_manager operations"""
+        from backend.api import embeddings
+
+        # Check get_embedding_settings uses config manager
+        source_get = inspect.getsource(embeddings.get_embedding_settings)
+        self.assertIn("unified_config_manager.get_nested", source_get)
+        self.assertIn("backend.llm.unified.embedding", source_get)
+
+        # Check update_embedding_settings uses config manager
+        source_update = inspect.getsource(embeddings.update_embedding_settings)
+        self.assertIn("unified_config_manager.set_nested", source_update)
+        self.assertIn("unified_config_manager.save_settings", source_update)
+        self.assertIn("ConfigService.clear_cache", source_update)
+
+    def test_batch_126_migration_preserves_default_config_fallback(self):
+        """Verify migration preserves default configuration fallback"""
+        from backend.api import embeddings
+
+        source = inspect.getsource(embeddings.get_embedding_settings)
+
+        # Check default configuration logic preserved
+        self.assertIn("if not embedding_config:", source)
+        self.assertIn('"provider": "ollama"', source)
+        self.assertIn("nomic-embed-text:latest", source)
+
+    def test_batch_126_migration_preserves_provider_logic(self):
+        """Verify migration preserves provider-specific logic"""
+        from backend.api import embeddings
+
+        source = inspect.getsource(embeddings.refresh_embedding_models)
+
+        # Check provider-specific logic preserved
+        self.assertIn('if provider_name == "ollama":', source)
+        self.assertIn("embedding_models", source)
+        self.assertIn("else:", source)
+        self.assertIn("status_code=400", source)
+
+    def test_batch_126_migration_preserves_status_response_structure(self):
+        """Verify migration preserves status response structure"""
+        from backend.api import embeddings
+
+        source = inspect.getsource(embeddings.get_embedding_status)
+
+        # Check status response fields preserved
+        self.assertIn('"configured"', source)
+        self.assertIn('"provider"', source)
+        self.assertIn('"model"', source)
+        self.assertIn('"endpoint"', source)
+        self.assertIn('"last_check"', source)
+
 
 if __name__ == "__main__":
     unittest.main()
