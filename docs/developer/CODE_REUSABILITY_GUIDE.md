@@ -727,6 +727,58 @@ The initial ~5,600 line estimate was optimistic. Actual duplicate code is closer
    - NotificationToast component for user feedback
 3. 📋 Re-estimate target based on actual patterns found (~1,500-2,000 lines realistic)
 
+**📊 Batch 13 Implementation Findings** (January 2025):
+Attempted to implement batch 12 recommendations - key learnings:
+
+**UnifiedLoadingView Analysis**: ⚠️ **Not a Drop-In Replacement**
+- UnifiedLoadingView already exists and is well-designed
+- Only 4 components currently use it (PopoutChromiumBrowser, NoVNCViewer, DesktopInterface, ChatInterface)
+- Uses `useUnifiedLoading` composable for centralized loading state management
+- **Why not widely adopted**: Requires components to use the unified loading system
+  - Example: InfrastructureManager uses `isLoading` from domain-specific `useInfrastructure` composable
+  - Migrating would require refactoring entire composable to use unified loading system
+  - Most components have domain-specific loading state tied to their data fetching
+- **Conclusion**: UnifiedLoadingView is an architectural pattern, not a drop-in component
+  - Can't simply replace custom loading UI without changing state management architecture
+  - Migration would be highly invasive with uncertain benefit
+  - Current approach (domain-specific loading states) is actually more appropriate
+
+**Form Pattern Analysis**: ⚠️ **High Variation**
+- 20+ components have form inputs (label + input/textarea/select patterns)
+- Forms are highly domain-specific:
+  - Infrastructure forms: Host configuration, deployment settings
+  - Knowledge forms: Category management, file upload
+  - Settings forms: Cache config, NPU workers, secrets
+  - Security forms: Permission dialogs, elevation requests
+- **Why FormGroup isn't viable**: Each form has unique:
+  - Validation logic (inline, server-side, real-time)
+  - Layout requirements (horizontal, vertical, grid, inline)
+  - Field types and combinations
+  - Error display patterns
+  - Conditional field visibility
+- **Conclusion**: Forms are not good candidates for generic components
+  - Too much context-specific logic and styling
+  - Forcing generic patterns would reduce flexibility
+
+**Revised Understanding**:
+The codebase is actually well-architected. Most "duplicate" code is contextual variation, not true duplication:
+- Loading states: Tied to domain-specific data fetching patterns
+- Forms: Varied by business requirements
+- Modals: Specialized for their use cases
+- Empty states: ✅ Successfully abstracted (33 migrations, ~579 lines)
+
+**What We Learned**:
+- Not all similar-looking code is duplicate code
+- Architecture matters - can't force generic solutions onto domain-specific patterns
+- EmptyState worked because it's truly presentational with no logic
+- UnifiedLoadingView exists but is an architectural choice, not a migration target
+- Forms and modals are inherently contextual
+
+**Actual Remaining Opportunity**: ~200-400 lines
+- Focus on truly generic presentational components
+- Don't force architectural changes for marginal savings
+- Current codebase structure is appropriate for the problem domain
+
 ### **Phase 3** (Planned 📅):
 - 📋 Migrate remaining 35+ components (see GitHub issue #10894)
 - 📋 Create FormInput reusable component
