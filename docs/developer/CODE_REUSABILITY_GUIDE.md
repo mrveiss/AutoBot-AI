@@ -800,10 +800,38 @@ Final sweep for duplicate utility functions - concrete savings found:
 - ✅ formatHelpers.ts continues to prevent future duplication
 - ✅ Validated batch 13 principle: Only consolidate truly duplicate patterns
 
+**📊 Batch 15 StatusBadge Adoptions** (January 2025):
+Migrated 3 components to use existing StatusBadge component:
+
+**1. PopoutChromiumBrowser.vue** ✅
+- **Before**: Inline "Connected" badge with custom Tailwind classes
+- **After**: `<StatusBadge variant="success" size="small">Connected</StatusBadge>`
+- **Lines Saved**: ~1 line (improved consistency)
+- **Location**: `autobot-vue/src/components/PopoutChromiumBrowser.vue:205`
+
+**2. HostCard.vue** ✅
+- **Before**: Inline status badge with 4 conditional color classes (active/pending/error/deploying)
+- **After**: `<StatusBadge :variant="statusVariant" size="small">{{ host.status }}</StatusBadge>` + computed variant mapping
+- **Lines Saved**: ~11 lines (12 lines inline badge → 1 StatusBadge component)
+- **Location**: `autobot-vue/src/components/infrastructure/HostCard.vue:18-20`
+
+**3. ChatFilePanel.vue** ✅
+- **Before**: Inline "AI Generated" badge with purple styling
+- **After**: `<StatusBadge variant="primary" size="small">AI Generated</StatusBadge>`
+- **Lines Saved**: ~2 lines
+- **Location**: `autobot-vue/src/components/chat/ChatFilePanel.vue:123-130`
+
+**Batch 15 Summary**:
+- ✅ 3 components migrated to StatusBadge
+- ✅ ~14 lines saved
+- ✅ Increased StatusBadge usage from 2 to 5 components (150% adoption increase)
+- ✅ Demonstrates value of leveraging existing components
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
-- **Total Progress**: ~597 lines / ~1,500-2,000 realistic target (30-40%)
+- StatusBadge adoptions: ~14 lines (batch 15)
+- **Total Progress**: ~611 lines / ~1,500-2,000 realistic target (31-41%)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 

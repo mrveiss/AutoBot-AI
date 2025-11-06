@@ -120,12 +120,14 @@
               <span class="text-xs text-blueGray-400">•</span>
               <span class="text-xs text-blueGray-500">{{ formatDate(file.upload_timestamp) }}</span>
             </div>
-            <span
+            <StatusBadge
               v-if="file.file_type === 'generated'"
-              class="inline-block mt-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded"
+              variant="primary"
+              size="small"
+              class="mt-1"
             >
               AI Generated
-            </span>
+            </StatusBadge>
           </div>
 
           <!-- File Actions -->
@@ -164,6 +166,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useConversationFiles } from '@/composables/useConversationFiles'
 import { formatTimeAgo } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
 
 const props = defineProps<{
   sessionId: string
