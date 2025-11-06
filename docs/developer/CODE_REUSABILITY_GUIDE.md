@@ -928,15 +928,35 @@ Migrated 4 components with 5 badge patterns total:
 - ✅ Demonstrates pattern consistency: Both CommandPermissionDialog and ElevationDialog use identical risk badge mapping
 - ✅ Covers diverse contexts: Secrets management, command permissions, elevation dialogs, knowledge stats
 
+**📊 Batch 19 StatusBadge Final Sweep** (January 2025):
+Final StatusBadge migration completing the enforcement wave:
+
+**NPUWorkersSettings.vue** ✅
+- **Before**: Status badge with 4 variants (online/offline/busy/error)
+- **After**: `getStatusVariant()` TypeScript function + StatusBadge component
+- **Badges Removed**: `.status-badge` with 4 variants - 29 lines CSS
+- **Function Added**: `getStatusVariant()` maps online/offline/busy/error to success/secondary/warning/danger
+- **Template Updates**: Line 116 replaced status-badge with StatusBadge (retained status-dot for visual indicator)
+- **Lines Saved**: ~29 lines
+- **Location**: `autobot-vue/src/components/settings/NPUWorkersSettings.vue`
+
+**Batch 19 Summary**:
+- ✅ 1 component migrated (final candidate)
+- ✅ ~29 lines saved
+- ✅ Increased StatusBadge usage from 14 to 15 instances (7% increase)
+- ✅ **StatusBadge enforcement substantially complete** - 650% usage increase from baseline (2 → 15 instances)
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
-- StatusBadge adoptions: ~168 lines (batches 15-18)
+- StatusBadge adoptions: ~197 lines (batches 15-19)
   - Batch 15: ~14 lines (3 components)
   - Batch 16: ~49 lines (2 components)
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
-- **Total Progress**: ~765 lines / ~1,500-2,000 realistic target (38-51%)
+  - Batch 19: ~29 lines (1 component - final sweep)
+- **Total Progress**: ~794 lines / ~1,500-2,000 realistic target (40-53%)
+- **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
@@ -949,12 +969,13 @@ During batch 14 final sweep, discovered several well-designed reusable component
 - **Estimated Potential**: ~100-200 lines if widely adopted across forms and modals
 
 **2. StatusBadge.vue** (`autobot-vue/src/components/ui/`)
-- **Current Usage**: 14 instances across 10 components (batches 15-18 migrations)
+- **Current Usage**: ✅ **SUBSTANTIALLY COMPLETE** - 15 instances across 11 components (batches 15-19 migrations)
   - Original: VectorizationProgressModal, TreeNodeComponent
-  - Batch 15-18: KnowledgePersistenceDialog, HostsManager, ResearchBrowser, MonitoringDashboard, SecretsManager, CommandPermissionDialog, ElevationDialog, KnowledgeStats
+  - Batches 15-19: KnowledgePersistenceDialog, HostsManager, ResearchBrowser, MonitoringDashboard, SecretsManager, CommandPermissionDialog, ElevationDialog, KnowledgeStats, NPUWorkersSettings
 - **Features**: Variant styles (success/danger/warning/info/primary/secondary), sizes (small/medium/large), icon support, dark mode
-- **Recommendation**: ✅ **Active adoption in progress** - Successfully migrated 10 components
-- **Results**: ~168 lines saved (batches 15-18), 600% usage increase (2 → 14 instances)
+- **Recommendation**: ✅ **Enforcement complete** - Law of diminishing returns reached
+- **Results**: ~197 lines saved (batches 15-19), 650% usage increase (2 → 15 instances)
+- **Achievement**: Successfully established as standard badge pattern across diverse contexts
 
 **3. useToast Composable** (`autobot-vue/src/composables/useToast.js`)
 - **Current Usage**: 2 components (KnowledgePersistenceDialog + examples)

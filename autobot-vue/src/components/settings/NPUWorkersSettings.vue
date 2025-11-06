@@ -113,10 +113,10 @@
 
               <!-- Status -->
               <td>
-                <span class="status-badge" :class="getStatusClass(worker.status)">
+                <StatusBadge :variant="getStatusVariant(worker.status)" size="small">
                   <span class="status-dot" :class="getStatusDotClass(worker.status)"></span>
                   {{ worker.status }}
-                </span>
+                </StatusBadge>
               </td>
 
               <!-- Load -->
@@ -385,6 +385,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { NetworkConstants } from '@/constants/network-constants.js'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
 
 // ===== TYPE DEFINITIONS =====
 
@@ -833,6 +834,17 @@ const getStatusDotClass = (status: string) => {
   return classes[status] || 'dot-unknown'
 }
 
+// StatusBadge variant mapping function
+const getStatusVariant = (status: string): 'success' | 'danger' | 'warning' | 'secondary' => {
+  const variantMap: Record<string, 'success' | 'danger' | 'warning' | 'secondary'> = {
+    'online': 'success',
+    'offline': 'secondary',
+    'busy': 'warning',
+    'error': 'danger'
+  }
+  return variantMap[status] || 'secondary'
+}
+
 const getLoadBarClass = (load: number) => {
   if (load < 50) return 'load-low'
   if (load < 80) return 'load-medium'
@@ -1055,36 +1067,6 @@ onUnmounted(() => {
 .connection-info {
   display: flex;
   flex-direction: column;
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: capitalize;
-}
-
-.status-online {
-  background: #d4edda;
-  color: #155724;
-}
-
-.status-offline {
-  background: #f8d7da;
-  color: #721c24;
-}
-
-.status-busy {
-  background: #fff3cd;
-  color: #856404;
-}
-
-.status-error {
-  background: #f8d7da;
-  color: #721c24;
 }
 
 .status-dot {
