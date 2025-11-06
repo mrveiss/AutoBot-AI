@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -88,6 +89,11 @@ def setup_rum_logger():
 rum_logger = setup_rum_logger()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="configure_rum",
+    error_code_prefix="RUM",
+)
 @router.post("/config")
 async def configure_rum(config: RumConfig):
     """Configure RUM monitoring settings"""
@@ -117,6 +123,11 @@ async def configure_rum(config: RumConfig):
         raise HTTPException(status_code=500, detail=f"Error configuring RUM: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="log_rum_event",
+    error_code_prefix="RUM",
+)
 @router.post("/event")
 async def log_rum_event(event: RumEvent):
     """Log a RUM event from the frontend"""
@@ -176,6 +187,11 @@ async def log_rum_event(event: RumEvent):
         return {"status": "error", "message": f"Failed to log RUM event: {str(e)}"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="disable_rum",
+    error_code_prefix="RUM",
+)
 @router.post("/disable")
 async def disable_rum():
     """Disable RUM monitoring"""
@@ -193,6 +209,11 @@ async def disable_rum():
         raise HTTPException(status_code=500, detail=f"Error disabling RUM: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_rum_data",
+    error_code_prefix="RUM",
+)
 @router.post("/clear")
 async def clear_rum_data():
     """Clear all RUM data"""
@@ -223,6 +244,11 @@ async def clear_rum_data():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_rum_data",
+    error_code_prefix="RUM",
+)
 @router.get("/export")
 async def export_rum_data():
     """Export RUM data for analysis"""
@@ -259,6 +285,11 @@ async def export_rum_data():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_rum_status",
+    error_code_prefix="RUM",
+)
 @router.get("/status")
 async def get_rum_status():
     """Get current RUM status and statistics"""
