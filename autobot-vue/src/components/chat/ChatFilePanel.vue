@@ -85,10 +85,12 @@
     <!-- File List -->
     <div class="flex-1 overflow-y-auto p-3 space-y-2" style="scrollbar-width: thin;">
       <!-- Empty State -->
-      <div v-if="!hasFiles && !loading" class="text-center py-8">
-        <i class="fas fa-folder-open text-3xl text-blueGray-300 mb-2"></i>
-        <p class="text-xs text-blueGray-500">No files attached</p>
-      </div>
+      <EmptyState
+        v-if="!hasFiles && !loading"
+        icon="fas fa-folder-open"
+        message="No files attached"
+        compact
+      />
 
       <!-- Loading State -->
       <div v-if="loading && !hasFiles" class="text-center py-8">
@@ -161,6 +163,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { useConversationFiles } from '@/composables/useConversationFiles'
 import { formatTimeAgo } from '@/utils/formatHelpers'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 const props = defineProps<{
   sessionId: string
