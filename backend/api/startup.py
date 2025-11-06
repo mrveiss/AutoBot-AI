@@ -107,6 +107,11 @@ async def broadcast_startup_message(message: StartupMessage):
         startup_state["websocket_clients"].discard(ws)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_startup_status",
+    error_code_prefix="STARTUP",
+)
 @router.get("/status")
 async def get_startup_status():
     """Get current startup status"""

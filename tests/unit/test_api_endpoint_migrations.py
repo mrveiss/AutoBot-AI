@@ -24408,6 +24408,136 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("total_requested", source)
         self.assertIn("transferred", source)
 
+    # ==============================================
+    # BATCH 133: startup.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_133_get_startup_status_simple_pattern(self):
+        """Verify get_startup_status endpoint uses Simple Pattern"""
+        from backend.api import startup
+
+        source = inspect.getsource(startup.get_startup_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_startup_status"', source)
+        self.assertIn('error_code_prefix="STARTUP"', source)
+
+    def test_batch_133_startup_websocket_simple_pattern(self):
+        """Verify startup_websocket endpoint uses Simple Pattern"""
+        from backend.api import startup
+
+        source = inspect.getsource(startup.startup_websocket)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="startup_websocket"', source)
+        self.assertIn('error_code_prefix="STARTUP"', source)
+
+    def test_batch_133_update_startup_phase_simple_pattern(self):
+        """Verify update_startup_phase endpoint uses Simple Pattern"""
+        from backend.api import startup
+
+        source = inspect.getsource(startup.update_startup_phase)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="update_startup_phase"', source)
+        self.assertIn('error_code_prefix="STARTUP"', source)
+
+    def test_batch_133_all_startup_endpoints_have_decorator(self):
+        """Verify all startup endpoints have @with_error_handling decorator"""
+        from backend.api import startup
+
+        endpoint_functions = [
+            startup.get_startup_status,
+            startup.startup_websocket,
+            startup.update_startup_phase,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_133_startup_100_percent_milestone(self):
+        """Verify startup.py has reached 100% migration"""
+        from backend.api import startup
+
+        endpoint_functions = [
+            startup.get_startup_status,
+            startup.startup_websocket,
+            startup.update_startup_phase,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 3
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_133_migration_preserves_startup_phase_enum(self):
+        """Verify migration preserves StartupPhase enumeration"""
+        from backend.api import startup
+
+        # Check get_startup_status preserves phase access
+        source_status = inspect.getsource(startup.get_startup_status)
+        self.assertIn('startup_state["current_phase"]', source_status)
+        self.assertIn('startup_state["progress"]', source_status)
+
+        # Check update_startup_phase preserves phase validation
+        source_update = inspect.getsource(startup.update_startup_phase)
+        self.assertIn("StartupPhase(phase)", source_update)
+        self.assertIn("add_startup_message", source_update)
+
+    def test_batch_133_migration_preserves_websocket_management(self):
+        """Verify migration preserves WebSocket client management"""
+        from backend.api import startup
+
+        source = inspect.getsource(startup.startup_websocket)
+
+        # Check WebSocket acceptance
+        self.assertIn("await websocket.accept()", source)
+
+        # Check client tracking
+        self.assertIn('startup_state["websocket_clients"].add(websocket)', source)
+        self.assertIn('startup_state["websocket_clients"].discard(websocket)', source)
+
+        # Check disconnect handling
+        self.assertIn("WebSocketDisconnect", source)
+
+    def test_batch_133_migration_preserves_message_broadcasting(self):
+        """Verify migration preserves message broadcasting functionality"""
+        from backend.api import startup
+
+        source = inspect.getsource(startup.startup_websocket)
+
+        # Check status sending
+        self.assertIn("await get_startup_status()", source)
+        self.assertIn("await websocket.send_text", source)
+
+        # Check message history
+        self.assertIn('startup_state["messages"]', source)
+
+    def test_batch_133_migration_preserves_startup_state_structure(self):
+        """Verify migration preserves startup state structure"""
+        from backend.api import startup
+
+        # Check get_startup_status preserves state access
+        source = inspect.getsource(startup.get_startup_status)
+        self.assertIn("elapsed_time", source)
+        self.assertIn("is_ready", source)
+        self.assertIn("StartupPhase.READY", source)
+
 
 if __name__ == "__main__":
     unittest.main()
