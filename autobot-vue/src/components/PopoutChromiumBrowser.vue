@@ -179,10 +179,10 @@
           <div class="text-center p-4">
             <i class="fas fa-exclamation-triangle text-red-500 text-2xl mb-2"></i>
             <p class="text-sm text-red-600 mb-2">Playwright service connection failed</p>
-            <button @click="initializeBrowser" :disabled="isInitializingBrowser" class="btn btn-primary btn-sm">
+            <BaseButton variant="primary" size="sm" @click="initializeBrowser" :loading="isInitializingBrowser">
               <i class="fas fa-retry mr-1"></i>
               Retry Connection
-            </button>
+            </BaseButton>
           </div>
         </div>
 
@@ -251,10 +251,10 @@
           message="Direct control via VNC interface"
         >
           <template #actions>
-            <button @click="initializeBrowser" :disabled="isInitializingBrowser" class="btn btn-primary">
-              <i class="fas mr-2" :class="isInitializingBrowser ? 'fa-spinner fa-spin' : 'fa-rocket'"></i>
+            <BaseButton variant="primary" @click="initializeBrowser" :loading="isInitializingBrowser">
+              <i class="fas fa-rocket mr-2"></i>
               {{ isInitializingBrowser ? 'Launching...' : 'Launch Browser Session' }}
-            </button>
+            </BaseButton>
             <p class="text-sm text-gray-500 mt-3">
               This will open a live browser that you can control directly
             </p>
@@ -306,17 +306,17 @@
           </div>
           <p class="text-gray-700 mb-4">{{ interactionMessage }}</p>
           <div class="flex space-x-3">
-            <button @click="handleInteraction('wait')" class="btn btn-primary">
+            <BaseButton variant="primary" @click="handleInteraction('wait')">
               <i class="fas fa-clock mr-1"></i>
               Wait & Monitor
-            </button>
-            <button @click="handleInteraction('takeover')" class="btn btn-secondary">
+            </BaseButton>
+            <BaseButton variant="secondary" @click="handleInteraction('takeover')">
               <i class="fas fa-hand-paper mr-1"></i>
               Take Control
-            </button>
-            <button @click="hideInteractionOverlay" class="btn btn-outline">
+            </BaseButton>
+            <BaseButton variant="outline" @click="hideInteractionOverlay">
               Dismiss
-            </button>
+            </BaseButton>
           </div>
         </div>
       </div>
@@ -333,6 +333,7 @@ import apiClient from '@/utils/ApiClient.ts'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import { NetworkConstants } from '@/constants/network-constants.js'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 
@@ -347,7 +348,8 @@ export default {
   components: {
     UnifiedLoadingView,
     EmptyState,
-    StatusBadge
+    StatusBadge,
+    BaseButton
   },
   props: {
     sessionId: {
@@ -1045,53 +1047,4 @@ export default {
   z-index: 20;
 }
 
-.btn-sm {
-  padding: 4px 8px;
-  font-size: 12px;
-  border-radius: 4px;
-}
-
-.btn-primary {
-  background-color: #3b82f6;
-  color: white;
-  border: none;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-color: #2563eb;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn {
-  padding: 8px 16px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.btn-secondary {
-  background-color: #6b7280;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background-color: #4b5563;
-}
-
-.btn-outline {
-  background-color: transparent;
-  color: #374151;
-  border: 1px solid #d1d5db;
-}
-
-.btn-outline:hover {
-  background-color: #f9fafb;
-}
 </style>
