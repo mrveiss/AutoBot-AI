@@ -23580,6 +23580,150 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('"error": str(e)', source)
         self.assertIn('"service": "hot_reload"', source)
 
+    # ==============================================
+    # BATCH 129: prompts.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_129_get_prompts_simple_pattern(self):
+        """Verify get_prompts endpoint uses Simple Pattern"""
+        from backend.api import prompts
+
+        source = inspect.getsource(prompts.get_prompts)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_prompts"', source)
+        self.assertIn('error_code_prefix="PROMPTS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_129_clear_prompts_cache_simple_pattern(self):
+        """Verify clear_prompts_cache endpoint uses Simple Pattern"""
+        from backend.api import prompts
+
+        source = inspect.getsource(prompts.clear_prompts_cache)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="clear_prompts_cache"', source)
+        self.assertIn('error_code_prefix="PROMPTS"', source)
+
+    def test_batch_129_save_prompt_simple_pattern(self):
+        """Verify save_prompt endpoint uses Simple Pattern"""
+        from backend.api import prompts
+
+        source = inspect.getsource(prompts.save_prompt)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="save_prompt"', source)
+        self.assertIn('error_code_prefix="PROMPTS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_129_revert_prompt_simple_pattern(self):
+        """Verify revert_prompt endpoint uses Simple Pattern"""
+        from backend.api import prompts
+
+        source = inspect.getsource(prompts.revert_prompt)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="revert_prompt"', source)
+        self.assertIn('error_code_prefix="PROMPTS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_129_all_prompts_endpoints_have_decorator(self):
+        """Verify all prompts endpoints have @with_error_handling decorator"""
+        from backend.api import prompts
+
+        endpoint_functions = [
+            prompts.get_prompts,
+            prompts.clear_prompts_cache,
+            prompts.save_prompt,
+            prompts.revert_prompt,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_129_prompts_100_percent_milestone(self):
+        """Verify prompts.py has reached 100% migration"""
+        from backend.api import prompts
+
+        endpoint_functions = [
+            prompts.get_prompts,
+            prompts.clear_prompts_cache,
+            prompts.save_prompt,
+            prompts.revert_prompt,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 4
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_129_migration_preserves_caching_logic(self):
+        """Verify migration preserves prompts caching logic"""
+        from backend.api import prompts
+
+        source = inspect.getsource(prompts.get_prompts)
+
+        # Check cache operations preserved
+        self.assertIn("_prompts_cache", source)
+        self.assertIn("_cache_timestamp", source)
+        self.assertIn("_cache_ttl", source)
+        self.assertIn("current_time - _cache_timestamp", source)
+
+    def test_batch_129_migration_preserves_async_file_operations(self):
+        """Verify migration preserves async file operations"""
+        from backend.api import prompts
+
+        # Check get_prompts uses async file operations
+        source_get = inspect.getsource(prompts.get_prompts)
+        self.assertIn("read_file_async", source_get)
+        self.assertIn("asyncio.gather", source_get)
+        self.assertIn("asyncio.Semaphore", source_get)
+
+        # Check save_prompt uses aiofiles
+        source_save = inspect.getsource(prompts.save_prompt)
+        self.assertIn("aiofiles.open", source_save)
+        self.assertIn('encoding="utf-8"', source_save)
+
+    def test_batch_129_migration_preserves_path_traversal_protection(self):
+        """Verify migration preserves path traversal security"""
+        from backend.api import prompts
+
+        source = inspect.getsource(prompts.save_prompt)
+
+        # Check path traversal protection preserved
+        self.assertIn("safe_prompt_id", source)
+        self.assertIn('.replace("..", "")', source)
+        self.assertIn('.replace("~", "")', source)
+        self.assertIn("resolved_path.startswith(prompts_dir)", source)
+        self.assertIn("path traversal detected", source)
+
+    def test_batch_129_migration_preserves_revert_logic(self):
+        """Verify migration preserves prompt revert logic"""
+        from backend.api import prompts
+
+        source = inspect.getsource(prompts.revert_prompt)
+
+        # Check revert operations preserved
+        self.assertIn("default_file_path", source)
+        self.assertIn("custom_file_path", source)
+        self.assertIn("No default prompt found", source)
+        self.assertIn("aiofiles.open", source)
+
 
 if __name__ == "__main__":
     unittest.main()
