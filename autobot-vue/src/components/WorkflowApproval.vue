@@ -12,10 +12,11 @@
         Loading workflows...
       </div>
 
-      <div v-else-if="workflows.length === 0" class="no-workflows">
-        <i class="fas fa-info-circle"></i>
-        No active workflows
-      </div>
+      <EmptyState
+        v-else-if="workflows.length === 0"
+        icon="fas fa-info-circle"
+        message="No active workflows"
+      />
 
       <div v-else class="workflows-list">
         <div
@@ -195,6 +196,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { apiService } from '../services/api.js'
 import type { WorkflowResponse } from '@/types/models'
 import { formatDateTime as formatDate } from '@/utils/formatHelpers'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 // Types
 interface Workflow {
@@ -383,7 +385,7 @@ onUnmounted(() => {
   color: #007bff;
 }
 
-.loading, .no-workflows {
+.loading {
   text-align: center;
   padding: 40px;
   color: #666;

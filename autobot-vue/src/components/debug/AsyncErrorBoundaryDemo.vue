@@ -41,10 +41,11 @@
           @loaded="handleComponentLoaded"
           @retry="handleComponentRetry"
         />
-        <div v-else class="no-scenario">
-          <i class="fas fa-play"></i>
-          <p>Select a scenario above to test async component error boundaries</p>
-        </div>
+        <EmptyState
+          v-else
+          icon="fas fa-play"
+          message="Select a scenario above to test async component error boundaries"
+        />
       </div>
     </div>
 
@@ -95,6 +96,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { createAsyncComponent, createLazyComponent, AsyncComponentErrorRecovery } from '@/utils/asyncComponentHelpers'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
 const loading = ref(false)
 const currentScenario = ref(null)
@@ -456,21 +458,6 @@ onMounted(() => {
   border-radius: 8px;
   padding: 2rem;
   background: #fdfdfd;
-}
-
-.no-scenario {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 200px;
-  color: #95a5a6;
-  text-align: center;
-}
-
-.no-scenario i {
-  font-size: 3rem;
-  margin-bottom: 1rem;
 }
 
 .demo-stats {
