@@ -21231,5 +21231,204 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         # Should preserve error for unknown types
         self.assertIn("Unknown cache type", source)
 
+
+    # ==============================================
+    # BATCH 114: chat_knowledge.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_114_create_chat_context_mixed_pattern(self):
+        """Verify create_chat_context endpoint uses Mixed Pattern"""
+        from backend.api import chat_knowledge
+
+        source = inspect.getsource(chat_knowledge.create_chat_context)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="create_chat_context"', source)
+        self.assertIn('error_code_prefix="CHAT_KNOWLEDGE"', source)
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+
+    def test_batch_114_associate_file_with_chat_mixed_pattern(self):
+        """Verify associate_file_with_chat endpoint uses Mixed Pattern"""
+        from backend.api import chat_knowledge
+
+        source = inspect.getsource(chat_knowledge.associate_file_with_chat)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('operation="associate_file_with_chat"', source)
+        self.assertIn('error_code_prefix="CHAT_KNOWLEDGE"', source)
+        self.assertIn("try:", source)
+        self.assertIn("raise HTTPException", source)
+
+    def test_batch_114_upload_file_to_chat_mixed_pattern(self):
+        """Verify upload_file_to_chat endpoint uses Mixed Pattern"""
+        from backend.api import chat_knowledge
+
+        source = inspect.getsource(chat_knowledge.upload_file_to_chat)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('operation="upload_file_to_chat"', source)
+        self.assertIn('error_code_prefix="CHAT_KNOWLEDGE"', source)
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+
+    def test_batch_114_add_temporary_knowledge_mixed_pattern(self):
+        """Verify add_temporary_knowledge endpoint uses Mixed Pattern"""
+        from backend.api import chat_knowledge
+
+        source = inspect.getsource(chat_knowledge.add_temporary_knowledge)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('operation="add_temporary_knowledge"', source)
+        self.assertIn('error_code_prefix="CHAT_KNOWLEDGE"', source)
+        self.assertIn("try:", source)
+
+    def test_batch_114_get_pending_knowledge_decisions_mixed_pattern(self):
+        """Verify get_pending_knowledge_decisions endpoint uses Mixed Pattern"""
+        from backend.api import chat_knowledge
+
+        source = inspect.getsource(chat_knowledge.get_pending_knowledge_decisions)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('operation="get_pending_knowledge_decisions"', source)
+        self.assertIn('error_code_prefix="CHAT_KNOWLEDGE"', source)
+        self.assertIn("try:", source)
+
+    def test_batch_114_apply_knowledge_decision_mixed_pattern(self):
+        """Verify apply_knowledge_decision endpoint uses Mixed Pattern"""
+        from backend.api import chat_knowledge
+
+        source = inspect.getsource(chat_knowledge.apply_knowledge_decision)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('operation="apply_knowledge_decision"', source)
+        self.assertIn('error_code_prefix="CHAT_KNOWLEDGE"', source)
+        self.assertIn("try:", source)
+
+    def test_batch_114_compile_chat_to_knowledge_mixed_pattern(self):
+        """Verify compile_chat_to_knowledge endpoint uses Mixed Pattern"""
+        from backend.api import chat_knowledge
+
+        source = inspect.getsource(chat_knowledge.compile_chat_to_knowledge)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('operation="compile_chat_to_knowledge"', source)
+        self.assertIn('error_code_prefix="CHAT_KNOWLEDGE"', source)
+        self.assertIn("try:", source)
+
+    def test_batch_114_search_chat_knowledge_mixed_pattern(self):
+        """Verify search_chat_knowledge endpoint uses Mixed Pattern"""
+        from backend.api import chat_knowledge
+
+        source = inspect.getsource(chat_knowledge.search_chat_knowledge)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('operation="search_chat_knowledge"', source)
+        self.assertIn('error_code_prefix="CHAT_KNOWLEDGE"', source)
+        self.assertIn("try:", source)
+
+    def test_batch_114_get_chat_context_mixed_pattern(self):
+        """Verify get_chat_context endpoint uses Mixed Pattern"""
+        from backend.api import chat_knowledge
+
+        source = inspect.getsource(chat_knowledge.get_chat_context)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('operation="get_chat_context"', source)
+        self.assertIn('error_code_prefix="CHAT_KNOWLEDGE"', source)
+        self.assertIn("try:", source)
+
+    def test_batch_114_health_check_mixed_pattern(self):
+        """Verify health_check endpoint uses Mixed Pattern"""
+        from backend.api import chat_knowledge
+
+        source = inspect.getsource(chat_knowledge.health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn('operation="health_check"', source)
+        self.assertIn('error_code_prefix="CHAT_KNOWLEDGE"', source)
+        self.assertIn("try:", source)
+
+    def test_batch_114_all_chat_knowledge_endpoints_have_decorator(self):
+        """Verify all chat_knowledge endpoints have @with_error_handling decorator"""
+        from backend.api import chat_knowledge
+
+        endpoint_functions = [
+            chat_knowledge.create_chat_context,
+            chat_knowledge.associate_file_with_chat,
+            chat_knowledge.upload_file_to_chat,
+            chat_knowledge.add_temporary_knowledge,
+            chat_knowledge.get_pending_knowledge_decisions,
+            chat_knowledge.apply_knowledge_decision,
+            chat_knowledge.compile_chat_to_knowledge,
+            chat_knowledge.search_chat_knowledge,
+            chat_knowledge.get_chat_context,
+            chat_knowledge.health_check,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_114_chat_knowledge_100_percent_milestone(self):
+        """Verify chat_knowledge.py has reached 100% migration"""
+        from backend.api import chat_knowledge
+
+        endpoint_functions = [
+            chat_knowledge.create_chat_context,
+            chat_knowledge.associate_file_with_chat,
+            chat_knowledge.upload_file_to_chat,
+            chat_knowledge.add_temporary_knowledge,
+            chat_knowledge.get_pending_knowledge_decisions,
+            chat_knowledge.apply_knowledge_decision,
+            chat_knowledge.compile_chat_to_knowledge,
+            chat_knowledge.search_chat_knowledge,
+            chat_knowledge.get_chat_context,
+            chat_knowledge.health_check,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 10
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_114_migration_preserves_knowledge_operations(self):
+        """Verify migration preserves knowledge management operations"""
+        from backend.api import chat_knowledge
+
+        # Check context creation
+        source_context = inspect.getsource(chat_knowledge.create_chat_context)
+        self.assertIn("create_or_update_context", source_context)
+        self.assertIn("chat_id", source_context)
+
+        # Check file association
+        source_file = inspect.getsource(chat_knowledge.associate_file_with_chat)
+        self.assertIn("associate_file", source_file)
+        self.assertIn("association_type", source_file)
+
+        # Check knowledge compilation
+        source_compile = inspect.getsource(chat_knowledge.compile_chat_to_knowledge)
+        self.assertIn("compile_chat_to_knowledge", source_compile)
+
+    def test_batch_114_migration_preserves_manager_integration(self):
+        """Verify migration preserves ChatKnowledgeManager integration"""
+        from backend.api import chat_knowledge
+
+        # Endpoints should use get_chat_knowledge_manager_instance for request-based ones
+        request_endpoints = [
+            chat_knowledge.create_chat_context,
+            chat_knowledge.associate_file_with_chat,
+            chat_knowledge.compile_chat_to_knowledge,
+        ]
+
+        for endpoint in request_endpoints:
+            source = inspect.getsource(endpoint)
+            self.assertIn("get_chat_knowledge_manager_instance", source)
+
 if __name__ == "__main__":
     unittest.main()

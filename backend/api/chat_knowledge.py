@@ -23,6 +23,7 @@ from src.constants.network_constants import NetworkConstants
 # Import existing components
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -453,6 +454,11 @@ class CreateContextRequest(BaseModel):
     keywords: Optional[List[str]] = None
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_chat_context",
+    error_code_prefix="CHAT_KNOWLEDGE",
+)
 @router.post("/context/create")
 async def create_chat_context(request_data: CreateContextRequest, request: Request):
     """Create or update knowledge context for a chat"""
@@ -487,6 +493,11 @@ class AssociateFileRequest(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="associate_file_with_chat",
+    error_code_prefix="CHAT_KNOWLEDGE",
+)
 @router.post("/files/associate")
 async def associate_file_with_chat(
     request_data: AssociateFileRequest, request: Request
@@ -516,6 +527,11 @@ async def associate_file_with_chat(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="upload_file_to_chat",
+    error_code_prefix="CHAT_KNOWLEDGE",
+)
 @router.post("/files/upload/{chat_id}")
 async def upload_file_to_chat(
     chat_id: str,
@@ -554,6 +570,11 @@ class AddKnowledgeRequest(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_temporary_knowledge",
+    error_code_prefix="CHAT_KNOWLEDGE",
+)
 @router.post("/knowledge/add_temporary")
 async def add_temporary_knowledge(request: AddKnowledgeRequest):
     """Add temporary knowledge to chat context"""
@@ -569,6 +590,11 @@ async def add_temporary_knowledge(request: AddKnowledgeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pending_knowledge_decisions",
+    error_code_prefix="CHAT_KNOWLEDGE",
+)
 @router.get("/knowledge/pending/{chat_id}")
 async def get_pending_knowledge_decisions(chat_id: str):
     """Get knowledge items pending user decision"""
@@ -592,6 +618,11 @@ class KnowledgeDecisionRequest(BaseModel):
     decision: KnowledgeDecision
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="apply_knowledge_decision",
+    error_code_prefix="CHAT_KNOWLEDGE",
+)
 @router.post("/knowledge/decide")
 async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
     """Apply user decision for temporary knowledge"""
@@ -618,6 +649,11 @@ class CompileChatRequest(BaseModel):
     include_system_messages: bool = False
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="compile_chat_to_knowledge",
+    error_code_prefix="CHAT_KNOWLEDGE",
+)
 @router.post("/compile")
 async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: Request):
     """Compile entire chat conversation to knowledge base"""
@@ -642,6 +678,11 @@ class SearchRequest(BaseModel):
     include_temporary: bool = True
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_chat_knowledge",
+    error_code_prefix="CHAT_KNOWLEDGE",
+)
 @router.post("/search")
 async def search_chat_knowledge(request: SearchRequest):
     """Search knowledge across chats or within specific chat"""
@@ -659,6 +700,11 @@ async def search_chat_knowledge(request: SearchRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_chat_context",
+    error_code_prefix="CHAT_KNOWLEDGE",
+)
 @router.get("/context/{chat_id}")
 async def get_chat_context(chat_id: str):
     """Get complete knowledge context for a chat"""
@@ -698,6 +744,11 @@ async def get_chat_context(chat_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="CHAT_KNOWLEDGE",
+)
 @router.get("/health")
 async def health_check():
     """Health check endpoint for chat knowledge system"""
