@@ -23225,6 +23225,186 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('"endpoint"', source)
         self.assertIn('"last_check"', source)
 
+    # ==============================================
+    # BATCH 127: redis_service.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_127_start_redis_service_simple_pattern(self):
+        """Verify start_redis_service endpoint uses Simple Pattern"""
+        from backend.api import redis_service
+
+        source = inspect.getsource(redis_service.start_redis_service)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="start_redis_service"', source)
+        self.assertIn('error_code_prefix="REDIS_SERVICE"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_127_stop_redis_service_simple_pattern(self):
+        """Verify stop_redis_service endpoint uses Simple Pattern"""
+        from backend.api import redis_service
+
+        source = inspect.getsource(redis_service.stop_redis_service)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="stop_redis_service"', source)
+        self.assertIn('error_code_prefix="REDIS_SERVICE"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_127_restart_redis_service_simple_pattern(self):
+        """Verify restart_redis_service endpoint uses Simple Pattern"""
+        from backend.api import redis_service
+
+        source = inspect.getsource(redis_service.restart_redis_service)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="restart_redis_service"', source)
+        self.assertIn('error_code_prefix="REDIS_SERVICE"', source)
+
+    def test_batch_127_get_redis_status_simple_pattern(self):
+        """Verify get_redis_status endpoint uses Simple Pattern"""
+        from backend.api import redis_service
+
+        source = inspect.getsource(redis_service.get_redis_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_redis_status"', source)
+        self.assertIn('error_code_prefix="REDIS_SERVICE"', source)
+
+    def test_batch_127_get_redis_health_simple_pattern(self):
+        """Verify get_redis_health endpoint uses Simple Pattern"""
+        from backend.api import redis_service
+
+        source = inspect.getsource(redis_service.get_redis_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_redis_health"', source)
+        self.assertIn('error_code_prefix="REDIS_SERVICE"', source)
+
+    def test_batch_127_all_redis_service_endpoints_have_decorator(self):
+        """Verify all redis_service endpoints have @with_error_handling decorator"""
+        from backend.api import redis_service
+
+        endpoint_functions = [
+            redis_service.start_redis_service,
+            redis_service.stop_redis_service,
+            redis_service.restart_redis_service,
+            redis_service.get_redis_status,
+            redis_service.get_redis_health,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_127_redis_service_100_percent_milestone(self):
+        """Verify redis_service.py has reached 100% migration"""
+        from backend.api import redis_service
+
+        endpoint_functions = [
+            redis_service.start_redis_service,
+            redis_service.stop_redis_service,
+            redis_service.restart_redis_service,
+            redis_service.get_redis_status,
+            redis_service.get_redis_health,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 5
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_127_migration_preserves_permission_checking(self):
+        """Verify migration preserves permission checking functions"""
+        from backend.api import redis_service
+
+        # Check start uses operator permission
+        source_start = inspect.getsource(redis_service.start_redis_service)
+        self.assertIn("check_operator_permission", source_start)
+
+        # Check stop uses admin permission
+        source_stop = inspect.getsource(redis_service.stop_redis_service)
+        self.assertIn("check_admin_permission", source_stop)
+
+        # Check restart uses operator permission
+        source_restart = inspect.getsource(redis_service.restart_redis_service)
+        self.assertIn("check_operator_permission", source_restart)
+
+    def test_batch_127_migration_preserves_service_manager_operations(self):
+        """Verify migration preserves RedisServiceManager operations"""
+        from backend.api import redis_service
+
+        # Check start_service operation
+        source_start = inspect.getsource(redis_service.start_redis_service)
+        self.assertIn("await manager.start_service", source_start)
+        self.assertIn("user_id=user_id", source_start)
+
+        # Check stop_service operation
+        source_stop = inspect.getsource(redis_service.stop_redis_service)
+        self.assertIn("await manager.stop_service", source_stop)
+
+        # Check restart_service operation
+        source_restart = inspect.getsource(redis_service.restart_redis_service)
+        self.assertIn("await manager.restart_service", source_restart)
+
+    def test_batch_127_migration_preserves_multiple_exception_types(self):
+        """Verify migration preserves multiple exception type handling"""
+        from backend.api import redis_service
+
+        # Check start has HTTPException and RedisConnectionError handling
+        source_start = inspect.getsource(redis_service.start_redis_service)
+        self.assertIn("except HTTPException:", source_start)
+        self.assertIn("except RedisConnectionError as e:", source_start)
+        self.assertIn("except Exception as e:", source_start)
+
+        # Check stop has multiple exception types
+        source_stop = inspect.getsource(redis_service.stop_redis_service)
+        self.assertIn("except HTTPException:", source_stop)
+        self.assertIn("except RedisConnectionError as e:", source_stop)
+
+    def test_batch_127_migration_preserves_response_models(self):
+        """Verify migration preserves ServiceOperationResponse structure"""
+        from backend.api import redis_service
+
+        source = inspect.getsource(redis_service.start_redis_service)
+
+        # Check ServiceOperationResponse fields preserved
+        self.assertIn("ServiceOperationResponse", source)
+        self.assertIn("success=result.success", source)
+        self.assertIn("operation=result.operation", source)
+        self.assertIn("message=result.message", source)
+        self.assertIn("duration_seconds=result.duration_seconds", source)
+        self.assertIn("timestamp=result.timestamp", source)
+        self.assertIn("new_status=result.new_status", source)
+
+    def test_batch_127_migration_preserves_logging(self):
+        """Verify migration preserves audit logging for operations"""
+        from backend.api import redis_service
+
+        # Check start has logging
+        source_start = inspect.getsource(redis_service.start_redis_service)
+        self.assertIn("logger.info", source_start)
+        self.assertIn("Starting Redis service", source_start)
+
+        # Check stop has warning logging (admin-only operation)
+        source_stop = inspect.getsource(redis_service.stop_redis_service)
+        self.assertIn("logger.warning", source_stop)
+        self.assertIn("Stopping Redis service", source_stop)
+
 
 if __name__ == "__main__":
     unittest.main()
