@@ -8,6 +8,7 @@ import aiofiles
 from fastapi import APIRouter, HTTPException
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 
@@ -19,6 +20,11 @@ _cache_timestamp: float = 0
 _cache_ttl: int = 300  # 5 minutes cache
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_prompts",
+    error_code_prefix="PROMPTS",
+)
 @router.get("/")
 async def get_prompts():
     global _prompts_cache, _cache_timestamp
@@ -165,6 +171,11 @@ async def get_prompts():
         raise HTTPException(status_code=500, detail=f"Error getting prompts: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_prompts_cache",
+    error_code_prefix="PROMPTS",
+)
 @router.post("/cache/clear")
 async def clear_prompts_cache():
     """Clear the prompts cache to force reload on next request"""
@@ -175,6 +186,11 @@ async def clear_prompts_cache():
     return {"status": "success", "message": "Prompts cache cleared"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_prompt",
+    error_code_prefix="PROMPTS",
+)
 @router.post("/{prompt_id}")
 async def save_prompt(prompt_id: str, request: dict):
     try:
@@ -229,6 +245,11 @@ async def save_prompt(prompt_id: str, request: dict):
         raise HTTPException(status_code=500, detail=f"Error saving prompt: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="revert_prompt",
+    error_code_prefix="PROMPTS",
+)
 @router.post("/{prompt_id}/revert")
 async def revert_prompt(prompt_id: str):
     try:
