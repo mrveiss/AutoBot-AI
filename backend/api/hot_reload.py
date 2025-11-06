@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,11 @@ class ReloadResponse(BaseModel):
     errors: list = []
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reload_chat_workflow",
+    error_code_prefix="HOT_RELOAD",
+)
 @router.post("/chat-workflow", response_model=ReloadResponse)
 async def reload_chat_workflow():
     """
@@ -77,6 +83,11 @@ async def reload_chat_workflow():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reload_module",
+    error_code_prefix="HOT_RELOAD",
+)
 @router.post("/module", response_model=ReloadResponse)
 async def reload_module(request: ReloadRequest):
     """
@@ -119,6 +130,11 @@ async def reload_module(request: ReloadRequest):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_reload_status",
+    error_code_prefix="HOT_RELOAD",
+)
 @router.get("/status", response_model=Dict[str, Any])
 async def get_reload_status():
     """
@@ -135,6 +151,11 @@ async def get_reload_status():
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_hot_reload",
+    error_code_prefix="HOT_RELOAD",
+)
 @router.post("/start")
 async def start_hot_reload():
     """
@@ -160,6 +181,11 @@ async def start_hot_reload():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_hot_reload",
+    error_code_prefix="HOT_RELOAD",
+)
 @router.post("/stop")
 async def stop_hot_reload():
     """
@@ -179,6 +205,11 @@ async def stop_hot_reload():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="hot_reload_health",
+    error_code_prefix="HOT_RELOAD",
+)
 @router.get("/health")
 async def hot_reload_health():
     """

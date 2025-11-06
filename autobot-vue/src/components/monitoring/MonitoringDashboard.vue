@@ -283,7 +283,7 @@
           :class="['recommendation-card', rec.priority]"
         >
           <div class="rec-header">
-            <span :class="['priority-badge', rec.priority]">{{ rec.priority }}</span>
+            <StatusBadge :variant="getPriorityVariant(rec.priority)" size="small">{{ rec.priority }}</StatusBadge>
             <span class="category">{{ rec.category.toUpperCase() }}</span>
           </div>
           <div class="rec-content">
@@ -318,7 +318,7 @@
               :class="['alert-item', alert.severity]"
             >
               <div class="alert-header">
-                <span :class="['severity-badge', alert.severity]">{{ alert.severity }}</span>
+                <StatusBadge :variant="getSeverityVariant(alert.severity)" size="small">{{ alert.severity }}</StatusBadge>
                 <span class="category">{{ alert.category }}</span>
                 <span class="timestamp">{{ formatTimestamp(alert.timestamp) }}</span>
               </div>
@@ -342,13 +342,15 @@
 import { Chart, registerables } from 'chart.js'
 import 'chartjs-adapter-date-fns'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
 
 Chart.register(...registerables)
 
 export default {
   name: 'MonitoringDashboard',
   components: {
-    EmptyState
+    EmptyState,
+    StatusBadge
   },
   data() {
     return {
@@ -912,6 +914,23 @@ export default {
     
     formatTimestamp(timestamp) {
       return new Date(timestamp * 1000).toLocaleString()
+    },
+
+    getPriorityVariant(priority) {
+      const variantMap = {
+        'high': 'danger',
+        'medium': 'warning',
+        'low': 'info'
+      }
+      return variantMap[priority] || 'secondary'
+    },
+
+    getSeverityVariant(severity) {
+      const variantMap = {
+        'critical': 'danger',
+        'warning': 'warning'
+      }
+      return variantMap[severity] || 'secondary'
     }
   }
 }
@@ -1190,18 +1209,6 @@ export default {
   margin-bottom: 10px;
 }
 
-.priority-badge {
-  font-size: 0.75em;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.priority-badge.high { background: #ffebee; color: #f44336; }
-.priority-badge.medium { background: #fff3e0; color: #ff9800; }
-.priority-badge.low { background: #e3f2fd; color: #2196f3; }
-
 .category {
   font-size: 0.8em;
   color: #666;
@@ -1297,17 +1304,6 @@ export default {
   gap: 10px;
   margin-bottom: 10px;
 }
-
-.severity-badge {
-  font-size: 0.75em;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.severity-badge.critical { background: #ffebee; color: #f44336; }
-.severity-badge.warning { background: #fff3e0; color: #ff9800; }
 
 .timestamp {
   font-size: 0.8em;

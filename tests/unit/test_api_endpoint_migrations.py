@@ -23405,6 +23405,181 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("logger.warning", source_stop)
         self.assertIn("Stopping Redis service", source_stop)
 
+    # ==============================================
+    # BATCH 128: hot_reload.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_128_reload_chat_workflow_simple_pattern(self):
+        """Verify reload_chat_workflow endpoint uses Simple Pattern"""
+        from backend.api import hot_reload
+
+        source = inspect.getsource(hot_reload.reload_chat_workflow)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="reload_chat_workflow"', source)
+        self.assertIn('error_code_prefix="HOT_RELOAD"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_128_reload_module_simple_pattern(self):
+        """Verify reload_module endpoint uses Simple Pattern"""
+        from backend.api import hot_reload
+
+        source = inspect.getsource(hot_reload.reload_module)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="reload_module"', source)
+        self.assertIn('error_code_prefix="HOT_RELOAD"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_128_get_reload_status_simple_pattern(self):
+        """Verify get_reload_status endpoint uses Simple Pattern"""
+        from backend.api import hot_reload
+
+        source = inspect.getsource(hot_reload.get_reload_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_reload_status"', source)
+        self.assertIn('error_code_prefix="HOT_RELOAD"', source)
+
+    def test_batch_128_start_hot_reload_simple_pattern(self):
+        """Verify start_hot_reload endpoint uses Simple Pattern"""
+        from backend.api import hot_reload
+
+        source = inspect.getsource(hot_reload.start_hot_reload)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="start_hot_reload"', source)
+        self.assertIn('error_code_prefix="HOT_RELOAD"', source)
+
+    def test_batch_128_stop_hot_reload_simple_pattern(self):
+        """Verify stop_hot_reload endpoint uses Simple Pattern"""
+        from backend.api import hot_reload
+
+        source = inspect.getsource(hot_reload.stop_hot_reload)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="stop_hot_reload"', source)
+        self.assertIn('error_code_prefix="HOT_RELOAD"', source)
+
+    def test_batch_128_hot_reload_health_mixed_pattern(self):
+        """Verify hot_reload_health endpoint uses Mixed Pattern"""
+        from backend.api import hot_reload
+
+        source = inspect.getsource(hot_reload.hot_reload_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="hot_reload_health"', source)
+        self.assertIn('error_code_prefix="HOT_RELOAD"', source)
+        # Mixed Pattern: returns error dict instead of raising HTTPException
+        self.assertIn('return {"status": "unhealthy"', source)
+
+    def test_batch_128_all_hot_reload_endpoints_have_decorator(self):
+        """Verify all hot_reload endpoints have @with_error_handling decorator"""
+        from backend.api import hot_reload
+
+        endpoint_functions = [
+            hot_reload.reload_chat_workflow,
+            hot_reload.reload_module,
+            hot_reload.get_reload_status,
+            hot_reload.start_hot_reload,
+            hot_reload.stop_hot_reload,
+            hot_reload.hot_reload_health,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_128_hot_reload_100_percent_milestone(self):
+        """Verify hot_reload.py has reached 100% migration"""
+        from backend.api import hot_reload
+
+        endpoint_functions = [
+            hot_reload.reload_chat_workflow,
+            hot_reload.reload_module,
+            hot_reload.get_reload_status,
+            hot_reload.start_hot_reload,
+            hot_reload.stop_hot_reload,
+            hot_reload.hot_reload_health,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 6
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_128_migration_preserves_hot_reload_manager_operations(self):
+        """Verify migration preserves hot_reload_manager operations"""
+        from backend.api import hot_reload
+
+        # Check reload_chat_workflow uses hot_reload_manager
+        source_workflow = inspect.getsource(hot_reload.reload_chat_workflow)
+        self.assertIn("hot_reload_manager.reload_chat_workflow", source_workflow)
+
+        # Check reload_module uses hot_reload_manager
+        source_module = inspect.getsource(hot_reload.reload_module)
+        self.assertIn("hot_reload_manager.reload_module", source_module)
+        self.assertIn("hot_reload_manager.is_watching", source_module)
+
+        # Check start uses hot_reload_manager
+        source_start = inspect.getsource(hot_reload.start_hot_reload)
+        self.assertIn("await hot_reload_manager.start", source_start)
+        self.assertIn("register_chat_workflow_modules", source_start)
+
+    def test_batch_128_migration_preserves_response_models(self):
+        """Verify migration preserves ReloadResponse structure"""
+        from backend.api import hot_reload
+
+        source = inspect.getsource(hot_reload.reload_chat_workflow)
+
+        # Check ReloadResponse fields preserved
+        self.assertIn("ReloadResponse", source)
+        self.assertIn("success=overall_success", source)
+        self.assertIn("message=message", source)
+        self.assertIn("results=reload_results", source)
+        self.assertIn("reloaded_modules=successful_reloads", source)
+        self.assertIn("errors=failed_reloads", source)
+
+    def test_batch_128_migration_preserves_module_validation(self):
+        """Verify migration preserves module validation in reload_module"""
+        from backend.api import hot_reload
+
+        source = inspect.getsource(hot_reload.reload_module)
+
+        # Check module_name validation preserved
+        self.assertIn("if not request.module_name:", source)
+        self.assertIn("module_name is required", source)
+
+        # Check is_watching check preserved
+        self.assertIn("if not hot_reload_manager.is_watching", source)
+        self.assertIn("hot_reload_manager.register_module", source)
+
+    def test_batch_128_migration_preserves_health_check_mixed_pattern(self):
+        """Verify migration preserves health check mixed pattern"""
+        from backend.api import hot_reload
+
+        source = inspect.getsource(hot_reload.hot_reload_health)
+
+        # Check Mixed Pattern preserved: returns error dict instead of HTTPException
+        self.assertIn("except Exception as e:", source)
+        self.assertIn('return {"status": "unhealthy"', source)
+        self.assertIn('"error": str(e)', source)
+        self.assertIn('"service": "hot_reload"', source)
+
 
 if __name__ == "__main__":
     unittest.main()
