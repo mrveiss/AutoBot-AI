@@ -25393,6 +25393,155 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("task_tracker.get_active_tasks()", source)
         self.assertIn("len(active_tasks)", source)
 
+    # ==============================================
+    # BATCH 137: security.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_137_get_security_status_simple_pattern(self):
+        """Verify get_security_status endpoint uses Simple Pattern"""
+        from backend.api import security
+
+        source = inspect.getsource(security.get_security_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_security_status"', source)
+        self.assertIn('error_code_prefix="SECURITY"', source)
+
+    def test_batch_137_approve_command_simple_pattern(self):
+        """Verify approve_command endpoint uses Simple Pattern"""
+        from backend.api import security
+
+        source = inspect.getsource(security.approve_command)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="approve_command"', source)
+        self.assertIn('error_code_prefix="SECURITY"', source)
+
+    def test_batch_137_get_pending_approvals_simple_pattern(self):
+        """Verify get_pending_approvals endpoint uses Simple Pattern"""
+        from backend.api import security
+
+        source = inspect.getsource(security.get_pending_approvals)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_pending_approvals"', source)
+        self.assertIn('error_code_prefix="SECURITY"', source)
+
+    def test_batch_137_get_command_history_simple_pattern(self):
+        """Verify get_command_history endpoint uses Simple Pattern"""
+        from backend.api import security
+
+        source = inspect.getsource(security.get_command_history)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_command_history"', source)
+        self.assertIn('error_code_prefix="SECURITY"', source)
+
+    def test_batch_137_get_audit_log_simple_pattern(self):
+        """Verify get_audit_log endpoint uses Simple Pattern"""
+        from backend.api import security
+
+        source = inspect.getsource(security.get_audit_log)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_audit_log"', source)
+        self.assertIn('error_code_prefix="SECURITY"', source)
+
+    def test_batch_137_all_security_endpoints_have_decorator(self):
+        """Verify all security endpoints have @with_error_handling decorator"""
+        from backend.api import security
+
+        endpoint_functions = [
+            security.get_security_status,
+            security.approve_command,
+            security.get_pending_approvals,
+            security.get_command_history,
+            security.get_audit_log,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_137_security_100_percent_milestone(self):
+        """Verify security.py has reached 100% migration"""
+        from backend.api import security
+
+        endpoint_functions = [
+            security.get_security_status,
+            security.approve_command,
+            security.get_pending_approvals,
+            security.get_command_history,
+            security.get_audit_log,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 5
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_137_migration_preserves_security_layer_fallback(self):
+        """Verify migration preserves security layer fallback logic"""
+        from backend.api import security
+
+        source = inspect.getsource(security.get_security_status)
+        self.assertIn("enhanced_security_layer", source)
+        self.assertIn("security_layer", source)
+        self.assertIn("EnhancedSecurityLayer()", source)
+        self.assertIn("get_pending_approvals()", source)
+
+    def test_batch_137_migration_preserves_command_approval(self):
+        """Verify migration preserves command approval functionality"""
+        from backend.api import security
+
+        source = inspect.getsource(security.approve_command)
+        self.assertIn("CommandApprovalRequest", source)
+        self.assertIn("approve_command(approval.command_id, approval.approved)", source)
+        self.assertIn("approved", source)
+        self.assertIn("denied", source)
+
+    def test_batch_137_migration_preserves_pending_approvals_retrieval(self):
+        """Verify migration preserves pending approvals retrieval"""
+        from backend.api import security
+
+        source = inspect.getsource(security.get_pending_approvals)
+        self.assertIn("get_pending_approvals()", source)
+        self.assertIn("pending_approvals", source)
+        self.assertIn("len(pending)", source)
+
+    def test_batch_137_migration_preserves_command_history_filtering(self):
+        """Verify migration preserves command history with user filtering"""
+        from backend.api import security
+
+        source = inspect.getsource(security.get_command_history)
+        self.assertIn("user: str = None", source)
+        self.assertIn("limit: int = 50", source)
+        self.assertIn("get_command_history(user=user, limit=limit)", source)
+
+    def test_batch_137_migration_preserves_audit_log_reading(self):
+        """Verify migration preserves audit log file reading"""
+        from backend.api import security
+
+        source = inspect.getsource(security.get_audit_log)
+        self.assertIn("audit_log_file", source)
+        self.assertIn("json.loads", source)
+        self.assertIn("FileNotFoundError", source)
+        self.assertIn("JSONDecodeError", source)
+
 
 if __name__ == "__main__":
     unittest.main()
