@@ -21898,5 +21898,144 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertTrue(hasattr(kb_librarian, "KBQuery"))
         self.assertTrue(hasattr(kb_librarian, "KBQueryResponse"))
 
+    # ==============================================
+    # BATCH 119: knowledge_fresh.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_119_get_fresh_knowledge_stats_mixed_pattern(self):
+        """Verify get_fresh_knowledge_stats endpoint uses Mixed Pattern"""
+        from backend.api import knowledge_fresh
+
+        source = inspect.getsource(knowledge_fresh.get_fresh_knowledge_stats)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_fresh_knowledge_stats"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_FRESH"', source)
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+
+    def test_batch_119_debug_redis_connection_mixed_pattern(self):
+        """Verify debug_redis_connection endpoint uses Mixed Pattern"""
+        from backend.api import knowledge_fresh
+
+        source = inspect.getsource(knowledge_fresh.debug_redis_connection)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="debug_redis_connection"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_FRESH"', source)
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+
+    def test_batch_119_rebuild_search_index_mixed_pattern(self):
+        """Verify rebuild_search_index endpoint uses Mixed Pattern"""
+        from backend.api import knowledge_fresh
+
+        source = inspect.getsource(knowledge_fresh.rebuild_search_index)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="rebuild_search_index"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_FRESH"', source)
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+
+    def test_batch_119_all_knowledge_fresh_endpoints_have_decorator(self):
+        """Verify all knowledge_fresh endpoints have @with_error_handling decorator"""
+        from backend.api import knowledge_fresh
+
+        endpoint_functions = [
+            knowledge_fresh.get_fresh_knowledge_stats,
+            knowledge_fresh.debug_redis_connection,
+            knowledge_fresh.rebuild_search_index,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_119_knowledge_fresh_100_percent_milestone(self):
+        """Verify knowledge_fresh.py has reached 100% migration"""
+        from backend.api import knowledge_fresh
+
+        endpoint_functions = [
+            knowledge_fresh.get_fresh_knowledge_stats,
+            knowledge_fresh.debug_redis_connection,
+            knowledge_fresh.rebuild_search_index,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 3
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_119_migration_preserves_fresh_kb_operations(self):
+        """Verify migration preserves fresh KB instance operations"""
+        from backend.api import knowledge_fresh
+
+        source = inspect.getsource(knowledge_fresh.get_fresh_knowledge_stats)
+
+        # Check fresh instance creation
+        self.assertIn("KnowledgeBase()", source)
+        self.assertIn("importlib.reload", source)
+        self.assertIn("get_stats", source)
+        self.assertIn("completely_fresh_instance", source)
+        self.assertIn("asyncio.sleep", source)
+
+    def test_batch_119_migration_preserves_redis_debug_operations(self):
+        """Verify migration preserves Redis debug operations"""
+        from backend.api import knowledge_fresh
+
+        source = inspect.getsource(knowledge_fresh.debug_redis_connection)
+
+        # Check Redis operations preserved
+        self.assertIn("get_redis_client", source)
+        self.assertIn('database="knowledge"', source)
+        self.assertIn("redis_client.ping", source)
+        self.assertIn("scan_iter", source)
+        self.assertIn("FT.INFO", source)
+        self.assertIn("num_docs", source)
+
+    def test_batch_119_migration_preserves_index_rebuild_operations(self):
+        """Verify migration preserves index rebuild operations"""
+        from backend.api import knowledge_fresh
+
+        source = inspect.getsource(knowledge_fresh.rebuild_search_index)
+
+        # Check rebuild operations preserved
+        self.assertIn("KnowledgeBase()", source)
+        self.assertIn("rebuild_search_index", source)
+        self.assertIn("asyncio.sleep", source)
+        self.assertIn('"operation"', source)
+
+    def test_batch_119_migration_preserves_error_response_format(self):
+        """Verify migration preserves error response dict format"""
+        from backend.api import knowledge_fresh
+
+        # Check all endpoints return error dicts
+        source_stats = inspect.getsource(knowledge_fresh.get_fresh_knowledge_stats)
+        self.assertIn('"error"', source_stats)
+        self.assertIn('"status"', source_stats)
+
+        source_redis = inspect.getsource(knowledge_fresh.debug_redis_connection)
+        self.assertIn('"redis_connection"', source_redis)
+        self.assertIn('"error"', source_redis)
+
+        source_rebuild = inspect.getsource(knowledge_fresh.rebuild_search_index)
+        self.assertIn('"error"', source_rebuild)
+        self.assertIn('"success"', source_rebuild)
+
 if __name__ == "__main__":
     unittest.main()

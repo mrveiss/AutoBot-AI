@@ -10,11 +10,17 @@ import os
 from fastapi import APIRouter, Request
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_fresh_knowledge_stats",
+    error_code_prefix="KNOWLEDGE_FRESH",
+)
 @router.get("/fresh_stats")
 async def get_fresh_knowledge_stats(request: Request = None):
     """Get knowledge base stats using a completely fresh instance (bypasses all cache)"""
@@ -80,6 +86,11 @@ async def get_fresh_knowledge_stats(request: Request = None):
         }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="debug_redis_connection",
+    error_code_prefix="KNOWLEDGE_FRESH",
+)
 @router.get("/debug_redis")
 async def debug_redis_connection():
     """Debug Redis connection and vector counts using canonical utility.
@@ -135,6 +146,11 @@ async def debug_redis_connection():
         return {"redis_connection": "failed", "error": str(e)}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rebuild_search_index",
+    error_code_prefix="KNOWLEDGE_FRESH",
+)
 @router.post("/rebuild_index")
 async def rebuild_search_index():
     """Rebuild the search index to sync vectors with search index"""
