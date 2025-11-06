@@ -5,12 +5,18 @@ from fastapi import APIRouter, HTTPException
 from backend.services.config_service import ConfigService
 from backend.utils.connection_utils import ConnectionTester
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_redis_config",
+    error_code_prefix="REDIS",
+)
 @router.get("/config")
 async def get_redis_config():
     """Get current Redis configuration"""
@@ -23,6 +29,11 @@ async def get_redis_config():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_redis_config",
+    error_code_prefix="REDIS",
+)
 @router.post("/config")
 async def update_redis_config(config_data: dict):
     """Update Redis configuration"""
@@ -36,6 +47,11 @@ async def update_redis_config(config_data: dict):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_redis_status",
+    error_code_prefix="REDIS",
+)
 @router.get("/status")
 async def get_redis_status():
     """Get Redis connection status"""
@@ -50,6 +66,11 @@ async def get_redis_status():
         }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_redis_connection",
+    error_code_prefix="REDIS",
+)
 @router.post("/test_connection")
 async def test_redis_connection():
     """Test Redis connection with current configuration"""

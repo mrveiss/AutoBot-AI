@@ -22037,5 +22037,138 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('"error"', source_rebuild)
         self.assertIn('"success"', source_rebuild)
 
+    # ==============================================
+    # BATCH 120: redis.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_120_get_redis_config_simple_pattern(self):
+        """Verify get_redis_config endpoint uses Simple Pattern"""
+        from backend.api import redis
+
+        source = inspect.getsource(redis.get_redis_config)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_redis_config"', source)
+        self.assertIn('error_code_prefix="REDIS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_120_update_redis_config_simple_pattern(self):
+        """Verify update_redis_config endpoint uses Simple Pattern"""
+        from backend.api import redis
+
+        source = inspect.getsource(redis.update_redis_config)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="update_redis_config"', source)
+        self.assertIn('error_code_prefix="REDIS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_120_get_redis_status_mixed_pattern(self):
+        """Verify get_redis_status endpoint uses Mixed Pattern"""
+        from backend.api import redis
+
+        source = inspect.getsource(redis.get_redis_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_redis_status"', source)
+        self.assertIn('error_code_prefix="REDIS"', source)
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+
+    def test_batch_120_test_redis_connection_mixed_pattern(self):
+        """Verify test_redis_connection endpoint uses Mixed Pattern"""
+        from backend.api import redis
+
+        source = inspect.getsource(redis.test_redis_connection)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="test_redis_connection"', source)
+        self.assertIn('error_code_prefix="REDIS"', source)
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+
+    def test_batch_120_all_redis_endpoints_have_decorator(self):
+        """Verify all redis endpoints have @with_error_handling decorator"""
+        from backend.api import redis
+
+        endpoint_functions = [
+            redis.get_redis_config,
+            redis.update_redis_config,
+            redis.get_redis_status,
+            redis.test_redis_connection,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_120_redis_100_percent_milestone(self):
+        """Verify redis.py has reached 100% migration"""
+        from backend.api import redis
+
+        endpoint_functions = [
+            redis.get_redis_config,
+            redis.update_redis_config,
+            redis.get_redis_status,
+            redis.test_redis_connection,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 4
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_120_migration_preserves_config_operations(self):
+        """Verify migration preserves ConfigService operations"""
+        from backend.api import redis
+
+        source_get = inspect.getsource(redis.get_redis_config)
+        self.assertIn("ConfigService.get_redis_config", source_get)
+
+        source_update = inspect.getsource(redis.update_redis_config)
+        self.assertIn("ConfigService.update_redis_config", source_update)
+        self.assertIn("config_data", source_update)
+
+    def test_batch_120_migration_preserves_connection_testing(self):
+        """Verify migration preserves ConnectionTester operations"""
+        from backend.api import redis
+
+        source_status = inspect.getsource(redis.get_redis_status)
+        self.assertIn("ConnectionTester.test_redis_connection", source_status)
+
+        source_test = inspect.getsource(redis.test_redis_connection)
+        self.assertIn("ConnectionTester.test_redis_connection", source_test)
+
+    def test_batch_120_migration_preserves_error_dict_format(self):
+        """Verify migration preserves error dict format for status endpoints"""
+        from backend.api import redis
+
+        # Check get_redis_status returns error dict
+        source_status = inspect.getsource(redis.get_redis_status)
+        self.assertIn('"status"', source_status)
+        self.assertIn('"disconnected"', source_status)
+        self.assertIn('"message"', source_status)
+
+        # Check test_redis_connection returns error dict
+        source_test = inspect.getsource(redis.test_redis_connection)
+        self.assertIn('"status"', source_test)
+        self.assertIn('"disconnected"', source_test)
+        self.assertIn('"message"', source_test)
+
+
 if __name__ == "__main__":
     unittest.main()
