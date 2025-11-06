@@ -12,9 +12,9 @@
         </div>
         <div class="flex items-center space-x-2">
           <StatusBadge :variant="statusVariant" size="small">{{ status || 'Unknown' }}</StatusBadge>
-          <button @click="refreshStatus" class="btn btn-secondary btn-sm" :disabled="isRefreshingStatus" aria-label="Refresh status">
-            <i class="fas fa-sync-alt" :class="{ 'fa-spin': isRefreshingStatus }"></i>
-          </button>
+          <BaseButton variant="secondary" size="sm" @click="refreshStatus" :loading="isRefreshingStatus" aria-label="Refresh status">
+            <i class="fas fa-sync-alt"></i>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -24,9 +24,9 @@
       <div class="flex items-center space-x-3">
         <i class="fas fa-globe text-gray-500"></i>
         <span class="text-sm text-gray-700 font-mono">{{ currentUrl }}</span>
-        <button @click="copyUrl" class="btn btn-outline btn-xs" title="Copy URL">
+        <BaseButton variant="outline" size="xs" @click="copyUrl" title="Copy URL">
           <i class="fas fa-copy"></i>
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -42,14 +42,14 @@
           </p>
         </div>
         <div class="ml-4 flex space-x-2">
-          <button @click="handleWaitForUser" class="btn btn-primary btn-sm" :disabled="isWaitingForUser" aria-label="Wait for user">
-            <i class="fas mr-1" :class="isWaitingForUser ? 'fa-spinner fa-spin' : 'fa-clock'"></i>
+          <BaseButton variant="primary" size="sm" @click="handleWaitForUser" :loading="isWaitingForUser" aria-label="Wait for user">
+            <i class="fas fa-clock mr-1"></i>
             {{ isWaitingForUser ? 'Waiting...' : 'Wait' }}
-          </button>
-          <button @click="openBrowserSession" class="btn btn-secondary btn-sm">
+          </BaseButton>
+          <BaseButton variant="secondary" size="sm" @click="openBrowserSession">
             <i class="fas fa-external-link-alt mr-1"></i>
             Open Browser
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -92,10 +92,10 @@
                 <i class="fas fa-hand-paper mr-1"></i>
                 Manual intervention required
               </div>
-              <button @click="openBrowserForResult(result)" class="btn btn-warning btn-sm">
+              <BaseButton variant="warning" size="sm" @click="openBrowserForResult(result)">
                 <i class="fas fa-external-link-alt mr-1"></i>
                 Open Browser
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -106,29 +106,25 @@
     <div v-if="sessionId" class="session-controls border-t p-4 bg-gray-50">
       <h4 class="text-md font-semibold text-gray-800 mb-3">Session Controls</h4>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <button @click="() => handleSessionAction('extract_content')"
-                class="btn btn-outline btn-sm" :disabled="isPerformingAction" aria-label="Extract content">
-          <i class="fas mr-1" :class="isPerformingAction ? 'fa-spinner fa-spin' : 'fa-file-alt'"></i>
+        <BaseButton variant="outline" size="sm" @click="() => handleSessionAction('extract_content')" :loading="isPerformingAction" aria-label="Extract content">
+          <i class="fas fa-file-alt mr-1"></i>
           Extract Content
-        </button>
+        </BaseButton>
 
-        <button @click="() => handleSessionAction('save_mhtml')"
-                class="btn btn-outline btn-sm" :disabled="isPerformingAction" aria-label="Save MHTML">
-          <i class="fas mr-1" :class="isPerformingAction ? 'fa-spinner fa-spin' : 'fa-save'"></i>
+        <BaseButton variant="outline" size="sm" @click="() => handleSessionAction('save_mhtml')" :loading="isPerformingAction" aria-label="Save MHTML">
+          <i class="fas fa-save mr-1"></i>
           Save MHTML
-        </button>
+        </BaseButton>
 
-        <button @click="navigateToUrl"
-                class="btn btn-outline btn-sm" :disabled="isNavigating" aria-label="Navigate to URL">
-          <i class="fas mr-1" :class="isNavigating ? 'fa-spinner fa-spin' : 'fa-arrow-right'"></i>
+        <BaseButton variant="outline" size="sm" @click="navigateToUrl" :loading="isNavigating" aria-label="Navigate to URL">
+          <i class="fas fa-arrow-right mr-1"></i>
           {{ isNavigating ? 'Navigating...' : 'Navigate' }}
-        </button>
+        </BaseButton>
 
-        <button @click="closeSessionHandler"
-                class="btn btn-danger btn-sm" :disabled="isClosingSession" aria-label="Close session">
-          <i class="fas mr-1" :class="isClosingSession ? 'fa-spinner fa-spin' : 'fa-times'"></i>
+        <BaseButton variant="danger" size="sm" @click="closeSessionHandler" :loading="isClosingSession" aria-label="Close session">
+          <i class="fas fa-times mr-1"></i>
           {{ isClosingSession ? 'Closing...' : 'Close Session' }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- URL Input for Navigation -->
@@ -140,15 +136,13 @@
                  class="flex-1 px-3 py-2 border border-gray-300 rounded text-sm"
                  :disabled="isNavigating"
                  @keyup.enter="performNavigation">
-          <button @click="performNavigation"
-                  class="btn btn-primary btn-sm" :disabled="!navigationUrl || isNavigating">
-            <i class="fas" :class="isNavigating ? 'fa-spinner fa-spin' : 'fa-arrow-right'"></i>
+          <BaseButton variant="primary" size="sm" @click="performNavigation" :disabled="!navigationUrl" :loading="isNavigating">
+            <i class="fas fa-arrow-right"></i>
             {{ isNavigating ? 'Going...' : 'Go' }}
-          </button>
-          <button @click="showNavigationInput = false"
-                  class="btn btn-secondary btn-sm">
+          </BaseButton>
+          <BaseButton variant="secondary" size="sm" @click="showNavigationInput = false">
             Cancel
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -173,46 +167,50 @@
               :disabled="sessionId && !agentPaused || isNavigatingBrowser"
               @keyup.enter="navigateToBrowserUrl"
             >
-            <button
+            <BaseButton
+              variant="primary"
+              size="xs"
               @click="navigateToBrowserUrl"
-              :disabled="!browserUrl || isNavigatingBrowser || (sessionId && !agentPaused)"
-              class="btn btn-primary btn-xs"
+              :disabled="!browserUrl || (sessionId && !agentPaused)"
+              :loading="isNavigatingBrowser"
               aria-label="Navigate browser">
-              <i class="fas" :class="isNavigatingBrowser ? 'fa-spinner fa-spin' : 'fa-arrow-right'"></i>
-            </button>
+              <i class="fas fa-arrow-right"></i>
+            </BaseButton>
           </div>
 
           <!-- Agent Control Buttons -->
           <div v-if="sessionId" class="flex items-center space-x-1 border-l border-gray-300 pl-2">
-            <button
+            <BaseButton
               v-if="!agentPaused"
+              variant="warning"
+              size="xs"
               @click="pauseAgent"
-              class="btn btn-warning btn-xs"
               title="Pause agent and take control of browser"
-              :disabled="isPausingAgent"
+              :loading="isPausingAgent"
               aria-label="Pause agent">
-              <i class="fas mr-1" :class="isPausingAgent ? 'fa-spinner fa-spin' : 'fa-pause'"></i>
+              <i class="fas fa-pause mr-1"></i>
               {{ isPausingAgent ? 'Pausing...' : 'Take Control' }}
-            </button>
-            <button
+            </BaseButton>
+            <BaseButton
               v-if="agentPaused"
+              variant="success"
+              size="xs"
               @click="resumeAgent"
-              class="btn btn-success btn-xs"
               title="Resume agent research session"
-              :disabled="isResumingAgent"
+              :loading="isResumingAgent"
               aria-label="Resume agent">
-              <i class="fas mr-1" :class="isResumingAgent ? 'fa-spinner fa-spin' : 'fa-play'"></i>
+              <i class="fas fa-play mr-1"></i>
               {{ isResumingAgent ? 'Resuming...' : 'Resume Agent' }}
-            </button>
+            </BaseButton>
           </div>
-          <button @click="toggleBrowserView" class="btn btn-outline btn-xs">
+          <BaseButton variant="outline" size="xs" @click="toggleBrowserView">
             <i class="fas" :class="showBrowser ? 'fa-eye-slash' : 'fa-eye'"></i>
             {{ showBrowser ? 'Hide Browser' : 'Show Browser' }}
-          </button>
-          <button @click="popoutBrowser" class="btn btn-primary btn-xs">
+          </BaseButton>
+          <BaseButton variant="primary" size="xs" @click="popoutBrowser">
             <i class="fas fa-external-link-alt mr-1"></i>
             Pop Out
-          </button>
+          </BaseButton>
         </div>
       </div>
 
@@ -264,13 +262,15 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import PopoutChromiumBrowser from './PopoutChromiumBrowser.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 
 export default {
   name: 'ResearchBrowser',
   components: {
     PopoutChromiumBrowser,
-    StatusBadge
+    StatusBadge,
+    BaseButton
   },
   props: {
     sessionId: {
@@ -709,46 +709,6 @@ export default {
 
 .result-card {
   @apply hover:shadow-md transition-shadow duration-150;
-}
-
-.btn {
-  @apply px-3 py-1 text-sm font-medium rounded border transition-all duration-150;
-}
-
-.btn:disabled {
-  @apply opacity-50 cursor-not-allowed;
-}
-
-.btn-primary {
-  @apply bg-blue-600 text-white border-blue-600 hover:bg-blue-700;
-}
-
-.btn-secondary {
-  @apply bg-gray-600 text-white border-gray-600 hover:bg-gray-700;
-}
-
-.btn-outline {
-  @apply bg-white text-gray-700 border-gray-300 hover:bg-gray-50;
-}
-
-.btn-warning {
-  @apply bg-yellow-600 text-white border-yellow-600 hover:bg-yellow-700;
-}
-
-.btn-danger {
-  @apply bg-red-600 text-white border-red-600 hover:bg-red-700;
-}
-
-.btn-success {
-  @apply bg-green-600 text-white border-green-600 hover:bg-green-700;
-}
-
-.btn-sm {
-  @apply px-2 py-1 text-xs;
-}
-
-.btn-xs {
-  @apply px-1 py-0.5 text-xs;
 }
 
 /* Loading indicator bar */

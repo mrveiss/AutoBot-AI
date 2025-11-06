@@ -1379,6 +1379,64 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 24 - Research Browser Migration** ✅ Completed
+
+**Goal**: Migrate ResearchBrowser component with comprehensive browser automation controls to BaseButton.
+
+**Component Migrated**: 1 component, 16 buttons, ~39 lines saved
+
+#### **ResearchBrowser.vue** (16 buttons, ~39 lines saved)
+
+**Purpose**: AI research browser automation with Playwright integration and agent control.
+
+**Buttons Migrated by Category**:
+
+**Header Controls:**
+- `btn btn-secondary btn-sm` → `<BaseButton variant="secondary" size="sm" :loading="isRefreshingStatus">` (Refresh status)
+- `btn btn-outline btn-xs` → `<BaseButton variant="outline" size="xs">` (Copy URL)
+
+**Interaction Alert:**
+- `btn btn-primary btn-sm` → `<BaseButton variant="primary" size="sm" :loading="isWaitingForUser">` (Wait)
+- `btn btn-secondary btn-sm` → `<BaseButton variant="secondary" size="sm">` (Open Browser)
+
+**Result Actions:**
+- `btn btn-warning btn-sm` → `<BaseButton variant="warning" size="sm">` (Open Browser for Result)
+
+**Session Controls (4 buttons):**
+- `btn btn-outline btn-sm` → `<BaseButton variant="outline" size="sm" :loading="isPerformingAction">` (Extract Content, Save MHTML)
+- `btn btn-outline btn-sm` → `<BaseButton variant="outline" size="sm" :loading="isNavigating">` (Navigate)
+- `btn btn-danger btn-sm` → `<BaseButton variant="danger" size="sm" :loading="isClosingSession">` (Close Session)
+
+**Navigation Input:**
+- `btn btn-primary btn-sm` → `<BaseButton variant="primary" size="sm" :disabled="!navigationUrl" :loading="isNavigating">` (Go)
+- `btn btn-secondary btn-sm` → `<BaseButton variant="secondary" size="sm">` (Cancel)
+
+**Browser Controls:**
+- `btn btn-primary btn-xs` → `<BaseButton variant="primary" size="xs" :loading="isNavigatingBrowser">` (Navigate browser)
+- `btn btn-warning btn-xs` → `<BaseButton variant="warning" size="xs" :loading="isPausingAgent">` (Take Control)
+- `btn btn-success btn-xs` → `<BaseButton variant="success" size="xs" :loading="isResumingAgent">` (Resume Agent)
+- `btn btn-outline btn-xs` → `<BaseButton variant="outline" size="xs">` (Toggle Browser View)
+- `btn btn-primary btn-xs` → `<BaseButton variant="primary" size="xs">` (Pop Out)
+
+**Key Features Demonstrated**:
+- ✅ Consistent :loading prop across all async operations
+- ✅ Both sm and xs size variants for different contexts
+- ✅ 7 different variants used: primary, secondary, outline, warning, danger, success
+- ✅ Conditional :disabled with :loading (navigation button)
+
+**CSS Removed**: ~39 lines (Tailwind @apply directives: .btn, .btn:disabled, .btn-primary, .btn-secondary, .btn-outline, .btn-warning, .btn-danger, .btn-success, .btn-sm, .btn-xs)
+
+---
+
+**Batch 24 Summary**:
+- Component: 1 (ResearchBrowser)
+- Buttons: 16 consolidated
+- Lines: ~39 saved
+- Variants: 7 (primary, secondary, outline, warning, danger, success, + sm/xs sizes)
+- **Combined Total**: 10 components, ~566 lines saved, 56 buttons consolidated
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -1388,14 +1446,15 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~527 lines (batches 20-23)
+- BaseButton adoptions: ~566 lines (batches 20-24)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
   - Batch 23: ~96 lines (2 components, 12 buttons)
-- **Total Progress**: ~1,321 lines / ~1,500-2,000 realistic target (66-88%)
+  - Batch 24: ~39 lines (1 component, 16 buttons)
+- **Total Progress**: ~1,360 lines / ~1,500-2,000 realistic target (68-91%)
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 9 components using BaseButton (40 buttons consolidated)
+- **BaseButton Milestone**: 10 components using BaseButton (56 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
