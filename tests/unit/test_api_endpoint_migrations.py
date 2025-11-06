@@ -21758,5 +21758,145 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertTrue(hasattr(startup, "broadcast_startup_message"))
         self.assertTrue(hasattr(startup, "add_startup_message"))
 
+    # ==============================================
+    # BATCH 118: kb_librarian.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_118_query_knowledge_base_mixed_pattern(self):
+        """Verify query_knowledge_base endpoint uses Mixed Pattern"""
+        from backend.api import kb_librarian
+
+        source = inspect.getsource(kb_librarian.query_knowledge_base)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="query_knowledge_base"', source)
+        self.assertIn('error_code_prefix="KB_LIBRARIAN"', source)
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_118_get_kb_librarian_status_mixed_pattern(self):
+        """Verify get_kb_librarian_status endpoint uses Mixed Pattern"""
+        from backend.api import kb_librarian
+
+        source = inspect.getsource(kb_librarian.get_kb_librarian_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_kb_librarian_status"', source)
+        self.assertIn('error_code_prefix="KB_LIBRARIAN"', source)
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_118_configure_kb_librarian_mixed_pattern(self):
+        """Verify configure_kb_librarian endpoint uses Mixed Pattern"""
+        from backend.api import kb_librarian
+
+        source = inspect.getsource(kb_librarian.configure_kb_librarian)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="configure_kb_librarian"', source)
+        self.assertIn('error_code_prefix="KB_LIBRARIAN"', source)
+        self.assertIn("try:", source)
+        self.assertIn("except ValueError", source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_118_all_kb_librarian_endpoints_have_decorator(self):
+        """Verify all kb_librarian endpoints have @with_error_handling decorator"""
+        from backend.api import kb_librarian
+
+        endpoint_functions = [
+            kb_librarian.query_knowledge_base,
+            kb_librarian.get_kb_librarian_status,
+            kb_librarian.configure_kb_librarian,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_118_kb_librarian_100_percent_milestone(self):
+        """Verify kb_librarian.py has reached 100% migration"""
+        from backend.api import kb_librarian
+
+        endpoint_functions = [
+            kb_librarian.query_knowledge_base,
+            kb_librarian.get_kb_librarian_status,
+            kb_librarian.configure_kb_librarian,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 3
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_118_migration_preserves_query_operations(self):
+        """Verify migration preserves KB query operations"""
+        from backend.api import kb_librarian
+
+        source = inspect.getsource(kb_librarian.query_knowledge_base)
+
+        # Check query operations preserved
+        self.assertIn("get_kb_librarian", source)
+        self.assertIn("process_query", source)
+        self.assertIn("max_results", source)
+        self.assertIn("similarity_threshold", source)
+        self.assertIn("auto_summarize", source)
+        self.assertIn("KBQueryResponse", source)
+
+    def test_batch_118_migration_preserves_status_operations(self):
+        """Verify migration preserves status retrieval operations"""
+        from backend.api import kb_librarian
+
+        source = inspect.getsource(kb_librarian.get_kb_librarian_status)
+
+        # Check status operations preserved
+        self.assertIn("get_kb_librarian", source)
+        self.assertIn("enabled", source)
+        self.assertIn("similarity_threshold", source)
+        self.assertIn("max_results", source)
+        self.assertIn("auto_summarize", source)
+        self.assertIn("knowledge_base_active", source)
+
+    def test_batch_118_migration_preserves_configuration_logic(self):
+        """Verify migration preserves configuration logic with validation"""
+        from backend.api import kb_librarian
+
+        source = inspect.getsource(kb_librarian.configure_kb_librarian)
+
+        # Check configuration operations preserved
+        self.assertIn("get_kb_librarian", source)
+        self.assertIn("ValueError", source)
+        self.assertIn("similarity_threshold must be between", source)
+        self.assertIn("max_results must be at least", source)
+
+        # Check that settings are applied
+        self.assertIn("kb_librarian.enabled", source)
+        self.assertIn("kb_librarian.similarity_threshold", source)
+        self.assertIn("kb_librarian.max_results", source)
+        self.assertIn("kb_librarian.auto_summarize", source)
+
+    def test_batch_118_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic models"""
+        from backend.api import kb_librarian
+
+        # Check that models are accessible
+        self.assertTrue(hasattr(kb_librarian, "KBQuery"))
+        self.assertTrue(hasattr(kb_librarian, "KBQueryResponse"))
+
 if __name__ == "__main__":
     unittest.main()
