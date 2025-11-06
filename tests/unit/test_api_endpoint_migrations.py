@@ -23909,6 +23909,226 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("total_events_today = 0", source_status)
         self.assertIn("datetime.now() - last_activity", source_status)
 
+    # ==============================================
+    # BATCH 131: audit.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_131_query_audit_logs_simple_pattern(self):
+        """Verify query_audit_logs endpoint uses Simple Pattern"""
+        from backend.api import audit
+
+        source = inspect.getsource(audit.query_audit_logs)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="query_audit_logs"', source)
+        self.assertIn('error_code_prefix="AUDIT"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_131_get_audit_statistics_simple_pattern(self):
+        """Verify get_audit_statistics endpoint uses Simple Pattern"""
+        from backend.api import audit
+
+        source = inspect.getsource(audit.get_audit_statistics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_audit_statistics"', source)
+        self.assertIn('error_code_prefix="AUDIT"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_131_get_session_audit_trail_simple_pattern(self):
+        """Verify get_session_audit_trail endpoint uses Simple Pattern"""
+        from backend.api import audit
+
+        source = inspect.getsource(audit.get_session_audit_trail)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_session_audit_trail"', source)
+        self.assertIn('error_code_prefix="AUDIT"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_131_get_user_audit_trail_simple_pattern(self):
+        """Verify get_user_audit_trail endpoint uses Simple Pattern"""
+        from backend.api import audit
+
+        source = inspect.getsource(audit.get_user_audit_trail)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_user_audit_trail"', source)
+        self.assertIn('error_code_prefix="AUDIT"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_131_get_failed_operations_simple_pattern(self):
+        """Verify get_failed_operations endpoint uses Simple Pattern"""
+        from backend.api import audit
+
+        source = inspect.getsource(audit.get_failed_operations)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_failed_operations"', source)
+        self.assertIn('error_code_prefix="AUDIT"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_131_cleanup_old_logs_simple_pattern(self):
+        """Verify cleanup_old_logs endpoint uses Simple Pattern"""
+        from backend.api import audit
+
+        source = inspect.getsource(audit.cleanup_old_logs)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="cleanup_old_logs"', source)
+        self.assertIn('error_code_prefix="AUDIT"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_131_list_operation_types_simple_pattern(self):
+        """Verify list_operation_types endpoint uses Simple Pattern"""
+        from backend.api import audit
+
+        source = inspect.getsource(audit.list_operation_types)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_operation_types"', source)
+        self.assertIn('error_code_prefix="AUDIT"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_131_all_audit_endpoints_have_decorator(self):
+        """Verify all audit endpoints have @with_error_handling decorator"""
+        from backend.api import audit
+
+        endpoint_functions = [
+            audit.query_audit_logs,
+            audit.get_audit_statistics,
+            audit.get_session_audit_trail,
+            audit.get_user_audit_trail,
+            audit.get_failed_operations,
+            audit.cleanup_old_logs,
+            audit.list_operation_types,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_131_audit_100_percent_milestone(self):
+        """Verify audit.py has reached 100% migration"""
+        from backend.api import audit
+
+        endpoint_functions = [
+            audit.query_audit_logs,
+            audit.get_audit_statistics,
+            audit.get_session_audit_trail,
+            audit.get_user_audit_trail,
+            audit.get_failed_operations,
+            audit.cleanup_old_logs,
+            audit.list_operation_types,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 7
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_131_migration_preserves_admin_permission_checks(self):
+        """Verify migration preserves admin permission checks"""
+        from backend.api import audit
+
+        # Check all endpoints use admin permission dependency
+        for func_name in [
+            "query_audit_logs",
+            "get_audit_statistics",
+            "get_session_audit_trail",
+            "get_user_audit_trail",
+            "get_failed_operations",
+            "cleanup_old_logs",
+            "list_operation_types",
+        ]:
+            func = getattr(audit, func_name)
+            source = inspect.getsource(func)
+            self.assertIn("Depends(check_admin_permission)", source)
+
+    def test_batch_131_migration_preserves_audit_logger_operations(self):
+        """Verify migration preserves audit_logger operations"""
+        from backend.api import audit
+
+        # Check query_audit_logs preserves query logic
+        source_query = inspect.getsource(audit.query_audit_logs)
+        self.assertIn("audit_logger = await get_audit_logger()", source_query)
+        self.assertIn("await audit_logger.query(", source_query)
+        self.assertIn("start_time=start_dt", source_query)
+        self.assertIn("end_time=end_dt", source_query)
+
+        # Check get_audit_statistics preserves statistics retrieval
+        source_stats = inspect.getsource(audit.get_audit_statistics)
+        self.assertIn("await audit_logger.get_statistics()", source_stats)
+
+        # Check cleanup_old_logs preserves cleanup logic
+        source_cleanup = inspect.getsource(audit.cleanup_old_logs)
+        self.assertIn("await audit_logger.cleanup_old_logs", source_cleanup)
+        self.assertIn("days_to_keep=cleanup_request.days_to_keep", source_cleanup)
+
+    def test_batch_131_migration_preserves_time_range_handling(self):
+        """Verify migration preserves time range handling"""
+        from backend.api import audit
+
+        # Check query_audit_logs preserves ISO datetime parsing
+        source_query = inspect.getsource(audit.query_audit_logs)
+        self.assertIn("datetime.fromisoformat(start_time)", source_query)
+        self.assertIn("datetime.fromisoformat(end_time)", source_query)
+
+        # Check session trail preserves 30-day range
+        source_session = inspect.getsource(audit.get_session_audit_trail)
+        self.assertIn("timedelta(days=30)", source_session)
+
+        # Check user trail preserves configurable days
+        source_user = inspect.getsource(audit.get_user_audit_trail)
+        self.assertIn("timedelta(days=days)", source_user)
+
+        # Check failures preserves configurable hours
+        source_failures = inspect.getsource(audit.get_failed_operations)
+        self.assertIn("timedelta(hours=hours)", source_failures)
+
+    def test_batch_131_migration_preserves_response_models(self):
+        """Verify migration preserves response model structure"""
+        from backend.api import audit
+
+        # Check query endpoints preserve AuditQueryResponse structure
+        source_query = inspect.getsource(audit.query_audit_logs)
+        self.assertIn("AuditQueryResponse(", source_query)
+        self.assertIn("success=True", source_query)
+        self.assertIn("total_returned=", source_query)
+        self.assertIn("has_more=", source_query)
+        self.assertIn("entries=entry_dicts", source_query)
+
+        # Check statistics preserves AuditStatisticsResponse structure
+        source_stats = inspect.getsource(audit.get_audit_statistics)
+        self.assertIn("AuditStatisticsResponse(", source_stats)
+        self.assertIn("statistics=stats", source_stats)
+        self.assertIn("vm_info=", source_stats)
+
+    def test_batch_131_migration_preserves_cleanup_confirmation(self):
+        """Verify migration preserves cleanup confirmation requirement"""
+        from backend.api import audit
+
+        source = inspect.getsource(audit.cleanup_old_logs)
+
+        # Check confirmation requirement preserved
+        self.assertIn("if not cleanup_request.confirm:", source)
+        self.assertIn("Cleanup requires confirmation", source)
+        self.assertIn("set 'confirm' to true", source)
+
 
 if __name__ == "__main__":
     unittest.main()
