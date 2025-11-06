@@ -15,16 +15,13 @@
         <span class="text-xs text-gray-500">
           Last check: {{ formatLastCheck(serviceStatus.last_check) }}
         </span>
-        <span
-          class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium"
-          :class="getStatusBadgeClass(serviceStatus.status)"
-        >
+        <StatusBadge :variant="statusVariant" class="inline-flex items-center">
           <span
             class="w-2 h-2 rounded-full mr-2 animate-pulse"
             :class="getStatusDotClass(serviceStatus.status)"
           ></span>
           {{ serviceStatus.status.toUpperCase() }}
-        </span>
+        </StatusBadge>
       </div>
     </div>
 
@@ -102,12 +99,9 @@
       <h4 class="text-md font-semibold text-gray-900 mb-3">Health Status</h4>
 
       <!-- Overall Health Indicator -->
-      <div
-        class="inline-flex items-center px-4 py-2 rounded-lg font-semibold mb-4"
-        :class="getHealthIndicatorClass(healthStatus.overall_status)"
-      >
+      <StatusBadge :variant="healthVariant" size="medium" class="font-semibold mb-4">
         {{ healthStatus.overall_status.toUpperCase() }}
-      </div>
+      </StatusBadge>
 
       <!-- Health Checks -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -119,12 +113,9 @@
         >
           <div class="flex items-center justify-between mb-2">
             <span class="text-sm font-medium text-gray-700 capitalize">{{ name }}</span>
-            <span
-              class="text-xs font-bold px-2 py-1 rounded"
-              :class="getHealthCheckBadgeClass(check.status)"
-            >
+            <StatusBadge :variant="getHealthCheckVariant(check.status)" size="small" class="font-bold">
               {{ check.status }}
-            </span>
+            </StatusBadge>
           </div>
           <p class="text-xs text-gray-600 mb-1">{{ check.message }}</p>
           <p class="text-xs text-gray-500">{{ check.duration_ms }}ms</p>
@@ -236,9 +227,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useServiceManagement } from '@/composables/useServiceManagement'
 import { NetworkConstants } from '@/constants/network-constants.js'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
 
 // Service management composable
 const {
@@ -262,6 +254,36 @@ const confirmDialog = ref({
   type: 'info',
   onConfirm: () => {}
 })
+
+// Map service status to StatusBadge variant
+const statusVariant = computed(() => {
+  const statusMap = {
+    'running': 'success',
+    'stopped': 'secondary',
+    'failed': 'danger'
+  }
+  return statusMap[serviceStatus.value.status] || 'warning'
+})
+
+// Map health status to StatusBadge variant
+const healthVariant = computed(() => {
+  const healthMap = {
+    'healthy': 'success',
+    'degraded': 'warning',
+    'critical': 'danger'
+  }
+  return healthMap[healthStatus.value.overall_status] || 'secondary'
+})
+
+// Map health check status to StatusBadge variant
+const getHealthCheckVariant = (status) => {
+  const variantMap = {
+    'pass': 'success',
+    'warning': 'warning',
+    'fail': 'danger'
+  }
+  return variantMap[status] || 'secondary'
+}
 
 /**
  * Lifecycle: Subscribe to WebSocket updates on mount
@@ -354,22 +376,6 @@ const formatLastCheck = (timestamp) => {
 }
 
 /**
- * Get status badge CSS classes
- */
-const getStatusBadgeClass = (status) => {
-  switch (status) {
-    case 'running':
-      return 'bg-green-100 text-green-800'
-    case 'stopped':
-      return 'bg-gray-100 text-gray-800'
-    case 'failed':
-      return 'bg-red-100 text-red-800'
-    default:
-      return 'bg-yellow-100 text-yellow-800'
-  }
-}
-
-/**
  * Get status dot CSS classes
  */
 const getStatusDotClass = (status) => {
@@ -382,22 +388,6 @@ const getStatusDotClass = (status) => {
       return 'bg-red-500'
     default:
       return 'bg-yellow-500'
-  }
-}
-
-/**
- * Get health indicator CSS classes
- */
-const getHealthIndicatorClass = (status) => {
-  switch (status) {
-    case 'healthy':
-      return 'bg-green-100 text-green-800 border border-green-300'
-    case 'degraded':
-      return 'bg-yellow-100 text-yellow-800 border border-yellow-300'
-    case 'critical':
-      return 'bg-red-100 text-red-800 border border-red-300'
-    default:
-      return 'bg-gray-100 text-gray-800 border border-gray-300'
   }
 }
 
@@ -417,21 +407,6 @@ const getHealthCheckCardClass = (status) => {
   }
 }
 
-/**
- * Get health check badge CSS classes
- */
-const getHealthCheckBadgeClass = (status) => {
-  switch (status) {
-    case 'pass':
-      return 'bg-green-200 text-green-800'
-    case 'warning':
-      return 'bg-yellow-200 text-yellow-800'
-    case 'fail':
-      return 'bg-red-200 text-red-800'
-    default:
-      return 'bg-gray-200 text-gray-800'
-  }
-}
 </script>
 
 <style scoped>
