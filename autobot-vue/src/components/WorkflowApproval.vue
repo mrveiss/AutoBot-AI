@@ -140,22 +140,22 @@
               </div>
 
               <div class="approval-actions">
-                <button
-                  class="btn btn-success"
+                <BaseButton
+                  variant="success"
                   @click="approveStep(selectedWorkflow.workflow_id, step.step_id)"
                   :disabled="approvingSteps.has(step.step_id)"
-                 aria-label="Confirm">
+                >
                   <i class="fas fa-check"></i>
                   Approve
-                </button>
-                <button
-                  class="btn btn-danger"
+                </BaseButton>
+                <BaseButton
+                  variant="danger"
                   @click="denyStep(selectedWorkflow.workflow_id, step.step_id)"
                   :disabled="approvingSteps.has(step.step_id)"
-                 aria-label="Close">
+                >
                   <i class="fas fa-times"></i>
                   Deny
-                </button>
+                </BaseButton>
               </div>
             </div>
 
@@ -170,22 +170,22 @@
 
       <!-- Workflow Actions -->
       <div class="workflow-actions">
-        <button
+        <BaseButton
           v-if="selectedWorkflow.status === 'executing' || selectedWorkflow.status === 'waiting_approval'"
-          class="btn btn-danger"
+          variant="danger"
           @click="cancelWorkflow(selectedWorkflow.workflow_id)"
-         aria-label="Cancel">
+        >
           <i class="fas fa-stop"></i>
           Cancel Workflow
-        </button>
+        </BaseButton>
 
-        <button
-          class="btn btn-secondary"
+        <BaseButton
+          variant="secondary"
           @click="refreshWorkflows"
-         aria-label="Refresh">
+        >
           <i class="fas fa-sync"></i>
           Refresh
-        </button>
+        </BaseButton>
       </div>
     </div>
   </div>
@@ -197,6 +197,7 @@ import { apiService } from '../services/api.js'
 import type { WorkflowResponse } from '@/types/models'
 import { formatDateTime as formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 // Types
 interface Workflow {
@@ -672,49 +673,5 @@ onUnmounted(() => {
 .workflow-actions {
   display: flex;
   gap: 12px;
-}
-
-.btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-success {
-  background: #28a745;
-  color: white;
-}
-
-.btn-success:hover:not(:disabled) {
-  background: #218838;
-}
-
-.btn-danger {
-  background: #dc3545;
-  color: white;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background: #c82333;
-}
-
-.btn-secondary {
-  background: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #5a6268;
 }
 </style>
