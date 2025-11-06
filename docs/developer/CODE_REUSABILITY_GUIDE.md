@@ -1322,6 +1322,63 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 23 - Browser & Knowledge Buttons Migration** ✅ Completed
+
+**Goal**: Migrate browser automation and knowledge management components to BaseButton.
+
+**Components Migrated**: 2 components, 12 buttons, ~96 lines saved
+
+#### **1. PopoutChromiumBrowser.vue** (5 buttons, ~49 lines saved)
+
+**Purpose**: Chromium browser automation interface with Playwright integration.
+
+**Buttons Migrated**:
+- Error Overlay:
+  - `btn btn-primary btn-sm` → `<BaseButton variant="primary" size="sm" :loading="isInitializingBrowser">` (Retry Connection)
+- Empty State:
+  - `btn btn-primary` → `<BaseButton variant="primary" :loading="isInitializingBrowser">` (Launch Browser Session)
+- Interaction Overlay:
+  - `btn btn-primary` → `<BaseButton variant="primary">` (Wait & Monitor)
+  - `btn btn-secondary` → `<BaseButton variant="secondary">` (Take Control)
+  - `btn btn-outline` → `<BaseButton variant="outline">` (Dismiss)
+
+**CSS Removed**: ~49 lines (.btn, .btn-sm, .btn-primary, .btn-secondary, .btn-outline styles)
+
+---
+
+#### **2. SystemKnowledgeManager.vue** (7 buttons, ~47 lines saved)
+
+**Purpose**: System knowledge base management with vector operations.
+
+**Buttons Migrated**:
+- Primary Actions (vector operations):
+  - `btn btn-primary btn-highlight` → `<BaseButton variant="primary" :loading="isVectorizing" class="btn-highlight">` (Generate Vector Embeddings)
+  - `btn btn-primary` → `<BaseButton variant="primary" :loading="isInitializing">` (Initialize Machine Knowledge)
+  - `btn btn-primary` → `<BaseButton variant="primary" :loading="isReindexing">` (Reindex Documents)
+- Secondary Actions (man pages):
+  - `btn btn-secondary` → `<BaseButton variant="secondary" :loading="isRefreshing">` (Refresh Man Pages)
+  - `btn btn-secondary` → `<BaseButton variant="secondary" :loading="isPopulating">` (Populate Common Commands)
+  - `btn btn-secondary` → `<BaseButton variant="secondary" :loading="isDocPopulating">` (Index AutoBot Docs)
+- Utility:
+  - `btn btn-outline` → `<BaseButton variant="outline">` (Refresh Stats)
+
+**Custom Styling Preserved**:
+- Kept `.btn-highlight` class for gradient styling on vector embeddings button
+- Applied as additional class: `<BaseButton class="btn-highlight">`
+
+**CSS Removed**: ~47 lines (.btn, .btn:disabled, .btn-primary, .btn-secondary, .btn-outline styles)
+
+---
+
+**Batch 23 Summary**:
+- Components: 2 (PopoutChromiumBrowser, SystemKnowledgeManager)
+- Buttons: 12 consolidated
+- Lines: ~96 saved
+- Variants: 4 (primary, secondary, outline, sm size)
+- **Combined Total**: 9 components, ~527 lines saved, 40 buttons consolidated
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -1331,13 +1388,14 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~431 lines (batches 20-22)
+- BaseButton adoptions: ~527 lines (batches 20-23)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
-- **Total Progress**: ~1,225 lines / ~1,500-2,000 realistic target (61-82%)
+  - Batch 23: ~96 lines (2 components, 12 buttons)
+- **Total Progress**: ~1,321 lines / ~1,500-2,000 realistic target (66-88%)
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 7 components using BaseButton (28 buttons consolidated)
+- **BaseButton Milestone**: 9 components using BaseButton (40 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 

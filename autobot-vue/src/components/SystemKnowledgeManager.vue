@@ -52,71 +52,72 @@
 
     <!-- Action Buttons -->
     <div class="actions">
-      <button
+      <BaseButton
+        variant="primary"
         @click="generateVectorEmbeddings"
-        :disabled="isVectorizing"
-        class="btn btn-primary btn-highlight"
+        :loading="isVectorizing"
         title="Batched vector generation: Processes 50 facts per batch with 0.5s delay. Skips already vectorized facts. Safe to run periodically to vectorize new facts."
+        class="btn-highlight"
       >
         <span class="icon">🧬</span>
         {{ isVectorizing ? 'Vectorizing...' : getVectorizeButtonText() }}
-      </button>
+      </BaseButton>
 
-      <button
+      <BaseButton
+        variant="primary"
         @click="initializeMachineKnowledge"
-        :disabled="isInitializing"
-        class="btn btn-primary"
+        :loading="isInitializing"
         title="Create vector embeddings for search functionality"
       >
         <span class="icon">🚀</span>
         {{ isInitializing ? 'Initializing...' : 'Initialize Machine Knowledge' }}
-      </button>
+      </BaseButton>
 
-      <button
+      <BaseButton
+        variant="primary"
         @click="reindexDocuments"
-        :disabled="isReindexing"
-        class="btn btn-primary"
+        :loading="isReindexing"
         title="Reindex all documents in the knowledge base"
       >
         <span class="icon">🔄</span>
         {{ isReindexing ? 'Reindexing...' : 'Reindex Documents' }}
-      </button>
+      </BaseButton>
 
-      <button
+      <BaseButton
+        variant="secondary"
         @click="refreshSystemKnowledge"
-        :disabled="isRefreshing"
-        class="btn btn-secondary"
+        :loading="isRefreshing"
       >
         <span class="icon">📋</span>
         {{ isRefreshing ? 'Refreshing...' : 'Refresh Man Pages' }}
-      </button>
+      </BaseButton>
 
-      <button
+      <BaseButton
+        variant="secondary"
         @click="populateManPages"
-        :disabled="isPopulating"
-        class="btn btn-secondary"
+        :loading="isPopulating"
       >
         <span class="icon">⚙️</span>
         {{ isPopulating ? 'Populating...' : 'Populate Common Commands' }}
-      </button>
+      </BaseButton>
 
-      <button
+      <BaseButton
+        variant="secondary"
         @click="populateAutoBotDocs"
-        :disabled="isDocPopulating"
-        class="btn btn-secondary"
+        :loading="isDocPopulating"
       >
         <span class="icon">📖</span>
         {{ isDocPopulating ? 'Populating...' : 'Index AutoBot Docs' }}
-      </button>
+      </BaseButton>
 
-      <button
+      <BaseButton
+        variant="outline"
         @click="fetchStats"
         :disabled="isLoading"
-        class="btn btn-outline"
       >
         <span class="icon">📊</span>
         Refresh Stats
-      </button>
+      </BaseButton>
     </div>
 
     <!-- Progress Display -->
@@ -196,9 +197,13 @@ import { ref, onMounted, computed } from 'vue';
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase';
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore';  // NEW: Use shared store
 import appConfig from '@/config/AppConfig.js';
+import BaseButton from '@/components/base/BaseButton.vue';
 
 export default {
   name: 'SystemKnowledgeManager',
+  components: {
+    BaseButton
+  },
 
   setup() {
     // Use the shared composable
@@ -830,53 +835,6 @@ export default {
   gap: 15px;
   margin-bottom: 30px;
   flex-wrap: wrap;
-}
-
-.btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.3s;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: #3498db;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #2980b9;
-}
-
-.btn-secondary {
-  background: #2ecc71;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #27ae60;
-}
-
-.btn-outline {
-  background: white;
-  color: #3498db;
-  border: 2px solid #3498db;
-}
-
-.btn-outline:hover:not(:disabled) {
-  background: #3498db;
-  color: white;
 }
 
 .btn-highlight {
