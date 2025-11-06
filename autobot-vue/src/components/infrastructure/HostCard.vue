@@ -15,17 +15,9 @@
         <p class="text-sm text-gray-500">{{ host.ip_address }}</p>
       </div>
       <div class="flex items-center space-x-2">
-        <span
-          :class="{
-            'bg-green-100 text-green-800': host.status === 'active',
-            'bg-yellow-100 text-yellow-800': host.status === 'pending',
-            'bg-red-100 text-red-800': host.status === 'error',
-            'bg-blue-100 text-blue-800': host.status === 'deploying'
-          }"
-          class="px-2 py-1 text-xs font-medium rounded-full"
-        >
+        <StatusBadge :variant="statusVariant" size="small">
           {{ host.status || 'unknown' }}
-        </span>
+        </StatusBadge>
       </div>
     </div>
 
@@ -109,11 +101,12 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, defineEmits } from 'vue'
+import { defineProps, defineEmits, computed } from 'vue'
 import type { Host } from '@/composables/useInfrastructure'
 import { formatDateTime } from '@/utils/formatHelpers'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
 
-defineProps<{
+const props = defineProps<{
   host: Host
 }>()
 
@@ -123,6 +116,17 @@ defineEmits<{
   edit: [host: Host]
   delete: [hostId: string]
 }>()
+
+// Map host status to StatusBadge variant
+const statusVariant = computed(() => {
+  const statusMap: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
+    'active': 'success',
+    'pending': 'warning',
+    'error': 'danger',
+    'deploying': 'info'
+  }
+  return statusMap[props.host.status] || 'secondary'
+})
 
 // NOTE: formatDate removed - now using formatDateTime from @/utils/formatHelpers
 const formatDate = formatDateTime

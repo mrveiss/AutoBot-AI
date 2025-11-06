@@ -202,7 +202,7 @@
           <div class="mb-4">
             <div class="flex items-center justify-between mb-2">
               <h4 class="text-sm font-medium text-gray-800">Browser Session</h4>
-              <span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">Connected</span>
+              <StatusBadge variant="success" size="small">Connected</StatusBadge>
             </div>
             <div class="text-xs text-gray-600">
               <div class="flex items-center space-x-2">
@@ -332,6 +332,7 @@ import appConfig from '@/config/AppConfig.js'
 import apiClient from '@/utils/ApiClient.ts'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
 import { NetworkConstants } from '@/constants/network-constants.js'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 
@@ -345,7 +346,8 @@ export default {
   name: 'PopoutChromiumBrowser',
   components: {
     UnifiedLoadingView,
-    EmptyState
+    EmptyState,
+    StatusBadge
   },
   props: {
     sessionId: {
