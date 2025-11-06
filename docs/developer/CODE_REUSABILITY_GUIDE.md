@@ -1031,8 +1031,170 @@ Final StatusBadge migration completing the enforcement wave:
 
 **Next Steps**:
 - Continue BaseButton migrations (target: 200-300 lines saved over multiple batches)
-- Address TouchFriendlyButton vs BaseButton overlap (component consolidation or specialized use cases)
+- ~~Address TouchFriendlyButton vs BaseButton overlap~~ ✅ **RESOLVED** - Touch features integrated into BaseButton
 - Document migration guide with before/after examples
+
+---
+
+### **BaseButton Touch Integration** ✅ Completed (Commit: TBD)
+
+**Goal**: Resolve TouchFriendlyButton vs BaseButton overlap by extending BaseButton with touch optimization features.
+
+**Strategic Decision**: Extended BaseButton with optional touch features rather than maintaining two separate button components. This approach provides:
+- ✅ Single unified button component for all use cases
+- ✅ Progressive enhancement - desktop apps use lightweight BaseButton, mobile apps enable touch features
+- ✅ Maintains all 11 BaseButton variants + touch capabilities
+- ✅ Backward compatible with batch 20 migrations (touchOptimized defaults to false)
+
+#### **Touch Features Added**:
+
+**1. Optional Touch Props**:
+```typescript
+interface Props {
+  // ... existing props ...
+  touchOptimized?: boolean      // Enable all touch features (default: false)
+  touchFeedback?: boolean        // Visual ripple effect (default: true)
+  hapticFeedback?: boolean       // Device vibration (default: true)
+}
+```
+
+**2. Touch Event Handlers**:
+- `@touchstart` - Triggers ripple effect and haptic feedback
+- `@touchend` - Resets pressed state
+- `@touchcancel` - Handles touch cancellation
+- Emits: `touchStart`, `touchEnd` events for parent components
+
+**3. Ripple Effect System**:
+- Dynamic ripple creation at touch point coordinates
+- 600ms animation with scale and opacity transition
+- Automatic cleanup after animation completion
+- Respects `touchFeedback` prop (can be disabled)
+
+**4. Haptic Feedback**:
+- 10ms vibration on touch start using `navigator.vibrate()`
+- Gracefully handles devices without vibration support
+- Respects `hapticFeedback` prop (can be disabled)
+
+**5. Touch-Optimized Styling**:
+- **44px minimum touch targets** (iOS/Android accessibility standard)
+- `-webkit-tap-highlight-color: transparent` (removes default mobile tap highlight)
+- `touch-action: manipulation` (improves touch responsiveness)
+- `overflow: hidden` (contains ripple effects)
+- Touch-specific pressed state with `scale(0.95)` transform
+- Media query `@media (hover: none) and (pointer: coarse)` disables desktop hover on touch devices
+
+#### **Usage Examples**:
+
+**Desktop Button (default - no touch features):**
+```vue
+<BaseButton variant="primary" @click="handleAction">
+  Click Me
+</BaseButton>
+<!-- Lightweight, desktop-optimized -->
+```
+
+**Mobile Touch-Optimized Button:**
+```vue
+<BaseButton
+  variant="primary"
+  touchOptimized
+  @click="handleAction"
+  @touchStart="handleTouchStart"
+>
+  Tap Me
+</BaseButton>
+<!-- Includes ripple effects, haptic feedback, 44px touch targets -->
+```
+
+**Customized Touch Features:**
+```vue
+<BaseButton
+  variant="primary"
+  touchOptimized
+  :touchFeedback="false"
+  :hapticFeedback="true"
+>
+  Vibrate Only
+</BaseButton>
+<!-- Haptic feedback enabled, visual ripple disabled -->
+```
+
+#### **Technical Implementation**:
+
+**Touch State Management**:
+```typescript
+const ripple = ref<HTMLElement>()
+const isPressed = ref(false)
+
+const handleTouchStart = (event: TouchEvent) => {
+  if (disabled || loading || !touchOptimized) return
+  isPressed.value = true
+  if (touchFeedback) createRipple(event)
+  if (hapticFeedback && 'vibrate' in navigator) navigator.vibrate(10)
+  emit('touchStart', event)
+}
+```
+
+**Ripple Effect Calculation**:
+```typescript
+const createRipple = (event: TouchEvent) => {
+  const button = ripple.value.parentElement!
+  const rect = button.getBoundingClientRect()
+  const touch = event.touches[0]
+
+  const x = touch.clientX - rect.left
+  const y = touch.clientY - rect.top
+
+  const rippleElement = document.createElement('div')
+  rippleElement.className = 'ripple-effect'
+  rippleElement.style.left = `${x - 25}px`
+  rippleElement.style.top = `${y - 25}px`
+
+  ripple.value.appendChild(rippleElement)
+  setTimeout(() => ripple.value.removeChild(rippleElement), 600)
+}
+```
+
+**CSS Enhancements**:
+```css
+.btn-touch-optimized {
+  min-height: 44px;
+  min-width: 44px;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.ripple-effect {
+  animation: ripple-animation 0.6s ease-out;
+  /* ... ripple styles ... */
+}
+```
+
+#### **Component Consolidation Result**:
+
+**Before**: Two separate components
+- BaseButton.vue - 11 variants, no touch support
+- TouchFriendlyButton.vue - 5 variants, touch optimized (0 usage)
+
+**After**: Single unified component
+- BaseButton.vue - 11 variants + optional touch features
+- TouchFriendlyButton.vue - Can be deprecated or converted to wrapper
+- ✅ Backward compatible - existing batch 20 migrations unchanged
+- ✅ Zero breaking changes - touchOptimized defaults to false
+- ✅ Future-ready - all buttons can enable touch features as needed
+
+#### **Migration Impact**:
+
+- **Batch 20 components unaffected** - touchOptimized=false by default
+- **New mobile components** - Can use touchOptimized=true for enhanced UX
+- **Responsive components** - Can conditionally enable based on device detection
+- **No duplicate code** - Single button component serves both desktop and mobile
+
+**Files Modified**:
+- `autobot-vue/src/components/base/BaseButton.vue` (extended with touch features)
+
+**TouchFriendlyButton.vue Status**: Recommend deprecation or conversion to lightweight wrapper around `<BaseButton touchOptimized>` for backward compatibility.
 
 ---
 
@@ -1058,18 +1220,19 @@ During batch 14 final sweep, discovered several well-designed reusable component
 **1. BaseButton.vue** (`autobot-vue/src/components/base/`)
 - **Current Usage**: ✅ **IN PROGRESS** - 3 components (batch 20 - first wave)
   - Batch 20: ErrorBoundary, AsyncErrorFallback, PhaseStatusIndicator
-- **Features**: 11 variants (primary/secondary/success/danger/warning/info/light/dark/outline/ghost/link), 5 sizes (xs-xl), loading states, icon support, flexible rendering (button/link/custom tag)
+- **Features**: 11 variants (primary/secondary/success/danger/warning/info/light/dark/outline/ghost/link), 5 sizes (xs-xl), loading states, icon support, flexible rendering (button/link/custom tag), **✅ NEW: Optional touch optimization** (ripple effects, haptic feedback, 44px touch targets)
 - **Recommendation**: ✅ **Active migration ongoing** - Replacing duplicate inline button patterns
 - **Results**: ~157 lines saved (batch 20), 10 buttons consolidated across 3 components
+- **Touch Integration**: ✅ **COMPLETED** - Extended with optional touchOptimized, touchFeedback, hapticFeedback props (backward compatible)
 - **Next Steps**: Continue migrations targeting modals, forms, and action buttons (target: 200-300 lines over multiple batches)
 
 **2. TouchFriendlyButton.vue** (`autobot-vue/src/components/ui/`)
 - **Current Usage**: 0 components (no imports found)
 - **Features**: Size variants (xs-xl), style variants (primary/secondary/outline/ghost/danger), loading states, touch feedback, haptic feedback, accessibility (dark mode, high contrast, reduced motion)
-- **Recommendation**: ⚠️ **Component overlap concern** - Overlaps with BaseButton functionality
-- **Analysis**: BaseButton has more variants (11 vs 5) but lacks touch-specific features (ripple, haptic feedback, 44px min targets)
-- **Decision Required**: Consolidate into single component OR establish clear use cases (BaseButton for general, TouchFriendlyButton for mobile/touch-first interfaces)
-- **Estimated Potential**: ~100-200 lines if adopted, but requires resolving overlap with BaseButton first
+- **Status**: ✅ **OVERLAP RESOLVED** - All touch features integrated into BaseButton
+- **Recommendation**: ⚠️ **Deprecation candidate** - Features now available in BaseButton via touchOptimized prop
+- **Alternative**: Convert to lightweight wrapper around `<BaseButton touchOptimized>` for backward compatibility
+- **Analysis**: BaseButton now has all TouchFriendlyButton features (11 variants + touch optimization) making this component redundant
 
 **3. StatusBadge.vue** (`autobot-vue/src/components/ui/`)
 - **Current Usage**: ✅ **SUBSTANTIALLY COMPLETE** - 15 instances across 11 components (batches 15-19 migrations)

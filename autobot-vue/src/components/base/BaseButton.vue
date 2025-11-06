@@ -5,6 +5,9 @@
     :disabled="disabled || loading"
     :type="htmlType"
     @click="handleClick"
+    @touchstart="handleTouchStart"
+    @touchend="handleTouchEnd"
+    @touchcancel="handleTouchCancel"
   >
     <span v-if="loading" class="button-spinner"></span>
     <slot name="icon-left" v-if="$slots['icon-left'] && !loading"></slot>
@@ -12,11 +15,12 @@
       <slot>{{ label }}</slot>
     </span>
     <slot name="icon-right" v-if="$slots['icon-right'] && !loading"></slot>
+    <div v-if="touchOptimized" class="touch-ripple" ref="ripple"></div>
   </component>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 interface Props {
   variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info' | 'light' | 'dark' | 'outline' | 'ghost' | 'link'
@@ -29,6 +33,9 @@ interface Props {
   htmlType?: 'button' | 'submit' | 'reset'
   tag?: string
   to?: string | object
+  touchOptimized?: boolean
+  touchFeedback?: boolean
+  hapticFeedback?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -39,12 +46,20 @@ const props = withDefaults(defineProps<Props>(), {
   block: false,
   rounded: false,
   htmlType: 'button',
-  tag: 'button'
+  tag: 'button',
+  touchOptimized: false,
+  touchFeedback: true,
+  hapticFeedback: true
 })
 
 const emit = defineEmits<{
   click: [event: MouseEvent]
+  touchStart: [event: TouchEvent]
+  touchEnd: [event: TouchEvent]
 }>()
+
+const ripple = ref<HTMLElement>()
+const isPressed = ref(false)
 
 const buttonClasses = computed(() => [
   'base-button',
@@ -54,7 +69,9 @@ const buttonClasses = computed(() => [
     'btn-block': props.block,
     'btn-rounded': props.rounded,
     'btn-loading': props.loading,
-    'btn-disabled': props.disabled
+    'btn-disabled': props.disabled,
+    'btn-touch-optimized': props.touchOptimized,
+    'btn-pressed': isPressed.value
   }
 ])
 
@@ -63,10 +80,63 @@ const handleClick = (event: MouseEvent) => {
     emit('click', event)
   }
 }
+
+const handleTouchStart = (event: TouchEvent) => {
+  if (props.disabled || props.loading || !props.touchOptimized) return
+
+  isPressed.value = true
+
+  if (props.touchFeedback) {
+    createRipple(event)
+  }
+
+  if (props.hapticFeedback && 'vibrate' in navigator) {
+    navigator.vibrate(10)
+  }
+
+  emit('touchStart', event)
+}
+
+const handleTouchEnd = (event: TouchEvent) => {
+  if (!props.touchOptimized) return
+  isPressed.value = false
+  emit('touchEnd', event)
+}
+
+const handleTouchCancel = () => {
+  if (!props.touchOptimized) return
+  isPressed.value = false
+}
+
+const createRipple = (event: TouchEvent) => {
+  if (!ripple.value || !props.touchFeedback) return
+
+  const button = ripple.value.parentElement!
+  const rect = button.getBoundingClientRect()
+  const touch = event.touches[0]
+
+  const x = touch.clientX - rect.left
+  const y = touch.clientY - rect.top
+
+  const rippleElement = document.createElement('div')
+  rippleElement.className = 'ripple-effect'
+  rippleElement.style.left = `${x - 25}px`
+  rippleElement.style.top = `${y - 25}px`
+
+  ripple.value.appendChild(rippleElement)
+
+  // Remove ripple after animation
+  setTimeout(() => {
+    if (ripple.value && ripple.value.contains(rippleElement)) {
+      ripple.value.removeChild(rippleElement)
+    }
+  }, 600)
+}
 </script>
 
 <style scoped>
 .base-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -284,6 +354,55 @@ const handleClick = (event: MouseEvent) => {
   .btn-xl {
     padding: 0.75rem 1.5rem;
     font-size: 1rem;
+  }
+}
+
+/* Touch optimization styles */
+.btn-touch-optimized {
+  min-height: 44px;
+  min-width: 44px;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.btn-pressed {
+  transform: scale(0.95);
+}
+
+.touch-ripple {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.ripple-effect {
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  transform: scale(0);
+  animation: ripple-animation 0.6s ease-out;
+}
+
+@keyframes ripple-animation {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+/* Touch-optimized button overrides hover behavior on touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .btn-touch-optimized:hover:not(.btn-disabled):not(.btn-loading) {
+    transform: none;
+  }
+
+  .btn-touch-optimized:active:not(.btn-disabled):not(.btn-loading) {
+    transform: scale(0.95);
   }
 }
 </style>
