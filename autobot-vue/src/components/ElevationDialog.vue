@@ -76,24 +76,23 @@
 
       <div class="elevation-footer">
         <div class="button-group">
-          <button 
-            class="btn btn-cancel" 
+          <BaseButton
+            variant="secondary"
             @click="handleCancel"
             :disabled="isProcessing"
-           aria-label="Cancel">
+            aria-label="Cancel">
             <i class="fas fa-times"></i>
             Cancel
-          </button>
-          <button 
-            class="btn btn-approve" 
+          </BaseButton>
+          <BaseButton
+            variant="danger"
             @click="handleApprove"
-            :disabled="!password || isProcessing"
-            :class="{ processing: isProcessing }"
-           aria-label="Confirm">
-            <i v-if="isProcessing" class="fas fa-spinner fa-spin"></i>
-            <i v-else class="fas fa-check"></i>
+            :disabled="!password"
+            :loading="isProcessing"
+            aria-label="Confirm">
+            <i class="fas fa-check"></i>
             {{ isProcessing ? 'Verifying...' : 'Authorize' }}
-          </button>
+          </BaseButton>
         </div>
         
         <div class="security-note">
@@ -109,11 +108,13 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { apiService } from '../services/api';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
+import BaseButton from '@/components/base/BaseButton.vue';
 
 export default {
   name: 'ElevationDialog',
   components: {
-    StatusBadge
+    StatusBadge,
+    BaseButton
   },
   props: {
     show: {
@@ -509,49 +510,6 @@ export default {
   display: flex;
   gap: 12px;
   margin-bottom: 12px;
-}
-
-.btn {
-  flex: 1;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.btn-cancel {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.btn-cancel:hover:not(:disabled) {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.btn-approve {
-  background: #dc2626;
-  color: white;
-}
-
-.btn-approve:hover:not(:disabled) {
-  background: #b91c1c;
-}
-
-.btn-approve.processing {
-  background: #6b7280;
 }
 
 .security-note {

@@ -1030,9 +1030,70 @@ Final StatusBadge migration completing the enforcement wave:
 - Both Composition API and Options API components supported
 
 **Next Steps**:
-- Continue BaseButton migrations (target: 200-300 lines saved over multiple batches)
+- ~~Continue BaseButton migrations~~ ✅ **IN PROGRESS** - Batch 21 complete (5 total components now using BaseButton)
 - ~~Address TouchFriendlyButton vs BaseButton overlap~~ ✅ **RESOLVED** - Touch features integrated into BaseButton
 - Document migration guide with before/after examples
+
+---
+
+### **Batch 21: BaseButton Migration (Second Wave)** ✅ Completed (Commit: bc2d72f)
+
+**Goal**: Continue BaseButton adoption across workflow management and knowledge integration components.
+
+#### **Components Migrated**:
+
+**1. WorkflowApproval.vue** - Workflow approval and management interface
+- **Buttons**: 4 (success: approve step, danger: deny step + cancel workflow, secondary: refresh)
+- **Lines Saved**: ~44 lines of duplicate button CSS
+- **Technical Notes**:
+  - Workflow approval actions with conditional rendering
+  - Preserved disabled states during approval operations
+  - Composition API with TypeScript (<script setup lang="ts">)
+  - All click handlers and conditional visibility maintained
+- **Location**: `autobot-vue/src/components/WorkflowApproval.vue`
+- **Commit**: bc2d72f (lines 200, 143-158, 173-188, 677-720 removed)
+
+**2. ManPageManager.vue** - Man page integration management
+- **Buttons**: 7 (3× outline sm: refresh/hide, primary: initialize/search, success: integrate, info: test)
+- **Lines Saved**: ~43 lines of duplicate button CSS
+- **Technical Notes**:
+  - **Leveraged BaseButton's built-in `:loading` prop** - Simplified loading state handling
+  - Removed manual spinner conditionals (`v-if="!loading"` / `v-else` icon logic)
+  - Options API with setup() + components registration
+  - Multiple refresh buttons, integration actions, search functionality
+  - Preserved all icon animations and disabled states
+- **Location**: `autobot-vue/src/components/ManPageManager.vue`
+- **Commit**: bc2d72f (lines 323-329, multiple button replacements, 936-978 removed)
+
+**Batch 21 Summary**:
+- ✅ 2 components migrated (workflow management, knowledge integration)
+- ✅ 11 button elements replaced with BaseButton
+- ✅ ~87 lines of duplicate CSS removed (44 + 43)
+- ✅ BaseButton usage increased from 3 to 5 components (67% increase)
+- ✅ 6 variants validated: primary, secondary, success, danger, info, outline
+- ✅ 2 size variants validated: sm, md
+
+**Technical Highlight - Loading State Simplification**:
+```vue
+<!-- BEFORE: Manual loading spinner logic -->
+<button>
+  <i class="fas fa-rocket" v-if="!loading?.initialize"></i>
+  <i class="fas fa-spinner fa-spin" v-else></i>
+  Initialize Machine Knowledge
+</button>
+
+<!-- AFTER: BaseButton handles loading automatically -->
+<BaseButton :loading="loading?.initialize">
+  <i class="fas fa-rocket"></i>
+  Initialize Machine Knowledge
+</BaseButton>
+<!-- BaseButton shows spinner automatically when loading=true -->
+```
+
+**Cumulative BaseButton Progress**:
+- Batch 20: 3 components, ~157 lines, 10 buttons
+- Batch 21: 2 components, ~87 lines, 11 buttons
+- **Combined Total**: 5 components, ~244 lines saved, 21 buttons consolidated
 
 ---
 
@@ -1198,6 +1259,69 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 22 - Dialog Buttons Migration** ✅ Completed
+
+**Goal**: Migrate dialog components with permission/elevation workflows to BaseButton.
+
+**Components Migrated**: 2 components, 7 buttons, ~187 lines saved
+
+#### **1. CommandPermissionDialog.vue** (5 buttons, ~145 lines saved)
+
+**Purpose**: Command execution permission dialog with approval/denial/comment actions.
+
+**Buttons Migrated**:
+- Comment Actions:
+  - `btn btn-secondary` → `<BaseButton variant="secondary">` (Cancel comment)
+  - `btn btn-primary` → `<BaseButton variant="primary" :loading="isProcessing">` (Send Feedback)
+- Footer Actions:
+  - `btn btn-cancel` → `<BaseButton variant="secondary">` (Deny)
+  - `btn btn-comment` → `<BaseButton variant="warning">` (Comment)
+  - `btn btn-allow` → `<BaseButton variant="success" :loading="isProcessing">` (Allow)
+
+**Loading State Benefit**:
+```vue
+<!-- BEFORE: Manual loading spinner logic -->
+<button class="btn btn-allow" :class="{ processing: isProcessing }">
+  <i v-if="isProcessing" class="fas fa-spinner fa-spin"></i>
+  <i v-else class="fas fa-check"></i>
+  {{ isProcessing ? 'Executing...' : 'Allow' }}
+</button>
+
+<!-- AFTER: BaseButton handles loading automatically -->
+<BaseButton variant="success" :loading="isProcessing">
+  <i class="fas fa-check"></i>
+  {{ isProcessing ? 'Executing...' : 'Allow' }}
+</BaseButton>
+```
+
+**CSS Removed**: ~145 lines (.btn, .btn:disabled, .btn-cancel, .btn-allow, .btn-comment, .btn-secondary, .btn-primary styles)
+
+---
+
+#### **2. ElevationDialog.vue** (2 buttons, ~42 lines saved)
+
+**Purpose**: Administrator privilege elevation dialog with password authentication.
+
+**Buttons Migrated**:
+- `btn btn-cancel` → `<BaseButton variant="secondary">` (Cancel)
+- `btn btn-approve` → `<BaseButton variant="danger" :loading="isProcessing">` (Authorize)
+
+**Variant Mapping**:
+- Custom `btn-approve` with red background (#dc2626) → `variant="danger"` (perfect color match)
+
+**CSS Removed**: ~42 lines (.btn, .btn:disabled, .btn-cancel, .btn-approve styles)
+
+---
+
+**Batch 22 Summary**:
+- Components: 2 (CommandPermissionDialog, ElevationDialog)
+- Buttons: 7 consolidated
+- Lines: ~187 saved
+- Variants: 5 (secondary, primary, warning, success, danger)
+- **Combined Total**: 7 components, ~431 lines saved, 28 buttons consolidated
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -1207,11 +1331,13 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~157 lines (batch 20 - first wave)
+- BaseButton adoptions: ~431 lines (batches 20-22)
   - Batch 20: ~157 lines (3 components, 10 buttons)
-- **Total Progress**: ~951 lines / ~1,500-2,000 realistic target (48-63%)
+  - Batch 21: ~87 lines (2 components, 11 buttons)
+  - Batch 22: ~187 lines (2 components, 7 buttons)
+- **Total Progress**: ~1,225 lines / ~1,500-2,000 realistic target (61-82%)
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 3 components using BaseButton (new baseline, 10 buttons consolidated)
+- **BaseButton Milestone**: 7 components using BaseButton (28 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
