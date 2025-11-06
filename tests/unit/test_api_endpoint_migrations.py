@@ -25542,6 +25542,126 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("FileNotFoundError", source)
         self.assertIn("JSONDecodeError", source)
 
+    # ==============================================
+    # BATCH 138: voice.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_138_voice_listen_api_simple_pattern(self):
+        """Verify voice_listen_api endpoint uses Simple Pattern"""
+        from backend.api import voice
+
+        source = inspect.getsource(voice.voice_listen_api)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="voice_listen_api"', source)
+        self.assertIn('error_code_prefix="VOICE"', source)
+
+    def test_batch_138_voice_speak_api_simple_pattern(self):
+        """Verify voice_speak_api endpoint uses Simple Pattern"""
+        from backend.api import voice
+
+        source = inspect.getsource(voice.voice_speak_api)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="voice_speak_api"', source)
+        self.assertIn('error_code_prefix="VOICE"', source)
+
+    def test_batch_138_all_voice_endpoints_have_decorator(self):
+        """Verify all voice endpoints have @with_error_handling decorator"""
+        from backend.api import voice
+
+        endpoint_functions = [
+            voice.voice_listen_api,
+            voice.voice_speak_api,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_138_voice_100_percent_milestone(self):
+        """Verify voice.py has reached 100% migration"""
+        from backend.api import voice
+
+        endpoint_functions = [
+            voice.voice_listen_api,
+            voice.voice_speak_api,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 2
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_138_migration_preserves_listen_permission_check(self):
+        """Verify migration preserves listen permission checking"""
+        from backend.api import voice
+
+        source = inspect.getsource(voice.voice_listen_api)
+        self.assertIn("security_layer", source)
+        self.assertIn("check_permission(user_role, \"allow_voice_listen\")", source)
+        self.assertIn("audit_log", source)
+        self.assertIn("Permission denied to listen via voice", source)
+
+    def test_batch_138_migration_preserves_listen_functionality(self):
+        """Verify migration preserves speech-to-text functionality"""
+        from backend.api import voice
+
+        source = inspect.getsource(voice.voice_listen_api)
+        self.assertIn("voice_interface", source)
+        self.assertIn("listen_and_convert_to_text()", source)
+        self.assertIn("Speech recognized", source)
+        self.assertIn("Speech recognition failed", source)
+
+    def test_batch_138_migration_preserves_speak_permission_check(self):
+        """Verify migration preserves speak permission checking"""
+        from backend.api import voice
+
+        source = inspect.getsource(voice.voice_speak_api)
+        self.assertIn("security_layer", source)
+        self.assertIn("check_permission(user_role, \"allow_voice_speak\")", source)
+        self.assertIn("audit_log", source)
+        self.assertIn("Permission denied to speak via voice", source)
+
+    def test_batch_138_migration_preserves_speak_functionality(self):
+        """Verify migration preserves text-to-speech functionality"""
+        from backend.api import voice
+
+        source = inspect.getsource(voice.voice_speak_api)
+        self.assertIn("voice_interface", source)
+        self.assertIn("speak_text(text)", source)
+        self.assertIn("Text spoken successfully", source)
+        self.assertIn("Text-to-speech failed", source)
+
+    def test_batch_138_migration_preserves_audit_logging(self):
+        """Verify migration preserves audit logging for both endpoints"""
+        from backend.api import voice
+
+        # Check listen endpoint
+        source_listen = inspect.getsource(voice.voice_listen_api)
+        self.assertIn("audit_log", source_listen)
+        self.assertIn("voice_listen", source_listen)
+
+        # Check speak endpoint
+        source_speak = inspect.getsource(voice.voice_speak_api)
+        self.assertIn("audit_log", source_speak)
+        self.assertIn("voice_speak", source_speak)
+        self.assertIn("text_preview", source_speak)
+
 
 if __name__ == "__main__":
     unittest.main()
