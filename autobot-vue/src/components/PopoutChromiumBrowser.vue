@@ -234,29 +234,32 @@
           </div>
 
           <!-- Getting started -->
-          <div v-else class="text-center">
-            <i class="fas fa-rocket text-gray-400 text-2xl mb-2"></i>
-            <p class="text-sm text-gray-600">Use automation controls above to get started</p>
-          </div>
+          <EmptyState
+            v-else
+            icon="fas fa-rocket"
+            message="Use automation controls above to get started"
+            compact
+          />
         </div>
       </div>
 
       <!-- Manual Browser View (No Session) -->
       <div v-if="!sessionId || sessionId === 'manual-browser'" class="flex items-center justify-center h-full bg-gray-50">
-        <div class="text-center p-8">
-          <i class="fas fa-globe text-gray-400 text-6xl mb-4"></i>
-          <h2 class="text-xl font-semibold text-gray-700 mb-2">Manual Browser Mode</h2>
-          <p class="text-gray-600 mb-6">Direct control via VNC interface</p>
-          <div class="space-y-3">
+        <EmptyState
+          icon="fas fa-globe"
+          title="Manual Browser Mode"
+          message="Direct control via VNC interface"
+        >
+          <template #actions>
             <button @click="initializeBrowser" :disabled="isInitializingBrowser" class="btn btn-primary">
               <i class="fas mr-2" :class="isInitializingBrowser ? 'fa-spinner fa-spin' : 'fa-rocket'"></i>
               {{ isInitializingBrowser ? 'Launching...' : 'Launch Browser Session' }}
             </button>
-            <p class="text-sm text-gray-500">
+            <p class="text-sm text-gray-500 mt-3">
               This will open a live browser that you can control directly
             </p>
-          </div>
-        </div>
+          </template>
+        </EmptyState>
       </div>
 
       <!-- Session Loading -->
@@ -328,6 +331,7 @@ import type { AutomationResults, SearchData, TestData, MessageData } from '@/typ
 import appConfig from '@/config/AppConfig.js'
 import apiClient from '@/utils/ApiClient.ts'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 import { NetworkConstants } from '@/constants/network-constants.js'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 
@@ -340,7 +344,8 @@ interface ConsoleLogEntry {
 export default {
   name: 'PopoutChromiumBrowser',
   components: {
-    UnifiedLoadingView
+    UnifiedLoadingView,
+    EmptyState
   },
   props: {
     sessionId: {
