@@ -4,12 +4,18 @@ from fastapi import APIRouter, HTTPException
 
 from backend.services.config_service import ConfigService
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_settings",
+    error_code_prefix="SETTINGS",
+)
 @router.get("/")
 async def get_settings():
     """Get application settings - now uses full config from config.yaml"""
@@ -20,6 +26,11 @@ async def get_settings():
         raise HTTPException(status_code=500, detail=f"Error getting settings: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_settings_explicit",
+    error_code_prefix="SETTINGS",
+)
 @router.get("/settings")
 async def get_settings_explicit():
     """Get application settings - explicit /settings endpoint for frontend compatibility"""
@@ -30,6 +41,11 @@ async def get_settings_explicit():
         raise HTTPException(status_code=500, detail=f"Error getting settings: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_settings",
+    error_code_prefix="SETTINGS",
+)
 @router.post("/")
 async def save_settings(settings_data: dict):
     """Save application settings"""
@@ -46,6 +62,11 @@ async def save_settings(settings_data: dict):
         raise HTTPException(status_code=500, detail=f"Error saving settings: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_settings_explicit",
+    error_code_prefix="SETTINGS",
+)
 @router.post("/settings")
 async def save_settings_explicit(settings_data: dict):
     """Save application settings - explicit /settings endpoint for frontend compatibility"""
@@ -62,6 +83,11 @@ async def save_settings_explicit(settings_data: dict):
         raise HTTPException(status_code=500, detail=f"Error saving settings: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_backend_settings",
+    error_code_prefix="SETTINGS",
+)
 @router.get("/backend")
 async def get_backend_settings():
     """Get backend-specific settings"""
@@ -74,6 +100,11 @@ async def get_backend_settings():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_backend_settings",
+    error_code_prefix="SETTINGS",
+)
 @router.post("/backend")
 async def save_backend_settings(backend_settings: dict):
     """Save backend-specific settings"""
@@ -87,6 +118,11 @@ async def save_backend_settings(backend_settings: dict):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_full_config",
+    error_code_prefix="SETTINGS",
+)
 @router.get("/config")
 async def get_full_config():
     """Get complete application configuration"""
@@ -99,6 +135,11 @@ async def get_full_config():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="save_full_config",
+    error_code_prefix="SETTINGS",
+)
 @router.post("/config")
 async def save_full_config(config_data: dict):
     """Save complete application configuration to config.yaml"""
@@ -113,6 +154,11 @@ async def save_full_config(config_data: dict):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_cache",
+    error_code_prefix="SETTINGS",
+)
 @router.post("/clear-cache")
 async def clear_cache():
     """Clear application cache - includes config cache"""
