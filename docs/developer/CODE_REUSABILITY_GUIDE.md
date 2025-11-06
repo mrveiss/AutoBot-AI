@@ -946,6 +946,96 @@ Final StatusBadge migration completing the enforcement wave:
 - ✅ Increased StatusBadge usage from 14 to 15 instances (7% increase)
 - ✅ **StatusBadge enforcement substantially complete** - 650% usage increase from baseline (2 → 15 instances)
 
+---
+
+### **Batch 20: BaseButton Migration (First Wave)** ✅ Completed (Commit: abd34a6)
+
+**Goal**: Begin BaseButton adoption to replace duplicate inline button patterns across components.
+
+**Strategic Context**: Following StatusBadge enforcement completion (batches 15-19), shifted focus to button component consolidation. Discovered TWO unused button components:
+- **BaseButton.vue** - 11 variants (primary/secondary/success/danger/warning/info/light/dark/outline/ghost/link), 5 sizes
+- **TouchFriendlyButton.vue** - 5 variants with touch optimization features (ripple, haptic feedback, 44px min targets)
+
+**Decision**: Started with BaseButton due to more comprehensive variant support (11 vs 5), deferring TouchFriendlyButton overlap resolution for later.
+
+#### **Components Migrated**:
+
+**1. ErrorBoundary.vue** - Error recovery component
+- **Buttons**: 3 (primary: retry, secondary: reload, ghost: toggle details)
+- **Lines Saved**: ~47 lines of duplicate button CSS
+- **Technical Notes**:
+  - Preserved conditional text rendering (`retrying ? 'Retrying...' : 'Try Again'`)
+  - Maintained disabled state binding (`:disabled="retrying"`)
+  - All click handlers and component logic unchanged
+- **Location**: `autobot-vue/src/components/ErrorBoundary.vue`
+- **Commit**: abd34a6 (lines 54, 25-43, 274-320 removed)
+
+**2. async/AsyncErrorFallback.vue** - Async component error fallback
+- **Buttons**: 4 (primary: retry, secondary: reload, outline: go home, ghost: toggle)
+- **Lines Saved**: ~66 lines of duplicate button CSS (kept .fa-spin animation)
+- **Technical Notes**:
+  - Preserved exponential backoff retry logic
+  - Maintained icon animations (`:class="{ 'fa-spin': retrying }"`)
+  - Preserved retry count display (`Retry (${retryCount}/${maxRetries})`)
+  - Kept service worker cache clearing on reload
+- **Location**: `autobot-vue/src/components/async/AsyncErrorFallback.vue`
+- **Commit**: abd34a6 (lines 65-67, 27-57, 340-405 removed)
+
+**3. PhaseStatusIndicator.vue** - Project phase status display
+- **Buttons**: 3 (primary: refresh, secondary: validate, info: report)
+- **Lines Saved**: ~44 lines of duplicate button CSS
+- **Technical Notes**:
+  - Preserved loading state animations (fa-sync spinning)
+  - Maintained disabled states during operations
+  - Options API component (required components registration)
+- **Location**: `autobot-vue/src/components/PhaseStatusIndicator.vue`
+- **Commit**: abd34a6 (lines 124-130, 88-99, 557-600 removed)
+
+**Batch 20 Summary**:
+- ✅ 3 components migrated (error recovery, async loading, status display)
+- ✅ 10 button elements replaced with BaseButton
+- ✅ ~157 lines of duplicate CSS removed (47 + 66 + 44)
+- ✅ BaseButton usage increased from 0 to 3 components (new baseline)
+- ✅ 5 variants validated: primary, secondary, ghost, outline, info
+
+**Migration Pattern Established**:
+```vue
+<!-- BEFORE: Inline button with duplicate CSS -->
+<button @click="retry" class="btn btn-primary" :disabled="retrying">
+  {{ retrying ? 'Retrying...' : 'Try Again' }}
+</button>
+
+<style scoped>
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  /* ...47 more lines... */
+}
+</style>
+
+<!-- AFTER: BaseButton component -->
+<BaseButton variant="primary" @click="retry" :disabled="retrying">
+  {{ retrying ? 'Retrying...' : 'Try Again' }}
+</BaseButton>
+<!-- No duplicate CSS needed -->
+```
+
+**Technical Approach**:
+- Used BaseButton's 11-variant system for comprehensive coverage
+- Preserved all functionality: disabled states, click handlers, conditional content
+- Maintained icon animations and loading states
+- Zero behavior changes - pure refactor for code reuse
+- Both Composition API and Options API components supported
+
+**Next Steps**:
+- Continue BaseButton migrations (target: 200-300 lines saved over multiple batches)
+- Address TouchFriendlyButton vs BaseButton overlap (component consolidation or specialized use cases)
+- Document migration guide with before/after examples
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -955,20 +1045,33 @@ Final StatusBadge migration completing the enforcement wave:
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- **Total Progress**: ~794 lines / ~1,500-2,000 realistic target (40-53%)
+- BaseButton adoptions: ~157 lines (batch 20 - first wave)
+  - Batch 20: ~157 lines (3 components, 10 buttons)
+- **Total Progress**: ~951 lines / ~1,500-2,000 realistic target (48-63%)
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
+- **BaseButton Milestone**: 3 components using BaseButton (new baseline, 10 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
 During batch 14 final sweep, discovered several well-designed reusable components that exist but are **significantly underutilized**:
 
-**1. TouchFriendlyButton.vue** (`autobot-vue/src/components/ui/`)
+**1. BaseButton.vue** (`autobot-vue/src/components/base/`)
+- **Current Usage**: ✅ **IN PROGRESS** - 3 components (batch 20 - first wave)
+  - Batch 20: ErrorBoundary, AsyncErrorFallback, PhaseStatusIndicator
+- **Features**: 11 variants (primary/secondary/success/danger/warning/info/light/dark/outline/ghost/link), 5 sizes (xs-xl), loading states, icon support, flexible rendering (button/link/custom tag)
+- **Recommendation**: ✅ **Active migration ongoing** - Replacing duplicate inline button patterns
+- **Results**: ~157 lines saved (batch 20), 10 buttons consolidated across 3 components
+- **Next Steps**: Continue migrations targeting modals, forms, and action buttons (target: 200-300 lines over multiple batches)
+
+**2. TouchFriendlyButton.vue** (`autobot-vue/src/components/ui/`)
 - **Current Usage**: 0 components (no imports found)
 - **Features**: Size variants (xs-xl), style variants (primary/secondary/outline/ghost/danger), loading states, touch feedback, haptic feedback, accessibility (dark mode, high contrast, reduced motion)
-- **Recommendation**: ⚠️ **High-value adoption opportunity** - Could replace dozens of inline button patterns
-- **Estimated Potential**: ~100-200 lines if widely adopted across forms and modals
+- **Recommendation**: ⚠️ **Component overlap concern** - Overlaps with BaseButton functionality
+- **Analysis**: BaseButton has more variants (11 vs 5) but lacks touch-specific features (ripple, haptic feedback, 44px min targets)
+- **Decision Required**: Consolidate into single component OR establish clear use cases (BaseButton for general, TouchFriendlyButton for mobile/touch-first interfaces)
+- **Estimated Potential**: ~100-200 lines if adopted, but requires resolving overlap with BaseButton first
 
-**2. StatusBadge.vue** (`autobot-vue/src/components/ui/`)
+**3. StatusBadge.vue** (`autobot-vue/src/components/ui/`)
 - **Current Usage**: ✅ **SUBSTANTIALLY COMPLETE** - 15 instances across 11 components (batches 15-19 migrations)
   - Original: VectorizationProgressModal, TreeNodeComponent
   - Batches 15-19: KnowledgePersistenceDialog, HostsManager, ResearchBrowser, MonitoringDashboard, SecretsManager, CommandPermissionDialog, ElevationDialog, KnowledgeStats, NPUWorkersSettings
