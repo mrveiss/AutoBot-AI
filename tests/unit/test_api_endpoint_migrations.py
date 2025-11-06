@@ -21430,5 +21430,112 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             source = inspect.getsource(endpoint)
             self.assertIn("get_chat_knowledge_manager_instance", source)
 
+    # ==============================================
+    # BATCH 115: frontend_config.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_115_get_frontend_config_mixed_pattern(self):
+        """Verify get_frontend_config endpoint uses Mixed Pattern"""
+        from backend.api import frontend_config
+
+        source = inspect.getsource(frontend_config.get_frontend_config)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_frontend_config"', source)
+        self.assertIn('error_code_prefix="FRONTEND_CONFIG"', source)
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+
+    def test_batch_115_all_frontend_config_endpoints_have_decorator(self):
+        """Verify all frontend_config endpoints have @with_error_handling decorator"""
+        from backend.api import frontend_config
+
+        endpoint_functions = [
+            frontend_config.get_frontend_config,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_115_frontend_config_100_percent_milestone(self):
+        """Verify frontend_config.py has reached 100% migration"""
+        from backend.api import frontend_config
+
+        endpoint_functions = [
+            frontend_config.get_frontend_config,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 1
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_115_migration_preserves_config_operations(self):
+        """Verify migration preserves config retrieval operations"""
+        from backend.api import frontend_config
+
+        source = inspect.getsource(frontend_config.get_frontend_config)
+
+        # Check config service usage
+        self.assertIn("ConfigService.get_full_config", source)
+
+        # Check unified config manager usage
+        self.assertIn("unified_config_manager", source)
+
+        # Check NetworkConstants usage for hosts
+        self.assertIn("NetworkConstants", source)
+
+        # Check PathConstants usage
+        self.assertIn("PathConstants.PROJECT_ROOT", source)
+
+    def test_batch_115_migration_preserves_fallback_behavior(self):
+        """Verify migration preserves fallback to default config on error"""
+        from backend.api import frontend_config
+
+        source = inspect.getsource(frontend_config.get_frontend_config)
+
+        # Check that fallback logic is preserved
+        self.assertIn("except Exception", source)
+        self.assertIn("default_config", source)
+        self.assertIn("Returning default frontend config", source)
+
+        # Check that all config sections are present in fallback
+        self.assertIn("project", source)
+        self.assertIn("api", source)
+        self.assertIn("websocket", source)
+        self.assertIn("features", source)
+        self.assertIn("ui", source)
+        self.assertIn("performance", source)
+        self.assertIn("hosts", source)
+
+    def test_batch_115_migration_preserves_host_definitions(self):
+        """Verify migration preserves VM host definitions"""
+        from backend.api import frontend_config
+
+        source = inspect.getsource(frontend_config.get_frontend_config)
+
+        # Check that all VM hosts are defined
+        self.assertIn("MAIN_MACHINE_IP", source)
+        self.assertIn("FRONTEND_VM_IP", source)
+        self.assertIn("NPU_WORKER_VM_IP", source)
+        self.assertIn("REDIS_VM_IP", source)
+        self.assertIn("AI_STACK_VM_IP", source)
+        self.assertIn("BROWSER_VM_IP", source)
+
 if __name__ == "__main__":
     unittest.main()
