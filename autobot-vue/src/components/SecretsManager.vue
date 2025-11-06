@@ -85,8 +85,8 @@
           <div class="secret-header">
             <h3>{{ secret.name }}</h3>
             <div class="secret-badges">
-              <span :class="['badge', `badge-${secret.scope}`]">{{ secret.scope }}</span>
-              <span :class="['badge', `badge-${secret.type}`]">{{ secret.type.replace('_', ' ') }}</span>
+              <StatusBadge :variant="getScopeVariant(secret.scope)" size="small">{{ secret.scope }}</StatusBadge>
+              <StatusBadge :variant="getTypeVariant(secret.type)" size="small">{{ secret.type.replace('_', ' ') }}</StatusBadge>
             </div>
           </div>
           
@@ -330,11 +330,13 @@ import { secretsApiClient } from '../utils/SecretsApiClient';
 import { useAppStore } from '../stores/useAppStore.ts';
 import { formatDateTime } from '@/utils/formatHelpers';
 import EmptyState from '@/components/ui/EmptyState.vue';
+import StatusBadge from '@/components/ui/StatusBadge.vue';
 
 export default {
   name: 'SecretsManager',
   components: {
-    EmptyState
+    EmptyState,
+    StatusBadge
   },
   setup() {
     // State
@@ -607,7 +609,25 @@ export default {
         loadStats()
       ]);
     });
-    
+
+    // StatusBadge variant mapping functions
+    const getScopeVariant = (scope) => {
+      const variantMap = {
+        'chat': 'info',
+        'general': 'primary'
+      };
+      return variantMap[scope] || 'secondary';
+    };
+
+    const getTypeVariant = (type) => {
+      const variantMap = {
+        'ssh_key': 'warning',
+        'password': 'danger',
+        'api_key': 'success'
+      };
+      return variantMap[type] || 'secondary';
+    };
+
     return {
       // State
       secrets,
@@ -651,7 +671,11 @@ export default {
       onScopeChange,
       copySecretValue,
       formatDate,
-      isExpired
+      isExpired,
+
+      // StatusBadge variant mappers
+      getScopeVariant,
+      getTypeVariant
     };
   }
 };
@@ -797,39 +821,6 @@ export default {
   display: flex;
   gap: 5px;
   flex-wrap: wrap;
-}
-
-.badge {
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-}
-
-.badge-chat {
-  background: #e3f2fd;
-  color: #1976d2;
-}
-
-.badge-general {
-  background: #f3e5f5;
-  color: #7b1fa2;
-}
-
-.badge-ssh_key {
-  background: #fff3e0;
-  color: #f57c00;
-}
-
-.badge-password {
-  background: #ffebee;
-  color: #c62828;
-}
-
-.badge-api_key {
-  background: #e8f5e8;
-  color: #2e7d32;
 }
 
 .secret-description {

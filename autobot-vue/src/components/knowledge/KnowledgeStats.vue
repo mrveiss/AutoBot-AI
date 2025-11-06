@@ -65,9 +65,9 @@
           </div>
           <div class="vector-stat-content">
             <h4>Status</h4>
-            <p class="vector-stat-value status-badge" :class="vectorStats.status">
+            <StatusBadge :variant="getStatusVariant(vectorStats.status)" size="small" class="vector-stat-value">
               {{ vectorStats.status || 'unknown' }}
-            </p>
+            </StatusBadge>
             <p class="vector-stat-label">RAG: {{ vectorStats.rag_available ? 'Available' : 'Unavailable' }}</p>
           </div>
         </div>
@@ -378,6 +378,7 @@ import {
   formatCategoryName
 } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
 
 // Import shared document feed wrapper styles
 import '@/styles/document-feed-wrapper.css'
@@ -693,6 +694,16 @@ const getActivityIcon = (type: string): string => {
     imported: 'fas fa-download'
   }
   return icons[type] || 'fas fa-circle'
+}
+
+// StatusBadge variant mapping function
+const getStatusVariant = (status: string): 'success' | 'danger' | 'secondary' => {
+  const variantMap: Record<string, 'success' | 'danger' | 'secondary'> = {
+    'online': 'success',
+    'offline': 'danger',
+    'unknown': 'secondary'
+  }
+  return variantMap[status] || 'secondary'
 }
 
 // NOTE: formatRelativeTime removed - now using formatTimeAgo from @/utils/formatHelpers
@@ -1402,25 +1413,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.status-badge.online {
-  background: rgba(16, 185, 129, 0.3);
-  border: 1px solid #10b981;
-}
-
-.status-badge.offline {
-  background: rgba(239, 68, 68, 0.3);
-  border: 1px solid #ef4444;
 }
 
 /* Vector Chart Section */
