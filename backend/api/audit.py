@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from backend.services.audit_logger import AuditEntry, AuditResult, get_audit_logger
 from src.auth_middleware import auth_middleware
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 logger = logging.getLogger(__name__)
@@ -94,6 +95,11 @@ def check_admin_permission(request: Request) -> bool:
         raise HTTPException(status_code=500, detail="Permission check error")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="query_audit_logs",
+    error_code_prefix="AUDIT",
+)
 @router.get("/logs", response_model=AuditQueryResponse)
 async def query_audit_logs(
     request: Request,
@@ -199,6 +205,11 @@ async def query_audit_logs(
         raise HTTPException(status_code=500, detail=f"Audit log query error: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_audit_statistics",
+    error_code_prefix="AUDIT",
+)
 @router.get("/statistics", response_model=AuditStatisticsResponse)
 async def get_audit_statistics(
     request: Request, admin_check: bool = Depends(check_admin_permission)
@@ -226,6 +237,11 @@ async def get_audit_statistics(
         raise HTTPException(status_code=500, detail=f"Statistics error: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_session_audit_trail",
+    error_code_prefix="AUDIT",
+)
 @router.get("/session/{session_id}", response_model=AuditQueryResponse)
 async def get_session_audit_trail(
     request: Request,
@@ -279,6 +295,11 @@ async def get_session_audit_trail(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_user_audit_trail",
+    error_code_prefix="AUDIT",
+)
 @router.get("/user/{user_id}", response_model=AuditQueryResponse)
 async def get_user_audit_trail(
     request: Request,
@@ -330,6 +351,11 @@ async def get_user_audit_trail(
         raise HTTPException(status_code=500, detail=f"User audit query error: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_failed_operations",
+    error_code_prefix="AUDIT",
+)
 @router.get("/failures", response_model=AuditQueryResponse)
 async def get_failed_operations(
     request: Request,
@@ -389,6 +415,11 @@ async def get_failed_operations(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cleanup_old_logs",
+    error_code_prefix="AUDIT",
+)
 @router.post("/cleanup")
 async def cleanup_old_logs(
     request: Request,
@@ -428,6 +459,11 @@ async def cleanup_old_logs(
         raise HTTPException(status_code=500, detail=f"Cleanup error: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_operation_types",
+    error_code_prefix="AUDIT",
+)
 @router.get("/operations")
 async def list_operation_types(
     request: Request, admin_check: bool = Depends(check_admin_permission)
