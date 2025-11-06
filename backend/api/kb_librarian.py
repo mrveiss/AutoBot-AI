@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from src.agents.kb_librarian_agent import get_kb_librarian
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -33,6 +34,11 @@ class KBQueryResponse(BaseModel):
     summary: Optional[str] = None
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="query_knowledge_base",
+    error_code_prefix="KB_LIBRARIAN",
+)
 @router.post("/query", response_model=KBQueryResponse)
 async def query_knowledge_base(kb_query: KBQuery):
     """Query the knowledge base using the KB Librarian Agent.
@@ -77,6 +83,11 @@ async def query_knowledge_base(kb_query: KBQuery):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_kb_librarian_status",
+    error_code_prefix="KB_LIBRARIAN",
+)
 @router.get("/status")
 async def get_kb_librarian_status():
     """Get the status of the KB Librarian Agent.
@@ -100,6 +111,11 @@ async def get_kb_librarian_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="configure_kb_librarian",
+    error_code_prefix="KB_LIBRARIAN",
+)
 @router.put("/configure")
 async def configure_kb_librarian(
     enabled: Optional[bool] = None,
