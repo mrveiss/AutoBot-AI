@@ -70,53 +70,51 @@
           </div>
 
           <div class="comment-actions">
-            <button
-              class="btn btn-secondary"
+            <BaseButton
+              variant="secondary"
               @click="cancelComment"
               :disabled="isProcessing">
               <i class="fas fa-times"></i>
               Cancel
-            </button>
-            <button
-              class="btn btn-primary"
+            </BaseButton>
+            <BaseButton
+              variant="primary"
               @click="submitComment"
-              :disabled="!commentText.trim() || isProcessing">
-              <i v-if="isProcessing" class="fas fa-spinner fa-spin"></i>
-              <i v-else class="fas fa-paper-plane"></i>
+              :disabled="!commentText.trim()"
+              :loading="isProcessing">
+              <i class="fas fa-paper-plane"></i>
               {{ isProcessing ? 'Sending...' : 'Send Feedback' }}
-            </button>
+            </BaseButton>
           </div>
         </div>
       </div>
 
       <div class="command-footer">
         <div class="button-group">
-          <button
-            class="btn btn-cancel"
+          <BaseButton
+            variant="secondary"
             @click="handleDeny"
             :disabled="isProcessing"
             aria-label="Deny">
             <i class="fas fa-times"></i>
             Deny
-          </button>
-          <button
-            class="btn btn-comment"
+          </BaseButton>
+          <BaseButton
+            variant="warning"
             @click="handleComment"
             :disabled="isProcessing"
             aria-label="Comment">
             <i class="fas fa-comment"></i>
             Comment
-          </button>
-          <button
-            class="btn btn-allow"
+          </BaseButton>
+          <BaseButton
+            variant="success"
             @click="handleAllow"
-            :disabled="isProcessing"
-            :class="{ processing: isProcessing }"
+            :loading="isProcessing"
             aria-label="Allow">
-            <i v-if="isProcessing" class="fas fa-spinner fa-spin"></i>
-            <i v-else class="fas fa-check"></i>
+            <i class="fas fa-check"></i>
             {{ isProcessing ? 'Executing...' : 'Allow' }}
-          </button>
+          </BaseButton>
         </div>
 
         <div class="security-note">
@@ -133,11 +131,13 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { apiService } from '../services/api';
 import appConfig from '@/config/AppConfig.js';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
+import BaseButton from '@/components/base/BaseButton.vue';
 
 export default {
   name: 'CommandPermissionDialog',
   components: {
-    StatusBadge
+    StatusBadge,
+    BaseButton
   },
   props: {
     show: {
@@ -584,58 +584,6 @@ export default {
   margin-bottom: 12px;
 }
 
-.btn {
-  flex: 1;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.btn-cancel {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.btn-cancel:hover:not(:disabled) {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.btn-allow {
-  background: #059669;
-  color: white;
-}
-
-.btn-allow:hover:not(:disabled) {
-  background: #047857;
-}
-
-.btn-allow.processing {
-  background: #6b7280;
-}
-
-.btn-comment {
-  background: #f59e0b;
-  color: white;
-}
-
-.btn-comment:hover:not(:disabled) {
-  background: #d97706;
-}
-
 .security-note {
   display: flex;
   align-items: center;
@@ -705,30 +653,6 @@ export default {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
-}
-
-.btn-secondary {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.btn-primary {
-  background: #059669;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #047857;
-}
-
-.btn-primary:disabled {
-  background: #9ca3af;
-  cursor: not-allowed;
 }
 
 @media (max-width: 640px) {
