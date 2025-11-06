@@ -22748,5 +22748,189 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('execution_mode=SandboxExecutionMode.BATCH', source)
 
 
+
+    # ==============================================
+    # BATCH 124: elevation.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_124_request_elevation_simple_pattern(self):
+        """Verify request_elevation endpoint uses Simple Pattern"""
+        from backend.api import elevation
+
+        source = inspect.getsource(elevation.request_elevation)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="request_elevation"', source)
+        self.assertIn('error_code_prefix="ELEVATION"', source)
+
+    def test_batch_124_authorize_elevation_simple_pattern(self):
+        """Verify authorize_elevation endpoint uses Simple Pattern"""
+        from backend.api import elevation
+
+        source = inspect.getsource(elevation.authorize_elevation)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="authorize_elevation"', source)
+        self.assertIn('error_code_prefix="ELEVATION"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_124_get_elevation_status_simple_pattern(self):
+        """Verify get_elevation_status endpoint uses Simple Pattern"""
+        from backend.api import elevation
+
+        source = inspect.getsource(elevation.get_elevation_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_elevation_status"', source)
+        self.assertIn('error_code_prefix="ELEVATION"', source)
+
+    def test_batch_124_execute_elevated_command_simple_pattern(self):
+        """Verify execute_elevated_command endpoint uses Simple Pattern"""
+        from backend.api import elevation
+
+        source = inspect.getsource(elevation.execute_elevated_command)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="execute_elevated_command"', source)
+        self.assertIn('error_code_prefix="ELEVATION"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_124_get_pending_requests_simple_pattern(self):
+        """Verify get_pending_requests endpoint uses Simple Pattern"""
+        from backend.api import elevation
+
+        source = inspect.getsource(elevation.get_pending_requests)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_pending_requests"', source)
+        self.assertIn('error_code_prefix="ELEVATION"', source)
+
+    def test_batch_124_revoke_elevation_session_simple_pattern(self):
+        """Verify revoke_elevation_session endpoint uses Simple Pattern"""
+        from backend.api import elevation
+
+        source = inspect.getsource(elevation.revoke_elevation_session)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="revoke_elevation_session"', source)
+        self.assertIn('error_code_prefix="ELEVATION"', source)
+
+    def test_batch_124_elevation_health_check_simple_pattern(self):
+        """Verify elevation_health_check endpoint uses Simple Pattern"""
+        from backend.api import elevation
+
+        source = inspect.getsource(elevation.elevation_health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="elevation_health_check"', source)
+        self.assertIn('error_code_prefix="ELEVATION"', source)
+
+    def test_batch_124_all_elevation_endpoints_have_decorator(self):
+        """Verify all elevation endpoints have @with_error_handling decorator"""
+        from backend.api import elevation
+
+        endpoint_functions = [
+            elevation.request_elevation,
+            elevation.authorize_elevation,
+            elevation.get_elevation_status,
+            elevation.execute_elevated_command,
+            elevation.get_pending_requests,
+            elevation.revoke_elevation_session,
+            elevation.elevation_health_check,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_124_elevation_100_percent_milestone(self):
+        """Verify elevation.py has reached 100% migration"""
+        from backend.api import elevation
+
+        endpoint_functions = [
+            elevation.request_elevation,
+            elevation.authorize_elevation,
+            elevation.get_elevation_status,
+            elevation.execute_elevated_command,
+            elevation.get_pending_requests,
+            elevation.revoke_elevation_session,
+            elevation.elevation_health_check,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 7
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_124_migration_preserves_password_verification(self):
+        """Verify migration preserves password verification logic"""
+        from backend.api import elevation
+
+        source = inspect.getsource(elevation.authorize_elevation)
+
+        # Check password verification preserved
+        self.assertIn("verify_sudo_password", source)
+        self.assertIn("auth.password", source)
+        self.assertIn("Invalid password", source)
+
+    def test_batch_124_migration_preserves_session_management(self):
+        """Verify migration preserves session token management"""
+        from backend.api import elevation
+
+        # Check session creation in authorize_elevation
+        source_auth = inspect.getsource(elevation.authorize_elevation)
+        self.assertIn("session_token", source_auth)
+        self.assertIn("elevation_sessions", source_auth)
+        self.assertIn("remember_session", source_auth)
+
+        # Check session validation in execute_elevated_command
+        source_exec = inspect.getsource(elevation.execute_elevated_command)
+        self.assertIn("session_token", source_exec)
+        self.assertIn("elevation_sessions", source_exec)
+        self.assertIn("Session expired", source_exec)
+
+    def test_batch_124_migration_preserves_command_execution(self):
+        """Verify migration preserves elevated command execution logic"""
+        from backend.api import elevation
+
+        source = inspect.getsource(elevation.execute_elevated_command)
+
+        # Check command execution operations preserved
+        self.assertIn("run_elevated_command", source)
+        self.assertIn("stdout", source)
+        self.assertIn("stderr", source)
+        self.assertIn("return_code", source)
+
+    def test_batch_124_migration_preserves_multiple_exception_types(self):
+        """Verify migration preserves multiple exception type handling"""
+        from backend.api import elevation
+
+        # Check authorize_elevation has multiple exception types
+        source_auth = inspect.getsource(elevation.authorize_elevation)
+        self.assertIn("ValueError", source_auth)
+        self.assertIn("OSError", source_auth)
+        self.assertIn("IOError", source_auth)
+
+        # Check execute_elevated_command has multiple exception types
+        source_exec = inspect.getsource(elevation.execute_elevated_command)
+        self.assertIn("OSError", source_exec)
+        self.assertIn("IOError", source_exec)
+        self.assertIn("asyncio.TimeoutError", source_exec)
+
+
 if __name__ == "__main__":
     unittest.main()

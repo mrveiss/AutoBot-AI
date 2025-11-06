@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,11 @@ class ElevationAuthorization(BaseModel):
     remember_session: bool = False
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="request_elevation",
+    error_code_prefix="ELEVATION",
+)
 @router.post("/request")
 async def request_elevation(request: ElevationRequest):
     """Request elevation for a privileged operation"""
@@ -61,6 +67,11 @@ async def request_elevation(request: ElevationRequest):
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="authorize_elevation",
+    error_code_prefix="ELEVATION",
+)
 @router.post("/authorize")
 async def authorize_elevation(auth: ElevationAuthorization):
     """Authorize an elevation request with password"""
@@ -115,6 +126,11 @@ async def authorize_elevation(auth: ElevationAuthorization):
         raise HTTPException(status_code=500, detail="Authorization failed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_elevation_status",
+    error_code_prefix="ELEVATION",
+)
 @router.get("/status/{request_id}")
 async def get_elevation_status(request_id: str):
     """Check the status of an elevation request"""
@@ -132,6 +148,11 @@ async def get_elevation_status(request_id: str):
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_elevated_command",
+    error_code_prefix="ELEVATION",
+)
 @router.post("/execute/{session_token}")
 async def execute_elevated_command(session_token: str, command: str):
     """Execute a command with elevated privileges using session token"""
@@ -174,6 +195,11 @@ async def execute_elevated_command(session_token: str, command: str):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pending_requests",
+    error_code_prefix="ELEVATION",
+)
 @router.get("/pending")
 async def get_pending_requests():
     """Get all pending elevation requests"""
@@ -259,6 +285,11 @@ async def run_elevated_command(command: str) -> dict:
         return {"stdout": "", "stderr": str(e), "return_code": 1}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="revoke_elevation_session",
+    error_code_prefix="ELEVATION",
+)
 @router.delete("/session/{session_token}")
 async def revoke_elevation_session(session_token: str):
     """Revoke an elevation session"""
@@ -269,6 +300,11 @@ async def revoke_elevation_session(session_token: str):
     return {"success": True, "message": "Session revoked"}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="elevation_health_check",
+    error_code_prefix="ELEVATION",
+)
 @router.get("/health")
 async def elevation_health_check():
     """Health check for elevation system"""
