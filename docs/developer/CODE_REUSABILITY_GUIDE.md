@@ -857,11 +857,35 @@ Continued migration to StatusBadge component with more complex components:
 - ✅ Increased StatusBadge usage from 5 to 7 components (40% increase)
 - ✅ Demonstrates value even in complex components with multiple status types
 
+**📊 Batch 17 StatusBadge Enforcement** (January 2025):
+Migrated MonitoringDashboard.vue with 2 badge patterns:
+
+**MonitoringDashboard.vue** ✅
+- **Before**: 2 badge CSS classes with variant styles (priority-badge, severity-badge)
+- **After**: 2 variant mapping functions (getPriorityVariant, getSeverityVariant) + StatusBadge components
+- **Badges Removed**:
+  - `.priority-badge` with 3 variants (high/medium/low) - 9 lines CSS
+  - `.severity-badge` with 2 variants (critical/warning) - 6 lines CSS
+- **Functions Added**:
+  - `getPriorityVariant()` - maps high/medium/low to danger/warning/info
+  - `getSeverityVariant()` - maps critical/warning to danger/warning
+- **Template Updates**:
+  - Line 286: Replaced `<span :class="['priority-badge', rec.priority]">` with StatusBadge
+  - Line 321: Replaced `<span :class="['severity-badge', alert.severity]">` with StatusBadge
+- **Lines Saved**: ~15 lines (CSS removed)
+- **Location**: `autobot-vue/src/components/monitoring/MonitoringDashboard.vue`
+
+**Batch 17 Summary**:
+- ✅ 1 component migrated (2 badge patterns)
+- ✅ ~15 lines saved
+- ✅ Increased StatusBadge usage from 7 to 9 instances (29% increase)
+- ✅ Demonstrates CSS consolidation benefit
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
-- StatusBadge adoptions: ~63 lines (batches 15-16)
-- **Total Progress**: ~660 lines / ~1,500-2,000 realistic target (33-44%)
+- StatusBadge adoptions: ~78 lines (batches 15-17)
+- **Total Progress**: ~675 lines / ~1,500-2,000 realistic target (34-45%)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
