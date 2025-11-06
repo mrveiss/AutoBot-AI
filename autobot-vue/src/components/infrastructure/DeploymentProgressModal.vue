@@ -174,6 +174,7 @@
 <script setup lang="ts">
 import { ref, defineProps, defineEmits, watch, nextTick } from 'vue'
 import type { Deployment } from '@/composables/useInfrastructure'
+import { formatDateTime, formatTime } from '@/utils/formatHelpers'
 
 const props = defineProps<{
   visible: boolean
@@ -220,25 +221,9 @@ function getStatusText(status?: string): string {
   }
 }
 
-function formatTimestamp(timestamp?: string): string {
-  if (!timestamp) return ''
-  try {
-    const date = new Date(timestamp)
-    return date.toLocaleString()
-  } catch {
-    return timestamp
-  }
-}
-
-function formatLogTime(timestamp?: string): string {
-  if (!timestamp) return ''
-  try {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString()
-  } catch {
-    return timestamp
-  }
-}
+// Use shared format utilities instead of duplicating
+const formatTimestamp = (timestamp?: string) => formatDateTime(timestamp)
+const formatLogTime = (timestamp?: string) => formatTime(timestamp)
 
 function scrollToBottom() {
   nextTick(() => {
