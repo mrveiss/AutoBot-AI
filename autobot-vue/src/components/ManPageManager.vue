@@ -5,14 +5,15 @@
     <div class="machine-profile-section">
       <div class="section-header">
         <h3><i class="fas fa-desktop"></i> Current Machine Profile</h3>
-        <button 
-          @click="refreshMachineProfile" 
+        <BaseButton
+          size="sm"
+          variant="outline"
+          @click="refreshMachineProfile"
           :disabled="loading?.profile"
-          class="btn btn-sm btn-outline"
         >
           <i class="fas fa-sync" :class="{ 'fa-spin': loading?.profile }"></i>
           Refresh
-        </button>
+        </BaseButton>
       </div>
 
       <div v-if="machineProfile && !loading?.profile" class="machine-info">
@@ -61,14 +62,15 @@
     <div class="integration-status-section">
       <div class="section-header">
         <h3><i class="fas fa-chart-bar"></i> Integration Status</h3>
-        <button 
-          @click="refreshIntegrationStatus" 
+        <BaseButton
+          size="sm"
+          variant="outline"
+          @click="refreshIntegrationStatus"
           :disabled="loading?.status"
-          class="btn btn-sm btn-outline"
         >
           <i class="fas fa-sync" :class="{ 'fa-spin': loading?.status }"></i>
           Refresh
-        </button>
+        </BaseButton>
       </div>
 
       <div v-if="integrationStatus" class="status-info">
@@ -141,51 +143,49 @@
       </div>
 
       <div class="action-buttons">
-        <button 
-          @click="initializeMachineKnowledgeWithProgress" 
+        <BaseButton
+          variant="primary"
+          @click="initializeMachineKnowledgeWithProgress"
           :disabled="loading?.initialize || !canInitialize"
-          class="btn btn-primary"
-          :class="{ 'loading': loading?.initialize }"
+          :loading="loading?.initialize"
         >
-          <i class="fas fa-rocket" v-if="!loading?.initialize"></i>
-          <i class="fas fa-spinner fa-spin" v-else></i>
+          <i class="fas fa-rocket"></i>
           Initialize Machine Knowledge
-        </button>
+        </BaseButton>
 
-        <button 
-          @click="integrateManPagesWithProgress" 
+        <BaseButton
+          variant="success"
+          @click="integrateManPagesWithProgress"
           :disabled="loading?.integrate || !canIntegrate"
-          class="btn btn-success"
-          :class="{ 'loading': loading?.integrate }"
+          :loading="loading?.integrate"
         >
-          <i class="fas fa-book-open" v-if="!loading?.integrate"></i>
-          <i class="fas fa-spinner fa-spin" v-else></i>
+          <i class="fas fa-book-open"></i>
           Integrate Man Pages
-        </button>
+        </BaseButton>
 
-        <button 
-          @click="testSearchManPages" 
+        <BaseButton
+          variant="info"
+          @click="testSearchManPages"
           :disabled="loading?.search || !hasIntegration"
-          class="btn btn-info"
-          :class="{ 'loading': loading?.search }"
+          :loading="loading?.search"
         >
-          <i class="fas fa-search" v-if="!loading?.search"></i>
-          <i class="fas fa-spinner fa-spin" v-else></i>
+          <i class="fas fa-search"></i>
           Test Search
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Real-time Progress Tracking -->
       <div v-if="showProgressTracking" class="progress-section">
         <div class="section-header">
           <h3><i class="fas fa-tasks"></i> Progress Tracking</h3>
-          <button 
-            @click="showProgressTracking = false" 
-            class="btn btn-sm btn-outline"
+          <BaseButton
+            size="sm"
+            variant="outline"
+            @click="showProgressTracking = false"
           >
             <i class="fas fa-times"></i>
             Hide
-          </button>
+          </BaseButton>
         </div>
 
         <div class="progress-container">
@@ -272,14 +272,14 @@
           placeholder="Search for commands, patterns, network tools, etc..."
           class="form-input"
         >
-        <button 
+        <BaseButton
+          variant="primary"
           @click="searchManPages"
           :disabled="!searchQuery.trim() || loading?.search"
-          class="btn btn-primary"
         >
           <i class="fas fa-search"></i>
           Search
-        </button>
+        </BaseButton>
       </div>
 
       <div v-if="searchResults" class="search-results">
@@ -320,11 +320,13 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import ApiClient from '../utils/ApiClient'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 export default {
   name: 'ManPageManager',
   components: {
-    EmptyState
+    EmptyState,
+    BaseButton
   },
   setup() {
     // Use the shared composable
@@ -929,50 +931,6 @@ export default {
   gap: 15px;
   margin-bottom: 25px;
   flex-wrap: wrap;
-}
-
-.btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 200px;
-  justify-content: center;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary { background: #3498db; color: white; }
-.btn-primary:hover:not(:disabled) { background: #2980b9; }
-
-.btn-success { background: #27ae60; color: white; }
-.btn-success:hover:not(:disabled) { background: #229954; }
-
-.btn-info { background: #17a2b8; color: white; }
-.btn-info:hover:not(:disabled) { background: #138496; }
-
-.btn-outline {
-  background: transparent;
-  color: #3498db;
-  border: 2px solid #3498db;
-}
-.btn-outline:hover:not(:disabled) {
-  background: #3498db;
-  color: white;
-}
-
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 0.9rem;
-  min-width: auto;
 }
 
 .action-info {
