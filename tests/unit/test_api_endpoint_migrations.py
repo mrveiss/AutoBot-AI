@@ -23724,6 +23724,191 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("No default prompt found", source)
         self.assertIn("aiofiles.open", source)
 
+    # ==============================================
+    # BATCH 130: rum.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_130_configure_rum_simple_pattern(self):
+        """Verify configure_rum endpoint uses Simple Pattern"""
+        from backend.api import rum
+
+        source = inspect.getsource(rum.configure_rum)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="configure_rum"', source)
+        self.assertIn('error_code_prefix="RUM"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_130_log_rum_event_mixed_pattern(self):
+        """Verify log_rum_event endpoint uses Mixed Pattern"""
+        from backend.api import rum
+
+        source = inspect.getsource(rum.log_rum_event)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="log_rum_event"', source)
+        self.assertIn('error_code_prefix="RUM"', source)
+        # Mixed Pattern: returns error dict instead of raising HTTPException
+        self.assertIn('return {"status": "error"', source)
+
+    def test_batch_130_disable_rum_simple_pattern(self):
+        """Verify disable_rum endpoint uses Simple Pattern"""
+        from backend.api import rum
+
+        source = inspect.getsource(rum.disable_rum)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="disable_rum"', source)
+        self.assertIn('error_code_prefix="RUM"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_130_clear_rum_data_simple_pattern(self):
+        """Verify clear_rum_data endpoint uses Simple Pattern"""
+        from backend.api import rum
+
+        source = inspect.getsource(rum.clear_rum_data)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="clear_rum_data"', source)
+        self.assertIn('error_code_prefix="RUM"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_130_export_rum_data_simple_pattern(self):
+        """Verify export_rum_data endpoint uses Simple Pattern"""
+        from backend.api import rum
+
+        source = inspect.getsource(rum.export_rum_data)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="export_rum_data"', source)
+        self.assertIn('error_code_prefix="RUM"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_130_get_rum_status_simple_pattern(self):
+        """Verify get_rum_status endpoint uses Simple Pattern"""
+        from backend.api import rum
+
+        source = inspect.getsource(rum.get_rum_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_rum_status"', source)
+        self.assertIn('error_code_prefix="RUM"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_130_all_rum_endpoints_have_decorator(self):
+        """Verify all rum endpoints have @with_error_handling decorator"""
+        from backend.api import rum
+
+        endpoint_functions = [
+            rum.configure_rum,
+            rum.log_rum_event,
+            rum.disable_rum,
+            rum.clear_rum_data,
+            rum.export_rum_data,
+            rum.get_rum_status,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_130_rum_100_percent_milestone(self):
+        """Verify rum.py has reached 100% migration"""
+        from backend.api import rum
+
+        endpoint_functions = [
+            rum.configure_rum,
+            rum.log_rum_event,
+            rum.disable_rum,
+            rum.clear_rum_data,
+            rum.export_rum_data,
+            rum.get_rum_status,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 6
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_130_migration_preserves_rum_config_management(self):
+        """Verify migration preserves RUM configuration management"""
+        from backend.api import rum
+
+        # Check configure_rum preserves config management
+        source_configure = inspect.getsource(rum.configure_rum)
+        self.assertIn("rum_config = config.dict()", source_configure)
+        self.assertIn("setup_rum_logger()", source_configure)
+        self.assertIn("rum_logger.info", source_configure)
+
+        # Check disable_rum preserves config update
+        source_disable = inspect.getsource(rum.disable_rum)
+        self.assertIn('rum_config["enabled"] = False', source_disable)
+
+    def test_batch_130_migration_preserves_event_logging_and_session_tracking(self):
+        """Verify migration preserves event logging and session tracking"""
+        from backend.api import rum
+
+        source = inspect.getsource(rum.log_rum_event)
+
+        # Check event storage preserved
+        self.assertIn("rum_events.append(event_data)", source)
+        self.assertIn("event_data = event.dict()", source)
+        self.assertIn('event_data["server_timestamp"]', source)
+
+        # Check session tracking preserved
+        self.assertIn("rum_sessions[session_id]", source)
+        self.assertIn('"event_count"', source)
+        self.assertIn('"last_activity"', source)
+
+        # Check memory management
+        self.assertIn("if len(rum_events) > 10000:", source)
+
+    def test_batch_130_migration_preserves_mixed_pattern_for_log_event(self):
+        """Verify migration preserves mixed pattern for log_rum_event"""
+        from backend.api import rum
+
+        source = inspect.getsource(rum.log_rum_event)
+
+        # Mixed Pattern: returns error dict instead of raising HTTPException
+        self.assertIn("except Exception as e:", source)
+        self.assertIn('return {"status": "error"', source)
+        self.assertIn('"message": f"Failed to log RUM event', source)
+        # Comment explains why: don't disrupt user experience
+        self.assertIn("# Don't raise HTTP exception", source)
+
+    def test_batch_130_migration_preserves_data_export_and_statistics(self):
+        """Verify migration preserves export and statistics logic"""
+        from backend.api import rum
+
+        # Check export_rum_data preserves export structure
+        source_export = inspect.getsource(rum.export_rum_data)
+        self.assertIn("export_data = {", source_export)
+        self.assertIn('"export_timestamp"', source_export)
+        self.assertIn('"config"', source_export)
+        self.assertIn('"sessions"', source_export)
+        self.assertIn('"events"', source_export)
+        self.assertIn('"summary"', source_export)
+
+        # Check get_rum_status preserves statistics calculation
+        source_status = inspect.getsource(rum.get_rum_status)
+        self.assertIn("active_sessions = 0", source_status)
+        self.assertIn("total_events_today = 0", source_status)
+        self.assertIn("datetime.now() - last_activity", source_status)
+
 
 if __name__ == "__main__":
     unittest.main()
