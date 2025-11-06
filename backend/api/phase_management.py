@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from scripts.phase_validation_system import PhaseValidator
 from src.constants.network_constants import NetworkConstants
 from src.phase_progression_manager import ProgressionTrigger, get_progression_manager
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -32,6 +33,11 @@ class ValidationRequest(BaseModel):
     include_details: bool = True
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_phase_management_status",
+    error_code_prefix="PHASE",
+)
 @router.get("/status")
 async def get_phase_management_status():
     """Get overall phase management system status"""
@@ -52,6 +58,11 @@ async def get_phase_management_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_full_phase_validation",
+    error_code_prefix="PHASE",
+)
 @router.get("/validation/full")
 async def run_full_phase_validation():
     """Run comprehensive phase validation across all phases"""
@@ -69,6 +80,11 @@ async def run_full_phase_validation():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_custom_phase_validation",
+    error_code_prefix="PHASE",
+)
 @router.post("/validation/run")
 async def run_custom_phase_validation(request: ValidationRequest):
     """Run phase validation for specific phases"""
@@ -94,6 +110,11 @@ async def run_custom_phase_validation(request: ValidationRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_progression_eligibility",
+    error_code_prefix="PHASE",
+)
 @router.get("/progression/eligibility")
 async def check_progression_eligibility():
     """Check which phases are eligible for progression"""
@@ -111,6 +132,11 @@ async def check_progression_eligibility():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_automated_progression",
+    error_code_prefix="PHASE",
+)
 @router.post("/progression/auto")
 async def execute_automated_progression(background_tasks: BackgroundTasks):
     """Execute automated phase progression"""
@@ -140,6 +166,11 @@ async def execute_automated_progression(background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="trigger_manual_progression",
+    error_code_prefix="PHASE",
+)
 @router.post("/progression/manual")
 async def trigger_manual_progression(request: PhaseProgressionRequest):
     """Manually trigger progression to a specific phase"""
@@ -172,6 +203,11 @@ async def trigger_manual_progression(request: PhaseProgressionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_available_phases",
+    error_code_prefix="PHASE",
+)
 @router.get("/phases/available")
 async def get_available_phases():
     """Get list of all available phases and their status"""
@@ -212,6 +248,11 @@ async def get_available_phases():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_current_capabilities",
+    error_code_prefix="PHASE",
+)
 @router.get("/capabilities/current")
 async def get_current_capabilities():
     """Get current system capabilities and progression history"""
@@ -229,6 +270,11 @@ async def get_current_capabilities():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_progression_history",
+    error_code_prefix="PHASE",
+)
 @router.get("/history/progressions")
 async def get_progression_history(limit: int = Query(10, ge=1, le=100)):
     """Get phase progression history"""
@@ -252,6 +298,11 @@ async def get_progression_history(limit: int = Query(10, ge=1, le=100)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="phase_management_health",
+    error_code_prefix="PHASE",
+)
 @router.get("/health")
 async def phase_management_health():
     """Health check for phase management system"""
@@ -284,6 +335,11 @@ async def phase_management_health():
         raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_progression_config",
+    error_code_prefix="PHASE",
+)
 @router.post("/config/update")
 async def update_progression_config(config_update: dict):
     """Update phase progression configuration"""
@@ -318,6 +374,11 @@ async def update_progression_config(config_update: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_progression_summary_report",
+    error_code_prefix="PHASE",
+)
 @router.get("/reports/summary")
 async def get_progression_summary_report():
     """Generate comprehensive phase progression summary report"""
