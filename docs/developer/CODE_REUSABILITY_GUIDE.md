@@ -679,8 +679,53 @@ grep -r "<table" autobot-vue/src/components/
 - ✅ Migrated InfrastructureManager.vue to EmptyState component (with action button, ~15 lines saved)
 - ✅ Migrated ChatFilePanel.vue to EmptyState component (compact inline state, ~4 lines saved)
 - ✅ Migrated PopoutChromiumBrowser.vue to EmptyState component (2 empty states with action button, ~19 lines saved)
-- 📋 Migrate additional empty states (DeploymentProgressModal, FilePreview, etc.)
-- 📋 Continue with remaining modal migrations
+
+**📊 Batch 12 Deep Dive Assessment** (January 2025):
+After exhaustive codebase analysis, the following findings guide our strategy:
+
+**EmptyState Migrations**: ✅ **Near Complete**
+- 33 components successfully migrated (~579 lines saved)
+- Remaining candidates offer minimal benefit (1-3 lines each)
+- Most contextual empty states already use compact inline patterns
+
+**BaseModal Migrations**: ⚠️ **Not Recommended**
+Evaluated 8 modal/dialog candidates:
+- **ElevationDialog.vue** (604 lines): Security-critical, custom red gradient, password input, risk badges - *intentionally distinctive*
+- **AdvancedStepConfirmationModal.vue** (1,670 lines): Workflow management, nested modals, step editing - *highly specialized*
+- **KnowledgePersistenceDialog.vue** (910 lines): Complex configuration with multiple tabs/sections
+- **VectorizationProgressModal.vue** (561 lines): Real-time progress tracking with logs
+- **TerminalModals.vue** (1,057 lines): Multiple terminal-specific modals in one file
+- **DeploymentProgressModal.vue**: Progress modal with log streaming
+- **CommandPermissionDialog.vue**: Permission workflow with approval logic
+- **AddHostModal.vue**: Infrastructure configuration with validation
+
+**Why BaseModal isn't suitable for these**:
+1. All have 500-1,600+ lines with extensive custom styling
+2. Highly specialized business logic (security, workflows, real-time updates)
+3. Custom layouts that don't fit BaseModal's header/content/actions pattern
+4. Many have nested modals, tabs, or complex form validation
+5. Migration would require massive refactoring with high risk, minimal benefit
+
+**Other Reusability Patterns**: ⚠️ **Mostly Contextual**
+- Loading spinners: Inline button states, not standalone components
+- Status indicators: Already using ServiceStatusIndicator component
+- Form patterns: Vary significantly by use case
+- Error messages: Context-dependent styling and placement
+
+**Revised Goal Assessment**:
+The initial ~5,600 line estimate was optimistic. Actual duplicate code is closer to ~1,500-2,000 lines across:
+- Empty states: ✅ **579 lines saved** (most complete)
+- Modals: ❌ **Not viable** (too specialized)
+- Other patterns: 🔄 **Future opportunity** (requires new components)
+
+**Recommended Next Steps**:
+1. ✅ Mark EmptyState migrations as substantially complete
+2. 📋 Focus on creating NEW reusable patterns for remaining duplicates:
+   - LoadingState component for full-page loading (not button spinners)
+   - FormGroup component for consistent form field layouts
+   - ActionButton component for primary/secondary button patterns
+   - NotificationToast component for user feedback
+3. 📋 Re-estimate target based on actual patterns found (~1,500-2,000 lines realistic)
 
 ### **Phase 3** (Planned 📅):
 - 📋 Migrate remaining 35+ components (see GitHub issue #10894)
