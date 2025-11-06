@@ -17,6 +17,7 @@ from src.enhanced_multi_agent_orchestrator import (
     create_and_execute_workflow,
     enhanced_orchestrator,
 )
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -34,6 +35,11 @@ class AgentRecommendationRequest(BaseModel):
     capabilities_needed: list[str]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_workflow",
+    error_code_prefix="ORCHESTRATION",
+)
 @router.post("/workflow/execute")
 async def execute_workflow(request: WorkflowRequest):
     """
@@ -110,6 +116,11 @@ async def execute_workflow(request: WorkflowRequest):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_workflow_plan",
+    error_code_prefix="ORCHESTRATION",
+)
 @router.post("/workflow/plan")
 async def create_workflow_plan(request: WorkflowRequest):
     """
@@ -163,6 +174,11 @@ async def create_workflow_plan(request: WorkflowRequest):
         raise HTTPException(status_code=500, detail=f"Plan creation failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_performance",
+    error_code_prefix="ORCHESTRATION",
+)
 @router.get("/agents/performance")
 async def get_agent_performance():
     """
@@ -184,6 +200,11 @@ async def get_agent_performance():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="recommend_agents",
+    error_code_prefix="ORCHESTRATION",
+)
 @router.post("/agents/recommend")
 async def recommend_agents(request: AgentRecommendationRequest):
     """
@@ -230,6 +251,11 @@ async def recommend_agents(request: AgentRecommendationRequest):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_active_workflows",
+    error_code_prefix="ORCHESTRATION",
+)
 @router.get("/workflow/active")
 async def get_active_workflows():
     """
@@ -265,6 +291,11 @@ async def get_active_workflows():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_execution_strategies",
+    error_code_prefix="ORCHESTRATION",
+)
 @router.get("/strategies")
 async def get_execution_strategies():
     """
@@ -303,6 +334,11 @@ async def get_execution_strategies():
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_capabilities",
+    error_code_prefix="ORCHESTRATION",
+)
 @router.get("/capabilities")
 async def get_agent_capabilities():
     """
@@ -343,6 +379,11 @@ async def get_agent_capabilities():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_orchestration_status",
+    error_code_prefix="ORCHESTRATION",
+)
 @router.get("/status")
 async def get_orchestration_status():
     """
@@ -379,6 +420,11 @@ async def get_orchestration_status():
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_orchestration_examples",
+    error_code_prefix="ORCHESTRATION",
+)
 @router.get("/examples")
 async def get_orchestration_examples():
     """
