@@ -24129,6 +24129,285 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("Cleanup requires confirmation", source)
         self.assertIn("set 'confirm' to true", source)
 
+    # ==============================================
+    # BATCH 132: secrets.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_132_create_secret_simple_pattern(self):
+        """Verify create_secret endpoint uses Simple Pattern"""
+        from backend.api import secrets
+
+        source = inspect.getsource(secrets.create_secret)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="create_secret"', source)
+        self.assertIn('error_code_prefix="SECRETS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_132_list_secrets_simple_pattern(self):
+        """Verify list_secrets endpoint uses Simple Pattern"""
+        from backend.api import secrets
+
+        source = inspect.getsource(secrets.list_secrets)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_secrets"', source)
+        self.assertIn('error_code_prefix="SECRETS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_132_get_secret_types_simple_pattern(self):
+        """Verify get_secret_types endpoint uses Simple Pattern"""
+        from backend.api import secrets
+
+        source = inspect.getsource(secrets.get_secret_types)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_secret_types"', source)
+        self.assertIn('error_code_prefix="SECRETS"', source)
+
+    def test_batch_132_get_secrets_status_simple_pattern(self):
+        """Verify get_secrets_status endpoint uses Simple Pattern"""
+        from backend.api import secrets
+
+        source = inspect.getsource(secrets.get_secrets_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_secrets_status"', source)
+        self.assertIn('error_code_prefix="SECRETS"', source)
+
+    def test_batch_132_get_secrets_stats_simple_pattern(self):
+        """Verify get_secrets_stats endpoint uses Simple Pattern"""
+        from backend.api import secrets
+
+        source = inspect.getsource(secrets.get_secrets_stats)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_secrets_stats"', source)
+        self.assertIn('error_code_prefix="SECRETS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_132_get_secret_simple_pattern(self):
+        """Verify get_secret endpoint uses Simple Pattern"""
+        from backend.api import secrets
+
+        source = inspect.getsource(secrets.get_secret)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_secret"', source)
+        self.assertIn('error_code_prefix="SECRETS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_132_update_secret_simple_pattern(self):
+        """Verify update_secret endpoint uses Simple Pattern"""
+        from backend.api import secrets
+
+        source = inspect.getsource(secrets.update_secret)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="update_secret"', source)
+        self.assertIn('error_code_prefix="SECRETS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_132_delete_secret_simple_pattern(self):
+        """Verify delete_secret endpoint uses Simple Pattern"""
+        from backend.api import secrets
+
+        source = inspect.getsource(secrets.delete_secret)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="delete_secret"', source)
+        self.assertIn('error_code_prefix="SECRETS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_132_transfer_secrets_simple_pattern(self):
+        """Verify transfer_secrets endpoint uses Simple Pattern"""
+        from backend.api import secrets
+
+        source = inspect.getsource(secrets.transfer_secrets)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="transfer_secrets"', source)
+        self.assertIn('error_code_prefix="SECRETS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_132_get_chat_cleanup_info_simple_pattern(self):
+        """Verify get_chat_cleanup_info endpoint uses Simple Pattern"""
+        from backend.api import secrets
+
+        source = inspect.getsource(secrets.get_chat_cleanup_info)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_chat_cleanup_info"', source)
+        self.assertIn('error_code_prefix="SECRETS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_132_delete_chat_secrets_simple_pattern(self):
+        """Verify delete_chat_secrets endpoint uses Simple Pattern"""
+        from backend.api import secrets
+
+        source = inspect.getsource(secrets.delete_chat_secrets)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="delete_chat_secrets"', source)
+        self.assertIn('error_code_prefix="SECRETS"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_132_all_secrets_endpoints_have_decorator(self):
+        """Verify all secrets endpoints have @with_error_handling decorator"""
+        from backend.api import secrets
+
+        endpoint_functions = [
+            secrets.create_secret,
+            secrets.list_secrets,
+            secrets.get_secret_types,
+            secrets.get_secrets_status,
+            secrets.get_secrets_stats,
+            secrets.get_secret,
+            secrets.update_secret,
+            secrets.delete_secret,
+            secrets.transfer_secrets,
+            secrets.get_chat_cleanup_info,
+            secrets.delete_chat_secrets,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_132_secrets_100_percent_milestone(self):
+        """Verify secrets.py has reached 100% migration"""
+        from backend.api import secrets
+
+        endpoint_functions = [
+            secrets.create_secret,
+            secrets.list_secrets,
+            secrets.get_secret_types,
+            secrets.get_secrets_status,
+            secrets.get_secrets_stats,
+            secrets.get_secret,
+            secrets.update_secret,
+            secrets.delete_secret,
+            secrets.transfer_secrets,
+            secrets.get_chat_cleanup_info,
+            secrets.delete_chat_secrets,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 11
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_132_migration_preserves_fernet_encryption(self):
+        """Verify migration preserves Fernet encryption functionality"""
+        from backend.api import secrets
+
+        # Check create_secret preserves encryption
+        source_create = inspect.getsource(secrets.create_secret)
+        self.assertIn("secrets_manager.create_secret(request)", source_create)
+
+        # Check get_secret preserves decryption
+        source_get = inspect.getsource(secrets.get_secret)
+        self.assertIn("secrets_manager.get_secret(secret_id", source_get)
+
+    def test_batch_132_migration_preserves_dual_scope_support(self):
+        """Verify migration preserves dual scope (chat/general) support"""
+        from backend.api import secrets
+
+        # Check list_secrets preserves scope filtering
+        source_list = inspect.getsource(secrets.list_secrets)
+        self.assertIn("chat_id:", source_list)
+        self.assertIn("scope:", source_list)
+
+        # Check transfer_secrets preserves scope transfer
+        source_transfer = inspect.getsource(secrets.transfer_secrets)
+        self.assertIn("secrets_manager.transfer_secrets", source_transfer)
+
+    def test_batch_132_migration_preserves_chat_access_control(self):
+        """Verify migration preserves chat-scoped access control"""
+        from backend.api import secrets
+
+        # Check get_secret preserves chat_id parameter
+        source_get = inspect.getsource(secrets.get_secret)
+        self.assertIn("chat_id:", source_get)
+        self.assertIn("PermissionError", source_get)
+
+        # Check update_secret preserves chat_id parameter
+        source_update = inspect.getsource(secrets.update_secret)
+        self.assertIn("chat_id:", source_update)
+        self.assertIn("PermissionError", source_update)
+
+        # Check delete_secret preserves chat_id parameter
+        source_delete = inspect.getsource(secrets.delete_secret)
+        self.assertIn("chat_id:", source_delete)
+        self.assertIn("PermissionError", source_delete)
+
+    def test_batch_132_migration_preserves_secret_types(self):
+        """Verify migration preserves secret types enumeration"""
+        from backend.api import secrets
+
+        source = inspect.getsource(secrets.get_secret_types)
+        self.assertIn("SecretType", source)
+        self.assertIn("SecretScope", source)
+
+    def test_batch_132_migration_preserves_statistics_calculation(self):
+        """Verify migration preserves statistics calculation logic"""
+        from backend.api import secrets
+
+        source = inspect.getsource(secrets.get_secrets_stats)
+        self.assertIn("by_scope", source)
+        self.assertIn("by_type", source)
+        self.assertIn("by_chat", source)
+        self.assertIn("expired_count", source)
+
+    def test_batch_132_migration_preserves_cleanup_management(self):
+        """Verify migration preserves chat cleanup management"""
+        from backend.api import secrets
+
+        # Check get_chat_cleanup_info preserves info retrieval
+        source_info = inspect.getsource(secrets.get_chat_cleanup_info)
+        self.assertIn("cleanup_chat_secrets", source_info)
+
+        # Check delete_chat_secrets preserves deletion logic
+        source_delete = inspect.getsource(secrets.delete_chat_secrets)
+        self.assertIn("delete_chat_secrets", source_delete)
+        self.assertIn("secret_ids", source_delete)
+
+    def test_batch_132_migration_preserves_datetime_serialization(self):
+        """Verify migration preserves datetime to ISO format conversion"""
+        from backend.api import secrets
+
+        # Check create_secret preserves datetime conversion
+        source_create = inspect.getsource(secrets.create_secret)
+        self.assertIn("created_at", source_create)
+        self.assertIn("isoformat()", source_create)
+
+        # Check update_secret preserves datetime conversion
+        source_update = inspect.getsource(secrets.update_secret)
+        self.assertIn("updated_at", source_update)
+        self.assertIn("isoformat()", source_update)
+
+    def test_batch_132_migration_preserves_transfer_result_structure(self):
+        """Verify migration preserves transfer result structure"""
+        from backend.api import secrets
+
+        source = inspect.getsource(secrets.transfer_secrets)
+        self.assertIn("total_requested", source)
+        self.assertIn("transferred", source)
+
 
 if __name__ == "__main__":
     unittest.main()
