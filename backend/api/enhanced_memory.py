@@ -19,6 +19,7 @@ from src.enhanced_memory_manager_async import (
 )
 from src.markdown_reference_system import MarkdownReferenceSystem
 from src.task_execution_tracker import task_tracker
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,11 @@ class MarkdownReferenceRequest(BaseModel):
 # Use /api/system/health?detailed=true for comprehensive status
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_memory_statistics",
+    error_code_prefix="MEMORY",
+)
 @router.get("/statistics")
 async def get_memory_statistics(days_back: int = Query(30, ge=1, le=365)):
     """Get comprehensive memory and task execution statistics"""
@@ -94,6 +100,11 @@ async def get_memory_statistics(days_back: int = Query(30, ge=1, le=365)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_task_history",
+    error_code_prefix="MEMORY",
+)
 @router.get("/tasks/history")
 async def get_task_history(
     agent_type: Optional[str] = Query(None),
@@ -157,6 +168,11 @@ async def get_task_history(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_task",
+    error_code_prefix="MEMORY",
+)
 @router.post("/tasks")
 async def create_task(request: TaskCreateRequest):
     """Create a new task record"""
@@ -190,6 +206,11 @@ async def create_task(request: TaskCreateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_task",
+    error_code_prefix="MEMORY",
+)
 @router.put("/tasks/{task_id}")
 async def update_task(task_id: str, request: TaskUpdateRequest):
     """Update task status and information"""
@@ -236,6 +257,11 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_markdown_reference",
+    error_code_prefix="MEMORY",
+)
 @router.post("/tasks/{task_id}/markdown-reference")
 async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest):
     """Add markdown file reference to a task"""
@@ -266,6 +292,11 @@ async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="scan_markdown_system",
+    error_code_prefix="MEMORY",
+)
 @router.get("/markdown/scan")
 async def scan_markdown_system():
     """Initialize and scan markdown reference system"""
@@ -281,6 +312,11 @@ async def scan_markdown_system():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_markdown",
+    error_code_prefix="MEMORY",
+)
 @router.get("/markdown/search")
 async def search_markdown(
     query: str = Query(..., min_length=2),
@@ -306,6 +342,11 @@ async def search_markdown(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_document_references",
+    error_code_prefix="MEMORY",
+)
 @router.get("/markdown/{file_path:path}/references")
 async def get_document_references(file_path: str):
     """Get all references for a specific markdown document"""
@@ -323,6 +364,11 @@ async def get_document_references(file_path: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_embedding_cache_stats",
+    error_code_prefix="MEMORY",
+)
 @router.get("/embeddings/cache-stats")
 async def get_embedding_cache_stats():
     """Get embedding cache statistics"""
@@ -341,6 +387,11 @@ async def get_embedding_cache_stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cleanup_old_data",
+    error_code_prefix="MEMORY",
+)
 @router.delete("/cleanup")
 async def cleanup_old_data(days_to_keep: int = Query(90, ge=30, le=365)):
     """Clean up old task records and cached data"""
@@ -359,6 +410,11 @@ async def cleanup_old_data(days_to_keep: int = Query(90, ge=30, le=365)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_active_tasks",
+    error_code_prefix="MEMORY",
+)
 @router.get("/active-tasks")
 async def get_active_tasks():
     """Get currently active tasks"""
