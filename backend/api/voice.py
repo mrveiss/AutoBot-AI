@@ -4,11 +4,17 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import JSONResponse
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_listen_api",
+    error_code_prefix="VOICE",
+)
 @router.post("/listen")
 async def voice_listen_api(request: Request, user_role: str = Form("user")):
     """Listen and convert speech to text"""
@@ -39,6 +45,11 @@ async def voice_listen_api(request: Request, user_role: str = Form("user")):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_speak_api",
+    error_code_prefix="VOICE",
+)
 @router.post("/speak")
 async def voice_speak_api(
     request: Request, text: str = Form(...), user_role: str = Form("user")
