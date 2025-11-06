@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["batch", "optimization"])
@@ -31,6 +32,11 @@ class BatchResponse(BaseModel):
     timing: Dict[str, float]  # Map of endpoint to response time
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_batch_status",
+    error_code_prefix="BATCH",
+)
 @router.get("/status")
 async def get_batch_status():
     """Get batch processing service status"""
@@ -44,6 +50,11 @@ async def get_batch_status():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_load",
+    error_code_prefix="BATCH",
+)
 @router.post("/load")
 async def batch_load(batch_request: BatchRequest):
     """
@@ -107,6 +118,11 @@ async def batch_load(batch_request: BatchRequest):
     return BatchResponse(responses=responses, errors=errors, timing=timing)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_chat_initialization",
+    error_code_prefix="BATCH",
+)
 @router.get("/chat-init")
 @router.post("/chat-init")
 async def batch_chat_initialization():

@@ -22932,5 +22932,146 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("asyncio.TimeoutError", source_exec)
 
 
+
+    # ==============================================
+    # BATCH 125: batch.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_125_get_batch_status_simple_pattern(self):
+        """Verify get_batch_status endpoint uses Simple Pattern"""
+        from backend.api import batch
+
+        source = inspect.getsource(batch.get_batch_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_batch_status"', source)
+        self.assertIn('error_code_prefix="BATCH"', source)
+
+    def test_batch_125_batch_load_simple_pattern(self):
+        """Verify batch_load endpoint uses Simple Pattern"""
+        from backend.api import batch
+
+        source = inspect.getsource(batch.batch_load)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="batch_load"', source)
+        self.assertIn('error_code_prefix="BATCH"', source)
+
+    def test_batch_125_batch_chat_initialization_simple_pattern(self):
+        """Verify batch_chat_initialization endpoint uses Simple Pattern"""
+        from backend.api import batch
+
+        source = inspect.getsource(batch.batch_chat_initialization)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="batch_chat_initialization"', source)
+        self.assertIn('error_code_prefix="BATCH"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_125_all_batch_endpoints_have_decorator(self):
+        """Verify all batch endpoints have @with_error_handling decorator"""
+        from backend.api import batch
+
+        endpoint_functions = [
+            batch.get_batch_status,
+            batch.batch_load,
+            batch.batch_chat_initialization,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_125_batch_100_percent_milestone(self):
+        """Verify batch.py has reached 100% migration"""
+        from backend.api import batch
+
+        endpoint_functions = [
+            batch.get_batch_status,
+            batch.batch_load,
+            batch.batch_chat_initialization,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 3
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_125_migration_preserves_batch_status_capabilities(self):
+        """Verify migration preserves batch status capabilities"""
+        from backend.api import batch
+
+        source = inspect.getsource(batch.get_batch_status)
+
+        # Check status response structure preserved
+        self.assertIn('"status"', source)
+        self.assertIn('"service"', source)
+        self.assertIn('"capabilities"', source)
+        self.assertIn('"max_batch_size"', source)
+
+    def test_batch_125_migration_preserves_batch_load_logic(self):
+        """Verify migration preserves batch load execution logic"""
+        from backend.api import batch
+
+        source = inspect.getsource(batch.batch_load)
+
+        # Check batch execution operations preserved
+        self.assertIn("execute_request", source)
+        self.assertIn("asyncio.gather", source)
+        self.assertIn("BatchResponse", source)
+        self.assertIn("responses", source)
+        self.assertIn("errors", source)
+        self.assertIn("timing", source)
+
+    def test_batch_125_migration_preserves_chat_init_parallel_gathering(self):
+        """Verify migration preserves parallel data gathering in chat initialization"""
+        from backend.api import batch
+
+        source = inspect.getsource(batch.batch_chat_initialization)
+
+        # Check parallel gathering preserved
+        self.assertIn("asyncio.gather", source)
+        self.assertIn("get_chat_sessions", source)
+        self.assertIn("get_system_health", source)
+        self.assertIn("get_service_health", source)
+        self.assertIn("get_settings", source)
+        self.assertIn("return_exceptions=True", source)
+
+    def test_batch_125_migration_preserves_nested_exception_handling(self):
+        """Verify migration preserves nested exception handling in batch_load"""
+        from backend.api import batch
+
+        source = inspect.getsource(batch.batch_load)
+
+        # Check nested try/except in execute_request preserved
+        self.assertIn("try:", source)
+        self.assertIn("except Exception as e:", source)
+        self.assertIn("errors[endpoint]", source)
+
+    def test_batch_125_migration_preserves_multiple_route_decorators(self):
+        """Verify migration preserves both GET and POST decorators for chat-init"""
+        from backend.api import batch
+
+        source = inspect.getsource(batch.batch_chat_initialization)
+
+        # Check both route decorators preserved
+        self.assertIn('@router.get("/chat-init")', source)
+        self.assertIn('@router.post("/chat-init")', source)
+
+
 if __name__ == "__main__":
     unittest.main()
