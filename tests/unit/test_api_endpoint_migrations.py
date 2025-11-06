@@ -21537,5 +21537,111 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("AI_STACK_VM_IP", source)
         self.assertIn("BROWSER_VM_IP", source)
 
+    # ==============================================
+    # BATCH 116: knowledge_test.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_116_get_fresh_kb_stats_mixed_pattern(self):
+        """Verify get_fresh_kb_stats endpoint uses Mixed Pattern"""
+        from backend.api import knowledge_test
+
+        source = inspect.getsource(knowledge_test.get_fresh_kb_stats)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_fresh_kb_stats"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_TEST"', source)
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+
+    def test_batch_116_test_rebuild_search_index_mixed_pattern(self):
+        """Verify test_rebuild_search_index endpoint uses Mixed Pattern"""
+        from backend.api import knowledge_test
+
+        source = inspect.getsource(knowledge_test.test_rebuild_search_index)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="test_rebuild_search_index"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_TEST"', source)
+        self.assertIn("try:", source)
+        self.assertIn("except Exception", source)
+
+    def test_batch_116_all_knowledge_test_endpoints_have_decorator(self):
+        """Verify all knowledge_test endpoints have @with_error_handling decorator"""
+        from backend.api import knowledge_test
+
+        endpoint_functions = [
+            knowledge_test.get_fresh_kb_stats,
+            knowledge_test.test_rebuild_search_index,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_116_knowledge_test_100_percent_milestone(self):
+        """Verify knowledge_test.py has reached 100% migration"""
+        from backend.api import knowledge_test
+
+        endpoint_functions = [
+            knowledge_test.get_fresh_kb_stats,
+            knowledge_test.test_rebuild_search_index,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 2
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_116_migration_preserves_kb_operations(self):
+        """Verify migration preserves knowledge base operations"""
+        from backend.api import knowledge_test
+
+        # Check fresh instance creation
+        source_stats = inspect.getsource(knowledge_test.get_fresh_kb_stats)
+        self.assertIn("KnowledgeBase()", source_stats)
+        self.assertIn("get_stats", source_stats)
+
+        # Check index rebuild
+        source_rebuild = inspect.getsource(knowledge_test.test_rebuild_search_index)
+        self.assertIn("KnowledgeBase()", source_rebuild)
+        self.assertIn("rebuild_search_index", source_rebuild)
+
+    def test_batch_116_migration_preserves_error_response_format(self):
+        """Verify migration preserves error response dict format"""
+        from backend.api import knowledge_test
+
+        # Check both endpoints return error dicts with success flag
+        source_stats = inspect.getsource(knowledge_test.get_fresh_kb_stats)
+        self.assertIn('"success"', source_stats)
+        self.assertIn('"error"', source_stats)
+
+        source_rebuild = inspect.getsource(knowledge_test.test_rebuild_search_index)
+        self.assertIn('"success"', source_rebuild)
+        self.assertIn('"error"', source_rebuild)
+
+    def test_batch_116_migration_preserves_fresh_instance_creation(self):
+        """Verify migration preserves fresh instance creation pattern"""
+        from backend.api import knowledge_test
+
+        # Both endpoints should create fresh KB instances (bypass cache)
+        for func in [knowledge_test.get_fresh_kb_stats, knowledge_test.test_rebuild_search_index]:
+            source = inspect.getsource(func)
+            self.assertIn("KnowledgeBase()", source)
+            self.assertIn("asyncio.sleep", source)  # Wait for initialization
+
 if __name__ == "__main__":
     unittest.main()
