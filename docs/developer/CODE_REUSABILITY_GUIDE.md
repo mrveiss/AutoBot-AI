@@ -779,17 +779,304 @@ The codebase is actually well-architected. Most "duplicate" code is contextual v
 - Don't force architectural changes for marginal savings
 - Current codebase structure is appropriate for the problem domain
 
-### **Phase 3** (Planned 📅):
-- 📋 Migrate remaining 35+ components (see GitHub issue #10894)
-- 📋 Create FormInput reusable component
-- 📋 Create Card/Panel variants
-- 📋 Create Notification toast component
+**📊 Batch 14 Utility Consolidation** (January 2025):
+Final sweep for duplicate utility functions - concrete savings found:
+
+**DeploymentProgressModal Format Functions**: ✅ **Migrated**
+- **Found**: 2 duplicate format functions (formatTimestamp, formatLogTime) - 20 lines
+- **Action**: Replaced with shared formatHelpers utilities (formatDateTime, formatTime)
+- **After**: 2-line wrappers using shared utilities + 1 import
+- **Lines Saved**: ~18 lines
+- **Location**: `autobot-vue/src/components/infrastructure/DeploymentProgressModal.vue`
+
+**Other Duration Formatting**: ⚠️ **Not Duplicate**
+- **AsyncComponentWrapper.vue**: `formatLoadingTime()` - unique to loading metrics (ms/s display)
+- **RumDashboard.vue**: `formatUptime()` - unique to uptime display (h/m/s display)
+- **Conclusion**: These are contextual variations, not true duplicates
+- Per batch 13 principles: Don't create utilities for single-use patterns
+
+**Batch 14 Summary**:
+- ✅ 18 lines saved (DeploymentProgressModal migration)
+- ✅ formatHelpers.ts continues to prevent future duplication
+- ✅ Validated batch 13 principle: Only consolidate truly duplicate patterns
+
+**Migration Status Update**:
+- EmptyState migrations: ~579 lines (38.6% of realistic target)
+- Utility consolidation: ~18 lines (batch 14)
+- **Total Progress**: ~597 lines / ~1,500-2,000 realistic target (30-40%)
+
+**📊 Final Assessment: Underutilized Reusable Components** (January 2025):
+
+During batch 14 final sweep, discovered several well-designed reusable components that exist but are **significantly underutilized**:
+
+**1. TouchFriendlyButton.vue** (`autobot-vue/src/components/ui/`)
+- **Current Usage**: 0 components (no imports found)
+- **Features**: Size variants (xs-xl), style variants (primary/secondary/outline/ghost/danger), loading states, touch feedback, haptic feedback, accessibility (dark mode, high contrast, reduced motion)
+- **Recommendation**: ⚠️ **High-value adoption opportunity** - Could replace dozens of inline button patterns
+- **Estimated Potential**: ~100-200 lines if widely adopted across forms and modals
+
+**2. StatusBadge.vue** (`autobot-vue/src/components/ui/`)
+- **Current Usage**: 2 components (VectorizationProgressModal, TreeNodeComponent)
+- **Features**: Variant styles (success/danger/warning/info/primary/secondary), sizes (small/medium/large), icon support, dark mode
+- **Recommendation**: ✅ **Medium adoption opportunity** - Many components use inline badge patterns
+- **Estimated Potential**: ~50-100 lines if adopted across status indicators
+
+**3. useToast Composable** (`autobot-vue/src/composables/useToast.js`)
+- **Current Usage**: 2 components (KnowledgePersistenceDialog + examples)
+- **Features**: Global toast state, type variants (info/success/warning/error), auto-dismiss, toast management
+- **Recommendation**: ✅ **Good pattern but needs Toast UI component** - Many components implement inline alert/notification patterns
+- **Estimated Potential**: ~50-150 lines if adopted for user feedback patterns
+
+**Analysis**:
+These components represent **prior investment in reusability infrastructure** that hasn't been fully leveraged. The challenge isn't creating new patterns - it's **adopting existing ones**.
+
+**Why Low Adoption?**:
+1. **Lack of awareness**: Developers may not know these components exist
+2. **Migration friction**: Easier to copy existing inline patterns than refactor to use shared components
+3. **Time constraints**: Quick inline solutions prioritized over proper architecture
+4. **Missing documentation**: Components need usage examples and migration guides
+
+**Recommended Path Forward**:
+1. ✅ **Document existing components** in this guide with clear usage examples
+2. ✅ **Create migration guides** showing before/after conversions
+3. ⚠️ **Establish component adoption policy** - require use of shared components in new code
+4. 📋 **Gradual migration** - target high-value files first (forms, modals, status displays)
+
+**Revised Opportunity Assessment**:
+- Direct code savings from existing patterns: ~200-400 lines (batch 14 baseline)
+- **Additional savings from adopting existing components: ~200-450 lines**
+- **Combined potential: ~400-850 lines** (aggressive adoption scenario)
+
+### **Phase 3** (Recommended 📅):
+
+**Priority 1: Leverage Existing Components** (High ROI)
+- 📋 Adopt TouchFriendlyButton.vue in forms and modals (~100-200 lines)
+- 📋 Adopt StatusBadge.vue for status indicators (~50-100 lines)
+- 📋 Create Toast UI component to pair with useToast composable
+- 📋 Document component usage patterns and migration examples
+
+**Priority 2: New Presentational Components** (Medium ROI)
+- 📋 Create FormInput reusable component (if truly generic pattern found)
+- 📋 Create Card/Panel variants (evaluate against batch 13 contextual variation principle)
+
+**Priority 3: Enforcement & Culture**
+- 📋 Add pre-commit checks for inline patterns that should use shared components
+- 📋 Update component contribution guidelines
+- 📋 Create "component showcase" documentation
 
 ---
 
 ## 📚 Migration Examples
 
-### Example 1: Migrating to EmptyState Component
+### Example 1: Using TouchFriendlyButton Component
+
+**Location**: `autobot-vue/src/components/ui/TouchFriendlyButton.vue`
+
+**Before** (Inline button with custom styling):
+```vue
+<template>
+  <button
+    @click="handleSubmit"
+    :disabled="isSubmitting"
+    class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+  >
+    {{ isSubmitting ? 'Saving...' : 'Save Changes' }}
+  </button>
+</template>
+```
+
+**After** (Using TouchFriendlyButton):
+```vue
+<script setup>
+import TouchFriendlyButton from '@/components/ui/TouchFriendlyButton.vue'
+</script>
+
+<template>
+  <TouchFriendlyButton
+    variant="primary"
+    size="md"
+    :loading="isSubmitting"
+    @click="handleSubmit"
+  >
+    Save Changes
+  </TouchFriendlyButton>
+</template>
+```
+
+**Benefits**:
+- ✅ Touch feedback with ripple effect
+- ✅ Haptic feedback on mobile
+- ✅ Loading state with spinner
+- ✅ Accessibility (dark mode, reduced motion)
+- ✅ Consistent sizing (minimum 44px touch target)
+
+**All Variants**:
+```vue
+<!-- Size variants -->
+<TouchFriendlyButton size="xs">Extra Small</TouchFriendlyButton>
+<TouchFriendlyButton size="sm">Small</TouchFriendlyButton>
+<TouchFriendlyButton size="md">Medium</TouchFriendlyButton>
+<TouchFriendlyButton size="lg">Large</TouchFriendlyButton>
+<TouchFriendlyButton size="xl">Extra Large</TouchFriendlyButton>
+
+<!-- Style variants -->
+<TouchFriendlyButton variant="primary">Primary</TouchFriendlyButton>
+<TouchFriendlyButton variant="secondary">Secondary</TouchFriendlyButton>
+<TouchFriendlyButton variant="outline">Outline</TouchFriendlyButton>
+<TouchFriendlyButton variant="ghost">Ghost</TouchFriendlyButton>
+<TouchFriendlyButton variant="danger">Danger</TouchFriendlyButton>
+
+<!-- With icon and loading -->
+<TouchFriendlyButton :loading="true">
+  <template #icon>
+    <i class="fas fa-save"></i>
+  </template>
+  Save
+</TouchFriendlyButton>
+```
+
+---
+
+### Example 2: Using StatusBadge Component
+
+**Location**: `autobot-vue/src/components/ui/StatusBadge.vue`
+
+**Before** (Inline badge):
+```vue
+<template>
+  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+    <i class="fas fa-check-circle mr-1"></i>
+    Active
+  </span>
+</template>
+```
+
+**After** (Using StatusBadge):
+```vue
+<script setup>
+import StatusBadge from '@/components/ui/StatusBadge.vue'
+</script>
+
+<template>
+  <StatusBadge variant="success" icon="fas fa-check-circle">
+    Active
+  </StatusBadge>
+</template>
+```
+
+**Benefits**:
+- ✅ Consistent status colors across application
+- ✅ Dark mode support
+- ✅ Size variants (small/medium/large)
+- ✅ Optional icon integration
+
+**All Variants**:
+```vue
+<!-- Variant styles -->
+<StatusBadge variant="success">Success</StatusBadge>
+<StatusBadge variant="danger">Danger</StatusBadge>
+<StatusBadge variant="warning">Warning</StatusBadge>
+<StatusBadge variant="info">Info</StatusBadge>
+<StatusBadge variant="primary">Primary</StatusBadge>
+<StatusBadge variant="secondary">Secondary</StatusBadge>
+
+<!-- Sizes -->
+<StatusBadge size="small" variant="success">Small</StatusBadge>
+<StatusBadge size="medium" variant="success">Medium</StatusBadge>
+<StatusBadge size="large" variant="success">Large</StatusBadge>
+
+<!-- With icons -->
+<StatusBadge variant="success" icon="fas fa-check-circle">Active</StatusBadge>
+<StatusBadge variant="danger" icon="fas fa-times-circle">Failed</StatusBadge>
+<StatusBadge variant="warning" icon="fas fa-exclamation-triangle">Pending</StatusBadge>
+```
+
+---
+
+### Example 3: Using useToast Composable
+
+**Location**: `autobot-vue/src/composables/useToast.js`
+
+**Before** (Inline alert/notification):
+```vue
+<template>
+  <div v-if="showSuccess" class="fixed top-4 right-4 bg-green-50 border border-green-200 rounded-lg p-4">
+    <p class="text-green-800">File uploaded successfully!</p>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const showSuccess = ref(false)
+
+const handleUpload = async () => {
+  try {
+    await uploadFile()
+    showSuccess.value = true
+    setTimeout(() => { showSuccess.value = false }, 3000)
+  } catch (error) {
+    // Handle error
+  }
+}
+</script>
+```
+
+**After** (Using useToast):
+```vue
+<script setup>
+import { useToast } from '@/composables/useToast'
+
+const { showToast } = useToast()
+
+const handleUpload = async () => {
+  try {
+    await uploadFile()
+    showToast('File uploaded successfully!', 'success')
+  } catch (error) {
+    showToast('Upload failed. Please try again.', 'error')
+  }
+}
+</script>
+```
+
+**Benefits**:
+- ✅ Global toast management (no local state)
+- ✅ Auto-dismiss after duration
+- ✅ Type variants (info/success/warning/error)
+- ✅ Stack multiple toasts
+- ✅ Programmatic control
+
+**All Usage Patterns**:
+```javascript
+import { useToast } from '@/composables/useToast'
+
+const { showToast, removeToast, clearAllToasts, toasts } = useToast()
+
+// Show toast with auto-dismiss (3 seconds default)
+showToast('Operation successful!', 'success')
+
+// Show toast with custom duration
+showToast('Processing...', 'info', 5000)
+
+// Show toast that persists (no auto-dismiss)
+const toastId = showToast('Critical error', 'error', 0)
+
+// Manually dismiss specific toast
+removeToast(toastId)
+
+// Clear all toasts
+clearAllToasts()
+
+// Access all active toasts (reactive)
+console.log(toasts.value)
+```
+
+**Note**: Requires Toast UI component in App.vue or layout to display toasts. See `KnowledgePersistenceDialog.vue` for implementation example.
+
+---
+
+### Example 4: Migrating to EmptyState Component
 
 **Component**: `DocumentChangeFeed.vue`
 **Before** (14 lines with custom CSS):

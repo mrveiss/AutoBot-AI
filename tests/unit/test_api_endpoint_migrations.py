@@ -22566,5 +22566,187 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("clear_all_redis", source)
 
 
+
+    # ==============================================
+    # BATCH 123: sandbox.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_123_execute_command_simple_pattern(self):
+        """Verify execute_command endpoint uses Simple Pattern"""
+        from backend.api import sandbox
+
+        source = inspect.getsource(sandbox.execute_command)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="execute_command"', source)
+        self.assertIn('error_code_prefix="SANDBOX"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_123_execute_script_simple_pattern(self):
+        """Verify execute_script endpoint uses Simple Pattern"""
+        from backend.api import sandbox
+
+        source = inspect.getsource(sandbox.execute_script)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="execute_script"', source)
+        self.assertIn('error_code_prefix="SANDBOX"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_123_execute_batch_simple_pattern(self):
+        """Verify execute_batch endpoint uses Simple Pattern"""
+        from backend.api import sandbox
+
+        source = inspect.getsource(sandbox.execute_batch)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="execute_batch"', source)
+        self.assertIn('error_code_prefix="SANDBOX"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_123_get_sandbox_stats_mixed_pattern(self):
+        """Verify get_sandbox_stats endpoint uses Mixed Pattern"""
+        from backend.api import sandbox
+
+        source = inspect.getsource(sandbox.get_sandbox_stats)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_sandbox_stats"', source)
+        self.assertIn('error_code_prefix="SANDBOX"', source)
+        self.assertIn("HTTPException", source)
+
+    def test_batch_123_get_security_levels_simple_pattern(self):
+        """Verify get_security_levels endpoint uses Simple Pattern"""
+        from backend.api import sandbox
+
+        source = inspect.getsource(sandbox.get_security_levels)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_security_levels"', source)
+        self.assertIn('error_code_prefix="SANDBOX"', source)
+
+    def test_batch_123_get_sandbox_examples_simple_pattern(self):
+        """Verify get_sandbox_examples endpoint uses Simple Pattern"""
+        from backend.api import sandbox
+
+        source = inspect.getsource(sandbox.get_sandbox_examples)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_sandbox_examples"', source)
+        self.assertIn('error_code_prefix="SANDBOX"', source)
+
+    def test_batch_123_all_sandbox_endpoints_have_decorator(self):
+        """Verify all sandbox endpoints have @with_error_handling decorator"""
+        from backend.api import sandbox
+
+        endpoint_functions = [
+            sandbox.execute_command,
+            sandbox.execute_script,
+            sandbox.execute_batch,
+            sandbox.get_sandbox_stats,
+            sandbox.get_security_levels,
+            sandbox.get_sandbox_examples,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_123_sandbox_100_percent_milestone(self):
+        """Verify sandbox.py has reached 100% migration"""
+        from backend.api import sandbox
+
+        endpoint_functions = [
+            sandbox.execute_command,
+            sandbox.execute_script,
+            sandbox.execute_batch,
+            sandbox.get_sandbox_stats,
+            sandbox.get_security_levels,
+            sandbox.get_sandbox_examples,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 6
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_123_migration_preserves_security_validation(self):
+        """Verify migration preserves security level validation"""
+        from backend.api import sandbox
+
+        # Check execute_command has security validation
+        source_cmd = inspect.getsource(sandbox.execute_command)
+        self.assertIn("SandboxSecurityLevel", source_cmd)
+        self.assertIn("security_level = SandboxSecurityLevel", source_cmd)
+
+        # Check execute_script has security validation
+        source_script = inspect.getsource(sandbox.execute_script)
+        self.assertIn("SandboxSecurityLevel", source_script)
+        self.assertIn("security_level = SandboxSecurityLevel", source_script)
+
+        # Check execute_batch has security validation
+        source_batch = inspect.getsource(sandbox.execute_batch)
+        self.assertIn("SandboxSecurityLevel", source_batch)
+
+    def test_batch_123_migration_preserves_sandbox_operations(self):
+        """Verify migration preserves sandbox execution operations"""
+        from backend.api import sandbox
+
+        # Check execute_command operations
+        source_cmd = inspect.getsource(sandbox.execute_command)
+        self.assertIn("get_secure_sandbox()", source_cmd)
+        self.assertIn("sandbox.execute_command", source_cmd)
+        self.assertIn("SandboxConfig", source_cmd)
+
+        # Check execute_script operations
+        source_script = inspect.getsource(sandbox.execute_script)
+        self.assertIn("get_secure_sandbox()", source_script)
+        self.assertIn("sandbox.execute_script", source_script)
+
+        # Check execute_batch operations
+        source_batch = inspect.getsource(sandbox.execute_batch)
+        self.assertIn("get_secure_sandbox()", source_batch)
+        self.assertIn("sandbox.execute_script", source_batch)
+
+    def test_batch_123_migration_preserves_stats_error_dict(self):
+        """Verify migration preserves error dict in get_sandbox_stats"""
+        from backend.api import sandbox
+
+        source = inspect.getsource(sandbox.get_sandbox_stats)
+
+        # Check Mixed Pattern preserved - returns error dict when unavailable
+        self.assertIn("if sandbox is None:", source)
+        self.assertIn('"status": "unavailable"', source)
+        self.assertIn('"error": "Secure sandbox unavailable"', source)
+        self.assertIn("sandbox.get_sandbox_stats()", source)
+
+    def test_batch_123_migration_preserves_batch_script_creation(self):
+        """Verify migration preserves batch script creation logic"""
+        from backend.api import sandbox
+
+        source = inspect.getsource(sandbox.execute_batch)
+
+        # Check batch script generation preserved
+        self.assertIn("script_lines", source)
+        self.assertIn("#!/bin/bash", source)
+        self.assertIn("set -e", source)
+        self.assertIn("stop_on_error", source)
+        self.assertIn('execution_mode=SandboxExecutionMode.BATCH', source)
+
+
 if __name__ == "__main__":
     unittest.main()

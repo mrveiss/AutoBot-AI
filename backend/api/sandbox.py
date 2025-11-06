@@ -19,6 +19,7 @@ from src.secure_sandbox_executor import (
     execute_in_sandbox,
     get_secure_sandbox,
 )
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -50,6 +51,11 @@ class SandboxBatchRequest(BaseModel):
     enable_network: bool = False
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_command",
+    error_code_prefix="SANDBOX",
+)
 @router.post("/execute")
 async def execute_command(request: SandboxExecuteRequest):
     """
@@ -115,6 +121,11 @@ async def execute_command(request: SandboxExecuteRequest):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_script",
+    error_code_prefix="SANDBOX",
+)
 @router.post("/execute/script")
 async def execute_script(request: SandboxScriptRequest):
     """
@@ -180,6 +191,11 @@ async def execute_script(request: SandboxScriptRequest):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_batch",
+    error_code_prefix="SANDBOX",
+)
 @router.post("/execute/batch")
 async def execute_batch(request: SandboxBatchRequest):
     """
@@ -255,6 +271,11 @@ async def execute_batch(request: SandboxBatchRequest):
         raise HTTPException(status_code=500, detail=f"Batch execution failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_sandbox_stats",
+    error_code_prefix="SANDBOX",
+)
 @router.get("/stats")
 async def get_sandbox_stats():
     """
@@ -318,6 +339,11 @@ async def get_sandbox_stats():
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_security_levels",
+    error_code_prefix="SANDBOX",
+)
 @router.get("/security-levels")
 async def get_security_levels():
     """
@@ -378,6 +404,11 @@ async def get_security_levels():
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_sandbox_examples",
+    error_code_prefix="SANDBOX",
+)
 @router.get("/examples")
 async def get_sandbox_examples():
     """
