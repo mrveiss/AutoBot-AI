@@ -26339,6 +26339,155 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("advanced_cache.get_stats()", source)
         self.assertIn("cache system health", source)
 
+    # ==============================================
+    # BATCH 144: base_terminal.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_144_get_terminal_system_status_simple_pattern(self):
+        """Verify get_terminal_system_status endpoint uses Simple Pattern"""
+        from backend.api import base_terminal
+
+        source = inspect.getsource(base_terminal.get_terminal_system_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_terminal_system_status"', source)
+        self.assertIn('error_code_prefix="BASE_TERMINAL"', source)
+
+    def test_batch_144_terminal_health_check_simple_pattern(self):
+        """Verify terminal_health_check endpoint uses Simple Pattern"""
+        from backend.api import base_terminal
+
+        source = inspect.getsource(base_terminal.terminal_health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="terminal_health_check"', source)
+        self.assertIn('error_code_prefix="BASE_TERMINAL"', source)
+
+    def test_batch_144_get_terminal_capabilities_simple_pattern(self):
+        """Verify get_terminal_capabilities endpoint uses Simple Pattern"""
+        from backend.api import base_terminal
+
+        source = inspect.getsource(base_terminal.get_terminal_capabilities)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_terminal_capabilities"', source)
+        self.assertIn('error_code_prefix="BASE_TERMINAL"', source)
+
+    def test_batch_144_get_security_policies_simple_pattern(self):
+        """Verify get_security_policies endpoint uses Simple Pattern"""
+        from backend.api import base_terminal
+
+        source = inspect.getsource(base_terminal.get_security_policies)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_security_policies"', source)
+        self.assertIn('error_code_prefix="BASE_TERMINAL"', source)
+
+    def test_batch_144_get_terminal_features_simple_pattern(self):
+        """Verify get_terminal_features endpoint uses Simple Pattern"""
+        from backend.api import base_terminal
+
+        source = inspect.getsource(base_terminal.get_terminal_features)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_terminal_features"', source)
+        self.assertIn('error_code_prefix="BASE_TERMINAL"', source)
+
+    def test_batch_144_all_base_terminal_endpoints_have_decorator(self):
+        """Verify all base_terminal endpoints have @with_error_handling decorator"""
+        from backend.api import base_terminal
+
+        endpoint_functions = [
+            base_terminal.get_terminal_system_status,
+            base_terminal.terminal_health_check,
+            base_terminal.get_terminal_capabilities,
+            base_terminal.get_security_policies,
+            base_terminal.get_terminal_features,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_144_base_terminal_100_percent_milestone(self):
+        """Verify base_terminal.py has reached 100% migration"""
+        from backend.api import base_terminal
+
+        endpoint_functions = [
+            base_terminal.get_terminal_system_status,
+            base_terminal.terminal_health_check,
+            base_terminal.get_terminal_capabilities,
+            base_terminal.get_security_policies,
+            base_terminal.get_terminal_features,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 5
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_144_migration_preserves_terminal_types(self):
+        """Verify migration preserves terminal type enumeration"""
+        from backend.api import base_terminal
+
+        source = inspect.getsource(base_terminal.get_terminal_system_status)
+        self.assertIn("terminal_types", source)
+        self.assertIn("standard_terminal", source)
+        self.assertIn("agent_terminal", source)
+        self.assertIn("remote_terminal", source)
+
+    def test_batch_144_migration_preserves_health_components(self):
+        """Verify migration preserves terminal health component structure"""
+        from backend.api import base_terminal
+
+        source = inspect.getsource(base_terminal.terminal_health_check)
+        self.assertIn("components", source)
+        self.assertIn("base_terminal", source)
+        self.assertIn("websocket_manager", source)
+        self.assertIn("pty_system", source)
+
+    def test_batch_144_migration_preserves_capabilities(self):
+        """Verify migration preserves terminal capability flags"""
+        from backend.api import base_terminal
+
+        source = inspect.getsource(base_terminal.get_terminal_capabilities)
+        self.assertIn("pty_management", source)
+        self.assertIn("websocket_streaming", source)
+        self.assertIn("security_validation", source)
+        self.assertIn("race_condition_handling", source)
+
+    def test_batch_144_migration_preserves_security_policies(self):
+        """Verify migration preserves security policy structure"""
+        from backend.api import base_terminal
+
+        source = inspect.getsource(base_terminal.get_security_policies)
+        self.assertIn("command_validation", source)
+        self.assertIn("risk_assessment", source)
+        self.assertIn("SecureCommandExecutor", source)
+
+    def test_batch_144_migration_preserves_features_documentation(self):
+        """Verify migration preserves terminal feature documentation"""
+        from backend.api import base_terminal
+
+        source = inspect.getsource(base_terminal.get_terminal_features)
+        self.assertIn("BaseTerminalWebSocket", source)
+        self.assertIn("implementations", source)
+        self.assertIn("pty_shell", source)
+
 
 if __name__ == "__main__":
     unittest.main()
