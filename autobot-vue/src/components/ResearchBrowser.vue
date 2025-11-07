@@ -31,17 +31,14 @@
     </div>
 
     <!-- Interaction Required Alert -->
-    <div v-if="interactionRequired" class="interaction-alert bg-yellow-50 border-l-4 border-yellow-400 p-4">
-      <div class="flex items-center">
-        <div class="flex-shrink-0">
-          <i class="fas fa-exclamation-triangle text-yellow-400"></i>
-        </div>
-        <div class="ml-3 flex-1">
-          <p class="text-sm text-yellow-800">
-            {{ interactionMessage || 'User interaction required to continue' }}
-          </p>
-        </div>
-        <div class="ml-4 flex space-x-2">
+    <BaseAlert
+      v-if="interactionRequired"
+      variant="warning"
+      :message="interactionMessage || 'User interaction required to continue'"
+      bordered
+    >
+      <template #actions>
+        <div class="flex space-x-2">
           <BaseButton variant="primary" size="sm" @click="handleWaitForUser" :loading="isWaitingForUser" aria-label="Wait for user">
             <i class="fas fa-clock mr-1"></i>
             {{ isWaitingForUser ? 'Waiting...' : 'Wait' }}
@@ -51,8 +48,8 @@
             Open Browser
           </BaseButton>
         </div>
-      </div>
-    </div>
+      </template>
+    </BaseAlert>
 
     <!-- Research Results -->
     <div v-if="researchResults && researchResults.length > 0" class="research-results p-4">
@@ -263,6 +260,7 @@ import apiClient from '@/utils/ApiClient'
 import PopoutChromiumBrowser from './PopoutChromiumBrowser.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import BaseAlert from '@/components/ui/BaseAlert.vue'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 
 export default {
@@ -270,7 +268,8 @@ export default {
   components: {
     PopoutChromiumBrowser,
     StatusBadge,
-    BaseButton
+    BaseButton,
+    BaseAlert
   },
   props: {
     sessionId: {
