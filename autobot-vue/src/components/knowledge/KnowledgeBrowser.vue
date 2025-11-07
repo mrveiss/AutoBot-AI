@@ -17,22 +17,19 @@
           <p>{{ mainCat.description }}</p>
           <div class="category-stats">
             <span class="fact-count">{{ mainCat.count }} facts</span>
-            <button
+            <BaseButton
               v-if="mainCat.id !== 'user-knowledge'"
-              class="populate-btn"
-              :class="{ 'is-populating': populationStates[mainCat.id]?.isPopulating }"
+              variant="primary"
+              size="sm"
+              :loading="populationStates[mainCat.id]?.isPopulating"
               :disabled="populationStates[mainCat.id]?.isPopulating"
               @click.stop="handlePopulate(mainCat.id)"
+              class="populate-btn"
             >
-              <i
-                :class="{
-                  'fas fa-sync': !populationStates[mainCat.id]?.isPopulating,
-                  'fas fa-spinner fa-spin': populationStates[mainCat.id]?.isPopulating
-                }"
-              ></i>
+              <i v-if="!populationStates[mainCat.id]?.isPopulating" class="fas fa-sync"></i>
               <span v-if="!populationStates[mainCat.id]?.isPopulating">Populate</span>
               <span v-else>{{ populationStates[mainCat.id]?.progress || 0 }}%</span>
-            </button>
+            </BaseButton>
           </div>
         </div>
       </div>
@@ -42,16 +39,18 @@
     <div class="browser-header">
       <!-- Category Filter Tabs -->
       <div class="category-tabs">
-        <button
+        <BaseButton
           v-for="cat in availableCategories"
           :key="cat.value ?? 'all'"
-          :class="['category-tab', { active: selectedCategory === cat.value }]"
+          :variant="selectedCategory === cat.value ? 'primary' : 'outline'"
+          size="sm"
           @click="selectCategory(cat.value)"
+          class="category-tab"
         >
           <i :class="cat.icon"></i>
           {{ cat.label }}
           <span v-if="cat.count > 0" class="category-count">{{ cat.count }}</span>
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Search bar -->
@@ -64,9 +63,16 @@
           class="search-input"
           @input="handleSearch"
         />
-        <button v-if="searchQuery" @click="clearSearch" class="clear-btn">
+        <BaseButton
+          v-if="searchQuery"
+          variant="ghost"
+          size="xs"
+          @click="clearSearch"
+          class="clear-btn"
+          aria-label="Clear search"
+        >
           <i class="fas fa-times"></i>
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -79,18 +85,24 @@
             <span>{{ selectionCount }} document{{ selectionCount > 1 ? 's' : '' }} selected</span>
           </div>
           <div class="toolbar-actions">
-            <button
+            <BaseButton
+              variant="primary"
               @click="vectorizeSelected"
               :disabled="!canVectorizeSelection || isVectorizing"
+              :loading="isVectorizing"
               class="toolbar-btn vectorize"
             >
-              <i class="fas fa-cubes" :class="{ 'fa-spin': isVectorizing }"></i>
+              <i v-if="!isVectorizing" class="fas fa-cubes"></i>
               Vectorize Selected
-            </button>
-            <button @click="deselectAll" class="toolbar-btn cancel">
+            </BaseButton>
+            <BaseButton
+              variant="secondary"
+              @click="deselectAll"
+              class="toolbar-btn cancel"
+            >
               <i class="fas fa-times"></i>
               Clear Selection
-            </button>
+            </BaseButton>
           </div>
         </div>
       </div>
@@ -107,9 +119,15 @@
 
     <!-- Breadcrumb navigation -->
     <div v-if="selectedFile" class="breadcrumb">
-      <button @click="clearSelection" class="breadcrumb-item">
+      <BaseButton
+        variant="ghost"
+        size="sm"
+        @click="clearSelection"
+        class="breadcrumb-item"
+        aria-label="Back to root"
+      >
         <i class="fas fa-home"></i> Root
-      </button>
+      </BaseButton>
       <i class="fas fa-chevron-right breadcrumb-sep"></i>
       <span v-for="(part, idx) in breadcrumbParts" :key="idx" class="breadcrumb-item active">
         {{ part }}
@@ -129,9 +147,13 @@
         <div v-else-if="error" class="error-state">
           <i class="fas fa-exclamation-triangle"></i>
           <p>{{ error }}</p>
-          <button @click="loadKnowledgeTree" class="retry-btn">
+          <BaseButton
+            variant="primary"
+            @click="loadKnowledgeTree"
+            class="retry-btn"
+          >
             <i class="fas fa-redo"></i> Retry
-          </button>
+          </BaseButton>
         </div>
 
         <div v-else class="tree-container">
@@ -157,10 +179,14 @@
 
           <!-- Load More button for cursor-based pagination -->
           <div v-if="hasMoreEntries && !isLoadingMore" class="load-more-container">
-            <button @click="loadMoreEntries" class="load-more-btn">
+            <BaseButton
+              variant="primary"
+              @click="loadMoreEntries"
+              class="load-more-btn"
+            >
               <i class="fas fa-chevron-down"></i>
               Load More
-            </button>
+            </BaseButton>
           </div>
 
           <div v-if="isLoadingMore" class="loading-more">
@@ -190,9 +216,15 @@
                 </p>
               </div>
             </div>
-            <button @click="clearSelection" class="close-btn">
+            <BaseButton
+              variant="ghost"
+              size="sm"
+              @click="clearSelection"
+              class="close-btn"
+              aria-label="Close file viewer"
+            >
               <i class="fas fa-times"></i>
-            </button>
+            </BaseButton>
           </div>
 
           <div class="file-content">
@@ -223,6 +255,7 @@ import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorizati
 import TreeNodeComponent, { type TreeNode } from './TreeNodeComponent.vue'
 import VectorizationProgressModal from './VectorizationProgressModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 // Use the shared composables
 const {
@@ -1117,40 +1150,9 @@ watch(() => props.mode, () => {
   border-radius: 6px;
 }
 
+/* Populate button spacing */
 .populate-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
   margin-left: 0.5rem;
-}
-
-.populate-btn:hover:not(:disabled) {
-  background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
-}
-
-.populate-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.populate-btn.is-populating {
-  background: #10b981;
-}
-
-.populate-btn i {
-  font-size: 0.875rem;
 }
 
 /* Header */
@@ -1173,34 +1175,7 @@ watch(() => props.mode, () => {
 }
 
 .category-tab {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #6b7280;
-  cursor: pointer;
-  transition: all 0.2s;
   white-space: nowrap;
-}
-
-.category-tab:hover {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.category-tab.active {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
-}
-
-.category-tab i {
-  font-size: 0.875rem;
 }
 
 .category-count {
@@ -1214,10 +1189,6 @@ watch(() => props.mode, () => {
   border-radius: 0.625rem;
   font-size: 0.75rem;
   font-weight: 600;
-}
-
-.category-tab.active .category-count {
-  background: rgba(255, 255, 255, 0.25);
 }
 
 /* Batch Toolbar */
@@ -1256,42 +1227,16 @@ watch(() => props.mode, () => {
   gap: 0.75rem;
 }
 
-.toolbar-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-  font-size: 0.875rem;
-}
-
+/* Toolbar button custom styling */
 .toolbar-btn.vectorize {
   background: white;
   color: #3b82f6;
-}
-
-.toolbar-btn.vectorize:hover:not(:disabled) {
-  background: #f3f4f6;
-  transform: scale(1.05);
-}
-
-.toolbar-btn.vectorize:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .toolbar-btn.cancel {
   background: rgba(255, 255, 255, 0.2);
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.toolbar-btn.cancel:hover {
-  background: rgba(255, 255, 255, 0.3);
 }
 
 .slide-down-enter-active,
@@ -1339,16 +1284,6 @@ watch(() => props.mode, () => {
 .clear-btn {
   position: absolute;
   right: 0.5rem;
-  padding: 0.25rem 0.5rem;
-  background: none;
-  border: none;
-  color: #9ca3af;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.clear-btn:hover {
-  color: #6b7280;
 }
 
 /* Breadcrumb */
@@ -1360,20 +1295,6 @@ watch(() => props.mode, () => {
   background: white;
   border-bottom: 1px solid #e5e7eb;
   font-size: 0.875rem;
-}
-
-.breadcrumb-item {
-  color: #3b82f6;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  transition: background 0.2s;
-}
-
-.breadcrumb-item:hover {
-  background: #eff6ff;
 }
 
 .breadcrumb-item.active {
@@ -1412,32 +1333,12 @@ watch(() => props.mode, () => {
   padding: 0.5rem;
 }
 
-/* Load More button styling */
+/* Load More button container */
 .load-more-container {
   display: flex;
   justify-content: center;
   padding: 1rem;
   margin-top: 0.5rem;
-}
-
-.load-more-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 0.375rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.load-more-btn:hover {
-  background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
 }
 
 .loading-more {
@@ -1481,18 +1382,6 @@ watch(() => props.mode, () => {
 
 .retry-btn {
   margin-top: 1rem;
-  padding: 0.5rem 1rem;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 0.375rem;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background 0.2s;
-}
-
-.retry-btn:hover {
-  background: #2563eb;
 }
 
 /* File viewer */
@@ -1542,17 +1431,6 @@ watch(() => props.mode, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f3f4f6;
-  border: none;
-  border-radius: 0.375rem;
-  color: #6b7280;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.close-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
 }
 
 .file-content {

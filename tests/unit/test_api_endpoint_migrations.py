@@ -26074,6 +26074,128 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("websocket.client_state", source)
         self.assertIn("WebSocketState.CONNECTED", source)
 
+    # ==============================================
+    # BATCH 142: infrastructure_monitor.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_142_health_check_simple_pattern(self):
+        """Verify health_check endpoint uses Simple Pattern"""
+        from backend.api import infrastructure_monitor
+
+        source = inspect.getsource(infrastructure_monitor.health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="health_check"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE_MONITOR"', source)
+
+    def test_batch_142_get_infrastructure_status_simple_pattern(self):
+        """Verify get_infrastructure_status endpoint uses Simple Pattern"""
+        from backend.api import infrastructure_monitor
+
+        source = inspect.getsource(infrastructure_monitor.get_infrastructure_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_infrastructure_status"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE_MONITOR"', source)
+
+    def test_batch_142_get_machine_status_simple_pattern(self):
+        """Verify get_machine_status endpoint uses Simple Pattern"""
+        from backend.api import infrastructure_monitor
+
+        source = inspect.getsource(infrastructure_monitor.get_machine_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_machine_status"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE_MONITOR"', source)
+
+    def test_batch_142_refresh_infrastructure_simple_pattern(self):
+        """Verify refresh_infrastructure endpoint uses Simple Pattern"""
+        from backend.api import infrastructure_monitor
+
+        source = inspect.getsource(infrastructure_monitor.refresh_infrastructure)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="refresh_infrastructure"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE_MONITOR"', source)
+
+    def test_batch_142_all_infrastructure_monitor_endpoints_have_decorator(self):
+        """Verify all infrastructure_monitor endpoints have @with_error_handling decorator"""
+        from backend.api import infrastructure_monitor
+
+        endpoint_functions = [
+            infrastructure_monitor.health_check,
+            infrastructure_monitor.get_infrastructure_status,
+            infrastructure_monitor.get_machine_status,
+            infrastructure_monitor.refresh_infrastructure,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_142_infrastructure_monitor_100_percent_milestone(self):
+        """Verify infrastructure_monitor.py has reached 100% migration"""
+        from backend.api import infrastructure_monitor
+
+        endpoint_functions = [
+            infrastructure_monitor.health_check,
+            infrastructure_monitor.get_infrastructure_status,
+            infrastructure_monitor.get_machine_status,
+            infrastructure_monitor.refresh_infrastructure,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 4
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_142_migration_preserves_health_check_config(self):
+        """Verify migration preserves health check configuration access"""
+        from backend.api import infrastructure_monitor
+
+        source = inspect.getsource(infrastructure_monitor.health_check)
+        self.assertIn("cfg.get_host", source)
+        self.assertIn("backend_host", source)
+        self.assertIn("frontend_host", source)
+        self.assertIn("redis_host", source)
+
+    def test_batch_142_migration_preserves_infrastructure_monitor_class(self):
+        """Verify migration preserves InfrastructureMonitor class usage"""
+        from backend.api import infrastructure_monitor
+
+        source = inspect.getsource(infrastructure_monitor.get_infrastructure_status)
+        self.assertIn("monitor.get_infrastructure_status()", source)
+
+    def test_batch_142_migration_preserves_machine_id_filtering(self):
+        """Verify migration preserves machine ID filtering logic"""
+        from backend.api import infrastructure_monitor
+
+        source = inspect.getsource(infrastructure_monitor.get_machine_status)
+        self.assertIn("machine_id", source)
+        self.assertIn("vm0", source)
+
+    def test_batch_142_migration_preserves_refresh_functionality(self):
+        """Verify migration preserves infrastructure refresh"""
+        from backend.api import infrastructure_monitor
+
+        source = inspect.getsource(infrastructure_monitor.refresh_infrastructure)
+        self.assertIn("monitor.get_infrastructure_status()", source)
+        self.assertIn("Refreshed", source)
+
 
 if __name__ == "__main__":
     unittest.main()
