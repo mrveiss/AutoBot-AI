@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from backend.dependencies import get_config, get_knowledge_base
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -389,6 +390,11 @@ async def process_enhanced_chat_message(
 # ====================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enhanced_chat",
+    error_code_prefix="CHAT_ENHANCED",
+)
 @router.post("/enhanced")
 async def enhanced_chat(
     message: EnhancedChatMessage,
@@ -452,6 +458,11 @@ async def enhanced_chat(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stream_enhanced_chat",
+    error_code_prefix="CHAT_ENHANCED",
+)
 @router.post("/stream-enhanced")
 async def stream_enhanced_chat(
     message: EnhancedChatMessage,
@@ -555,6 +566,11 @@ async def stream_enhanced_chat(
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enhanced_chat_health_check",
+    error_code_prefix="CHAT_ENHANCED",
+)
 @router.get("/health-enhanced")
 async def enhanced_chat_health_check():
     """Health check for enhanced chat service including AI Stack connectivity."""
@@ -595,6 +611,11 @@ async def enhanced_chat_health_check():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_enhanced_chat_capabilities",
+    error_code_prefix="CHAT_ENHANCED",
+)
 @router.get("/capabilities")
 async def get_enhanced_chat_capabilities():
     """Get enhanced chat capabilities and available features."""
@@ -643,6 +664,11 @@ async def get_enhanced_chat_capabilities():
 # ====================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="compatible_chat_message",
+    error_code_prefix="CHAT_ENHANCED",
+)
 @router.post("/compat/message")
 async def compatible_chat_message(
     content: str,
