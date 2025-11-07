@@ -1521,6 +1521,96 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 26 - Knowledge, Services & Monitoring Components** ✅ Completed
+
+**Goal**: Migrate knowledge management, service control, and monitoring components to BaseButton for consistent UI patterns.
+
+**Components Migrated**: 3 components, 19 buttons, ~129 lines saved
+
+#### **DocumentChangeFeed.vue** (8 buttons, ~75 lines saved)
+
+**Purpose**: Knowledge base document change tracking with scanning and filtering capabilities.
+
+**Buttons Migrated**:
+
+**Main Controls:**
+- `btn btn-primary btn-sm` → `<BaseButton variant="primary" size="sm" :loading="isScanning">` (Scan Now)
+- `btn btn-secondary` → `<BaseButton variant="secondary">` (Scan for Changes - empty state)
+
+**Action Buttons:**
+- `btn btn-sm btn-outline-secondary` → `<BaseButton variant="outline" size="sm">` (Clear History)
+- `btn btn-sm btn-outline-secondary` → `<BaseButton variant="outline" size="sm">` (Export Changes)
+
+**Filter Buttons (4 buttons):**
+- `filter-btn` + `.active` class → `<BaseButton :variant="activeFilter === 'all' ? 'primary' : 'outline'" size="sm">` (All)
+- `filter-btn` + `.active` class → `<BaseButton :variant="activeFilter === 'added' ? 'primary' : 'outline'" size="sm">` (Added)
+- `filter-btn` + `.active` class → `<BaseButton :variant="activeFilter === 'updated' ? 'primary' : 'outline'" size="sm">` (Updated)
+- `filter-btn` + `.active` class → `<BaseButton :variant="activeFilter === 'removed' ? 'primary' : 'outline'" size="sm">` (Removed)
+
+**Key Patterns**:
+- ✅ Dynamic variant switching for active filters (primary vs outline)
+- ✅ Loading state for scan operations
+- ✅ Size sm for compact action buttons
+
+**CSS Removed**: ~75 lines (.btn, .btn-primary, .btn-secondary, .btn-outline-secondary, .btn-sm, .filter-btn, .filter-btn:hover, .filter-btn.active)
+
+#### **RedisServiceControl.vue** (6 buttons, ~30 lines saved)
+
+**Purpose**: Redis service management with start, stop, restart controls and confirmation dialogs.
+
+**Buttons Migrated**:
+
+**Service Controls:**
+- `btn btn-success` → `<BaseButton variant="success" :disabled="serviceStatus.status === 'running' || loading">` (Start)
+- `btn btn-warning` → `<BaseButton variant="warning" :disabled="serviceStatus.status !== 'running' || loading">` (Restart)
+- `btn btn-danger` → `<BaseButton variant="danger" :disabled="serviceStatus.status !== 'running' || loading">` (Stop)
+- `btn btn-secondary` → `<BaseButton variant="secondary" :loading="loading">` (Refresh)
+
+**Confirmation Dialog:**
+- Cancel button → `<BaseButton variant="secondary">` (Cancel)
+- Confirm button → `<BaseButton :variant="confirmDialog.type === 'danger' ? 'danger' : 'primary'">` (Confirm)
+
+**Key Patterns**:
+- ✅ Conditional :disabled based on service status
+- ✅ Loading state for refresh operation
+- ✅ Dynamic variant for confirm button based on action severity
+
+**CSS Removed**: ~30 lines (.btn, .btn-success, .btn-warning, .btn-danger, .btn-secondary)
+
+#### **MonitoringDashboard.vue** (5 buttons, ~24 lines saved)
+
+**Purpose**: Phase 9 GPU/NPU monitoring dashboard with real-time performance tracking.
+
+**Buttons Migrated**:
+
+**Dashboard Controls:**
+- Toggle monitoring → `<BaseButton :variant="monitoringActive ? 'danger' : 'success'" :disabled="loading">` (Start/Stop)
+- Refresh button → `<BaseButton variant="secondary" :loading="loading">` (Refresh Dashboard)
+
+**Alert & Recommendations:**
+- Alert banner → `<BaseButton variant="outline" size="sm" class="btn-outline-light">` (View Details)
+- Recommendations → `<BaseButton variant="outline" size="sm" class="btn-outline-primary">` (Refresh Recommendations)
+- Modal close → `<BaseButton variant="ghost" size="xs" class="btn-close">` (Close Modal)
+
+**Key Patterns**:
+- ✅ Dynamic variant toggle (success ↔ danger) based on monitoring state
+- ✅ Loading states for async operations
+- ✅ Custom outline classes preserved for light backgrounds
+- ✅ Ghost variant for minimal close button
+
+**CSS Removed**: ~24 lines (.btn, .btn:disabled, .btn-success, .btn-danger, .btn-secondary, .btn-outline-primary, .btn-outline-light, .btn-sm)
+
+---
+
+**Batch 26 Summary**:
+- Components: 3 (DocumentChangeFeed, RedisServiceControl, MonitoringDashboard)
+- Buttons: 19 consolidated (8 knowledge + 6 services + 5 monitoring)
+- Lines: ~129 saved (~75 knowledge + ~30 services + ~24 monitoring)
+- Variants: 6 (primary, secondary, success, warning, danger, outline, ghost)
+- **Combined Total**: 15 components, ~809 lines saved, 94 buttons consolidated
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -1530,16 +1620,17 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~680 lines (batches 20-25)
+- BaseButton adoptions: ~809 lines (batches 20-26)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
   - Batch 23: ~96 lines (2 components, 12 buttons)
   - Batch 24: ~39 lines (1 component, 16 buttons)
   - Batch 25: ~114 lines (2 components, 19 buttons)
-- **Total Progress**: ~1,474 lines / ~1,500-2,000 realistic target (74-98%)
+  - Batch 26: ~129 lines (3 components, 19 buttons)
+- **Total Progress**: ~1,603 lines / ~1,500-2,000 realistic target (80-107%)
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 12 components using BaseButton (75 buttons consolidated)
+- **BaseButton Milestone**: 15 components using BaseButton (94 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 

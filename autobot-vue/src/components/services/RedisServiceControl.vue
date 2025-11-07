@@ -52,45 +52,46 @@
     <div class="px-6 py-4 border-b">
       <div class="flex items-center justify-between">
         <div class="flex space-x-3">
-          <button
+          <BaseButton
+            variant="success"
             @click="handleStartService"
             :disabled="serviceStatus.status === 'running' || loading"
-            class="btn btn-success flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors"
-            :class="serviceStatus.status === 'running' || loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-600'"
+            class="flex items-center space-x-2 px-4 py-2"
           >
             <i class="fas fa-play"></i>
             <span>Start</span>
-          </button>
+          </BaseButton>
 
-          <button
+          <BaseButton
+            variant="warning"
             @click="handleRestartService"
             :disabled="serviceStatus.status !== 'running' || loading"
-            class="btn btn-warning flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors"
-            :class="serviceStatus.status !== 'running' || loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-yellow-600'"
+            class="flex items-center space-x-2 px-4 py-2"
           >
             <i class="fas fa-sync"></i>
             <span>Restart</span>
-          </button>
+          </BaseButton>
 
-          <button
+          <BaseButton
+            variant="danger"
             @click="handleStopService"
             :disabled="serviceStatus.status !== 'running' || loading"
-            class="btn btn-danger flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors"
-            :class="serviceStatus.status !== 'running' || loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-700'"
+            class="flex items-center space-x-2 px-4 py-2"
           >
             <i class="fas fa-stop"></i>
             <span>Stop</span>
-          </button>
+          </BaseButton>
         </div>
 
-        <button
+        <BaseButton
+          variant="secondary"
           @click="refreshStatus"
-          :disabled="loading"
-          class="btn btn-secondary flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors hover:bg-gray-300"
+          :loading="loading"
+          class="flex items-center space-x-2 px-4 py-2"
         >
-          <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+          <i class="fas fa-sync-alt"></i>
           <span>Refresh</span>
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -206,19 +207,20 @@
           </div>
 
           <div class="px-6 py-4 border-t flex justify-end space-x-3">
-            <button
+            <BaseButton
+              variant="secondary"
               @click="showConfirmDialog = false"
-              class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              class="px-4 py-2"
             >
               Cancel
-            </button>
-            <button
+            </BaseButton>
+            <BaseButton
+              :variant="confirmDialog.type === 'danger' ? 'danger' : 'primary'"
               @click="confirmDialog.onConfirm"
-              class="px-4 py-2 rounded-lg font-medium transition-colors"
-              :class="confirmDialog.type === 'danger' ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-blue-600 text-white hover:bg-blue-700'"
+              class="px-4 py-2"
             >
               Confirm
-            </button>
+            </BaseButton>
           </div>
         </div>
       </div>
@@ -231,6 +233,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useServiceManagement } from '@/composables/useServiceManagement'
 import { NetworkConstants } from '@/constants/network-constants.js'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 // Service management composable
 const {
@@ -418,34 +421,6 @@ const getHealthCheckCardClass = (status) => {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  cursor: pointer;
-}
-
-.btn-success {
-  background-color: #10b981;
-  color: white;
-}
-
-.btn-warning {
-  background-color: #f59e0b;
-  color: white;
-}
-
-.btn-danger {
-  background-color: #ef4444;
-  color: white;
-}
-
-.btn-secondary {
-  background-color: #e5e7eb;
-  color: #374151;
 }
 
 .health-check-card {

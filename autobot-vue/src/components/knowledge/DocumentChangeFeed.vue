@@ -30,14 +30,15 @@
 
     <!-- Controls -->
     <div class="feed-controls">
-      <button
-        class="btn btn-primary btn-sm"
-        :disabled="isScanning"
+      <BaseButton
+        variant="primary"
+        size="sm"
+        :loading="isScanning"
         @click="handleScanNow"
       >
-        <i class="fas" :class="isScanning ? 'fa-spinner fa-spin' : 'fa-search'"></i>
+        <i class="fas fa-search"></i>
         {{ isScanning ? 'Scanning...' : 'Scan Now' }}
-      </button>
+      </BaseButton>
 
       <div class="auto-refresh-toggle">
         <label class="toggle-label">
@@ -91,37 +92,37 @@
     <!-- Change Feed -->
     <div class="change-list" v-if="recentChanges.length > 0">
       <div class="change-filters">
-        <button
-          class="filter-btn"
-          :class="{ active: activeFilter === 'all' }"
+        <BaseButton
+          :variant="activeFilter === 'all' ? 'primary' : 'outline'"
+          size="sm"
           @click="activeFilter = 'all'"
         >
           All ({{ totalChanges }})
-        </button>
-        <button
-          class="filter-btn"
-          :class="{ active: activeFilter === 'added' }"
+        </BaseButton>
+        <BaseButton
+          :variant="activeFilter === 'added' ? 'primary' : 'outline'"
+          size="sm"
           @click="activeFilter = 'added'"
           v-if="changeSummary.added > 0"
         >
           Added ({{ changeSummary.added }})
-        </button>
-        <button
-          class="filter-btn"
-          :class="{ active: activeFilter === 'updated' }"
+        </BaseButton>
+        <BaseButton
+          :variant="activeFilter === 'updated' ? 'primary' : 'outline'"
+          size="sm"
           @click="activeFilter = 'updated'"
           v-if="changeSummary.updated > 0"
         >
           Updated ({{ changeSummary.updated }})
-        </button>
-        <button
-          class="filter-btn"
-          :class="{ active: activeFilter === 'removed' }"
+        </BaseButton>
+        <BaseButton
+          :variant="activeFilter === 'removed' ? 'primary' : 'outline'"
+          size="sm"
           @click="activeFilter = 'removed'"
           v-if="changeSummary.removed > 0"
         >
           Removed ({{ changeSummary.removed }})
-        </button>
+        </BaseButton>
       </div>
 
       <div class="change-items">
@@ -164,22 +165,22 @@
       message="No recent changes detected"
     >
       <template #actions>
-        <button class="btn btn-secondary" @click="handleScanNow">
+        <BaseButton variant="secondary" @click="handleScanNow">
           Scan for Changes
-        </button>
+        </BaseButton>
       </template>
     </EmptyState>
 
     <!-- Actions -->
     <div class="feed-actions" v-if="recentChanges.length > 0">
-      <button class="btn btn-sm btn-outline-secondary" @click="handleClearChanges">
+      <BaseButton variant="outline" size="sm" @click="handleClearChanges">
         <i class="fas fa-trash"></i>
         Clear History
-      </button>
-      <button class="btn btn-sm btn-outline-secondary" @click="handleExportChanges">
+      </BaseButton>
+      <BaseButton variant="outline" size="sm" @click="handleExportChanges">
         <i class="fas fa-download"></i>
         Export Changes
-      </button>
+      </BaseButton>
     </div>
   </div>
 </template>
@@ -190,6 +191,7 @@ import { useDocumentChanges } from '@/composables/useDocumentChanges'
 import type { DocumentChange } from '@/composables/useDocumentChanges'
 import { formatBytes } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 // Composable
 const {
@@ -348,57 +350,6 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
-.btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.btn-primary:disabled {
-  background: #9ca3af;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.btn-secondary:hover {
-  background: #e5e7eb;
-}
-
-.btn-outline-secondary {
-  background: transparent;
-  color: #6b7280;
-  border: 1px solid #d1d5db;
-}
-
-.btn-outline-secondary:hover {
-  background: #f9fafb;
-}
-
-.btn-sm {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.8125rem;
-}
-
 .auto-refresh-toggle {
   display: flex;
   align-items: center;
@@ -478,26 +429,6 @@ onUnmounted(() => {
   gap: 0.5rem;
   margin-bottom: 1rem;
   flex-wrap: wrap;
-}
-
-.filter-btn {
-  padding: 0.375rem 0.75rem;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.filter-btn:hover {
-  background: #f9fafb;
-}
-
-.filter-btn.active {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
 }
 
 .change-list {
