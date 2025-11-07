@@ -33,13 +33,17 @@
     </div>
 
     <!-- Alert Banner -->
-    <div v-if="criticalAlerts.length > 0" class="alert-banner critical">
-      <i class="fas fa-exclamation-triangle"></i>
-      <span>{{ criticalAlerts.length }} critical performance alert(s) detected</span>
-      <BaseButton variant="outline" size="sm" @click="showAlertsModal = true" class="btn-outline-light">
-        View Details
-      </BaseButton>
-    </div>
+    <BaseAlert
+      v-if="criticalAlerts.length > 0"
+      variant="critical"
+      :message="`${criticalAlerts.length} critical performance alert(s) detected`"
+    >
+      <template #actions>
+        <BaseButton variant="outline" size="sm" @click="showAlertsModal = true" class="btn-outline-light">
+          View Details
+        </BaseButton>
+      </template>
+    </BaseAlert>
 
     <!-- Performance Overview Cards -->
     <div class="performance-overview">
@@ -346,6 +350,7 @@ import 'chartjs-adapter-date-fns'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import BaseAlert from '@/components/ui/BaseAlert.vue'
 
 Chart.register(...registerables)
 
@@ -354,7 +359,8 @@ export default {
   components: {
     EmptyState,
     StatusBadge,
-    BaseButton
+    BaseButton,
+    BaseAlert
   },
   data() {
     return {
@@ -1007,22 +1013,6 @@ export default {
   0% { opacity: 1; }
   50% { opacity: 0.5; }
   100% { opacity: 1; }
-}
-
-.alert-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 15px 20px;
-  margin-bottom: 20px;
-  border-radius: 8px;
-  font-weight: 500;
-}
-
-.alert-banner.critical {
-  background: #ffebee;
-  border: 1px solid #f44336;
-  color: #d32f2f;
 }
 
 .performance-overview {
