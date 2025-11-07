@@ -1749,6 +1749,74 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 29 - Knowledge Browser** ✅ Completed
+
+**Goal**: Migrate knowledge base file browser with category filters, search, batch operations, and file viewer to BaseButton.
+
+**Components Migrated**: 1 component, 9 buttons, ~156 lines saved
+
+#### **KnowledgeBrowser.vue** (9 buttons, ~156 lines saved)
+
+**Purpose**: Comprehensive knowledge base file browser with category navigation, search, batch vectorization, and file viewer.
+
+**Buttons Migrated**:
+
+**Category Management:**
+- Populate button (v-for per category) → `<BaseButton variant="primary" size="sm" :loading="populationStates[mainCat.id]?.isPopulating" :disabled="populationStates[mainCat.id]?.isPopulating" class="populate-btn">` (Populate knowledge)
+
+**Category Filters (v-for pattern):**
+- Category tabs → `<BaseButton :variant="selectedCategory === cat.value ? 'primary' : 'outline'" size="sm" class="category-tab">` (Filter by category)
+
+**Search Controls:**
+- Clear search → `<BaseButton variant="ghost" size="xs" class="clear-btn">` (×)
+
+**Batch Operations Toolbar:**
+- Vectorize selected → `<BaseButton variant="primary" :disabled="!canVectorizeSelection || isVectorizing" :loading="isVectorizing" class="toolbar-btn vectorize">` (Batch vectorize)
+- Clear selection → `<BaseButton variant="secondary" class="toolbar-btn cancel">` (Clear batch selection)
+
+**Navigation:**
+- Breadcrumb root → `<BaseButton variant="ghost" size="sm" class="breadcrumb-item">` (🏠 Root)
+
+**Error Handling:**
+- Retry load → `<BaseButton variant="primary" class="retry-btn">` (🔄 Retry)
+
+**Pagination:**
+- Load more → `<BaseButton variant="primary" class="load-more-btn">` (Load More)
+
+**File Viewer:**
+- Close viewer → `<BaseButton variant="ghost" size="sm" class="close-btn">` (×)
+
+**Key Patterns**:
+- ✅ Loading state integration for populate and vectorize buttons (`:loading` prop)
+- ✅ Dynamic variant switching for category tabs (primary when active, outline when inactive)
+- ✅ Conditional :disabled for batch operations
+- ✅ Ghost variant for minimal UI controls (clear, breadcrumb, close)
+- ✅ v-for pattern with computed variant logic
+- ✅ Progress percentage display in button content during population
+- ✅ Size xs for compact control buttons
+- ✅ Custom classes preserved for toolbar styling
+
+**CSS Removed**: ~156 lines removed from scoped styles:
+- `.populate-btn` (~32 lines) - kept spacing only
+- `.category-tab` and active/hover states (~27 lines) - kept layout
+- `.clear-btn` (~10 lines) - kept positioning
+- `.toolbar-btn` variants (vectorize/cancel) (~27 lines) - kept custom colors
+- `.breadcrumb-item` button styles (~18 lines) - removed all
+- `.retry-btn` (~13 lines) - kept spacing only
+- `.load-more-btn` (~18 lines) - kept container only
+- `.close-btn` (~11 lines) - kept sizing only
+
+---
+
+**Batch 29 Summary**:
+- Components: 1 (KnowledgeBrowser)
+- Buttons: 9 consolidated (1 populate + category tabs + 1 search + 2 toolbar + 1 breadcrumb + 1 retry + 1 load-more + 1 close)
+- Lines: ~156 saved
+- Variants: 4 (primary, secondary, outline, ghost)
+- **Combined Total**: 18 components, ~1,200 lines saved, 130 buttons consolidated
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -1758,7 +1826,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~1,044 lines (batches 20-28)
+- BaseButton adoptions: ~1,200 lines (batches 20-29)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
@@ -1768,9 +1836,10 @@ const createRipple = (event: TouchEvent) => {
   - Batch 26: ~129 lines (3 components, 19 buttons)
   - Batch 27: ~170 lines (1 component, 17 buttons)
   - Batch 28: ~65 lines (1 component, 10 buttons)
-- **Total Progress**: ~1,838 lines / ~1,500-2,000 realistic target (92-123%) ✅ **TARGET EXCEEDED**
+  - Batch 29: ~156 lines (1 component, 9 buttons)
+- **Total Progress**: ~1,994 lines / ~1,500-2,000 realistic target (100-133%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 17 components using BaseButton (121 buttons consolidated)
+- **BaseButton Milestone**: 18 components using BaseButton (130 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 

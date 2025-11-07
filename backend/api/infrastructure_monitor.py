@@ -19,11 +19,17 @@ from pydantic import BaseModel
 # Import unified configuration system - NO HARDCODED VALUES
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="INFRASTRUCTURE_MONITOR",
+)
 @router.get("/health")
 async def health_check():
     """Health check endpoint for infrastructure monitoring"""
@@ -1083,6 +1089,11 @@ class InfrastructureMonitor:
 monitor = InfrastructureMonitor()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_infrastructure_status",
+    error_code_prefix="INFRASTRUCTURE_MONITOR",
+)
 @router.get("/status")
 async def get_infrastructure_status():
     """Get complete infrastructure monitoring status"""
@@ -1136,6 +1147,11 @@ async def get_infrastructure_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_machine_status",
+    error_code_prefix="INFRASTRUCTURE_MONITOR",
+)
 @router.get("/machine/{machine_id}")
 async def get_machine_status(machine_id: str):
     """Get status for a specific machine"""
@@ -1170,6 +1186,11 @@ async def get_machine_status(machine_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="refresh_infrastructure",
+    error_code_prefix="INFRASTRUCTURE_MONITOR",
+)
 @router.post("/refresh")
 async def refresh_infrastructure():
     """Force refresh of all infrastructure monitoring"""
