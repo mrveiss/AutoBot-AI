@@ -49,10 +49,14 @@
     <!-- Browser View (when category selected) -->
     <div v-else class="browser-view">
       <div class="browser-header-bar">
-        <button @click="backToCategories" class="back-btn">
+        <BaseButton
+          variant="outline"
+          @click="backToCategories"
+          class="back-btn"
+        >
           <i class="fas fa-arrow-left"></i>
           Back to Categories
-        </button>
+        </BaseButton>
         <h3>{{ getSelectedCategoryName() }}</h3>
       </div>
       <KnowledgeBrowser :mode="selectedMainCategory" :preselected-category="selectedMainCategory" />
@@ -62,9 +66,14 @@
     <div v-if="false" class="user-categories">
       <div class="categories-header">
         <h3>User Categories</h3>
-        <button @click="showCreateDialog = true" class="create-category-btn">
+        <BaseButton
+          variant="primary"
+          size="sm"
+          @click="showCreateDialog = true"
+          class="create-category-btn"
+        >
           <i class="fas fa-plus"></i> New Category
-        </button>
+        </BaseButton>
       </div>
 
     <div v-if="store.isLoading" class="loading-state">
@@ -93,12 +102,24 @@
             <i class="fas fa-folder"></i>
           </div>
           <div class="category-actions">
-            <button @click.stop="editCategory(category)" class="action-btn" title="Edit">
+            <BaseButton
+              variant="ghost"
+              size="xs"
+              @click.stop="editCategory(category)"
+              class="action-btn"
+              title="Edit"
+            >
               <i class="fas fa-edit"></i>
-            </button>
-            <button @click.stop="deleteCategory(category)" class="action-btn danger" title="Delete">
+            </BaseButton>
+            <BaseButton
+              variant="ghost"
+              size="xs"
+              @click.stop="deleteCategory(category)"
+              class="action-btn danger"
+              title="Delete"
+            >
               <i class="fas fa-trash"></i>
-            </button>
+            </BaseButton>
           </div>
         </div>
 
@@ -117,9 +138,14 @@
         </div>
 
         <div class="category-actions-bottom">
-          <button @click.stop="viewDocuments(category)" class="view-docs-btn">
+          <BaseButton
+            variant="outline"
+            size="sm"
+            @click.stop="viewDocuments(category)"
+            class="view-docs-btn"
+          >
             View Documents
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -169,14 +195,21 @@
       </div>
 
       <template #actions>
-        <button @click="closeDialogs" class="cancel-btn">Cancel</button>
-        <button
+        <BaseButton
+          variant="secondary"
+          @click="closeDialogs"
+          class="cancel-btn"
+        >
+          Cancel
+        </BaseButton>
+        <BaseButton
+          variant="primary"
           @click="saveCategory"
-          class="save-btn"
           :disabled="!categoryForm.name.trim()"
+          class="save-btn"
         >
           {{ showEditDialog ? 'Update' : 'Create' }}
-        </button>
+        </BaseButton>
       </template>
     </BaseModal>
 
@@ -184,9 +217,14 @@
     <div v-if="showDocumentsPanel" class="documents-panel">
       <div class="panel-header">
         <h3>{{ selectedCategory?.name }} - Documents</h3>
-        <button @click="closeDocumentsPanel" class="close-panel-btn">
+        <BaseButton
+          variant="ghost"
+          size="sm"
+          @click="closeDocumentsPanel"
+          class="close-panel-btn"
+        >
           <i class="fas fa-times"></i>
-        </button>
+        </BaseButton>
       </div>
 
       <div class="documents-list">
@@ -301,6 +339,7 @@ import ManPageManager from '@/components/ManPageManager.vue'
 import DocumentChangeFeed from './DocumentChangeFeed.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 // Import shared document feed wrapper styles
 import '@/styles/document-feed-wrapper.css'
@@ -736,24 +775,7 @@ onUnmounted(() => {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.back-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  background: #f3f4f6;
-  border: none;
-  border-radius: 0.5rem;
-  color: #374151;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.back-btn:hover {
-  background: #e5e7eb;
-  transform: translateX(-2px);
-}
+/* Button styling handled by BaseButton component */
 
 .browser-header-bar h3 {
   font-size: 1.25rem;
@@ -1131,23 +1153,7 @@ onUnmounted(() => {
   color: #1f2937;
 }
 
-.create-category-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background-color: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 0.375rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.create-category-btn:hover {
-  background-color: #2563eb;
-}
+/* Button styling handled by BaseButton component */
 
 .loading-state {
   text-align: center;
@@ -1203,29 +1209,7 @@ onUnmounted(() => {
   gap: 0.5rem;
 }
 
-.action-btn {
-  width: 2rem;
-  height: 2rem;
-  border: none;
-  background: #f3f4f6;
-  border-radius: 0.25rem;
-  color: #6b7280;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.action-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.action-btn.danger:hover {
-  background: #fee2e2;
-  color: #dc2626;
-}
+/* Button styling handled by BaseButton component */
 
 .category-name {
   font-size: 1.125rem;
@@ -1254,22 +1238,7 @@ onUnmounted(() => {
   gap: 0.25rem;
 }
 
-.view-docs-btn {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid #e5e7eb;
-  background: white;
-  border-radius: 0.375rem;
-  color: #3b82f6;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.view-docs-btn:hover {
-  background: #eff6ff;
-  border-color: #3b82f6;
-}
+/* Button styling handled by BaseButton component */
 
 /* Form styles (used in modals) */
 
@@ -1329,38 +1298,7 @@ onUnmounted(() => {
   font-weight: bold;
 }
 
-.cancel-btn,
-.save-btn {
-  padding: 0.625rem 1.25rem;
-  border: none;
-  border-radius: 0.375rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.cancel-btn {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.cancel-btn:hover {
-  background: #e5e7eb;
-}
-
-.save-btn {
-  background: #3b82f6;
-  color: white;
-}
-
-.save-btn:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.save-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Button styling handled by BaseButton component */
 
 /* Documents Panel */
 .documents-panel {
@@ -1384,23 +1322,7 @@ onUnmounted(() => {
   border-bottom: 1px solid #e5e7eb;
 }
 
-.close-panel-btn {
-  width: 2rem;
-  height: 2rem;
-  border: none;
-  background: #f3f4f6;
-  border-radius: 0.25rem;
-  color: #6b7280;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.close-panel-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
-}
+/* Button styling handled by BaseButton component */
 
 .documents-list {
   flex: 1;

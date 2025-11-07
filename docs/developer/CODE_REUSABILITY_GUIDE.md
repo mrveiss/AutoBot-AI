@@ -2179,6 +2179,68 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 37 - Knowledge Categories Browser** ✅ Completed
+
+**Goal**: Migrate main knowledge category browsing interface with category navigation, management actions, document viewing, and modal forms to BaseButton.
+
+**Components Migrated**: 1 component, 8 buttons, ~65 lines saved
+
+#### **KnowledgeCategories.vue** (8 buttons, ~65 lines saved)
+
+**Purpose**: Main knowledge category browsing interface with main category selection, legacy user category management, and document panel.
+
+**Buttons Migrated**:
+
+**Navigation (1 button):**
+- Back to categories → `<BaseButton variant="outline" class="back-btn">` (Back to Categories)
+
+**Category Management (2 buttons):**
+- Create category → `<BaseButton variant="primary" size="sm" class="create-category-btn">` (New Category)
+
+**Per-Category Actions (2 buttons per category with @click.stop):**
+- Edit category → `<BaseButton variant="ghost" size="xs" @click.stop="editCategory(category)">` (edit icon)
+- Delete category → `<BaseButton variant="ghost" size="xs" @click.stop="deleteCategory(category)" class="action-btn danger">` (trash icon)
+
+**Document Actions (1 button):**
+- View documents → `<BaseButton variant="outline" size="sm" @click.stop="viewDocuments(category)">` (View Documents)
+
+**Dialog Actions (2 buttons with form validation):**
+- Cancel → `<BaseButton variant="secondary" @click="closeDialogs">` (Cancel)
+- Save/Update → `<BaseButton variant="primary" :disabled="!categoryForm.name.trim()">` (Create/Update - dynamic text)
+
+**Panel Actions (1 button):**
+- Close panel → `<BaseButton variant="ghost" size="sm" class="close-panel-btn">` (× icon)
+
+**Key Patterns**:
+- ✅ Outline variant for navigation and view actions
+- ✅ Primary variant for create action with sm size
+- ✅ Ghost variant with xs size for compact per-category icon buttons
+- ✅ Event propagation control with @click.stop on nested clickable elements
+- ✅ Form validation with disabled state (!categoryForm.name.trim())
+- ✅ Dynamic button text based on dialog mode (showEditDialog ? 'Update' : 'Create')
+- ✅ Secondary variant for cancel actions
+- ✅ Preserved category card click handlers while allowing independent action buttons
+
+**CSS Removed**: ~65 lines removed from scoped styles:
+- `.back-btn` base styles and hover (~18 lines)
+- `.create-category-btn` base and hover (~17 lines)
+- `.action-btn` base, hover, danger states (~23 lines)
+- `.view-docs-btn` base and hover (~16 lines)
+- `.cancel-btn`, `.save-btn` shared and individual styles (~32 lines)
+- `.close-panel-btn` base and hover (~17 lines)
+- Remaining: Layout containers (.category-grid, .category-card, .panel-header) and card selection state preserved
+
+---
+
+**Batch 37 Summary**:
+- Components: 1 (KnowledgeCategories)
+- Buttons: 8 consolidated (1 navigation + 1 create + 2 per-category actions + 1 view + 2 dialog + 1 panel)
+- Lines: ~65 saved
+- Variants: 4 (primary, secondary, outline, ghost)
+- **Combined Total**: 26 components, ~1,627 lines saved, 182 buttons consolidated
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -2188,7 +2250,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~1,562 lines (batches 20-36)
+- BaseButton adoptions: ~1,627 lines (batches 20-37)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
@@ -2206,9 +2268,10 @@ const createRipple = (event: TouchEvent) => {
   - Batch 34: ~50 lines (1 component, 3 buttons)
   - Batch 35: ~60 lines (1 component, 10 buttons)
   - Batch 36: ~90 lines (1 component, 15 buttons)
-- **Total Progress**: ~2,356 lines / ~1,500-2,000 realistic target (118-157%) ✅ **TARGET EXCEEDED**
+  - Batch 37: ~65 lines (1 component, 8 buttons)
+- **Total Progress**: ~2,421 lines / ~1,500-2,000 realistic target (121-161%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 25 components using BaseButton (174 buttons consolidated)
+- **BaseButton Milestone**: 26 components using BaseButton (182 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
