@@ -225,15 +225,17 @@
     </div>
 
     <!-- Success/Error Messages -->
-    <div v-if="successMessage" class="alert alert-success">
-      <i class="fas fa-check-circle"></i>
-      {{ successMessage }}
-    </div>
+    <BaseAlert
+      v-if="successMessage"
+      variant="success"
+      :message="successMessage"
+    />
 
-    <div v-if="errorMessage" class="alert alert-error">
-      <i class="fas fa-exclamation-circle"></i>
-      {{ errorMessage }}
-    </div>
+    <BaseAlert
+      v-if="errorMessage"
+      variant="error"
+      :message="errorMessage"
+    />
   </div>
 </template>
 
@@ -246,6 +248,7 @@ import { parseTags } from '@/utils/tagHelpers'
 import { resetFormFields } from '@/utils/formHelpers'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import { useUploadProgress } from '@/composables/useUploadProgress'
+import BaseAlert from '@/components/ui/BaseAlert.vue'
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
@@ -725,25 +728,6 @@ onMounted(() => {
   color: #6b7280;
 }
 
-/* Alert styles */
-.alert {
-  margin-top: 1rem;
-  padding: 0.75rem 1rem;
-  border-radius: 0.375rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.alert-success {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.alert-error {
-  background: #fee2e2;
-  color: #991b1b;
-}
 
 /* Responsive */
 @media (max-width: 768px) {
