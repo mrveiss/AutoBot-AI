@@ -18,6 +18,7 @@ from backend.dependencies import get_knowledge_base
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +145,11 @@ async def handle_ai_stack_error(error: AIStackError, context: str):
 # ====================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enhanced_search",
+    error_code_prefix="KNOWLEDGE_ENHANCED",
+)
 @router.post("/search/enhanced")
 async def enhanced_search(
     request_data: EnhancedSearchRequest,
@@ -291,6 +297,11 @@ async def enhanced_search(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rag_search",
+    error_code_prefix="KNOWLEDGE_ENHANCED",
+)
 @router.post("/search/rag")
 async def rag_search(
     request_data: RAGQueryRequest, knowledge_base=Depends(get_knowledge_base)
@@ -346,6 +357,11 @@ async def rag_search(
 # ====================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="extract_knowledge",
+    error_code_prefix="KNOWLEDGE_ENHANCED",
+)
 @router.post("/extract")
 async def extract_knowledge(request_data: KnowledgeExtractionRequest, req: Request):
     """
@@ -411,6 +427,11 @@ async def extract_knowledge(request_data: KnowledgeExtractionRequest, req: Reque
         await handle_ai_stack_error(e, "Knowledge extraction")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_documents",
+    error_code_prefix="KNOWLEDGE_ENHANCED",
+)
 @router.post("/analyze/documents")
 async def analyze_documents(request_data: DocumentAnalysisRequest):
     """
@@ -446,6 +467,11 @@ async def analyze_documents(request_data: DocumentAnalysisRequest):
 # ====================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reformulate_query",
+    error_code_prefix="KNOWLEDGE_ENHANCED",
+)
 @router.post("/query/reformulate")
 async def reformulate_query(query: str, context: Optional[str] = None):
     """
@@ -478,6 +504,11 @@ async def reformulate_query(query: str, context: Optional[str] = None):
 # ====================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_knowledge_insights",
+    error_code_prefix="KNOWLEDGE_ENHANCED",
+)
 @router.get("/system/insights")
 async def get_system_knowledge_insights(knowledge_category: Optional[str] = None):
     """
@@ -506,6 +537,11 @@ async def get_system_knowledge_insights(knowledge_category: Optional[str] = None
 # ====================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_enhanced_stats",
+    error_code_prefix="KNOWLEDGE_ENHANCED",
+)
 @router.get("/stats/enhanced")
 async def get_enhanced_stats(req: Request):
     """
@@ -550,6 +586,11 @@ async def get_enhanced_stats(req: Request):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enhanced_knowledge_health",
+    error_code_prefix="KNOWLEDGE_ENHANCED",
+)
 @router.get("/health/enhanced")
 async def enhanced_knowledge_health():
     """
