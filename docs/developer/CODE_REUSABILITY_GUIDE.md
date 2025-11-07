@@ -1817,6 +1817,57 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 30 - Knowledge Advanced Management** ✅ Completed
+
+**Goal**: Migrate knowledge base administrative management interface with population and database management actions to BaseButton.
+
+**Components Migrated**: 1 component, 5 buttons, ~61 lines saved
+
+#### **KnowledgeAdvanced.vue** (5 buttons, ~61 lines saved)
+
+**Purpose**: Administrative knowledge management interface for populating and managing the knowledge base.
+
+**Buttons Migrated**:
+
+**Knowledge Population Actions (3 buttons):**
+- Populate AutoBot Documentation → `<BaseButton variant="primary" :disabled="isPopulating" :loading="populateStatus.autobotDocs === 'loading'" class="action-btn">` (~30 documents)
+- Populate System Commands → `<BaseButton variant="primary" :disabled="isPopulating" :loading="populateStatus.systemCommands === 'loading'" class="action-btn">` (~150 commands)
+- Populate Manual Pages → `<BaseButton variant="primary" :disabled="isPopulating" :loading="populateStatus.manPages === 'loading'" class="action-btn">` (~50 man pages)
+
+**Database Management:**
+- Clear All Knowledge → `<BaseButton variant="danger" :disabled="isClearing || isPopulating" :loading="isClearing" class="action-btn">` (Destructive action)
+
+**Status Messages:**
+- Dismiss message → `<BaseButton variant="ghost" size="xs" class="dismiss-btn">` (×)
+
+**Key Patterns**:
+- ✅ Loading state integration for async operations (`:loading` prop replaces manual spinner)
+- ✅ Conditional icon display (hide icon during loading, BaseButton shows spinner)
+- ✅ Multiple disabled conditions (isPopulating, isClearing)
+- ✅ Danger variant for destructive actions
+- ✅ Ghost variant for minimal dismiss buttons
+- ✅ Status tracking with computed button text
+- ✅ Full width layout for action buttons
+
+**CSS Removed**: ~61 lines removed from scoped styles:
+- `.action-btn` base styles (~14 lines) - kept width: 100% only
+- `.action-btn:disabled` (~4 lines)
+- `.action-btn.primary` (~8 lines)
+- `.action-btn.danger` (~8 lines)
+- `.dismiss-btn` (~17 lines) - kept positioning only
+- Hover states and transitions (~10 lines)
+
+---
+
+**Batch 30 Summary**:
+- Components: 1 (KnowledgeAdvanced)
+- Buttons: 5 consolidated (3 populate actions + 1 clear + 1 dismiss)
+- Lines: ~61 saved
+- Variants: 3 (primary, danger, ghost)
+- **Combined Total**: 19 components, ~1,261 lines saved, 135 buttons consolidated
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -1826,7 +1877,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~1,200 lines (batches 20-29)
+- BaseButton adoptions: ~1,261 lines (batches 20-30)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
@@ -1837,9 +1888,10 @@ const createRipple = (event: TouchEvent) => {
   - Batch 27: ~170 lines (1 component, 17 buttons)
   - Batch 28: ~65 lines (1 component, 10 buttons)
   - Batch 29: ~156 lines (1 component, 9 buttons)
-- **Total Progress**: ~1,994 lines / ~1,500-2,000 realistic target (100-133%) ✅ **TARGET EXCEEDED**
+  - Batch 30: ~61 lines (1 component, 5 buttons)
+- **Total Progress**: ~2,055 lines / ~1,500-2,000 realistic target (103-137%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 18 components using BaseButton (130 buttons consolidated)
+- **BaseButton Milestone**: 19 components using BaseButton (135 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
