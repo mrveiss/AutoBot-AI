@@ -30,6 +30,7 @@ from backend.services.feature_flags import (
     get_feature_flags,
 )
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,11 @@ async def require_admin(
     return {"username": "admin", "role": "admin"}  # Development placeholder
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_feature_flags_status",
+    error_code_prefix="FEATURE_FLAGS",
+)
 @router.get("/feature-flags/status")
 async def get_feature_flags_status(
     admin: Dict = Depends(require_admin),
@@ -101,6 +107,11 @@ async def get_feature_flags_status(
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_enforcement_mode",
+    error_code_prefix="FEATURE_FLAGS",
+)
 @router.put("/feature-flags/enforcement-mode")
 async def update_enforcement_mode(
     update: EnforcementModeUpdate,
@@ -164,6 +175,11 @@ async def update_enforcement_mode(
         raise HTTPException(status_code=500, detail=f"Failed to update mode: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_endpoint_enforcement",
+    error_code_prefix="FEATURE_FLAGS",
+)
 @router.put("/feature-flags/endpoint/{endpoint:path}")
 async def set_endpoint_enforcement(
     endpoint: str,
@@ -213,6 +229,11 @@ async def set_endpoint_enforcement(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="remove_endpoint_enforcement",
+    error_code_prefix="FEATURE_FLAGS",
+)
 @router.delete("/feature-flags/endpoint/{endpoint:path}")
 async def remove_endpoint_enforcement(
     endpoint: str,
@@ -251,6 +272,11 @@ async def remove_endpoint_enforcement(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_access_control_metrics",
+    error_code_prefix="FEATURE_FLAGS",
+)
 @router.get("/access-control/metrics")
 async def get_access_control_metrics(
     days: int = Query(7, ge=1, le=30, description="Number of days to include"),
@@ -289,6 +315,11 @@ async def get_access_control_metrics(
         raise HTTPException(status_code=500, detail=f"Failed to get metrics: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_endpoint_metrics",
+    error_code_prefix="FEATURE_FLAGS",
+)
 @router.get("/access-control/endpoint/{endpoint:path}")
 async def get_endpoint_metrics(
     endpoint: str,
@@ -316,6 +347,11 @@ async def get_endpoint_metrics(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_user_metrics",
+    error_code_prefix="FEATURE_FLAGS",
+)
 @router.get("/access-control/user/{username}")
 async def get_user_metrics(
     username: str,
@@ -343,6 +379,11 @@ async def get_user_metrics(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cleanup_old_metrics",
+    error_code_prefix="FEATURE_FLAGS",
+)
 @router.post("/access-control/cleanup")
 async def cleanup_old_metrics(
     admin: Dict = Depends(require_admin),
