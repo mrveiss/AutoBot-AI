@@ -18,6 +18,7 @@ from backend.services.playwright_service import (
 )
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -44,6 +45,11 @@ class ScreenshotRequest(BaseModel):
     wait_timeout: int = 5000
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_playwright_status",
+    error_code_prefix="PLAYWRIGHT",
+)
 @router.get("/status")
 async def get_playwright_status():
     """Get Playwright service status and capabilities"""
@@ -62,6 +68,11 @@ async def get_playwright_status():
         }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="PLAYWRIGHT",
+)
 @router.get("/health")
 async def health_check():
     """Health check endpoint for Playwright service"""
@@ -86,6 +97,11 @@ async def health_check():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="web_search",
+    error_code_prefix="PLAYWRIGHT",
+)
 @router.post("/search")
 async def web_search(request: SearchRequest):
     """
@@ -120,6 +136,11 @@ async def web_search(request: SearchRequest):
         raise HTTPException(status_code=500, detail=f"Web search failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_frontend",
+    error_code_prefix="PLAYWRIGHT",
+)
 @router.post("/test-frontend")
 async def test_frontend(request: FrontendTestRequest):
     """
@@ -149,6 +170,11 @@ async def test_frontend(request: FrontendTestRequest):
         raise HTTPException(status_code=500, detail=f"Frontend test failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="send_test_message",
+    error_code_prefix="PLAYWRIGHT",
+)
 @router.post("/send-test-message")
 async def send_test_message(request: TestMessageRequest):
     """
@@ -182,6 +208,11 @@ async def send_test_message(request: TestMessageRequest):
         raise HTTPException(status_code=500, detail=f"Test message failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="capture_screenshot",
+    error_code_prefix="PLAYWRIGHT",
+)
 @router.post("/screenshot")
 async def capture_screenshot(request: ScreenshotRequest):
     """
@@ -214,6 +245,11 @@ async def capture_screenshot(request: ScreenshotRequest):
         raise HTTPException(status_code=500, detail=f"Screenshot failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="quick_automation_test",
+    error_code_prefix="PLAYWRIGHT",
+)
 @router.post("/automation/quick-test")
 async def quick_automation_test(background_tasks: BackgroundTasks):
     """
@@ -270,6 +306,11 @@ async def quick_automation_test(background_tasks: BackgroundTasks):
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_capabilities",
+    error_code_prefix="PLAYWRIGHT",
+)
 @router.get("/capabilities")
 async def get_capabilities():
     """Get Playwright service capabilities and features"""
