@@ -111,13 +111,19 @@
               message="No active alerts"
               variant="success"
             />
-            <div v-else>
-              <div v-for="alert in reportData.alerts" :key="alert.timestamp"
-                   :class="['alert', 'alert-' + alert.level]">
-                <div class="alert-title">{{ alert.title }}</div>
-                <div class="alert-message">{{ alert.message }}</div>
-                <div class="alert-time">{{ formatTime(alert.timestamp) }}</div>
-              </div>
+            <div v-else class="alerts-list">
+              <BaseAlert
+                v-for="alert in reportData.alerts"
+                :key="alert.timestamp"
+                :variant="alert.level"
+                :title="alert.title"
+                :message="alert.message"
+                bordered
+              >
+                <template #actions>
+                  <span class="alert-time">{{ formatTime(alert.timestamp) }}</span>
+                </template>
+              </BaseAlert>
             </div>
           </div>
 
@@ -193,12 +199,14 @@ import apiClient from '../utils/ApiClient.js';
 import errorHandler from '../utils/ErrorHandler.js';
 import PhaseProgressionIndicator from './PhaseProgressionIndicator.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
+import BaseAlert from '@/components/ui/BaseAlert.vue';
 
 export default {
   name: 'ValidationDashboard',
   components: {
     PhaseProgressionIndicator,
-    EmptyState
+    EmptyState,
+    BaseAlert
   },
   data() {
     return {
@@ -482,34 +490,10 @@ export default {
   gap: 20px;
 }
 
-.alert {
-  padding: 15px;
-  margin: 10px 0;
-  border-radius: 5px;
-  border-left: 4px solid;
-}
-
-.alert-critical {
-  background: #ffebee;
-  border-color: #f44336;
-  color: #c62828;
-}
-
-.alert-warning {
-  background: #fff3e0;
-  border-color: #ff9800;
-  color: #e65100;
-}
-
-.alert-info {
-  background: #e3f2fd;
-  border-color: #2196f3;
-  color: #1565c0;
-}
-
-.alert-title {
-  font-weight: bold;
-  margin-bottom: 5px;
+.alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .alert-time {
