@@ -1437,6 +1437,90 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 25 - Terminal & Chat Components** ✅ Completed
+
+**Goal**: Migrate terminal modal dialogs and chat sidebar to BaseButton for consistent UI patterns.
+
+**Components Migrated**: 2 components, 19 buttons, ~114 lines saved
+
+#### **TerminalModals.vue** (6 buttons, ~91 lines saved)
+
+**Purpose**: Terminal confirmation modals for reconnect, command execution, emergency kill, and workflow actions.
+
+**Buttons Migrated by Modal**:
+
+**Reconnect Modal:**
+- `btn btn-secondary` → `<BaseButton variant="secondary" :disabled="isReconnecting">` (Cancel)
+- `btn btn-primary` → `<BaseButton variant="primary" :loading="isReconnecting">` (Reconnect)
+
+**Command Confirmation Modal:**
+- `btn btn-danger` → `<BaseButton variant="danger" :loading="isExecutingCommand">` (Execute Command)
+- `btn btn-secondary` → `<BaseButton variant="secondary" :disabled="isExecutingCommand">` (Cancel)
+
+**Emergency Kill Modal:**
+- `btn btn-danger` → `<BaseButton variant="danger" :loading="isKillingProcesses">` (Kill All Processes)
+- `btn btn-secondary` → `<BaseButton variant="secondary" :disabled="isKillingProcesses">` (Cancel)
+
+**Key Patterns**:
+- ✅ Consistent :loading prop for async operations
+- ✅ Manual spinner removal (BaseButton handles internally)
+- ✅ Proper :disabled usage during loading states
+- ⚠️ **Advanced Pattern**: Workflow buttons use conditional loading: `:loading="isProcessingWorkflow && lastWorkflowAction === 'execute'"` to isolate loading state per action
+
+**CSS Removed**: ~91 lines (removed .btn, .btn-primary, .btn-secondary, .btn-danger, .btn-success, .btn-warning, .loading-spinner, @keyframes spin)
+
+#### **ChatSidebar.vue** (13 buttons, ~23 lines saved)
+
+**Purpose**: Chat session management, multi-select deletion, system control, and display settings.
+
+**Buttons Migrated by Section**:
+
+**Sidebar Toggle:**
+- Custom toggle → `<BaseButton variant="ghost" class="p-3">` (Collapse/Expand)
+
+**Selection Mode (2 buttons):**
+- Selection controls → `<BaseButton variant="ghost" size="xs">` (Select, Cancel)
+
+**Chat History Actions (2 buttons):**
+- History item controls → `<BaseButton variant="ghost" size="xs" class="text-blueGray-400 p-1">` (Edit)
+- History item controls → `<BaseButton variant="ghost" size="xs" class="text-red-400 p-1">` (Delete)
+
+**Chat Actions Grid (4 buttons):**
+- `btn btn-primary text-xs` → `<BaseButton variant="primary" size="xs" class="py-1.5 px-2">` (New)
+- `btn btn-secondary text-xs` → `<BaseButton variant="secondary" size="xs" :disabled="!store.currentSessionId">` (Reset)
+- `btn btn-danger text-xs` → `<BaseButton variant="danger" size="xs" :disabled="!store.currentSessionId">` (Delete)
+- `btn btn-outline text-xs` → `<BaseButton variant="outline" size="xs">` (Refresh)
+
+**Selection Mode Actions:**
+- `btn btn-danger w-full` → `<BaseButton variant="danger" size="xs" class="w-full" :disabled="selectedSessions.size === 0">` (Delete Selected)
+
+**System Control:**
+- `btn btn-primary w-full` → `<BaseButton variant="primary" size="xs" class="w-full" :loading="isSystemReloading">` (Reload System)
+
+**Edit Modal (2 buttons):**
+- Modal cancel → `<BaseButton variant="secondary">` (Cancel)
+- Modal save → `<BaseButton variant="primary">` (Save)
+
+**Key Features Demonstrated**:
+- ✅ Ghost variant for subtle UI controls (toggle, selection, history actions)
+- ✅ Size xs for compact grid layouts
+- ✅ Loading state for system reload operation
+- ✅ Conditional :disabled based on state (currentSessionId, selectedSessions)
+- ✅ Custom classes preserved for specific styling needs
+
+**CSS Removed**: ~23 lines (Tailwind @apply directives: .btn, .btn-primary, .btn-secondary, .btn-danger, .btn-outline, .btn:disabled)
+
+---
+
+**Batch 25 Summary**:
+- Components: 2 (TerminalModals, ChatSidebar)
+- Buttons: 19 consolidated (6 terminal + 13 chat)
+- Lines: ~114 saved (~91 terminal + ~23 chat)
+- Variants: 5 (primary, secondary, danger, outline, ghost)
+- **Combined Total**: 12 components, ~680 lines saved, 75 buttons consolidated
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -1446,15 +1530,16 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~566 lines (batches 20-24)
+- BaseButton adoptions: ~680 lines (batches 20-25)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
   - Batch 23: ~96 lines (2 components, 12 buttons)
   - Batch 24: ~39 lines (1 component, 16 buttons)
-- **Total Progress**: ~1,360 lines / ~1,500-2,000 realistic target (68-91%)
+  - Batch 25: ~114 lines (2 components, 19 buttons)
+- **Total Progress**: ~1,474 lines / ~1,500-2,000 realistic target (74-98%)
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 10 components using BaseButton (56 buttons consolidated)
+- **BaseButton Milestone**: 12 components using BaseButton (75 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 

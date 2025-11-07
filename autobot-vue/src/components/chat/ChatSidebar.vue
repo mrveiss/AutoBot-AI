@@ -4,13 +4,14 @@
     :class="{ 'w-12': store.sidebarCollapsed, 'w-80': !store.sidebarCollapsed }"
   >
     <!-- Toggle Button -->
-    <button
-      class="p-3 border-b border-blueGray-200 text-blueGray-600 hover:bg-blueGray-200 transition-colors flex-shrink-0"
+    <BaseButton
+      variant="ghost"
+      class="p-3 border-b border-blueGray-200 text-blueGray-600 flex-shrink-0"
       @click="controller.toggleSidebar()"
       :aria-label="store.sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
     >
       <i :class="store.sidebarCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-left'"></i>
-    </button>
+    </BaseButton>
 
     <!-- Sidebar Content - FIXED: Better scroll behavior -->
     <div v-if="!store.sidebarCollapsed" class="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -19,22 +20,26 @@
       <section class="flex-1 flex flex-col min-h-0 overflow-hidden p-4 pb-0">
         <div class="flex items-center justify-between mb-3 flex-shrink-0">
           <h3 class="text-base font-semibold text-blueGray-700">Chat History</h3>
-          <button
+          <BaseButton
             v-if="!selectionMode"
             @click="enableSelectionMode"
-            class="text-xs text-blueGray-600 hover:text-indigo-600 transition-colors"
+            variant="ghost"
+            size="xs"
+            class="text-blueGray-600"
             title="Select multiple"
           >
             <i class="fas fa-check-square mr-1"></i>Select
-          </button>
+          </BaseButton>
           <div v-else class="flex items-center gap-2">
             <span class="text-xs text-blueGray-600">{{ selectedSessions.size }} selected</span>
-            <button
+            <BaseButton
               @click="cancelSelection"
-              class="text-xs text-blueGray-600 hover:text-blueGray-800"
+              variant="ghost"
+              size="xs"
+              class="text-blueGray-600"
             >
               Cancel
-            </button>
+            </BaseButton>
           </div>
         </div>
 
@@ -72,22 +77,26 @@
                 {{ session.title || getSessionPreview(session) }}
               </span>
               <div v-if="!selectionMode" class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                <button
-                  class="text-blueGray-400 hover:text-blueGray-600 p-1 rounded"
+                <BaseButton
+                  variant="ghost"
+                  size="xs"
+                  class="text-blueGray-400 p-1"
                   @click.stop="editSessionName(session)"
                   title="Edit Name"
                   tabindex="-1"
                 >
                   <i class="fas fa-edit text-xs"></i>
-                </button>
-                <button
-                  class="text-red-400 hover:text-red-600 p-1 rounded"
+                </BaseButton>
+                <BaseButton
+                  variant="ghost"
+                  size="xs"
+                  class="text-red-400 p-1"
                   @click.stop="deleteSession(session.id)"
                   title="Delete"
                   tabindex="-1"
                 >
                   <i class="fas fa-trash text-xs"></i>
-                </button>
+                </BaseButton>
               </div>
             </div>
 
@@ -108,53 +117,63 @@
 
         <!-- Chat Actions - FIXED: More compact, stays at bottom of scrollable area -->
         <div v-if="!selectionMode" class="grid grid-cols-2 gap-1.5 pt-2 border-t border-blueGray-200 flex-shrink-0">
-          <button
-            class="btn btn-primary text-xs py-1.5 px-2"
+          <BaseButton
+            variant="primary"
+            size="xs"
+            class="py-1.5 px-2"
             @click="controller.createNewSession()"
             aria-label="Create new chat"
           >
             <i class="fas fa-plus mr-1"></i>
             New
-          </button>
-          <button
-            class="btn btn-secondary text-xs py-1.5 px-2"
+          </BaseButton>
+          <BaseButton
+            variant="secondary"
+            size="xs"
+            class="py-1.5 px-2"
             @click="controller.resetCurrentChat()"
             :disabled="!store.currentSessionId"
             aria-label="Reset current chat"
           >
             <i class="fas fa-redo mr-1"></i>
             Reset
-          </button>
-          <button
-            class="btn btn-danger text-xs py-1.5 px-2"
+          </BaseButton>
+          <BaseButton
+            variant="danger"
+            size="xs"
+            class="py-1.5 px-2"
             @click="deleteCurrentSession()"
             :disabled="!store.currentSessionId"
             aria-label="Delete current chat"
           >
             <i class="fas fa-trash mr-1"></i>
             Delete
-          </button>
-          <button
-            class="btn btn-outline text-xs py-1.5 px-2"
+          </BaseButton>
+          <BaseButton
+            variant="outline"
+            size="xs"
+            class="py-1.5 px-2"
             @click="controller.loadChatSessions()"
             aria-label="Refresh chat list"
           >
             <i class="fas fa-sync mr-1"></i>
             Refresh
-          </button>
+          </BaseButton>
         </div>
 
         <!-- Selection Mode Actions -->
         <div v-else class="pt-2 border-t border-blueGray-200 flex-shrink-0">
-          <button
-            class="btn btn-danger w-full text-xs py-2"
+          <BaseButton
+            variant="danger"
+            size="xs"
+            class="w-full py-2"
             @click="deleteSelectedSessions()"
             :disabled="selectedSessions.size === 0"
             aria-label="Delete selected conversations"
           >
             <i class="fas fa-trash mr-1.5"></i>
             Delete {{ selectedSessions.size }} Selected
-          </button>
+          </BaseButton>
         </div>
       </section>
 
@@ -178,15 +197,17 @@
       <section class="border-t border-blueGray-200 p-4 pb-4 flex-shrink-0">
         <h3 class="text-base font-semibold text-blueGray-700 mb-2">System Control</h3>
         <div class="space-y-1.5">
-          <button
-            class="btn btn-primary w-full text-xs py-1.5"
+          <BaseButton
+            variant="primary"
+            size="xs"
+            class="w-full py-1.5"
             @click="reloadSystem"
-            :disabled="isSystemReloading"
+            :loading="isSystemReloading"
             aria-label="Reload system"
           >
-            <i class="fas fa-sync mr-1.5" :class="{ 'fa-spin': isSystemReloading }"></i>
+            <i class="fas fa-sync mr-1.5"></i>
             {{ isSystemReloading ? 'Reloading...' : 'Reload System' }}
-          </button>
+          </BaseButton>
 
           <!-- System Status -->
           <div class="text-xs text-center text-blueGray-500 mt-1">
@@ -221,18 +242,18 @@
         ref="editInput"
       />
       <div class="flex justify-end gap-2 mt-4">
-        <button
-          class="px-4 py-2 text-gray-600 hover:text-gray-800"
+        <BaseButton
+          variant="secondary"
           @click="cancelEdit"
         >
           Cancel
-        </button>
-        <button
-          class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+        </BaseButton>
+        <BaseButton
+          variant="primary"
           @click="saveSessionName"
         >
           Save
-        </button>
+        </BaseButton>
       </div>
     </div>
   </div>
@@ -249,6 +270,7 @@ import type { FileStats } from '@/composables/useConversationFiles'
 import ApiClient from '@/utils/ApiClient.js'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 const store = useChatStore()
 const controller = useChatController()
@@ -426,30 +448,6 @@ const deleteSelectedSessions = async () => {
 </script>
 
 <style scoped>
-.btn {
-  @apply px-3 py-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2;
-}
-
-.btn-primary {
-  @apply bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500;
-}
-
-.btn-secondary {
-  @apply bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500;
-}
-
-.btn-danger {
-  @apply bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
-}
-
-.btn-outline {
-  @apply border border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-500;
-}
-
-.btn:disabled {
-  @apply opacity-50 cursor-not-allowed;
-}
-
 /* Scrollbar styling */
 .overflow-y-auto::-webkit-scrollbar {
   width: 6px;
