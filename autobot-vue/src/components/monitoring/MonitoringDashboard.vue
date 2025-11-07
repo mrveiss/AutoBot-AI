@@ -11,19 +11,19 @@
       </div>
       
       <div class="monitoring-controls">
-        <button 
-          @click="toggleMonitoring" 
-          :class="['btn', monitoringActive ? 'btn-danger' : 'btn-success']"
+        <BaseButton
+          @click="toggleMonitoring"
+          :variant="monitoringActive ? 'danger' : 'success'"
           :disabled="loading"
         >
           <i :class="monitoringActive ? 'fas fa-stop' : 'fas fa-play'"></i>
           {{ monitoringActive ? 'Stop' : 'Start' }} Monitoring
-        </button>
-        
-        <button @click="refreshDashboard" class="btn btn-secondary" :disabled="loading">
-          <i class="fas fa-sync" :class="{ 'fa-spin': loading }"></i>
+        </BaseButton>
+
+        <BaseButton variant="secondary" @click="refreshDashboard" :loading="loading">
+          <i class="fas fa-sync"></i>
           Refresh
-        </button>
+        </BaseButton>
         
         <div class="status-indicator">
           <span :class="['status-dot', connectionStatus]"></span>
@@ -36,9 +36,9 @@
     <div v-if="criticalAlerts.length > 0" class="alert-banner critical">
       <i class="fas fa-exclamation-triangle"></i>
       <span>{{ criticalAlerts.length }} critical performance alert(s) detected</span>
-      <button @click="showAlertsModal = true" class="btn btn-sm btn-outline-light">
+      <BaseButton variant="outline" size="sm" @click="showAlertsModal = true" class="btn-outline-light">
         View Details
-      </button>
+      </BaseButton>
     </div>
 
     <!-- Performance Overview Cards -->
@@ -270,10 +270,10 @@
           <i class="fas fa-lightbulb"></i>
           Performance Optimization Recommendations
         </h4>
-        <button @click="refreshRecommendations" class="btn btn-sm btn-outline-primary">
+        <BaseButton variant="outline" size="sm" @click="refreshRecommendations" class="btn-outline-primary">
           <i class="fas fa-sync"></i>
           Refresh
-        </button>
+        </BaseButton>
       </div>
       
       <div v-if="recommendations.length > 0" class="recommendations-list">
@@ -308,7 +308,9 @@
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <h5>Performance Alerts</h5>
-          <button @click="showAlertsModal = false" class="btn-close"></button>
+          <BaseButton variant="ghost" size="xs" @click="showAlertsModal = false" class="btn-close">
+            <i class="fas fa-times"></i>
+          </BaseButton>
         </div>
         <div class="modal-body">
           <div v-if="allAlerts.length > 0" class="alerts-list">
@@ -343,6 +345,7 @@ import { Chart, registerables } from 'chart.js'
 import 'chartjs-adapter-date-fns'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 Chart.register(...registerables)
 
@@ -350,7 +353,8 @@ export default {
   name: 'MonitoringDashboard',
   components: {
     EmptyState,
-    StatusBadge
+    StatusBadge,
+    BaseButton
   },
   data() {
     return {
@@ -1333,77 +1337,6 @@ export default {
   font-size: 2em;
   margin-bottom: 10px;
   display: block;
-}
-
-.btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9em;
-  font-weight: 500;
-  text-decoration: none;
-  display: inline-block;
-  transition: background-color 0.2s;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-success {
-  background: #4caf50;
-  color: white;
-}
-
-.btn-success:hover:not(:disabled) {
-  background: #45a049;
-}
-
-.btn-danger {
-  background: #f44336;
-  color: white;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background: #da190b;
-}
-
-.btn-secondary {
-  background: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #5a6268;
-}
-
-.btn-outline-primary {
-  background: transparent;
-  color: #007bff;
-  border: 1px solid #007bff;
-}
-
-.btn-outline-primary:hover:not(:disabled) {
-  background: #007bff;
-  color: white;
-}
-
-.btn-outline-light {
-  background: transparent;
-  color: white;
-  border: 1px solid white;
-}
-
-.btn-outline-light:hover:not(:disabled) {
-  background: white;
-  color: #333;
-}
-
-.btn-sm {
-  padding: 4px 8px;
-  font-size: 0.8em;
 }
 
 .form-select {
