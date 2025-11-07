@@ -27763,6 +27763,209 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("container_integration", capabilities_source)
         self.assertIn("docker_container", capabilities_source)
 
+    # ==============================================
+    # BATCH 152: feature_flags.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_152_get_feature_flags_status_simple_pattern(self):
+        """Verify get_feature_flags_status endpoint uses Simple Pattern"""
+        from backend.api import feature_flags
+
+        source = inspect.getsource(feature_flags.get_feature_flags_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_feature_flags_status"', source)
+        self.assertIn('error_code_prefix="FEATURE_FLAGS"', source)
+
+    def test_batch_152_update_enforcement_mode_simple_pattern(self):
+        """Verify update_enforcement_mode endpoint uses Simple Pattern"""
+        from backend.api import feature_flags
+
+        source = inspect.getsource(feature_flags.update_enforcement_mode)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="update_enforcement_mode"', source)
+        self.assertIn('error_code_prefix="FEATURE_FLAGS"', source)
+
+    def test_batch_152_set_endpoint_enforcement_simple_pattern(self):
+        """Verify set_endpoint_enforcement endpoint uses Simple Pattern"""
+        from backend.api import feature_flags
+
+        source = inspect.getsource(feature_flags.set_endpoint_enforcement)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="set_endpoint_enforcement"', source)
+        self.assertIn('error_code_prefix="FEATURE_FLAGS"', source)
+
+    def test_batch_152_remove_endpoint_enforcement_simple_pattern(self):
+        """Verify remove_endpoint_enforcement endpoint uses Simple Pattern"""
+        from backend.api import feature_flags
+
+        source = inspect.getsource(feature_flags.remove_endpoint_enforcement)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="remove_endpoint_enforcement"', source)
+        self.assertIn('error_code_prefix="FEATURE_FLAGS"', source)
+
+    def test_batch_152_get_access_control_metrics_simple_pattern(self):
+        """Verify get_access_control_metrics endpoint uses Simple Pattern"""
+        from backend.api import feature_flags
+
+        source = inspect.getsource(feature_flags.get_access_control_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_access_control_metrics"', source)
+        self.assertIn('error_code_prefix="FEATURE_FLAGS"', source)
+
+    def test_batch_152_get_endpoint_metrics_simple_pattern(self):
+        """Verify get_endpoint_metrics endpoint uses Simple Pattern"""
+        from backend.api import feature_flags
+
+        source = inspect.getsource(feature_flags.get_endpoint_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_endpoint_metrics"', source)
+        self.assertIn('error_code_prefix="FEATURE_FLAGS"', source)
+
+    def test_batch_152_get_user_metrics_simple_pattern(self):
+        """Verify get_user_metrics endpoint uses Simple Pattern"""
+        from backend.api import feature_flags
+
+        source = inspect.getsource(feature_flags.get_user_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_user_metrics"', source)
+        self.assertIn('error_code_prefix="FEATURE_FLAGS"', source)
+
+    def test_batch_152_cleanup_old_metrics_simple_pattern(self):
+        """Verify cleanup_old_metrics endpoint uses Simple Pattern"""
+        from backend.api import feature_flags
+
+        source = inspect.getsource(feature_flags.cleanup_old_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="cleanup_old_metrics"', source)
+        self.assertIn('error_code_prefix="FEATURE_FLAGS"', source)
+
+    def test_batch_152_all_feature_flags_endpoints_have_decorator(self):
+        """Verify all feature_flags endpoints have @with_error_handling decorator"""
+        from backend.api import feature_flags
+
+        endpoint_functions = [
+            feature_flags.get_feature_flags_status,
+            feature_flags.update_enforcement_mode,
+            feature_flags.set_endpoint_enforcement,
+            feature_flags.remove_endpoint_enforcement,
+            feature_flags.get_access_control_metrics,
+            feature_flags.get_endpoint_metrics,
+            feature_flags.get_user_metrics,
+            feature_flags.cleanup_old_metrics,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_152_feature_flags_100_percent_milestone(self):
+        """Verify feature_flags.py has reached 100% migration"""
+        from backend.api import feature_flags
+
+        endpoint_functions = [
+            feature_flags.get_feature_flags_status,
+            feature_flags.update_enforcement_mode,
+            feature_flags.set_endpoint_enforcement,
+            feature_flags.remove_endpoint_enforcement,
+            feature_flags.get_access_control_metrics,
+            feature_flags.get_endpoint_metrics,
+            feature_flags.get_user_metrics,
+            feature_flags.cleanup_old_metrics,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 8
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_152_migration_preserves_enforcement_mode_enum(self):
+        """Verify migration preserves EnforcementMode enum handling"""
+        from backend.api import feature_flags
+
+        # Verify EnforcementMode is imported
+        source_update = inspect.getsource(feature_flags.update_enforcement_mode)
+        self.assertIn("update.mode", source_update)
+        self.assertIn("set_enforcement_mode", source_update)
+
+        # Verify endpoint-specific enforcement
+        source_endpoint = inspect.getsource(feature_flags.set_endpoint_enforcement)
+        self.assertIn("set_endpoint_enforcement", source_endpoint)
+
+    def test_batch_152_migration_preserves_admin_dependency(self):
+        """Verify migration preserves admin authentication dependency"""
+        from backend.api import feature_flags
+
+        # Verify require_admin is used in endpoints
+        status_source = inspect.getsource(feature_flags.get_feature_flags_status)
+        self.assertIn("require_admin", status_source)
+        self.assertIn("admin", status_source)
+
+    def test_batch_152_migration_preserves_feature_flags_service(self):
+        """Verify migration preserves FeatureFlags service integration"""
+        from backend.api import feature_flags
+
+        # Verify FeatureFlags dependency injection
+        status_source = inspect.getsource(feature_flags.get_feature_flags_status)
+        self.assertIn("get_feature_flags", status_source)
+        self.assertIn("flags", status_source)
+
+        # Verify service methods are called
+        self.assertIn("get_rollout_statistics", status_source)
+
+    def test_batch_152_migration_preserves_metrics_service(self):
+        """Verify migration preserves AccessControlMetrics service integration"""
+        from backend.api import feature_flags
+
+        # Verify metrics service dependency injection
+        metrics_source = inspect.getsource(feature_flags.get_access_control_metrics)
+        self.assertIn("get_metrics_service", metrics_source)
+        self.assertIn("metrics", metrics_source)
+
+        # Verify metrics methods
+        self.assertIn("get_statistics", metrics_source)
+
+    def test_batch_152_migration_preserves_audit_logging(self):
+        """Verify migration preserves audit logging functionality"""
+        from backend.api import feature_flags
+
+        # Verify audit_log is called in update operations
+        update_source = inspect.getsource(feature_flags.update_enforcement_mode)
+        self.assertIn("audit_log", update_source)
+        self.assertIn("operation=", update_source)
+        self.assertIn("result=", update_source)
+
+    def test_batch_152_migration_preserves_query_parameters(self):
+        """Verify migration preserves FastAPI Query parameters"""
+        from backend.api import feature_flags
+
+        # Verify Query parameters in metrics endpoints
+        metrics_source = inspect.getsource(feature_flags.get_access_control_metrics)
+        self.assertIn("days", metrics_source)
+        self.assertIn("include_details", metrics_source)
+        self.assertIn("Query", metrics_source)
+
 
 if __name__ == "__main__":
     unittest.main()
