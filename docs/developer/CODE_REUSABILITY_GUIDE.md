@@ -2353,6 +2353,52 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 40 - System Status Indicator** ✅ Completed
+
+**Goal**: Migrate system status monitoring indicator with notification management, status details, and quick actions to BaseButton.
+
+**Components Migrated**: 1 component, 5 buttons, ~35 lines saved
+
+#### **SystemStatusIndicator.vue** (5 buttons, ~35 lines saved)
+
+**Purpose**: Fixed system status indicator with dropdown details panel, notification list, and quick action controls.
+
+**Buttons Migrated**:
+
+**Main Status Indicator (1 button):**
+- Status indicator → `<BaseButton variant="primary" :class="statusClasses" :title="getStatusDescription(indicator.status)">` (System status with dynamic classes)
+
+**Details Panel Controls (2 buttons):**
+- Close details → `<BaseButton variant="ghost" size="sm" class="text-gray-400...">` (Close)
+- Refresh status → `<BaseButton variant="primary" size="xs" class="px-3 py-1...">` (Refresh)
+
+**Notification Actions (2 buttons):**
+- Clear all notifications → `<BaseButton variant="danger" size="xs" v-if="activeNotificationCount > 0" class="px-3 py-1...">` (Clear All)
+- Hide notification → `<BaseButton variant="ghost" size="xs" class="ml-2 p-1">` (Per-notification hide, v-for)
+
+**Key Patterns**:
+- ✅ Primary variant for main status indicator with preserved dynamic class bindings (statusClasses computed property)
+- ✅ Ghost variant with sm/xs sizes for minimal close/hide buttons
+- ✅ Primary/danger variants with xs size for quick actions
+- ✅ Conditional rendering with notification count (v-if="activeNotificationCount > 0")
+- ✅ Per-notification actions in v-for loop
+- ✅ Preserved complex status-based styling (bg-green/yellow/red/gray with animate-pulse)
+- ✅ Teleport integration with dropdown details panel
+- ✅ Icon components (Heroicons) with dynamic rendering
+
+**CSS Impact**: ~35 lines saved from cleaner template code (no button-specific CSS in this component - uses custom animations and scrollbar styles for other UI elements).
+
+---
+
+**Batch 40 Summary**:
+- Components: 1 (SystemStatusIndicator)
+- Buttons: 5 consolidated (1 main status + 1 close + 2 quick actions + 1 per-notification hide)
+- Lines: ~35 saved
+- Variants: 3 (primary, ghost, danger)
+- **Combined Total**: 29 components, ~1,817 lines saved, 202 buttons consolidated
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -2362,7 +2408,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~1,782 lines (batches 20-39)
+- BaseButton adoptions: ~1,817 lines (batches 20-40)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
@@ -2383,9 +2429,10 @@ const createRipple = (event: TouchEvent) => {
   - Batch 37: ~65 lines (1 component, 8 buttons)
   - Batch 38: ~85 lines (1 component, 9 buttons)
   - Batch 39: ~70 lines (1 component, 6 buttons)
-- **Total Progress**: ~2,576 lines / ~1,500-2,000 realistic target (129-172%) ✅ **TARGET EXCEEDED**
+  - Batch 40: ~35 lines (1 component, 5 buttons)
+- **Total Progress**: ~2,611 lines / ~1,500-2,000 realistic target (131-174%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 28 components using BaseButton (197 buttons consolidated)
+- **BaseButton Milestone**: 29 components using BaseButton (202 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 

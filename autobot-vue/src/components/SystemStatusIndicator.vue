@@ -1,27 +1,28 @@
 <template>
   <div class="fixed top-4 left-4 z-30 lg:left-auto lg:right-4">
     <!-- Main status indicator -->
-    <button
+    <BaseButton
       @click="toggleDetails"
       :class="statusClasses"
       class="relative px-3 py-2 rounded-lg shadow-lg flex items-center space-x-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
       :title="getStatusDescription(indicator.status)"
+      variant="primary"
     >
       <!-- Status icon -->
-      <component 
-        :is="getStatusIcon(indicator.status)" 
-        class="h-4 w-4" 
+      <component
+        :is="getStatusIcon(indicator.status)"
+        class="h-4 w-4"
       />
-      
+
       <!-- Status text -->
       <span>{{ indicator.text }}</span>
-      
+
       <!-- Pulse animation for warning/error states -->
       <div
         v-if="indicator.pulse"
         class="absolute -top-1 -right-1 w-3 h-3 bg-red-400 rounded-full animate-ping"
       ></div>
-      
+
       <!-- Notification count badge -->
       <span
         v-if="activeNotificationCount > 0"
@@ -29,7 +30,7 @@
       >
         {{ activeNotificationCount }}
       </span>
-    </button>
+    </BaseButton>
 
     <!-- Details dropdown -->
     <Teleport to="body">
@@ -43,12 +44,14 @@
           <!-- Header -->
           <div class="flex items-center justify-between p-4 border-b dark:border-gray-700">
             <h3 class="font-medium text-gray-900 dark:text-white">System Status</h3>
-            <button
+            <BaseButton
+              variant="ghost"
+              size="sm"
               @click="showDetails = false"
               class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md p-1 transition-colors duration-200"
             >
               <XMarkIcon class="h-5 w-5" />
-            </button>
+            </BaseButton>
           </div>
           
           <!-- Status details -->
@@ -102,19 +105,23 @@
 
             <!-- Quick Actions -->
             <div class="flex items-center justify-between border-t dark:border-gray-700 pt-4 mt-4">
-              <button
+              <BaseButton
+                variant="primary"
+                size="xs"
                 @click="refreshStatus"
                 class="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900 rounded-md transition-colors duration-200"
               >
                 Refresh
-              </button>
-              <button
+              </BaseButton>
+              <BaseButton
                 v-if="activeNotificationCount > 0"
+                variant="danger"
+                size="xs"
                 @click="clearAllNotifications"
                 class="px-3 py-1 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900 rounded-md transition-colors duration-200"
               >
                 Clear All
-              </button>
+              </BaseButton>
             </div>
           </div>
           
@@ -152,12 +159,14 @@
                       {{ formatTime(new Date(notification.timestamp)) }}
                     </p>
                   </div>
-                  <button
+                  <BaseButton
+                    variant="ghost"
+                    size="xs"
                     @click="hideNotification(notification.id)"
-                    class="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200"
+                    class="ml-2 p-1"
                   >
                     <XMarkIcon class="h-3 w-3" />
-                  </button>
+                  </BaseButton>
                 </div>
                 <div v-if="activeNotificationCount > 5" class="text-xs text-gray-500 dark:text-gray-400 text-center pt-2">
                   ... and {{ activeNotificationCount - 5 }} more
@@ -181,6 +190,7 @@ import InformationCircleIcon from '@heroicons/vue/24/outline/InformationCircleIc
 import XCircleIcon from '@heroicons/vue/24/outline/XCircleIcon'
 import { formatTime } from '@/utils/formatHelpers'
 import CheckCircleIcon from '@heroicons/vue/24/outline/CheckCircleIcon'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 const appStore = useAppStore()
 
