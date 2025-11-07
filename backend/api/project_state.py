@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Add project root to path and import project state manager
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -60,6 +61,11 @@ class PhaseValidationModel(BaseModel):
     validation_results: List[ValidationResultModel]
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_project_status",
+    error_code_prefix="PROJECT_STATE",
+)
 @router.get("/status", response_model=ProjectStatus)
 @smart_cache(
     data_type="project_status",
@@ -105,6 +111,11 @@ async def get_project_status(detailed: bool = False):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_validation",
+    error_code_prefix="PROJECT_STATE",
+)
 @router.post("/validate")
 async def run_validation():
     """Run validation on all project phases"""
@@ -141,6 +152,11 @@ async def run_validation():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_validation_report",
+    error_code_prefix="PROJECT_STATE",
+)
 @router.get("/report")
 async def get_validation_report():
     """Get detailed validation report in markdown format"""
@@ -163,6 +179,11 @@ async def get_validation_report():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_all_phases",
+    error_code_prefix="PROJECT_STATE",
+)
 @router.get("/phases")
 async def get_all_phases():
     """Get detailed information about all development phases"""
@@ -214,6 +235,11 @@ async def get_all_phases():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="activate_phase",
+    error_code_prefix="PROJECT_STATE",
+)
 @router.post("/phase/{phase_id}/activate")
 async def activate_phase(phase_id: str):
     """Activate a specific development phase"""
@@ -250,6 +276,11 @@ async def activate_phase(phase_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="auto_progress_phases",
+    error_code_prefix="PROJECT_STATE",
+)
 @router.post("/auto-progress")
 async def auto_progress_phases():
     """Run automated phase progression logic"""
@@ -268,6 +299,11 @@ async def auto_progress_phases():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="PROJECT_STATE",
+)
 @router.get("/health")
 async def health_check():
     """Health check for project state API"""
