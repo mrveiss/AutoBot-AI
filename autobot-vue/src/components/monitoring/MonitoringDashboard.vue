@@ -308,39 +308,34 @@
     </div>
 
     <!-- Performance Alerts Modal -->
-    <div v-if="showAlertsModal" class="modal-overlay" @click="showAlertsModal = false">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h5>Performance Alerts</h5>
-          <BaseButton variant="ghost" size="xs" @click="showAlertsModal = false" class="btn-close">
-            <i class="fas fa-times"></i>
-          </BaseButton>
-        </div>
-        <div class="modal-body">
-          <div v-if="allAlerts.length > 0" class="alerts-list">
-            <div 
-              v-for="alert in allAlerts" 
-              :key="alert.timestamp"
-              :class="['alert-item', alert.severity]"
-            >
-              <div class="alert-header">
-                <StatusBadge :variant="getSeverityVariant(alert.severity)" size="small">{{ alert.severity }}</StatusBadge>
-                <span class="category">{{ alert.category }}</span>
-                <span class="timestamp">{{ formatTimestamp(alert.timestamp) }}</span>
-              </div>
-              <div class="alert-message">{{ alert.message }}</div>
-              <div class="alert-recommendation">
-                <strong>Recommendation:</strong> {{ alert.recommendation }}
-              </div>
-            </div>
+    <BaseModal
+      v-model="showAlertsModal"
+      title="Performance Alerts"
+      size="large"
+      scrollable
+    >
+      <div v-if="allAlerts.length > 0" class="alerts-list">
+        <div
+          v-for="alert in allAlerts"
+          :key="alert.timestamp"
+          :class="['alert-item', alert.severity]"
+        >
+          <div class="alert-header">
+            <StatusBadge :variant="getSeverityVariant(alert.severity)" size="small">{{ alert.severity }}</StatusBadge>
+            <span class="category">{{ alert.category }}</span>
+            <span class="timestamp">{{ formatTimestamp(alert.timestamp) }}</span>
           </div>
-          <div v-else class="no-alerts">
-            <i class="fas fa-check-circle"></i>
-            No performance alerts
+          <div class="alert-message">{{ alert.message }}</div>
+          <div class="alert-recommendation">
+            <strong>Recommendation:</strong> {{ alert.recommendation }}
           </div>
         </div>
       </div>
-    </div>
+      <div v-else class="no-alerts">
+        <i class="fas fa-check-circle"></i>
+        No performance alerts
+      </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -351,6 +346,7 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 Chart.register(...registerables)
 
@@ -360,7 +356,8 @@ export default {
     EmptyState,
     StatusBadge,
     BaseButton,
-    BaseAlert
+    BaseAlert,
+    BaseModal
   },
   data() {
     return {
@@ -1225,56 +1222,6 @@ export default {
   font-size: 2em;
   margin-bottom: 10px;
   display: block;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 8px;
-  max-width: 800px;
-  max-height: 80vh;
-  width: 90%;
-  overflow: hidden;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
-}
-
-.modal-header h5 {
-  margin: 0;
-  color: #333;
-}
-
-.btn-close {
-  background: none;
-  border: none;
-  font-size: 1.5em;
-  cursor: pointer;
-  color: #666;
-}
-
-.modal-body {
-  padding: 20px;
-  max-height: 60vh;
-  overflow-y: auto;
 }
 
 .alerts-list {
