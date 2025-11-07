@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import existing monitoring functionality
 try:
@@ -65,6 +66,11 @@ class ServicesResponse(BaseModel):
     last_updated: datetime
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_services",
+    error_code_prefix="SERVICES",
+)
 @router.get("/services", response_model=ServicesResponse)
 async def get_services():
     """Get list of all available services with their status"""
@@ -180,12 +186,22 @@ async def get_services():
         raise HTTPException(status_code=500, detail=f"Failed to get services: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_health",
+    error_code_prefix="SERVICES",
+)
 @router.get("/health")
 async def get_health():
     """Simple health check endpoint"""
     return {"status": "healthy", "timestamp": datetime.now()}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_services_health",
+    error_code_prefix="SERVICES",
+)
 @router.get("/services/health")
 async def get_services_health():
     """Get service health status - alias to monitoring endpoint"""
@@ -232,6 +248,11 @@ async def get_services_health():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_vms_status",
+    error_code_prefix="SERVICES",
+)
 @router.get("/vms/status")
 async def get_vms_status():
     """Get VM status for distributed infrastructure"""
@@ -317,6 +338,11 @@ async def get_vms_status():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_version",
+    error_code_prefix="SERVICES",
+)
 @router.get("/version", response_model=SystemInfo)
 async def get_version():
     """Get application version and system information"""

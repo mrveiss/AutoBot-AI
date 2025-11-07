@@ -25806,6 +25806,151 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("unified_config_manager.get_nested(\"developer.enabled\"", source_info)
         self.assertIn("HTTPException(status_code=403", source_info)
 
+    # ==============================================
+    # BATCH 140: services.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_140_get_services_simple_pattern(self):
+        """Verify get_services endpoint uses Simple Pattern"""
+        from backend.api import services
+
+        source = inspect.getsource(services.get_services)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_services"', source)
+        self.assertIn('error_code_prefix="SERVICES"', source)
+
+    def test_batch_140_get_health_simple_pattern(self):
+        """Verify get_health endpoint uses Simple Pattern"""
+        from backend.api import services
+
+        source = inspect.getsource(services.get_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_health"', source)
+        self.assertIn('error_code_prefix="SERVICES"', source)
+
+    def test_batch_140_get_services_health_simple_pattern(self):
+        """Verify get_services_health endpoint uses Simple Pattern"""
+        from backend.api import services
+
+        source = inspect.getsource(services.get_services_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_services_health"', source)
+        self.assertIn('error_code_prefix="SERVICES"', source)
+
+    def test_batch_140_get_vms_status_simple_pattern(self):
+        """Verify get_vms_status endpoint uses Simple Pattern"""
+        from backend.api import services
+
+        source = inspect.getsource(services.get_vms_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_vms_status"', source)
+        self.assertIn('error_code_prefix="SERVICES"', source)
+
+    def test_batch_140_get_version_simple_pattern(self):
+        """Verify get_version endpoint uses Simple Pattern"""
+        from backend.api import services
+
+        source = inspect.getsource(services.get_version)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_version"', source)
+        self.assertIn('error_code_prefix="SERVICES"', source)
+
+    def test_batch_140_all_services_endpoints_have_decorator(self):
+        """Verify all services endpoints have @with_error_handling decorator"""
+        from backend.api import services
+
+        endpoint_functions = [
+            services.get_services,
+            services.get_health,
+            services.get_services_health,
+            services.get_vms_status,
+            services.get_version,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_140_services_100_percent_milestone(self):
+        """Verify services.py has reached 100% migration"""
+        from backend.api import services
+
+        endpoint_functions = [
+            services.get_services,
+            services.get_health,
+            services.get_services_health,
+            services.get_vms_status,
+            services.get_version,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 5
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_140_migration_preserves_service_monitoring(self):
+        """Verify migration preserves service monitoring integration"""
+        from backend.api import services
+
+        source = inspect.getsource(services.get_services)
+        self.assertIn("monitoring_services_health", source)
+        self.assertIn("RedisServiceManager", source)
+        self.assertIn("ServiceStatus", source)
+
+    def test_batch_140_migration_preserves_health_check(self):
+        """Verify migration preserves simple health check"""
+        from backend.api import services
+
+        source = inspect.getsource(services.get_health)
+        self.assertIn("healthy", source)
+        self.assertIn("datetime.now()", source)
+
+    def test_batch_140_migration_preserves_services_health_alias(self):
+        """Verify migration preserves services health monitoring alias"""
+        from backend.api import services
+
+        source = inspect.getsource(services.get_services_health)
+        self.assertIn("monitoring_services_health", source)
+        self.assertIn("await get_services()", source)
+        self.assertIn("overall_status", source)
+
+    def test_batch_140_migration_preserves_vm_status_tracking(self):
+        """Verify migration preserves VM status tracking"""
+        from backend.api import services
+
+        source = inspect.getsource(services.get_vms_status)
+        self.assertIn("NetworkConstants", source)
+        self.assertIn("VMStatus", source)
+
+    def test_batch_140_migration_preserves_version_info(self):
+        """Verify migration preserves version and system info"""
+        from backend.api import services
+
+        source = inspect.getsource(services.get_version)
+        self.assertIn("unified_config_manager", source)
+        self.assertIn("SystemInfo", source)
+        self.assertIn("version", source)
+        self.assertIn("uptime", source)
+
 
 if __name__ == "__main__":
     unittest.main()
