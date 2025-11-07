@@ -13,6 +13,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -22,6 +23,11 @@ _npu_worker_ws_clients: list[WebSocket] = []
 _npu_events_subscribed = False
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="websocket_test_endpoint",
+    error_code_prefix="WEBSOCKETS",
+)
 @router.websocket("/ws-test")
 async def websocket_test_endpoint(websocket: WebSocket):
     """Simple test WebSocket endpoint without event manager integration."""
@@ -51,6 +57,11 @@ async def websocket_test_endpoint(websocket: WebSocket):
         logger.info("Test WebSocket disconnected")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="websocket_endpoint",
+    error_code_prefix="WEBSOCKETS",
+)
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """
@@ -345,6 +356,11 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("WebSocket connection cleanup completed")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="npu_workers_websocket_endpoint",
+    error_code_prefix="WEBSOCKETS",
+)
 @router.websocket("/ws/npu-workers")
 async def npu_workers_websocket_endpoint(websocket: WebSocket):
     """

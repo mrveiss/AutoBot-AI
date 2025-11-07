@@ -25951,6 +25951,129 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("version", source)
         self.assertIn("uptime", source)
 
+    # ==============================================
+    # BATCH 141: websockets.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_141_websocket_test_endpoint_simple_pattern(self):
+        """Verify websocket_test_endpoint uses Simple Pattern"""
+        from backend.api import websockets
+
+        source = inspect.getsource(websockets.websocket_test_endpoint)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="websocket_test_endpoint"', source)
+        self.assertIn('error_code_prefix="WEBSOCKETS"', source)
+
+    def test_batch_141_websocket_endpoint_simple_pattern(self):
+        """Verify websocket_endpoint uses Simple Pattern"""
+        from backend.api import websockets
+
+        source = inspect.getsource(websockets.websocket_endpoint)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="websocket_endpoint"', source)
+        self.assertIn('error_code_prefix="WEBSOCKETS"', source)
+
+    def test_batch_141_npu_workers_websocket_endpoint_simple_pattern(self):
+        """Verify npu_workers_websocket_endpoint uses Simple Pattern"""
+        from backend.api import websockets
+
+        source = inspect.getsource(websockets.npu_workers_websocket_endpoint)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="npu_workers_websocket_endpoint"', source)
+        self.assertIn('error_code_prefix="WEBSOCKETS"', source)
+
+    def test_batch_141_all_websockets_endpoints_have_decorator(self):
+        """Verify all websockets endpoints have @with_error_handling decorator"""
+        from backend.api import websockets
+
+        endpoint_functions = [
+            websockets.websocket_test_endpoint,
+            websockets.websocket_endpoint,
+            websockets.npu_workers_websocket_endpoint,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_141_websockets_100_percent_milestone(self):
+        """Verify websockets.py has reached 100% migration"""
+        from backend.api import websockets
+
+        endpoint_functions = [
+            websockets.websocket_test_endpoint,
+            websockets.websocket_endpoint,
+            websockets.npu_workers_websocket_endpoint,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 3
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_141_migration_preserves_websocket_test(self):
+        """Verify migration preserves test WebSocket functionality"""
+        from backend.api import websockets
+
+        source = inspect.getsource(websockets.websocket_test_endpoint)
+        self.assertIn("await websocket.accept()", source)
+        self.assertIn("WebSocket connected successfully", source)
+        self.assertIn("WebSocketState.CONNECTED", source)
+
+    def test_batch_141_migration_preserves_event_broadcasting(self):
+        """Verify migration preserves event broadcasting in main WebSocket"""
+        from backend.api import websockets
+
+        source = inspect.getsource(websockets.websocket_endpoint)
+        self.assertIn("chat_history_manager", source)
+        self.assertIn("connection_established", source)
+        self.assertIn("broadcast_event", source)
+
+    def test_batch_141_migration_preserves_npu_worker_management(self):
+        """Verify migration preserves NPU worker WebSocket management"""
+        from backend.api import websockets
+
+        source = inspect.getsource(websockets.npu_workers_websocket_endpoint)
+        self.assertIn("_npu_worker_ws_clients", source)
+        self.assertIn("NPU Worker WebSocket connected", source)
+
+    def test_batch_141_migration_preserves_websocket_disconnect_handling(self):
+        """Verify migration preserves WebSocketDisconnect handling"""
+        from backend.api import websockets
+
+        # Check test endpoint
+        source_test = inspect.getsource(websockets.websocket_test_endpoint)
+        self.assertIn("WebSocketDisconnect", source_test)
+
+        # Check main endpoint
+        source_main = inspect.getsource(websockets.websocket_endpoint)
+        self.assertIn("WebSocketState", source_main)
+
+    def test_batch_141_migration_preserves_connection_state_tracking(self):
+        """Verify migration preserves connection state tracking"""
+        from backend.api import websockets
+
+        source = inspect.getsource(websockets.websocket_endpoint)
+        self.assertIn("websocket.client_state", source)
+        self.assertIn("WebSocketState.CONNECTED", source)
+
 
 if __name__ == "__main__":
     unittest.main()
