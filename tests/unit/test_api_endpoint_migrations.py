@@ -26488,6 +26488,152 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("implementations", source)
         self.assertIn("pty_shell", source)
 
+    # ==============================================
+    # BATCH 145: chat_enhanced.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_145_enhanced_chat_simple_pattern(self):
+        """Verify enhanced_chat endpoint uses Simple Pattern"""
+        from backend.api import chat_enhanced
+
+        source = inspect.getsource(chat_enhanced.enhanced_chat)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="enhanced_chat"', source)
+        self.assertIn('error_code_prefix="CHAT_ENHANCED"', source)
+
+    def test_batch_145_stream_enhanced_chat_simple_pattern(self):
+        """Verify stream_enhanced_chat endpoint uses Simple Pattern"""
+        from backend.api import chat_enhanced
+
+        source = inspect.getsource(chat_enhanced.stream_enhanced_chat)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="stream_enhanced_chat"', source)
+        self.assertIn('error_code_prefix="CHAT_ENHANCED"', source)
+
+    def test_batch_145_enhanced_chat_health_check_simple_pattern(self):
+        """Verify enhanced_chat_health_check endpoint uses Simple Pattern"""
+        from backend.api import chat_enhanced
+
+        source = inspect.getsource(chat_enhanced.enhanced_chat_health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="enhanced_chat_health_check"', source)
+        self.assertIn('error_code_prefix="CHAT_ENHANCED"', source)
+
+    def test_batch_145_get_enhanced_chat_capabilities_simple_pattern(self):
+        """Verify get_enhanced_chat_capabilities endpoint uses Simple Pattern"""
+        from backend.api import chat_enhanced
+
+        source = inspect.getsource(chat_enhanced.get_enhanced_chat_capabilities)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_enhanced_chat_capabilities"', source)
+        self.assertIn('error_code_prefix="CHAT_ENHANCED"', source)
+
+    def test_batch_145_compatible_chat_message_simple_pattern(self):
+        """Verify compatible_chat_message endpoint uses Simple Pattern"""
+        from backend.api import chat_enhanced
+
+        source = inspect.getsource(chat_enhanced.compatible_chat_message)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="compatible_chat_message"', source)
+        self.assertIn('error_code_prefix="CHAT_ENHANCED"', source)
+
+    def test_batch_145_all_chat_enhanced_endpoints_have_decorator(self):
+        """Verify all chat_enhanced endpoints have @with_error_handling decorator"""
+        from backend.api import chat_enhanced
+
+        endpoint_functions = [
+            chat_enhanced.enhanced_chat,
+            chat_enhanced.stream_enhanced_chat,
+            chat_enhanced.enhanced_chat_health_check,
+            chat_enhanced.get_enhanced_chat_capabilities,
+            chat_enhanced.compatible_chat_message,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_145_chat_enhanced_100_percent_milestone(self):
+        """Verify chat_enhanced.py has reached 100% migration"""
+        from backend.api import chat_enhanced
+
+        endpoint_functions = [
+            chat_enhanced.enhanced_chat,
+            chat_enhanced.stream_enhanced_chat,
+            chat_enhanced.enhanced_chat_health_check,
+            chat_enhanced.get_enhanced_chat_capabilities,
+            chat_enhanced.compatible_chat_message,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 5
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_145_migration_preserves_ai_stack_integration(self):
+        """Verify migration preserves AI Stack integration"""
+        from backend.api import chat_enhanced
+
+        source = inspect.getsource(chat_enhanced.enhanced_chat)
+        self.assertIn("process_enhanced_chat_message", source)
+        self.assertIn("Enhanced chat message processed successfully", source)
+        self.assertIn("get_knowledge_base", source)
+
+    def test_batch_145_migration_preserves_streaming_functionality(self):
+        """Verify migration preserves streaming response functionality"""
+        from backend.api import chat_enhanced
+
+        source = inspect.getsource(chat_enhanced.stream_enhanced_chat)
+        self.assertIn("StreamingResponse", source)
+        self.assertIn("generate_enhanced_stream", source)
+        self.assertIn("text/event-stream", source)
+
+    def test_batch_145_migration_preserves_health_check_components(self):
+        """Verify migration preserves health check component structure"""
+        from backend.api import chat_enhanced
+
+        source = inspect.getsource(chat_enhanced.enhanced_chat_health_check)
+        self.assertIn("health_status", source)
+        self.assertIn("ai_stack", source)
+        self.assertIn("components", source)
+
+    def test_batch_145_migration_preserves_capabilities_response(self):
+        """Verify migration preserves capabilities response structure"""
+        from backend.api import chat_enhanced
+
+        source = inspect.getsource(chat_enhanced.get_enhanced_chat_capabilities)
+        self.assertIn("available_agents", source)
+        self.assertIn("response_styles", source)
+        self.assertIn("knowledge_base_integration", source)
+
+    def test_batch_145_migration_preserves_backward_compatibility(self):
+        """Verify migration preserves backward compatibility wrapper"""
+        from backend.api import chat_enhanced
+
+        source = inspect.getsource(chat_enhanced.compatible_chat_message)
+        self.assertIn("EnhancedChatMessage", source)
+        self.assertIn("use_ai_stack", source)
+        self.assertIn("use_knowledge_base", source)
+
 
 if __name__ == "__main__":
     unittest.main()
