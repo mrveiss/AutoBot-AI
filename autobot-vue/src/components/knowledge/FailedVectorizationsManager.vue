@@ -6,19 +6,28 @@
         Failed Vectorizations
       </h3>
       <div class="header-actions">
-        <button class="btn-refresh" @click="refreshFailedJobs" :disabled="loading">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+        <BaseButton
+          variant="primary"
+          size="sm"
+          @click="refreshFailedJobs"
+          :disabled="loading"
+          :loading="loading"
+          class="btn-refresh"
+        >
+          <i v-if="!loading" class="fas fa-sync-alt"></i>
           Refresh
-        </button>
-        <button
+        </BaseButton>
+        <BaseButton
           v-if="failedJobs.length > 0"
-          class="btn-clear-all"
+          variant="danger"
+          size="sm"
           @click="clearAllFailed"
           :disabled="loading"
+          class="btn-clear-all"
         >
           <i class="fas fa-trash-alt"></i>
           Clear All
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -61,25 +70,27 @@
         </div>
 
         <div class="job-actions">
-          <button
-            class="btn-retry"
+          <BaseButton
+            variant="success"
+            size="sm"
             @click="retryJob(job.job_id)"
             :disabled="loading || retryingJobs.has(job.job_id)"
+            :loading="retryingJobs.has(job.job_id)"
+            class="btn-retry"
           >
-            <i
-              class="fas"
-              :class="retryingJobs.has(job.job_id) ? 'fa-spinner fa-spin' : 'fa-redo'"
-            ></i>
+            <i v-if="!retryingJobs.has(job.job_id)" class="fas fa-redo"></i>
             {{ retryingJobs.has(job.job_id) ? 'Retrying...' : 'Retry' }}
-          </button>
-          <button
-            class="btn-delete"
+          </BaseButton>
+          <BaseButton
+            variant="secondary"
+            size="sm"
             @click="deleteJob(job.job_id)"
             :disabled="loading"
+            class="btn-delete"
           >
             <i class="fas fa-trash"></i>
             Delete
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -92,6 +103,7 @@ import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatDateTime } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 interface FailedJob {
   job_id: string
@@ -251,47 +263,7 @@ onMounted(() => {
   gap: 0.75rem;
 }
 
-.btn-refresh,
-.btn-clear-all,
-.btn-retry,
-.btn-delete {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-refresh {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.btn-clear-all {
-  background: #dc2626;
-  color: white;
-}
-
-.btn-clear-all:hover:not(:disabled) {
-  background: #b91c1c;
-}
-
-.btn-refresh:disabled,
-.btn-clear-all:disabled,
-.btn-retry:disabled,
-.btn-delete:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Button spacing handled by BaseButton */
 
 .loading-state,
 .error-state {
@@ -379,22 +351,5 @@ onMounted(() => {
   gap: 0.5rem;
 }
 
-.btn-retry {
-  flex: 1;
-  background: #10b981;
-  color: white;
-}
-
-.btn-retry:hover:not(:disabled) {
-  background: #059669;
-}
-
-.btn-delete {
-  background: #6b7280;
-  color: white;
-}
-
-.btn-delete:hover:not(:disabled) {
-  background: #4b5563;
-}
+/* Button styling handled by BaseButton component */
 </style>
