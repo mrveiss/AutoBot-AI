@@ -4,7 +4,15 @@
       <!-- Header -->
       <div class="dialog-header">
         <h3 class="dialog-title">📚 Knowledge Management Decision</h3>
-        <button class="close-button" @click="closeDialog" aria-label="Action button">×</button>
+        <BaseButton
+          variant="ghost"
+          size="sm"
+          @click="closeDialog"
+          class="close-button"
+          aria-label="Close dialog"
+        >
+          ×
+        </BaseButton>
       </div>
 
       <!-- Chat Context Info -->
@@ -130,33 +138,49 @@
       <div class="bulk-actions" v-if="pendingItems.length > 1">
         <h4 class="section-title">🚀 Bulk Actions</h4>
         <div class="bulk-buttons">
-          <button @click="selectAll" class="bulk-button" aria-label="✅ select all">
+          <BaseButton
+            variant="outline"
+            @click="selectAll"
+            class="bulk-button"
+            aria-label="Select all items"
+          >
             ✅ Select All
-          </button>
-          <button @click="deselectAll" class="bulk-button" aria-label="❌ deselect all">
+          </BaseButton>
+          <BaseButton
+            variant="outline"
+            @click="deselectAll"
+            class="bulk-button"
+            aria-label="Deselect all items"
+          >
             ❌ Deselect All
-          </button>
-          <button 
-            @click="applyBulkDecision('add_to_kb')" 
+          </BaseButton>
+          <BaseButton
+            variant="success"
+            @click="applyBulkDecision('add_to_kb')"
             :disabled="!hasSelectedItems"
             class="bulk-button add"
-           aria-label="💾 add selected to kb">
+            aria-label="Add selected to knowledge base"
+          >
             💾 Add Selected to KB
-          </button>
-          <button 
-            @click="applyBulkDecision('keep_temporary')" 
+          </BaseButton>
+          <BaseButton
+            variant="warning"
+            @click="applyBulkDecision('keep_temporary')"
             :disabled="!hasSelectedItems"
             class="bulk-button temp"
-           aria-label="⏰ keep selected temporarily">
+            aria-label="Keep selected temporarily"
+          >
             ⏰ Keep Selected Temporarily
-          </button>
-          <button 
-            @click="applyBulkDecision('delete')" 
+          </BaseButton>
+          <BaseButton
+            variant="danger"
+            @click="applyBulkDecision('delete')"
             :disabled="!hasSelectedItems"
             class="bulk-button delete"
-           aria-label="🗑️ delete selected">
+            aria-label="Delete selected items"
+          >
             🗑️ Delete Selected
-          </button>
+          </BaseButton>
         </div>
       </div>
 
@@ -181,9 +205,14 @@
             >
           </div>
         </div>
-        <button @click="compileChat" class="compile-button" aria-label="📚 compile chat to knowledge base">
+        <BaseButton
+          variant="primary"
+          @click="compileChat"
+          class="compile-button"
+          aria-label="Compile chat to knowledge base"
+        >
           📚 Compile Chat to Knowledge Base
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Dialog Actions -->
@@ -199,14 +228,25 @@
             🗑️ {{ decisionsCount.delete }} to delete
           </span>
         </div>
-        
+
         <div class="action-buttons">
-          <button @click="applyAllDecisions" class="primary-button" :disabled="!hasDecisions" aria-label="✅ apply decisions">
+          <BaseButton
+            variant="success"
+            @click="applyAllDecisions"
+            :disabled="!hasDecisions"
+            class="primary-button"
+            aria-label="Apply decisions"
+          >
             ✅ Apply Decisions
-          </button>
-          <button @click="closeDialog" class="secondary-button" aria-label="❌ cancel">
+          </BaseButton>
+          <BaseButton
+            variant="secondary"
+            @click="closeDialog"
+            class="secondary-button"
+            aria-label="Cancel"
+          >
             ❌ Cancel
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -218,6 +258,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useToast } from '@/composables/useToast.js';
 import { apiService } from '@/services/api.js';
 import { formatDateTime as formatDate } from '@/utils/formatHelpers';
+import BaseButton from '@/components/base/BaseButton.vue';
 
 // Props
 const props = defineProps({
@@ -461,20 +502,7 @@ watch(() => props.visible, (newVal) => {
   font-weight: 600;
 }
 
-.close-button {
-  background: none;
-  border: none;
-  color: #ffffff;
-  font-size: 24px;
-  cursor: pointer;
-  padding: 5px;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.close-button:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
+/* Button styling handled by BaseButton component */
 
 .context-info {
   padding: 20px;
@@ -700,40 +728,7 @@ watch(() => props.visible, (newVal) => {
   gap: 12px;
 }
 
-.bulk-button {
-  padding: 8px 16px;
-  border: 1px solid #374151;
-  border-radius: 6px;
-  background: #1f2937;
-  color: #ffffff;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.bulk-button:hover:not(:disabled) {
-  background: #374151;
-}
-
-.bulk-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.bulk-button.add:not(:disabled):hover {
-  background: #059669;
-  border-color: #059669;
-}
-
-.bulk-button.temp:not(:disabled):hover {
-  background: #d97706;
-  border-color: #d97706;
-}
-
-.bulk-button.delete:not(:disabled):hover {
-  background: #dc2626;
-  border-color: #dc2626;
-}
+/* Button styling handled by BaseButton component */
 
 .compile-section {
   padding: 20px;
@@ -784,20 +779,7 @@ watch(() => props.visible, (newVal) => {
   border-color: #2563eb;
 }
 
-.compile-button {
-  background: #7c3aed;
-  border: none;
-  color: #ffffff;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.compile-button:hover {
-  background: #6d28d9;
-}
+/* Button styling handled by BaseButton component */
 
 .dialog-actions {
   display: flex;
@@ -840,39 +822,7 @@ watch(() => props.visible, (newVal) => {
   gap: 12px;
 }
 
-.primary-button,
-.secondary-button {
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s;
-}
-
-.primary-button {
-  background: #22c55e;
-  color: #ffffff;
-}
-
-.primary-button:hover:not(:disabled) {
-  background: #16a34a;
-}
-
-.primary-button:disabled {
-  background: #374151;
-  color: #9ca3af;
-  cursor: not-allowed;
-}
-
-.secondary-button {
-  background: #6b7280;
-  color: #ffffff;
-}
-
-.secondary-button:hover {
-  background: #4b5563;
-}
+/* Button styling handled by BaseButton component */
 
 /* Responsive design */
 @media (max-width: 768px) {
@@ -884,11 +834,7 @@ watch(() => props.visible, (newVal) => {
   .bulk-buttons {
     flex-direction: column;
   }
-  
-  .bulk-button {
-    width: 100%;
-  }
-  
+
   .dialog-actions {
     flex-direction: column;
     gap: 16px;
@@ -901,11 +847,6 @@ watch(() => props.visible, (newVal) => {
   .action-buttons {
     order: 1;
     width: 100%;
-  }
-  
-  .primary-button,
-  .secondary-button {
-    flex: 1;
   }
 }
 </style>

@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Tuple
 from fastapi import APIRouter
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Create FastAPI router
 router = APIRouter()
@@ -358,6 +359,11 @@ def get_endpoint_documentation() -> List[Dict]:
 # ============================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_endpoints",
+    error_code_prefix="REGISTRY",
+)
 @router.get("/endpoints")
 async def list_endpoints():
     """List all registered API endpoints"""
@@ -367,6 +373,11 @@ async def list_endpoints():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_routers",
+    error_code_prefix="REGISTRY",
+)
 @router.get("/routers")
 async def list_routers():
     """List all registered routers with full configuration"""
@@ -386,6 +397,11 @@ async def list_routers():
     return routers_data
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_router_details",
+    error_code_prefix="REGISTRY",
+)
 @router.get("/router/{router_name}")
 async def get_router_details(router_name: str):
     """Get details for a specific router"""
@@ -406,6 +422,11 @@ async def get_router_details(router_name: str):
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_tags",
+    error_code_prefix="REGISTRY",
+)
 @router.get("/tags")
 async def list_tags():
     """List all unique tags across all routers"""
@@ -415,6 +436,11 @@ async def list_tags():
     return {"tags": sorted(list(all_tags))}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_routers_by_tag",
+    error_code_prefix="REGISTRY",
+)
 @router.get("/tags/{tag}")
 async def get_routers_by_tag(tag: str):
     """Get all routers with a specific tag"""
@@ -426,6 +452,11 @@ async def get_routers_by_tag(tag: str):
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="validate_dependencies",
+    error_code_prefix="REGISTRY",
+)
 @router.get("/validate")
 async def validate_dependencies():
     """Validate router dependencies"""
@@ -433,6 +464,11 @@ async def validate_dependencies():
     return {"valid": len(errors) == 0, "errors": errors}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="registry_health",
+    error_code_prefix="REGISTRY",
+)
 @router.get("/health")
 async def registry_health():
     """Health check for registry system"""

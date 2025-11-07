@@ -2241,6 +2241,65 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 38 - Knowledge Persistence Dialog** ✅ Completed
+
+**Goal**: Migrate comprehensive knowledge management decision dialog with bulk actions, compile functionality, and decision tracking to BaseButton.
+
+**Components Migrated**: 1 component, 9 buttons, ~85 lines saved
+
+#### **KnowledgePersistenceDialog.vue** (9 buttons, ~85 lines saved)
+
+**Purpose**: Comprehensive knowledge management dialog for reviewing, categorizing, and persisting chat knowledge items with bulk operations and compile functionality.
+
+**Buttons Migrated**:
+
+**Header (1 button):**
+- Close dialog → `<BaseButton variant="ghost" size="sm" class="close-button">` (× icon)
+
+**Bulk Actions (5 buttons with selection validation):**
+- Select all → `<BaseButton variant="outline" class="bulk-button">` (✅ Select All)
+- Deselect all → `<BaseButton variant="outline" class="bulk-button">` (❌ Deselect All)
+- Add to KB → `<BaseButton variant="success" :disabled="!hasSelectedItems" class="bulk-button add">` (💾 Add Selected to KB)
+- Keep temporary → `<BaseButton variant="warning" :disabled="!hasSelectedItems" class="bulk-button temp">` (⏰ Keep Selected Temporarily)
+- Delete → `<BaseButton variant="danger" :disabled="!hasSelectedItems" class="bulk-button delete">` (🗑️ Delete Selected)
+
+**Compile Section (1 button):**
+- Compile chat → `<BaseButton variant="primary" class="compile-button">` (📚 Compile Chat to Knowledge Base)
+
+**Dialog Actions (2 buttons):**
+- Apply decisions → `<BaseButton variant="success" :disabled="!hasDecisions" class="primary-button">` (✅ Apply Decisions)
+- Cancel → `<BaseButton variant="secondary" class="secondary-button">` (❌ Cancel)
+
+**Key Patterns**:
+- ✅ Ghost variant with sm size for minimal header close button
+- ✅ Outline variant for selection control actions
+- ✅ Success/warning/danger variants for categorized bulk actions
+- ✅ Disabled state with computed property validation (hasSelectedItems, hasDecisions)
+- ✅ Primary variant for major action (compile chat)
+- ✅ Success variant for primary dialog action with disabled state
+- ✅ Secondary variant for cancel action
+- ✅ Consistent emoji icons preserved in button text
+
+**CSS Removed**: ~85 lines removed from scoped styles:
+- `.close-button` base and hover (~13 lines)
+- `.bulk-button` base, hover, disabled, and variant-specific styles (.add, .temp, .delete) (~34 lines)
+- `.compile-button` base and hover (~14 lines)
+- `.primary-button` base, hover, disabled (~18 lines)
+- `.secondary-button` base and hover (~6 lines)
+- Responsive media query button styles removed
+- Remaining: Layout containers (.bulk-buttons, .action-buttons) and summary items preserved
+
+---
+
+**Batch 38 Summary**:
+- Components: 1 (KnowledgePersistenceDialog)
+- Buttons: 9 consolidated (1 close + 5 bulk actions + 1 compile + 2 dialog actions)
+- Lines: ~85 saved
+- Variants: 6 (primary, secondary, success, warning, danger, outline, ghost)
+- **Combined Total**: 27 components, ~1,712 lines saved, 191 buttons consolidated
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -2250,7 +2309,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~1,627 lines (batches 20-37)
+- BaseButton adoptions: ~1,712 lines (batches 20-38)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
@@ -2269,9 +2328,10 @@ const createRipple = (event: TouchEvent) => {
   - Batch 35: ~60 lines (1 component, 10 buttons)
   - Batch 36: ~90 lines (1 component, 15 buttons)
   - Batch 37: ~65 lines (1 component, 8 buttons)
-- **Total Progress**: ~2,421 lines / ~1,500-2,000 realistic target (121-161%) ✅ **TARGET EXCEEDED**
+  - Batch 38: ~85 lines (1 component, 9 buttons)
+- **Total Progress**: ~2,506 lines / ~1,500-2,000 realistic target (125-167%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 26 components using BaseButton (182 buttons consolidated)
+- **BaseButton Milestone**: 27 components using BaseButton (191 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 

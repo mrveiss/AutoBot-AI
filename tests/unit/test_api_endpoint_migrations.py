@@ -27165,6 +27165,215 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("search_performance", source)
         self.assertIn("overall_performance_score", source)
 
+    # ==============================================
+    # BATCH 149: registry.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_149_list_endpoints_simple_pattern(self):
+        """Verify list_endpoints endpoint uses Simple Pattern"""
+        from backend.api import registry
+
+        source = inspect.getsource(registry.list_endpoints)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_endpoints"', source)
+        self.assertIn('error_code_prefix="REGISTRY"', source)
+
+    def test_batch_149_list_routers_simple_pattern(self):
+        """Verify list_routers endpoint uses Simple Pattern"""
+        from backend.api import registry
+
+        source = inspect.getsource(registry.list_routers)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_routers"', source)
+        self.assertIn('error_code_prefix="REGISTRY"', source)
+
+    def test_batch_149_get_router_details_simple_pattern(self):
+        """Verify get_router_details endpoint uses Simple Pattern"""
+        from backend.api import registry
+
+        source = inspect.getsource(registry.get_router_details)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_router_details"', source)
+        self.assertIn('error_code_prefix="REGISTRY"', source)
+
+    def test_batch_149_list_tags_simple_pattern(self):
+        """Verify list_tags endpoint uses Simple Pattern"""
+        from backend.api import registry
+
+        source = inspect.getsource(registry.list_tags)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_tags"', source)
+        self.assertIn('error_code_prefix="REGISTRY"', source)
+
+    def test_batch_149_get_routers_by_tag_simple_pattern(self):
+        """Verify get_routers_by_tag endpoint uses Simple Pattern"""
+        from backend.api import registry
+
+        source = inspect.getsource(registry.get_routers_by_tag)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_routers_by_tag"', source)
+        self.assertIn('error_code_prefix="REGISTRY"', source)
+
+    def test_batch_149_validate_dependencies_simple_pattern(self):
+        """Verify validate_dependencies endpoint uses Simple Pattern"""
+        from backend.api import registry
+
+        source = inspect.getsource(registry.validate_dependencies)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="validate_dependencies"', source)
+        self.assertIn('error_code_prefix="REGISTRY"', source)
+
+    def test_batch_149_registry_health_simple_pattern(self):
+        """Verify registry_health endpoint uses Simple Pattern"""
+        from backend.api import registry
+
+        source = inspect.getsource(registry.registry_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="registry_health"', source)
+        self.assertIn('error_code_prefix="REGISTRY"', source)
+
+    def test_batch_149_all_registry_endpoints_have_decorator(self):
+        """Verify all registry endpoints have @with_error_handling decorator"""
+        from backend.api import registry
+
+        endpoint_functions = [
+            registry.list_endpoints,
+            registry.list_routers,
+            registry.get_router_details,
+            registry.list_tags,
+            registry.get_routers_by_tag,
+            registry.validate_dependencies,
+            registry.registry_health,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_149_registry_100_percent_milestone(self):
+        """Verify registry.py has reached 100% migration"""
+        from backend.api import registry
+
+        endpoint_functions = [
+            registry.list_endpoints,
+            registry.list_routers,
+            registry.get_router_details,
+            registry.list_tags,
+            registry.get_routers_by_tag,
+            registry.validate_dependencies,
+            registry.registry_health,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 7
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_149_migration_preserves_router_config(self):
+        """Verify migration preserves RouterConfig dataclass"""
+        from backend.api import registry
+
+        # Verify RouterConfig is accessible
+        self.assertTrue(hasattr(registry, "RouterConfig"))
+
+        # Verify key fields exist
+        config_fields = ["name", "module_path", "prefix", "tags", "status"]
+        router_config = registry.RouterConfig
+        for field in config_fields:
+            self.assertTrue(
+                any(f.name == field for f in router_config.__dataclass_fields__.values()),
+                f"RouterConfig missing field: {field}"
+            )
+
+    def test_batch_149_migration_preserves_router_status_enum(self):
+        """Verify migration preserves RouterStatus enum"""
+        from backend.api import registry
+
+        # Verify RouterStatus enum exists
+        self.assertTrue(hasattr(registry, "RouterStatus"))
+
+        # Verify enum values
+        status_values = ["ENABLED", "DISABLED", "LAZY_LOAD"]
+        for value in status_values:
+            self.assertTrue(
+                hasattr(registry.RouterStatus, value),
+                f"RouterStatus missing value: {value}"
+            )
+
+    def test_batch_149_migration_preserves_api_registry_class(self):
+        """Verify migration preserves APIRegistry class and global instance"""
+        from backend.api import registry
+
+        # Verify APIRegistry class exists
+        self.assertTrue(hasattr(registry, "APIRegistry"))
+
+        # Verify global registry instance exists
+        self.assertTrue(hasattr(registry, "registry"))
+        self.assertIsInstance(registry.registry, registry.APIRegistry)
+
+        # Verify key methods exist
+        methods = ["get_enabled_routers", "get_router_by_name", "get_routers_by_tag",
+                   "get_endpoint_list", "validate_dependencies"]
+        for method in methods:
+            self.assertTrue(
+                hasattr(registry.registry, method),
+                f"registry instance missing method: {method}"
+            )
+
+    def test_batch_149_migration_preserves_endpoint_list_functionality(self):
+        """Verify migration preserves endpoint list functionality"""
+        from backend.api import registry
+
+        # Verify list_endpoints returns expected structure
+        source = inspect.getsource(registry.list_endpoints)
+        self.assertIn("registry.get_endpoint_list()", source)
+        self.assertIn('"endpoints":', source)
+        self.assertIn('"total":', source)
+
+    def test_batch_149_migration_preserves_router_details_structure(self):
+        """Verify migration preserves router details structure"""
+        from backend.api import registry
+
+        source = inspect.getsource(registry.get_router_details)
+        self.assertIn("registry.get_router_by_name", source)
+        self.assertIn('{"error":', source)
+        self.assertIn("config.name", source)
+        self.assertIn("config.module_path", source)
+
+    def test_batch_149_migration_preserves_tag_functionality(self):
+        """Verify migration preserves tag collection and filtering"""
+        from backend.api import registry
+
+        # Verify list_tags functionality
+        list_tags_source = inspect.getsource(registry.list_tags)
+        self.assertIn("all_tags = set()", list_tags_source)
+        self.assertIn("all_tags.update(config.tags)", list_tags_source)
+
+        # Verify get_routers_by_tag functionality
+        by_tag_source = inspect.getsource(registry.get_routers_by_tag)
+        self.assertIn("registry.get_routers_by_tag(tag)", by_tag_source)
+
 
 if __name__ == "__main__":
     unittest.main()
