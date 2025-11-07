@@ -26,21 +26,20 @@
         </div>
 
         <div class="modal-actions">
-          <button
-            class="btn btn-secondary"
+          <BaseButton
+            variant="secondary"
             @click="$emit('hide-reconnect-modal')"
             :disabled="isReconnecting"
           >
             Cancel
-          </button>
-          <button
-            class="btn btn-primary"
+          </BaseButton>
+          <BaseButton
+            variant="primary"
             @click="handleReconnect"
-            :disabled="isReconnecting"
+            :loading="isReconnecting"
           >
-            <span v-if="isReconnecting" class="loading-spinner"></span>
             {{ isReconnecting ? 'Reconnecting...' : 'Reconnect' }}
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -100,21 +99,20 @@
         </div>
 
         <div class="modal-actions">
-          <button
-            class="btn btn-danger"
+          <BaseButton
+            variant="danger"
             @click="handleExecuteCommand"
-            :disabled="isExecutingCommand"
+            :loading="isExecutingCommand"
           >
-            <span v-if="isExecutingCommand" class="loading-spinner"></span>
             {{ isExecutingCommand ? 'Executing...' : '⚡ Execute Command' }}
-          </button>
-          <button
-            class="btn btn-secondary"
+          </BaseButton>
+          <BaseButton
+            variant="secondary"
             @click="cancelCommand"
             :disabled="isExecutingCommand"
           >
             ❌ Cancel
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -158,21 +156,20 @@
         </div>
 
         <div class="modal-actions">
-          <button
-            class="btn btn-danger"
+          <BaseButton
+            variant="danger"
             @click="handleEmergencyKill"
-            :disabled="isKillingProcesses"
+            :loading="isKillingProcesses"
           >
-            <span v-if="isKillingProcesses" class="loading-spinner"></span>
             {{ isKillingProcesses ? 'Killing Processes...' : '🛑 KILL ALL PROCESSES' }}
-          </button>
-          <button
-            class="btn btn-secondary"
+          </BaseButton>
+          <BaseButton
+            variant="secondary"
             @click="cancelKill"
             :disabled="isKillingProcesses"
           >
             ❌ Cancel
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -232,30 +229,30 @@
         </div>
 
         <div class="modal-actions workflow-actions">
-          <button
-            class="btn btn-success"
+          <BaseButton
+            variant="success"
             @click="handleConfirmWorkflowStep"
-            :disabled="isProcessingWorkflow"
+            :loading="isProcessingWorkflow && lastWorkflowAction === 'execute'"
+            :disabled="isProcessingWorkflow && lastWorkflowAction !== 'execute'"
           >
-            <span v-if="isProcessingWorkflow && lastWorkflowAction === 'execute'" class="loading-spinner"></span>
             {{ (isProcessingWorkflow && lastWorkflowAction === 'execute') ? 'Executing...' : '✅ Execute & Continue' }}
-          </button>
-          <button
-            class="btn btn-warning"
+          </BaseButton>
+          <BaseButton
+            variant="warning"
             @click="handleSkipWorkflowStep"
-            :disabled="isProcessingWorkflow"
+            :loading="isProcessingWorkflow && lastWorkflowAction === 'skip'"
+            :disabled="isProcessingWorkflow && lastWorkflowAction !== 'skip'"
           >
-            <span v-if="isProcessingWorkflow && lastWorkflowAction === 'skip'" class="loading-spinner"></span>
             {{ (isProcessingWorkflow && lastWorkflowAction === 'skip') ? 'Skipping...' : '⏭️ Skip This Step' }}
-          </button>
-          <button
-            class="btn btn-primary"
+          </BaseButton>
+          <BaseButton
+            variant="primary"
             @click="handleTakeManualControl"
-            :disabled="isProcessingWorkflow"
+            :loading="isProcessingWorkflow && lastWorkflowAction === 'manual'"
+            :disabled="isProcessingWorkflow && lastWorkflowAction !== 'manual'"
           >
-            <span v-if="isProcessingWorkflow && lastWorkflowAction === 'manual'" class="loading-spinner"></span>
             {{ (isProcessingWorkflow && lastWorkflowAction === 'manual') ? 'Taking Control...' : '👤 Take Manual Control' }}
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -264,6 +261,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 interface ProcessInfo {
   pid: number
@@ -616,94 +614,6 @@ const handleTakeManualControl = async () => {
   margin-top: 20px;
 }
 
-.btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  position: relative;
-  overflow: hidden;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none !important;
-}
-
-.btn:not(:disabled):hover {
-  transform: translateY(-1px);
-}
-
-.btn-primary {
-  background-color: #007acc;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-color: #005999;
-}
-
-.btn-secondary {
-  background-color: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background-color: #5a6268;
-}
-
-.btn-danger {
-  background-color: #dc3545;
-  color: white;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background-color: #c82333;
-}
-
-.btn-success {
-  background-color: #28a745;
-  color: white;
-  border: 1px solid #1e7e34;
-}
-
-.btn-success:hover:not(:disabled) {
-  background-color: #218838;
-  border-color: #1c7430;
-}
-
-.btn-warning {
-  background-color: #ffc107;
-  color: #212529;
-  border: 1px solid #e0a800;
-}
-
-.btn-warning:hover:not(:disabled) {
-  background-color: #e0a800;
-  border-color: #d39e00;
-}
-
-/* Loading spinner */
-.loading-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid transparent;
-  border-top: 2px solid currentColor;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
 /* Error and Success Messages */
 .error-message, .success-message {
   display: flex;
@@ -1017,11 +927,6 @@ const handleTakeManualControl = async () => {
   .workflow-actions {
     flex-direction: column;
     gap: 8px;
-  }
-
-  .btn {
-    width: 100%;
-    justify-content: center;
   }
 
   .command-text {
