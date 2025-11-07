@@ -2048,6 +2048,66 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 35 - Chat Messages Component** ✅ Completed
+
+**Goal**: Migrate comprehensive chat message display with inline actions, command approvals, and message editing modals to BaseButton.
+
+**Components Migrated**: 1 component, 10 buttons, ~60 lines saved
+
+#### **ChatMessages.vue** (10 buttons, ~60 lines saved)
+
+**Purpose**: Main chat message display with inline message actions, command approval workflow, comment system, and message editing capabilities.
+
+**Buttons Migrated**:
+
+**Message Actions (Inline per message):**
+- Edit message → `<BaseButton variant="ghost" size="xs" v-if="message.sender === 'user'" class="action-btn">` (conditional on user messages)
+- Copy message → `<BaseButton variant="ghost" size="xs" class="action-btn">` (universal action)
+- Delete message → `<BaseButton variant="ghost" size="xs" class="action-btn danger">` (universal action)
+
+**Comment Actions:**
+- Cancel comment → `<BaseButton variant="secondary" size="sm" class="cancel-comment-btn">` (Cancel)
+- Submit approval → `<BaseButton variant="primary" size="sm" :disabled="!approvalComment.trim()" class="submit-comment-btn">` (Submit Approval/Denial)
+
+**Approval Actions (Command approval workflow):**
+- Approve command → `<BaseButton variant="success" size="sm" :disabled="processingApproval || showCommentInput" class="approve-btn">` (Approve)
+- Add comment → `<BaseButton variant="outline" size="sm" :disabled="processingApproval || showCommentInput" class="comment-btn">` (Comment)
+- Deny command → `<BaseButton variant="danger" size="sm" :disabled="processingApproval || showCommentInput" class="deny-btn">` (Deny)
+
+**Edit Modal Actions:**
+- Cancel edit → `<BaseButton variant="secondary" @click="cancelEdit">` (Cancel)
+- Save edit → `<BaseButton variant="primary" @click="saveEditedMessage" :disabled="!editingContent.trim()">` (Save)
+
+**Key Patterns**:
+- ✅ Ghost variant with xs size for minimal inline message actions (edit, copy, delete)
+- ✅ Conditional rendering for user-only actions (edit message)
+- ✅ Success/danger variants for approval workflow (approve = green, deny = red)
+- ✅ Outline variant for neutral actions (comment)
+- ✅ Disabled state management with complex conditions (processingApproval || showCommentInput)
+- ✅ Form validation in disabled state (!approvalComment.trim(), !editingContent.trim())
+- ✅ Secondary variant for cancel actions in modals and forms
+- ✅ Primary variant for main submit actions
+- ✅ Preserved custom classes for layout-specific styling
+
+**CSS Removed**: ~60 lines removed from scoped styles:
+- `.action-btn` base and color overrides for user/assistant messages (~17 lines)
+- `.action-btn.danger:hover` (~3 lines)
+- `.approve-btn`, `.deny-btn` base styles and variants (~12 lines)
+- `.cancel-comment-btn`, `.submit-comment-btn`, `.comment-btn` (~12 lines)
+- Responsive overrides for `.action-btn`, `.approve-btn`, `.deny-btn` (~12 lines)
+- Remaining: Layout containers (`.message-actions`, `.approval-actions`, `.comment-actions`) preserved for flex layouts
+
+---
+
+**Batch 35 Summary**:
+- Components: 1 (ChatMessages)
+- Buttons: 10 consolidated (3 inline message actions + 2 comment actions + 3 approval workflow + 2 edit modal)
+- Lines: ~60 saved
+- Variants: 6 (primary, secondary, success, danger, outline, ghost)
+- **Combined Total**: 24 components, ~1,472 lines saved, 159 buttons consolidated
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -2057,7 +2117,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~1,412 lines (batches 20-34)
+- BaseButton adoptions: ~1,472 lines (batches 20-35)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
@@ -2073,9 +2133,10 @@ const createRipple = (event: TouchEvent) => {
   - Batch 32: ~24 lines (1 component, 4 buttons)
   - Batch 33: ~19 lines (1 component, 3 buttons)
   - Batch 34: ~50 lines (1 component, 3 buttons)
-- **Total Progress**: ~2,206 lines / ~1,500-2,000 realistic target (110-147%) ✅ **TARGET EXCEEDED**
+  - Batch 35: ~60 lines (1 component, 10 buttons)
+- **Total Progress**: ~2,266 lines / ~1,500-2,000 realistic target (113-151%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 23 components using BaseButton (149 buttons consolidated)
+- **BaseButton Milestone**: 24 components using BaseButton (159 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
