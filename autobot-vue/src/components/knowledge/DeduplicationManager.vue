@@ -6,10 +6,17 @@
         Duplicate & Orphan Management
       </h3>
       <div class="header-actions">
-        <button class="btn-scan" @click="scanForIssues" :disabled="scanning">
-          <i class="fas fa-search" :class="{ 'fa-spin': scanning }"></i>
+        <BaseButton
+          variant="primary"
+          size="sm"
+          @click="scanForIssues"
+          :disabled="scanning"
+          :loading="scanning"
+          class="btn-scan"
+        >
+          <i v-if="!scanning" class="fas fa-search"></i>
           Scan for Issues
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -85,10 +92,16 @@
           </div>
 
           <div class="action-buttons">
-            <button class="btn-cleanup btn-warning" @click="cleanupDuplicates" :disabled="cleaning">
-              <i class="fas" :class="cleaning ? 'fa-spinner fa-spin' : 'fa-trash-alt'"></i>
+            <BaseButton
+              variant="warning"
+              @click="cleanupDuplicates"
+              :disabled="cleaning"
+              :loading="cleaning"
+              class="btn-cleanup"
+            >
+              <i v-if="!cleaning" class="fas fa-trash-alt"></i>
               {{ cleaning ? 'Removing Duplicates...' : 'Remove All Duplicates' }}
-            </button>
+            </BaseButton>
           </div>
         </div>
         <EmptyState
@@ -142,10 +155,16 @@
           </div>
 
           <div class="action-buttons">
-            <button class="btn-cleanup btn-danger" @click="cleanupOrphans" :disabled="cleaning">
-              <i class="fas" :class="cleaning ? 'fa-spinner fa-spin' : 'fa-trash-alt'"></i>
+            <BaseButton
+              variant="danger"
+              @click="cleanupOrphans"
+              :disabled="cleaning"
+              :loading="cleaning"
+              class="btn-cleanup"
+            >
+              <i v-if="!cleaning" class="fas fa-trash-alt"></i>
               {{ cleaning ? 'Removing Orphans...' : 'Remove All Orphans' }}
-            </button>
+            </BaseButton>
           </div>
         </div>
         <EmptyState
@@ -171,6 +190,7 @@ import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 // Interfaces
 interface DuplicateGroup {
@@ -338,29 +358,7 @@ const cleanupOrphans = async () => {
   gap: 0.5rem;
 }
 
-.btn-scan {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-scan:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.btn-scan:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Button styling handled by BaseButton component */
 
 .scanning-state,
 .error-state,
@@ -567,38 +565,5 @@ const cleanupOrphans = async () => {
   justify-content: flex-end;
 }
 
-.btn-cleanup {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  border: none;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  color: white;
-}
-
-.btn-warning {
-  background: #f59e0b;
-}
-
-.btn-warning:hover:not(:disabled) {
-  background: #d97706;
-}
-
-.btn-danger {
-  background: #dc2626;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background: #b91c1c;
-}
-
-.btn-cleanup:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Button styling handled by BaseButton component */
 </style>

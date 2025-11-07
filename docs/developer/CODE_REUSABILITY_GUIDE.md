@@ -1999,7 +1999,52 @@ const createRipple = (event: TouchEvent) => {
 - Buttons: 3 consolidated (1 navigation + 2 file actions)
 - Lines: ~19 saved
 - Variants: 2 (primary for navigation, outline for actions)
-- **Combined Total**: 22 components, ~1,362 lines saved, 146 buttons consolidated
+
+---
+
+### **Batch 34 - Deduplication Manager** ✅ Completed
+
+**Goal**: Migrate knowledge base deduplication and orphan management interface to BaseButton.
+
+**Components Migrated**: 1 component, 3 buttons, ~50 lines saved
+
+#### **DeduplicationManager.vue** (3 buttons, ~50 lines saved)
+
+**Purpose**: Knowledge base maintenance tool for scanning and removing duplicate and orphaned documents.
+
+**Buttons Migrated**:
+
+**Scan Action:**
+- Scan for Issues → `<BaseButton variant="primary" size="sm" :disabled="scanning" :loading="scanning">` (Search icon)
+
+**Cleanup Actions:**
+- Remove All Duplicates → `<BaseButton variant="warning" :disabled="cleaning" :loading="cleaning">` (Trash icon, warning variant for caution)
+- Remove All Orphans → `<BaseButton variant="danger" :disabled="cleaning" :loading="cleaning">` (Trash icon, danger variant for destructive action)
+
+**Key Patterns**:
+- ✅ Loading state integration (`:loading` prop replaces manual spinner conditionals)
+- ✅ Conditional icon display (`v-if="!loading"` to hide icon during loading)
+- ✅ Dynamic button text based on state (scanning/cleaning vs idle)
+- ✅ Warning variant for potentially destructive batch operations (duplicates)
+- ✅ Danger variant for irreversible operations (orphans)
+- ✅ Primary variant for main scan action
+- ✅ Shared cleaning state for both cleanup actions
+
+**CSS Removed**: ~50 lines removed from scoped styles:
+- `.btn-scan` base styles + hover + disabled (~18 lines)
+- `.btn-cleanup` base styles + disabled (~14 lines)
+- `.btn-warning` variant + hover (~6 lines)
+- `.btn-danger` variant + hover (~6 lines)
+- Flex, padding, colors, transitions (~6 lines)
+
+---
+
+**Batch 34 Summary**:
+- Components: 1 (DeduplicationManager)
+- Buttons: 3 consolidated (1 scan + 2 cleanup actions)
+- Lines: ~50 saved
+- Variants: 3 (primary, warning, danger)
+- **Combined Total**: 23 components, ~1,412 lines saved, 149 buttons consolidated
 
 ---
 
@@ -2012,7 +2057,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~1,362 lines (batches 20-33)
+- BaseButton adoptions: ~1,412 lines (batches 20-34)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
@@ -2027,9 +2072,10 @@ const createRipple = (event: TouchEvent) => {
   - Batch 31: ~58 lines (1 component, 4 buttons)
   - Batch 32: ~24 lines (1 component, 4 buttons)
   - Batch 33: ~19 lines (1 component, 3 buttons)
-- **Total Progress**: ~2,156 lines / ~1,500-2,000 realistic target (108-144%) ✅ **TARGET EXCEEDED**
+  - Batch 34: ~50 lines (1 component, 3 buttons)
+- **Total Progress**: ~2,206 lines / ~1,500-2,000 realistic target (110-147%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 22 components using BaseButton (146 buttons consolidated)
+- **BaseButton Milestone**: 23 components using BaseButton (149 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
