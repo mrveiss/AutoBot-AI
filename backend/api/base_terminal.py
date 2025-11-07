@@ -16,6 +16,7 @@ from fastapi import APIRouter
 
 from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.terminal_websocket_manager import TerminalWebSocketAdapter
 
 logger = logging.getLogger(__name__)
@@ -339,6 +340,11 @@ class BaseTerminalWebSocket(ABC):
 # ============================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_terminal_system_status",
+    error_code_prefix="BASE_TERMINAL",
+)
 @router.get("/status")
 async def get_terminal_system_status():
     """Get overall terminal system status"""
@@ -354,6 +360,11 @@ async def get_terminal_system_status():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="terminal_health_check",
+    error_code_prefix="BASE_TERMINAL",
+)
 @router.get("/health")
 async def terminal_health_check():
     """Health check for terminal system"""
@@ -368,6 +379,11 @@ async def terminal_health_check():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_terminal_capabilities",
+    error_code_prefix="BASE_TERMINAL",
+)
 @router.get("/capabilities")
 async def get_terminal_capabilities():
     """Get terminal system capabilities"""
@@ -385,6 +401,11 @@ async def get_terminal_capabilities():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_security_policies",
+    error_code_prefix="BASE_TERMINAL",
+)
 @router.get("/security")
 async def get_security_policies():
     """Get terminal security policies and command validation info"""
@@ -400,6 +421,11 @@ async def get_security_policies():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_terminal_features",
+    error_code_prefix="BASE_TERMINAL",
+)
 @router.get("/features")
 async def get_terminal_features():
     """Get available terminal features and implementation details"""
