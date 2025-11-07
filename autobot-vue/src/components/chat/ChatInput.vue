@@ -20,13 +20,16 @@
           size="sm"
           :show-details="true"
         />
-        <button
+        <BaseButton
           v-if="upload.error"
+          variant="danger"
+          size="xs"
           @click="retryUpload(upload.id)"
           class="retry-upload-btn"
+          aria-label="Retry upload"
         >
           <i class="fas fa-redo"></i>
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -37,9 +40,9 @@
           <i class="fas fa-paperclip mr-1"></i>
           {{ attachedFiles.length }} file{{ attachedFiles.length > 1 ? 's' : '' }} attached
         </h4>
-        <button @click="clearAllFiles" class="text-sm text-red-600 hover:text-red-800">
+        <BaseButton variant="ghost" size="sm" @click="clearAllFiles" class="text-red-600 hover:text-red-800">
           Clear all
-        </button>
+        </BaseButton>
       </div>
 
       <div class="attached-files-list">
@@ -55,13 +58,15 @@
             <span class="file-name">{{ file.name }}</span>
             <span class="file-size">{{ formatFileSize(file.size) }}</span>
           </div>
-          <button
+          <BaseButton
+            variant="ghost"
+            size="xs"
             @click="removeFile(index)"
             class="remove-file-btn"
-            title="Remove file"
+            aria-label="Remove file"
           >
             <i class="fas fa-times"></i>
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -100,74 +105,78 @@
           <!-- Input Actions -->
           <div class="input-actions">
             <!-- File Attach Button -->
-            <button
+            <BaseButton
+              variant="ghost"
+              size="xs"
               @click="attachFile"
               class="action-btn"
-              title="Attach file"
               :disabled="isDisabled"
+              aria-label="Attach file"
             >
               <i class="fas fa-paperclip"></i>
-            </button>
+            </BaseButton>
 
             <!-- Voice Input Button -->
-            <button
+            <BaseButton
+              variant="ghost"
+              size="xs"
               @click="toggleVoiceInput"
               class="action-btn"
               :class="{ 'active': isVoiceRecording }"
-              title="Voice input"
               :disabled="isDisabled"
+              aria-label="Voice input"
             >
               <i :class="isVoiceRecording ? 'fas fa-stop' : 'fas fa-microphone'"></i>
-            </button>
+            </BaseButton>
 
             <!-- Emoji Button -->
-            <button
+            <BaseButton
+              variant="ghost"
+              size="xs"
               @click="toggleEmojiPicker"
               class="action-btn"
-              title="Add emoji"
               :disabled="isDisabled"
+              aria-label="Add emoji"
             >
               <i class="fas fa-smile"></i>
-            </button>
+            </BaseButton>
 
             <!-- Vertical Divider -->
             <div class="action-divider"></div>
 
             <!-- Quick Actions -->
-            <button
+            <BaseButton
               v-for="action in quickActions"
               :key="action.id"
+              variant="ghost"
+              size="sm"
               @click="useQuickAction(action)"
               class="action-btn quick-action-btn"
-              :title="action.description"
               :disabled="isDisabled"
+              :aria-label="action.description"
             >
               <i :class="action.icon"></i>
               <span class="action-label">{{ action.label }}</span>
-            </button>
+            </BaseButton>
           </div>
         </div>
 
         <!-- Send Button -->
-        <button
+        <BaseButton
+          variant="primary"
           @click="sendMessage"
           class="send-button"
           :disabled="!canSend"
-          :class="{ 'sending': isSending, 'pulse': messageQueueLength > 0 }"
-          :title="isSending ? 'Sending...' : canSend ? 'Send message (Enter)' : 'Enter a message to send'"
+          :loading="isSending"
+          :class="{ 'pulse': messageQueueLength > 0 }"
+          :aria-label="isSending ? 'Sending...' : canSend ? 'Send message (Enter)' : 'Enter a message to send'"
         >
-          <LoadingSpinner
-            v-if="isSending"
-            variant="dots"
-            size="xs"
-            color="white"
-          />
-          <div v-else-if="messageQueueLength > 0" class="queue-indicator">
+          <div v-if="!isSending && messageQueueLength > 0" class="queue-indicator">
             <i class="fas fa-paper-plane"></i>
             <span class="queue-count">{{ messageQueueLength }}</span>
           </div>
-          <i v-else class="fas fa-paper-plane"></i>
-        </button>
+          <i v-else-if="!isSending" class="fas fa-paper-plane"></i>
+        </BaseButton>
       </div>
 
       <!-- Input Status Bar -->
@@ -196,20 +205,22 @@
     <div v-if="showEmojiPicker" class="emoji-picker" ref="emojiPicker">
       <div class="emoji-header">
         <span class="emoji-title">Add Emoji</span>
-        <button @click="showEmojiPicker = false" class="close-emoji-btn">
+        <BaseButton variant="ghost" size="xs" @click="showEmojiPicker = false" class="close-emoji-btn" aria-label="Close emoji picker">
           <i class="fas fa-times"></i>
-        </button>
+        </BaseButton>
       </div>
       <div class="emoji-grid">
-        <button
+        <BaseButton
           v-for="emoji in commonEmojis"
           :key="emoji.code"
+          variant="ghost"
+          size="sm"
           @click="insertEmoji(emoji)"
           class="emoji-btn"
-          :title="emoji.name"
+          :aria-label="emoji.name"
         >
           {{ emoji.emoji }}
-        </button>
+        </BaseButton>
       </div>
     </div>
   </div>
@@ -222,6 +233,7 @@ import { useChatController } from '@/models/controllers'
 import globalWebSocketService from '@/services/GlobalWebSocketService'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import ProgressBar from '@/components/ui/ProgressBar.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 
 const store = useChatStore()
@@ -652,10 +664,6 @@ onUnmounted(() => {
   @apply text-sm text-blue-600;
 }
 
-.retry-upload-btn {
-  @apply w-8 h-8 flex items-center justify-center text-red-600 hover:text-red-800 hover:bg-red-100 rounded transition-colors;
-}
-
 /* Attached Files */
 .attached-files {
   @apply border border-gray-200 rounded-lg p-3;
@@ -687,10 +695,6 @@ onUnmounted(() => {
 
 .file-size {
   @apply block text-xs text-gray-500;
-}
-
-.remove-file-btn {
-  @apply w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-600 rounded transition-colors;
 }
 
 /* Input Wrapper */
@@ -725,32 +729,9 @@ onUnmounted(() => {
   @apply flex items-center gap-1 px-2 py-2 border-t border-gray-200 bg-gray-50;
 }
 
-.action-btn {
-  @apply flex items-center justify-center text-gray-500 hover:text-gray-700 rounded transition-colors;
-  min-width: 2rem;
-  min-height: 2rem;
-}
-
-.action-btn:not(.quick-action-btn) {
-  @apply w-8 h-8;
-}
-
-.action-btn.active {
-  @apply text-red-600 bg-red-50;
-}
-
-.action-btn:disabled {
-  @apply opacity-50 cursor-not-allowed;
-}
-
 .action-divider {
   @apply w-px h-6 bg-gray-300 mx-2;
   flex-shrink: 0;
-}
-
-.quick-action-btn {
-  @apply gap-1.5 px-2 py-1 text-sm;
-  white-space: nowrap;
 }
 
 .action-label {
@@ -758,11 +739,7 @@ onUnmounted(() => {
 }
 
 .send-button {
-  @apply w-12 h-12 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center;
-}
-
-.send-button.sending {
-  @apply bg-indigo-500;
+  @apply w-12 h-12;
 }
 
 .send-button.pulse {
@@ -820,10 +797,6 @@ onUnmounted(() => {
   @apply flex flex-wrap gap-2 pt-3 border-t border-gray-100;
 }
 
-.quick-action-btn {
-  @apply flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors;
-}
-
 /* Emoji Picker */
 .emoji-picker {
   @apply absolute bottom-full right-0 mb-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50;
@@ -837,16 +810,8 @@ onUnmounted(() => {
   @apply font-medium text-gray-900;
 }
 
-.close-emoji-btn {
-  @apply w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded;
-}
-
 .emoji-grid {
   @apply grid grid-cols-6 gap-1 p-3 max-h-48 overflow-y-auto;
-}
-
-.emoji-btn {
-  @apply w-10 h-10 flex items-center justify-center text-xl hover:bg-gray-100 rounded transition-colors;
 }
 
 /* Responsive */
@@ -887,14 +852,5 @@ onUnmounted(() => {
   animation: pulse 2s infinite;
 }
 
-/* Focus states for accessibility */
-.action-btn:focus,
-.quick-action-btn:focus,
-.emoji-btn:focus {
-  @apply outline-none ring-2 ring-indigo-500 ring-offset-2;
-}
-
-.send-button:focus {
-  @apply outline-none ring-2 ring-indigo-500 ring-offset-2;
-}
+/* Focus states for accessibility handled by BaseButton */
 </style>
