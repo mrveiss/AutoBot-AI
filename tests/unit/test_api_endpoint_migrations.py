@@ -27966,6 +27966,215 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("include_details", metrics_source)
         self.assertIn("Query", metrics_source)
 
+    # ==============================================
+    # BATCH 153: knowledge_enhanced.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_153_enhanced_search_simple_pattern(self):
+        """Verify enhanced_search endpoint uses Simple Pattern"""
+        from backend.api import knowledge_enhanced
+
+        source = inspect.getsource(knowledge_enhanced.enhanced_search)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="enhanced_search"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
+
+    def test_batch_153_rag_search_simple_pattern(self):
+        """Verify rag_search endpoint uses Simple Pattern"""
+        from backend.api import knowledge_enhanced
+
+        source = inspect.getsource(knowledge_enhanced.rag_search)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="rag_search"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
+
+    def test_batch_153_extract_knowledge_simple_pattern(self):
+        """Verify extract_knowledge endpoint uses Simple Pattern"""
+        from backend.api import knowledge_enhanced
+
+        source = inspect.getsource(knowledge_enhanced.extract_knowledge)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="extract_knowledge"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
+
+    def test_batch_153_analyze_documents_simple_pattern(self):
+        """Verify analyze_documents endpoint uses Simple Pattern"""
+        from backend.api import knowledge_enhanced
+
+        source = inspect.getsource(knowledge_enhanced.analyze_documents)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="analyze_documents"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
+
+    def test_batch_153_reformulate_query_simple_pattern(self):
+        """Verify reformulate_query endpoint uses Simple Pattern"""
+        from backend.api import knowledge_enhanced
+
+        source = inspect.getsource(knowledge_enhanced.reformulate_query)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="reformulate_query"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
+
+    def test_batch_153_get_system_knowledge_insights_simple_pattern(self):
+        """Verify get_system_knowledge_insights endpoint uses Simple Pattern"""
+        from backend.api import knowledge_enhanced
+
+        source = inspect.getsource(knowledge_enhanced.get_system_knowledge_insights)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_system_knowledge_insights"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
+
+    def test_batch_153_get_enhanced_stats_simple_pattern(self):
+        """Verify get_enhanced_stats endpoint uses Simple Pattern"""
+        from backend.api import knowledge_enhanced
+
+        source = inspect.getsource(knowledge_enhanced.get_enhanced_stats)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_enhanced_stats"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
+
+    def test_batch_153_enhanced_knowledge_health_simple_pattern(self):
+        """Verify enhanced_knowledge_health endpoint uses Simple Pattern"""
+        from backend.api import knowledge_enhanced
+
+        source = inspect.getsource(knowledge_enhanced.enhanced_knowledge_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="enhanced_knowledge_health"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_ENHANCED"', source)
+
+    def test_batch_153_all_knowledge_enhanced_endpoints_have_decorator(self):
+        """Verify all knowledge_enhanced endpoints have @with_error_handling decorator"""
+        from backend.api import knowledge_enhanced
+
+        endpoint_functions = [
+            knowledge_enhanced.enhanced_search,
+            knowledge_enhanced.rag_search,
+            knowledge_enhanced.extract_knowledge,
+            knowledge_enhanced.analyze_documents,
+            knowledge_enhanced.reformulate_query,
+            knowledge_enhanced.get_system_knowledge_insights,
+            knowledge_enhanced.get_enhanced_stats,
+            knowledge_enhanced.enhanced_knowledge_health,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_153_knowledge_enhanced_100_percent_milestone(self):
+        """Verify knowledge_enhanced.py has reached 100% migration"""
+        from backend.api import knowledge_enhanced
+
+        endpoint_functions = [
+            knowledge_enhanced.enhanced_search,
+            knowledge_enhanced.rag_search,
+            knowledge_enhanced.extract_knowledge,
+            knowledge_enhanced.analyze_documents,
+            knowledge_enhanced.reformulate_query,
+            knowledge_enhanced.get_system_knowledge_insights,
+            knowledge_enhanced.get_enhanced_stats,
+            knowledge_enhanced.enhanced_knowledge_health,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 8
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_153_migration_preserves_ai_stack_integration(self):
+        """Verify migration preserves AI Stack client integration"""
+        from backend.api import knowledge_enhanced
+
+        # Verify AI Stack client dependency injection
+        enhanced_search_source = inspect.getsource(knowledge_enhanced.enhanced_search)
+        self.assertIn("get_ai_stack_client", enhanced_search_source)
+        self.assertIn("ai_client", enhanced_search_source)
+
+        # Verify RAG query functionality
+        rag_source = inspect.getsource(knowledge_enhanced.rag_search)
+        self.assertIn("rag_query", rag_source)
+
+    def test_batch_153_migration_preserves_rag_capabilities(self):
+        """Verify migration preserves RAG (Retrieval-Augmented Generation) capabilities"""
+        from backend.api import knowledge_enhanced
+
+        # Verify RAG search functionality
+        rag_source = inspect.getsource(knowledge_enhanced.rag_search)
+        self.assertIn("rag_query", rag_source)
+        self.assertIn("documents", rag_source)
+
+        # Verify enhanced search combines RAG
+        enhanced_source = inspect.getsource(knowledge_enhanced.enhanced_search)
+        self.assertIn("include_rag", enhanced_source)
+        self.assertIn("rag_enhanced", enhanced_source)
+
+    def test_batch_153_migration_preserves_knowledge_extraction(self):
+        """Verify migration preserves knowledge extraction functionality"""
+        from backend.api import knowledge_enhanced
+
+        # Verify extraction endpoint
+        extract_source = inspect.getsource(knowledge_enhanced.extract_knowledge)
+        self.assertIn("extract_knowledge", extract_source)
+        self.assertIn("auto_store", extract_source)
+        self.assertIn("store_fact", extract_source)
+
+        # Verify extraction result handling
+        self.assertIn("extracted_facts", extract_source)
+
+    def test_batch_153_migration_preserves_document_analysis(self):
+        """Verify migration preserves document analysis functionality"""
+        from backend.api import knowledge_enhanced
+
+        # Verify document analysis endpoint
+        analyze_source = inspect.getsource(knowledge_enhanced.analyze_documents)
+        self.assertIn("analyze_documents", analyze_source)
+        self.assertIn("analysis_type", analyze_source)
+
+    def test_batch_153_migration_preserves_query_reformulation(self):
+        """Verify migration preserves query reformulation functionality"""
+        from backend.api import knowledge_enhanced
+
+        # Verify reformulation endpoint
+        reformulate_source = inspect.getsource(knowledge_enhanced.reformulate_query)
+        self.assertIn("reformulate_query", reformulate_source)
+        self.assertIn("context", reformulate_source)
+
+    def test_batch_153_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic request models"""
+        from backend.api import knowledge_enhanced
+
+        # Verify request models are defined
+        self.assertTrue(hasattr(knowledge_enhanced, "EnhancedSearchRequest"))
+        self.assertTrue(hasattr(knowledge_enhanced, "KnowledgeExtractionRequest"))
+        self.assertTrue(hasattr(knowledge_enhanced, "DocumentAnalysisRequest"))
+        self.assertTrue(hasattr(knowledge_enhanced, "RAGQueryRequest"))
+
+        # Verify models are used in endpoints
+        enhanced_search_source = inspect.getsource(knowledge_enhanced.enhanced_search)
+        self.assertIn("EnhancedSearchRequest", enhanced_search_source)
+
 
 if __name__ == "__main__":
     unittest.main()
