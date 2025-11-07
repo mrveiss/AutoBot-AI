@@ -11,6 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.system_validator import get_system_validator
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,11 @@ class ValidationResult(BaseModel):
     timestamp: str
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="validation_health",
+    error_code_prefix="SYSTEM_VALIDATION",
+)
 @router.get("/health")
 async def validation_health():
     """Health check for validation system"""
@@ -57,6 +63,11 @@ async def validation_health():
         raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_comprehensive_validation",
+    error_code_prefix="SYSTEM_VALIDATION",
+)
 @router.post("/validate/comprehensive", response_model=ValidationResult)
 async def run_comprehensive_validation(
     request: ValidationRequest, background_tasks: BackgroundTasks
@@ -93,6 +104,11 @@ async def run_comprehensive_validation(
         raise HTTPException(status_code=500, detail=f"Validation error: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_quick_validation",
+    error_code_prefix="SYSTEM_VALIDATION",
+)
 @router.get("/validate/quick")
 async def run_quick_validation():
     """Run quick system validation check"""
@@ -155,6 +171,11 @@ async def run_quick_validation():
         raise HTTPException(status_code=500, detail=f"Quick validation error: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="validate_component",
+    error_code_prefix="SYSTEM_VALIDATION",
+)
 @router.get("/validate/component/{component_name}")
 async def validate_component(component_name: str):
     """Validate specific component"""
@@ -200,6 +221,11 @@ async def validate_component(component_name: str):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_optimization_recommendations",
+    error_code_prefix="SYSTEM_VALIDATION",
+)
 @router.get("/validate/recommendations")
 async def get_optimization_recommendations():
     """Get system optimization recommendations"""
@@ -260,6 +286,11 @@ async def get_optimization_recommendations():
         raise HTTPException(status_code=500, detail=f"Recommendations error: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_validation_status",
+    error_code_prefix="SYSTEM_VALIDATION",
+)
 @router.get("/validate/status")
 async def get_validation_status():
     """Get current validation system status"""
@@ -287,6 +318,11 @@ async def get_validation_status():
         raise HTTPException(status_code=500, detail=f"Status error: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_performance_benchmark",
+    error_code_prefix="SYSTEM_VALIDATION",
+)
 @router.post("/validate/benchmark")
 async def run_performance_benchmark():
     """Run performance benchmarking tests"""

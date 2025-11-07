@@ -26983,6 +26983,188 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("ConnectionError", source)
         self.assertIn("TimeoutError", source)
 
+    # ==============================================
+    # BATCH 148: system_validation.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_148_validation_health_simple_pattern(self):
+        """Verify validation_health endpoint uses Simple Pattern"""
+        from backend.api import system_validation
+
+        source = inspect.getsource(system_validation.validation_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="validation_health"', source)
+        self.assertIn('error_code_prefix="SYSTEM_VALIDATION"', source)
+
+    def test_batch_148_run_comprehensive_validation_simple_pattern(self):
+        """Verify run_comprehensive_validation endpoint uses Simple Pattern"""
+        from backend.api import system_validation
+
+        source = inspect.getsource(system_validation.run_comprehensive_validation)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="run_comprehensive_validation"', source)
+        self.assertIn('error_code_prefix="SYSTEM_VALIDATION"', source)
+
+    def test_batch_148_run_quick_validation_simple_pattern(self):
+        """Verify run_quick_validation endpoint uses Simple Pattern"""
+        from backend.api import system_validation
+
+        source = inspect.getsource(system_validation.run_quick_validation)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="run_quick_validation"', source)
+        self.assertIn('error_code_prefix="SYSTEM_VALIDATION"', source)
+
+    def test_batch_148_validate_component_simple_pattern(self):
+        """Verify validate_component endpoint uses Simple Pattern"""
+        from backend.api import system_validation
+
+        source = inspect.getsource(system_validation.validate_component)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="validate_component"', source)
+        self.assertIn('error_code_prefix="SYSTEM_VALIDATION"', source)
+
+    def test_batch_148_get_optimization_recommendations_simple_pattern(self):
+        """Verify get_optimization_recommendations endpoint uses Simple Pattern"""
+        from backend.api import system_validation
+
+        source = inspect.getsource(system_validation.get_optimization_recommendations)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_optimization_recommendations"', source)
+        self.assertIn('error_code_prefix="SYSTEM_VALIDATION"', source)
+
+    def test_batch_148_get_validation_status_simple_pattern(self):
+        """Verify get_validation_status endpoint uses Simple Pattern"""
+        from backend.api import system_validation
+
+        source = inspect.getsource(system_validation.get_validation_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_validation_status"', source)
+        self.assertIn('error_code_prefix="SYSTEM_VALIDATION"', source)
+
+    def test_batch_148_run_performance_benchmark_simple_pattern(self):
+        """Verify run_performance_benchmark endpoint uses Simple Pattern"""
+        from backend.api import system_validation
+
+        source = inspect.getsource(system_validation.run_performance_benchmark)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="run_performance_benchmark"', source)
+        self.assertIn('error_code_prefix="SYSTEM_VALIDATION"', source)
+
+    def test_batch_148_all_system_validation_endpoints_have_decorator(self):
+        """Verify all system_validation endpoints have @with_error_handling decorator"""
+        from backend.api import system_validation
+
+        endpoint_functions = [
+            system_validation.validation_health,
+            system_validation.run_comprehensive_validation,
+            system_validation.run_quick_validation,
+            system_validation.validate_component,
+            system_validation.get_optimization_recommendations,
+            system_validation.get_validation_status,
+            system_validation.run_performance_benchmark,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_148_system_validation_100_percent_milestone(self):
+        """Verify system_validation.py has reached 100% migration"""
+        from backend.api import system_validation
+
+        endpoint_functions = [
+            system_validation.validation_health,
+            system_validation.run_comprehensive_validation,
+            system_validation.run_quick_validation,
+            system_validation.validate_component,
+            system_validation.get_optimization_recommendations,
+            system_validation.get_validation_status,
+            system_validation.run_performance_benchmark,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 7
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_148_migration_preserves_validator_integration(self):
+        """Verify migration preserves system validator integration"""
+        from backend.api import system_validation
+
+        source = inspect.getsource(system_validation.validation_health)
+        self.assertIn("get_system_validator", source)
+        self.assertIn("validator_initialized", source)
+        self.assertIn("_get_timestamp", source)
+
+    def test_batch_148_migration_preserves_validation_models(self):
+        """Verify migration preserves ValidationRequest and ValidationResult models"""
+        from backend.api import system_validation
+
+        source = inspect.getsource(system_validation.run_comprehensive_validation)
+        self.assertIn("ValidationResult", source)
+        self.assertIn("validation_id", source)
+        self.assertIn("component_scores", source)
+
+    def test_batch_148_migration_preserves_quick_validation_components(self):
+        """Verify migration preserves quick validation component checks"""
+        from backend.api import system_validation
+
+        source = inspect.getsource(system_validation.run_quick_validation)
+        self.assertIn("validate_knowledge_base_caching", source)
+        self.assertIn("validate_hybrid_search", source)
+        self.assertIn("validate_monitoring_system", source)
+        self.assertIn("validate_model_optimization", source)
+
+    def test_batch_148_migration_preserves_component_mapping(self):
+        """Verify migration preserves component validation method mapping"""
+        from backend.api import system_validation
+
+        source = inspect.getsource(system_validation.validate_component)
+        self.assertIn("component_methods", source)
+        self.assertIn('"cache"', source)
+        self.assertIn('"search"', source)
+        self.assertIn('"monitoring"', source)
+
+    def test_batch_148_migration_preserves_recommendations_collection(self):
+        """Verify migration preserves recommendations collection logic"""
+        from backend.api import system_validation
+
+        source = inspect.getsource(system_validation.get_optimization_recommendations)
+        self.assertIn("recommendations", source)
+        self.assertIn('"component"', source)
+        self.assertIn('"recommendation"', source)
+
+    def test_batch_148_migration_preserves_benchmark_structure(self):
+        """Verify migration preserves performance benchmark structure"""
+        from backend.api import system_validation
+
+        source = inspect.getsource(system_validation.run_performance_benchmark)
+        self.assertIn("benchmarks", source)
+        self.assertIn("cache_performance", source)
+        self.assertIn("search_performance", source)
+        self.assertIn("overall_performance_score", source)
+
 
 if __name__ == "__main__":
     unittest.main()
