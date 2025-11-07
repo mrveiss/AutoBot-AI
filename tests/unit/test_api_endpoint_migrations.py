@@ -26196,6 +26196,149 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("monitor.get_infrastructure_status()", source)
         self.assertIn("Refreshed", source)
 
+    # ==============================================
+    # BATCH 143: cache_management.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_143_get_cache_stats_simple_pattern(self):
+        """Verify get_cache_stats endpoint uses Simple Pattern"""
+        from backend.api import cache_management
+
+        source = inspect.getsource(cache_management.get_cache_stats)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_cache_stats"', source)
+        self.assertIn('error_code_prefix="CACHE_MANAGEMENT"', source)
+
+    def test_batch_143_warm_cache_simple_pattern(self):
+        """Verify warm_cache endpoint uses Simple Pattern"""
+        from backend.api import cache_management
+
+        source = inspect.getsource(cache_management.warm_cache)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="warm_cache"', source)
+        self.assertIn('error_code_prefix="CACHE_MANAGEMENT"', source)
+
+    def test_batch_143_invalidate_cache_simple_pattern(self):
+        """Verify invalidate_cache endpoint uses Simple Pattern"""
+        from backend.api import cache_management
+
+        source = inspect.getsource(cache_management.invalidate_cache)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="invalidate_cache"', source)
+        self.assertIn('error_code_prefix="CACHE_MANAGEMENT"', source)
+
+    def test_batch_143_clear_all_cache_simple_pattern(self):
+        """Verify clear_all_cache endpoint uses Simple Pattern"""
+        from backend.api import cache_management
+
+        source = inspect.getsource(cache_management.clear_all_cache)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="clear_all_cache"', source)
+        self.assertIn('error_code_prefix="CACHE_MANAGEMENT"', source)
+
+    def test_batch_143_cache_health_check_simple_pattern(self):
+        """Verify cache_health_check endpoint uses Simple Pattern"""
+        from backend.api import cache_management
+
+        source = inspect.getsource(cache_management.cache_health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="cache_health_check"', source)
+        self.assertIn('error_code_prefix="CACHE_MANAGEMENT"', source)
+
+    def test_batch_143_all_cache_management_endpoints_have_decorator(self):
+        """Verify all cache_management endpoints have @with_error_handling decorator"""
+        from backend.api import cache_management
+
+        endpoint_functions = [
+            cache_management.get_cache_stats,
+            cache_management.warm_cache,
+            cache_management.invalidate_cache,
+            cache_management.clear_all_cache,
+            cache_management.cache_health_check,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_143_cache_management_100_percent_milestone(self):
+        """Verify cache_management.py has reached 100% migration"""
+        from backend.api import cache_management
+
+        endpoint_functions = [
+            cache_management.get_cache_stats,
+            cache_management.warm_cache,
+            cache_management.invalidate_cache,
+            cache_management.clear_all_cache,
+            cache_management.cache_health_check,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 5
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_143_migration_preserves_cache_stats_functionality(self):
+        """Verify migration preserves cache statistics retrieval"""
+        from backend.api import cache_management
+
+        source = inspect.getsource(cache_management.get_cache_stats)
+        self.assertIn("advanced_cache.get_stats", source)
+        self.assertIn("data_type", source)
+        self.assertIn("CacheStatsResponse", source)
+
+    def test_batch_143_migration_preserves_cache_warming(self):
+        """Verify migration preserves cache warming functionality"""
+        from backend.api import cache_management
+
+        source = inspect.getsource(cache_management.warm_cache)
+        self.assertIn("CacheWarmingRequest", source)
+        self.assertIn("warmed_types", source)
+        self.assertIn("failed_types", source)
+
+    def test_batch_143_migration_preserves_cache_invalidation(self):
+        """Verify migration preserves cache invalidation with pattern support"""
+        from backend.api import cache_management
+
+        source = inspect.getsource(cache_management.invalidate_cache)
+        self.assertIn("advanced_cache.invalidate", source)
+        self.assertIn("key_pattern", source)
+
+    def test_batch_143_migration_preserves_clear_all_functionality(self):
+        """Verify migration preserves clear all cache functionality"""
+        from backend.api import cache_management
+
+        source = inspect.getsource(cache_management.clear_all_cache)
+        self.assertIn("total_deleted", source)
+        self.assertIn("All cache data cleared", source)
+
+    def test_batch_143_migration_preserves_health_check(self):
+        """Verify migration preserves cache health check"""
+        from backend.api import cache_management
+
+        source = inspect.getsource(cache_management.cache_health_check)
+        self.assertIn("advanced_cache.get_stats()", source)
+        self.assertIn("cache system health", source)
+
 
 if __name__ == "__main__":
     unittest.main()
