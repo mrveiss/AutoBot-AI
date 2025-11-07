@@ -7,10 +7,16 @@ from fastapi import APIRouter, HTTPException, Query
 from src.constants.network_constants import NetworkConstants
 from src.metrics.system_monitor import system_monitor
 from src.metrics.workflow_metrics import workflow_metrics
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_workflow_metrics",
+    error_code_prefix="METRICS",
+)
 @router.get("/workflow/{workflow_id}")
 async def get_workflow_metrics(workflow_id: str):
     """Get metrics for a specific workflow"""
@@ -27,6 +33,11 @@ async def get_workflow_metrics(workflow_id: str):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_performance_summary",
+    error_code_prefix="METRICS",
+)
 @router.get("/performance/summary")
 async def get_performance_summary(
     time_window_hours: int = Query(
@@ -45,6 +56,11 @@ async def get_performance_summary(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_current_system_metrics",
+    error_code_prefix="METRICS",
+)
 @router.get("/system/current")
 async def get_current_system_metrics():
     """Get current system resource metrics"""
@@ -59,6 +75,11 @@ async def get_current_system_metrics():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_summary",
+    error_code_prefix="METRICS",
+)
 @router.get("/system/summary")
 async def get_system_summary(
     minutes: int = Query(
@@ -82,6 +103,11 @@ async def get_system_summary(
 # Use /api/system/health?detailed=true for comprehensive status
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_workflow_metrics",
+    error_code_prefix="METRICS",
+)
 @router.get("/export/workflow")
 async def export_workflow_metrics(
     format: str = Query(default="json", description="Export format")
@@ -98,6 +124,11 @@ async def export_workflow_metrics(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_system_metrics",
+    error_code_prefix="METRICS",
+)
 @router.get("/export/system")
 async def export_system_metrics(
     format: str = Query(default="json", description="Export format")
@@ -114,6 +145,11 @@ async def export_system_metrics(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_system_monitoring",
+    error_code_prefix="METRICS",
+)
 @router.post("/system/monitoring/start")
 async def start_system_monitoring():
     """Start continuous system monitoring"""
@@ -132,6 +168,11 @@ async def start_system_monitoring():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_system_monitoring",
+    error_code_prefix="METRICS",
+)
 @router.post("/system/monitoring/stop")
 async def stop_system_monitoring():
     """Stop continuous system monitoring"""
@@ -146,6 +187,11 @@ async def stop_system_monitoring():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_metrics_dashboard",
+    error_code_prefix="METRICS",
+)
 @router.get("/dashboard")
 async def get_metrics_dashboard():
     """Get comprehensive metrics dashboard data"""
