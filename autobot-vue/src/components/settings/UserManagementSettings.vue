@@ -186,74 +186,61 @@
     </div>
 
     <!-- Login Modal -->
-    <teleport to="body">
-      <div v-if="showLoginModal" class="modal-overlay" @click="showLoginModal = false">
-        <div class="modal-content" @click.stop>
-          <div class="modal-header">
-            <h3>Login</h3>
-            <button @click="showLoginModal = false" class="close-btn">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
-          <LoginForm @login-success="onLoginSuccess" @login-error="onLoginError" />
-        </div>
-      </div>
-    </teleport>
+    <BaseModal
+      v-model="showLoginModal"
+      title="Login"
+      size="medium"
+    >
+      <LoginForm @login-success="onLoginSuccess" @login-error="onLoginError" />
+    </BaseModal>
 
     <!-- Change Password Modal -->
-    <teleport to="body">
-      <div v-if="showChangePasswordModal" class="modal-overlay" @click="showChangePasswordModal = false">
-        <div class="modal-content" @click.stop>
-          <div class="modal-header">
-            <h3>Change Password</h3>
-            <button @click="showChangePasswordModal = false" class="close-btn">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
-          <div class="change-password-form">
-            <div class="form-group">
-              <label for="currentPassword">Current Password</label>
-              <input
-                id="currentPassword"
-                type="password"
-                v-model="passwordForm.currentPassword"
-                class="form-control"
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="newPassword">New Password</label>
-              <input
-                id="newPassword"
-                type="password"
-                v-model="passwordForm.newPassword"
-                class="form-control"
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="confirmPassword">Confirm New Password</label>
-              <input
-                id="confirmPassword"
-                type="password"
-                v-model="passwordForm.confirmPassword"
-                class="form-control"
-              />
-            </div>
-
-            <div class="form-actions">
-              <button @click="changePassword" class="save-btn" :disabled="isChangingPassword">
-                <i :class="isChangingPassword ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
-                {{ isChangingPassword ? 'Changing...' : 'Change Password' }}
-              </button>
-              <button @click="showChangePasswordModal = false" class="cancel-btn">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
+    <BaseModal
+      v-model="showChangePasswordModal"
+      title="Change Password"
+      size="medium"
+      :closeOnOverlay="!isChangingPassword"
+    >
+      <div class="form-group">
+        <label for="currentPassword">Current Password</label>
+        <input
+          id="currentPassword"
+          type="password"
+          v-model="passwordForm.currentPassword"
+          class="form-control"
+        />
       </div>
-    </teleport>
+
+      <div class="form-group">
+        <label for="newPassword">New Password</label>
+        <input
+          id="newPassword"
+          type="password"
+          v-model="passwordForm.newPassword"
+          class="form-control"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="confirmPassword">Confirm New Password</label>
+        <input
+          id="confirmPassword"
+          type="password"
+          v-model="passwordForm.confirmPassword"
+          class="form-control"
+        />
+      </div>
+
+      <template #actions>
+        <button @click="showChangePasswordModal = false" class="cancel-btn">
+          Cancel
+        </button>
+        <button @click="changePassword" class="save-btn" :disabled="isChangingPassword">
+          <i :class="isChangingPassword ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
+          {{ isChangingPassword ? 'Changing...' : 'Change Password' }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -261,6 +248,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useUserStore } from '../../stores/useUserStore'
 import LoginForm from '../auth/LoginForm.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 const userStore = useUserStore()
 
@@ -557,55 +545,6 @@ onMounted(() => {
   gap: 8px;
 }
 
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  max-width: 500px;
-  width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #dee2e6;
-}
-
-.modal-header h3 {
-  margin: 0;
-  color: #2c3e50;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #6c757d;
-  font-size: 18px;
-}
-
-.change-password-form {
-  padding: 20px;
-}
-
 /* Dark theme support */
 @media (prefers-color-scheme: dark) {
   .user-management-settings h3,
@@ -624,18 +563,6 @@ onMounted(() => {
   .form-control {
     background: #3d3d3d;
     border-color: #555;
-    color: #ffffff;
-  }
-
-  .modal-content {
-    background: #2d2d2d;
-  }
-
-  .modal-header {
-    border-bottom-color: #555;
-  }
-
-  .modal-header h3 {
     color: #ffffff;
   }
 }
