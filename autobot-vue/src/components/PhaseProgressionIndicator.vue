@@ -7,11 +7,16 @@
         System Phase Status (On-Demand)
       </h2>
       <div class="header-controls">
-        <button @click="loadPhaseData" :disabled="loading" class="load-validation-btn">
+        <BaseButton
+          variant="outline"
+          @click="loadPhaseData"
+          :disabled="loading"
+          class="load-validation-btn"
+        >
           <i class="fas fa-play" v-if="!loading"></i>
           <i class="fas fa-spinner fa-spin" v-else></i>
           {{ loading ? 'Loading...' : 'Load Validation Data' }}
-        </button>
+        </BaseButton>
         <div class="overall-maturity" v-if="phases.length > 0">
           <span class="maturity-label">System Maturity:</span>
           <div class="maturity-bar">
@@ -32,10 +37,14 @@
         <i class="fas fa-exclamation-triangle"></i>
         <h3>Phase validation temporarily unavailable</h3>
         <p>The validation system is currently not accessible, but the application continues to work normally.</p>
-        <button @click="retryLoad" class="retry-button">
+        <BaseButton
+          variant="warning"
+          @click="retryLoad"
+          class="retry-button"
+        >
           <i class="fas fa-redo"></i>
           Retry
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -222,24 +231,28 @@
 
         <!-- Action Buttons -->
         <div class="phase-actions" v-if="canManagePhases">
-          <button
+          <BaseButton
             v-if="canTriggerProgression(phase)"
+            variant="primary"
+            size="sm"
             @click="triggerProgression(phase.name)"
-            class="btn-progression"
             :disabled="progressionInProgress"
+            class="btn-progression"
           >
             <i class="fas fa-play"></i>
             Progress
-          </button>
+          </BaseButton>
 
-          <button
+          <BaseButton
+            variant="success"
+            size="sm"
             @click="validatePhase(phase.name)"
-            class="btn-validate"
             :disabled="validationInProgress"
+            class="btn-validate"
           >
             <i class="fas fa-check-circle"></i>
             Validate
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -294,23 +307,25 @@
           <span class="control-label">Auto-Progression Enabled</span>
         </div>
 
-        <button
+        <BaseButton
+          variant="primary"
           @click="runFullValidation"
-          class="btn-full-validation"
           :disabled="validationInProgress"
+          class="btn-full-validation"
         >
           <i class="fas fa-play-circle"></i>
           Run Full System Validation
-        </button>
+        </BaseButton>
 
-        <button
+        <BaseButton
+          variant="success"
           @click="triggerAutoProgression"
-          class="btn-auto-progression"
           :disabled="progressionInProgress || !autoProgressionEnabled"
+          class="btn-auto-progression"
         >
           <i class="fas fa-forward"></i>
           Trigger Auto-Progression
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -327,11 +342,13 @@
 <script>
 import { apiRequest } from '@/config/api.js';
 import EmptyState from '@/components/ui/EmptyState.vue';
+import BaseButton from '@/components/base/BaseButton.vue';
 
 export default {
   name: 'PhaseProgressionIndicator',
   components: {
-    EmptyState
+    EmptyState,
+    BaseButton
   },
 
   data() {
@@ -648,29 +665,7 @@ export default {
   gap: 20px;
 }
 
-.load-validation-btn {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 10px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.load-validation-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.5);
-}
-
-.load-validation-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+/* Button styling handled by BaseButton component */
 
 .performance-note {
   font-size: 0.9rem;
@@ -779,26 +774,7 @@ export default {
   margin-bottom: 15px;
 }
 
-.retry-button {
-  background: #f59e0b;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: background 0.2s;
-}
-
-.retry-button:hover {
-  background: #d97706;
-}
-
-.retry-button i {
-  margin-right: 5px;
-  color: white !important;
-  font-size: 0.9rem !important;
-}
+/* Button styling handled by BaseButton component */
 
 .phases-grid {
   display: grid;
@@ -993,40 +969,7 @@ export default {
   margin-top: 15px;
 }
 
-.btn-progression, .btn-validate {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.btn-progression {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-progression:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.btn-validate {
-  background: #10b981;
-  color: white;
-}
-
-.btn-validate:hover:not(:disabled) {
-  background: #059669;
-}
-
-.btn-progression:disabled, .btn-validate:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Button styling handled by BaseButton component */
 
 .progression-history {
   background: white;
@@ -1155,41 +1098,7 @@ input:checked + .slider:before {
   transform: translateX(26px);
 }
 
-.btn-full-validation, .btn-auto-progression {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.btn-full-validation {
-  background: #6366f1;
-  color: white;
-}
-
-.btn-full-validation:hover:not(:disabled) {
-  background: #5855eb;
-}
-
-.btn-auto-progression {
-  background: #10b981;
-  color: white;
-}
-
-.btn-auto-progression:hover:not(:disabled) {
-  background: #059669;
-}
-
-.btn-full-validation:disabled, .btn-auto-progression:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Button styling handled by BaseButton component */
 
 .loading-overlay {
   position: absolute;
