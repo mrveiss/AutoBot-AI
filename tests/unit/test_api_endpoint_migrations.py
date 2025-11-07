@@ -27554,6 +27554,215 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         analytics_source = inspect.getsource(enhanced_search.get_performance_analytics)
         self.assertIn("_generate_system_recommendations", analytics_source)
 
+    # ==============================================
+    # BATCH 151: playwright.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_151_get_playwright_status_simple_pattern(self):
+        """Verify get_playwright_status endpoint uses Simple Pattern"""
+        from backend.api import playwright
+
+        source = inspect.getsource(playwright.get_playwright_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_playwright_status"', source)
+        self.assertIn('error_code_prefix="PLAYWRIGHT"', source)
+
+    def test_batch_151_health_check_simple_pattern(self):
+        """Verify health_check endpoint uses Simple Pattern"""
+        from backend.api import playwright
+
+        source = inspect.getsource(playwright.health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="health_check"', source)
+        self.assertIn('error_code_prefix="PLAYWRIGHT"', source)
+
+    def test_batch_151_web_search_simple_pattern(self):
+        """Verify web_search endpoint uses Simple Pattern"""
+        from backend.api import playwright
+
+        source = inspect.getsource(playwright.web_search)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="web_search"', source)
+        self.assertIn('error_code_prefix="PLAYWRIGHT"', source)
+
+    def test_batch_151_test_frontend_simple_pattern(self):
+        """Verify test_frontend endpoint uses Simple Pattern"""
+        from backend.api import playwright
+
+        source = inspect.getsource(playwright.test_frontend)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="test_frontend"', source)
+        self.assertIn('error_code_prefix="PLAYWRIGHT"', source)
+
+    def test_batch_151_send_test_message_simple_pattern(self):
+        """Verify send_test_message endpoint uses Simple Pattern"""
+        from backend.api import playwright
+
+        source = inspect.getsource(playwright.send_test_message)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="send_test_message"', source)
+        self.assertIn('error_code_prefix="PLAYWRIGHT"', source)
+
+    def test_batch_151_capture_screenshot_simple_pattern(self):
+        """Verify capture_screenshot endpoint uses Simple Pattern"""
+        from backend.api import playwright
+
+        source = inspect.getsource(playwright.capture_screenshot)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="capture_screenshot"', source)
+        self.assertIn('error_code_prefix="PLAYWRIGHT"', source)
+
+    def test_batch_151_quick_automation_test_simple_pattern(self):
+        """Verify quick_automation_test endpoint uses Simple Pattern"""
+        from backend.api import playwright
+
+        source = inspect.getsource(playwright.quick_automation_test)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="quick_automation_test"', source)
+        self.assertIn('error_code_prefix="PLAYWRIGHT"', source)
+
+    def test_batch_151_get_capabilities_simple_pattern(self):
+        """Verify get_capabilities endpoint uses Simple Pattern"""
+        from backend.api import playwright
+
+        source = inspect.getsource(playwright.get_capabilities)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_capabilities"', source)
+        self.assertIn('error_code_prefix="PLAYWRIGHT"', source)
+
+    def test_batch_151_all_playwright_endpoints_have_decorator(self):
+        """Verify all playwright endpoints have @with_error_handling decorator"""
+        from backend.api import playwright
+
+        endpoint_functions = [
+            playwright.get_playwright_status,
+            playwright.health_check,
+            playwright.web_search,
+            playwright.test_frontend,
+            playwright.send_test_message,
+            playwright.capture_screenshot,
+            playwright.quick_automation_test,
+            playwright.get_capabilities,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_151_playwright_100_percent_milestone(self):
+        """Verify playwright.py has reached 100% migration"""
+        from backend.api import playwright
+
+        endpoint_functions = [
+            playwright.get_playwright_status,
+            playwright.health_check,
+            playwright.web_search,
+            playwright.test_frontend,
+            playwright.send_test_message,
+            playwright.capture_screenshot,
+            playwright.quick_automation_test,
+            playwright.get_capabilities,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 8
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_151_migration_preserves_playwright_service_integration(self):
+        """Verify migration preserves Playwright service integration"""
+        from backend.api import playwright
+
+        # Verify service integration functions are imported and used
+        status_source = inspect.getsource(playwright.get_playwright_status)
+        self.assertIn("get_playwright_service", status_source)
+        self.assertIn("get_service_status", status_source)
+
+        screenshot_source = inspect.getsource(playwright.capture_screenshot)
+        self.assertIn("playwright_service", screenshot_source)
+
+    def test_batch_151_migration_preserves_embedded_docker_functions(self):
+        """Verify migration preserves embedded Docker function calls"""
+        from backend.api import playwright
+
+        # Verify embedded functions are imported
+        search_source = inspect.getsource(playwright.web_search)
+        self.assertIn("search_web_embedded", search_source)
+
+        frontend_source = inspect.getsource(playwright.test_frontend)
+        self.assertIn("test_frontend_embedded", frontend_source)
+
+        message_source = inspect.getsource(playwright.send_test_message)
+        self.assertIn("send_test_message_embedded", message_source)
+
+    def test_batch_151_migration_preserves_screenshot_functionality(self):
+        """Verify migration preserves screenshot capture functionality"""
+        from backend.api import playwright
+
+        screenshot_source = inspect.getsource(playwright.capture_screenshot)
+        self.assertIn("capture_screenshot", screenshot_source)
+        self.assertIn("url=", screenshot_source)
+        self.assertIn("full_page=", screenshot_source)
+        self.assertIn("wait_timeout=", screenshot_source)
+
+    def test_batch_151_migration_preserves_background_tasks(self):
+        """Verify migration preserves BackgroundTasks execution"""
+        from backend.api import playwright
+
+        automation_source = inspect.getsource(playwright.quick_automation_test)
+        self.assertIn("BackgroundTasks", automation_source)
+        self.assertIn("background_tasks", automation_source)
+        self.assertIn("add_task", automation_source)
+        self.assertIn("run_automation_tests", automation_source)
+
+    def test_batch_151_migration_preserves_request_models(self):
+        """Verify migration preserves Pydantic request models"""
+        from backend.api import playwright
+
+        # Verify request models are defined
+        self.assertTrue(hasattr(playwright, "SearchRequest"))
+        self.assertTrue(hasattr(playwright, "TestMessageRequest"))
+        self.assertTrue(hasattr(playwright, "FrontendTestRequest"))
+        self.assertTrue(hasattr(playwright, "ScreenshotRequest"))
+
+        # Verify models are used in endpoints
+        web_search_source = inspect.getsource(playwright.web_search)
+        self.assertIn("SearchRequest", web_search_source)
+
+    def test_batch_151_migration_preserves_capabilities_structure(self):
+        """Verify migration preserves capabilities endpoint structure"""
+        from backend.api import playwright
+
+        capabilities_source = inspect.getsource(playwright.get_capabilities)
+        self.assertIn("web_search", capabilities_source)
+        self.assertIn("frontend_testing", capabilities_source)
+        self.assertIn("message_automation", capabilities_source)
+        self.assertIn("screenshot_capture", capabilities_source)
+        self.assertIn("container_integration", capabilities_source)
+        self.assertIn("docker_container", capabilities_source)
+
 
 if __name__ == "__main__":
     unittest.main()
