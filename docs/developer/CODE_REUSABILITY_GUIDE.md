@@ -1859,12 +1859,57 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 31 - Failed Vectorizations Manager** ✅ Completed
+
+**Goal**: Migrate failed vectorization jobs management interface with retry and cleanup actions to BaseButton.
+
+**Components Migrated**: 1 component, 4 buttons, ~58 lines saved
+
+#### **FailedVectorizationsManager.vue** (4 buttons, ~58 lines saved)
+
+**Purpose**: Failed vectorization jobs manager with per-job retry and cleanup functionality.
+
+**Buttons Migrated**:
+
+**Header Actions (2 buttons):**
+- Refresh → `<BaseButton variant="primary" size="sm" :disabled="loading" :loading="loading" class="btn-refresh">` (Sync alt icon)
+- Clear All → `<BaseButton variant="danger" size="sm" v-if="failedJobs.length > 0" :disabled="loading" class="btn-clear-all">` (Trash alt icon)
+
+**Per-Job Actions (v-for, 2 buttons per job):**
+- Retry → `<BaseButton variant="success" size="sm" :disabled="loading || retryingJobs.has(job.job_id)" :loading="retryingJobs.has(job.job_id)" class="btn-retry">` (Redo icon)
+- Delete → `<BaseButton variant="secondary" size="sm" :disabled="loading" class="btn-delete">` (Trash icon)
+
+**Key Patterns**:
+- ✅ **Per-item loading states in v-for** - Using `Set<string>` for tracking individual job retry states
+- ✅ Conditional loading prop with per-item check: `:loading="retryingJobs.has(job.job_id)"`
+- ✅ Conditional icon display with Set check: `v-if="!retryingJobs.has(job.job_id)"`
+- ✅ Multiple disabled conditions (global loading + per-item retrying)
+- ✅ Success variant for positive actions (retry)
+- ✅ Danger variant for destructive bulk actions (clear all)
+- ✅ Secondary variant for per-item delete (less prominent than bulk clear)
+- ✅ Conditional rendering for bulk actions (`v-if="failedJobs.length > 0"`)
+
+**CSS Removed**: ~58 lines removed from scoped styles:
+- `.btn-refresh` base styles (~10 lines)
+- `.btn-clear-all` base styles (~10 lines)
+- `.btn-retry` base styles + success variant (~14 lines)
+- `.btn-delete` base styles + secondary variant (~14 lines)
+- Hover states and transitions (~10 lines)
+
+---
+
 **Batch 30 Summary**:
 - Components: 1 (KnowledgeAdvanced)
 - Buttons: 5 consolidated (3 populate actions + 1 clear + 1 dismiss)
 - Lines: ~61 saved
 - Variants: 3 (primary, danger, ghost)
-- **Combined Total**: 19 components, ~1,261 lines saved, 135 buttons consolidated
+
+**Batch 31 Summary**:
+- Components: 1 (FailedVectorizationsManager)
+- Buttons: 4 consolidated (2 header actions + 2 per-job actions)
+- Lines: ~58 saved
+- Variants: 4 (primary, danger, success, secondary)
+- **Combined Total**: 20 components, ~1,319 lines saved, 139 buttons consolidated
 
 ---
 
@@ -1877,7 +1922,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~1,261 lines (batches 20-30)
+- BaseButton adoptions: ~1,319 lines (batches 20-31)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
@@ -1889,9 +1934,10 @@ const createRipple = (event: TouchEvent) => {
   - Batch 28: ~65 lines (1 component, 10 buttons)
   - Batch 29: ~156 lines (1 component, 9 buttons)
   - Batch 30: ~61 lines (1 component, 5 buttons)
-- **Total Progress**: ~2,055 lines / ~1,500-2,000 realistic target (103-137%) ✅ **TARGET EXCEEDED**
+  - Batch 31: ~58 lines (1 component, 4 buttons)
+- **Total Progress**: ~2,113 lines / ~1,500-2,000 realistic target (106-141%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 19 components using BaseButton (135 buttons consolidated)
+- **BaseButton Milestone**: 20 components using BaseButton (139 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
