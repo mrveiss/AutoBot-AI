@@ -187,197 +187,182 @@
     </div>
 
     <!-- Add/Edit Worker Dialog -->
-    <div v-if="showAddWorkerDialog || showEditWorkerDialog" class="modal-overlay" @click.self="closeWorkerDialog">
-      <div class="modal-dialog">
-        <div class="modal-header">
-          <h3 class="modal-title">
-            {{ showEditWorkerDialog ? 'Edit Worker' : 'Add New Worker' }}
-          </h3>
-          <button @click="closeWorkerDialog" class="modal-close">
-            <i class="fas fa-times"></i>
-          </button>
+    <BaseModal
+      :modelValue="showAddWorkerDialog || showEditWorkerDialog"
+      @update:modelValue="val => !val && closeWorkerDialog()"
+      :title="showEditWorkerDialog ? 'Edit Worker' : 'Add New Worker'"
+      size="medium"
+      :closeOnOverlay="!isSavingWorker && !operationInProgress"
+    >
+      <!-- Error Alert -->
+      <BaseAlert
+        v-if="workerFormError"
+        variant="error"
+        :message="workerFormError"
+      />
+
+      <div class="form-group">
+        <label class="form-label">Worker Name *</label>
+        <input
+          v-model="workerForm.name"
+          type="text"
+          class="form-input"
+          placeholder="e.g., NPU-Worker-VM2"
+          required
+        />
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Platform *</label>
+          <select v-model="workerForm.platform" class="form-select">
+            <option value="linux">Linux</option>
+            <option value="windows">Windows</option>
+            <option value="macos">macOS</option>
+          </select>
         </div>
 
-        <div class="modal-body">
-          <!-- Error Alert -->
-          <BaseAlert
-            v-if="workerFormError"
-            variant="error"
-            :message="workerFormError"
+        <div class="form-group">
+          <label class="form-label">IP Address *</label>
+          <input
+            v-model="workerForm.ip_address"
+            type="text"
+            class="form-input"
+            :placeholder="NetworkConstants.NPU_WORKER_VM_IP"
+            required
           />
-
-          <div class="form-group">
-            <label class="form-label">Worker Name *</label>
-            <input
-              v-model="workerForm.name"
-              type="text"
-              class="form-input"
-              placeholder="e.g., NPU-Worker-VM2"
-              required
-            />
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Platform *</label>
-              <select v-model="workerForm.platform" class="form-select">
-                <option value="linux">Linux</option>
-                <option value="windows">Windows</option>
-                <option value="macos">macOS</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">IP Address *</label>
-              <input
-                v-model="workerForm.ip_address"
-                type="text"
-                class="form-input"
-                :placeholder="NetworkConstants.NPU_WORKER_VM_IP"
-                required
-              />
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Port *</label>
-              <input
-                v-model.number="workerForm.port"
-                type="number"
-                class="form-input"
-                placeholder="8081"
-                min="1"
-                max="65535"
-                required
-              />
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Priority (1-10)</label>
-              <input
-                v-model.number="workerForm.priority"
-                type="number"
-                class="form-input"
-                min="1"
-                max="10"
-              />
-              <p class="form-help">Higher priority workers receive tasks first</p>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Weight</label>
-              <input
-                v-model.number="workerForm.weight"
-                type="number"
-                class="form-input"
-                min="1"
-                max="100"
-              />
-              <p class="form-help">Load balancing weight (higher = more tasks)</p>
-            </div>
-          </div>
         </div>
 
-        <div class="modal-footer">
-          <button @click="closeWorkerDialog" class="btn-secondary">
-            Cancel
-          </button>
-          <button
-            @click="saveWorker"
-            :disabled="!isWorkerFormValid || isSavingWorker || operationInProgress"
-            class="btn-primary"
-          >
-            <i :class="isSavingWorker ? 'fas fa-spinner fa-spin mr-2' : 'fas fa-save mr-2'"></i>
-            {{ isSavingWorker ? 'Saving...' : 'Save Worker' }}
-          </button>
+        <div class="form-group">
+          <label class="form-label">Port *</label>
+          <input
+            v-model.number="workerForm.port"
+            type="number"
+            class="form-input"
+            placeholder="8081"
+            min="1"
+            max="65535"
+            required
+          />
         </div>
       </div>
-    </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Priority (1-10)</label>
+          <input
+            v-model.number="workerForm.priority"
+            type="number"
+            class="form-input"
+            min="1"
+            max="10"
+          />
+          <p class="form-help">Higher priority workers receive tasks first</p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Weight</label>
+          <input
+            v-model.number="workerForm.weight"
+            type="number"
+            class="form-input"
+            min="1"
+            max="100"
+          />
+          <p class="form-help">Load balancing weight (higher = more tasks)</p>
+        </div>
+      </div>
+
+      <template #actions>
+        <button @click="closeWorkerDialog" class="btn-secondary">
+          Cancel
+        </button>
+        <button
+          @click="saveWorker"
+          :disabled="!isWorkerFormValid || isSavingWorker || operationInProgress"
+          class="btn-primary"
+        >
+          <i :class="isSavingWorker ? 'fas fa-spinner fa-spin mr-2' : 'fas fa-save mr-2'"></i>
+          {{ isSavingWorker ? 'Saving...' : 'Save Worker' }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Delete Confirmation Dialog -->
-    <div v-if="showDeleteDialog" class="modal-overlay" @click.self="showDeleteDialog = false">
-      <div class="modal-dialog modal-sm">
-        <div class="modal-header bg-red-50">
-          <h3 class="modal-title text-red-700">
-            <i class="fas fa-exclamation-triangle mr-2"></i>
-            Confirm Deletion
-          </h3>
-          <button @click="showDeleteDialog = false" class="modal-close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
+    <BaseModal
+      v-model="showDeleteDialog"
+      size="small"
+      :closeOnOverlay="!isDeletingWorker && !operationInProgress"
+    >
+      <template #title>
+        <span class="text-red-700">
+          <i class="fas fa-exclamation-triangle mr-2"></i>
+          Confirm Deletion
+        </span>
+      </template>
 
-        <div class="modal-body">
-          <p class="text-gray-700">
-            Are you sure you want to remove worker <strong>{{ workerToDelete?.name }}</strong>?
-          </p>
-          <p class="text-sm text-gray-600 mt-2">
-            This action cannot be undone.
-          </p>
-        </div>
+      <p class="text-gray-700">
+        Are you sure you want to remove worker <strong>{{ workerToDelete?.name }}</strong>?
+      </p>
+      <p class="text-sm text-gray-600 mt-2">
+        This action cannot be undone.
+      </p>
 
-        <div class="modal-footer">
-          <button @click="showDeleteDialog = false" class="btn-secondary">
-            Cancel
-          </button>
-          <button @click="deleteWorker" :disabled="isDeletingWorker || operationInProgress" class="btn-danger">
-            <i :class="isDeletingWorker ? 'fas fa-spinner fa-spin mr-2' : 'fas fa-trash mr-2'"></i>
-            {{ isDeletingWorker ? 'Deleting...' : 'Delete Worker' }}
-          </button>
-        </div>
-      </div>
-    </div>
+      <template #actions>
+        <button @click="showDeleteDialog = false" class="btn-secondary">
+          Cancel
+        </button>
+        <button @click="deleteWorker" :disabled="isDeletingWorker || operationInProgress" class="btn-danger">
+          <i :class="isDeletingWorker ? 'fas fa-spinner fa-spin mr-2' : 'fas fa-trash mr-2'"></i>
+          {{ isDeletingWorker ? 'Deleting...' : 'Delete Worker' }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Worker Metrics Modal -->
-    <div v-if="showMetricsDialog && selectedWorkerMetrics" class="modal-overlay" @click.self="showMetricsDialog = false">
-      <div class="modal-dialog modal-lg">
-        <div class="modal-header">
-          <h3 class="modal-title">
-            <i class="fas fa-chart-line mr-2"></i>
-            Worker Metrics: {{ selectedWorkerMetrics.name }}
-          </h3>
-          <button @click="showMetricsDialog = false" class="modal-close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
+    <BaseModal
+      v-if="selectedWorkerMetrics"
+      v-model="showMetricsDialog"
+      size="large"
+    >
+      <template #title>
+        <i class="fas fa-chart-line mr-2"></i>
+        Worker Metrics: {{ selectedWorkerMetrics.name }}
+      </template>
 
-        <div class="modal-body">
-          <div class="metrics-grid">
-            <div class="metric-card">
-              <div class="metric-label">CPU Usage</div>
-              <div class="metric-value">{{ selectedWorkerMetrics.performance_metrics?.cpu_usage ?? 0 }}%</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-label">Memory Usage</div>
-              <div class="metric-value">{{ selectedWorkerMetrics.performance_metrics?.memory_usage ?? 0 }}%</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-label">NPU Utilization</div>
-              <div class="metric-value">{{ selectedWorkerMetrics.performance_metrics?.npu_utilization ?? 0 }}%</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-label">Tasks Completed</div>
-              <div class="metric-value">{{ selectedWorkerMetrics.performance_metrics?.tasks_completed ?? 0 }}</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-label">Avg Response Time</div>
-              <div class="metric-value">{{ selectedWorkerMetrics.performance_metrics?.avg_response_time ?? 0 }}ms</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-label">Error Rate</div>
-              <div class="metric-value">{{ selectedWorkerMetrics.performance_metrics?.error_rate ?? 0 }}%</div>
-            </div>
-          </div>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">CPU Usage</div>
+          <div class="metric-value">{{ selectedWorkerMetrics.performance_metrics?.cpu_usage ?? 0 }}%</div>
         </div>
-
-        <div class="modal-footer">
-          <button @click="showMetricsDialog = false" class="btn-secondary">
-            Close
-          </button>
+        <div class="metric-card">
+          <div class="metric-label">Memory Usage</div>
+          <div class="metric-value">{{ selectedWorkerMetrics.performance_metrics?.memory_usage ?? 0 }}%</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">NPU Utilization</div>
+          <div class="metric-value">{{ selectedWorkerMetrics.performance_metrics?.npu_utilization ?? 0 }}%</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Tasks Completed</div>
+          <div class="metric-value">{{ selectedWorkerMetrics.performance_metrics?.tasks_completed ?? 0 }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Avg Response Time</div>
+          <div class="metric-value">{{ selectedWorkerMetrics.performance_metrics?.avg_response_time ?? 0 }}ms</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Error Rate</div>
+          <div class="metric-value">{{ selectedWorkerMetrics.performance_metrics?.error_rate ?? 0 }}%</div>
         </div>
       </div>
-    </div>
+
+      <template #actions>
+        <button @click="showMetricsDialog = false" class="btn-secondary">
+          Close
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -388,6 +373,7 @@ import { NetworkConstants } from '@/constants/network-constants.js'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 // ===== TYPE DEFINITIONS =====
 
@@ -1199,79 +1185,6 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   padding: 60px 20px;
-}
-
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-}
-
-.modal-dialog {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  max-width: 600px;
-  width: 100%;
-  max-height: 90vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-dialog.modal-sm {
-  max-width: 400px;
-}
-
-.modal-dialog.modal-lg {
-  max-width: 800px;
-}
-
-.modal-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid #dee2e6;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2c3e50;
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  font-size: 20px;
-  color: #6c757d;
-  cursor: pointer;
-  padding: 4px 8px;
-}
-
-.modal-close:hover {
-  color: #2c3e50;
-}
-
-.modal-body {
-  padding: 24px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.modal-footer {
-  padding: 16px 24px;
-  border-top: 1px solid #dee2e6;
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
 }
 
 .form-group {
