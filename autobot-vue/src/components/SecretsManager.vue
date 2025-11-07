@@ -126,14 +126,14 @@
     </div>
 
     <!-- Create/Edit Secret Modal -->
-    <div v-if="showCreateModal || showEditModal" class="modal-overlay" @click="closeModals">
-      <div class="modal" @click.stop>
-        <div class="modal-header">
-          <h3>{{ showEditModal ? 'Edit Secret' : 'Create New Secret' }}</h3>
-          <button @click="closeModals" class="btn-close">&times;</button>
-        </div>
-        
-        <form @submit.prevent="saveSecret" class="modal-body">
+    <BaseModal
+      :modelValue="showCreateModal || showEditModal"
+      @update:modelValue="val => !val && closeModals()"
+      :title="showEditModal ? 'Edit Secret' : 'Create New Secret'"
+      size="medium"
+      :closeOnOverlay="!saving"
+    >
+      <form @submit.prevent="saveSecret">
           <div class="form-group">
             <label>Name <span class="required">*</span></label>
             <input 
@@ -209,32 +209,28 @@
 
           <div class="form-group">
             <label>Expiration Date</label>
-            <input 
-              type="datetime-local" 
-              v-model="secretForm.expires_at" 
+            <input
+              type="datetime-local"
+              v-model="secretForm.expires_at"
               class="form-input"
             />
           </div>
-
-          <div class="modal-actions">
-            <button type="button" @click="closeModals" class="btn-secondary">Cancel</button>
-            <button type="submit" class="btn-primary" :disabled="saving">
-              {{ saving ? 'Saving...' : (showEditModal ? 'Update' : 'Create') }}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>
+
+      <template #actions>
+        <button type="button" @click="closeModals" class="btn-secondary">Cancel</button>
+        <button type="submit" @click="saveSecret" class="btn-primary" :disabled="saving">
+          {{ saving ? 'Saving...' : (showEditModal ? 'Update' : 'Create') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- View Secret Modal -->
-    <div v-if="showViewModal" class="modal-overlay" @click="showViewModal = false">
-      <div class="modal" @click.stop>
-        <div class="modal-header">
-          <h3>View Secret: {{ viewingSecret?.name }}</h3>
-          <button @click="showViewModal = false" class="btn-close">&times;</button>
-        </div>
-        
-        <div class="modal-body">
+    <BaseModal
+      v-model="showViewModal"
+      :title="`View Secret: ${viewingSecret?.name || ''}`"
+      size="medium"
+    >
           <div class="secret-details">
             <div class="detail-group">
               <label>Type:</label>
@@ -283,26 +279,23 @@
               </span>
             </div>
           </div>
-        </div>
 
-        <div class="modal-actions">
-          <button @click="showViewModal = false" class="btn-secondary">Close</button>
-          <button @click="copySecretValue" class="btn-primary">
-            Copy Value
-          </button>
-        </div>
-      </div>
-    </div>
+      <template #actions>
+        <button @click="showViewModal = false" class="btn-secondary">Close</button>
+        <button @click="copySecretValue" class="btn-primary">
+          Copy Value
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Transfer Modal -->
-    <div v-if="showTransferModal" class="modal-overlay" @click="showTransferModal = false">
-      <div class="modal" @click.stop>
-        <div class="modal-header">
-          <h3>Transfer Secret: {{ transferringSecret?.name }}</h3>
-          <button @click="showTransferModal = false" class="btn-close">&times;</button>
-        </div>
-        
-        <form @submit.prevent="confirmTransfer" class="modal-body">
+    <BaseModal
+      v-model="showTransferModal"
+      :title="`Transfer Secret: ${transferringSecret?.name || ''}`"
+      size="medium"
+      :closeOnOverlay="!transferring"
+    >
+      <form @submit.prevent="confirmTransfer">
           <p>This will move the secret from chat-scoped to general scope, making it accessible across all conversations.</p>
           
           <div class="form-group">
@@ -311,16 +304,15 @@
               I understand this action cannot be undone
             </label>
           </div>
-
-          <div class="modal-actions">
-            <button type="button" @click="showTransferModal = false" class="btn-secondary">Cancel</button>
-            <button type="submit" class="btn-primary" :disabled="!transferConfirmed || transferring">
-              {{ transferring ? 'Transferring...' : 'Transfer to General' }}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>
+
+      <template #actions>
+        <button type="button" @click="showTransferModal = false" class="btn-secondary">Cancel</button>
+        <button type="submit" @click="confirmTransfer" class="btn-primary" :disabled="!transferConfirmed || transferring">
+          {{ transferring ? 'Transferring...' : 'Transfer to General' }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -331,12 +323,14 @@ import { useAppStore } from '../stores/useAppStore.ts';
 import { formatDateTime } from '@/utils/formatHelpers';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
+import BaseModal from '@/components/ui/BaseModal.vue';
 
 export default {
   name: 'SecretsManager',
   components: {
     EmptyState,
-    StatusBadge
+    StatusBadge,
+    BaseModal
   },
   setup() {
     // State
@@ -896,58 +890,7 @@ export default {
   opacity: 0.8;
 }
 
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal {
-  background: white;
-  border-radius: 8px;
-  max-width: 500px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #eee;
-}
-
-.modal-header h3 {
-  margin: 0;
-}
-
-.btn-close {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  padding: 0;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
+/* Form Styles */
 .form-group {
   margin-bottom: 15px;
 }
@@ -993,14 +936,6 @@ export default {
   border: 1px solid #ddd;
   border-radius: 4px;
   cursor: pointer;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 20px;
-  border-top: 1px solid #eee;
 }
 
 .secret-details {
