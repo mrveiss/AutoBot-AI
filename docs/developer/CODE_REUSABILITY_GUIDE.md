@@ -2399,6 +2399,138 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+## BaseAlert Component Creation & Migration (Batches 41-46)
+
+### **Batch 41 - BaseAlert Component Creation + LoginForm Migration** ✅ Completed
+
+**Goal**: Create reusable BaseAlert component to consolidate inline alert patterns and migrate first component.
+
+**New Component**: BaseAlert.vue (`autobot-vue/src/components/ui/BaseAlert.vue`)
+
+**Features**:
+- 5 variants: success, info, warning, error, critical
+- Icon support with Heroicons (CheckCircleIcon, InformationCircleIcon, ExclamationTriangleIcon, XCircleIcon)
+- Optional title and message props
+- Slots: default (message), icon, actions
+- Dismissible with optional auto-dismiss timer (milliseconds)
+- Bordered variant with left accent border (4px)
+- Dark mode support with adjusted colors
+- TypeScript interface for props
+- Accessible with role="alert"
+- Emits dismiss event
+
+**First Migration**: LoginForm.vue (2 alerts, ~22 lines saved)
+- Replaced error-alert div with BaseAlert variant="error"
+- Replaced warning-alert div with BaseAlert variant="warning"
+- Removed error-alert/warning-alert CSS (~18 lines)
+- Removed icon CSS (~2 lines: icon-alert-circle, icon-lock)
+
+---
+
+### **Batch 42 - KnowledgeUpload Migration** ✅ Completed
+
+**Component**: KnowledgeUpload.vue (2 alerts, ~18 lines saved)
+
+**Alerts Migrated**:
+1. Success message → BaseAlert variant="success"
+2. Error message → BaseAlert variant="error"
+
+**Changes**:
+- Added BaseAlert import
+- Replaced alert divs with BaseAlert components
+- Removed alert CSS (~15 lines: .alert + .alert-success + .alert-error)
+- Removed FontAwesome icon markup (CheckCircle, ExclamationCircle)
+
+---
+
+### **Batch 43 - NPUWorkersSettings Migration** ✅ Completed
+
+**Component**: NPUWorkersSettings.vue (1 alert, ~14 lines saved)
+
+**Alert Migrated**:
+1. Worker form error → BaseAlert variant="error"
+
+**Changes**:
+- Added BaseAlert import
+- Replaced error-alert div with BaseAlert component
+- Removed error-alert CSS (~14 lines: base class + icon styles)
+- Replaced FontAwesome with Heroicons automatically
+
+---
+
+### **Batch 44 - ValidationDashboard Migration** ✅ Completed
+
+**Component**: ValidationDashboard.vue (alerts list, ~40 lines saved)
+
+**Alerts Migrated**:
+- Alert list with v-for loop (critical/warning/info variants)
+- Dynamic variant binding based on alert.level
+- Title and message props from alert data
+- Timestamp in actions slot
+
+**Changes**:
+- Added BaseAlert import and component registration
+- Replaced v-for div with BaseAlert v-for loop
+- Used bordered prop for left accent border
+- Moved timestamp to actions slot for right-aligned display
+- Removed alert CSS (~40 lines: .alert, .alert-critical, .alert-warning, .alert-info, .alert-title)
+- Added .alerts-list CSS for flex gap spacing
+
+**Key Patterns**:
+- Dynamic variant binding: `:variant="alert.level"`
+- Title/message props from data
+- Actions slot for timestamp display
+- V-for rendering with BaseAlert
+
+---
+
+### **Batch 45 - MonitoringDashboard Migration** ✅ Completed
+
+**Component**: MonitoringDashboard.vue (alert banner, ~17 lines saved)
+
+**Alert Migrated**:
+- Critical alert banner with dynamic count message
+- BaseButton in actions slot for "View Details"
+
+**Changes**:
+- Added BaseAlert import and component registration
+- Replaced alert-banner div with BaseAlert variant="critical"
+- Dynamic message with template literal for alert count
+- BaseButton placed in actions slot
+- Removed alert-banner CSS (~17 lines: base class + critical variant)
+
+**Note**: Alert items list in modal not migrated - uses custom structure with StatusBadge, specific header layout, and recommendation section that doesn't fit BaseAlert pattern.
+
+---
+
+### **Batch 46 - ResearchBrowser Migration** ✅ Completed
+
+**Component**: ResearchBrowser.vue (interaction alert, ~10 lines saved)
+
+**Alert Migrated**:
+- Interaction required warning with action buttons
+- Warning variant for user attention
+- Two BaseButtons in actions slot (Wait, Open Browser)
+
+**Changes**:
+- Added BaseAlert import and component registration
+- Replaced interaction-alert div with BaseAlert variant="warning"
+- Used bordered prop for left accent border
+- Actions slot contains flex container with two buttons
+- Removed inline Tailwind classes (~10 lines of utility classes)
+
+---
+
+**BaseAlert Migration Summary (Batches 41-46)**:
+- **Components Migrated**: 6 components (LoginForm, KnowledgeUpload, NPUWorkersSettings, ValidationDashboard, MonitoringDashboard, ResearchBrowser)
+- **Alerts Consolidated**: 10+ alerts
+- **Lines Saved**: ~121 lines
+- **Target**: ~50-100 lines estimated → **121 lines achieved** ✅ **TARGET EXCEEDED**
+- **Variants Used**: All 5 variants (success, info, warning, error, critical)
+- **Key Patterns**: Simple messages, v-for loops, actions slot with buttons, dynamic variant binding, title + message structure
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -2430,9 +2562,17 @@ const createRipple = (event: TouchEvent) => {
   - Batch 38: ~85 lines (1 component, 9 buttons)
   - Batch 39: ~70 lines (1 component, 6 buttons)
   - Batch 40: ~35 lines (1 component, 5 buttons)
-- **Total Progress**: ~2,611 lines / ~1,500-2,000 realistic target (131-174%) ✅ **TARGET EXCEEDED**
+- BaseAlert adoptions: ~121 lines (batches 41-46)
+  - Batch 41: ~22 lines (1 component, 2 alerts) + BaseAlert.vue creation
+  - Batch 42: ~18 lines (1 component, 2 alerts)
+  - Batch 43: ~14 lines (1 component, 1 alert)
+  - Batch 44: ~40 lines (1 component, alerts list with v-for)
+  - Batch 45: ~17 lines (1 component, 1 banner)
+  - Batch 46: ~10 lines (1 component, 1 alert)
+- **Total Progress**: ~2,732 lines / ~1,500-2,000 realistic target (137-182%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
 - **BaseButton Milestone**: 29 components using BaseButton (202 buttons consolidated)
+- **BaseAlert Milestone**: 6 components using BaseAlert (10+ alerts consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
