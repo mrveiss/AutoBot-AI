@@ -26,15 +26,16 @@
               <p>Add AutoBot-specific documentation, configs, and setup guides</p>
               <small class="action-meta">~30 documents, ~3 minutes</small>
             </div>
-            <button
+            <BaseButton
+              variant="primary"
               @click="populateAutoBotDocs"
               :disabled="isPopulating"
-              class="action-btn primary"
+              :loading="populateStatus.autobotDocs === 'loading'"
+              class="action-btn"
             >
-              <i v-if="populateStatus.autobotDocs === 'loading'" class="fas fa-spinner fa-spin"></i>
-              <i v-else class="fas fa-plus"></i>
+              <i v-if="populateStatus.autobotDocs !== 'loading'" class="fas fa-plus"></i>
               {{ getButtonText('autobotDocs') }}
-            </button>
+            </BaseButton>
           </div>
 
           <!-- 2. System Commands (SECOND - Common CLI commands) -->
@@ -47,15 +48,16 @@
               <p>Add common Linux commands and usage examples (curl, grep, ssh, docker, etc.)</p>
               <small class="action-meta">~150 commands, ~5 minutes</small>
             </div>
-            <button
+            <BaseButton
+              variant="primary"
               @click="populateSystemCommands"
               :disabled="isPopulating"
-              class="action-btn primary"
+              :loading="populateStatus.systemCommands === 'loading'"
+              class="action-btn"
             >
-              <i v-if="populateStatus.systemCommands === 'loading'" class="fas fa-spinner fa-spin"></i>
-              <i v-else class="fas fa-plus"></i>
+              <i v-if="populateStatus.systemCommands !== 'loading'" class="fas fa-plus"></i>
               {{ getButtonText('systemCommands') }}
-            </button>
+            </BaseButton>
           </div>
 
           <!-- 3. Manual Pages (THIRD - Detailed reference docs) -->
@@ -68,15 +70,16 @@
               <p>Add selected system manual pages for common tools and utilities</p>
               <small class="action-meta">~50 man pages, ~8 minutes</small>
             </div>
-            <button
+            <BaseButton
+              variant="primary"
               @click="populateManPages"
               :disabled="isPopulating"
-              class="action-btn primary"
+              :loading="populateStatus.manPages === 'loading'"
+              class="action-btn"
             >
-              <i v-if="populateStatus.manPages === 'loading'" class="fas fa-spinner fa-spin"></i>
-              <i v-else class="fas fa-plus"></i>
+              <i v-if="populateStatus.manPages !== 'loading'" class="fas fa-plus"></i>
               {{ getButtonText('manPages') }}
-            </button>
+            </BaseButton>
           </div>
         </div>
       </div>
@@ -98,15 +101,16 @@
               <p>Remove all entries from the knowledge base. <strong>This action cannot be undone.</strong></p>
               <small class="action-meta">Requires confirmation</small>
             </div>
-            <button
+            <BaseButton
+              variant="danger"
               @click="clearAllKnowledge"
               :disabled="isClearing || isPopulating"
-              class="action-btn danger"
+              :loading="isClearing"
+              class="action-btn"
             >
-              <i v-if="isClearing" class="fas fa-spinner fa-spin"></i>
-              <i v-else class="fas fa-exclamation-triangle"></i>
+              <i v-if="!isClearing" class="fas fa-exclamation-triangle"></i>
               {{ isClearing ? 'Clearing...' : 'Clear All' }}
-            </button>
+            </BaseButton>
           </div>
         </div>
       </div>
@@ -151,9 +155,15 @@
           <div class="message-title">{{ message.title }}</div>
           <div v-if="message.details" class="message-details">{{ message.details }}</div>
         </div>
-        <button @click="dismissMessage(index)" class="dismiss-btn">
+        <BaseButton
+          variant="ghost"
+          size="xs"
+          @click="dismissMessage(index)"
+          class="dismiss-btn"
+          aria-label="Dismiss message"
+        >
           <i class="fas fa-times"></i>
-        </button>
+        </BaseButton>
       </div>
     </div>
   </div>
@@ -164,6 +174,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import ApiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 const store = useKnowledgeStore()
 
@@ -634,41 +645,9 @@ onMounted(() => {
   margin-bottom: 1rem;
 }
 
+/* Action button layout */
 .action-btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  transition: all 0.2s;
-  font-size: 0.875rem;
-}
-
-.action-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.action-btn.primary {
-  background: #3b82f6;
-  color: white;
-}
-
-.action-btn.primary:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.action-btn.danger {
-  background: #dc2626;
-  color: white;
-}
-
-.action-btn.danger:hover:not(:disabled) {
-  background: #b91c1c;
+  width: 100%;
 }
 
 /* Progress Styles */
@@ -807,25 +786,11 @@ onMounted(() => {
   font-size: 0.875rem;
 }
 
+/* Dismiss button positioning */
 .dismiss-btn {
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
-  width: 1.5rem;
-  height: 1.5rem;
-  border: none;
-  background: none;
-  color: #9ca3af;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.25rem;
-}
-
-.dismiss-btn:hover {
-  background: rgba(0, 0, 0, 0.1);
-  color: #6b7280;
 }
 
 /* Responsive */
