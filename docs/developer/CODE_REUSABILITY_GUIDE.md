@@ -1909,7 +1909,53 @@ const createRipple = (event: TouchEvent) => {
 - Buttons: 4 consolidated (2 header actions + 2 per-job actions)
 - Lines: ~58 saved
 - Variants: 4 (primary, danger, success, secondary)
-- **Combined Total**: 20 components, ~1,319 lines saved, 139 buttons consolidated
+
+---
+
+### **Batch 32 - File List Table Actions** ✅ Completed
+
+**Goal**: Migrate file browser list table with per-row action buttons to BaseButton.
+
+**Components Migrated**: 1 component, 4 buttons, ~24 lines saved
+
+#### **FileListTable.vue** (4 buttons, ~24 lines saved)
+
+**Purpose**: File browser list table with per-row file/directory actions (view, open, rename, delete).
+
+**Buttons Migrated (v-for per file/directory):**
+
+**Conditional File Actions:**
+- View file → `<BaseButton variant="ghost" size="sm" v-if="!file.is_dir" class="action-btn view-btn">` (Eye icon)
+- Open directory → `<BaseButton variant="ghost" size="sm" v-if="file.is_dir" class="action-btn open-btn">` (Folder open icon)
+
+**Universal Actions:**
+- Rename → `<BaseButton variant="ghost" size="sm" class="action-btn rename-btn">` (Edit icon)
+- Delete → `<BaseButton variant="ghost" size="sm" class="action-btn delete-btn">` (Trash icon)
+
+**Key Patterns**:
+- ✅ Ghost variant for minimal icon-only action buttons
+- ✅ Conditional rendering in v-for (view vs open based on file.is_dir)
+- ✅ Per-row actions in table cells
+- ✅ Consistent size (sm) for compact table layout
+- ✅ Preserved aria-label and title for accessibility
+- ✅ Icon-only buttons with hover interactions handled by BaseButton
+
+**CSS Removed**: ~24 lines removed from scoped styles:
+- `.action-btn` base styles + hover states (~6 lines)
+- `.view-btn:hover` color override (~3 lines)
+- `.open-btn:hover` color override (~3 lines)
+- `.rename-btn:hover` color override (~3 lines)
+- `.delete-btn:hover` color override (~3 lines)
+- Tailwind utility classes for sizing, spacing, colors (~6 lines)
+
+---
+
+**Batch 32 Summary**:
+- Components: 1 (FileListTable)
+- Buttons: 4 consolidated (2 conditional + 2 universal per-row actions)
+- Lines: ~24 saved
+- Variants: 1 (ghost for minimal action buttons)
+- **Combined Total**: 21 components, ~1,343 lines saved, 143 buttons consolidated
 
 ---
 
@@ -1922,7 +1968,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~1,319 lines (batches 20-31)
+- BaseButton adoptions: ~1,343 lines (batches 20-32)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
@@ -1935,9 +1981,10 @@ const createRipple = (event: TouchEvent) => {
   - Batch 29: ~156 lines (1 component, 9 buttons)
   - Batch 30: ~61 lines (1 component, 5 buttons)
   - Batch 31: ~58 lines (1 component, 4 buttons)
-- **Total Progress**: ~2,113 lines / ~1,500-2,000 realistic target (106-141%) ✅ **TARGET EXCEEDED**
+  - Batch 32: ~24 lines (1 component, 4 buttons)
+- **Total Progress**: ~2,137 lines / ~1,500-2,000 realistic target (107-143%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 20 components using BaseButton (139 buttons consolidated)
+- **BaseButton Milestone**: 21 components using BaseButton (143 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 

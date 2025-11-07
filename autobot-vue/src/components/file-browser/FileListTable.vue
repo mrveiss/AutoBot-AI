@@ -39,40 +39,48 @@
           <td>{{ formatDate(file.last_modified) }}</td>
           <td>
             <div class="action-buttons">
-              <button
+              <BaseButton
                 v-if="!file.is_dir"
+                variant="ghost"
+                size="sm"
                 @click="$emit('view-file', file)"
                 class="action-btn view-btn"
                 aria-label="View file"
                 title="View file"
               >
                 <i class="fas fa-eye"></i>
-              </button>
-              <button
+              </BaseButton>
+              <BaseButton
                 v-if="file.is_dir"
+                variant="ghost"
+                size="sm"
                 @click="$emit('navigate', file.path)"
                 class="action-btn open-btn"
                 aria-label="Open directory"
                 title="Open directory"
               >
                 <i class="fas fa-folder-open"></i>
-              </button>
-              <button
+              </BaseButton>
+              <BaseButton
+                variant="ghost"
+                size="sm"
                 @click="$emit('rename-file', file)"
                 class="action-btn rename-btn"
                 aria-label="Rename"
                 title="Rename"
               >
                 <i class="fas fa-edit"></i>
-              </button>
-              <button
+              </BaseButton>
+              <BaseButton
+                variant="ghost"
+                size="sm"
                 @click="$emit('delete-file', file)"
                 class="action-btn delete-btn"
                 aria-label="Delete"
                 title="Delete"
               >
                 <i class="fas fa-trash"></i>
-              </button>
+              </BaseButton>
             </div>
           </td>
         </tr>
@@ -90,6 +98,7 @@
 import { computed } from 'vue'
 import { formatDateTime } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 interface FileItem {
   name: string
@@ -261,23 +270,5 @@ const formatDate = formatDateTime
   @apply flex gap-1;
 }
 
-.action-btn {
-  @apply w-8 h-8 flex items-center justify-center rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100;
-}
-
-.view-btn:hover {
-  @apply text-blue-600;
-}
-
-.open-btn:hover {
-  @apply text-green-600;
-}
-
-.rename-btn:hover {
-  @apply text-yellow-600;
-}
-
-.delete-btn:hover {
-  @apply text-red-600;
-}
+/* Button styling handled by BaseButton component */
 </style>

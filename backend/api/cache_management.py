@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.advanced_cache_manager import advanced_cache
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cache", tags=["cache_management"])
@@ -32,6 +33,11 @@ class CacheWarmingRequest(BaseModel):
     force_refresh: bool = False
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cache_stats",
+    error_code_prefix="CACHE_MANAGEMENT",
+)
 @router.get("/stats", response_model=CacheStatsResponse)
 async def get_cache_stats(data_type: Optional[str] = Query(None)):
     """Get cache statistics - global or for specific data type"""
@@ -59,6 +65,11 @@ async def get_cache_stats(data_type: Optional[str] = Query(None)):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="warm_cache",
+    error_code_prefix="CACHE_MANAGEMENT",
+)
 @router.post("/warm")
 async def warm_cache(request: CacheWarmingRequest):
     """Warm up cache with commonly accessed data"""
@@ -89,6 +100,11 @@ async def warm_cache(request: CacheWarmingRequest):
         raise HTTPException(status_code=500, detail=f"Error warming cache: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="invalidate_cache",
+    error_code_prefix="CACHE_MANAGEMENT",
+)
 @router.delete("/invalidate/{data_type}")
 async def invalidate_cache(
     data_type: str,
@@ -114,6 +130,11 @@ async def invalidate_cache(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_all_cache",
+    error_code_prefix="CACHE_MANAGEMENT",
+)
 @router.post("/clear-all")
 async def clear_all_cache():
     """Clear all cache data (use with caution)"""
@@ -276,6 +297,11 @@ async def _warm_data_type(data_type: str, force_refresh: bool = False) -> bool:
         return False
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cache_health_check",
+    error_code_prefix="CACHE_MANAGEMENT",
+)
 @router.get("/health")
 async def cache_health_check():
     """Check cache system health"""
