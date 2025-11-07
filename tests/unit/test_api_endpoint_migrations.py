@@ -26805,6 +26805,184 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("progression_result", source)
         self.assertIn("Auto progression completed", source)
 
+    # ==============================================
+    # BATCH 147: error_monitoring.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_147_get_system_error_statistics_simple_pattern(self):
+        """Verify get_system_error_statistics endpoint uses Simple Pattern"""
+        from backend.api import error_monitoring
+
+        source = inspect.getsource(error_monitoring.get_system_error_statistics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_system_error_statistics"', source)
+        self.assertIn('error_code_prefix="ERROR_MONITORING"', source)
+
+    def test_batch_147_get_recent_errors_simple_pattern(self):
+        """Verify get_recent_errors endpoint uses Simple Pattern"""
+        from backend.api import error_monitoring
+
+        source = inspect.getsource(error_monitoring.get_recent_errors)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_recent_errors"', source)
+        self.assertIn('error_code_prefix="ERROR_MONITORING"', source)
+
+    def test_batch_147_get_error_categories_simple_pattern(self):
+        """Verify get_error_categories endpoint uses Simple Pattern"""
+        from backend.api import error_monitoring
+
+        source = inspect.getsource(error_monitoring.get_error_categories)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_error_categories"', source)
+        self.assertIn('error_code_prefix="ERROR_MONITORING"', source)
+
+    def test_batch_147_get_error_by_component_simple_pattern(self):
+        """Verify get_error_by_component endpoint uses Simple Pattern"""
+        from backend.api import error_monitoring
+
+        source = inspect.getsource(error_monitoring.get_error_by_component)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_error_by_component"', source)
+        self.assertIn('error_code_prefix="ERROR_MONITORING"', source)
+
+    def test_batch_147_get_error_system_health_simple_pattern(self):
+        """Verify get_error_system_health endpoint uses Simple Pattern"""
+        from backend.api import error_monitoring
+
+        source = inspect.getsource(error_monitoring.get_error_system_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_error_system_health"', source)
+        self.assertIn('error_code_prefix="ERROR_MONITORING"', source)
+
+    def test_batch_147_clear_error_history_simple_pattern(self):
+        """Verify clear_error_history endpoint uses Simple Pattern"""
+        from backend.api import error_monitoring
+
+        source = inspect.getsource(error_monitoring.clear_error_history)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="clear_error_history"', source)
+        self.assertIn('error_code_prefix="ERROR_MONITORING"', source)
+
+    def test_batch_147_test_error_system_simple_pattern(self):
+        """Verify test_error_system endpoint uses Simple Pattern"""
+        from backend.api import error_monitoring
+
+        source = inspect.getsource(error_monitoring.test_error_system)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="test_error_system"', source)
+        self.assertIn('error_code_prefix="ERROR_MONITORING"', source)
+
+    def test_batch_147_all_error_monitoring_endpoints_have_decorator(self):
+        """Verify all error_monitoring endpoints have @with_error_handling decorator"""
+        from backend.api import error_monitoring
+
+        endpoint_functions = [
+            error_monitoring.get_system_error_statistics,
+            error_monitoring.get_recent_errors,
+            error_monitoring.get_error_categories,
+            error_monitoring.get_error_by_component,
+            error_monitoring.get_error_system_health,
+            error_monitoring.clear_error_history,
+            error_monitoring.test_error_system,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_147_error_monitoring_100_percent_milestone(self):
+        """Verify error_monitoring.py has reached 100% migration"""
+        from backend.api import error_monitoring
+
+        endpoint_functions = [
+            error_monitoring.get_system_error_statistics,
+            error_monitoring.get_recent_errors,
+            error_monitoring.get_error_categories,
+            error_monitoring.get_error_by_component,
+            error_monitoring.get_error_system_health,
+            error_monitoring.clear_error_history,
+            error_monitoring.test_error_system,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 7
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_147_migration_preserves_error_statistics(self):
+        """Verify migration preserves error statistics functionality"""
+        from backend.api import error_monitoring
+
+        source = inspect.getsource(error_monitoring.get_system_error_statistics)
+        self.assertIn("get_error_statistics", source)
+        self.assertIn('{"status": "success", "data": stats}', source)
+
+    def test_batch_147_migration_preserves_redis_operations(self):
+        """Verify migration preserves Redis error operations"""
+        from backend.api import error_monitoring
+
+        source = inspect.getsource(error_monitoring.get_recent_errors)
+        self.assertIn("get_error_boundary_manager", source)
+        self.assertIn("redis_client", source)
+        self.assertIn('"autobot:errors:*"', source)
+
+    def test_batch_147_migration_preserves_category_calculations(self):
+        """Verify migration preserves category percentage calculations"""
+        from backend.api import error_monitoring
+
+        source = inspect.getsource(error_monitoring.get_error_categories)
+        self.assertIn("categories", source)
+        self.assertIn("percentage", source)
+        self.assertIn("total_errors", source)
+
+    def test_batch_147_migration_preserves_health_scoring(self):
+        """Verify migration preserves health scoring system"""
+        from backend.api import error_monitoring
+
+        source = inspect.getsource(error_monitoring.get_error_system_health)
+        self.assertIn("health_status", source)
+        self.assertIn("health_score", source)
+        self.assertIn("_get_health_recommendations", source)
+
+    def test_batch_147_migration_preserves_auth_check(self):
+        """Verify migration preserves authorization check"""
+        from backend.api import error_monitoring
+
+        source = inspect.getsource(error_monitoring.clear_error_history)
+        self.assertIn("authorization", source)
+        self.assertIn("Bearer admin_token", source)
+        self.assertIn("HTTP_401_UNAUTHORIZED", source)
+
+    def test_batch_147_migration_preserves_test_error_types(self):
+        """Verify migration preserves test error type handling"""
+        from backend.api import error_monitoring
+
+        source = inspect.getsource(error_monitoring.test_error_system)
+        self.assertIn("ValueError", source)
+        self.assertIn("ConnectionError", source)
+        self.assertIn("TimeoutError", source)
+
 
 if __name__ == "__main__":
     unittest.main()
