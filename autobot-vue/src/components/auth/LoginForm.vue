@@ -55,15 +55,17 @@
           </div>
         </div>
 
-        <div v-if="loginError" class="error-alert">
-          <i class="icon-alert-circle"></i>
-          {{ loginError }}
-        </div>
+        <BaseAlert
+          v-if="loginError"
+          variant="error"
+          :message="loginError"
+        />
 
-        <div v-if="lockoutMessage" class="warning-alert">
-          <i class="icon-lock"></i>
-          {{ lockoutMessage }}
-        </div>
+        <BaseAlert
+          v-if="lockoutMessage"
+          variant="warning"
+          :message="lockoutMessage"
+        />
 
         <button
           type="submit"
@@ -96,6 +98,7 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/useUserStore'
 import ApiClient from '@/utils/ApiClient'
+import BaseAlert from '@/components/ui/BaseAlert.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -362,26 +365,6 @@ onMounted(async () => {
   margin-top: 0.25rem;
 }
 
-.error-alert, .warning-alert {
-  padding: 0.75rem;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-}
-
-.error-alert {
-  background-color: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
-}
-
-.warning-alert {
-  background-color: #fffbeb;
-  color: #d97706;
-  border: 1px solid #fed7aa;
-}
 
 .login-button {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -451,8 +434,6 @@ onMounted(async () => {
 /* Icon classes for basic icons */
 .icon-eye::before { content: '👁'; }
 .icon-eye-off::before { content: '🙈'; }
-.icon-alert-circle::before { content: '⚠️'; }
-.icon-lock::before { content: '🔒'; }
 
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
