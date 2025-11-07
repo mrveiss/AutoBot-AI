@@ -28175,6 +28175,233 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         enhanced_search_source = inspect.getsource(knowledge_enhanced.enhanced_search)
         self.assertIn("EnhancedSearchRequest", enhanced_search_source)
 
+    # ==============================================
+    # BATCH 154: metrics.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_154_get_workflow_metrics_simple_pattern(self):
+        """Verify get_workflow_metrics endpoint uses Simple Pattern"""
+        from backend.api import metrics
+
+        source = inspect.getsource(metrics.get_workflow_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_workflow_metrics"', source)
+        self.assertIn('error_code_prefix="METRICS"', source)
+
+    def test_batch_154_get_performance_summary_simple_pattern(self):
+        """Verify get_performance_summary endpoint uses Simple Pattern"""
+        from backend.api import metrics
+
+        source = inspect.getsource(metrics.get_performance_summary)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_performance_summary"', source)
+        self.assertIn('error_code_prefix="METRICS"', source)
+
+    def test_batch_154_get_current_system_metrics_simple_pattern(self):
+        """Verify get_current_system_metrics endpoint uses Simple Pattern"""
+        from backend.api import metrics
+
+        source = inspect.getsource(metrics.get_current_system_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_current_system_metrics"', source)
+        self.assertIn('error_code_prefix="METRICS"', source)
+
+    def test_batch_154_get_system_summary_simple_pattern(self):
+        """Verify get_system_summary endpoint uses Simple Pattern"""
+        from backend.api import metrics
+
+        source = inspect.getsource(metrics.get_system_summary)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_system_summary"', source)
+        self.assertIn('error_code_prefix="METRICS"', source)
+
+    def test_batch_154_export_workflow_metrics_simple_pattern(self):
+        """Verify export_workflow_metrics endpoint uses Simple Pattern"""
+        from backend.api import metrics
+
+        source = inspect.getsource(metrics.export_workflow_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="export_workflow_metrics"', source)
+        self.assertIn('error_code_prefix="METRICS"', source)
+
+    def test_batch_154_export_system_metrics_simple_pattern(self):
+        """Verify export_system_metrics endpoint uses Simple Pattern"""
+        from backend.api import metrics
+
+        source = inspect.getsource(metrics.export_system_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="export_system_metrics"', source)
+        self.assertIn('error_code_prefix="METRICS"', source)
+
+    def test_batch_154_start_system_monitoring_simple_pattern(self):
+        """Verify start_system_monitoring endpoint uses Simple Pattern"""
+        from backend.api import metrics
+
+        source = inspect.getsource(metrics.start_system_monitoring)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="start_system_monitoring"', source)
+        self.assertIn('error_code_prefix="METRICS"', source)
+
+    def test_batch_154_stop_system_monitoring_simple_pattern(self):
+        """Verify stop_system_monitoring endpoint uses Simple Pattern"""
+        from backend.api import metrics
+
+        source = inspect.getsource(metrics.stop_system_monitoring)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="stop_system_monitoring"', source)
+        self.assertIn('error_code_prefix="METRICS"', source)
+
+    def test_batch_154_get_metrics_dashboard_simple_pattern(self):
+        """Verify get_metrics_dashboard endpoint uses Simple Pattern"""
+        from backend.api import metrics
+
+        source = inspect.getsource(metrics.get_metrics_dashboard)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_metrics_dashboard"', source)
+        self.assertIn('error_code_prefix="METRICS"', source)
+
+    def test_batch_154_all_metrics_endpoints_have_decorator(self):
+        """Verify all metrics endpoints have @with_error_handling decorator"""
+        from backend.api import metrics
+
+        endpoint_functions = [
+            metrics.get_workflow_metrics,
+            metrics.get_performance_summary,
+            metrics.get_current_system_metrics,
+            metrics.get_system_summary,
+            metrics.export_workflow_metrics,
+            metrics.export_system_metrics,
+            metrics.start_system_monitoring,
+            metrics.stop_system_monitoring,
+            metrics.get_metrics_dashboard,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_154_metrics_100_percent_milestone(self):
+        """Verify metrics.py has reached 100% migration"""
+        from backend.api import metrics
+
+        endpoint_functions = [
+            metrics.get_workflow_metrics,
+            metrics.get_performance_summary,
+            metrics.get_current_system_metrics,
+            metrics.get_system_summary,
+            metrics.export_workflow_metrics,
+            metrics.export_system_metrics,
+            metrics.start_system_monitoring,
+            metrics.stop_system_monitoring,
+            metrics.get_metrics_dashboard,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 9
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_154_migration_preserves_workflow_metrics_integration(self):
+        """Verify migration preserves workflow_metrics integration"""
+        from backend.api import metrics
+
+        # Verify workflow_metrics is imported and used
+        workflow_source = inspect.getsource(metrics.get_workflow_metrics)
+        self.assertIn("workflow_metrics", workflow_source)
+        self.assertIn("get_workflow_stats", workflow_source)
+
+        # Verify performance summary
+        performance_source = inspect.getsource(metrics.get_performance_summary)
+        self.assertIn("get_performance_summary", performance_source)
+
+    def test_batch_154_migration_preserves_system_monitor_integration(self):
+        """Verify migration preserves system_monitor integration"""
+        from backend.api import metrics
+
+        # Verify system_monitor is used
+        system_source = inspect.getsource(metrics.get_current_system_metrics)
+        self.assertIn("system_monitor", system_source)
+        self.assertIn("get_current_metrics", system_source)
+
+        # Verify resource summary
+        summary_source = inspect.getsource(metrics.get_system_summary)
+        self.assertIn("get_resource_summary", summary_source)
+
+    def test_batch_154_migration_preserves_query_parameters(self):
+        """Verify migration preserves FastAPI Query parameters"""
+        from backend.api import metrics
+
+        # Verify time_window_hours parameter
+        performance_source = inspect.getsource(metrics.get_performance_summary)
+        self.assertIn("time_window_hours", performance_source)
+        self.assertIn("Query", performance_source)
+
+        # Verify minutes parameter
+        summary_source = inspect.getsource(metrics.get_system_summary)
+        self.assertIn("minutes", summary_source)
+        self.assertIn("Query", summary_source)
+
+    def test_batch_154_migration_preserves_export_functionality(self):
+        """Verify migration preserves metrics export functionality"""
+        from backend.api import metrics
+
+        # Verify workflow export
+        workflow_export_source = inspect.getsource(metrics.export_workflow_metrics)
+        self.assertIn("export_metrics", workflow_export_source)
+        self.assertIn("format", workflow_export_source)
+
+        # Verify system export
+        system_export_source = inspect.getsource(metrics.export_system_metrics)
+        self.assertIn("export_resource_data", system_export_source)
+
+    def test_batch_154_migration_preserves_monitoring_control(self):
+        """Verify migration preserves system monitoring start/stop control"""
+        from backend.api import metrics
+
+        # Verify start monitoring
+        start_source = inspect.getsource(metrics.start_system_monitoring)
+        self.assertIn("start_monitoring", start_source)
+        self.assertIn("collection_interval", start_source)
+
+        # Verify stop monitoring
+        stop_source = inspect.getsource(metrics.stop_system_monitoring)
+        self.assertIn("stop_monitoring", stop_source)
+
+    def test_batch_154_migration_preserves_dashboard_aggregation(self):
+        """Verify migration preserves dashboard data aggregation"""
+        from backend.api import metrics
+
+        # Verify dashboard endpoint aggregates data
+        dashboard_source = inspect.getsource(metrics.get_metrics_dashboard)
+        self.assertIn("workflow_performance", dashboard_source)
+        self.assertIn("system_health", dashboard_source)
+        self.assertIn("resource_usage", dashboard_source)
+        self.assertIn("current_status", dashboard_source)
+        self.assertIn("check_resource_thresholds", dashboard_source)
+
 
 if __name__ == "__main__":
     unittest.main()
