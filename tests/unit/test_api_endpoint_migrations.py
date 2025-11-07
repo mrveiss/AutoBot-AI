@@ -27374,6 +27374,186 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         by_tag_source = inspect.getsource(registry.get_routers_by_tag)
         self.assertIn("registry.get_routers_by_tag(tag)", by_tag_source)
 
+    # ==============================================
+    # BATCH 150: enhanced_search.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_150_enhanced_semantic_search_simple_pattern(self):
+        """Verify enhanced_semantic_search endpoint uses Simple Pattern"""
+        from backend.api import enhanced_search
+
+        source = inspect.getsource(enhanced_search.enhanced_semantic_search)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="enhanced_semantic_search"', source)
+        self.assertIn('error_code_prefix="ENHANCED_SEARCH"', source)
+
+    def test_batch_150_get_hardware_status_simple_pattern(self):
+        """Verify get_hardware_status endpoint uses Simple Pattern"""
+        from backend.api import enhanced_search
+
+        source = inspect.getsource(enhanced_search.get_hardware_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_hardware_status"', source)
+        self.assertIn('error_code_prefix="ENHANCED_SEARCH"', source)
+
+    def test_batch_150_benchmark_search_performance_simple_pattern(self):
+        """Verify benchmark_search_performance endpoint uses Simple Pattern"""
+        from backend.api import enhanced_search
+
+        source = inspect.getsource(enhanced_search.benchmark_search_performance)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="benchmark_search_performance"', source)
+        self.assertIn('error_code_prefix="ENHANCED_SEARCH"', source)
+
+    def test_batch_150_optimize_search_engine_simple_pattern(self):
+        """Verify optimize_search_engine endpoint uses Simple Pattern"""
+        from backend.api import enhanced_search
+
+        source = inspect.getsource(enhanced_search.optimize_search_engine)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="optimize_search_engine"', source)
+        self.assertIn('error_code_prefix="ENHANCED_SEARCH"', source)
+
+    def test_batch_150_get_performance_analytics_simple_pattern(self):
+        """Verify get_performance_analytics endpoint uses Simple Pattern"""
+        from backend.api import enhanced_search
+
+        source = inspect.getsource(enhanced_search.get_performance_analytics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_performance_analytics"', source)
+        self.assertIn('error_code_prefix="ENHANCED_SEARCH"', source)
+
+    def test_batch_150_test_npu_connectivity_simple_pattern(self):
+        """Verify test_npu_connectivity endpoint uses Simple Pattern"""
+        from backend.api import enhanced_search
+
+        source = inspect.getsource(enhanced_search.test_npu_connectivity)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="test_npu_connectivity"', source)
+        self.assertIn('error_code_prefix="ENHANCED_SEARCH"', source)
+
+    def test_batch_150_health_check_simple_pattern(self):
+        """Verify health_check endpoint uses Simple Pattern"""
+        from backend.api import enhanced_search
+
+        source = inspect.getsource(enhanced_search.health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="health_check"', source)
+        self.assertIn('error_code_prefix="ENHANCED_SEARCH"', source)
+
+    def test_batch_150_all_enhanced_search_endpoints_have_decorator(self):
+        """Verify all enhanced_search endpoints have @with_error_handling decorator"""
+        from backend.api import enhanced_search
+
+        endpoint_functions = [
+            enhanced_search.enhanced_semantic_search,
+            enhanced_search.get_hardware_status,
+            enhanced_search.benchmark_search_performance,
+            enhanced_search.optimize_search_engine,
+            enhanced_search.get_performance_analytics,
+            enhanced_search.test_npu_connectivity,
+            enhanced_search.health_check,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_150_enhanced_search_100_percent_milestone(self):
+        """Verify enhanced_search.py has reached 100% migration"""
+        from backend.api import enhanced_search
+
+        endpoint_functions = [
+            enhanced_search.enhanced_semantic_search,
+            enhanced_search.get_hardware_status,
+            enhanced_search.benchmark_search_performance,
+            enhanced_search.optimize_search_engine,
+            enhanced_search.get_performance_analytics,
+            enhanced_search.test_npu_connectivity,
+            enhanced_search.health_check,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 7
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_150_migration_preserves_npu_semantic_search(self):
+        """Verify migration preserves NPU semantic search functionality"""
+        from backend.api import enhanced_search
+
+        source = inspect.getsource(enhanced_search.enhanced_semantic_search)
+        self.assertIn("get_npu_search_engine", source)
+        self.assertIn("enhanced_search", source)
+        self.assertIn("enable_npu_acceleration", source)
+
+    def test_batch_150_migration_preserves_hardware_device_enum(self):
+        """Verify migration preserves HardwareDevice enum handling"""
+        from backend.api import enhanced_search
+
+        source = inspect.getsource(enhanced_search.enhanced_semantic_search)
+        self.assertIn("HardwareDevice", source)
+        self.assertIn("force_device", source)
+
+    def test_batch_150_migration_preserves_search_metrics(self):
+        """Verify migration preserves SearchMetrics and SearchResult models"""
+        from backend.api import enhanced_search
+
+        source = inspect.getsource(enhanced_search.enhanced_semantic_search)
+        self.assertIn("SearchResponse", source)
+        self.assertIn("metrics", source)
+        self.assertIn("results_data", source)
+
+    def test_batch_150_migration_preserves_benchmark_functionality(self):
+        """Verify migration preserves benchmark functionality"""
+        from backend.api import enhanced_search
+
+        source = inspect.getsource(enhanced_search.benchmark_search_performance)
+        self.assertIn("benchmark_search_performance", source)
+        self.assertIn("test_queries", source)
+        self.assertIn("iterations", source)
+
+    def test_batch_150_migration_preserves_optimization_workload_types(self):
+        """Verify migration preserves optimization workload types"""
+        from backend.api import enhanced_search
+
+        source = inspect.getsource(enhanced_search.optimize_search_engine)
+        self.assertIn("optimize_for_workload", source)
+        self.assertIn("workload_type", source)
+
+    def test_batch_150_migration_preserves_performance_recommendations(self):
+        """Verify migration preserves performance recommendation helpers"""
+        from backend.api import enhanced_search
+
+        # Verify helper functions exist
+        self.assertTrue(hasattr(enhanced_search, "_generate_performance_recommendations"))
+        self.assertTrue(hasattr(enhanced_search, "_generate_system_recommendations"))
+
+        # Verify they're used in endpoints
+        analytics_source = inspect.getsource(enhanced_search.get_performance_analytics)
+        self.assertIn("_generate_system_recommendations", analytics_source)
+
 
 if __name__ == "__main__":
     unittest.main()

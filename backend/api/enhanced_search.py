@@ -18,6 +18,7 @@ from src.constants.network_constants import NetworkConstants
 
 # Import NPU semantic search components
 from src.npu_semantic_search import SearchMetrics, SearchResult, get_npu_search_engine
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("enhanced_search_api")
@@ -72,6 +73,11 @@ class OptimizationRequest(BaseModel):
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enhanced_semantic_search",
+    error_code_prefix="ENHANCED_SEARCH",
+)
 @router.post("/semantic", response_model=SearchResponse)
 async def enhanced_semantic_search(request: SearchRequest):
     """
@@ -155,6 +161,11 @@ async def enhanced_semantic_search(request: SearchRequest):
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_hardware_status",
+    error_code_prefix="ENHANCED_SEARCH",
+)
 @router.get("/hardware/status")
 async def get_hardware_status():
     """
@@ -181,6 +192,11 @@ async def get_hardware_status():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="benchmark_search_performance",
+    error_code_prefix="ENHANCED_SEARCH",
+)
 @router.post("/benchmark")
 async def benchmark_search_performance(request: BenchmarkRequest):
     """
@@ -207,6 +223,11 @@ async def benchmark_search_performance(request: BenchmarkRequest):
         raise HTTPException(status_code=500, detail=f"Benchmark failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="optimize_search_engine",
+    error_code_prefix="ENHANCED_SEARCH",
+)
 @router.post("/optimize")
 async def optimize_search_engine(request: OptimizationRequest):
     """
@@ -234,6 +255,11 @@ async def optimize_search_engine(request: OptimizationRequest):
         raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_performance_analytics",
+    error_code_prefix="ENHANCED_SEARCH",
+)
 @router.get("/performance/analytics")
 async def get_performance_analytics():
     """
@@ -274,6 +300,11 @@ async def get_performance_analytics():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_npu_connectivity",
+    error_code_prefix="ENHANCED_SEARCH",
+)
 @router.get("/test/connectivity")
 async def test_npu_connectivity():
     """
@@ -423,6 +454,11 @@ def _generate_system_recommendations(
 
 
 # Health check endpoint
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="ENHANCED_SEARCH",
+)
 @router.get("/health")
 async def health_check():
     """Health check for enhanced search service."""
