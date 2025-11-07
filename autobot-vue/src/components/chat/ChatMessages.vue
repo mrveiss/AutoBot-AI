@@ -31,28 +31,34 @@
           </div>
 
           <div class="message-actions">
-            <button
+            <BaseButton
               v-if="message.sender === 'user'"
+              variant="ghost"
+              size="xs"
               @click="editMessage(message)"
               class="action-btn"
               title="Edit message"
             >
               <i class="fas fa-edit"></i>
-            </button>
-            <button
+            </BaseButton>
+            <BaseButton
+              variant="ghost"
+              size="xs"
               @click="copyMessage(message)"
               class="action-btn"
               title="Copy message"
             >
               <i class="fas fa-copy"></i>
-            </button>
-            <button
+            </BaseButton>
+            <BaseButton
+              variant="ghost"
+              size="xs"
               @click="deleteMessage(message)"
               class="action-btn danger"
               title="Delete message"
             >
               <i class="fas fa-trash"></i>
-            </button>
+            </BaseButton>
           </div>
         </div>
 
@@ -219,21 +225,25 @@
                 @keydown.meta.enter="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
               ></textarea>
               <div class="comment-actions">
-                <button
+                <BaseButton
+                  variant="secondary"
+                  size="sm"
                   @click="cancelComment"
                   class="cancel-comment-btn"
                 >
                   <i class="fas fa-times"></i>
                   <span>Cancel</span>
-                </button>
-                <button
+                </BaseButton>
+                <BaseButton
+                  variant="primary"
+                  size="sm"
                   @click="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
-                  class="submit-comment-btn"
                   :disabled="!approvalComment.trim()"
+                  class="submit-comment-btn"
                 >
                   <i class="fas fa-check"></i>
                   <span>Submit {{ pendingApprovalDecision ? 'Approval' : 'Denial' }}</span>
-                </button>
+                </BaseButton>
               </div>
             </div>
 
@@ -257,30 +267,36 @@
             </div>
 
             <div class="approval-actions">
-              <button
+              <BaseButton
+                variant="success"
+                size="sm"
                 @click="approveCommand(message.metadata.terminal_session_id, true)"
-                class="approve-btn"
                 :disabled="processingApproval || showCommentInput"
+                class="approve-btn"
               >
                 <i class="fas fa-check"></i>
                 <span>Approve</span>
-              </button>
-              <button
+              </BaseButton>
+              <BaseButton
+                variant="outline"
+                size="sm"
                 @click="promptForComment(message.metadata.terminal_session_id)"
-                class="comment-btn"
                 :disabled="processingApproval || showCommentInput"
+                class="comment-btn"
               >
                 <i class="fas fa-comment"></i>
                 <span>Comment</span>
-              </button>
-              <button
+              </BaseButton>
+              <BaseButton
+                variant="danger"
+                size="sm"
                 @click="approveCommand(message.metadata.terminal_session_id, false)"
-                class="deny-btn"
                 :disabled="processingApproval || showCommentInput"
+                class="deny-btn"
               >
                 <i class="fas fa-times"></i>
                 <span>Deny</span>
-              </button>
+              </BaseButton>
             </div>
             <div v-if="processingApproval" class="approval-processing">
               <LoadingSpinner size="sm" />
@@ -344,19 +360,19 @@
         ref="editTextarea"
       ></textarea>
       <div class="flex justify-end gap-2 mt-4">
-        <button
-          class="px-4 py-2 text-gray-600 hover:text-gray-800"
+        <BaseButton
+          variant="secondary"
           @click="cancelEdit"
         >
           Cancel
-        </button>
-        <button
-          class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+        </BaseButton>
+        <BaseButton
+          variant="primary"
           @click="saveEditedMessage"
           :disabled="!editingContent.trim()"
         >
           Save
-        </button>
+        </BaseButton>
       </div>
       <div class="text-xs text-gray-500 mt-2">
         Press Ctrl+Enter (Cmd+Enter on Mac) to save
@@ -375,6 +391,7 @@ import MessageStatus from '@/components/ui/MessageStatus.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 import appConfig from '@/config/AppConfig.js'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 
@@ -972,23 +989,7 @@ onMounted(() => {
   @apply flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity;
 }
 
-.action-btn {
-  @apply w-6 h-6 flex items-center justify-center rounded transition-colors text-xs;
-}
-
-/* User message actions - light colored for visibility on blue background */
-.user-message .action-btn {
-  @apply text-blue-200 hover:text-white;
-}
-
-/* Assistant message actions - darker for visibility on light background */
-.assistant-message .action-btn {
-  @apply text-gray-400 hover:text-gray-600;
-}
-
-.action-btn.danger:hover {
-  @apply text-red-500;
-}
+/* Button styling handled by BaseButton component */
 
 .message-status {
   @apply flex items-center gap-1.5 mb-1.5 text-xs;
@@ -1264,18 +1265,7 @@ onMounted(() => {
   @apply flex gap-2;
 }
 
-.approve-btn,
-.deny-btn {
-  @apply flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed;
-}
-
-.approve-btn {
-  @apply bg-green-600 text-white hover:bg-green-700 active:bg-green-800;
-}
-
-.deny-btn {
-  @apply bg-red-600 text-white hover:bg-red-700 active:bg-red-800;
-}
+/* Button styling handled by BaseButton component */
 
 .approval-processing {
   @apply flex items-center gap-2 mt-2 text-sm text-gray-600;
@@ -1307,17 +1297,10 @@ onMounted(() => {
     @apply text-xs;
   }
 
-  .action-btn {
-    @apply w-5 h-5 text-xs;
-  }
+  /* Responsive button styling handled by BaseButton component */
 
   .approval-actions {
     @apply flex-col;
-  }
-
-  .approve-btn,
-  .deny-btn {
-    @apply w-full justify-center;
   }
 }
 
@@ -1334,17 +1317,7 @@ onMounted(() => {
   @apply flex gap-2 mt-2;
 }
 
-.cancel-comment-btn {
-  @apply flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-gray-300 text-gray-700 hover:bg-gray-400 transition-all;
-}
-
-.submit-comment-btn {
-  @apply flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all;
-}
-
-.comment-btn {
-  @apply flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-yellow-600 text-white hover:bg-yellow-700 active:bg-yellow-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all;
-}
+/* Button styling handled by BaseButton component */
 
 /* Auto-approve checkbox section */
 .auto-approve-section {
