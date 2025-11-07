@@ -16,6 +16,12 @@ from pydantic import BaseModel
 
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import (
+    ErrorCategory,
+    get_error_boundary_manager,
+    get_error_statistics,
+    with_error_handling,
+)
 
 # Add project root to path for imports
 # Add project root to path for imports
@@ -23,14 +29,17 @@ sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
-from src.utils.error_boundaries import get_error_boundary_manager, get_error_statistics
-
 logger = logging.getLogger(__name__)
 
 # Create FastAPI router
 router = APIRouter(tags=["Error Monitoring"])
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_error_statistics",
+    error_code_prefix="ERROR_MONITORING",
+)
 @router.get("/statistics")
 async def get_system_error_statistics():
     """Get system-wide error statistics"""
@@ -44,6 +53,11 @@ async def get_system_error_statistics():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_recent_errors",
+    error_code_prefix="ERROR_MONITORING",
+)
 @router.get("/recent")
 async def get_recent_errors(limit: int = 20):
     """Get recent error reports"""
@@ -79,6 +93,11 @@ async def get_recent_errors(limit: int = 20):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_error_categories",
+    error_code_prefix="ERROR_MONITORING",
+)
 @router.get("/categories")
 async def get_error_categories():
     """Get error breakdown by category"""
@@ -108,6 +127,11 @@ async def get_error_categories():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_error_by_component",
+    error_code_prefix="ERROR_MONITORING",
+)
 @router.get("/components")
 async def get_error_by_component():
     """Get error breakdown by component"""
@@ -132,6 +156,11 @@ async def get_error_by_component():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_error_system_health",
+    error_code_prefix="ERROR_MONITORING",
+)
 @router.get("/health")
 async def get_error_system_health():
     """Get error system health status"""
@@ -178,6 +207,11 @@ async def get_error_system_health():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_error_history",
+    error_code_prefix="ERROR_MONITORING",
+)
 @router.post("/clear")
 async def clear_error_history(authorization: Optional[str] = Header(None)):
     """Clear error history (admin only)"""
@@ -218,6 +252,11 @@ class TestErrorRequest(BaseModel):
     message: str = "Test error for error boundary system"
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_error_system",
+    error_code_prefix="ERROR_MONITORING",
+)
 @router.post("/test-error")
 async def test_error_system(request: TestErrorRequest):
     """Test the error boundary system (development only)"""

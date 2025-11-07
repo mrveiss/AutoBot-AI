@@ -2108,6 +2108,77 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 36 - Knowledge Entries Management** ✅ Completed
+
+**Goal**: Migrate comprehensive knowledge entry management interface with tabs, filters, bulk actions, per-entry actions, pagination, and edit dialog to BaseButton.
+
+**Components Migrated**: 1 component, 15 buttons, ~90 lines saved
+
+#### **KnowledgeEntries.vue** (15 buttons, ~90 lines saved)
+
+**Purpose**: Main knowledge entry management interface with upload/manage/advanced tabs, bulk operations, filtering, per-entry actions, pagination, and full-featured edit dialog.
+
+**Buttons Migrated**:
+
+**Tab Navigation (3 buttons):**
+- Upload tab → `<BaseButton variant="ghost" :class="['manage-tab-btn', { active: manageTab === 'upload' }]">` (Upload)
+- Manage tab → `<BaseButton variant="ghost" :class="['manage-tab-btn', { active: manageTab === 'manage' }]">` (Manage)
+- Advanced tab → `<BaseButton variant="ghost" :class="['manage-tab-btn', { active: manageTab === 'advanced' }]">` (Advanced)
+
+**Bulk Actions (2 buttons):**
+- Export selected → `<BaseButton variant="primary" size="sm" :disabled="selectedEntries.length === 0">` (Export (N))
+- Delete selected → `<BaseButton variant="danger" size="sm" :disabled="selectedEntries.length === 0">` (Delete (N))
+
+**Filter Actions (1 button):**
+- Clear filters → `<BaseButton variant="secondary" size="sm" class="clear-filters-btn">` (Clear Filters)
+
+**Per-Entry Actions in Table (3 buttons per entry in v-for):**
+- View entry → `<BaseButton variant="ghost" size="xs" class="icon-btn">` (eye icon)
+- Edit entry → `<BaseButton variant="ghost" size="xs" class="icon-btn">` (edit icon)
+- Delete entry → `<BaseButton variant="ghost" size="xs" class="icon-btn danger">` (trash icon)
+
+**Pagination (2 buttons):**
+- Previous page → `<BaseButton variant="outline" size="sm" :disabled="currentPage === 1">` (chevron-left)
+- Next page → `<BaseButton variant="outline" size="sm" :disabled="currentPage === totalPages">` (chevron-right)
+
+**Dialog Actions (4 buttons):**
+- Close dialog → `<BaseButton variant="ghost" size="sm" class="close-btn">` (× icon)
+- Edit button (view mode) → `<BaseButton variant="primary" v-if="dialogMode === 'view'">` (Edit)
+- Cancel edit → `<BaseButton variant="secondary" v-if="dialogMode === 'edit'">` (Cancel)
+- Save changes → `<BaseButton variant="primary" v-if="dialogMode === 'edit'">` (Save Changes)
+
+**Key Patterns**:
+- ✅ Ghost variant for minimal tab navigation with .active class preserved
+- ✅ Primary/danger variants for bulk actions with dynamic count display
+- ✅ Ghost variant with xs size for compact table icon buttons
+- ✅ Outline variant for pagination controls
+- ✅ Disabled state with selection count validation (selectedEntries.length === 0)
+- ✅ Disabled state with boundary checks (currentPage === 1, currentPage === totalPages)
+- ✅ Conditional rendering with v-if for dialog mode (view vs edit)
+- ✅ Secondary variant for cancel actions
+- ✅ Preserved custom classes for active state styling (.manage-tab-btn.active)
+
+**CSS Removed**: ~90 lines removed from scoped styles:
+- `.manage-tab-btn` base styles and hover (~13 lines) - kept .active class
+- `.action-btn` base, hover, danger, disabled states (~27 lines)
+- `.clear-filters-btn` base and hover (~14 lines)
+- `.icon-btn` base, hover, danger hover (~23 lines)
+- `.page-btn` base, hover, disabled states (~22 lines)
+- `.close-btn` base and hover (~17 lines)
+- `.edit-btn`, `.cancel-btn`, `.save-btn` shared and individual styles (~40 lines)
+- Remaining: Layout containers (.manage-tabs, .pagination, .dialog-actions) and .active state preserved
+
+---
+
+**Batch 36 Summary**:
+- Components: 1 (KnowledgeEntries)
+- Buttons: 15 consolidated (3 tabs + 2 bulk actions + 1 filter + 3 per-entry actions + 2 pagination + 4 dialog)
+- Lines: ~90 saved
+- Variants: 5 (primary, secondary, danger, outline, ghost)
+- **Combined Total**: 25 components, ~1,562 lines saved, 174 buttons consolidated
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -2117,7 +2188,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~1,472 lines (batches 20-35)
+- BaseButton adoptions: ~1,562 lines (batches 20-36)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
@@ -2134,9 +2205,10 @@ const createRipple = (event: TouchEvent) => {
   - Batch 33: ~19 lines (1 component, 3 buttons)
   - Batch 34: ~50 lines (1 component, 3 buttons)
   - Batch 35: ~60 lines (1 component, 10 buttons)
-- **Total Progress**: ~2,266 lines / ~1,500-2,000 realistic target (113-151%) ✅ **TARGET EXCEEDED**
+  - Batch 36: ~90 lines (1 component, 15 buttons)
+- **Total Progress**: ~2,356 lines / ~1,500-2,000 realistic target (118-157%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 24 components using BaseButton (159 buttons consolidated)
+- **BaseButton Milestone**: 25 components using BaseButton (174 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 

@@ -2,24 +2,27 @@
   <div class="knowledge-entries">
     <!-- Sub-tabs for Manage section -->
     <div class="manage-tabs">
-      <button
+      <BaseButton
+        variant="ghost"
         @click="manageTab = 'upload'"
         :class="['manage-tab-btn', { active: manageTab === 'upload' }]"
       >
         <i class="fas fa-upload mr-2"></i>Upload
-      </button>
-      <button
+      </BaseButton>
+      <BaseButton
+        variant="ghost"
         @click="manageTab = 'manage'"
         :class="['manage-tab-btn', { active: manageTab === 'manage' }]"
       >
         <i class="fas fa-edit mr-2"></i>Manage
-      </button>
-      <button
+      </BaseButton>
+      <BaseButton
+        variant="ghost"
         @click="manageTab = 'advanced'"
         :class="['manage-tab-btn', { active: manageTab === 'advanced' }]"
       >
         <i class="fas fa-cog mr-2"></i>Advanced
-      </button>
+      </BaseButton>
     </div>
 
     <!-- Upload Tab Content -->
@@ -54,14 +57,26 @@
             @input="filterEntries"
           />
         </div>
-        <button @click="exportSelected" :disabled="selectedEntries.length === 0" class="action-btn">
+        <BaseButton
+          variant="primary"
+          size="sm"
+          @click="exportSelected"
+          :disabled="selectedEntries.length === 0"
+          class="action-btn"
+        >
           <i class="fas fa-download"></i>
           Export ({{ selectedEntries.length }})
-        </button>
-        <button @click="deleteSelected" :disabled="selectedEntries.length === 0" class="action-btn danger">
+        </BaseButton>
+        <BaseButton
+          variant="danger"
+          size="sm"
+          @click="deleteSelected"
+          :disabled="selectedEntries.length === 0"
+          class="action-btn danger"
+        >
           <i class="fas fa-trash"></i>
           Delete ({{ selectedEntries.length }})
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -98,9 +113,14 @@
         </select>
       </div>
 
-      <button @click="clearFilters" class="clear-filters-btn">
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        @click="clearFilters"
+        class="clear-filters-btn"
+      >
         Clear Filters
-      </button>
+      </BaseButton>
     </div>
 
     <!-- Entries list -->
@@ -174,15 +194,33 @@
             </td>
             <td class="date-cell">{{ formatDate(entry.updatedAt) }}</td>
             <td class="actions-cell">
-              <button @click="viewEntry(entry)" class="icon-btn" title="View">
+              <BaseButton
+                variant="ghost"
+                size="xs"
+                @click="viewEntry(entry)"
+                class="icon-btn"
+                title="View"
+              >
                 <i class="fas fa-eye"></i>
-              </button>
-              <button @click="editEntry(entry)" class="icon-btn" title="Edit">
+              </BaseButton>
+              <BaseButton
+                variant="ghost"
+                size="xs"
+                @click="editEntry(entry)"
+                class="icon-btn"
+                title="Edit"
+              >
                 <i class="fas fa-edit"></i>
-              </button>
-              <button @click="deleteEntry(entry)" class="icon-btn danger" title="Delete">
+              </BaseButton>
+              <BaseButton
+                variant="ghost"
+                size="xs"
+                @click="deleteEntry(entry)"
+                class="icon-btn danger"
+                title="Delete"
+              >
                 <i class="fas fa-trash"></i>
-              </button>
+              </BaseButton>
             </td>
           </tr>
         </tbody>
@@ -190,26 +228,30 @@
 
       <!-- Pagination -->
       <div class="pagination">
-        <button
+        <BaseButton
+          variant="outline"
+          size="sm"
           @click="currentPage--"
           :disabled="currentPage === 1"
           class="page-btn"
         >
           <i class="fas fa-chevron-left"></i>
-        </button>
+        </BaseButton>
 
         <span class="page-info">
           Page {{ currentPage }} of {{ totalPages }}
           ({{ filteredDocuments.length }} entries)
         </span>
 
-        <button
+        <BaseButton
+          variant="outline"
+          size="sm"
           @click="currentPage++"
           :disabled="currentPage === totalPages"
           class="page-btn"
         >
           <i class="fas fa-chevron-right"></i>
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -218,9 +260,14 @@
       <div class="dialog large" @click.stop>
         <div class="dialog-header">
           <h3>{{ dialogMode === 'view' ? 'View Entry' : 'Edit Entry' }}</h3>
-          <button @click="closeDialog" class="close-btn">
+          <BaseButton
+            variant="ghost"
+            size="sm"
+            @click="closeDialog"
+            class="close-btn"
+          >
             <i class="fas fa-times"></i>
-          </button>
+          </BaseButton>
         </div>
 
         <div class="dialog-content">
@@ -327,16 +374,31 @@
         </div>
 
         <div class="dialog-actions">
-          <button v-if="dialogMode === 'view'" @click="switchToEdit" class="edit-btn">
+          <BaseButton
+            v-if="dialogMode === 'view'"
+            variant="primary"
+            @click="switchToEdit"
+            class="edit-btn"
+          >
             <i class="fas fa-edit"></i>
             Edit
-          </button>
-          <button v-if="dialogMode === 'edit'" @click="cancelEdit" class="cancel-btn">
+          </BaseButton>
+          <BaseButton
+            v-if="dialogMode === 'edit'"
+            variant="secondary"
+            @click="cancelEdit"
+            class="cancel-btn"
+          >
             Cancel
-          </button>
-          <button v-if="dialogMode === 'edit'" @click="saveEdit" class="save-btn">
+          </BaseButton>
+          <BaseButton
+            v-if="dialogMode === 'edit'"
+            variant="primary"
+            @click="saveEdit"
+            class="save-btn"
+          >
             Save Changes
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -356,6 +418,7 @@ import FailedVectorizationsManager from '@/components/knowledge/FailedVectorizat
 import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vue'
 import { formatDate, formatDateTime } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
@@ -676,33 +739,7 @@ watch([searchQuery, filterCategory, filterType], () => {
   width: 250px;
 }
 
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-btn:hover:not(:disabled) {
-  background: #f3f4f6;
-}
-
-.action-btn.danger:hover:not(:disabled) {
-  background: #fee2e2;
-  color: #dc2626;
-  border-color: #dc2626;
-}
-
-.action-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Button styling handled by BaseButton component */
 
 /* Filter bar */
 .filter-bar {
@@ -736,20 +773,7 @@ watch([searchQuery, filterCategory, filterType], () => {
   background: white;
 }
 
-.clear-filters-btn {
-  margin-left: auto;
-  padding: 0.375rem 0.75rem;
-  border: none;
-  background: none;
-  color: #3b82f6;
-  font-size: 0.875rem;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.clear-filters-btn:hover {
-  color: #2563eb;
-}
+/* Button styling handled by BaseButton component */
 
 /* Loading and empty states */
 .loading-state {
@@ -860,29 +884,7 @@ tr.selected {
   gap: 0.5rem;
 }
 
-.icon-btn {
-  width: 2rem;
-  height: 2rem;
-  border: none;
-  background: #f3f4f6;
-  border-radius: 0.25rem;
-  color: #6b7280;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.icon-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.icon-btn.danger:hover {
-  background: #fee2e2;
-  color: #dc2626;
-}
+/* Button styling handled by BaseButton component */
 
 /* Pagination */
 .pagination {
@@ -894,28 +896,7 @@ tr.selected {
   border-top: 1px solid #e5e7eb;
 }
 
-.page-btn {
-  width: 2rem;
-  height: 2rem;
-  border: 1px solid #d1d5db;
-  background: white;
-  border-radius: 0.375rem;
-  color: #374151;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.page-btn:hover:not(:disabled) {
-  background: #f3f4f6;
-}
-
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Button styling handled by BaseButton component */
 
 .page-info {
   font-size: 0.875rem;
@@ -957,23 +938,7 @@ tr.selected {
   border-bottom: 1px solid #e5e7eb;
 }
 
-.close-btn {
-  width: 2rem;
-  height: 2rem;
-  border: none;
-  background: #f3f4f6;
-  border-radius: 0.25rem;
-  color: #6b7280;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.close-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
-}
+/* Button styling handled by BaseButton component */
 
 .dialog-content {
   padding: 1.5rem;
@@ -1080,46 +1045,7 @@ tr.selected {
   border-top: 1px solid #e5e7eb;
 }
 
-.edit-btn,
-.cancel-btn,
-.save-btn {
-  padding: 0.625rem 1.25rem;
-  border: none;
-  border-radius: 0.375rem;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: all 0.2s;
-}
-
-.edit-btn {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.edit-btn:hover {
-  background: #e5e7eb;
-}
-
-.cancel-btn {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.cancel-btn:hover {
-  background: #e5e7eb;
-}
-
-.save-btn {
-  background: #3b82f6;
-  color: white;
-}
-
-.save-btn:hover {
-  background: #2563eb;
-}
+/* Button styling handled by BaseButton component */
 
 /* Responsive */
 @media (max-width: 768px) {
@@ -1169,25 +1095,7 @@ tr.selected {
   background: white;
 }
 
-.manage-tab-btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  background: transparent;
-  border-radius: 0.375rem;
-  color: #6b7280;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-}
-
-.manage-tab-btn:hover {
-  background: #f3f4f6;
-  color: #374151;
-}
-
+/* Button styling handled by BaseButton component */
 .manage-tab-btn.active {
   background: #3b82f6;
   color: white;
