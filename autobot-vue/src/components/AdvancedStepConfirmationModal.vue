@@ -4,7 +4,7 @@
       <!-- Modal Header -->
       <div class="modal-header">
         <h3 class="modal-title">🤖 Advanced Workflow Step Management</h3>
-        <button class="close-button" @click="closeModal" aria-label="Action button">×</button>
+        <BaseButton variant="ghost" size="xs" @click="closeModal" class="close-button" aria-label="Close modal">×</BaseButton>
       </div>
 
       <!-- Current Step Info -->
@@ -25,9 +25,9 @@
         <label class="section-label">Command to Execute:</label>
         <div class="command-preview">
           <code>{{ currentStep?.command }}</code>
-          <button class="edit-command-btn" @click="showCommandEditor = !showCommandEditor" aria-label="📝 edit">
+          <BaseButton variant="outline" size="xs" @click="showCommandEditor = !showCommandEditor" class="edit-command-btn" aria-label="Edit command">
             📝 Edit
-          </button>
+          </BaseButton>
         </div>
 
         <!-- Command Editor -->
@@ -39,8 +39,8 @@
             placeholder="Edit the command..."
           ></textarea>
           <div class="editor-actions">
-            <button @click="saveCommandEdit" class="save-btn" aria-label="💾 save">💾 Save</button>
-            <button @click="cancelCommandEdit" class="cancel-btn" aria-label="❌ cancel">❌ Cancel</button>
+            <BaseButton variant="success" size="sm" @click="saveCommandEdit" aria-label="Save edit">💾 Save</BaseButton>
+            <BaseButton variant="secondary" size="sm" @click="cancelCommandEdit" aria-label="Cancel edit">❌ Cancel</BaseButton>
           </div>
         </div>
       </div>
@@ -61,9 +61,9 @@
       <div class="workflow-management">
         <div class="section-header">
           <h4>📋 Workflow Steps Management</h4>
-          <button @click="showStepsManager = !showStepsManager" class="toggle-btn" :aria-label="showStepsManager ? '▼ Hide Steps' : '▶ Show Steps'">
+          <BaseButton variant="outline" size="sm" @click="showStepsManager = !showStepsManager" :aria-label="showStepsManager ? '▼ Hide Steps' : '▶ Show Steps'">
             {{ showStepsManager ? '▼ Hide' : '▶ Show' }}
-          </button>
+          </BaseButton>
         </div>
 
         <div v-if="showStepsManager" class="steps-manager">
@@ -76,9 +76,9 @@
               :class="{ 'current': index === currentStepIndex, 'completed': index < currentStepIndex }"
             >
               <div class="step-controls">
-                <button @click="moveStepUp(index)" :disabled="index === 0" class="step-control" aria-label="Action button">↑</button>
-                <button @click="moveStepDown(index)" :disabled="index === workflowSteps.length - 1" class="step-control" aria-label="Action button">↓</button>
-                <button @click="deleteStep(index)" :disabled="workflowSteps.length <= 1" class="step-control delete" aria-label="Action button">🗑️</button>
+                <BaseButton variant="outline" size="xs" @click="moveStepUp(index)" :disabled="index === 0" aria-label="Move step up">↑</BaseButton>
+                <BaseButton variant="outline" size="xs" @click="moveStepDown(index)" :disabled="index === workflowSteps.length - 1" aria-label="Move step down">↓</BaseButton>
+                <BaseButton variant="danger" size="xs" @click="deleteStep(index)" :disabled="workflowSteps.length <= 1" aria-label="Delete step">🗑️</BaseButton>
               </div>
 
               <div class="step-info">
@@ -90,17 +90,17 @@
               </div>
 
               <div class="step-actions">
-                <button @click="editStep(index)" class="edit-step-btn" aria-label="✏️ edit">✏️ Edit</button>
-                <button @click="insertStepAfter(index)" class="insert-step-btn" aria-label="➕ insert after">➕ Insert After</button>
+                <BaseButton variant="outline" size="xs" @click="editStep(index)" aria-label="Edit step">✏️ Edit</BaseButton>
+                <BaseButton variant="success" size="xs" @click="insertStepAfter(index)" aria-label="Insert step after">➕ Insert After</BaseButton>
               </div>
             </div>
           </div>
 
           <!-- Add New Step -->
           <div class="add-step-section">
-            <button @click="showAddStepForm = !showAddStepForm" class="add-step-btn" aria-label="Action button">
+            <BaseButton variant="success" @click="showAddStepForm = !showAddStepForm" class="add-step-btn" aria-label="Add new step">
               ➕ Add New Step
-            </button>
+            </BaseButton>
 
             <div v-if="showAddStepForm" class="add-step-form">
               <div class="form-field">
@@ -134,8 +134,8 @@
               </div>
 
               <div class="form-actions">
-                <button @click="addNewStep" class="save-btn" aria-label="Action button">✅ Add Step</button>
-                <button @click="cancelAddStep" class="cancel-btn" aria-label="Action button">❌ Cancel</button>
+                <BaseButton variant="success" @click="addNewStep" aria-label="Add step">✅ Add Step</BaseButton>
+                <BaseButton variant="secondary" @click="cancelAddStep" aria-label="Cancel">❌ Cancel</BaseButton>
               </div>
             </div>
           </div>
@@ -217,7 +217,7 @@
         <div class="edit-dialog" @click.stop>
           <div class="edit-header">
             <h4>✏️ Edit Step {{ editingStepIndex + 1 }}</h4>
-            <button @click="cancelEdit" class="close-button">×</button>
+            <BaseButton variant="ghost" size="xs" @click="cancelEdit" class="close-button" aria-label="Close dialog">×</BaseButton>
           </div>
 
           <div class="edit-content">
@@ -286,15 +286,16 @@
           </div>
 
           <div class="edit-actions">
-            <button
+            <BaseButton
+              variant="success"
               @click="saveEdit"
               :disabled="!isEditFormValid || isSavingEdit"
-              class="save-btn"
+              :loading="isSavingEdit"
+              aria-label="Save changes"
             >
-              <span v-if="isSavingEdit" class="loading-spinner"></span>
-              {{ isSavingEdit ? 'Saving...' : '💾 Save Changes' }}
-            </button>
-            <button @click="cancelEdit" :disabled="isSavingEdit" class="cancel-btn">❌ Cancel</button>
+              💾 {{ isSavingEdit ? 'Saving...' : 'Save Changes' }}
+            </BaseButton>
+            <BaseButton variant="secondary" @click="cancelEdit" :disabled="isSavingEdit" aria-label="Cancel">❌ Cancel</BaseButton>
           </div>
         </div>
       </div>
@@ -302,27 +303,27 @@
       <!-- Action Buttons -->
       <div class="modal-actions">
         <div class="primary-actions">
-          <button @click="executeStep" :disabled="!currentStep" class="execute-btn" aria-label="Action button">
+          <BaseButton variant="success" @click="executeStep" :disabled="!currentStep" class="execute-btn" aria-label="Execute this step">
             ✅ Execute This Step
-          </button>
-          <button @click="skipStep" class="skip-btn" aria-label="Action button">
+          </BaseButton>
+          <BaseButton variant="secondary" @click="skipStep" class="skip-btn" aria-label="Skip this step">
             ⏭️ Skip This Step
-          </button>
-          <button @click="takeManualControl" class="manual-btn" aria-label="Action button">
+          </BaseButton>
+          <BaseButton variant="primary" @click="takeManualControl" class="manual-btn" aria-label="Take manual control">
             👤 Take Manual Control
-          </button>
+          </BaseButton>
         </div>
 
         <div class="secondary-actions">
-          <button @click="executeAllRemaining" class="execute-all-btn" aria-label="Action button">
+          <BaseButton variant="info" @click="executeAllRemaining" class="execute-all-btn" aria-label="Execute all remaining steps">
             🚀 Execute All Remaining
-          </button>
-          <button @click="saveWorkflow" class="save-workflow-btn" aria-label="Action button">
+          </BaseButton>
+          <BaseButton variant="success" @click="saveWorkflow" class="save-workflow-btn" aria-label="Save workflow">
             💾 Save Workflow
-          </button>
-          <button @click="toggleAdvancedOptions" class="toggle-advanced-btn" aria-label="Action button">
+          </BaseButton>
+          <BaseButton variant="secondary" @click="toggleAdvancedOptions" class="toggle-advanced-btn" aria-label="Toggle advanced options">
             ⚙️ {{ showAdvancedOptions ? 'Hide' : 'Show' }} Advanced
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -331,6 +332,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 // Interfaces
 interface WorkflowStep {
@@ -720,26 +722,6 @@ validateEditForm()
   font-weight: 700;
 }
 
-.close-button {
-  background: none;
-  border: none;
-  color: #ffffff;
-  font-size: 24px;
-  cursor: pointer;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.close-button:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .current-step-info {
   padding: 20px;
   border-bottom: 1px solid #333;
@@ -794,21 +776,6 @@ validateEditForm()
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   background: none;
   color: #22c55e;
-}
-
-.edit-command-btn {
-  background: #374151;
-  border: 1px solid #4b5563;
-  color: #ffffff;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85em;
-  transition: all 0.2s;
-}
-
-.edit-command-btn:hover {
-  background: #4b5563;
 }
 
 .command-editor {
@@ -908,20 +875,6 @@ validateEditForm()
   color: #f3f4f6;
 }
 
-.toggle-btn {
-  background: #374151;
-  border: 1px solid #4b5563;
-  color: #ffffff;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85em;
-}
-
-.toggle-btn:hover {
-  background: #4b5563;
-}
-
 .steps-manager {
   padding: 0 20px 20px;
 }
@@ -955,35 +908,6 @@ validateEditForm()
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-.step-control {
-  background: #374151;
-  border: 1px solid #4b5563;
-  color: #ffffff;
-  padding: 4px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.8em;
-  min-width: 32px;
-}
-
-.step-control:hover:not(:disabled) {
-  background: #4b5563;
-}
-
-.step-control:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.step-control.delete {
-  background: #dc2626;
-  border-color: #b91c1c;
-}
-
-.step-control.delete:hover:not(:disabled) {
-  background: #b91c1c;
 }
 
 .step-info {
@@ -1033,40 +957,9 @@ validateEditForm()
   gap: 8px;
 }
 
-.edit-step-btn,
-.insert-step-btn {
-  background: #374151;
-  border: 1px solid #4b5563;
-  color: #ffffff;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.8em;
-}
-
-.edit-step-btn:hover,
-.insert-step-btn:hover {
-  background: #4b5563;
-}
-
 .add-step-section {
   border-top: 1px solid #374151;
   padding-top: 20px;
-}
-
-.add-step-btn {
-  background: #059669;
-  border: 1px solid #047857;
-  color: #ffffff;
-  padding: 12px 20px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  width: 100%;
-}
-
-.add-step-btn:hover {
-  background: #047857;
 }
 
 .add-step-form {
@@ -1186,116 +1079,6 @@ validateEditForm()
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-}
-
-.execute-btn,
-.skip-btn,
-.manual-btn,
-.execute-all-btn,
-.save-workflow-btn,
-.save-btn,
-.cancel-btn {
-  padding: 12px 20px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s;
-  font-size: 0.95em;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.execute-btn {
-  background: #22c55e;
-  color: #ffffff;
-}
-
-.execute-btn:hover:not(:disabled) {
-  background: #16a34a;
-}
-
-.execute-btn:disabled {
-  background: #374151;
-  color: #9ca3af;
-  cursor: not-allowed;
-}
-
-.skip-btn {
-  background: #6b7280;
-  color: #ffffff;
-}
-
-.skip-btn:hover {
-  background: #4b5563;
-}
-
-.manual-btn {
-  background: #2563eb;
-  color: #ffffff;
-}
-
-.manual-btn:hover {
-  background: #1d4ed8;
-}
-
-.execute-all-btn {
-  background: #7c3aed;
-  color: #ffffff;
-}
-
-.execute-all-btn:hover {
-  background: #6d28d9;
-}
-
-.save-workflow-btn {
-  background: #059669;
-  color: #ffffff;
-}
-
-.save-workflow-btn:hover {
-  background: #047857;
-}
-
-.save-btn {
-  background: #22c55e;
-  color: #ffffff;
-}
-
-.save-btn:hover:not(:disabled) {
-  background: #16a34a;
-}
-
-.save-btn:disabled {
-  background: #374151;
-  color: #9ca3af;
-  cursor: not-allowed;
-}
-
-.cancel-btn {
-  background: #dc2626;
-  color: #ffffff;
-}
-
-.cancel-btn:hover:not(:disabled) {
-  background: #b91c1c;
-}
-
-.toggle-advanced-btn {
-  background: #4b5563;
-  color: #ffffff;
-  padding: 12px 20px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s;
-  font-size: 0.95em;
-}
-
-.toggle-advanced-btn:hover {
-  background: #374151;
 }
 
 /* Edit Dialog */
@@ -1494,18 +1277,6 @@ validateEditForm()
     gap: 8px;
   }
 
-  .execute-btn,
-  .skip-btn,
-  .manual-btn,
-  .execute-all-btn,
-  .save-workflow-btn,
-  .save-btn,
-  .cancel-btn,
-  .toggle-advanced-btn {
-    width: 100%;
-    justify-content: center;
-    padding: 14px 20px;
-  }
 
   .step-item {
     padding: 12px;
@@ -1533,11 +1304,6 @@ validateEditForm()
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
-  }
-
-  .edit-command-btn {
-    align-self: flex-end;
-    width: auto;
   }
 
   .password-options {
@@ -1603,18 +1369,6 @@ validateEditForm()
     font-size: 0.8em;
   }
 
-  .execute-btn,
-  .skip-btn,
-  .manual-btn,
-  .execute-all-btn,
-  .save-workflow-btn,
-  .save-btn,
-  .cancel-btn,
-  .toggle-advanced-btn {
-    padding: 12px 16px;
-    font-size: 0.9em;
-  }
-
   .form-input,
   .form-textarea,
   .password-field {
@@ -1636,35 +1390,6 @@ validateEditForm()
     flex-wrap: wrap;
   }
 
-  .execute-btn,
-  .skip-btn,
-  .manual-btn {
-    flex: 1;
-    min-width: calc(33.333% - 8px);
-  }
-
-  .execute-all-btn,
-  .save-workflow-btn,
-  .toggle-advanced-btn {
-    flex: 1;
-    min-width: calc(33.333% - 8px);
-  }
 }
 
-/* Touch-friendly improvements */
-@media (pointer: coarse) {
-  .step-control,
-  .edit-step-btn,
-  .insert-step-btn,
-  .edit-command-btn,
-  .toggle-btn {
-    min-height: 44px;
-    min-width: 44px;
-  }
-
-  .close-button {
-    min-height: 44px;
-    min-width: 44px;
-  }
-}
 </style>

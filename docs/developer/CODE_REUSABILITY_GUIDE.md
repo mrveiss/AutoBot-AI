@@ -1611,6 +1611,81 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 27 - Advanced Workflow Step Management** ✅ Completed
+
+**Goal**: Migrate advanced workflow modal with complex step management controls to BaseButton for consistent UI patterns.
+
+**Components Migrated**: 1 component, 17 buttons, ~170 lines saved
+
+#### **AdvancedStepConfirmationModal.vue** (17 buttons, ~170 lines saved)
+
+**Purpose**: Advanced workflow step management modal with command editing, risk assessment, and step reordering capabilities.
+
+**Buttons Migrated**:
+
+**Modal Header:**
+- Close button → `<BaseButton variant="ghost" size="xs" class="close-button">` (×)
+
+**Command Editor:**
+- Edit command → `<BaseButton variant="outline" size="xs" class="edit-command-btn">` (📝 Edit)
+- Save command → `<BaseButton variant="success" size="sm">` (💾 Save)
+- Cancel command → `<BaseButton variant="secondary" size="sm">` (❌ Cancel)
+
+**Step Management:**
+- Toggle steps manager → `<BaseButton variant="outline" size="sm">` (▼ Hide / ▶ Show)
+- Move step up → `<BaseButton variant="outline" size="xs" :disabled="index === 0">` (↑)
+- Move step down → `<BaseButton variant="outline" size="xs" :disabled="index === workflowSteps.length - 1">` (↓)
+- Delete step → `<BaseButton variant="danger" size="xs" :disabled="workflowSteps.length <= 1">` (🗑️)
+- Edit step → `<BaseButton variant="outline" size="xs">` (✏️ Edit)
+- Insert step after → `<BaseButton variant="success" size="xs">` (➕ Insert After)
+- Add new step → `<BaseButton variant="success" class="add-step-btn">` (➕ Add New Step)
+- Add step (form) → `<BaseButton variant="success">` (✅ Add Step)
+- Cancel add step → `<BaseButton variant="secondary">` (❌ Cancel)
+
+**Edit Dialog:**
+- Close edit dialog → `<BaseButton variant="ghost" size="xs" class="close-button">` (×)
+- Save edit → `<BaseButton variant="success" :disabled="!isEditFormValid || isSavingEdit" :loading="isSavingEdit">` (💾 Save Changes)
+- Cancel edit → `<BaseButton variant="secondary" :disabled="isSavingEdit">` (❌ Cancel)
+
+**Modal Actions (Primary):**
+- Execute step → `<BaseButton variant="success" :disabled="!currentStep" class="execute-btn">` (✅ Execute This Step)
+- Skip step → `<BaseButton variant="secondary" class="skip-btn">` (⏭️ Skip This Step)
+- Manual control → `<BaseButton variant="primary" class="manual-btn">` (👤 Take Manual Control)
+
+**Modal Actions (Secondary):**
+- Execute all → `<BaseButton variant="info" class="execute-all-btn">` (🚀 Execute All Remaining)
+- Save workflow → `<BaseButton variant="success" class="save-workflow-btn">` (💾 Save Workflow)
+- Toggle advanced → `<BaseButton variant="secondary" class="toggle-advanced-btn">` (⚙️ Hide/Show Advanced)
+
+**Key Patterns**:
+- ✅ Complex conditional :disabled logic for step management controls
+- ✅ Loading state integration with form validation (saveEdit)
+- ✅ Ghost variant for minimal close buttons
+- ✅ Size xs for compact step control buttons
+- ✅ Dynamic variant mapping (success for execute, info for batch operations)
+- ✅ Preserved custom classes for layout-specific styling (add-step-btn, execute-btn)
+
+**CSS Removed**: ~170 lines removed from scoped styles:
+- `.close-button`, `.edit-command-btn` (~13 lines)
+- `.toggle-btn` (~12 lines)
+- `.step-control`, `.step-control:hover`, `.step-control:disabled`, `.step-control.delete` (~28 lines)
+- `.edit-step-btn`, `.insert-step-btn` (~14 lines)
+- `.add-step-btn` (~13 lines)
+- `.execute-btn`, `.skip-btn`, `.manual-btn`, `.execute-all-btn`, `.save-workflow-btn`, `.save-btn`, `.cancel-btn` (~93 lines including hover/disabled states)
+- `.toggle-advanced-btn` (~14 lines)
+- Media query references removed (~35 lines across 3 breakpoints)
+
+---
+
+**Batch 27 Summary**:
+- Components: 1 (AdvancedStepConfirmationModal)
+- Buttons: 17 consolidated (1 modal header + 3 command editor + 9 step management + 3 edit dialog + 6 modal actions)
+- Lines: ~170 saved
+- Variants: 7 (primary, secondary, success, danger, info, outline, ghost)
+- **Combined Total**: 16 components, ~979 lines saved, 111 buttons consolidated
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -1620,7 +1695,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~809 lines (batches 20-26)
+- BaseButton adoptions: ~979 lines (batches 20-27)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
@@ -1628,9 +1703,10 @@ const createRipple = (event: TouchEvent) => {
   - Batch 24: ~39 lines (1 component, 16 buttons)
   - Batch 25: ~114 lines (2 components, 19 buttons)
   - Batch 26: ~129 lines (3 components, 19 buttons)
-- **Total Progress**: ~1,603 lines / ~1,500-2,000 realistic target (80-107%)
+  - Batch 27: ~170 lines (1 component, 17 buttons)
+- **Total Progress**: ~1,773 lines / ~1,500-2,000 realistic target (89-118%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 15 components using BaseButton (94 buttons consolidated)
+- **BaseButton Milestone**: 16 components using BaseButton (111 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
