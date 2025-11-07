@@ -1,6 +1,6 @@
 # Code Reusability Guide
 
-**Last Updated**: 2025-11-03
+**Last Updated**: 2025-11-07
 **Status**: Active Best Practices
 
 This document outlines reusable code patterns, shared utilities, and components across the AutoBot codebase to eliminate duplication and improve maintainability.
@@ -2531,6 +2531,129 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+## BaseModal Component Adoption (Batches 47-49)
+
+### **Batch 47 - TerminalModals.vue Migration** ✅ Completed
+
+**Goal**: Migrate 4 terminal-related modals to BaseModal, consolidating duplicate overlay and modal structure code.
+
+**Component**: TerminalModals.vue (963 → 781 lines, ~182 lines saved, 19% reduction)
+
+**Modals Migrated**:
+1. **Reconnect modal** - Connection lost dialog (small size)
+2. **Command confirmation modal** - Destructive command warning with risk assessment (medium size)
+3. **Emergency kill modal** - Process termination warning (medium size, emergency styling)
+4. **Legacy workflow modal** - AI workflow step confirmation with 3 action buttons (large size)
+
+**Changes**:
+- Added BaseModal import and component usage
+- Converted all 4 modals from inline overlay/modal divs to BaseModal with v-model
+- Mapped size variants (small, medium, large) directly to BaseModal sizes
+- Preserved all content-specific styling (command-preview, risk-assessment, workflow-options)
+- Maintained BaseButton integration throughout all modal actions
+- Implemented conditional closeOnOverlay based on loading states (isReconnecting, isExecutingCommand, isKillingProcesses, isProcessingWorkflow)
+
+**CSS Removed**:
+- Modal overlay structure (~10 lines)
+- Confirmation modal overlay and structure (~30 lines)
+- Modal header, title, and content structure (~20 lines)
+- Modal actions footer structure (~10 lines)
+- Duplicate mobile responsiveness rules (~30 lines)
+- Total: ~100 lines of structure CSS
+
+**Patterns Preserved**:
+- Error/success message displays remain unchanged
+- Risk assessment styling intact (risk-level variants: low/moderate/high/critical)
+- Emergency warning styling preserved
+- Workflow step counter and options styling maintained
+- Loading states with disabled close-on-overlay during operations
+
+---
+
+### **Batch 48 - KnowledgeSearch.vue Migration** ✅ Completed
+
+**Goal**: Migrate document viewer modal to BaseModal.
+
+**Component**: KnowledgeSearch.vue (741 → 686 lines, ~54 lines saved, 7% reduction)
+
+**Modal Migrated**:
+- **Document viewer modal** - Full document display with metadata and copy action (large size, scrollable)
+
+**Changes**:
+- Added BaseModal import
+- Converted document-modal-overlay div to BaseModal with v-model bound to showDocumentModal
+- Used large scrollable modal size for optimal document viewing
+- Document metadata (type, category, updated date) moved into default slot
+- Copy action and close buttons moved to actions slot
+
+**CSS Removed**:
+- document-modal-overlay and fadeIn animation (~15 lines)
+- document-modal container and slideUp animation (~15 lines)
+- document-modal-header structure (~10 lines)
+- modal-close-button styling (~3 lines)
+- document-modal-content wrapper (~3 lines)
+- document-modal-footer structure (~8 lines)
+- Total: ~54 lines
+
+**Content-Specific Styles Preserved**:
+- document-modal-meta display
+- modal-meta-item styling
+- modal-loading spinner
+- document-text display
+- modal-no-content empty state
+- modal-action-button custom styling
+
+---
+
+### **Batch 49 - SecretsManager.vue Migration** ✅ Completed
+
+**Goal**: Migrate all 3 secrets management modals to BaseModal.
+
+**Component**: SecretsManager.vue (1103 → 1037 lines, ~65 lines saved, 6% reduction)
+
+**Modals Migrated**:
+1. **Create/Edit modal** - Secret form for creating/updating secrets (medium size, form validation)
+2. **View modal** - Secret details display with show/hide value toggle (medium size)
+3. **Transfer modal** - Confirmation dialog for transferring secrets between scopes (medium size, checkbox confirmation)
+
+**Changes**:
+- Added BaseModal to component imports and registration
+- Converted all 3 modal-overlay divs to BaseModal with v-model patterns
+- Create/Edit: Combined showCreateModal || showEditModal into single v-model condition
+- View: Bound v-model to showViewModal
+- Transfer: Bound v-model to showTransferModal
+- All form submissions and action buttons moved to actions slots
+- Conditional closeOnOverlay for Create/Edit (!saving) and Transfer (!transferring) modals
+
+**CSS Removed**:
+- modal-overlay structure (~15 lines)
+- modal container and sizing (~8 lines)
+- modal-header with h3 and close button (~20 lines)
+- btn-close button styling (~12 lines)
+- modal-body padding (~3 lines)
+- modal-actions footer structure (~7 lines)
+- Total: ~65 lines
+
+**Features Preserved**:
+- Create/Edit modal: Form structure with required fields, validation, saving state
+- View modal: Secret value show/hide toggle, metadata display, copy functionality
+- Transfer modal: Confirmation checkbox, warning message, transferring state
+- Custom button styling maintained (btn-primary, btn-secondary)
+- Form groups and validation intact
+- StatusBadge integration for scope and type badges
+
+---
+
+**BaseModal Migration Summary (Batches 47-49)**:
+- **Components Migrated**: 3 components (TerminalModals, KnowledgeSearch, SecretsManager)
+- **Modals Consolidated**: 8 modals total (4 terminal + 1 document viewer + 3 secrets)
+- **Lines Saved**: ~301 lines (182 + 54 + 65)
+- **Target**: ~250-300 lines estimated → **301 lines achieved** ✅ **TARGET EXCEEDED**
+- **Sizes Used**: All 3 sizes (small, medium, large)
+- **Key Patterns**: v-model binding, size variants, scrollable modals, conditional closeOnOverlay, actions slot with custom buttons, form submissions in modals
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -2569,10 +2692,15 @@ const createRipple = (event: TouchEvent) => {
   - Batch 44: ~40 lines (1 component, alerts list with v-for)
   - Batch 45: ~17 lines (1 component, 1 banner)
   - Batch 46: ~10 lines (1 component, 1 alert)
-- **Total Progress**: ~2,732 lines / ~1,500-2,000 realistic target (137-182%) ✅ **TARGET EXCEEDED**
+- BaseModal adoptions: ~301 lines (batches 47-49)
+  - Batch 47: ~182 lines (1 component, 4 modals)
+  - Batch 48: ~54 lines (1 component, 1 modal)
+  - Batch 49: ~65 lines (1 component, 3 modals)
+- **Total Progress**: ~3,033 lines / ~1,500-2,000 realistic target (152-202%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 29 components using BaseButton (202 buttons consolidated)
+- **BaseButton Milestone**: 29 components using BaseButton (202 buttons consolidated) ✅ **100% ADOPTION**
 - **BaseAlert Milestone**: 6 components using BaseAlert (10+ alerts consolidated)
+- **BaseModal Milestone**: 6 components using BaseModal (2 baseline + 4 new, 8 modals consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
