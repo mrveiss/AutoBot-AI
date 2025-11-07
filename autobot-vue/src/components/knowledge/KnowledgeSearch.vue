@@ -155,54 +155,49 @@
       </div>
 
       <!-- Document Viewer Modal -->
-      <div v-if="showDocumentModal" class="document-modal-overlay" @click="closeDocument">
-        <div class="document-modal" @click.stop>
-          <div class="document-modal-header">
-            <div>
-              <h3 class="document-modal-title">{{ selectedDocument?.title || 'Document' }}</h3>
-              <div class="document-modal-meta">
-                <span class="modal-meta-item">
-                  <i class="fas fa-file-text"></i>
-                  {{ selectedDocument?.type || 'text' }}
-                </span>
-                <span class="modal-meta-item">
-                  <i class="fas fa-folder"></i>
-                  {{ selectedDocument?.category || 'general' }}
-                </span>
-                <span v-if="selectedDocument?.updatedAt" class="modal-meta-item">
-                  <i class="fas fa-clock"></i>
-                  {{ new Date(selectedDocument.updatedAt).toLocaleDateString() }}
-                </span>
-              </div>
-            </div>
-            <button @click="closeDocument" class="modal-close-button">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
-          <div class="document-modal-content">
-            <div v-if="loadingDocument" class="modal-loading">
-              <i class="fas fa-spinner fa-spin"></i>
-              Loading document...
-            </div>
-            <div v-else-if="selectedDocument?.content" class="document-text">
-              {{ selectedDocument.content }}
-            </div>
-            <div v-else class="modal-no-content">
-              <i class="fas fa-file-excel"></i>
-              <p>No content available for this document</p>
-            </div>
-          </div>
-          <div class="document-modal-footer">
-            <button @click="copyDocument" class="modal-action-button">
-              <i class="fas fa-copy"></i>
-              Copy Content
-            </button>
-            <button @click="closeDocument" class="modal-action-button modal-close-action">
-              Close
-            </button>
-          </div>
+      <BaseModal
+        v-model="showDocumentModal"
+        :title="selectedDocument?.title || 'Document'"
+        size="large"
+        scrollable
+      >
+        <div class="document-modal-meta">
+          <span class="modal-meta-item">
+            <i class="fas fa-file-text"></i>
+            {{ selectedDocument?.type || 'text' }}
+          </span>
+          <span class="modal-meta-item">
+            <i class="fas fa-folder"></i>
+            {{ selectedDocument?.category || 'general' }}
+          </span>
+          <span v-if="selectedDocument?.updatedAt" class="modal-meta-item">
+            <i class="fas fa-clock"></i>
+            {{ new Date(selectedDocument.updatedAt).toLocaleDateString() }}
+          </span>
         </div>
-      </div>
+
+        <div v-if="loadingDocument" class="modal-loading">
+          <i class="fas fa-spinner fa-spin"></i>
+          Loading document...
+        </div>
+        <div v-else-if="selectedDocument?.content" class="document-text">
+          {{ selectedDocument.content }}
+        </div>
+        <div v-else class="modal-no-content">
+          <i class="fas fa-file-excel"></i>
+          <p>No content available for this document</p>
+        </div>
+
+        <template #actions>
+          <button @click="copyDocument" class="modal-action-button">
+            <i class="fas fa-copy"></i>
+            Copy Content
+          </button>
+          <button @click="closeDocument" class="modal-action-button modal-close-action">
+            Close
+          </button>
+        </template>
+      </BaseModal>
 
       <!-- No Results -->
       <EmptyState
@@ -239,6 +234,7 @@
 import { ref, computed } from 'vue'
 import { KnowledgeRepository, type RagSearchResponse } from '@/models/repositories'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 // Define types
 interface KnowledgeDocument {
@@ -636,45 +632,7 @@ const copyDocument = async () => {
   @apply text-blue-500;
 }
 
-/* Document Viewer Modal */
-.document-modal-overlay {
-  @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4;
-  animation: fadeIn 0.2s ease-in-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.document-modal {
-  @apply bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col;
-  animation: slideUp 0.3s ease-out;
-}
-
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.document-modal-header {
-  @apply flex justify-between items-start p-6 border-b border-gray-200;
-}
-
-.document-modal-title {
-  @apply text-xl font-semibold text-gray-900 mb-2;
-}
-
+/* Document Viewer Modal - Content Styles */
 .document-modal-meta {
   @apply flex gap-4 text-sm text-gray-600;
 }
@@ -685,14 +643,6 @@ const copyDocument = async () => {
 
 .modal-meta-item i {
   @apply text-gray-400;
-}
-
-.modal-close-button {
-  @apply p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 hover:text-gray-700;
-}
-
-.document-modal-content {
-  @apply flex-1 overflow-y-auto p-6;
 }
 
 .modal-loading {
@@ -717,10 +667,6 @@ const copyDocument = async () => {
 
 .modal-no-content p {
   @apply text-gray-500;
-}
-
-.document-modal-footer {
-  @apply flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50;
 }
 
 .modal-action-button {
