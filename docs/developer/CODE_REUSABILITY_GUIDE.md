@@ -1955,7 +1955,51 @@ const createRipple = (event: TouchEvent) => {
 - Buttons: 4 consolidated (2 conditional + 2 universal per-row actions)
 - Lines: ~24 saved
 - Variants: 1 (ghost for minimal action buttons)
-- **Combined Total**: 21 components, ~1,343 lines saved, 143 buttons consolidated
+
+---
+
+### **Batch 33 - File Browser Header** ✅ Completed
+
+**Goal**: Migrate file browser header navigation and action buttons to BaseButton.
+
+**Components Migrated**: 1 component, 3 buttons, ~19 lines saved
+
+#### **FileBrowserHeader.vue** (3 buttons, ~19 lines saved)
+
+**Purpose**: File browser header with path navigation and file management actions.
+
+**Buttons Migrated**:
+
+**Path Navigation:**
+- Path go button → `<BaseButton variant="primary" size="sm" class="path-go-btn">` (Arrow right icon, navigate to entered path)
+
+**File Actions:**
+- New Folder → `<BaseButton variant="outline" size="sm" aria-label="Create new folder">` (Folder plus icon + text)
+- Upload File → `<BaseButton variant="outline" size="sm" aria-label="Upload file">` (Upload icon + text)
+
+**Key Patterns**:
+- ✅ Primary variant for main path navigation action (blue background)
+- ✅ Outline variant for secondary file actions (white background with border)
+- ✅ Consistent sm size for compact header layout
+- ✅ Icon + text combination for clear action labels
+- ✅ Preserved aria-label attributes for accessibility
+- ✅ Maintained path input integration with Enter key handler
+
+**CSS Removed**: ~19 lines removed from scoped styles:
+- `.path-go-btn` Tailwind classes (~3 lines)
+- `.file-actions button` base styles (~3 lines)
+- `.file-actions button:hover` hover state (~3 lines)
+- `.file-actions button i` icon styles (~3 lines)
+- Padding, colors, borders, focus states (~7 lines)
+
+---
+
+**Batch 33 Summary**:
+- Components: 1 (FileBrowserHeader)
+- Buttons: 3 consolidated (1 navigation + 2 file actions)
+- Lines: ~19 saved
+- Variants: 2 (primary for navigation, outline for actions)
+- **Combined Total**: 22 components, ~1,362 lines saved, 146 buttons consolidated
 
 ---
 
@@ -1968,7 +2012,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~1,343 lines (batches 20-32)
+- BaseButton adoptions: ~1,362 lines (batches 20-33)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
@@ -1982,9 +2026,10 @@ const createRipple = (event: TouchEvent) => {
   - Batch 30: ~61 lines (1 component, 5 buttons)
   - Batch 31: ~58 lines (1 component, 4 buttons)
   - Batch 32: ~24 lines (1 component, 4 buttons)
-- **Total Progress**: ~2,137 lines / ~1,500-2,000 realistic target (107-143%) ✅ **TARGET EXCEEDED**
+  - Batch 33: ~19 lines (1 component, 3 buttons)
+- **Total Progress**: ~2,156 lines / ~1,500-2,000 realistic target (108-144%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 21 components using BaseButton (143 buttons consolidated)
+- **BaseButton Milestone**: 22 components using BaseButton (146 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 

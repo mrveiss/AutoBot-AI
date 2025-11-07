@@ -25,25 +25,42 @@
           placeholder="/path/to/directory"
           class="path-field"
         />
-        <button @click="$emit('navigate-to-path', pathInput)" class="path-go-btn">
+        <BaseButton
+          variant="primary"
+          size="sm"
+          @click="$emit('navigate-to-path', pathInput)"
+          class="path-go-btn"
+          aria-label="Navigate to path"
+        >
           <i class="fas fa-arrow-right"></i>
-        </button>
+        </BaseButton>
       </div>
     </div>
 
     <div class="file-actions">
-      <button @click="$emit('new-folder')" aria-label="Create new folder">
+      <BaseButton
+        variant="outline"
+        size="sm"
+        @click="$emit('new-folder')"
+        aria-label="Create new folder"
+      >
         <i class="fas fa-folder-plus"></i> New Folder
-      </button>
-      <button @click="$emit('upload')" aria-label="Upload file">
+      </BaseButton>
+      <BaseButton
+        variant="outline"
+        size="sm"
+        @click="$emit('upload')"
+        aria-label="Upload file"
+      >
         <i class="fas fa-upload"></i> Upload File
-      </button>
+      </BaseButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 interface Props {
   title?: string
@@ -122,23 +139,9 @@ const getPathUpTo = (index: number): string => {
   @apply px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px];
 }
 
-.path-go-btn {
-  @apply px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500;
-}
-
 .file-actions {
   @apply flex gap-2 flex-shrink-0 ml-auto;
 }
 
-.file-actions button {
-  @apply px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-2;
-}
-
-.file-actions button:hover {
-  @apply shadow-sm;
-}
-
-.file-actions button i {
-  @apply text-sm;
-}
+/* Button styling handled by BaseButton component */
 </style>
