@@ -200,10 +200,11 @@
 
         <div class="modal-body">
           <!-- Error Alert -->
-          <div v-if="workerFormError" class="error-alert">
-            <i class="fas fa-exclamation-circle mr-2"></i>
-            {{ workerFormError }}
-          </div>
+          <BaseAlert
+            v-if="workerFormError"
+            variant="error"
+            :message="workerFormError"
+          />
 
           <div class="form-group">
             <label class="form-label">Worker Name *</label>
@@ -386,6 +387,7 @@ import axios from 'axios'
 import { NetworkConstants } from '@/constants/network-constants.js'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
+import BaseAlert from '@/components/ui/BaseAlert.vue'
 
 // ===== TYPE DEFINITIONS =====
 
@@ -1310,22 +1312,6 @@ onUnmounted(() => {
   margin-top: 4px;
 }
 
-/* Error Alert */
-.error-alert {
-  background: #fee;
-  border: 1px solid #fcc;
-  border-radius: 6px;
-  padding: 12px 16px;
-  margin-bottom: 20px;
-  color: #c33;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-}
-
-.error-alert i {
-  flex-shrink: 0;
-}
 
 /* Metrics Grid */
 .metrics-grid {
