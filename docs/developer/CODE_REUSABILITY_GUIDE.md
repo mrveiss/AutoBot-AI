@@ -1686,6 +1686,69 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 28 - Chat Input Component** ✅ Completed
+
+**Goal**: Migrate chat input interface with file attachments, voice input, emoji picker, and quick actions to BaseButton.
+
+**Components Migrated**: 1 component, 10 buttons, ~65 lines saved
+
+#### **ChatInput.vue** (10 buttons, ~65 lines saved)
+
+**Purpose**: Comprehensive chat input interface with file uploads, voice input, emoji picker, and quick action shortcuts.
+
+**Buttons Migrated**:
+
+**File Management:**
+- Retry upload → `<BaseButton variant="danger" size="xs" class="retry-upload-btn">` (per upload item)
+- Clear all files → `<BaseButton variant="ghost" size="sm" class="text-red-600">` (Clear all)
+- Remove file → `<BaseButton variant="ghost" size="xs" class="remove-file-btn">` (per attached file)
+
+**Input Actions:**
+- Attach file → `<BaseButton variant="ghost" size="xs" class="action-btn" :disabled="isDisabled">` (📎)
+- Voice input → `<BaseButton variant="ghost" size="xs" class="action-btn" :class="{ 'active': isVoiceRecording }" :disabled="isDisabled">` (🎤)
+- Emoji picker → `<BaseButton variant="ghost" size="xs" class="action-btn" :disabled="isDisabled">` (😊)
+
+**Quick Actions (4 buttons in v-for):**
+- Help/Summarize/Translate/Explain → `<BaseButton variant="ghost" size="sm" class="action-btn quick-action-btn" :disabled="isDisabled">` (dynamic actions)
+
+**Main Actions:**
+- Send message → `<BaseButton variant="primary" class="send-button" :disabled="!canSend" :loading="isSending" :class="{ 'pulse': messageQueueLength > 0 }">` (✈️)
+
+**Emoji Picker:**
+- Close emoji picker → `<BaseButton variant="ghost" size="xs" class="close-emoji-btn">` (×)
+- Emoji buttons (12 in v-for) → `<BaseButton variant="ghost" size="sm" class="emoji-btn">` (😀)
+
+**Key Patterns**:
+- ✅ Loading state integration for send button (`:loading` prop)
+- ✅ Conditional :disabled for all input actions
+- ✅ Active state preservation via :class for voice recording
+- ✅ Ghost variant for minimal UI controls
+- ✅ Queue indicator preserved in send button content
+- ✅ Size xs for compact action buttons
+- ✅ Custom classes preserved for layout (action-btn, send-button)
+
+**CSS Removed**: ~65 lines removed from scoped styles:
+- `.retry-upload-btn` (~3 lines)
+- `.remove-file-btn` (~3 lines)
+- `.action-btn`, `.action-btn:not(.quick-action-btn)`, `.action-btn.active`, `.action-btn:disabled` (~14 lines)
+- `.quick-action-btn` (~4 lines)
+- `.send-button`, `.send-button.sending` (~10 lines) - kept sizing and pulse animation
+- `.close-emoji-btn` (~3 lines)
+- `.emoji-btn` (~3 lines)
+- Focus states: `.action-btn:focus`, `.quick-action-btn:focus`, `.emoji-btn:focus`, `.send-button:focus` (~8 lines)
+- Remaining: action-label, send-button sizing/animation (preserved for layout)
+
+---
+
+**Batch 28 Summary**:
+- Components: 1 (ChatInput)
+- Buttons: 10 consolidated (3 file management + 3 input actions + 4 quick actions + 1 send + 2 emoji picker)
+- Lines: ~65 saved
+- Variants: 3 (primary, danger, ghost)
+- **Combined Total**: 17 components, ~1,044 lines saved, 121 buttons consolidated
+
+---
+
 **Migration Status Update**:
 - EmptyState migrations: ~579 lines (38.6% of realistic target)
 - Utility consolidation: ~18 lines (batch 14)
@@ -1695,7 +1758,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~979 lines (batches 20-27)
+- BaseButton adoptions: ~1,044 lines (batches 20-28)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
@@ -1704,9 +1767,10 @@ const createRipple = (event: TouchEvent) => {
   - Batch 25: ~114 lines (2 components, 19 buttons)
   - Batch 26: ~129 lines (3 components, 19 buttons)
   - Batch 27: ~170 lines (1 component, 17 buttons)
-- **Total Progress**: ~1,773 lines / ~1,500-2,000 realistic target (89-118%) ✅ **TARGET EXCEEDED**
+  - Batch 28: ~65 lines (1 component, 10 buttons)
+- **Total Progress**: ~1,838 lines / ~1,500-2,000 realistic target (92-123%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 16 components using BaseButton (111 buttons consolidated)
+- **BaseButton Milestone**: 17 components using BaseButton (121 buttons consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
