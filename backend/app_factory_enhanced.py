@@ -36,6 +36,7 @@ from backend.api.files import router as files_router
 from backend.api.intelligent_agent import router as intelligent_agent_router
 from backend.api.kb_librarian import router as kb_librarian_router
 from backend.api.knowledge import router as knowledge_router
+from backend.api.knowledge_advanced_rag import router as knowledge_advanced_rag_router
 from backend.api.knowledge_enhanced import router as knowledge_enhanced_router
 from backend.api.llm import router as llm_router
 from backend.api.metrics import router as metrics_router
@@ -468,6 +469,12 @@ def configure_enhanced_api_routes(app: FastAPI) -> None:
             "/knowledge/enhanced",
             ["knowledge-enhanced"],
             "knowledge_enhanced",
+        ),
+        (
+            knowledge_advanced_rag_router,
+            "/knowledge_base/rag",
+            ["knowledge-advanced-rag"],
+            "knowledge_advanced_rag",
         ),
     ]
 
