@@ -33099,6 +33099,315 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
 
 
+    # ==============================================
+    # BATCH 173: development_speedup.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_173_analyze_codebase_endpoint_simple_pattern(self):
+        """Verify analyze_codebase_endpoint uses Simple Pattern"""
+        from backend.api import development_speedup
+
+        source = inspect.getsource(development_speedup.analyze_codebase_endpoint)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="analyze_codebase_endpoint"', source)
+        self.assertIn('error_code_prefix="DEVELOPMENT_SPEEDUP"', source)
+
+    def test_batch_173_analyze_codebase_get_simple_pattern(self):
+        """Verify analyze_codebase_get uses Simple Pattern"""
+        from backend.api import development_speedup
+
+        source = inspect.getsource(development_speedup.analyze_codebase_get)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="analyze_codebase_get"', source)
+        self.assertIn('error_code_prefix="DEVELOPMENT_SPEEDUP"', source)
+
+    def test_batch_173_find_duplicates_endpoint_simple_pattern(self):
+        """Verify find_duplicates_endpoint uses Simple Pattern"""
+        from backend.api import development_speedup
+
+        source = inspect.getsource(development_speedup.find_duplicates_endpoint)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="find_duplicates_endpoint"', source)
+        self.assertIn('error_code_prefix="DEVELOPMENT_SPEEDUP"', source)
+
+    def test_batch_173_analyze_patterns_endpoint_simple_pattern(self):
+        """Verify analyze_patterns_endpoint uses Simple Pattern"""
+        from backend.api import development_speedup
+
+        source = inspect.getsource(development_speedup.analyze_patterns_endpoint)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="analyze_patterns_endpoint"', source)
+        self.assertIn('error_code_prefix="DEVELOPMENT_SPEEDUP"', source)
+
+    def test_batch_173_analyze_imports_endpoint_simple_pattern(self):
+        """Verify analyze_imports_endpoint uses Simple Pattern"""
+        from backend.api import development_speedup
+
+        source = inspect.getsource(development_speedup.analyze_imports_endpoint)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="analyze_imports_endpoint"', source)
+        self.assertIn('error_code_prefix="DEVELOPMENT_SPEEDUP"', source)
+
+    def test_batch_173_detect_dead_code_endpoint_simple_pattern(self):
+        """Verify detect_dead_code_endpoint uses Simple Pattern"""
+        from backend.api import development_speedup
+
+        source = inspect.getsource(development_speedup.detect_dead_code_endpoint)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="detect_dead_code_endpoint"', source)
+        self.assertIn('error_code_prefix="DEVELOPMENT_SPEEDUP"', source)
+
+    def test_batch_173_find_refactoring_opportunities_endpoint_simple_pattern(self):
+        """Verify find_refactoring_opportunities_endpoint uses Simple Pattern"""
+        from backend.api import development_speedup
+
+        source = inspect.getsource(development_speedup.find_refactoring_opportunities_endpoint)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="find_refactoring_opportunities_endpoint"', source)
+        self.assertIn('error_code_prefix="DEVELOPMENT_SPEEDUP"', source)
+
+    def test_batch_173_analyze_quality_endpoint_simple_pattern(self):
+        """Verify analyze_quality_endpoint uses Simple Pattern"""
+        from backend.api import development_speedup
+
+        source = inspect.getsource(development_speedup.analyze_quality_endpoint)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="analyze_quality_endpoint"', source)
+        self.assertIn('error_code_prefix="DEVELOPMENT_SPEEDUP"', source)
+
+    def test_batch_173_get_recommendations_endpoint_simple_pattern(self):
+        """Verify get_recommendations_endpoint uses Simple Pattern"""
+        from backend.api import development_speedup
+
+        source = inspect.getsource(development_speedup.get_recommendations_endpoint)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_recommendations_endpoint"', source)
+        self.assertIn('error_code_prefix="DEVELOPMENT_SPEEDUP"', source)
+
+    def test_batch_173_get_development_speedup_status_simple_pattern(self):
+        """Verify get_development_speedup_status uses Simple Pattern"""
+        from backend.api import development_speedup
+
+        source = inspect.getsource(development_speedup.get_development_speedup_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_development_speedup_status"', source)
+        self.assertIn('error_code_prefix="DEVELOPMENT_SPEEDUP"', source)
+
+    def test_batch_173_get_analysis_examples_simple_pattern(self):
+        """Verify get_analysis_examples uses Simple Pattern"""
+        from backend.api import development_speedup
+
+        source = inspect.getsource(development_speedup.get_analysis_examples)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_analysis_examples"', source)
+        self.assertIn('error_code_prefix="DEVELOPMENT_SPEEDUP"', source)
+
+    def test_batch_173_all_development_speedup_endpoints_have_decorator(self):
+        """Verify all development_speedup endpoints have @with_error_handling decorator"""
+        from backend.api import development_speedup
+
+        endpoint_functions = [
+            development_speedup.analyze_codebase_endpoint,
+            development_speedup.analyze_codebase_get,
+            development_speedup.find_duplicates_endpoint,
+            development_speedup.analyze_patterns_endpoint,
+            development_speedup.analyze_imports_endpoint,
+            development_speedup.detect_dead_code_endpoint,
+            development_speedup.find_refactoring_opportunities_endpoint,
+            development_speedup.analyze_quality_endpoint,
+            development_speedup.get_recommendations_endpoint,
+            development_speedup.get_development_speedup_status,
+            development_speedup.get_analysis_examples,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_173_development_speedup_100_percent_milestone(self):
+        """Verify development_speedup.py has reached 100% migration"""
+        from backend.api import development_speedup
+
+        endpoint_functions = [
+            development_speedup.analyze_codebase_endpoint,
+            development_speedup.analyze_codebase_get,
+            development_speedup.find_duplicates_endpoint,
+            development_speedup.analyze_patterns_endpoint,
+            development_speedup.analyze_imports_endpoint,
+            development_speedup.detect_dead_code_endpoint,
+            development_speedup.find_refactoring_opportunities_endpoint,
+            development_speedup.analyze_quality_endpoint,
+            development_speedup.get_recommendations_endpoint,
+            development_speedup.get_development_speedup_status,
+            development_speedup.get_analysis_examples,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 11
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_173_migration_preserves_agent_integration(self):
+        """Verify migration preserves development_speedup_agent integration"""
+        from backend.api import development_speedup
+
+        # Verify development_speedup_agent functions are imported
+        self.assertTrue(hasattr(development_speedup, "analyze_codebase"))
+        self.assertTrue(hasattr(development_speedup, "find_duplicates"))
+        self.assertTrue(hasattr(development_speedup, "get_development_speedup_agent"))
+
+        # Verify _get_dev_speedup_agent helper exists
+        self.assertTrue(hasattr(development_speedup, "_get_dev_speedup_agent"))
+
+        # Verify lazy initialization pattern
+        helper_source = inspect.getsource(development_speedup._get_dev_speedup_agent)
+        self.assertIn("_development_speedup_instance", helper_source)
+        self.assertIn("get_development_speedup_agent()", helper_source)
+
+    def test_batch_173_migration_preserves_analysis_types(self):
+        """Verify migration preserves all analysis type handling"""
+        from backend.api import development_speedup
+
+        # Verify analyze_codebase_endpoint handles all analysis types
+        source = inspect.getsource(development_speedup.analyze_codebase_endpoint)
+        self.assertIn('analysis_type == "comprehensive"', source)
+        self.assertIn('analysis_type == "duplicates"', source)
+        self.assertIn('analysis_type == "patterns"', source)
+        self.assertIn('analysis_type == "imports"', source)
+        self.assertIn('analysis_type == "dead_code"', source)
+        self.assertIn('analysis_type == "refactoring"', source)
+        self.assertIn('analysis_type == "quality"', source)
+        self.assertIn("analyze_codebase(request.root_path)", source)
+
+    def test_batch_173_migration_preserves_duplicate_detection_threshold(self):
+        """Verify migration preserves duplicate detection with adjustable threshold"""
+        from backend.api import development_speedup
+
+        # Verify find_duplicates_endpoint adjusts min_duplicate_lines
+        source = inspect.getsource(development_speedup.find_duplicates_endpoint)
+        self.assertIn("agent.min_duplicate_lines = min_lines", source)
+        self.assertIn("original_threshold = agent.min_duplicate_lines", source)
+        self.assertIn("agent.min_duplicate_lines = original_threshold", source)
+        self.assertIn("find_duplicates(path)", source)
+
+    def test_batch_173_migration_preserves_pattern_filtering(self):
+        """Verify migration preserves pattern type filtering"""
+        from backend.api import development_speedup
+
+        # Verify analyze_patterns_endpoint supports pattern_type filtering
+        source = inspect.getsource(development_speedup.analyze_patterns_endpoint)
+        self.assertIn("identify_code_patterns(path)", source)
+        self.assertIn("if pattern_type:", source)
+        self.assertIn("filtered_patterns", source)
+        self.assertIn('pattern_type.lower() in p.get("pattern_type", "").lower()', source)
+
+    def test_batch_173_migration_preserves_import_analysis_options(self):
+        """Verify migration preserves import analysis with show_unused option"""
+        from backend.api import development_speedup
+
+        # Verify analyze_imports_endpoint handles show_unused parameter
+        source = inspect.getsource(development_speedup.analyze_imports_endpoint)
+        self.assertIn("analyze_imports_and_dependencies(path)", source)
+        self.assertIn("if not show_unused:", source)
+        self.assertIn('result.pop("potential_unused_imports", None)', source)
+
+    def test_batch_173_migration_preserves_refactoring_complexity_filter(self):
+        """Verify migration preserves refactoring opportunities with complexity filtering"""
+        from backend.api import development_speedup
+
+        # Verify find_refactoring_opportunities_endpoint filters by complexity
+        source = inspect.getsource(development_speedup.find_refactoring_opportunities_endpoint)
+        self.assertIn("find_refactoring_opportunities(path)", source)
+        self.assertIn("if min_complexity > 1.0:", source)
+        self.assertIn("filtered_opportunities", source)
+        self.assertIn('opp.get("complexity_score", 0) >= min_complexity', source)
+
+    def test_batch_173_migration_preserves_quality_severity_filter(self):
+        """Verify migration preserves quality analysis with severity filtering"""
+        from backend.api import development_speedup
+
+        # Verify analyze_quality_endpoint filters by severity
+        source = inspect.getsource(development_speedup.analyze_quality_endpoint)
+        self.assertIn("analyze_code_quality_consistency(path)", source)
+        self.assertIn("if severity:", source)
+        self.assertIn('valid_severities = ["low", "medium", "high", "critical"]', source)
+        self.assertIn("filtered_issues", source)
+        self.assertIn('issue.get("severity") == severity', source)
+
+    def test_batch_173_migration_preserves_recommendations_metrics(self):
+        """Verify migration preserves recommendations endpoint with health scoring"""
+        from backend.api import development_speedup
+
+        # Verify get_recommendations_endpoint calculates metrics and health score
+        source = inspect.getsource(development_speedup.get_recommendations_endpoint)
+        self.assertIn("analyze_codebase(path)", source)
+        self.assertIn('"duplicate_savings":', source)
+        self.assertIn('"technical_debt_items":', source)
+        self.assertIn('"unused_imports":', source)
+        self.assertIn('"refactoring_opportunities":', source)
+        self.assertIn('"quality_issues":', source)
+        self.assertIn("health_score", source)
+        self.assertIn("total_issues", source)
+        self.assertIn('recommendations[:3]', source)  # Top 3 recommendations
+
+    def test_batch_173_migration_preserves_status_capabilities(self):
+        """Verify migration preserves status endpoint with NPU and capabilities info"""
+        from backend.api import development_speedup
+
+        # Verify get_development_speedup_status includes NPU and capabilities
+        source = inspect.getsource(development_speedup.get_development_speedup_status)
+        self.assertIn("npu_code_search.get_index_status()", source)
+        self.assertIn('"capabilities":', source)
+        self.assertIn('"npu_acceleration":', source)
+        self.assertIn('"redis_indexing":', source)
+        self.assertIn('"analysis_types":', source)
+        self.assertIn('"supported_languages":', source)
+        self.assertIn('"thresholds":', source)
+        self.assertIn("duplicate_threshold", source)
+        self.assertIn("min_duplicate_lines", source)
+        self.assertIn("complexity_threshold", source)
+
+    def test_batch_173_migration_preserves_examples_workflow(self):
+        """Verify migration preserves examples endpoint with usage patterns"""
+        from backend.api import development_speedup
+
+        # Verify get_analysis_examples returns examples structure
+        source = inspect.getsource(development_speedup.get_analysis_examples)
+        self.assertIn('"examples":', source)
+        self.assertIn('"comprehensive_analysis":', source)
+        self.assertIn('"duplicate_detection":', source)
+        self.assertIn('"pattern_analysis":', source)
+        self.assertIn('"quick_recommendations":', source)
+        self.assertIn('"typical_workflow":', source)
+        self.assertIn('"performance_tips":', source)
+
+
+
 
 
 if __name__ == "__main__":
