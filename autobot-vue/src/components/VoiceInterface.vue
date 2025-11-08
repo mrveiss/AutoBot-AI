@@ -49,8 +49,10 @@
       </div>
 
       <!-- Voice Settings -->
-      <div class="voice-settings glass-card">
-        <h3>Voice Configuration</h3>
+      <BasePanel variant="bordered" size="medium">
+        <template #header>
+          <h3>Voice Configuration</h3>
+        </template>
         <div class="setting-group">
           <label>Speech Recognition Language</label>
           <select v-model="settings.stt_language">
@@ -89,11 +91,13 @@
           <label>Auto-Listen After Response</label>
           <input type="checkbox" v-model="settings.auto_listen">
         </div>
-      </div>
+      </BasePanel>
 
       <!-- Recent Voice Commands -->
-      <div class="voice-history glass-card">
-        <h3>Recent Voice Commands</h3>
+      <BasePanel variant="bordered" size="medium">
+        <template #header>
+          <h3>Recent Voice Commands</h3>
+        </template>
         <div class="history-list">
           <div
             v-for="(command, index) in voiceHistory"
@@ -105,7 +109,7 @@
             <div class="command-confidence">{{ Math.round(command.confidence * 100) }}%</div>
           </div>
         </div>
-      </div>
+      </BasePanel>
 
       <!-- Voice Status Display -->
       <div class="voice-status-display" v-if="currentTranscription || statusMessage || isProcessing">
@@ -125,9 +129,13 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import apiClient from '@/utils/ApiClient.js';
 import { useAsyncHandler } from '@/composables/useErrorHandler';
+import BasePanel from '@/components/base/BasePanel.vue';
 
 export default {
   name: 'VoiceInterface',
+  components: {
+    BasePanel
+  },
   setup() {
     const isListening = ref(false);
     const isSpeaking = ref(false);
@@ -524,20 +532,6 @@ export default {
   transform: none;
 }
 
-.voice-settings {
-  padding: 24px;
-  background: rgba(248, 250, 252, 0.8);
-  border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-}
-
-.voice-settings h3 {
-  margin: 0 0 20px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #374151;
-}
 
 .setting-group {
   display: flex;
@@ -567,21 +561,6 @@ export default {
   flex: 1;
   max-width: 200px;
   accent-color: #10b981;
-}
-
-.voice-history {
-  padding: 24px;
-  background: rgba(248, 250, 252, 0.8);
-  border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-}
-
-.voice-history h3 {
-  margin: 0 0 20px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #374151;
 }
 
 .history-list {
