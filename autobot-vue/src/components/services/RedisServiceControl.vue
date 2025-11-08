@@ -178,53 +178,37 @@
     </div>
 
     <!-- Confirmation Dialog -->
-    <div
-      v-if="showConfirmDialog"
-      class="fixed inset-0 z-50 overflow-y-auto"
-      @click.self="showConfirmDialog = false"
+    <BaseModal
+      v-model="showConfirmDialog"
+      :title="confirmDialog.title"
+      size="medium"
     >
-      <div class="flex items-center justify-center min-h-screen px-4">
-        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
-
-        <div class="relative bg-white rounded-lg max-w-md w-full shadow-xl">
-          <div class="px-6 py-4 border-b">
-            <h3 class="text-lg font-semibold text-gray-900">
-              {{ confirmDialog.title }}
-            </h3>
-          </div>
-
-          <div class="p-6">
-            <p class="text-sm text-gray-700 mb-4">{{ confirmDialog.message }}</p>
-            <div
-              v-if="confirmDialog.warning"
-              class="p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded"
-            >
-              <p class="text-sm text-yellow-800">
-                <i class="fas fa-exclamation-triangle mr-1"></i>
-                {{ confirmDialog.warning }}
-              </p>
-            </div>
-          </div>
-
-          <div class="px-6 py-4 border-t flex justify-end space-x-3">
-            <BaseButton
-              variant="secondary"
-              @click="showConfirmDialog = false"
-              class="px-4 py-2"
-            >
-              Cancel
-            </BaseButton>
-            <BaseButton
-              :variant="confirmDialog.type === 'danger' ? 'danger' : 'primary'"
-              @click="confirmDialog.onConfirm"
-              class="px-4 py-2"
-            >
-              Confirm
-            </BaseButton>
-          </div>
-        </div>
+      <p class="text-sm text-gray-700 mb-4">{{ confirmDialog.message }}</p>
+      <div
+        v-if="confirmDialog.warning"
+        class="p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded"
+      >
+        <p class="text-sm text-yellow-800">
+          <i class="fas fa-exclamation-triangle mr-1"></i>
+          {{ confirmDialog.warning }}
+        </p>
       </div>
-    </div>
+
+      <template #actions>
+        <BaseButton
+          variant="secondary"
+          @click="showConfirmDialog = false"
+        >
+          Cancel
+        </BaseButton>
+        <BaseButton
+          :variant="confirmDialog.type === 'danger' ? 'danger' : 'primary'"
+          @click="confirmDialog.onConfirm"
+        >
+          Confirm
+        </BaseButton>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -234,6 +218,7 @@ import { useServiceManagement } from '@/composables/useServiceManagement'
 import { NetworkConstants } from '@/constants/network-constants.js'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 // Service management composable
 const {
