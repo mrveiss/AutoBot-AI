@@ -30273,6 +30273,293 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("llm.optimization.performance_threshold", config_source)
         self.assertIn("llm.optimization.cache_ttl", config_source)
 
+    # ==============================================
+    # BATCH 162: knowledge_mcp.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_162_get_mcp_tools_simple_pattern(self):
+        """Verify get_mcp_tools endpoint uses Simple Pattern"""
+        from backend.api import knowledge_mcp
+
+        source = inspect.getsource(knowledge_mcp.get_mcp_tools)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_mcp_tools"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_MCP"', source)
+
+    def test_batch_162_mcp_search_knowledge_base_simple_pattern(self):
+        """Verify mcp_search_knowledge_base endpoint uses Simple Pattern"""
+        from backend.api import knowledge_mcp
+
+        source = inspect.getsource(knowledge_mcp.mcp_search_knowledge_base)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="mcp_search_knowledge_base"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_MCP"', source)
+
+    def test_batch_162_mcp_add_to_knowledge_base_simple_pattern(self):
+        """Verify mcp_add_to_knowledge_base endpoint uses Simple Pattern"""
+        from backend.api import knowledge_mcp
+
+        source = inspect.getsource(knowledge_mcp.mcp_add_to_knowledge_base)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="mcp_add_to_knowledge_base"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_MCP"', source)
+
+    def test_batch_162_mcp_get_knowledge_stats_simple_pattern(self):
+        """Verify mcp_get_knowledge_stats endpoint uses Simple Pattern"""
+        from backend.api import knowledge_mcp
+
+        source = inspect.getsource(knowledge_mcp.mcp_get_knowledge_stats)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="mcp_get_knowledge_stats"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_MCP"', source)
+
+    def test_batch_162_mcp_summarize_knowledge_topic_simple_pattern(self):
+        """Verify mcp_summarize_knowledge_topic endpoint uses Simple Pattern"""
+        from backend.api import knowledge_mcp
+
+        source = inspect.getsource(knowledge_mcp.mcp_summarize_knowledge_topic)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="mcp_summarize_knowledge_topic"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_MCP"', source)
+
+    def test_batch_162_mcp_vector_similarity_search_simple_pattern(self):
+        """Verify mcp_vector_similarity_search endpoint uses Simple Pattern"""
+        from backend.api import knowledge_mcp
+
+        source = inspect.getsource(knowledge_mcp.mcp_vector_similarity_search)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="mcp_vector_similarity_search"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_MCP"', source)
+
+    def test_batch_162_mcp_langchain_qa_chain_simple_pattern(self):
+        """Verify mcp_langchain_qa_chain endpoint uses Simple Pattern"""
+        from backend.api import knowledge_mcp
+
+        source = inspect.getsource(knowledge_mcp.mcp_langchain_qa_chain)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="mcp_langchain_qa_chain"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_MCP"', source)
+
+    def test_batch_162_mcp_redis_vector_operations_simple_pattern(self):
+        """Verify mcp_redis_vector_operations endpoint uses Simple Pattern"""
+        from backend.api import knowledge_mcp
+
+        source = inspect.getsource(knowledge_mcp.mcp_redis_vector_operations)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="mcp_redis_vector_operations"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_MCP"', source)
+
+    def test_batch_162_get_mcp_schema_simple_pattern(self):
+        """Verify get_mcp_schema endpoint uses Simple Pattern"""
+        from backend.api import knowledge_mcp
+
+        source = inspect.getsource(knowledge_mcp.get_mcp_schema)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_mcp_schema"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_MCP"', source)
+
+    def test_batch_162_mcp_health_simple_pattern(self):
+        """Verify mcp_health endpoint uses Simple Pattern"""
+        from backend.api import knowledge_mcp
+
+        source = inspect.getsource(knowledge_mcp.mcp_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="mcp_health"', source)
+        self.assertIn('error_code_prefix="KNOWLEDGE_MCP"', source)
+
+    def test_batch_162_all_knowledge_mcp_endpoints_have_decorator(self):
+        """Verify all knowledge_mcp endpoints have @with_error_handling decorator"""
+        from backend.api import knowledge_mcp
+
+        endpoint_functions = [
+            knowledge_mcp.get_mcp_tools,
+            knowledge_mcp.mcp_search_knowledge_base,
+            knowledge_mcp.mcp_add_to_knowledge_base,
+            knowledge_mcp.mcp_get_knowledge_stats,
+            knowledge_mcp.mcp_summarize_knowledge_topic,
+            knowledge_mcp.mcp_vector_similarity_search,
+            knowledge_mcp.mcp_langchain_qa_chain,
+            knowledge_mcp.mcp_redis_vector_operations,
+            knowledge_mcp.get_mcp_schema,
+            knowledge_mcp.mcp_health,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_162_knowledge_mcp_100_percent_milestone(self):
+        """Verify knowledge_mcp.py has reached 100% migration"""
+        from backend.api import knowledge_mcp
+
+        endpoint_functions = [
+            knowledge_mcp.get_mcp_tools,
+            knowledge_mcp.mcp_search_knowledge_base,
+            knowledge_mcp.mcp_add_to_knowledge_base,
+            knowledge_mcp.mcp_get_knowledge_stats,
+            knowledge_mcp.mcp_summarize_knowledge_topic,
+            knowledge_mcp.mcp_vector_similarity_search,
+            knowledge_mcp.mcp_langchain_qa_chain,
+            knowledge_mcp.mcp_redis_vector_operations,
+            knowledge_mcp.get_mcp_schema,
+            knowledge_mcp.mcp_health,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 10
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_162_migration_preserves_knowledge_base_dependency(self):
+        """Verify migration preserves get_knowledge_base dependency"""
+        from backend.api import knowledge_mcp
+
+        # Verify get_knowledge_base is defined
+        self.assertTrue(hasattr(knowledge_mcp, "get_knowledge_base"))
+
+        # Verify it's used in endpoints
+        search_source = inspect.getsource(knowledge_mcp.mcp_search_knowledge_base)
+        self.assertIn("get_knowledge_base()", search_source)
+
+        stats_source = inspect.getsource(knowledge_mcp.mcp_get_knowledge_stats)
+        self.assertIn("get_knowledge_base()", stats_source)
+
+    def test_batch_162_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic request models"""
+        from backend.api import knowledge_mcp
+
+        # Verify models are defined
+        self.assertTrue(hasattr(knowledge_mcp, "MCPTool"))
+        self.assertTrue(hasattr(knowledge_mcp, "KnowledgeSearchRequest"))
+        self.assertTrue(hasattr(knowledge_mcp, "DocumentAddRequest"))
+        self.assertTrue(hasattr(knowledge_mcp, "KnowledgeStatsRequest"))
+
+        # Verify models are used in endpoints
+        search_source = inspect.getsource(knowledge_mcp.mcp_search_knowledge_base)
+        self.assertIn("KnowledgeSearchRequest", search_source)
+
+        add_source = inspect.getsource(knowledge_mcp.mcp_add_to_knowledge_base)
+        self.assertIn("DocumentAddRequest", add_source)
+
+    def test_batch_162_migration_preserves_langchain_orchestrator(self):
+        """Verify migration preserves get_langchain_orchestrator dependency"""
+        from backend.api import knowledge_mcp
+
+        # Verify get_langchain_orchestrator is defined
+        self.assertTrue(hasattr(knowledge_mcp, "get_langchain_orchestrator"))
+
+        # Verify it's used in mcp_langchain_qa_chain
+        qa_source = inspect.getsource(knowledge_mcp.mcp_langchain_qa_chain)
+        self.assertIn("get_langchain_orchestrator()", qa_source)
+
+    def test_batch_162_migration_preserves_redis_manager(self):
+        """Verify migration preserves get_redis_manager dependency"""
+        from backend.api import knowledge_mcp
+
+        # Verify get_redis_manager is defined
+        self.assertTrue(hasattr(knowledge_mcp, "get_redis_manager"))
+
+        # Verify it's used in mcp_redis_vector_operations
+        redis_ops_source = inspect.getsource(knowledge_mcp.mcp_redis_vector_operations)
+        self.assertIn("get_redis_manager()", redis_ops_source)
+
+    def test_batch_162_migration_preserves_mcp_tool_schema(self):
+        """Verify migration preserves MCP tool schema structure"""
+        from backend.api import knowledge_mcp
+
+        # Verify get_mcp_tools returns tool definitions
+        tools_source = inspect.getsource(knowledge_mcp.get_mcp_tools)
+        self.assertIn("MCPTool(", tools_source)
+        self.assertIn("input_schema", tools_source)
+        self.assertIn("search_knowledge_base", tools_source)
+        self.assertIn("add_to_knowledge_base", tools_source)
+
+    def test_batch_162_migration_preserves_knowledge_search_formatting(self):
+        """Verify migration preserves knowledge search result formatting"""
+        from backend.api import knowledge_mcp
+
+        # Verify mcp_search_knowledge_base formats results
+        search_source = inspect.getsource(knowledge_mcp.mcp_search_knowledge_base)
+        self.assertIn("formatted_results", search_source)
+        self.assertIn("content", search_source)
+        self.assertIn("score", search_source)
+        self.assertIn("metadata", search_source)
+
+    def test_batch_162_migration_preserves_document_add_functionality(self):
+        """Verify migration preserves document addition functionality"""
+        from backend.api import knowledge_mcp
+
+        # Verify mcp_add_to_knowledge_base adds documents
+        add_source = inspect.getsource(knowledge_mcp.mcp_add_to_knowledge_base)
+        self.assertIn("add_document(", add_source)
+        self.assertIn("request.content", add_source)
+        self.assertIn("request.metadata", add_source)
+
+    def test_batch_162_migration_preserves_stats_details(self):
+        """Verify migration preserves knowledge stats with optional details"""
+        from backend.api import knowledge_mcp
+
+        # Verify mcp_get_knowledge_stats includes conditional details
+        stats_source = inspect.getsource(knowledge_mcp.mcp_get_knowledge_stats)
+        self.assertIn("request.include_details", stats_source)
+        self.assertIn("total_documents", stats_source)
+        self.assertIn("vector_store_type", stats_source)
+        self.assertIn("embedding_model", stats_source)
+
+    def test_batch_162_migration_preserves_topic_summarization(self):
+        """Verify migration preserves topic summarization with LLM fallback"""
+        from backend.api import knowledge_mcp
+
+        # Verify mcp_summarize_knowledge_topic has LLM and fallback logic
+        summarize_source = inspect.getsource(knowledge_mcp.mcp_summarize_knowledge_topic)
+        self.assertIn("request.get(\"topic\")", summarize_source)
+        self.assertIn("request.get(\"max_length\"", summarize_source)
+        self.assertIn("if hasattr(kb, \"llm\")", summarize_source)
+
+    def test_batch_162_migration_preserves_vector_similarity_threshold(self):
+        """Verify migration preserves vector similarity search threshold"""
+        from backend.api import knowledge_mcp
+
+        # Verify mcp_vector_similarity_search uses threshold
+        vector_source = inspect.getsource(knowledge_mcp.mcp_vector_similarity_search)
+        self.assertIn("request.get(\"threshold\"", vector_source)
+        self.assertIn("if result.get(\"score\", 0) >= threshold", vector_source)
+
+    def test_batch_162_migration_preserves_redis_vector_operations(self):
+        """Verify migration preserves Redis vector operations (info, flush, reindex, backup)"""
+        from backend.api import knowledge_mcp
+
+        # Verify mcp_redis_vector_operations handles multiple operations
+        redis_ops_source = inspect.getsource(knowledge_mcp.mcp_redis_vector_operations)
+        self.assertIn("operation == \"info\"", redis_ops_source)
+        self.assertIn("operation == \"flush\"", redis_ops_source)
+        self.assertIn("operation == \"reindex\"", redis_ops_source)
+        self.assertIn("operation == \"backup\"", redis_ops_source)
+
 
 if __name__ == "__main__":
     unittest.main()

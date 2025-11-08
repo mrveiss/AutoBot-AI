@@ -16,6 +16,7 @@ from src.constants.network_constants import NetworkConstants
 from src.knowledge_base import KnowledgeBase
 from src.langchain_agent_orchestrator import LangChainAgentOrchestrator
 from src.unified_config_manager import config as global_config_manager
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_database_manager import RedisDatabase, RedisDatabaseManager
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,11 @@ class KnowledgeStatsRequest(BaseModel):
     include_details: bool = Field(False, description="Include detailed statistics")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_mcp_tools",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
 @router.get("/mcp/tools")
 async def get_mcp_tools() -> List[MCPTool]:
     """Get available MCP tools for knowledge base operations"""
@@ -232,6 +238,11 @@ async def get_mcp_tools() -> List[MCPTool]:
     return tools
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_search_knowledge_base",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
 @router.post("/mcp/search_knowledge_base")
 async def mcp_search_knowledge_base(request: KnowledgeSearchRequest):
     """MCP tool: Search the knowledge base"""
@@ -267,6 +278,11 @@ async def mcp_search_knowledge_base(request: KnowledgeSearchRequest):
         return {"success": False, "error": str(e), "results": []}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_add_to_knowledge_base",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
 @router.post("/mcp/add_to_knowledge_base")
 async def mcp_add_to_knowledge_base(request: DocumentAddRequest):
     """MCP tool: Add document to knowledge base"""
@@ -291,6 +307,11 @@ async def mcp_add_to_knowledge_base(request: DocumentAddRequest):
         return {"success": False, "error": str(e)}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_get_knowledge_stats",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
 @router.post("/mcp/get_knowledge_stats")
 async def mcp_get_knowledge_stats(request: KnowledgeStatsRequest):
     """MCP tool: Get knowledge base statistics"""
@@ -323,6 +344,11 @@ async def mcp_get_knowledge_stats(request: KnowledgeStatsRequest):
         return {"success": False, "error": str(e), "stats": {}}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_summarize_knowledge_topic",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
 @router.post("/mcp/summarize_knowledge_topic")
 async def mcp_summarize_knowledge_topic(request: Dict[str, Any]):
     """MCP tool: Summarize knowledge on a topic"""
@@ -368,6 +394,11 @@ async def mcp_summarize_knowledge_topic(request: Dict[str, Any]):
         return {"success": False, "error": str(e), "summary": ""}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_vector_similarity_search",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
 @router.post("/mcp/vector_similarity_search")
 async def mcp_vector_similarity_search(request: Dict[str, Any]):
     """MCP tool: Perform vector similarity search in Redis"""
@@ -412,6 +443,11 @@ async def mcp_vector_similarity_search(request: Dict[str, Any]):
         return {"success": False, "error": str(e), "results": []}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_langchain_qa_chain",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
 @router.post("/mcp/langchain_qa_chain")
 async def mcp_langchain_qa_chain(request: Dict[str, Any]):
     """MCP tool: Use LangChain QA chain for comprehensive answers"""
@@ -460,6 +496,11 @@ async def mcp_langchain_qa_chain(request: Dict[str, Any]):
         return {"success": False, "error": str(e), "answer": ""}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_redis_vector_operations",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
 @router.post("/mcp/redis_vector_operations")
 async def mcp_redis_vector_operations(request: Dict[str, Any]):
     """MCP tool: Direct Redis vector store operations"""
@@ -536,6 +577,11 @@ async def mcp_redis_vector_operations(request: Dict[str, Any]):
         return {"success": False, "error": str(e)}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_mcp_schema",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
 @router.get("/mcp/schema")
 async def get_mcp_schema():
     """Get the complete MCP schema for knowledge base tools"""
@@ -553,6 +599,11 @@ async def get_mcp_schema():
 
 
 # Health check for MCP bridge
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mcp_health",
+    error_code_prefix="KNOWLEDGE_MCP",
+)
 @router.get("/mcp/health")
 async def mcp_health():
     """Check if MCP bridge is healthy"""
