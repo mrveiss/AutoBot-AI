@@ -29,6 +29,16 @@ except ImportError:
     RAG_AVAILABLE = False
     logging.warning("RAG Agent not available - enhanced search features disabled")
 
+# Import Advanced RAG Service for reranking
+try:
+    from backend.services.rag_service import RAGService, get_rag_service
+    from backend.services.rag_config import get_rag_config, update_rag_config
+
+    ADVANCED_RAG_AVAILABLE = True
+except ImportError:
+    ADVANCED_RAG_AVAILABLE = False
+    logging.warning("Advanced RAG Service not available - reranking features disabled")
+
 # Set up logging
 logger = logging.getLogger(__name__)
 
@@ -117,6 +127,23 @@ class ScanHostChangesRequest(BaseModel):
     force: bool = Field(default=False)
     scan_type: str = Field(default="manpages", max_length=50)
     auto_vectorize: bool = Field(default=False, description="Automatically vectorize detected changes")
+
+
+class AdvancedSearchRequest(BaseModel):
+    """Request model for advanced RAG search with reranking"""
+
+    query: str = Field(..., min_length=1, max_length=1000, description="Search query")
+    max_results: int = Field(default=5, ge=1, le=50, description="Maximum results to return")
+    enable_reranking: bool = Field(default=True, description="Enable cross-encoder reranking")
+    return_context: bool = Field(default=False, description="Return optimized context for RAG")
+    timeout: Optional[float] = Field(default=None, description="Optional timeout in seconds")
+
+
+class RerankRequest(BaseModel):
+    """Request model for reranking existing search results"""
+
+    query: str = Field(..., min_length=1, max_length=1000, description="Original search query")
+    results: List[Dict[str, Any]] = Field(..., description="Search results to rerank")
 
 
 # ===== HELPER FUNCTIONS FOR BATCH VECTORIZATION STATUS =====
@@ -657,13 +684,15 @@ async def search_knowledge(request: dict, req: Request):
     top_k = request.get("top_k", 10)
     limit = request.get("limit", 10)  # Also accept 'limit' for compatibility
     mode = request.get("mode", "auto")
-    use_rag = request.get("use_rag", False)  # New parameter for RAG enhancement
+    use_rag = request.get("use_rag", False)  # Old RAG enhancement parameter
+    enable_reranking = request.get("enable_reranking", False)  # NEW: Advanced reranking
 
     # Use limit if provided, otherwise use top_k
     search_limit = limit if request.get("limit") is not None else top_k
 
     logger.info(
-        f"Knowledge search request: '{query}' (top_k={search_limit}, mode={mode}, use_rag={use_rag})"
+        f"Knowledge search request: '{query}' (top_k={search_limit}, mode={mode}, "
+        f"use_rag={use_rag}, enable_reranking={enable_reranking})"
     )
 
     # Check if knowledge base is empty - fast check to avoid timeout
@@ -698,7 +727,30 @@ async def search_knowledge(request: dict, req: Request):
             query=query, similarity_top_k=search_limit, mode=mode
         )
 
-    # Enhanced search with RAG if requested and available
+    # Advanced reranking with cross-encoder if requested
+    if enable_reranking and ADVANCED_RAG_AVAILABLE and results:
+        try:
+            logger.info("Applying advanced reranking to search results")
+            rag_service = RAGService(kb_to_use)
+            await rag_service.initialize()
+
+            # Rerank results
+            reranked_results = await rag_service.rerank_results(query, results)
+
+            return {
+                "results": reranked_results,
+                "total_results": len(reranked_results),
+                "query": query,
+                "mode": mode,
+                "kb_implementation": kb_class_name,
+                "reranking_applied": True,
+                "reranking_method": "cross-encoder",
+            }
+        except Exception as e:
+            logger.error(f"Advanced reranking failed: {e}, returning original results")
+            # Fall through to regular results
+
+    # Enhanced search with RAG if requested and available (legacy support)
     if use_rag and RAG_AVAILABLE and results:
         try:
             rag_enhancement = await _enhance_search_with_rag(query, results)
@@ -722,6 +774,7 @@ async def search_knowledge(request: dict, req: Request):
         "mode": mode,
         "kb_implementation": kb_class_name,
         "rag_enhanced": False,
+        "reranking_applied": False,
     }
 
 
