@@ -12,12 +12,18 @@ from src.constants.network_constants import NetworkConstants
 
 # Import unified configuration system - NO HARDCODED VALUES
 from src.unified_config import config
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_llm_config",
+    error_code_prefix="LLM",
+)
 @router.get("/config")
 async def get_llm_config():
     """Get current LLM configuration"""
@@ -30,6 +36,11 @@ async def get_llm_config():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_llm_config",
+    error_code_prefix="LLM",
+)
 @router.post("/config")
 async def update_llm_config(config_data: dict):
     """Update LLM configuration"""
@@ -43,6 +54,11 @@ async def update_llm_config(config_data: dict):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_llm_connection",
+    error_code_prefix="LLM",
+)
 @router.post("/test_connection")
 async def test_llm_connection():
     """Test LLM connection with current configuration"""
@@ -57,6 +73,11 @@ async def test_llm_connection():
         }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_available_llm_models",
+    error_code_prefix="LLM",
+)
 @router.get("/models")
 @cache_response(cache_key="llm_models", ttl=180)  # Cache for 3 minutes - RESTORED
 async def get_available_llm_models():
@@ -76,6 +97,11 @@ async def get_available_llm_models():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_current_llm",
+    error_code_prefix="LLM",
+)
 @router.get("/current")
 @cache_response(cache_key="current_llm", ttl=60)  # Cache for 1 minute
 async def get_current_llm():
@@ -96,6 +122,11 @@ async def get_current_llm():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_llm_provider",
+    error_code_prefix="LLM",
+)
 @router.post("/provider")
 async def update_llm_provider(provider_data: dict):
     """Update LLM provider configuration using unified config system"""
@@ -170,6 +201,11 @@ async def update_llm_provider(provider_data: dict):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_available_embedding_models",
+    error_code_prefix="LLM",
+)
 @router.get("/embedding/models")
 @cache_response(cache_key="embedding_models", ttl=300)  # Cache for 5 minutes
 async def get_available_embedding_models():
@@ -215,6 +251,11 @@ async def get_available_embedding_models():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_embedding_model",
+    error_code_prefix="LLM",
+)
 @router.post("/embedding")
 async def update_embedding_model(embedding_data: dict):
     """Update embedding model configuration"""
@@ -274,6 +315,11 @@ async def update_embedding_model(embedding_data: dict):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_comprehensive_llm_status",
+    error_code_prefix="LLM",
+)
 @router.get("/status/comprehensive")
 @cache_response(cache_key="llm_status_comprehensive", ttl=30)  # Cache for 30 seconds
 async def get_comprehensive_llm_status():
@@ -404,12 +450,22 @@ async def get_comprehensive_llm_status():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_llm_status",
+    error_code_prefix="LLM",
+)
 @router.get("/status")
 async def get_llm_status():
     """Get current LLM status (alias for quick status)"""
     return await get_quick_llm_status()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_quick_llm_status",
+    error_code_prefix="LLM",
+)
 @router.get("/status/quick")
 @cache_response(cache_key="llm_status_quick", ttl=15)  # Cache for 15 seconds
 async def get_quick_llm_status():

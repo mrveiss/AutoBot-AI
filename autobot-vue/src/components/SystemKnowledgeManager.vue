@@ -17,37 +17,45 @@
 
     <!-- Status Cards -->
     <div class="status-cards">
-      <div class="status-card">
-        <div class="status-icon">📚</div>
-        <div class="status-content">
-          <h3>{{ stats.total_facts || 0 }}</h3>
-          <p>Total Facts</p>
+      <BasePanel variant="elevated" size="small">
+        <div class="status-card-content">
+          <div class="status-icon">📚</div>
+          <div class="status-content">
+            <h3>{{ stats.total_facts || 0 }}</h3>
+            <p>Total Facts</p>
+          </div>
         </div>
-      </div>
+      </BasePanel>
 
-      <div class="status-card">
-        <div class="status-icon">🔍</div>
-        <div class="status-content">
-          <h3>{{ stats.total_vectors || 0 }}</h3>
-          <p>Searchable Vectors</p>
+      <BasePanel variant="elevated" size="small">
+        <div class="status-card-content">
+          <div class="status-icon">🔍</div>
+          <div class="status-content">
+            <h3>{{ stats.total_vectors || 0 }}</h3>
+            <p>Searchable Vectors</p>
+          </div>
         </div>
-      </div>
+      </BasePanel>
 
-      <div class="status-card">
-        <div class="status-icon">⚙️</div>
-        <div class="status-content">
-          <h3>{{ commandsIndexed || 0 }}</h3>
-          <p>Commands Indexed</p>
+      <BasePanel variant="elevated" size="small">
+        <div class="status-card-content">
+          <div class="status-icon">⚙️</div>
+          <div class="status-content">
+            <h3>{{ commandsIndexed || 0 }}</h3>
+            <p>Commands Indexed</p>
+          </div>
         </div>
-      </div>
+      </BasePanel>
 
-      <div class="status-card">
-        <div class="status-icon">📄</div>
-        <div class="status-content">
-          <h3>{{ docsIndexed || 0 }}</h3>
-          <p>Docs Indexed</p>
+      <BasePanel variant="elevated" size="small">
+        <div class="status-card-content">
+          <div class="status-icon">📄</div>
+          <div class="status-content">
+            <h3>{{ docsIndexed || 0 }}</h3>
+            <p>Docs Indexed</p>
+          </div>
         </div>
-      </div>
+      </BasePanel>
     </div>
 
     <!-- Action Buttons -->
@@ -148,8 +156,10 @@
     </div>
 
     <!-- Info Section -->
-    <div class="info-section">
-      <h3>ℹ️ About System Knowledge</h3>
+    <BasePanel variant="bordered" size="medium">
+      <template #header>
+        <h3>ℹ️ About System Knowledge</h3>
+      </template>
       <div class="info-content">
         <p>
           <strong>Initialize Machine Knowledge:</strong> Creates vector embeddings for all documents in the knowledge base.
@@ -176,7 +186,7 @@
           Refresh after installing packages or updating docs.
         </p>
       </div>
-    </div>
+    </BasePanel>
 
     <!-- Recent Activity Log -->
     <div v-if="activityLog.length > 0" class="activity-log">
@@ -198,11 +208,13 @@ import { useKnowledgeBase } from '@/composables/useKnowledgeBase';
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore';  // NEW: Use shared store
 import appConfig from '@/config/AppConfig.js';
 import BaseButton from '@/components/base/BaseButton.vue';
+import BasePanel from '@/components/base/BasePanel.vue';
 
 export default {
   name: 'SystemKnowledgeManager',
   components: {
-    BaseButton
+    BaseButton,
+    BasePanel
   },
 
   setup() {
@@ -804,11 +816,8 @@ export default {
   margin-bottom: 30px;
 }
 
-.status-card {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+/* BasePanel handles card container - only content styles remain */
+.status-card-content {
   display: flex;
   align-items: center;
   gap: 15px;
@@ -932,18 +941,7 @@ export default {
   font-size: 14px;
 }
 
-.info-section {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 30px;
-}
-
-.info-section h3 {
-  margin: 0 0 15px 0;
-  color: #2c3e50;
-}
-
+/* BasePanel handles info section container - only content styles remain */
 .info-content p {
   margin: 10px 0;
   line-height: 1.6;

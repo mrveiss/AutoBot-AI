@@ -31774,6 +31774,324 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("requires_confirmation", create_source)
         self.assertIn("risk_level", create_source)
 
+    # ==============================================
+    # BATCH 169: llm.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_169_get_llm_config_simple_pattern(self):
+        """Verify get_llm_config endpoint uses Simple Pattern"""
+        from backend.api import llm
+
+        source = inspect.getsource(llm.get_llm_config)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_llm_config"', source)
+        self.assertIn('error_code_prefix="LLM"', source)
+
+    def test_batch_169_update_llm_config_simple_pattern(self):
+        """Verify update_llm_config endpoint uses Simple Pattern"""
+        from backend.api import llm
+
+        source = inspect.getsource(llm.update_llm_config)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="update_llm_config"', source)
+        self.assertIn('error_code_prefix="LLM"', source)
+
+    def test_batch_169_test_llm_connection_simple_pattern(self):
+        """Verify test_llm_connection endpoint uses Simple Pattern"""
+        from backend.api import llm
+
+        source = inspect.getsource(llm.test_llm_connection)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="test_llm_connection"', source)
+        self.assertIn('error_code_prefix="LLM"', source)
+
+    def test_batch_169_get_available_llm_models_simple_pattern(self):
+        """Verify get_available_llm_models endpoint uses Simple Pattern"""
+        from backend.api import llm
+
+        source = inspect.getsource(llm.get_available_llm_models)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_available_llm_models"', source)
+        self.assertIn('error_code_prefix="LLM"', source)
+
+    def test_batch_169_get_current_llm_simple_pattern(self):
+        """Verify get_current_llm endpoint uses Simple Pattern"""
+        from backend.api import llm
+
+        source = inspect.getsource(llm.get_current_llm)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_current_llm"', source)
+        self.assertIn('error_code_prefix="LLM"', source)
+
+    def test_batch_169_update_llm_provider_simple_pattern(self):
+        """Verify update_llm_provider endpoint uses Simple Pattern"""
+        from backend.api import llm
+
+        source = inspect.getsource(llm.update_llm_provider)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="update_llm_provider"', source)
+        self.assertIn('error_code_prefix="LLM"', source)
+
+    def test_batch_169_get_available_embedding_models_simple_pattern(self):
+        """Verify get_available_embedding_models endpoint uses Simple Pattern"""
+        from backend.api import llm
+
+        source = inspect.getsource(llm.get_available_embedding_models)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_available_embedding_models"', source)
+        self.assertIn('error_code_prefix="LLM"', source)
+
+    def test_batch_169_update_embedding_model_simple_pattern(self):
+        """Verify update_embedding_model endpoint uses Simple Pattern"""
+        from backend.api import llm
+
+        source = inspect.getsource(llm.update_embedding_model)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="update_embedding_model"', source)
+        self.assertIn('error_code_prefix="LLM"', source)
+
+    def test_batch_169_get_comprehensive_llm_status_simple_pattern(self):
+        """Verify get_comprehensive_llm_status endpoint uses Simple Pattern"""
+        from backend.api import llm
+
+        source = inspect.getsource(llm.get_comprehensive_llm_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_comprehensive_llm_status"', source)
+        self.assertIn('error_code_prefix="LLM"', source)
+
+    def test_batch_169_get_llm_status_simple_pattern(self):
+        """Verify get_llm_status endpoint uses Simple Pattern"""
+        from backend.api import llm
+
+        source = inspect.getsource(llm.get_llm_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_llm_status"', source)
+        self.assertIn('error_code_prefix="LLM"', source)
+
+    def test_batch_169_get_quick_llm_status_simple_pattern(self):
+        """Verify get_quick_llm_status endpoint uses Simple Pattern"""
+        from backend.api import llm
+
+        source = inspect.getsource(llm.get_quick_llm_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_quick_llm_status"', source)
+        self.assertIn('error_code_prefix="LLM"', source)
+
+    def test_batch_169_all_llm_endpoints_have_decorator(self):
+        """Verify all llm endpoints have @with_error_handling decorator"""
+        from backend.api import llm
+
+        endpoint_functions = [
+            llm.get_llm_config,
+            llm.update_llm_config,
+            llm.test_llm_connection,
+            llm.get_available_llm_models,
+            llm.get_current_llm,
+            llm.update_llm_provider,
+            llm.get_available_embedding_models,
+            llm.update_embedding_model,
+            llm.get_comprehensive_llm_status,
+            llm.get_llm_status,
+            llm.get_quick_llm_status,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_169_llm_100_percent_milestone(self):
+        """Verify llm.py has reached 100% migration"""
+        from backend.api import llm
+
+        endpoint_functions = [
+            llm.get_llm_config,
+            llm.update_llm_config,
+            llm.test_llm_connection,
+            llm.get_available_llm_models,
+            llm.get_current_llm,
+            llm.update_llm_provider,
+            llm.get_available_embedding_models,
+            llm.update_embedding_model,
+            llm.get_comprehensive_llm_status,
+            llm.get_llm_status,
+            llm.get_quick_llm_status,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 11
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_169_migration_preserves_config_service_integration(self):
+        """Verify migration preserves ConfigService integration"""
+        from backend.api import llm
+
+        # Verify ConfigService is imported
+        self.assertTrue(hasattr(llm, "ConfigService"))
+
+        # Verify get_llm_config uses ConfigService
+        get_config_source = inspect.getsource(llm.get_llm_config)
+        self.assertIn("ConfigService.get_llm_config()", get_config_source)
+
+        # Verify update_llm_config uses ConfigService
+        update_config_source = inspect.getsource(llm.update_llm_config)
+        self.assertIn("ConfigService.update_llm_config", update_config_source)
+
+    def test_batch_169_migration_preserves_cache_response_decorators(self):
+        """Verify migration preserves @cache_response decorators"""
+        from backend.api import llm
+
+        # Verify cache_response is imported
+        self.assertTrue(hasattr(llm, "cache_response"))
+
+        # Verify get_available_llm_models has caching
+        models_source = inspect.getsource(llm.get_available_llm_models)
+        self.assertIn("@cache_response", models_source)
+        self.assertIn('cache_key="llm_models"', models_source)
+        self.assertIn("ttl=180", models_source)
+
+        # Verify get_current_llm has caching
+        current_source = inspect.getsource(llm.get_current_llm)
+        self.assertIn("@cache_response", current_source)
+        self.assertIn('cache_key="current_llm"', current_source)
+        self.assertIn("ttl=60", current_source)
+
+        # Verify get_available_embedding_models has caching
+        embedding_models_source = inspect.getsource(llm.get_available_embedding_models)
+        self.assertIn("@cache_response", embedding_models_source)
+        self.assertIn('cache_key="embedding_models"', embedding_models_source)
+        self.assertIn("ttl=300", embedding_models_source)
+
+    def test_batch_169_migration_preserves_unified_config_system(self):
+        """Verify migration preserves unified configuration system usage"""
+        from backend.api import llm
+
+        # Verify unified config is imported
+        self.assertTrue(hasattr(llm, "config"))
+
+        # Verify update_llm_provider uses unified config
+        provider_source = inspect.getsource(llm.update_llm_provider)
+        self.assertIn("config.set(", provider_source)
+        self.assertIn("config.save()", provider_source)
+        self.assertIn("config.get(", provider_source)
+        self.assertIn("config.update_llm_model", provider_source)
+
+        # Verify update_embedding_model uses unified config
+        embedding_source = inspect.getsource(llm.update_embedding_model)
+        self.assertIn("config.set(", embedding_source)
+        self.assertIn("config.update_embedding_model", embedding_source)
+
+    def test_batch_169_migration_preserves_model_manager_integration(self):
+        """Verify migration preserves ModelManager and ConnectionTester integration"""
+        from backend.api import llm
+
+        # Verify imports exist
+        self.assertTrue(hasattr(llm, "ModelManager"))
+        self.assertTrue(hasattr(llm, "ConnectionTester"))
+
+        # Verify test_llm_connection uses ConnectionTester
+        connection_source = inspect.getsource(llm.test_llm_connection)
+        self.assertIn("ConnectionTester.test_ollama_connection()", connection_source)
+
+        # Verify get_available_llm_models uses ModelManager
+        models_source = inspect.getsource(llm.get_available_llm_models)
+        self.assertIn("ModelManager.get_available_models()", models_source)
+
+    def test_batch_169_migration_preserves_json_response_usage(self):
+        """Verify migration preserves JSONResponse for custom status codes"""
+        from backend.api import llm
+
+        # Verify JSONResponse is imported
+        self.assertTrue(hasattr(llm, "JSONResponse"))
+
+        # Verify get_comprehensive_llm_status uses JSONResponse
+        comprehensive_source = inspect.getsource(llm.get_comprehensive_llm_status)
+        self.assertIn("JSONResponse", comprehensive_source)
+        self.assertIn("status_code=200", comprehensive_source)
+
+        # Verify get_quick_llm_status uses JSONResponse
+        quick_source = inspect.getsource(llm.get_quick_llm_status)
+        self.assertIn("JSONResponse", quick_source)
+        self.assertIn("status_code=200", quick_source)
+
+    def test_batch_169_migration_preserves_provider_configuration(self):
+        """Verify migration preserves LLM provider configuration logic"""
+        from backend.api import llm
+
+        # Verify update_llm_provider handles local and cloud providers
+        provider_source = inspect.getsource(llm.update_llm_provider)
+        self.assertIn('provider_type"', provider_source)
+        self.assertIn('"local"', provider_source)
+        self.assertIn('"cloud"', provider_source)
+        self.assertIn('local_model"', provider_source)
+        self.assertIn('cloud_provider"', provider_source)
+        self.assertIn('cloud_model"', provider_source)
+        self.assertIn('streaming"', provider_source)
+
+    def test_batch_169_migration_preserves_embedding_model_configuration(self):
+        """Verify migration preserves embedding model configuration logic"""
+        from backend.api import llm
+
+        # Verify update_embedding_model handles different providers
+        embedding_source = inspect.getsource(llm.update_embedding_model)
+        self.assertIn('"provider"', embedding_source)
+        self.assertIn('"model"', embedding_source)
+        self.assertIn('"endpoint"', embedding_source)
+        self.assertIn('"openai"', embedding_source)
+        self.assertIn('"api_key"', embedding_source)
+
+        # Verify embedding model filtering in get_available_embedding_models
+        models_source = inspect.getsource(llm.get_available_embedding_models)
+        self.assertIn('"embed"', models_source)
+        self.assertIn('"nomic"', models_source)
+        self.assertIn('"all-minilm"', models_source)
+        self.assertIn('"sentence"', models_source)
+
+    def test_batch_169_migration_preserves_comprehensive_status_structure(self):
+        """Verify migration preserves comprehensive LLM status structure"""
+        from backend.api import llm
+
+        # Verify get_comprehensive_llm_status returns detailed structure
+        status_source = inspect.getsource(llm.get_comprehensive_llm_status)
+        self.assertIn('"provider_type"', status_source)
+        self.assertIn('"providers"', status_source)
+        self.assertIn('"local"', status_source)
+        self.assertIn('"cloud"', status_source)
+        self.assertIn('"ollama"', status_source)
+        self.assertIn('"lmstudio"', status_source)
+        self.assertIn('"openai"', status_source)
+        self.assertIn('"anthropic"', status_source)
+        self.assertIn('"active_provider"', status_source)
+        self.assertIn('"settings"', status_source)
+        self.assertIn('"streaming"', status_source)
+        self.assertIn('"timeout"', status_source)
+        self.assertIn('"max_retries"', status_source)
+
 
 
 
