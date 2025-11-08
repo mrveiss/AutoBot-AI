@@ -488,6 +488,11 @@ async def stream_log(filename: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="tail_log",
+    error_code_prefix="LOGS",
+)
 @router.websocket("/logs/tail/{filename}")
 async def tail_log(websocket: WebSocket, filename: str):
     """WebSocket endpoint to tail log file in real-time"""

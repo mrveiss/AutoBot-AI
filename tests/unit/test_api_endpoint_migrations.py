@@ -31194,6 +31194,76 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
 
 
+    # ==============================================
+    # BATCH 166: logs.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_166_tail_log_simple_pattern(self):
+        """Verify tail_log WebSocket endpoint uses Simple Pattern"""
+        from backend.api import logs
+
+        source = inspect.getsource(logs.tail_log)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="tail_log"', source)
+        self.assertIn('error_code_prefix="LOGS"', source)
+
+    def test_batch_166_logs_100_percent_milestone(self):
+        """Verify logs.py has reached 100% migration"""
+        from backend.api import logs
+
+        endpoint_functions = [
+            logs.get_log_sources,
+            logs.get_recent_logs,
+            logs.list_logs,
+            logs.read_log,
+            logs.read_container_logs,
+            logs.get_unified_logs,
+            logs.stream_log,
+            logs.tail_log,
+            logs.search_logs,
+            logs.clear_log,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 10
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_166_migration_preserves_websocket_functionality(self):
+        """Verify migration preserves WebSocket log tailing functionality"""
+        from backend.api import logs
+
+        # Verify WebSocket endpoint exists
+        source = inspect.getsource(logs.tail_log)
+
+        # Verify WebSocket accept
+        self.assertIn("await websocket.accept()", source)
+
+        # Verify file path security checks
+        self.assertIn("LOG_DIR", source)
+        self.assertIn("file_path.resolve()", source)
+
+        # Verify real-time tailing with asyncio
+        self.assertIn("await f.readline()", source)
+        self.assertIn("await asyncio.sleep", source)
+
+        # Verify WebSocket send operations
+        self.assertIn("await websocket.send_text", source)
+
+
+
+
 
 if __name__ == "__main__":
     unittest.main()
