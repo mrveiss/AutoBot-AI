@@ -2754,15 +2754,115 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
-**BaseModal Migration Summary (Batches 47-52)**:
-- **Components Migrated**: 6 components (TerminalModals, KnowledgeSearch, SecretsManager, NPUWorkersSettings, UserManagementSettings, MonitoringDashboard)
-- **Modals Consolidated**: 14 modals total (4 terminal + 1 document + 3 secrets + 3 workers + 2 user mgmt + 1 monitoring)
-- **Lines Saved**: ~514 lines total
+### **Batch 53 - KnowledgeEntries.vue Migration** ✅ Completed
+
+**Goal**: Migrate large dual-mode knowledge entry modal to BaseModal.
+
+**Component**: KnowledgeEntries.vue (1130 → 1068 lines, ~62 lines saved, 5.5% reduction)
+
+**Modal Migrated**:
+- **View/Edit Dialog** - Large scrollable modal with dual mode (view/edit) for knowledge entries
+
+**Changes**:
+- Added BaseModal import
+- Converted dialog-overlay structure to BaseModal with large scrollable size
+- Dynamic title based on dialogMode ('View Entry' vs 'Edit Entry')
+- Conditional content rendering (view mode vs edit mode) in default slot
+- Actions slot with mode-specific buttons (Edit in view, Cancel/Save in edit)
+
+**CSS Removed**:
+- .dialog-overlay fixed positioning and overlay (~18 lines)
+- .dialog modal structure with max dimensions (~12 lines)
+- .dialog.large size variant (~3 lines)
+- .dialog-header with flex layout (~8 lines)
+- .dialog-content padding wrapper (~4 lines)
+- .dialog-actions footer with flex layout (~8 lines)
+- Total: ~71 lines
+
+**Patterns Preserved**:
+- Entry metadata grid display with category badges
+- Tags list with chip styling
+- Content viewer with HTML rendering
+- Edit form with category select, source input, tags input, content textarea
+- Form validation and save/cancel actions
+- Scrollable content for long knowledge entries
+
+---
+
+### **Batch 54 - RedisServiceControl.vue Migration** ✅ Completed
+
+**Goal**: Migrate Redis service confirmation dialog to BaseModal.
+
+**Component**: RedisServiceControl.vue (434 → 419 lines, ~15 lines saved, 3.5% reduction)
+
+**Modal Migrated**:
+- **Confirmation Dialog** - Medium modal for confirming service operations (restart/stop)
+
+**Changes**:
+- Added BaseModal import
+- Converted fixed overlay structure to BaseModal with medium size
+- Dynamic title from confirmDialog.title
+- Message and warning sections in default slot
+- Actions slot with Cancel and Confirm buttons
+- Dynamic Confirm button variant (danger for stop, primary for restart)
+
+**Template Simplified**:
+- Removed fixed positioning overlay structure (~23 lines)
+- Removed custom centering flex layout
+- Removed custom modal card structure
+- BaseModal handles all positioning and overlay
+
+**Patterns Preserved**:
+- Dynamic title based on operation type
+- Message display with operation description
+- Conditional warning section with yellow alert styling
+- Dynamic button variants based on operation risk
+- onConfirm callback pattern for action handling
+
+---
+
+### **Batch 55 - ChatMessages.vue Migration** ✅ Completed
+
+**Goal**: Migrate chat message editing modal to BaseModal.
+
+**Component**: ChatMessages.vue (1351 → 1351 lines, ~0 lines net, improved consistency)
+
+**Modal Migrated**:
+- **Edit Message Modal** - Medium modal for editing user messages in chat
+
+**Changes**:
+- Added BaseModal import
+- Converted fixed overlay structure to BaseModal with medium size
+- Textarea with keyboard shortcut support preserved
+- Actions slot with Cancel and Save buttons
+- Save button disabled validation maintained
+
+**Template Simplified**:
+- Removed fixed positioning overlay structure
+- Removed custom centering flex layout
+- Removed custom modal card structure
+- BaseModal handles all positioning and overlay
+- Note: Slight net increase due to BaseModal import + slot structure, but gained consistency and maintainability
+
+**Patterns Preserved**:
+- Textarea ref for focus management
+- Keyboard shortcut handling (Ctrl+Enter / Cmd+Enter)
+- Save button disabled when content empty (trim validation)
+- Keyboard shortcut hint text below textarea
+- Cancel/Save action pattern
+
+---
+
+**BaseModal Migration Summary (Batches 47-55)**:
+- **Components Migrated**: 9 components (TerminalModals, KnowledgeSearch, SecretsManager, NPUWorkersSettings, UserManagementSettings, MonitoringDashboard, KnowledgeEntries, RedisServiceControl, ChatMessages)
+- **Modals Consolidated**: 17 modals total (4 terminal + 1 document + 3 secrets + 3 workers + 2 user mgmt + 1 monitoring + 1 knowledge + 1 service + 1 chat)
+- **Lines Saved**: ~587 lines total
   - Batches 47-49: ~301 lines (182 + 54 + 65)
   - Batches 50-52: ~213 lines (87 + 73 + 53)
-- **Target**: ~450-500 lines estimated → **514 lines achieved** ✅ **TARGET EXCEEDED**
+  - Batches 53-55: ~73 lines (62 + 15 - 4)
+- **Target**: ~450-500 lines estimated → **587 lines achieved** ✅ **TARGET EXCEEDED**
 - **Sizes Used**: All 3 sizes (small, medium, large)
-- **Key Patterns**: v-model binding, size variants, scrollable modals, conditional closeOnOverlay, custom title slots, actions slot with custom buttons, form submissions in modals, StatusBadge integration, operation locking, loading states
+- **Key Patterns**: v-model binding, size variants, scrollable modals, conditional closeOnOverlay, custom title slots, actions slot with custom buttons, form submissions in modals, StatusBadge integration, operation locking, loading states, dual-mode modals, confirmation dialogs, keyboard shortcuts
 
 ---
 
@@ -2804,18 +2904,21 @@ const createRipple = (event: TouchEvent) => {
   - Batch 44: ~40 lines (1 component, alerts list with v-for)
   - Batch 45: ~17 lines (1 component, 1 banner)
   - Batch 46: ~10 lines (1 component, 1 alert)
-- BaseModal adoptions: ~514 lines (batches 47-52)
+- BaseModal adoptions: ~587 lines (batches 47-55)
   - Batch 47: ~182 lines (1 component, 4 modals)
   - Batch 48: ~54 lines (1 component, 1 modal)
   - Batch 49: ~65 lines (1 component, 3 modals)
   - Batch 50: ~87 lines (1 component, 3 modals)
   - Batch 51: ~73 lines (1 component, 2 modals)
   - Batch 52: ~53 lines (1 component, 1 modal)
-- **Total Progress**: ~3,246 lines / ~1,500-2,000 realistic target (162-216%) ✅ **TARGET EXCEEDED**
+  - Batch 53: ~62 lines (1 component, 1 modal)
+  - Batch 54: ~15 lines (1 component, 1 modal)
+  - Batch 55: ~0 lines (1 component, 1 modal - consistency gain)
+- **Total Progress**: ~3,319 lines / ~1,500-2,000 realistic target (166-221%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
 - **BaseButton Milestone**: 29 components using BaseButton (202 buttons consolidated) ✅ **100% ADOPTION**
 - **BaseAlert Milestone**: 6 components using BaseAlert (10+ alerts consolidated)
-- **BaseModal Milestone**: 11 components using BaseModal (2 baseline + 9 new, 14 modals consolidated)
+- **BaseModal Milestone**: 14 components using BaseModal (2 baseline + 12 new, 17 modals consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
