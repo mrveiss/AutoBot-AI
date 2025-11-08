@@ -29428,6 +29428,272 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("query", test_source)
         self.assertIn("max_results", test_source)
 
+    # ==============================================
+    # BATCH 159: npu_workers.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_159_list_workers_simple_pattern(self):
+        """Verify list_workers endpoint uses Simple Pattern"""
+        from backend.api import npu_workers
+
+        source = inspect.getsource(npu_workers.list_workers)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_workers"', source)
+        self.assertIn('error_code_prefix="NPU_WORKERS"', source)
+
+    def test_batch_159_add_worker_simple_pattern(self):
+        """Verify add_worker endpoint uses Simple Pattern"""
+        from backend.api import npu_workers
+
+        source = inspect.getsource(npu_workers.add_worker)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="add_worker"', source)
+        self.assertIn('error_code_prefix="NPU_WORKERS"', source)
+
+    def test_batch_159_get_worker_simple_pattern(self):
+        """Verify get_worker endpoint uses Simple Pattern"""
+        from backend.api import npu_workers
+
+        source = inspect.getsource(npu_workers.get_worker)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_worker"', source)
+        self.assertIn('error_code_prefix="NPU_WORKERS"', source)
+
+    def test_batch_159_update_worker_simple_pattern(self):
+        """Verify update_worker endpoint uses Simple Pattern"""
+        from backend.api import npu_workers
+
+        source = inspect.getsource(npu_workers.update_worker)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="update_worker"', source)
+        self.assertIn('error_code_prefix="NPU_WORKERS"', source)
+
+    def test_batch_159_remove_worker_simple_pattern(self):
+        """Verify remove_worker endpoint uses Simple Pattern"""
+        from backend.api import npu_workers
+
+        source = inspect.getsource(npu_workers.remove_worker)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="remove_worker"', source)
+        self.assertIn('error_code_prefix="NPU_WORKERS"', source)
+
+    def test_batch_159_test_worker_simple_pattern(self):
+        """Verify test_worker endpoint uses Simple Pattern"""
+        from backend.api import npu_workers
+
+        source = inspect.getsource(npu_workers.test_worker)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="test_worker"', source)
+        self.assertIn('error_code_prefix="NPU_WORKERS"', source)
+
+    def test_batch_159_get_worker_metrics_simple_pattern(self):
+        """Verify get_worker_metrics endpoint uses Simple Pattern"""
+        from backend.api import npu_workers
+
+        source = inspect.getsource(npu_workers.get_worker_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_worker_metrics"', source)
+        self.assertIn('error_code_prefix="NPU_WORKERS"', source)
+
+    def test_batch_159_get_load_balancing_config_simple_pattern(self):
+        """Verify get_load_balancing_config endpoint uses Simple Pattern"""
+        from backend.api import npu_workers
+
+        source = inspect.getsource(npu_workers.get_load_balancing_config)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_load_balancing_config"', source)
+        self.assertIn('error_code_prefix="NPU_WORKERS"', source)
+
+    def test_batch_159_update_load_balancing_config_simple_pattern(self):
+        """Verify update_load_balancing_config endpoint uses Simple Pattern"""
+        from backend.api import npu_workers
+
+        source = inspect.getsource(npu_workers.update_load_balancing_config)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="update_load_balancing_config"', source)
+        self.assertIn('error_code_prefix="NPU_WORKERS"', source)
+
+    def test_batch_159_get_npu_status_simple_pattern(self):
+        """Verify get_npu_status endpoint uses Simple Pattern"""
+        from backend.api import npu_workers
+
+        source = inspect.getsource(npu_workers.get_npu_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_npu_status"', source)
+        self.assertIn('error_code_prefix="NPU_WORKERS"', source)
+
+    def test_batch_159_all_npu_workers_endpoints_have_decorator(self):
+        """Verify all npu_workers endpoints have @with_error_handling decorator"""
+        from backend.api import npu_workers
+
+        endpoint_functions = [
+            npu_workers.list_workers,
+            npu_workers.add_worker,
+            npu_workers.get_worker,
+            npu_workers.update_worker,
+            npu_workers.remove_worker,
+            npu_workers.test_worker,
+            npu_workers.get_worker_metrics,
+            npu_workers.get_load_balancing_config,
+            npu_workers.update_load_balancing_config,
+            npu_workers.get_npu_status,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_159_npu_workers_100_percent_milestone(self):
+        """Verify npu_workers.py has reached 100% migration"""
+        from backend.api import npu_workers
+
+        endpoint_functions = [
+            npu_workers.list_workers,
+            npu_workers.add_worker,
+            npu_workers.get_worker,
+            npu_workers.update_worker,
+            npu_workers.remove_worker,
+            npu_workers.test_worker,
+            npu_workers.get_worker_metrics,
+            npu_workers.get_load_balancing_config,
+            npu_workers.update_load_balancing_config,
+            npu_workers.get_npu_status,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 10
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_159_migration_preserves_worker_manager_dependency(self):
+        """Verify migration preserves get_worker_manager dependency"""
+        from backend.api import npu_workers
+
+        # Verify get_worker_manager is imported
+        self.assertTrue(hasattr(npu_workers, "get_worker_manager"))
+
+        # Verify it's used in endpoints
+        list_source = inspect.getsource(npu_workers.list_workers)
+        self.assertIn("get_worker_manager()", list_source)
+
+        add_source = inspect.getsource(npu_workers.add_worker)
+        self.assertIn("get_worker_manager()", add_source)
+
+    def test_batch_159_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic model imports"""
+        from backend.api import npu_workers
+
+        # Verify models are imported
+        self.assertTrue(hasattr(npu_workers, "NPUWorkerConfig"))
+        self.assertTrue(hasattr(npu_workers, "NPUWorkerDetails"))
+        self.assertTrue(hasattr(npu_workers, "NPUWorkerMetrics"))
+        self.assertTrue(hasattr(npu_workers, "LoadBalancingConfig"))
+        self.assertTrue(hasattr(npu_workers, "WorkerTestResult"))
+
+        # Verify models are used in endpoints
+        add_source = inspect.getsource(npu_workers.add_worker)
+        self.assertIn("NPUWorkerConfig", add_source)
+
+        test_source = inspect.getsource(npu_workers.test_worker)
+        self.assertIn("WorkerTestResult", test_source)
+
+    def test_batch_159_migration_preserves_http_status_codes(self):
+        """Verify migration preserves custom HTTP status codes"""
+        from backend.api import npu_workers
+
+        # Verify add_worker uses 201 CREATED
+        add_source = inspect.getsource(npu_workers.add_worker)
+        self.assertIn("status.HTTP_201_CREATED", add_source)
+
+        # Verify remove_worker uses 204 NO_CONTENT
+        remove_source = inspect.getsource(npu_workers.remove_worker)
+        self.assertIn("status.HTTP_204_NO_CONTENT", remove_source)
+
+    def test_batch_159_migration_preserves_worker_id_validation(self):
+        """Verify migration preserves worker_id validation in update_worker"""
+        from backend.api import npu_workers
+
+        # Verify update_worker validates worker_id matches config
+        update_source = inspect.getsource(npu_workers.update_worker)
+        self.assertIn("worker_config.id != worker_id", update_source)
+        self.assertIn("Worker ID in path must match ID in configuration", update_source)
+
+    def test_batch_159_migration_preserves_worker_not_found_handling(self):
+        """Verify migration preserves worker not found handling"""
+        from backend.api import npu_workers
+
+        # Verify get_worker handles not found
+        get_source = inspect.getsource(npu_workers.get_worker)
+        self.assertIn("if not worker:", get_source)
+        self.assertIn("status.HTTP_404_NOT_FOUND", get_source)
+
+        # Verify test_worker handles not found
+        test_source = inspect.getsource(npu_workers.test_worker)
+        self.assertIn("if not worker:", test_source)
+        self.assertIn("not found", test_source)
+
+    def test_batch_159_migration_preserves_value_error_handling(self):
+        """Verify migration preserves ValueError handling for invalid inputs"""
+        from backend.api import npu_workers
+
+        # Verify add_worker handles ValueError
+        add_source = inspect.getsource(npu_workers.add_worker)
+        self.assertIn("except ValueError as e:", add_source)
+        self.assertIn("status.HTTP_400_BAD_REQUEST", add_source)
+
+        # Verify update_worker handles ValueError
+        update_source = inspect.getsource(npu_workers.update_worker)
+        self.assertIn("except ValueError as e:", update_source)
+
+    def test_batch_159_migration_preserves_load_balancing_config(self):
+        """Verify migration preserves load balancing configuration methods"""
+        from backend.api import npu_workers
+
+        # Verify get_load_balancing_config uses manager method
+        get_config_source = inspect.getsource(npu_workers.get_load_balancing_config)
+        self.assertIn("get_load_balancing_config()", get_config_source)
+
+        # Verify update_load_balancing_config uses manager method
+        update_config_source = inspect.getsource(npu_workers.update_load_balancing_config)
+        self.assertIn("update_load_balancing_config", update_config_source)
+        self.assertIn("config.strategy", update_config_source)
+
+    def test_batch_159_migration_preserves_status_aggregation(self):
+        """Verify migration preserves worker pool status aggregation"""
+        from backend.api import npu_workers
+
+        # Verify get_npu_status aggregates statistics
+        status_source = inspect.getsource(npu_workers.get_npu_status)
+        self.assertIn("total_workers", status_source)
+        self.assertIn("online_workers", status_source)
+        self.assertIn("total_capacity", status_source)
+        self.assertIn("current_load", status_source)
+        self.assertIn("utilization_percent", status_source)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -30,6 +30,7 @@ from backend.models.npu_models import (
 )
 from backend.services.npu_worker_manager import get_worker_manager
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,11 @@ router = APIRouter()
 # ==============================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_workers",
+    error_code_prefix="NPU_WORKERS",
+)
 @router.get("/npu/workers", response_model=List[NPUWorkerDetails])
 async def list_workers():
     """
@@ -63,6 +69,11 @@ async def list_workers():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_worker",
+    error_code_prefix="NPU_WORKERS",
+)
 @router.post(
     "/npu/workers", response_model=NPUWorkerDetails, status_code=status.HTTP_201_CREATED
 )
@@ -100,6 +111,11 @@ async def add_worker(worker_config: NPUWorkerConfig):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_worker",
+    error_code_prefix="NPU_WORKERS",
+)
 @router.get("/npu/workers/{worker_id}", response_model=NPUWorkerDetails)
 async def get_worker(worker_id: str):
     """
@@ -137,6 +153,11 @@ async def get_worker(worker_id: str):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_worker",
+    error_code_prefix="NPU_WORKERS",
+)
 @router.put("/npu/workers/{worker_id}", response_model=NPUWorkerDetails)
 async def update_worker(worker_id: str, worker_config: NPUWorkerConfig):
     """
@@ -183,6 +204,11 @@ async def update_worker(worker_id: str, worker_config: NPUWorkerConfig):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="remove_worker",
+    error_code_prefix="NPU_WORKERS",
+)
 @router.delete("/npu/workers/{worker_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_worker(worker_id: str):
     """
@@ -213,6 +239,11 @@ async def remove_worker(worker_id: str):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_worker",
+    error_code_prefix="NPU_WORKERS",
+)
 @router.post("/npu/workers/{worker_id}/test", response_model=WorkerTestResult)
 async def test_worker(worker_id: str):
     """
@@ -256,6 +287,11 @@ async def test_worker(worker_id: str):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_worker_metrics",
+    error_code_prefix="NPU_WORKERS",
+)
 @router.get(
     "/npu/workers/{worker_id}/metrics", response_model=Optional[NPUWorkerMetrics]
 )
@@ -301,6 +337,11 @@ async def get_worker_metrics(worker_id: str):
 # ==============================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_load_balancing_config",
+    error_code_prefix="NPU_WORKERS",
+)
 @router.get("/npu/load-balancing", response_model=LoadBalancingConfig)
 async def get_load_balancing_config():
     """
@@ -322,6 +363,11 @@ async def get_load_balancing_config():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_load_balancing_config",
+    error_code_prefix="NPU_WORKERS",
+)
 @router.put("/npu/load-balancing", response_model=LoadBalancingConfig)
 async def update_load_balancing_config(config: LoadBalancingConfig):
     """
@@ -360,6 +406,11 @@ async def update_load_balancing_config(config: LoadBalancingConfig):
 # ==============================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_npu_status",
+    error_code_prefix="NPU_WORKERS",
+)
 @router.get("/npu/status")
 async def get_npu_status():
     """
