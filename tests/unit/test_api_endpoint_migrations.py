@@ -28862,6 +28862,283 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertTrue(hasattr(RemoteSessionType, "INTERACTIVE"))
         self.assertTrue(hasattr(RemoteSessionType, "BATCH"))
 
+    # ==============================================
+    # BATCH 157: logs.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_157_get_log_sources_simple_pattern(self):
+        """Verify get_log_sources endpoint uses Simple Pattern"""
+        from backend.api import logs
+
+        source = inspect.getsource(logs.get_log_sources)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_log_sources"', source)
+        self.assertIn('error_code_prefix="LOGS"', source)
+
+    def test_batch_157_get_recent_logs_simple_pattern(self):
+        """Verify get_recent_logs endpoint uses Simple Pattern"""
+        from backend.api import logs
+
+        source = inspect.getsource(logs.get_recent_logs)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_recent_logs"', source)
+        self.assertIn('error_code_prefix="LOGS"', source)
+
+    def test_batch_157_list_logs_simple_pattern(self):
+        """Verify list_logs endpoint uses Simple Pattern"""
+        from backend.api import logs
+
+        source = inspect.getsource(logs.list_logs)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_logs"', source)
+        self.assertIn('error_code_prefix="LOGS"', source)
+
+    def test_batch_157_read_log_simple_pattern(self):
+        """Verify read_log endpoint uses Simple Pattern"""
+        from backend.api import logs
+
+        source = inspect.getsource(logs.read_log)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="read_log"', source)
+        self.assertIn('error_code_prefix="LOGS"', source)
+
+    def test_batch_157_read_container_logs_simple_pattern(self):
+        """Verify read_container_logs endpoint uses Simple Pattern"""
+        from backend.api import logs
+
+        source = inspect.getsource(logs.read_container_logs)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="read_container_logs"', source)
+        self.assertIn('error_code_prefix="LOGS"', source)
+
+    def test_batch_157_get_unified_logs_simple_pattern(self):
+        """Verify get_unified_logs endpoint uses Simple Pattern"""
+        from backend.api import logs
+
+        source = inspect.getsource(logs.get_unified_logs)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_unified_logs"', source)
+        self.assertIn('error_code_prefix="LOGS"', source)
+
+    def test_batch_157_stream_log_simple_pattern(self):
+        """Verify stream_log endpoint uses Simple Pattern"""
+        from backend.api import logs
+
+        source = inspect.getsource(logs.stream_log)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="stream_log"', source)
+        self.assertIn('error_code_prefix="LOGS"', source)
+
+    def test_batch_157_search_logs_simple_pattern(self):
+        """Verify search_logs endpoint uses Simple Pattern"""
+        from backend.api import logs
+
+        source = inspect.getsource(logs.search_logs)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="search_logs"', source)
+        self.assertIn('error_code_prefix="LOGS"', source)
+
+    def test_batch_157_clear_log_simple_pattern(self):
+        """Verify clear_log endpoint uses Simple Pattern"""
+        from backend.api import logs
+
+        source = inspect.getsource(logs.clear_log)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="clear_log"', source)
+        self.assertIn('error_code_prefix="LOGS"', source)
+
+    def test_batch_157_all_logs_endpoints_have_decorator(self):
+        """Verify all logs endpoints have @with_error_handling decorator"""
+        from backend.api import logs
+
+        endpoint_functions = [
+            logs.get_log_sources,
+            logs.get_recent_logs,
+            logs.list_logs,
+            logs.read_log,
+            logs.read_container_logs,
+            logs.get_unified_logs,
+            logs.stream_log,
+            logs.search_logs,
+            logs.clear_log,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_157_logs_100_percent_milestone(self):
+        """Verify logs.py has reached 100% migration"""
+        from backend.api import logs
+
+        endpoint_functions = [
+            logs.get_log_sources,
+            logs.get_recent_logs,
+            logs.list_logs,
+            logs.read_log,
+            logs.read_container_logs,
+            logs.get_unified_logs,
+            logs.stream_log,
+            logs.search_logs,
+            logs.clear_log,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 9
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_157_migration_preserves_log_directory_config(self):
+        """Verify migration preserves log directory configuration"""
+        from backend.api import logs
+
+        # Verify LOG_DIR is defined and used
+        self.assertTrue(hasattr(logs, "LOG_DIR"))
+
+        # Verify it's used in endpoints
+        read_source = inspect.getsource(logs.read_log)
+        self.assertIn("LOG_DIR", read_source)
+
+        stream_source = inspect.getsource(logs.stream_log)
+        self.assertIn("LOG_DIR", stream_source)
+
+    def test_batch_157_migration_preserves_docker_container_mapping(self):
+        """Verify migration preserves Docker container log mapping"""
+        from backend.api import logs
+
+        # Verify CONTAINER_LOGS mapping exists
+        self.assertTrue(hasattr(logs, "CONTAINER_LOGS"))
+        self.assertIsInstance(logs.CONTAINER_LOGS, dict)
+
+        # Verify it's used in read_container_logs
+        container_source = inspect.getsource(logs.read_container_logs)
+        self.assertIn("CONTAINER_LOGS", container_source)
+
+    def test_batch_157_migration_preserves_security_checks(self):
+        """Verify migration preserves path security validation"""
+        from backend.api import logs
+
+        # Verify security check in read_log
+        read_source = inspect.getsource(logs.read_log)
+        self.assertIn("resolve()", read_source)
+        self.assertIn("Access denied", read_source)
+
+        # Verify security check in stream_log
+        stream_source = inspect.getsource(logs.stream_log)
+        self.assertIn("resolve()", stream_source)
+        self.assertIn("Access denied", stream_source)
+
+        # Verify security check in clear_log
+        clear_source = inspect.getsource(logs.clear_log)
+        self.assertIn("resolve()", clear_source)
+        self.assertIn("Access denied", clear_source)
+
+    def test_batch_157_migration_preserves_protected_logs(self):
+        """Verify migration preserves protected log file list"""
+        from backend.api import logs
+
+        # Verify protected_logs in clear_log
+        clear_source = inspect.getsource(logs.clear_log)
+        self.assertIn("protected_logs", clear_source)
+        self.assertIn("system.log", clear_source)
+        self.assertIn("backend.log", clear_source)
+        self.assertIn("frontend.log", clear_source)
+        self.assertIn("Cannot clear protected log files", clear_source)
+
+    def test_batch_157_migration_preserves_log_parsing(self):
+        """Verify migration preserves log parsing functions"""
+        from backend.api import logs
+
+        # Verify parse_docker_log_line exists and is used
+        self.assertTrue(hasattr(logs, "parse_docker_log_line"))
+        container_source = inspect.getsource(logs.read_container_logs)
+        self.assertIn("parse_docker_log_line", container_source)
+
+        # Verify parse_file_log_line exists and is used
+        self.assertTrue(hasattr(logs, "parse_file_log_line"))
+        unified_source = inspect.getsource(logs.get_unified_logs)
+        self.assertIn("parse_file_log_line", unified_source)
+
+    def test_batch_157_migration_preserves_streaming_response(self):
+        """Verify migration preserves streaming response functionality"""
+        from backend.api import logs
+
+        # Verify StreamingResponse is used
+        stream_source = inspect.getsource(logs.stream_log)
+        self.assertIn("StreamingResponse", stream_source)
+        self.assertIn("generate", stream_source)
+
+    def test_batch_157_migration_preserves_query_parameters(self):
+        """Verify migration preserves Query parameter validation"""
+        from backend.api import logs
+
+        # Verify read_log has Query parameters
+        read_source = inspect.getsource(logs.read_log)
+        self.assertIn("Query", read_source)
+        self.assertIn("lines", read_source)
+        self.assertIn("offset", read_source)
+        self.assertIn("tail", read_source)
+
+        # Verify read_container_logs has Query parameters
+        container_source = inspect.getsource(logs.read_container_logs)
+        self.assertIn("Query", container_source)
+        self.assertIn("ge=1", container_source)
+        self.assertIn("le=10000", container_source)
+
+        # Verify search_logs has Query parameters
+        search_source = inspect.getsource(logs.search_logs)
+        self.assertIn("Query(...", search_source)
+        self.assertIn("case_sensitive", search_source)
+        self.assertIn("max_results", search_source)
+
+    def test_batch_157_migration_preserves_unified_log_merging(self):
+        """Verify migration preserves unified log merging by timestamp"""
+        from backend.api import logs
+
+        # Verify get_unified_logs merges logs
+        unified_source = inspect.getsource(logs.get_unified_logs)
+        self.assertIn("all_logs", unified_source)
+        self.assertIn("sort", unified_source)
+        self.assertIn("timestamp", unified_source)
+        self.assertIn("source_type", unified_source)
+
+
+
+        """Verify migration preserves RemoteSessionType enum"""
+        from backend.api import remote_terminal
+
+        # Verify enum exists
+        self.assertTrue(hasattr(remote_terminal, "RemoteSessionType"))
+
+        # Verify enum values
+        RemoteSessionType = remote_terminal.RemoteSessionType
+        self.assertTrue(hasattr(RemoteSessionType, "COMMAND"))
+        self.assertTrue(hasattr(RemoteSessionType, "INTERACTIVE"))
+        self.assertTrue(hasattr(RemoteSessionType, "BATCH"))
+
 
 
         """Verify migration preserves web research test functionality"""
