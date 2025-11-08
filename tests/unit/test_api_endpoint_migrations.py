@@ -30560,6 +30560,289 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("operation == \"reindex\"", redis_ops_source)
         self.assertIn("operation == \"backup\"", redis_ops_source)
 
+    # ==============================================
+    # BATCH 163: long_running_operations.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_163_start_codebase_indexing_simple_pattern(self):
+        """Verify start_codebase_indexing endpoint uses Simple Pattern"""
+        from backend.api import long_running_operations
+
+        source = inspect.getsource(long_running_operations.start_codebase_indexing)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="start_codebase_indexing"', source)
+        self.assertIn('error_code_prefix="LONG_RUNNING_OPERATIONS"', source)
+
+    def test_batch_163_start_comprehensive_testing_simple_pattern(self):
+        """Verify start_comprehensive_testing endpoint uses Simple Pattern"""
+        from backend.api import long_running_operations
+
+        source = inspect.getsource(long_running_operations.start_comprehensive_testing)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="start_comprehensive_testing"', source)
+        self.assertIn('error_code_prefix="LONG_RUNNING_OPERATIONS"', source)
+
+    def test_batch_163_start_knowledge_base_population_simple_pattern(self):
+        """Verify start_knowledge_base_population endpoint uses Simple Pattern"""
+        from backend.api import long_running_operations
+
+        source = inspect.getsource(long_running_operations.start_knowledge_base_population)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="start_knowledge_base_population"', source)
+        self.assertIn('error_code_prefix="LONG_RUNNING_OPERATIONS"', source)
+
+    def test_batch_163_start_security_scan_simple_pattern(self):
+        """Verify start_security_scan endpoint uses Simple Pattern"""
+        from backend.api import long_running_operations
+
+        source = inspect.getsource(long_running_operations.start_security_scan)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="start_security_scan"', source)
+        self.assertIn('error_code_prefix="LONG_RUNNING_OPERATIONS"', source)
+
+    def test_batch_163_migrate_existing_operation_simple_pattern(self):
+        """Verify migrate_existing_operation endpoint uses Simple Pattern"""
+        from backend.api import long_running_operations
+
+        source = inspect.getsource(long_running_operations.migrate_existing_operation)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="migrate_existing_operation"', source)
+        self.assertIn('error_code_prefix="LONG_RUNNING_OPERATIONS"', source)
+
+    def test_batch_163_get_operation_status_simple_pattern(self):
+        """Verify get_operation_status endpoint uses Simple Pattern"""
+        from backend.api import long_running_operations
+
+        source = inspect.getsource(long_running_operations.get_operation_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_operation_status"', source)
+        self.assertIn('error_code_prefix="LONG_RUNNING_OPERATIONS"', source)
+
+    def test_batch_163_list_operations_simple_pattern(self):
+        """Verify list_operations endpoint uses Simple Pattern"""
+        from backend.api import long_running_operations
+
+        source = inspect.getsource(long_running_operations.list_operations)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_operations"', source)
+        self.assertIn('error_code_prefix="LONG_RUNNING_OPERATIONS"', source)
+
+    def test_batch_163_cancel_operation_simple_pattern(self):
+        """Verify cancel_operation endpoint uses Simple Pattern"""
+        from backend.api import long_running_operations
+
+        source = inspect.getsource(long_running_operations.cancel_operation)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="cancel_operation"', source)
+        self.assertIn('error_code_prefix="LONG_RUNNING_OPERATIONS"', source)
+
+    def test_batch_163_resume_operation_simple_pattern(self):
+        """Verify resume_operation endpoint uses Simple Pattern"""
+        from backend.api import long_running_operations
+
+        source = inspect.getsource(long_running_operations.resume_operation)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="resume_operation"', source)
+        self.assertIn('error_code_prefix="LONG_RUNNING_OPERATIONS"', source)
+
+    def test_batch_163_operations_health_simple_pattern(self):
+        """Verify operations_health endpoint uses Simple Pattern"""
+        from backend.api import long_running_operations
+
+        source = inspect.getsource(long_running_operations.operations_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="operations_health"', source)
+        self.assertIn('error_code_prefix="LONG_RUNNING_OPERATIONS"', source)
+
+    def test_batch_163_all_long_running_operations_endpoints_have_decorator(self):
+        """Verify all long_running_operations endpoints have @with_error_handling decorator"""
+        from backend.api import long_running_operations
+
+        endpoint_functions = [
+            long_running_operations.start_codebase_indexing,
+            long_running_operations.start_comprehensive_testing,
+            long_running_operations.start_knowledge_base_population,
+            long_running_operations.start_security_scan,
+            long_running_operations.migrate_existing_operation,
+            long_running_operations.get_operation_status,
+            long_running_operations.list_operations,
+            long_running_operations.cancel_operation,
+            long_running_operations.resume_operation,
+            long_running_operations.operations_health,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_163_long_running_operations_100_percent_milestone(self):
+        """Verify long_running_operations.py has reached 100% migration"""
+        from backend.api import long_running_operations
+
+        endpoint_functions = [
+            long_running_operations.start_codebase_indexing,
+            long_running_operations.start_comprehensive_testing,
+            long_running_operations.start_knowledge_base_population,
+            long_running_operations.start_security_scan,
+            long_running_operations.migrate_existing_operation,
+            long_running_operations.get_operation_status,
+            long_running_operations.list_operations,
+            long_running_operations.cancel_operation,
+            long_running_operations.resume_operation,
+            long_running_operations.operations_health,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 10
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_163_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic request models"""
+        from backend.api import long_running_operations
+
+        # Verify models are defined
+        self.assertTrue(hasattr(long_running_operations, "CodebaseIndexingRequest"))
+        self.assertTrue(hasattr(long_running_operations, "TestSuiteRequest"))
+        self.assertTrue(hasattr(long_running_operations, "KnowledgeBaseRequest"))
+        self.assertTrue(hasattr(long_running_operations, "SecurityScanRequest"))
+
+        # Verify models are used in endpoints
+        indexing_source = inspect.getsource(long_running_operations.start_codebase_indexing)
+        self.assertIn("CodebaseIndexingRequest", indexing_source)
+
+        testing_source = inspect.getsource(long_running_operations.start_comprehensive_testing)
+        self.assertIn("TestSuiteRequest", testing_source)
+
+    def test_batch_163_migration_preserves_operation_manager_dependency(self):
+        """Verify migration preserves get_operation_manager dependency injection"""
+        from backend.api import long_running_operations
+
+        # Verify get_operation_manager is defined
+        self.assertTrue(hasattr(long_running_operations, "get_operation_manager"))
+
+        # Verify it's used in endpoints via Depends
+        indexing_source = inspect.getsource(long_running_operations.start_codebase_indexing)
+        self.assertIn("Depends(get_operation_manager)", indexing_source)
+
+        status_source = inspect.getsource(long_running_operations.get_operation_status)
+        self.assertIn("Depends(get_operation_manager)", status_source)
+
+    def test_batch_163_migration_preserves_create_operation_request_pattern(self):
+        """Verify migration preserves CreateOperationRequest creation pattern"""
+        from backend.api import long_running_operations
+
+        # Verify CreateOperationRequest is imported
+        self.assertTrue(hasattr(long_running_operations, "CreateOperationRequest"))
+
+        # Verify it's used in endpoints
+        indexing_source = inspect.getsource(long_running_operations.start_codebase_indexing)
+        self.assertIn("CreateOperationRequest(", indexing_source)
+        self.assertIn("operation_type=", indexing_source)
+        self.assertIn("estimated_items=", indexing_source)
+
+        testing_source = inspect.getsource(long_running_operations.start_comprehensive_testing)
+        self.assertIn("CreateOperationRequest(", testing_source)
+
+    def test_batch_163_migration_preserves_operation_migrator(self):
+        """Verify migration preserves OperationMigrator for legacy migration"""
+        from backend.api import long_running_operations
+
+        # Verify OperationMigrator is imported
+        self.assertTrue(hasattr(long_running_operations, "OperationMigrator"))
+
+        # Verify migrate_existing_operation uses OperationMigrator
+        migrate_source = inspect.getsource(long_running_operations.migrate_existing_operation)
+        self.assertIn("OperationMigrator.migrate_existing_operation(", migrate_source)
+        self.assertIn("operation_name=", migrate_source)
+        self.assertIn("timeout_seconds=", migrate_source)
+
+    def test_batch_163_migration_preserves_checkpoint_resume(self):
+        """Verify migration preserves checkpoint/resume functionality"""
+        from backend.api import long_running_operations
+
+        # Verify resume_operation uses checkpoint manager
+        resume_source = inspect.getsource(long_running_operations.resume_operation)
+        self.assertIn("checkpoint_manager.list_checkpoints(", resume_source)
+        self.assertIn("resume_operation(", resume_source)
+        self.assertIn("latest_checkpoint", resume_source)
+        self.assertIn("checkpoint_id", resume_source)
+
+    def test_batch_163_migration_preserves_operation_filtering(self):
+        """Verify migration preserves operation filtering by status and type"""
+        from backend.api import long_running_operations
+
+        # Verify list_operations supports filtering
+        list_source = inspect.getsource(long_running_operations.list_operations)
+        self.assertIn("status: Optional[str]", list_source)
+        self.assertIn("operation_type: Optional[str]", list_source)
+        self.assertIn("OperationStatus(status)", list_source)
+        self.assertIn("OperationType(operation_type)", list_source)
+
+    def test_batch_163_migration_preserves_statistics_calculation(self):
+        """Verify migration preserves operation statistics calculation"""
+        from backend.api import long_running_operations
+
+        # Verify list_operations calculates statistics
+        list_source = inspect.getsource(long_running_operations.list_operations)
+        self.assertIn("total_count", list_source)
+        self.assertIn("active_count", list_source)
+        self.assertIn("completed_count", list_source)
+        self.assertIn("failed_count", list_source)
+        self.assertIn("OperationStatus.RUNNING", list_source)
+        self.assertIn("OperationStatus.COMPLETED", list_source)
+
+    def test_batch_163_migration_preserves_background_tasks(self):
+        """Verify migration preserves BackgroundTasks integration"""
+        from backend.api import long_running_operations
+
+        # Verify endpoints use BackgroundTasks
+        indexing_source = inspect.getsource(long_running_operations.start_codebase_indexing)
+        self.assertIn("BackgroundTasks", indexing_source)
+
+        testing_source = inspect.getsource(long_running_operations.start_comprehensive_testing)
+        self.assertIn("BackgroundTasks", testing_source)
+
+    def test_batch_163_migration_preserves_operation_context(self):
+        """Verify migration preserves operation context creation with all options"""
+        from backend.api import long_running_operations
+
+        # Verify codebase indexing creates proper context
+        indexing_source = inspect.getsource(long_running_operations.start_codebase_indexing)
+        self.assertIn("context = {", indexing_source)
+        self.assertIn("codebase_path", indexing_source)
+        self.assertIn("file_patterns", indexing_source)
+        self.assertIn("include_tests", indexing_source)
+
+        # Verify testing creates proper context
+        testing_source = inspect.getsource(long_running_operations.start_comprehensive_testing)
+        self.assertIn("test_patterns", testing_source)
+        self.assertIn("parallel_execution", testing_source)
+
 
 if __name__ == "__main__":
     unittest.main()
