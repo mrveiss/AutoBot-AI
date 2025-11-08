@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
 from src.llm_self_awareness import get_llm_self_awareness
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -36,6 +37,11 @@ class QueryAnalysisRequest(BaseModel):
     provide_recommendations: bool = True
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_awareness_status",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.get("/status")
 async def get_awareness_status():
     """Get LLM self-awareness system status"""
@@ -56,6 +62,11 @@ async def get_awareness_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_context",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.get("/context")
 async def get_system_context(
     level: str = Query(
@@ -121,6 +132,11 @@ async def get_system_context(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_capabilities_summary",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.get("/capabilities")
 async def get_capabilities_summary():
     """Get detailed capabilities summary"""
@@ -156,6 +172,11 @@ async def get_capabilities_summary():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="inject_awareness_context",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.post("/inject-context")
 async def inject_awareness_context(request: PromptInjectionRequest):
     """Inject system awareness context into a prompt"""
@@ -190,6 +211,11 @@ async def inject_awareness_context(request: PromptInjectionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_query_with_awareness",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.post("/analyze-query")
 async def analyze_query_with_awareness(request: QueryAnalysisRequest):
     """Analyze a query with phase and capability awareness"""
@@ -209,6 +235,11 @@ async def analyze_query_with_awareness(request: QueryAnalysisRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_capability_summary_text",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.get("/summary/text")
 async def get_capability_summary_text():
     """Get human-readable capability summary"""
@@ -227,6 +258,11 @@ async def get_capability_summary_text():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_phase_information",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.get("/phase-info")
 async def get_phase_information():
     """Get current phase information and progression status"""
@@ -253,6 +289,11 @@ async def get_phase_information():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_awareness_metrics",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.get("/metrics")
 async def get_awareness_metrics():
     """Get self-awareness system metrics"""
@@ -288,6 +329,11 @@ async def get_awareness_metrics():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_awareness_data",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.post("/export")
 async def export_awareness_data(
     include_history: bool = Query(False),
@@ -312,6 +358,11 @@ async def export_awareness_data(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="llm_awareness_health",
+    error_code_prefix="LLM_AWARENESS",
+)
 @router.get("/health")
 async def llm_awareness_health():
     """Health check for LLM awareness system"""
