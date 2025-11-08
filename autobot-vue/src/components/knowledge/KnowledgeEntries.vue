@@ -256,152 +256,138 @@
     </div>
 
     <!-- View/Edit Dialog -->
-    <div v-if="showDialog" class="dialog-overlay" @click="closeDialog">
-      <div class="dialog large" @click.stop>
-        <div class="dialog-header">
-          <h3>{{ dialogMode === 'view' ? 'View Entry' : 'Edit Entry' }}</h3>
-          <BaseButton
-            variant="ghost"
-            size="sm"
-            @click="closeDialog"
-            class="close-btn"
-          >
-            <i class="fas fa-times"></i>
-          </BaseButton>
-        </div>
-
-        <div class="dialog-content">
-          <div v-if="dialogMode === 'view'" class="view-mode">
-            <div class="entry-metadata">
-              <div class="meta-item">
-                <label>Title:</label>
-                <span>{{ currentEntry.title || 'Untitled' }}</span>
-              </div>
-              <div class="meta-item">
-                <label>Category:</label>
-                <span class="category-badge" :style="getCategoryStyle(currentEntry.category)">
-                  {{ currentEntry.category }}
-                </span>
-              </div>
-              <div class="meta-item">
-                <label>Type:</label>
-                <span class="type-badge">
-                  <i :class="getTypeIcon(currentEntry.type)"></i>
-                  {{ currentEntry.type }}
-                </span>
-              </div>
-              <div class="meta-item">
-                <label>Source:</label>
-                <span>{{ currentEntry.source }}</span>
-              </div>
-              <div class="meta-item">
-                <label>Created:</label>
-                <span>{{ formatDateTime(currentEntry.createdAt) }}</span>
-              </div>
-              <div class="meta-item">
-                <label>Updated:</label>
-                <span>{{ formatDateTime(currentEntry.updatedAt) }}</span>
-              </div>
-              <div v-if="currentEntry.tags.length > 0" class="meta-item tags-section">
-                <label>Tags:</label>
-                <div class="tags-list">
-                  <span v-for="tag in currentEntry.tags" :key="tag" class="tag-chip">
-                    {{ tag }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div class="entry-content">
-              <h4>Content</h4>
-              <div class="content-viewer" v-html="formatContent(currentEntry.content)"></div>
-            </div>
+    <BaseModal
+      v-model="showDialog"
+      :title="dialogMode === 'view' ? 'View Entry' : 'Edit Entry'"
+      size="large"
+      scrollable
+    >
+      <div v-if="dialogMode === 'view'" class="view-mode">
+        <div class="entry-metadata">
+          <div class="meta-item">
+            <label>Title:</label>
+            <span>{{ currentEntry.title || 'Untitled' }}</span>
           </div>
-
-          <div v-else class="edit-mode">
-            <div class="form-group">
-              <label for="edit-title">Title</label>
-              <input
-                id="edit-title"
-                v-model="editForm.title"
-                type="text"
-                class="form-input"
-              />
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label for="edit-category">Category</label>
-                <select id="edit-category" v-model="editForm.category" class="form-select">
-                  <option v-for="cat in store.categories" :key="cat.id" :value="cat.name">
-                    {{ cat.name }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="edit-source">Source</label>
-                <input
-                  id="edit-source"
-                  v-model="editForm.source"
-                  type="text"
-                  class="form-input"
-                />
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="edit-tags">Tags (comma-separated)</label>
-              <input
-                id="edit-tags"
-                v-model="editForm.tagsInput"
-                type="text"
-                class="form-input"
-                placeholder="tag1, tag2, tag3"
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="edit-content">Content</label>
-              <textarea
-                id="edit-content"
-                v-model="editForm.content"
-                class="form-textarea"
-                rows="10"
-              ></textarea>
+          <div class="meta-item">
+            <label>Category:</label>
+            <span class="category-badge" :style="getCategoryStyle(currentEntry.category)">
+              {{ currentEntry.category }}
+            </span>
+          </div>
+          <div class="meta-item">
+            <label>Type:</label>
+            <span class="type-badge">
+              <i :class="getTypeIcon(currentEntry.type)"></i>
+              {{ currentEntry.type }}
+            </span>
+          </div>
+          <div class="meta-item">
+            <label>Source:</label>
+            <span>{{ currentEntry.source }}</span>
+          </div>
+          <div class="meta-item">
+            <label>Created:</label>
+            <span>{{ formatDateTime(currentEntry.createdAt) }}</span>
+          </div>
+          <div class="meta-item">
+            <label>Updated:</label>
+            <span>{{ formatDateTime(currentEntry.updatedAt) }}</span>
+          </div>
+          <div v-if="currentEntry.tags.length > 0" class="meta-item tags-section">
+            <label>Tags:</label>
+            <div class="tags-list">
+              <span v-for="tag in currentEntry.tags" :key="tag" class="tag-chip">
+                {{ tag }}
+              </span>
             </div>
           </div>
         </div>
 
-        <div class="dialog-actions">
-          <BaseButton
-            v-if="dialogMode === 'view'"
-            variant="primary"
-            @click="switchToEdit"
-            class="edit-btn"
-          >
-            <i class="fas fa-edit"></i>
-            Edit
-          </BaseButton>
-          <BaseButton
-            v-if="dialogMode === 'edit'"
-            variant="secondary"
-            @click="cancelEdit"
-            class="cancel-btn"
-          >
-            Cancel
-          </BaseButton>
-          <BaseButton
-            v-if="dialogMode === 'edit'"
-            variant="primary"
-            @click="saveEdit"
-            class="save-btn"
-          >
-            Save Changes
-          </BaseButton>
+        <div class="entry-content">
+          <h4>Content</h4>
+          <div class="content-viewer" v-html="formatContent(currentEntry.content)"></div>
         </div>
       </div>
-    </div>
+
+      <div v-else class="edit-mode">
+        <div class="form-group">
+          <label for="edit-title">Title</label>
+          <input
+            id="edit-title"
+            v-model="editForm.title"
+            type="text"
+            class="form-input"
+          />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="edit-category">Category</label>
+            <select id="edit-category" v-model="editForm.category" class="form-select">
+              <option v-for="cat in store.categories" :key="cat.id" :value="cat.name">
+                {{ cat.name }}
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-source">Source</label>
+            <input
+              id="edit-source"
+              v-model="editForm.source"
+              type="text"
+              class="form-input"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-tags">Tags (comma-separated)</label>
+          <input
+            id="edit-tags"
+            v-model="editForm.tagsInput"
+            type="text"
+            class="form-input"
+            placeholder="tag1, tag2, tag3"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="edit-content">Content</label>
+          <textarea
+            id="edit-content"
+            v-model="editForm.content"
+            class="form-textarea"
+            rows="10"
+          ></textarea>
+        </div>
+      </div>
+
+      <template #actions>
+        <BaseButton
+          v-if="dialogMode === 'view'"
+          variant="primary"
+          @click="switchToEdit"
+        >
+          <i class="fas fa-edit"></i>
+          Edit
+        </BaseButton>
+        <BaseButton
+          v-if="dialogMode === 'edit'"
+          variant="secondary"
+          @click="cancelEdit"
+        >
+          Cancel
+        </BaseButton>
+        <BaseButton
+          v-if="dialogMode === 'edit'"
+          variant="primary"
+          @click="saveEdit"
+        >
+          Save Changes
+        </BaseButton>
+      </template>
+    </BaseModal>
     </div>
   </div>
 </template>
@@ -419,6 +405,7 @@ import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vu
 import { formatDate, formatDateTime } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
@@ -903,47 +890,6 @@ tr.selected {
   color: #6b7280;
 }
 
-/* Dialog styles */
-.dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.dialog {
-  background: white;
-  border-radius: 0.5rem;
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.dialog.large {
-  max-width: 900px;
-}
-
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-/* Button styling handled by BaseButton component */
-
-.dialog-content {
-  padding: 1.5rem;
-}
-
 /* View mode styles */
 .entry-metadata {
   display: grid;
@@ -1035,14 +981,6 @@ tr.selected {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
-}
-
-.dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1.5rem;
-  border-top: 1px solid #e5e7eb;
 }
 
 /* Button styling handled by BaseButton component */
