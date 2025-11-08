@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,11 @@ class ResearchPreferences(BaseModel):
     anonymize_requests: bool = True
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_research_status",
+    error_code_prefix="WEB_RESEARCH_SETTINGS",
+)
 @router.get("/status")
 async def get_research_status():
     """Get current web research status and configuration"""
@@ -87,6 +93,11 @@ async def get_research_status():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enable_web_research",
+    error_code_prefix="WEB_RESEARCH_SETTINGS",
+)
 @router.post("/enable")
 async def enable_web_research():
     """Enable web research functionality"""
@@ -135,6 +146,11 @@ async def enable_web_research():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="disable_web_research",
+    error_code_prefix="WEB_RESEARCH_SETTINGS",
+)
 @router.post("/disable")
 async def disable_web_research():
     """Disable web research functionality"""
@@ -183,6 +199,11 @@ async def disable_web_research():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_research_settings",
+    error_code_prefix="WEB_RESEARCH_SETTINGS",
+)
 @router.get("/settings")
 async def get_research_settings():
     """Get current web research settings"""
@@ -231,6 +252,11 @@ async def get_research_settings():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_research_settings",
+    error_code_prefix="WEB_RESEARCH_SETTINGS",
+)
 @router.put("/settings")
 async def update_research_settings(settings: WebResearchSettings):
     """Update web research settings"""
@@ -288,6 +314,11 @@ async def update_research_settings(settings: WebResearchSettings):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="test_web_research",
+    error_code_prefix="WEB_RESEARCH_SETTINGS",
+)
 @router.post("/test")
 async def test_web_research(query: str = "test query"):
     """Test web research functionality"""
@@ -326,6 +357,11 @@ async def test_web_research(query: str = "test query"):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_research_cache",
+    error_code_prefix="WEB_RESEARCH_SETTINGS",
+)
 @router.post("/clear-cache")
 async def clear_research_cache():
     """Clear web research cache"""
@@ -355,6 +391,11 @@ async def clear_research_cache():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reset_circuit_breakers",
+    error_code_prefix="WEB_RESEARCH_SETTINGS",
+)
 @router.post("/reset-circuit-breakers")
 async def reset_circuit_breakers():
     """Reset all circuit breakers for web research"""
@@ -384,6 +425,11 @@ async def reset_circuit_breakers():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_usage_stats",
+    error_code_prefix="WEB_RESEARCH_SETTINGS",
+)
 @router.get("/usage-stats")
 async def get_usage_stats():
     """Get web research usage statistics"""

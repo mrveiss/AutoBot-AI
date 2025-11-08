@@ -28402,6 +28402,227 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("current_status", dashboard_source)
         self.assertIn("check_resource_thresholds", dashboard_source)
 
+    # ==============================================
+    # BATCH 155: web_research_settings.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_155_get_research_status_simple_pattern(self):
+        """Verify get_research_status endpoint uses Simple Pattern"""
+        from backend.api import web_research_settings
+
+        source = inspect.getsource(web_research_settings.get_research_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_research_status"', source)
+        self.assertIn('error_code_prefix="WEB_RESEARCH_SETTINGS"', source)
+
+    def test_batch_155_enable_web_research_simple_pattern(self):
+        """Verify enable_web_research endpoint uses Simple Pattern"""
+        from backend.api import web_research_settings
+
+        source = inspect.getsource(web_research_settings.enable_web_research)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="enable_web_research"', source)
+        self.assertIn('error_code_prefix="WEB_RESEARCH_SETTINGS"', source)
+
+    def test_batch_155_disable_web_research_simple_pattern(self):
+        """Verify disable_web_research endpoint uses Simple Pattern"""
+        from backend.api import web_research_settings
+
+        source = inspect.getsource(web_research_settings.disable_web_research)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="disable_web_research"', source)
+        self.assertIn('error_code_prefix="WEB_RESEARCH_SETTINGS"', source)
+
+    def test_batch_155_get_research_settings_simple_pattern(self):
+        """Verify get_research_settings endpoint uses Simple Pattern"""
+        from backend.api import web_research_settings
+
+        source = inspect.getsource(web_research_settings.get_research_settings)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_research_settings"', source)
+        self.assertIn('error_code_prefix="WEB_RESEARCH_SETTINGS"', source)
+
+    def test_batch_155_update_research_settings_simple_pattern(self):
+        """Verify update_research_settings endpoint uses Simple Pattern"""
+        from backend.api import web_research_settings
+
+        source = inspect.getsource(web_research_settings.update_research_settings)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="update_research_settings"', source)
+        self.assertIn('error_code_prefix="WEB_RESEARCH_SETTINGS"', source)
+
+    def test_batch_155_test_web_research_simple_pattern(self):
+        """Verify test_web_research endpoint uses Simple Pattern"""
+        from backend.api import web_research_settings
+
+        source = inspect.getsource(web_research_settings.test_web_research)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="test_web_research"', source)
+        self.assertIn('error_code_prefix="WEB_RESEARCH_SETTINGS"', source)
+
+    def test_batch_155_clear_research_cache_simple_pattern(self):
+        """Verify clear_research_cache endpoint uses Simple Pattern"""
+        from backend.api import web_research_settings
+
+        source = inspect.getsource(web_research_settings.clear_research_cache)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="clear_research_cache"', source)
+        self.assertIn('error_code_prefix="WEB_RESEARCH_SETTINGS"', source)
+
+    def test_batch_155_reset_circuit_breakers_simple_pattern(self):
+        """Verify reset_circuit_breakers endpoint uses Simple Pattern"""
+        from backend.api import web_research_settings
+
+        source = inspect.getsource(web_research_settings.reset_circuit_breakers)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="reset_circuit_breakers"', source)
+        self.assertIn('error_code_prefix="WEB_RESEARCH_SETTINGS"', source)
+
+    def test_batch_155_get_usage_stats_simple_pattern(self):
+        """Verify get_usage_stats endpoint uses Simple Pattern"""
+        from backend.api import web_research_settings
+
+        source = inspect.getsource(web_research_settings.get_usage_stats)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_usage_stats"', source)
+        self.assertIn('error_code_prefix="WEB_RESEARCH_SETTINGS"', source)
+
+    def test_batch_155_all_web_research_settings_endpoints_have_decorator(self):
+        """Verify all web_research_settings endpoints have @with_error_handling decorator"""
+        from backend.api import web_research_settings
+
+        endpoint_functions = [
+            web_research_settings.get_research_status,
+            web_research_settings.enable_web_research,
+            web_research_settings.disable_web_research,
+            web_research_settings.get_research_settings,
+            web_research_settings.update_research_settings,
+            web_research_settings.test_web_research,
+            web_research_settings.clear_research_cache,
+            web_research_settings.reset_circuit_breakers,
+            web_research_settings.get_usage_stats,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_155_web_research_settings_100_percent_milestone(self):
+        """Verify web_research_settings.py has reached 100% migration"""
+        from backend.api import web_research_settings
+
+        endpoint_functions = [
+            web_research_settings.get_research_status,
+            web_research_settings.enable_web_research,
+            web_research_settings.disable_web_research,
+            web_research_settings.get_research_settings,
+            web_research_settings.update_research_settings,
+            web_research_settings.test_web_research,
+            web_research_settings.clear_research_cache,
+            web_research_settings.reset_circuit_breakers,
+            web_research_settings.get_usage_stats,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 9
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_155_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic request models"""
+        from backend.api import web_research_settings
+
+        # Verify models are defined
+        self.assertTrue(hasattr(web_research_settings, "WebResearchSettings"))
+        self.assertTrue(hasattr(web_research_settings, "ResearchPreferences"))
+
+        # Verify models are used in endpoints
+        update_source = inspect.getsource(web_research_settings.update_research_settings)
+        self.assertIn("WebResearchSettings", update_source)
+
+    def test_batch_155_migration_preserves_web_research_integration(self):
+        """Verify migration preserves web research integration"""
+        from backend.api import web_research_settings
+
+        # Verify get_web_research_integration is used
+        status_source = inspect.getsource(web_research_settings.get_research_status)
+        self.assertIn("get_web_research_integration", status_source)
+        self.assertIn("health_check", status_source)
+        self.assertIn("get_circuit_breaker_status", status_source)
+        self.assertIn("get_cache_stats", status_source)
+
+    def test_batch_155_migration_preserves_config_manager_integration(self):
+        """Verify migration preserves unified config manager integration"""
+        from backend.api import web_research_settings
+
+        # Verify config manager usage
+        settings_source = inspect.getsource(web_research_settings.get_research_settings)
+        self.assertIn("unified_unified_config_manager", settings_source)
+        self.assertIn("get_nested", settings_source)
+
+        # Verify config updates
+        update_source = inspect.getsource(web_research_settings.update_research_settings)
+        self.assertIn("set_nested", update_source)
+        self.assertIn("save_settings", update_source)
+
+    def test_batch_155_migration_preserves_enable_disable_functionality(self):
+        """Verify migration preserves enable/disable research functionality"""
+        from backend.api import web_research_settings
+
+        # Verify enable functionality
+        enable_source = inspect.getsource(web_research_settings.enable_web_research)
+        self.assertIn("enable_research", enable_source)
+        self.assertIn("user_confirmed", enable_source)
+
+        # Verify disable functionality
+        disable_source = inspect.getsource(web_research_settings.disable_web_research)
+        self.assertIn("disable_research", disable_source)
+
+    def test_batch_155_migration_preserves_circuit_breaker_and_cache(self):
+        """Verify migration preserves circuit breaker and cache management"""
+        from backend.api import web_research_settings
+
+        # Verify cache clearing
+        clear_cache_source = inspect.getsource(web_research_settings.clear_research_cache)
+        self.assertIn("cache.clear", clear_cache_source)
+
+        # Verify circuit breaker reset
+        reset_source = inspect.getsource(web_research_settings.reset_circuit_breakers)
+        self.assertIn("reset_circuit_breakers", reset_source)
+
+    def test_batch_155_migration_preserves_test_functionality(self):
+        """Verify migration preserves web research test functionality"""
+        from backend.api import web_research_settings
+
+        # Verify test research
+        test_source = inspect.getsource(web_research_settings.test_web_research)
+        self.assertIn("conduct_web_research", test_source)
+        self.assertIn("query", test_source)
+        self.assertIn("max_results", test_source)
+
 
 if __name__ == "__main__":
     unittest.main()
