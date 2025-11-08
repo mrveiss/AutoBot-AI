@@ -229,34 +229,36 @@
   />
 
   <!-- Edit Session Name Modal -->
-  <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-    <div class="bg-white rounded-lg p-6 w-96 max-w-90vw">
-      <h3 class="text-lg font-semibold mb-4">Edit Chat Name</h3>
-      <input
-        v-model="editingName"
-        type="text"
-        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        placeholder="Enter chat name..."
-        @keyup.enter="saveSessionName"
-        @keyup.escape="cancelEdit"
-        ref="editInput"
-      />
-      <div class="flex justify-end gap-2 mt-4">
-        <BaseButton
-          variant="secondary"
-          @click="cancelEdit"
-        >
-          Cancel
-        </BaseButton>
-        <BaseButton
-          variant="primary"
-          @click="saveSessionName"
-        >
-          Save
-        </BaseButton>
-      </div>
-    </div>
-  </div>
+  <BaseModal
+    v-model="showEditModal"
+    title="Edit Chat Name"
+    size="medium"
+  >
+    <input
+      v-model="editingName"
+      type="text"
+      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      placeholder="Enter chat name..."
+      @keyup.enter="saveSessionName"
+      @keyup.escape="cancelEdit"
+      ref="editInput"
+    />
+
+    <template #actions>
+      <BaseButton
+        variant="secondary"
+        @click="cancelEdit"
+      >
+        Cancel
+      </BaseButton>
+      <BaseButton
+        variant="primary"
+        @click="saveSessionName"
+      >
+        Save
+      </BaseButton>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
@@ -271,6 +273,7 @@ import ApiClient from '@/utils/ApiClient.js'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 const store = useChatStore()
 const controller = useChatController()
