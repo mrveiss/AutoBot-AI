@@ -6,10 +6,15 @@
         AutoBot System Health Dashboard
       </h2>
       <div class="refresh-controls">
-        <button @click="refreshData" :disabled="loading" class="btn-refresh">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+        <BaseButton
+          @click="refreshData"
+          :disabled="loading"
+          variant="primary"
+          :loading="loading"
+          icon="fas fa-sync-alt"
+        >
           Refresh
-        </button>
+        </BaseButton>
         <span class="last-update">Last update: {{ lastUpdate }}</span>
       </div>
     </div>
@@ -159,6 +164,7 @@ import { storeToRefs } from 'pinia'
 import { useAppStore } from '@/stores/app'
 import { formatTime } from '@/utils/formatHelpers'
 import BasePanel from '@/components/base/BasePanel.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 // Store
 const appStore = useAppStore()
@@ -335,28 +341,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 20px;
-}
-
-.btn-refresh {
-  padding: 8px 16px;
-  background: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: background 0.3s;
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: #0056b3;
-}
-
-.btn-refresh:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .last-update {
