@@ -219,7 +219,7 @@
 
       <!-- No Results -->
       <EmptyState
-        v-else
+        v-if="!hasSearchResults"
         icon="fas fa-search"
         message="No documents found matching your search."
       >
