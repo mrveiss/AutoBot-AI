@@ -2,8 +2,8 @@
   <div class="man-page-manager">
 
     <!-- Machine Profile Section -->
-    <div class="machine-profile-section">
-      <div class="section-header">
+    <BasePanel variant="bordered" size="medium">
+      <template #header>
         <h3><i class="fas fa-desktop"></i> Current Machine Profile</h3>
         <BaseButton
           size="sm"
@@ -14,7 +14,7 @@
           <i class="fas fa-sync" :class="{ 'fa-spin': loading?.profile }"></i>
           Refresh
         </BaseButton>
-      </div>
+      </template>
 
       <div v-if="machineProfile && !loading?.profile" class="machine-info">
         <div class="info-grid">
@@ -56,11 +56,11 @@
         <i class="fas fa-spinner fa-spin"></i>
         Detecting machine profile...
       </div>
-    </div>
+    </BasePanel>
 
     <!-- Integration Status Section -->
-    <div class="integration-status-section">
-      <div class="section-header">
+    <BasePanel variant="bordered" size="medium">
+      <template #header>
         <h3><i class="fas fa-chart-bar"></i> Integration Status</h3>
         <BaseButton
           size="sm"
@@ -71,7 +71,7 @@
           <i class="fas fa-sync" :class="{ 'fa-spin': loading?.status }"></i>
           Refresh
         </BaseButton>
-      </div>
+      </template>
 
       <div v-if="integrationStatus" class="status-info">
         <div v-if="integrationStatus.status === 'not_integrated'" class="not-integrated">
@@ -134,7 +134,7 @@
         <i class="fas fa-spinner fa-spin"></i>
         Loading integration status...
       </div>
-    </div>
+    </BasePanel>
 
     <!-- Integration Actions -->
     <div class="integration-actions">
@@ -175,8 +175,8 @@
       </div>
 
       <!-- Real-time Progress Tracking -->
-      <div v-if="showProgressTracking" class="progress-section">
-        <div class="section-header">
+      <BasePanel v-if="showProgressTracking" variant="bordered" size="medium">
+        <template #header>
           <h3><i class="fas fa-tasks"></i> Progress Tracking</h3>
           <BaseButton
             size="sm"
@@ -186,7 +186,7 @@
             <i class="fas fa-times"></i>
             Hide
           </BaseButton>
-        </div>
+        </template>
 
         <div class="progress-container">
           <!-- Overall Progress -->
@@ -240,7 +240,7 @@
             </span>
           </div>
         </div>
-      </div>
+      </BasePanel>
 
       <div class="action-info">
         <div class="info-item">
@@ -259,10 +259,10 @@
     </div>
 
     <!-- Search Section -->
-    <div v-if="showSearch" class="search-section">
-      <div class="section-header">
+    <BasePanel v-if="showSearch" variant="bordered" size="medium">
+      <template #header>
         <h3><i class="fas fa-search"></i> Search Man Page Knowledge</h3>
-      </div>
+      </template>
 
       <div class="search-input">
         <input 
@@ -305,7 +305,7 @@
           </div>
         </div>
       </div>
-    </div>
+    </BasePanel>
 
     <!-- Progress Messages -->
     <div v-if="progressMessage" class="progress-message" :class="progressMessageType">
@@ -321,12 +321,14 @@ import ApiClient from '../utils/ApiClient'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import BasePanel from '@/components/base/BasePanel.vue'
 
 export default {
   name: 'ManPageManager',
   components: {
     EmptyState,
-    BaseButton
+    BaseButton,
+    BasePanel
   },
   setup() {
     // Use the shared composable
@@ -748,30 +750,8 @@ export default {
   font-size: 1.1rem;
 }
 
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
-  border-bottom: 2px solid #ecf0f1;
-}
-
-.section-header h3 {
-  margin: 0;
-  color: #2c3e50;
-}
-
-.section-header i {
-  margin-right: 8px;
-  color: #3498db;
-}
-
-/* Machine Profile Section */
-.machine-profile-section,
-.integration-status-section,
-.integration-actions,
-.search-section {
+/* BasePanel handles section containers - only .integration-actions remains as non-migrated */
+.integration-actions {
   background: #f8f9fa;
   border-radius: 10px;
   padding: 25px;
@@ -1098,15 +1078,7 @@ export default {
   }
 }
 
-/* Progress Tracking Styles */
-.progress-section {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 8px;
-  padding: 20px;
-  margin: 25px 0;
-}
-
+/* BasePanel handles progress-section container - only content styles remain */
 .progress-container {
   margin-top: 15px;
 }
