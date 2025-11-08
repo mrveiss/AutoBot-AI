@@ -20,6 +20,7 @@ from src.agents.npu_code_search_agent import (
     search_codebase,
 )
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_client import get_redis_client
 
 router = APIRouter()
@@ -56,6 +57,11 @@ class SearchResponse(BaseModel):
     search_type: str
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="index_codebase",
+    error_code_prefix="CODE_SEARCH",
+)
 @router.post("/index")
 async def index_codebase(request: IndexRequest):
     """
@@ -103,6 +109,11 @@ async def index_codebase(request: IndexRequest):
         raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_code",
+    error_code_prefix="CODE_SEARCH",
+)
 @router.post("/search")
 async def search_code(request: SearchRequest):
     """
@@ -171,6 +182,11 @@ async def search_code(request: SearchRequest):
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_code_get",
+    error_code_prefix="CODE_SEARCH",
+)
 @router.get("/search")
 async def search_code_get(
     q: str = Query(..., description="Search query"),
@@ -191,6 +207,11 @@ async def search_code_get(
     return await search_code(request)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_search_status",
+    error_code_prefix="CODE_SEARCH",
+)
 @router.get("/status")
 async def get_search_status():
     """
@@ -243,6 +264,11 @@ async def get_search_status():
         raise HTTPException(status_code=500, detail=f"Status check failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_search_cache",
+    error_code_prefix="CODE_SEARCH",
+)
 @router.delete("/cache")
 async def clear_search_cache():
     """
@@ -276,6 +302,11 @@ async def clear_search_cache():
         raise HTTPException(status_code=500, detail=f"Cache clear failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_search_examples",
+    error_code_prefix="CODE_SEARCH",
+)
 @router.get("/examples")
 async def get_search_examples():
     """
@@ -420,6 +451,11 @@ class ReusabilityReport(BaseModel):
 # Advanced Codebase Analytics Endpoints
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_declarations",
+    error_code_prefix="CODE_SEARCH",
+)
 @router.post("/analytics/declarations")
 async def analyze_declarations(request: AnalyticsRequest):
     """
@@ -599,6 +635,11 @@ async def analyze_declarations(request: AnalyticsRequest):
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="find_code_duplicates",
+    error_code_prefix="CODE_SEARCH",
+)
 @router.post("/analytics/duplicates")
 async def find_code_duplicates(request: AnalyticsRequest):
     """
@@ -707,6 +748,11 @@ async def find_code_duplicates(request: AnalyticsRequest):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_codebase_statistics",
+    error_code_prefix="CODE_SEARCH",
+)
 @router.get("/analytics/stats")
 async def get_codebase_statistics():
     """
@@ -767,6 +813,11 @@ async def get_codebase_statistics():
         raise HTTPException(status_code=500, detail=f"Statistics failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_refactor_suggestions",
+    error_code_prefix="CODE_SEARCH",
+)
 @router.post("/analytics/refactor-suggestions")
 async def get_refactor_suggestions(request: AnalyticsRequest):
     """

@@ -31262,6 +31262,283 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("await websocket.send_text", source)
 
 
+    # ==============================================
+    # BATCH 167: code_search.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_167_index_codebase_simple_pattern(self):
+        """Verify index_codebase endpoint uses Simple Pattern"""
+        from backend.api import code_search
+
+        source = inspect.getsource(code_search.index_codebase)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="index_codebase"', source)
+        self.assertIn('error_code_prefix="CODE_SEARCH"', source)
+
+    def test_batch_167_search_code_simple_pattern(self):
+        """Verify search_code endpoint uses Simple Pattern"""
+        from backend.api import code_search
+
+        source = inspect.getsource(code_search.search_code)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="search_code"', source)
+        self.assertIn('error_code_prefix="CODE_SEARCH"', source)
+
+    def test_batch_167_search_code_get_simple_pattern(self):
+        """Verify search_code_get endpoint uses Simple Pattern"""
+        from backend.api import code_search
+
+        source = inspect.getsource(code_search.search_code_get)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="search_code_get"', source)
+        self.assertIn('error_code_prefix="CODE_SEARCH"', source)
+
+    def test_batch_167_get_search_status_simple_pattern(self):
+        """Verify get_search_status endpoint uses Simple Pattern"""
+        from backend.api import code_search
+
+        source = inspect.getsource(code_search.get_search_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_search_status"', source)
+        self.assertIn('error_code_prefix="CODE_SEARCH"', source)
+
+    def test_batch_167_clear_search_cache_simple_pattern(self):
+        """Verify clear_search_cache endpoint uses Simple Pattern"""
+        from backend.api import code_search
+
+        source = inspect.getsource(code_search.clear_search_cache)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="clear_search_cache"', source)
+        self.assertIn('error_code_prefix="CODE_SEARCH"', source)
+
+    def test_batch_167_get_search_examples_simple_pattern(self):
+        """Verify get_search_examples endpoint uses Simple Pattern"""
+        from backend.api import code_search
+
+        source = inspect.getsource(code_search.get_search_examples)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_search_examples"', source)
+        self.assertIn('error_code_prefix="CODE_SEARCH"', source)
+
+    def test_batch_167_analyze_declarations_simple_pattern(self):
+        """Verify analyze_declarations endpoint uses Simple Pattern"""
+        from backend.api import code_search
+
+        source = inspect.getsource(code_search.analyze_declarations)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="analyze_declarations"', source)
+        self.assertIn('error_code_prefix="CODE_SEARCH"', source)
+
+    def test_batch_167_find_code_duplicates_simple_pattern(self):
+        """Verify find_code_duplicates endpoint uses Simple Pattern"""
+        from backend.api import code_search
+
+        source = inspect.getsource(code_search.find_code_duplicates)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="find_code_duplicates"', source)
+        self.assertIn('error_code_prefix="CODE_SEARCH"', source)
+
+    def test_batch_167_get_codebase_statistics_simple_pattern(self):
+        """Verify get_codebase_statistics endpoint uses Simple Pattern"""
+        from backend.api import code_search
+
+        source = inspect.getsource(code_search.get_codebase_statistics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_codebase_statistics"', source)
+        self.assertIn('error_code_prefix="CODE_SEARCH"', source)
+
+    def test_batch_167_get_refactor_suggestions_simple_pattern(self):
+        """Verify get_refactor_suggestions endpoint uses Simple Pattern"""
+        from backend.api import code_search
+
+        source = inspect.getsource(code_search.get_refactor_suggestions)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_refactor_suggestions"', source)
+        self.assertIn('error_code_prefix="CODE_SEARCH"', source)
+
+    def test_batch_167_all_code_search_endpoints_have_decorator(self):
+        """Verify all code_search endpoints have @with_error_handling decorator"""
+        from backend.api import code_search
+
+        endpoint_functions = [
+            code_search.index_codebase,
+            code_search.search_code,
+            code_search.search_code_get,
+            code_search.get_search_status,
+            code_search.clear_search_cache,
+            code_search.get_search_examples,
+            code_search.analyze_declarations,
+            code_search.find_code_duplicates,
+            code_search.get_codebase_statistics,
+            code_search.get_refactor_suggestions,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_167_code_search_100_percent_milestone(self):
+        """Verify code_search.py has reached 100% migration"""
+        from backend.api import code_search
+
+        endpoint_functions = [
+            code_search.index_codebase,
+            code_search.search_code,
+            code_search.search_code_get,
+            code_search.get_search_status,
+            code_search.clear_search_cache,
+            code_search.get_search_examples,
+            code_search.analyze_declarations,
+            code_search.find_code_duplicates,
+            code_search.get_codebase_statistics,
+            code_search.get_refactor_suggestions,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 10
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_167_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic request/response models"""
+        from backend.api import code_search
+
+        # Verify models are defined
+        self.assertTrue(hasattr(code_search, "IndexRequest"))
+        self.assertTrue(hasattr(code_search, "SearchRequest"))
+        self.assertTrue(hasattr(code_search, "SearchResponse"))
+        self.assertTrue(hasattr(code_search, "AnalyticsRequest"))
+        self.assertTrue(hasattr(code_search, "CodeDeclaration"))
+        self.assertTrue(hasattr(code_search, "ReusabilityReport"))
+
+        # Verify models are used in endpoints
+        index_source = inspect.getsource(code_search.index_codebase)
+        self.assertIn("IndexRequest", index_source)
+
+        search_source = inspect.getsource(code_search.search_code)
+        self.assertIn("SearchRequest", search_source)
+
+        analytics_source = inspect.getsource(code_search.analyze_declarations)
+        self.assertIn("AnalyticsRequest", analytics_source)
+
+    def test_batch_167_migration_preserves_npu_code_search_integration(self):
+        """Verify migration preserves NPU code search agent integration"""
+        from backend.api import code_search
+
+        # Verify imports are present
+        self.assertTrue(hasattr(code_search, "get_npu_code_search"))
+        self.assertTrue(hasattr(code_search, "index_project"))
+        self.assertTrue(hasattr(code_search, "search_codebase"))
+
+        # Verify _get_code_search_agent helper function exists
+        self.assertTrue(hasattr(code_search, "_get_code_search_agent"))
+
+        # Verify search_code uses search_codebase
+        search_source = inspect.getsource(code_search.search_code)
+        self.assertIn("search_codebase", search_source)
+
+    def test_batch_167_migration_preserves_search_types(self):
+        """Verify migration preserves multiple search type support"""
+        from backend.api import code_search
+
+        # Verify search_code validates search types
+        search_source = inspect.getsource(code_search.search_code)
+        self.assertIn("semantic", search_source)
+        self.assertIn("exact", search_source)
+        self.assertIn("regex", search_source)
+        self.assertIn("element", search_source)
+        self.assertIn("valid_types", search_source)
+
+    def test_batch_167_migration_preserves_redis_client_integration(self):
+        """Verify migration preserves Redis client usage for caching"""
+        from backend.api import code_search
+
+        # Verify get_redis_client is imported
+        self.assertTrue(hasattr(code_search, "get_redis_client"))
+
+        # Verify get_codebase_statistics uses Redis client
+        stats_source = inspect.getsource(code_search.get_codebase_statistics)
+        self.assertIn("get_redis_client", stats_source)
+        self.assertIn("redis_client.keys", stats_source)
+
+    def test_batch_167_migration_preserves_analytics_functionality(self):
+        """Verify migration preserves advanced codebase analytics"""
+        from backend.api import code_search
+
+        # Verify analytics endpoints exist
+        self.assertTrue(hasattr(code_search, "analyze_declarations"))
+        self.assertTrue(hasattr(code_search, "find_code_duplicates"))
+        self.assertTrue(hasattr(code_search, "get_codebase_statistics"))
+        self.assertTrue(hasattr(code_search, "get_refactor_suggestions"))
+
+        # Verify declaration analysis patterns
+        declarations_source = inspect.getsource(code_search.analyze_declarations)
+        self.assertIn("functions", declarations_source)
+        self.assertIn("classes", declarations_source)
+        self.assertIn("imports", declarations_source)
+        self.assertIn("variables", declarations_source)
+
+    def test_batch_167_migration_preserves_duplicate_detection(self):
+        """Verify migration preserves code duplicate detection logic"""
+        from backend.api import code_search
+
+        # Verify find_code_duplicates uses semantic search
+        duplicates_source = inspect.getsource(code_search.find_code_duplicates)
+        self.assertIn("duplicate_patterns", duplicates_source)
+        self.assertIn("semantic", duplicates_source)
+        self.assertIn("similar_blocks", duplicates_source)
+        self.assertIn("refactor_priority", duplicates_source)
+
+    def test_batch_167_migration_preserves_json_response_usage(self):
+        """Verify migration preserves JSONResponse with custom status codes"""
+        from backend.api import code_search
+
+        # Verify JSONResponse is imported
+        self.assertTrue(hasattr(code_search, "JSONResponse"))
+
+        # Verify get_search_status uses JSONResponse
+        status_source = inspect.getsource(code_search.get_search_status)
+        self.assertIn("JSONResponse", status_source)
+        self.assertIn("status_code=200", status_source)
+
+    def test_batch_167_migration_preserves_language_support(self):
+        """Verify migration preserves multi-language support"""
+        from backend.api import code_search
+
+        # Verify get_search_status lists supported languages
+        status_source = inspect.getsource(code_search.get_search_status)
+        self.assertIn("python", status_source)
+        self.assertIn("javascript", status_source)
+        self.assertIn("typescript", status_source)
+        self.assertIn("supported_languages", status_source)
+
+
+
+
 
 
 
