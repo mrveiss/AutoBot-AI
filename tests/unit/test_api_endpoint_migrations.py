@@ -28623,6 +28623,256 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("query", test_source)
         self.assertIn("max_results", test_source)
 
+    # ==============================================
+    # BATCH 156: remote_terminal.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_156_remote_terminal_info_simple_pattern(self):
+        """Verify remote_terminal_info endpoint uses Simple Pattern"""
+        from backend.api import remote_terminal
+
+        source = inspect.getsource(remote_terminal.remote_terminal_info)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="remote_terminal_info"', source)
+        self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
+
+    def test_batch_156_list_hosts_simple_pattern(self):
+        """Verify list_hosts endpoint uses Simple Pattern"""
+        from backend.api import remote_terminal
+
+        source = inspect.getsource(remote_terminal.list_hosts)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_hosts"', source)
+        self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
+
+    def test_batch_156_get_host_info_simple_pattern(self):
+        """Verify get_host_info endpoint uses Simple Pattern"""
+        from backend.api import remote_terminal
+
+        source = inspect.getsource(remote_terminal.get_host_info)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_host_info"', source)
+        self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
+
+    def test_batch_156_execute_remote_command_simple_pattern(self):
+        """Verify execute_remote_command endpoint uses Simple Pattern"""
+        from backend.api import remote_terminal
+
+        source = inspect.getsource(remote_terminal.execute_remote_command)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="execute_remote_command"', source)
+        self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
+
+    def test_batch_156_execute_batch_command_simple_pattern(self):
+        """Verify execute_batch_command endpoint uses Simple Pattern"""
+        from backend.api import remote_terminal
+
+        source = inspect.getsource(remote_terminal.execute_batch_command)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="execute_batch_command"', source)
+        self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
+
+    def test_batch_156_check_all_hosts_health_simple_pattern(self):
+        """Verify check_all_hosts_health endpoint uses Simple Pattern"""
+        from backend.api import remote_terminal
+
+        source = inspect.getsource(remote_terminal.check_all_hosts_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="check_all_hosts_health"', source)
+        self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
+
+    def test_batch_156_get_connection_pool_stats_simple_pattern(self):
+        """Verify get_connection_pool_stats endpoint uses Simple Pattern"""
+        from backend.api import remote_terminal
+
+        source = inspect.getsource(remote_terminal.get_connection_pool_stats)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_connection_pool_stats"', source)
+        self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
+
+    def test_batch_156_create_remote_session_simple_pattern(self):
+        """Verify create_remote_session endpoint uses Simple Pattern"""
+        from backend.api import remote_terminal
+
+        source = inspect.getsource(remote_terminal.create_remote_session)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="create_remote_session"', source)
+        self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
+
+    def test_batch_156_list_remote_sessions_simple_pattern(self):
+        """Verify list_remote_sessions endpoint uses Simple Pattern"""
+        from backend.api import remote_terminal
+
+        source = inspect.getsource(remote_terminal.list_remote_sessions)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_remote_sessions"', source)
+        self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
+
+    def test_batch_156_all_remote_terminal_endpoints_have_decorator(self):
+        """Verify all remote_terminal endpoints have @with_error_handling decorator"""
+        from backend.api import remote_terminal
+
+        endpoint_functions = [
+            remote_terminal.remote_terminal_info,
+            remote_terminal.list_hosts,
+            remote_terminal.get_host_info,
+            remote_terminal.execute_remote_command,
+            remote_terminal.execute_batch_command,
+            remote_terminal.check_all_hosts_health,
+            remote_terminal.get_connection_pool_stats,
+            remote_terminal.create_remote_session,
+            remote_terminal.list_remote_sessions,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_156_remote_terminal_100_percent_milestone(self):
+        """Verify remote_terminal.py has reached 100% migration"""
+        from backend.api import remote_terminal
+
+        endpoint_functions = [
+            remote_terminal.remote_terminal_info,
+            remote_terminal.list_hosts,
+            remote_terminal.get_host_info,
+            remote_terminal.execute_remote_command,
+            remote_terminal.execute_batch_command,
+            remote_terminal.check_all_hosts_health,
+            remote_terminal.get_connection_pool_stats,
+            remote_terminal.create_remote_session,
+            remote_terminal.list_remote_sessions,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 9
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_156_migration_preserves_ssh_manager_dependency(self):
+        """Verify migration preserves SSHManager dependency injection"""
+        from backend.api import remote_terminal
+
+        # Verify get_ssh_manager dependency is used
+        list_hosts_source = inspect.getsource(remote_terminal.list_hosts)
+        self.assertIn("ssh_manager: SSHManager = Depends(get_ssh_manager)", list_hosts_source)
+
+        execute_source = inspect.getsource(remote_terminal.execute_remote_command)
+        self.assertIn("ssh_manager: SSHManager = Depends(get_ssh_manager)", execute_source)
+
+        batch_source = inspect.getsource(remote_terminal.execute_batch_command)
+        self.assertIn("ssh_manager: SSHManager = Depends(get_ssh_manager)", batch_source)
+
+    def test_batch_156_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic request models"""
+        from backend.api import remote_terminal
+
+        # Verify models are defined
+        self.assertTrue(hasattr(remote_terminal, "RemoteCommandRequest"))
+        self.assertTrue(hasattr(remote_terminal, "BatchCommandRequest"))
+        self.assertTrue(hasattr(remote_terminal, "RemoteSessionRequest"))
+
+        # Verify models are used in endpoints
+        execute_source = inspect.getsource(remote_terminal.execute_remote_command)
+        self.assertIn("RemoteCommandRequest", execute_source)
+
+        batch_source = inspect.getsource(remote_terminal.execute_batch_command)
+        self.assertIn("BatchCommandRequest", batch_source)
+
+        session_source = inspect.getsource(remote_terminal.create_remote_session)
+        self.assertIn("RemoteSessionRequest", session_source)
+
+    def test_batch_156_migration_preserves_multi_host_execution(self):
+        """Verify migration preserves multi-host command execution"""
+        from backend.api import remote_terminal
+
+        # Verify batch command execution logic
+        batch_source = inspect.getsource(remote_terminal.execute_batch_command)
+        self.assertIn("execute_command_all_hosts", batch_source)
+        self.assertIn("parallel", batch_source)
+        self.assertIn("asyncio.gather", batch_source)
+
+    def test_batch_156_migration_preserves_remote_session_management(self):
+        """Verify migration preserves remote session management"""
+        from backend.api import remote_terminal
+
+        # Verify session manager is used
+        create_source = inspect.getsource(remote_terminal.create_remote_session)
+        self.assertIn("session_id", create_source)
+        self.assertIn("uuid.uuid4", create_source)
+
+        list_source = inspect.getsource(remote_terminal.list_remote_sessions)
+        self.assertIn("session_manager.list_sessions", list_source)
+
+    def test_batch_156_migration_preserves_connection_pool_stats(self):
+        """Verify migration preserves connection pool statistics"""
+        from backend.api import remote_terminal
+
+        # Verify pool stats retrieval
+        stats_source = inspect.getsource(remote_terminal.get_connection_pool_stats)
+        self.assertIn("get_pool_stats", stats_source)
+        self.assertIn("total_connections", stats_source)
+        self.assertIn("active_connections", stats_source)
+        self.assertIn("idle_connections", stats_source)
+
+    def test_batch_156_migration_preserves_health_check(self):
+        """Verify migration preserves health check functionality"""
+        from backend.api import remote_terminal
+
+        # Verify health check logic
+        health_source = inspect.getsource(remote_terminal.check_all_hosts_health)
+        self.assertIn("health_check_all_hosts", health_source)
+        self.assertIn("healthy", health_source)
+        self.assertIn("unhealthy", health_source)
+        self.assertIn("disabled", health_source)
+
+    def test_batch_156_migration_preserves_remote_session_type_enum(self):
+        """Verify migration preserves RemoteSessionType enum"""
+        from backend.api import remote_terminal
+
+        # Verify enum exists
+        self.assertTrue(hasattr(remote_terminal, "RemoteSessionType"))
+
+        # Verify enum values
+        RemoteSessionType = remote_terminal.RemoteSessionType
+        self.assertTrue(hasattr(RemoteSessionType, "COMMAND"))
+        self.assertTrue(hasattr(RemoteSessionType, "INTERACTIVE"))
+        self.assertTrue(hasattr(RemoteSessionType, "BATCH"))
+
+
+
+        """Verify migration preserves web research test functionality"""
+        from backend.api import web_research_settings
+
+        # Verify test research
+        test_source = inspect.getsource(web_research_settings.test_web_research)
+        self.assertIn("conduct_web_research", test_source)
+        self.assertIn("query", test_source)
+        self.assertIn("max_results", test_source)
+
 
 if __name__ == "__main__":
     unittest.main()
