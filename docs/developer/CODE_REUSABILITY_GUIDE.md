@@ -2853,16 +2853,83 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
-**BaseModal Migration Summary (Batches 47-55)**:
-- **Components Migrated**: 9 components (TerminalModals, KnowledgeSearch, SecretsManager, NPUWorkersSettings, UserManagementSettings, MonitoringDashboard, KnowledgeEntries, RedisServiceControl, ChatMessages)
-- **Modals Consolidated**: 17 modals total (4 terminal + 1 document + 3 secrets + 3 workers + 2 user mgmt + 1 monitoring + 1 knowledge + 1 service + 1 chat)
-- **Lines Saved**: ~587 lines total
+### **Batch 56 - ChatSidebar.vue Migration** ✅ Completed
+
+**Goal**: Migrate edit chat name modal to BaseModal.
+
+**Component**: ChatSidebar.vue (428 → 431 lines, ~3 lines net increase, consistency gain)
+
+**Modal Migrated**:
+- **Edit Session Name Modal** - Simple text input modal for renaming chat sessions
+
+**Changes**:
+- Added BaseModal import
+- Converted inline modal to BaseModal with medium size
+- Input field with keyboard shortcuts preserved (Enter to save, Escape to cancel)
+- Actions slot with Cancel and Save buttons
+- Input ref maintained for focus management
+
+**Template Simplified**:
+- Removed fixed positioning overlay (~9 lines of template structure)
+- Removed custom centering flex layout
+- Removed custom modal card wrapper
+- BaseModal handles all positioning and overlay
+- Note: Slight net increase due to BaseModal import + slot structure, but gained consistency
+
+**Patterns Preserved**:
+- Input ref for focus management (editInput)
+- Keyboard shortcut handlers (@keyup.enter, @keyup.escape)
+- Save button triggers saveSessionName method
+- Cancel button triggers cancelEdit method
+- Inline Tailwind utility classes for input styling
+
+---
+
+### **Batch 57 - PhaseStatusIndicator.vue Migration** ✅ Completed
+
+**Goal**: Migrate validation report modal to BaseModal.
+
+**Component**: PhaseStatusIndicator.vue (653 → 595 lines, ~58 lines saved, 8.9% reduction)
+
+**Modal Migrated**:
+- **Validation Report Modal** - Large scrollable modal displaying validation report
+
+**Changes**:
+- Added BaseModal import and component registration
+- Converted modal-overlay structure to BaseModal with large scrollable size
+- Pre-formatted text display for validation report preserved
+- No custom actions (uses default close button only)
+
+**CSS Removed**:
+- .modal-overlay fixed positioning and structure (~12 lines)
+- .modal-content wrapper with max dimensions (~9 lines)
+- .modal-header layout and styling (~7 lines)
+- .modal-header h3 styling (~4 lines)
+- .close-btn button styles (~8 lines)
+- .close-btn:hover state (~3 lines)
+- .modal-body scrollable container (~5 lines)
+- Removed manual keyboard event handlers (@click.self, @keyup.enter, @keyup.space)
+- Total: ~57 lines
+
+**Patterns Preserved**:
+- .validation-report styling (background, padding, font-family, monospace, etc.)
+- Pre tag for formatted text display
+- Large size for potentially long text content
+- Scrollable content area
+
+---
+
+**BaseModal Migration Summary (Batches 47-57)**:
+- **Components Migrated**: 11 components (TerminalModals, KnowledgeSearch, SecretsManager, NPUWorkersSettings, UserManagementSettings, MonitoringDashboard, KnowledgeEntries, RedisServiceControl, ChatMessages, ChatSidebar, PhaseStatusIndicator)
+- **Modals Consolidated**: 19 modals total (4 terminal + 1 document + 3 secrets + 3 workers + 2 user mgmt + 1 monitoring + 1 knowledge + 1 service + 2 chat + 1 phase status)
+- **Lines Saved**: ~642 lines total
   - Batches 47-49: ~301 lines (182 + 54 + 65)
   - Batches 50-52: ~213 lines (87 + 73 + 53)
   - Batches 53-55: ~73 lines (62 + 15 - 4)
-- **Target**: ~450-500 lines estimated → **587 lines achieved** ✅ **TARGET EXCEEDED**
+  - Batches 56-57: ~55 lines (-3 + 58)
+- **Target**: ~450-500 lines estimated → **642 lines achieved** ✅ **TARGET EXCEEDED (128%)**
 - **Sizes Used**: All 3 sizes (small, medium, large)
-- **Key Patterns**: v-model binding, size variants, scrollable modals, conditional closeOnOverlay, custom title slots, actions slot with custom buttons, form submissions in modals, StatusBadge integration, operation locking, loading states, dual-mode modals, confirmation dialogs, keyboard shortcuts
+- **Key Patterns**: v-model binding, size variants, scrollable modals, conditional closeOnOverlay, custom title slots, actions slot with custom buttons, form submissions in modals, StatusBadge integration, operation locking, loading states, dual-mode modals, confirmation dialogs, keyboard shortcuts, pre-formatted text display
 
 ---
 
@@ -2904,7 +2971,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 44: ~40 lines (1 component, alerts list with v-for)
   - Batch 45: ~17 lines (1 component, 1 banner)
   - Batch 46: ~10 lines (1 component, 1 alert)
-- BaseModal adoptions: ~587 lines (batches 47-55)
+- BaseModal adoptions: ~642 lines (batches 47-57)
   - Batch 47: ~182 lines (1 component, 4 modals)
   - Batch 48: ~54 lines (1 component, 1 modal)
   - Batch 49: ~65 lines (1 component, 3 modals)
@@ -2914,11 +2981,13 @@ const createRipple = (event: TouchEvent) => {
   - Batch 53: ~62 lines (1 component, 1 modal)
   - Batch 54: ~15 lines (1 component, 1 modal)
   - Batch 55: ~0 lines (1 component, 1 modal - consistency gain)
-- **Total Progress**: ~3,319 lines / ~1,500-2,000 realistic target (166-221%) ✅ **TARGET EXCEEDED**
+  - Batch 56: ~-3 lines (1 component, 1 modal - consistency gain)
+  - Batch 57: ~58 lines (1 component, 1 modal)
+- **Total Progress**: ~3,374 lines / ~1,500-2,000 realistic target (169-225%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
 - **BaseButton Milestone**: 29 components using BaseButton (202 buttons consolidated) ✅ **100% ADOPTION**
 - **BaseAlert Milestone**: 6 components using BaseAlert (10+ alerts consolidated)
-- **BaseModal Milestone**: 14 components using BaseModal (2 baseline + 12 new, 17 modals consolidated)
+- **BaseModal Milestone**: 16 components using BaseModal (2 baseline + 14 new, 19 modals consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
