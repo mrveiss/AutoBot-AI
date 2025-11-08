@@ -18,6 +18,7 @@ from fastapi.responses import StreamingResponse
 
 from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,11 @@ CONTAINER_LOGS = {
 }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_log_sources",
+    error_code_prefix="LOGS",
+)
 @router.get("/logs/sources")
 async def get_log_sources():
     """Get all available log sources (files + Docker containers)"""
@@ -105,6 +111,11 @@ async def get_log_sources():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_recent_logs",
+    error_code_prefix="LOGS",
+)
 @router.get("/logs/recent")
 async def get_recent_logs(limit: int = 100):
     """Get recent log entries across all log files"""
@@ -143,6 +154,11 @@ async def get_recent_logs(limit: int = 100):
         return {"entries": [], "count": 0, "limit": limit, "error": str(e)}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_logs",
+    error_code_prefix="LOGS",
+)
 @router.get("/logs/list")
 async def list_logs() -> List[Dict[str, Any]]:
     """List all available log files (backward compatibility)"""
@@ -154,6 +170,11 @@ async def list_logs() -> List[Dict[str, Any]]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="read_log",
+    error_code_prefix="LOGS",
+)
 @router.get("/logs/read/{filename}")
 async def read_log(
     filename: str,
@@ -204,6 +225,11 @@ async def read_log(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="read_container_logs",
+    error_code_prefix="LOGS",
+)
 @router.get("/logs/container/{service}")
 async def read_container_logs(
     service: str,
@@ -313,6 +339,11 @@ def parse_docker_log_line(line: str, service: str) -> Dict[str, Any]:
     return parsed
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_unified_logs",
+    error_code_prefix="LOGS",
+)
 @router.get("/logs/unified")
 async def get_unified_logs(
     lines: int = Query(
@@ -426,6 +457,11 @@ def parse_file_log_line(line: str, source: str) -> Dict[str, Any]:
     return parsed
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stream_log",
+    error_code_prefix="LOGS",
+)
 @router.get("/logs/stream/{filename}")
 async def stream_log(filename: str):
     """Stream log file content"""
@@ -500,6 +536,11 @@ async def tail_log(websocket: WebSocket, filename: str):
             pass
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_logs",
+    error_code_prefix="LOGS",
+)
 @router.get("/logs/search")
 async def search_logs(
     query: str = Query(..., description="Search query"),
@@ -566,6 +607,11 @@ async def search_logs(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_log",
+    error_code_prefix="LOGS",
+)
 @router.delete("/logs/clear/{filename}")
 async def clear_log(filename: str):
     """Clear a log file (truncate to 0 bytes)"""
