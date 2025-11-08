@@ -3225,16 +3225,82 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
-**BasePanel Migration Summary (Batches 58-61)**:
-- **Components Migrated**: 4 components (ValidationDashboard, VoiceInterface, MonitoringDashboard, CodebaseAnalytics)
-- **Panels Consolidated**: 26 panels (8 stat cards + 5 sections + 2 voice panels + 4 metric cards + 2 chart cards + 1 optimization section + 4 analytics cards)
-- **Lines Saved**: ~88 lines total
+### **Batch 62 - SystemMonitor.vue Migration** ✅ Completed
+
+**Goal**: Migrate real-time system monitoring dashboard glass-cards to BasePanel.
+
+**Component**: SystemMonitor.vue (686 → 684 lines, ~2 lines saved, 0.3% reduction)
+
+**Panels Migrated**:
+1. **6 Glass Cards** - System monitoring panels with elevated variant (medium size)
+   - Performance Metrics - CPU, Memory, GPU, NPU, Network usage bars with refresh indicator
+   - Service Status - Online/offline service list with version info (v-for service-item)
+   - Performance History - Canvas chart with timeframe selector buttons
+   - API Health - Endpoint groups with response times (v-for endpoint-item)
+   - Quick Actions - Router links for chat, upload, terminal, logs
+   - Recent Activity - Activity feed with icons and timestamps (v-for activity-item)
+
+**Template Changes**:
+```vue
+<!-- Before: Glass Card -->
+<div class="metric-card glass-card">
+  <div class="card-header">
+    <h3>System Performance</h3>
+    <div class="refresh-indicator" :class="{ spinning: isRefreshing }">⟳</div>
+  </div>
+  <div class="metric-content">
+    <div class="metric-item">...</div>
+  </div>
+</div>
+
+<!-- After: BasePanel with Header Wrapper -->
+<BasePanel variant="elevated" size="medium">
+  <template #header>
+    <div class="card-header-content">
+      <h3>System Performance</h3>
+      <div class="refresh-indicator" :class="{ spinning: isRefreshing }">⟳</div>
+    </div>
+  </template>
+  <div class="metric-content">
+    <div class="metric-item">...</div>
+  </div>
+</BasePanel>
+```
+
+**CSS Removed** (~21 lines):
+- `.glass-card` structure (background, border, border-radius, padding, backdrop-filter, box-shadow) - 8 lines
+- `.card-header` layout (display, justify, align, margin, padding, border) - 8 lines
+- `.card-header h3` (font-size, font-weight, color) - 5 lines
+
+**CSS Added** (~9 lines):
+- `.card-header-content` (flex layout for header slot with controls/stats) - 7 lines
+- `.card-header-content h3` (font-size, font-weight, color) - 2 lines
+
+**Features Preserved**:
+- Glass morphism visual style (backdrop-filter blur) now via BasePanel elevated variant
+- Real-time refresh indicator with spinning animation (@keyframes spin)
+- Service status badges with online/offline states
+- Chart.js canvas integration with timeframe control buttons
+- API endpoint grouping with health status color coding
+- Router-link quick actions grid layout
+- Activity feed with icon + timestamp structure
+- All v-for list items preserved (service-item, endpoint-item, activity-item)
+
+**Key Pattern**: Header wrapper (`.card-header-content`) created for cards with controls/stats in header slot (refresh indicator, status summary, API stats, timeframe buttons)
+
+---
+
+**BasePanel Migration Summary (Batches 58-62)**:
+- **Components Migrated**: 5 components (ValidationDashboard, VoiceInterface, MonitoringDashboard, CodebaseAnalytics, SystemMonitor)
+- **Panels Consolidated**: 32 panels (8 stat cards + 5 sections + 2 voice panels + 4 metric cards + 2 chart cards + 1 optimization section + 4 analytics cards + 6 glass cards)
+- **Lines Saved**: ~90 lines total
   - Batch 58: ~0 lines (CSS consolidation, template overhead offset)
   - Batch 59: ~36 lines (CSS consolidation)
   - Batch 60: ~21 lines (CSS consolidation)
   - Batch 61: ~31 lines (CSS consolidation)
-- **Variants Used**: elevated (metric/stat cards), bordered (sections/charts/optimization/analytics)
-- **Sizes Used**: small (metric/stat cards), medium (sections/charts/optimization/analytics)
+  - Batch 62: ~2 lines (CSS consolidation)
+- **Variants Used**: elevated (metric/stat/glass cards), bordered (sections/charts/optimization/analytics)
+- **Sizes Used**: small (metric/stat cards), medium (sections/charts/optimization/analytics/glass cards)
 - **Key Patterns**: header slot for titles, header wrappers for controls, default slot for content
 
 ---
@@ -3289,17 +3355,18 @@ const createRipple = (event: TouchEvent) => {
   - Batch 55: ~0 lines (1 component, 1 modal - consistency gain)
   - Batch 56: ~-3 lines (1 component, 1 modal - consistency gain)
   - Batch 57: ~58 lines (1 component, 1 modal)
-- BasePanel adoptions: ~88 lines (batches 58-61)
+- BasePanel adoptions: ~90 lines (batches 58-62)
   - Batch 58: ~0 lines (1 component, 9 panels - consistency gain, CSS consolidation)
   - Batch 59: ~36 lines (1 component, 2 panels)
   - Batch 60: ~21 lines (1 component, 7 panels)
   - Batch 61: ~31 lines (1 component, 8 panels)
-- **Total Progress**: ~3,462 lines / ~1,500-2,000 realistic target (173-231%) ✅ **TARGET EXCEEDED**
+  - Batch 62: ~2 lines (1 component, 6 panels)
+- **Total Progress**: ~3,464 lines / ~1,500-2,000 realistic target (173-231%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
 - **BaseButton Milestone**: 29 components using BaseButton (202 buttons consolidated) ✅ **100% ADOPTION**
 - **BaseAlert Milestone**: 6 components using BaseAlert (10+ alerts consolidated)
 - **BaseModal Milestone**: 16 components using BaseModal (2 baseline + 14 new, 19 modals consolidated)
-- **BasePanel Milestone**: 4 components using BasePanel (0 baseline + 4 new, 26 panels consolidated)
+- **BasePanel Milestone**: 5 components using BasePanel (0 baseline + 5 new, 32 panels consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
