@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from src.autobot_types import TaskComplexity
 from src.constants.network_constants import NetworkConstants
 from src.utils.advanced_cache_manager import advanced_cache, smart_cache
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.workflow_templates import TemplateCategory, workflow_template_manager
 
 router = APIRouter()
@@ -39,6 +40,11 @@ def _generate_templates_cache_key(category, tags, complexity):
     return "list:" + (":".join(key_parts) if key_parts else "all")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_templates_root",
+    error_code_prefix="TEMPLATES",
+)
 @router.get("/")
 async def get_templates_root():
     """Root endpoint for templates API - redirects to /templates"""
@@ -54,6 +60,11 @@ async def get_templates_root():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_workflow_templates",
+    error_code_prefix="TEMPLATES",
+)
 @router.get("/templates")
 @smart_cache(
     data_type="templates",
@@ -133,6 +144,11 @@ async def list_workflow_templates(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_template_details",
+    error_code_prefix="TEMPLATES",
+)
 @router.get("/templates/{template_id}")
 @smart_cache(
     data_type="templates", key_func=lambda template_id: f"detail:{template_id}"
@@ -180,6 +196,11 @@ async def get_template_details(template_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to get template: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_templates",
+    error_code_prefix="TEMPLATES",
+)
 @router.get("/templates/search")
 async def search_templates(
     q: str = Query(
@@ -221,6 +242,11 @@ async def search_templates(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_template_categories",
+    error_code_prefix="TEMPLATES",
+)
 @router.get("/templates/categories")
 async def list_template_categories():
     """List all available template categories"""
@@ -247,6 +273,11 @@ async def list_template_categories():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="validate_template_variables",
+    error_code_prefix="TEMPLATES",
+)
 @router.post("/templates/{template_id}/validate")
 async def validate_template_variables(
     template_id: str, request: TemplateValidationRequest
@@ -269,6 +300,11 @@ async def validate_template_variables(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_workflow_from_template",
+    error_code_prefix="TEMPLATES",
+)
 @router.post("/templates/{template_id}/create-workflow")
 async def create_workflow_from_template(
     template_id: str, request: TemplateExecutionRequest
@@ -315,6 +351,11 @@ async def create_workflow_from_template(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_template_workflow",
+    error_code_prefix="TEMPLATES",
+)
 @router.post("/templates/{template_id}/execute")
 async def execute_template_workflow(
     template_id: str, request: TemplateExecutionRequest
@@ -362,6 +403,11 @@ async def execute_template_workflow(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_template_statistics",
+    error_code_prefix="TEMPLATES",
+)
 @router.get("/templates/stats")
 async def get_template_statistics():
     """Get statistics about available templates"""
@@ -413,6 +459,11 @@ async def get_template_statistics():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="preview_template_workflow",
+    error_code_prefix="TEMPLATES",
+)
 @router.get("/templates/{template_id}/preview")
 async def preview_template_workflow(
     template_id: str,

@@ -29694,6 +29694,300 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("current_load", status_source)
         self.assertIn("utilization_percent", status_source)
 
+    # ==============================================
+    # BATCH 160: templates.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_160_get_templates_root_simple_pattern(self):
+        """Verify get_templates_root endpoint uses Simple Pattern"""
+        from backend.api import templates
+
+        source = inspect.getsource(templates.get_templates_root)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_templates_root"', source)
+        self.assertIn('error_code_prefix="TEMPLATES"', source)
+
+    def test_batch_160_list_workflow_templates_simple_pattern(self):
+        """Verify list_workflow_templates endpoint uses Simple Pattern"""
+        from backend.api import templates
+
+        source = inspect.getsource(templates.list_workflow_templates)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_workflow_templates"', source)
+        self.assertIn('error_code_prefix="TEMPLATES"', source)
+
+    def test_batch_160_get_template_details_simple_pattern(self):
+        """Verify get_template_details endpoint uses Simple Pattern"""
+        from backend.api import templates
+
+        source = inspect.getsource(templates.get_template_details)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_template_details"', source)
+        self.assertIn('error_code_prefix="TEMPLATES"', source)
+
+    def test_batch_160_search_templates_simple_pattern(self):
+        """Verify search_templates endpoint uses Simple Pattern"""
+        from backend.api import templates
+
+        source = inspect.getsource(templates.search_templates)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="search_templates"', source)
+        self.assertIn('error_code_prefix="TEMPLATES"', source)
+
+    def test_batch_160_list_template_categories_simple_pattern(self):
+        """Verify list_template_categories endpoint uses Simple Pattern"""
+        from backend.api import templates
+
+        source = inspect.getsource(templates.list_template_categories)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_template_categories"', source)
+        self.assertIn('error_code_prefix="TEMPLATES"', source)
+
+    def test_batch_160_validate_template_variables_simple_pattern(self):
+        """Verify validate_template_variables endpoint uses Simple Pattern"""
+        from backend.api import templates
+
+        source = inspect.getsource(templates.validate_template_variables)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="validate_template_variables"', source)
+        self.assertIn('error_code_prefix="TEMPLATES"', source)
+
+    def test_batch_160_create_workflow_from_template_simple_pattern(self):
+        """Verify create_workflow_from_template endpoint uses Simple Pattern"""
+        from backend.api import templates
+
+        source = inspect.getsource(templates.create_workflow_from_template)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="create_workflow_from_template"', source)
+        self.assertIn('error_code_prefix="TEMPLATES"', source)
+
+    def test_batch_160_execute_template_workflow_simple_pattern(self):
+        """Verify execute_template_workflow endpoint uses Simple Pattern"""
+        from backend.api import templates
+
+        source = inspect.getsource(templates.execute_template_workflow)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="execute_template_workflow"', source)
+        self.assertIn('error_code_prefix="TEMPLATES"', source)
+
+    def test_batch_160_get_template_statistics_simple_pattern(self):
+        """Verify get_template_statistics endpoint uses Simple Pattern"""
+        from backend.api import templates
+
+        source = inspect.getsource(templates.get_template_statistics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_template_statistics"', source)
+        self.assertIn('error_code_prefix="TEMPLATES"', source)
+
+    def test_batch_160_preview_template_workflow_simple_pattern(self):
+        """Verify preview_template_workflow endpoint uses Simple Pattern"""
+        from backend.api import templates
+
+        source = inspect.getsource(templates.preview_template_workflow)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="preview_template_workflow"', source)
+        self.assertIn('error_code_prefix="TEMPLATES"', source)
+
+    def test_batch_160_all_templates_endpoints_have_decorator(self):
+        """Verify all templates endpoints have @with_error_handling decorator"""
+        from backend.api import templates
+
+        endpoint_functions = [
+            templates.get_templates_root,
+            templates.list_workflow_templates,
+            templates.get_template_details,
+            templates.search_templates,
+            templates.list_template_categories,
+            templates.validate_template_variables,
+            templates.create_workflow_from_template,
+            templates.execute_template_workflow,
+            templates.get_template_statistics,
+            templates.preview_template_workflow,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_160_templates_100_percent_milestone(self):
+        """Verify templates.py has reached 100% migration"""
+        from backend.api import templates
+
+        endpoint_functions = [
+            templates.get_templates_root,
+            templates.list_workflow_templates,
+            templates.get_template_details,
+            templates.search_templates,
+            templates.list_template_categories,
+            templates.validate_template_variables,
+            templates.create_workflow_from_template,
+            templates.execute_template_workflow,
+            templates.get_template_statistics,
+            templates.preview_template_workflow,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 10
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_160_migration_preserves_smart_cache_decorators(self):
+        """Verify migration preserves @smart_cache decorators"""
+        from backend.api import templates
+
+        # Verify list_workflow_templates has smart_cache
+        list_source = inspect.getsource(templates.list_workflow_templates)
+        self.assertIn("@smart_cache", list_source)
+        self.assertIn('data_type="templates"', list_source)
+
+        # Verify get_template_details has smart_cache
+        details_source = inspect.getsource(templates.get_template_details)
+        self.assertIn("@smart_cache", details_source)
+        self.assertIn('data_type="templates"', details_source)
+
+    def test_batch_160_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic request models"""
+        from backend.api import templates
+
+        # Verify models are defined
+        self.assertTrue(hasattr(templates, "TemplateExecutionRequest"))
+        self.assertTrue(hasattr(templates, "TemplateValidationRequest"))
+
+        # Verify models are used in endpoints
+        validate_source = inspect.getsource(templates.validate_template_variables)
+        self.assertIn("TemplateValidationRequest", validate_source)
+
+        create_source = inspect.getsource(templates.create_workflow_from_template)
+        self.assertIn("TemplateExecutionRequest", create_source)
+
+    def test_batch_160_migration_preserves_workflow_template_manager(self):
+        """Verify migration preserves workflow_template_manager dependency"""
+        from backend.api import templates
+
+        # Verify workflow_template_manager is imported
+        self.assertTrue(hasattr(templates, "workflow_template_manager"))
+
+        # Verify it's used in endpoints
+        list_source = inspect.getsource(templates.list_workflow_templates)
+        self.assertIn("workflow_template_manager.list_templates", list_source)
+
+        details_source = inspect.getsource(templates.get_template_details)
+        self.assertIn("workflow_template_manager.get_template", details_source)
+
+    def test_batch_160_migration_preserves_template_category_enum(self):
+        """Verify migration preserves TemplateCategory enum usage"""
+        from backend.api import templates
+
+        # Verify TemplateCategory is imported
+        self.assertTrue(hasattr(templates, "TemplateCategory"))
+
+        # Verify it's used in endpoints
+        list_source = inspect.getsource(templates.list_workflow_templates)
+        self.assertIn("TemplateCategory", list_source)
+
+        categories_source = inspect.getsource(templates.list_template_categories)
+        self.assertIn("TemplateCategory", categories_source)
+
+    def test_batch_160_migration_preserves_task_complexity_enum(self):
+        """Verify migration preserves TaskComplexity enum usage"""
+        from backend.api import templates
+
+        # Verify TaskComplexity is imported
+        self.assertTrue(hasattr(templates, "TaskComplexity"))
+
+        # Verify it's used in endpoints
+        list_source = inspect.getsource(templates.list_workflow_templates)
+        self.assertIn("TaskComplexity", list_source)
+
+    def test_batch_160_migration_preserves_query_parameters(self):
+        """Verify migration preserves Query parameter validation"""
+        from backend.api import templates
+
+        # Verify list_workflow_templates has Query parameters
+        list_source = inspect.getsource(templates.list_workflow_templates)
+        self.assertIn("Query", list_source)
+        self.assertIn("category", list_source)
+        self.assertIn("tags", list_source)
+        self.assertIn("complexity", list_source)
+
+        # Verify search_templates has Query parameters
+        search_source = inspect.getsource(templates.search_templates)
+        self.assertIn("Query", search_source)
+        self.assertIn("q", search_source)
+
+    def test_batch_160_migration_preserves_variables_validation(self):
+        """Verify migration preserves template variables validation"""
+        from backend.api import templates
+
+        # Verify validate_template_variables validates variables
+        validate_source = inspect.getsource(templates.validate_template_variables)
+        self.assertIn("validate_template_variables", validate_source)
+        self.assertIn("request.variables", validate_source)
+
+        # Verify create_workflow_from_template validates variables
+        create_source = inspect.getsource(templates.create_workflow_from_template)
+        self.assertIn("validate_template_variables", create_source)
+        self.assertIn("validation", create_source)
+
+    def test_batch_160_migration_preserves_workflow_creation(self):
+        """Verify migration preserves workflow creation from templates"""
+        from backend.api import templates
+
+        # Verify create_workflow_from_template creates workflow
+        create_source = inspect.getsource(templates.create_workflow_from_template)
+        self.assertIn("create_workflow_from_template", create_source)
+        self.assertIn("workflow_data", create_source)
+
+        # Verify preview_template_workflow creates preview
+        preview_source = inspect.getsource(templates.preview_template_workflow)
+        self.assertIn("create_workflow_from_template", preview_source)
+        self.assertIn("workflow_preview", preview_source)
+
+    def test_batch_160_migration_preserves_template_search(self):
+        """Verify migration preserves template search functionality"""
+        from backend.api import templates
+
+        # Verify search_templates uses search method
+        search_source = inspect.getsource(templates.search_templates)
+        self.assertIn("search_templates", search_source)
+        self.assertIn("query", search_source)
+        self.assertIn("search_results", search_source)
+
+    def test_batch_160_migration_preserves_statistics_aggregation(self):
+        """Verify migration preserves template statistics aggregation"""
+        from backend.api import templates
+
+        # Verify get_template_statistics aggregates stats
+        stats_source = inspect.getsource(templates.get_template_statistics)
+        self.assertIn("category_stats", stats_source)
+        self.assertIn("complexity_stats", stats_source)
+        self.assertIn("agent_usage", stats_source)
+        self.assertIn("avg_duration", stats_source)
+
 
 if __name__ == "__main__":
     unittest.main()
