@@ -3594,6 +3594,60 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
+### **Batch 66 - MCPDashboard.vue BaseButton Migration** ✅ Completed
+
+**Goal**: Migrate refresh button to BaseButton for consistent styling and behavior (returning to BaseButton migrations).
+
+**Component**: MCPDashboard.vue (545 → 528 lines, ~17 lines saved, 3.1% reduction)
+
+**Button Migrated (1 total)**:
+
+1. **Refresh Button** → BaseButton `variant="primary"` with loading state:
+```vue
+<!-- Before: custom button with manual loading handling -->
+<button @click="refreshData" :disabled="loading" class="btn-refresh">
+  <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+  Refresh
+</button>
+
+<!-- After: BaseButton with built-in loading -->
+<BaseButton
+  @click="refreshData"
+  :disabled="loading"
+  variant="primary"
+  :loading="loading"
+  icon="fas fa-sync-alt"
+>
+  Refresh
+</BaseButton>
+```
+
+**CSS Removed** (~20 lines):
+```css
+/* Removed manual button styling: */
+.btn-refresh { padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.3s; }
+.btn-refresh:hover:not(:disabled) { background: #0056b3; }
+.btn-refresh:disabled { opacity: 0.6; cursor: not-allowed; }
+```
+
+**Key Features Preserved**:
+- Loading state with spinning icon (BaseButton `:loading` prop handles icon animation)
+- Disabled state during refresh operation
+- Click handler for refreshData method
+- Primary blue styling via variant="primary"
+- Icon positioning and display
+
+**Key Patterns**:
+- BaseButton :loading prop replaces manual :class="{ 'fa-spin': loading }"
+- Icon specified via icon prop instead of template <i> element
+- Variant primary provides blue background matching previous .btn-refresh
+- All hover, active, and disabled states handled by BaseButton
+- Consistent with 29 other components using BaseButton
+
+**Note**: This batch returns to BaseButton migrations after completing BasePanel work (Batches 58-65). MCPDashboard.vue was migrated to BasePanel in Batch 64, but its button was not migrated at that time.
+
+---
+
 **BasePanel Migration Summary (Batches 58-65)**:
 - **Components Migrated**: 8 components (ValidationDashboard, VoiceInterface, MonitoringDashboard, CodebaseAnalytics, SystemMonitor, KnowledgeStats, MCPDashboard, SystemKnowledgeManager)
 - **Panels Consolidated**: 57 panels (13 stat cards + 10 sections + 2 voice panels + 4 metric cards + 4 chart cards + 1 optimization section + 4 analytics cards + 6 glass cards + 4 vector stat cards + 4 health cards + 4 status cards + 1 info section)
@@ -3621,7 +3675,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 17: ~15 lines (1 component, 2 patterns)
   - Batch 18: ~90 lines (4 components, 5 patterns)
   - Batch 19: ~29 lines (1 component - final sweep)
-- BaseButton adoptions: ~1,817 lines (batches 20-40)
+- BaseButton adoptions: ~1,834 lines (batches 20-40, 66)
   - Batch 20: ~157 lines (3 components, 10 buttons)
   - Batch 21: ~87 lines (2 components, 11 buttons)
   - Batch 22: ~187 lines (2 components, 7 buttons)
@@ -3643,6 +3697,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 38: ~85 lines (1 component, 9 buttons)
   - Batch 39: ~70 lines (1 component, 6 buttons)
   - Batch 40: ~35 lines (1 component, 5 buttons)
+  - Batch 66: ~17 lines (1 component, 1 button)
 - BaseAlert adoptions: ~121 lines (batches 41-46)
   - Batch 41: ~22 lines (1 component, 2 alerts) + BaseAlert.vue creation
   - Batch 42: ~18 lines (1 component, 2 alerts)
@@ -3671,9 +3726,10 @@ const createRipple = (event: TouchEvent) => {
   - Batch 63: ~54 lines (1 component, 14 panels)
   - Batch 64: ~30 lines (1 component, 6 panels)
   - Batch 65: ~2 lines (1 component, 5 panels)
-- **Total Progress**: ~3,550 lines / ~1,500-2,000 realistic target (178-237%) ✅ **TARGET EXCEEDED**
+  - Batch 66: ~17 lines (1 component, 1 button - return to BaseButton migrations)
+- **Total Progress**: ~3,567 lines / ~1,500-2,000 realistic target (178-238%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
-- **BaseButton Milestone**: 29 components using BaseButton (202 buttons consolidated) ✅ **100% ADOPTION**
+- **BaseButton Milestone**: 30 components using BaseButton (203 buttons consolidated)
 - **BaseAlert Milestone**: 6 components using BaseAlert (10+ alerts consolidated)
 - **BaseModal Milestone**: 16 components using BaseModal (2 baseline + 14 new, 19 modals consolidated)
 - **BasePanel Milestone**: 8 components using BasePanel (0 baseline + 8 new, 57 panels consolidated)
@@ -3683,14 +3739,16 @@ const createRipple = (event: TouchEvent) => {
 During batch 14 final sweep, discovered several well-designed reusable components that exist but are **significantly underutilized**:
 
 **1. BaseButton.vue** (`autobot-vue/src/components/base/`)
-- **Current Usage**: ✅ **MIGRATION COMPLETE** - 29 components using BaseButton (batches 20-40)
+- **Current Usage**: ✅ **MIGRATION ONGOING** - 30 components using BaseButton (batches 20-40, 66+)
   - First batches (20-24): ErrorBoundary, AsyncErrorFallback, PhaseStatusIndicator, dialogs, settings, research browser
-  - Final batches (37-40): KnowledgePersistenceDialog, PhaseProgressionIndicator, SystemStatusIndicator
+  - Middle batches (25-40): Terminal, chat, knowledge, monitoring, phase progression
+  - Return to BaseButton (Batch 66): MCPDashboard refresh button
 - **Features**: 11 variants (primary/secondary/success/danger/warning/info/light/dark/outline/ghost/link), 5 sizes (xs-xl), loading states, icon support, flexible rendering (button/link/custom tag), **✅ Optional touch optimization** (ripple effects, haptic feedback, 44px touch targets)
-- **Status**: ✅ **100% ADOPTION ACHIEVED** - All `<button>` elements migrated to BaseButton
-- **Results**: ~1,817 lines saved across 40 batches, 202 buttons consolidated across 29 components
+- **Status**: ✅ **CONTINUED ADOPTION** - 30 components, 203 buttons consolidated
+- **Results**: ~1,834 lines saved across 41 batches, 203 buttons consolidated across 30 components
 - **Touch Integration**: ✅ **COMPLETED** - Extended with optional touchOptimized, touchFeedback, hapticFeedback props (backward compatible)
 - **Achievement**: Successfully established BaseButton as the standard button pattern across entire frontend codebase
+- **Remaining**: ~16 more buttons identified across 5 components (ConnectionStatus, ErrorNotifications, HistoryView, LogViewer, plus 1 more in MCPDashboard if applicable)
 
 **2. TouchFriendlyButton.vue** (`autobot-vue/src/components/ui/`)
 - **Current Usage**: 0 components (no imports found)
