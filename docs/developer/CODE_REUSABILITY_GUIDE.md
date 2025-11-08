@@ -3510,10 +3510,94 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
-**BasePanel Migration Summary (Batches 58-64)**:
-- **Components Migrated**: 7 components (ValidationDashboard, VoiceInterface, MonitoringDashboard, CodebaseAnalytics, SystemMonitor, KnowledgeStats, MCPDashboard)
-- **Panels Consolidated**: 52 panels (13 stat cards + 10 sections + 2 voice panels + 4 metric cards + 4 chart cards + 1 optimization section + 4 analytics cards + 6 glass cards + 4 vector stat cards + 4 health cards)
-- **Lines Saved**: ~174 lines total
+### **Batch 65 - SystemKnowledgeManager.vue Migration** ✅ Completed
+
+**Goal**: Migrate knowledge base management component panels to BasePanel.
+
+**Component**: SystemKnowledgeManager.vue (1013 → 1011 lines, ~2 lines saved, 0.2% reduction)
+
+**Panels Migrated (5 total)**:
+
+1-4. **Status Cards** (4 cards) → BasePanel `variant="elevated" size="small"`:
+```vue
+<!-- Before: status-card with icon and content -->
+<div class="status-card">
+  <div class="status-icon">📚</div>
+  <div class="status-content">
+    <h3>{{ stats.total_facts || 0 }}</h3>
+    <p>Total Facts</p>
+  </div>
+</div>
+
+<!-- After: BasePanel elevated with status-card-content wrapper -->
+<BasePanel variant="elevated" size="small">
+  <div class="status-card-content">
+    <div class="status-icon">📚</div>
+    <div class="status-content">
+      <h3>{{ stats.total_facts || 0 }}</h3>
+      <p>Total Facts</p>
+    </div>
+  </div>
+</BasePanel>
+```
+
+5. **Info Section** → BasePanel `variant="bordered" size="medium"`:
+```vue
+<!-- Before: info-section with title and content -->
+<div class="info-section">
+  <h3>ℹ️ About System Knowledge</h3>
+  <div class="info-content">
+    <p><strong>Initialize Machine Knowledge:</strong> Creates vector embeddings...</p>
+    <!-- more info paragraphs -->
+  </div>
+</div>
+
+<!-- After: BasePanel bordered with header slot -->
+<BasePanel variant="bordered" size="medium">
+  <template #header>
+    <h3>ℹ️ About System Knowledge</h3>
+  </template>
+  <div class="info-content">
+    <p><strong>Initialize Machine Knowledge:</strong> Creates vector embeddings...</p>
+    <!-- more info paragraphs -->
+  </div>
+</BasePanel>
+```
+
+**CSS Removed** (~16 lines):
+```css
+/* Removed duplicate card/section structures: */
+.status-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 15px; }
+.info-section { background: #f8f9fa; border-radius: 8px; padding: 20px; margin-bottom: 30px; }
+.info-section h3 { margin: 0 0 15px 0; color: #2c3e50; }
+
+/* Kept content-level styles: */
+.status-card-content { display: flex; align-items: center; gap: 15px; }
+.status-icon { font-size: 32px; }
+.status-content h3/p { /* styling preserved */ }
+.info-content p { margin: 10px 0; line-height: 1.6; color: #555; }
+```
+
+**Key Features Preserved**:
+- Status card icon and content layout (status-icon + status-content)
+- Stats bindings (stats.total_facts, stats.total_vectors, commandsIndexed, docsIndexed)
+- Info section header moved to BasePanel header slot
+- Info content paragraphs with usage instructions for all operations (Initialize, Reindex, Refresh Man Pages, Populate Commands, Index Docs)
+- All styling and spacing maintained
+
+**Key Patterns**:
+- Status cards use elevated variant small for compact metric display
+- Info section uses bordered variant medium for documentation content
+- Header slot used for info section title with emoji
+- Status cards wrap content in status-card-content div for internal layout
+- BasePanel handles container styling, content classes remain for internal structure
+
+---
+
+**BasePanel Migration Summary (Batches 58-65)**:
+- **Components Migrated**: 8 components (ValidationDashboard, VoiceInterface, MonitoringDashboard, CodebaseAnalytics, SystemMonitor, KnowledgeStats, MCPDashboard, SystemKnowledgeManager)
+- **Panels Consolidated**: 57 panels (13 stat cards + 10 sections + 2 voice panels + 4 metric cards + 4 chart cards + 1 optimization section + 4 analytics cards + 6 glass cards + 4 vector stat cards + 4 health cards + 4 status cards + 1 info section)
+- **Lines Saved**: ~176 lines total
   - Batch 58: ~0 lines (CSS consolidation, template overhead offset)
   - Batch 59: ~36 lines (CSS consolidation)
   - Batch 60: ~21 lines (CSS consolidation)
@@ -3521,8 +3605,9 @@ const createRipple = (event: TouchEvent) => {
   - Batch 62: ~2 lines (CSS consolidation)
   - Batch 63: ~54 lines (CSS consolidation)
   - Batch 64: ~30 lines (CSS consolidation)
-- **Variants Used**: elevated (metric/stat/glass/vector/health cards), bordered (sections/charts/optimization/analytics/activity/tag-cloud/manpages/status)
-- **Sizes Used**: small (metric/stat cards), medium (sections/charts/optimization/analytics/glass cards/vector cards/health cards)
+  - Batch 65: ~2 lines (CSS consolidation)
+- **Variants Used**: elevated (metric/stat/glass/vector/health/status cards), bordered (sections/charts/optimization/analytics/activity/tag-cloud/manpages/status/info)
+- **Sizes Used**: small (metric/stat/status cards), medium (sections/charts/optimization/analytics/glass cards/vector cards/health cards/info section)
 - **Key Patterns**: header slot for titles, header wrappers for controls, default slot for content, accessibility attributes preservation, conditional styling preservation
 
 ---
@@ -3577,7 +3662,7 @@ const createRipple = (event: TouchEvent) => {
   - Batch 55: ~0 lines (1 component, 1 modal - consistency gain)
   - Batch 56: ~-3 lines (1 component, 1 modal - consistency gain)
   - Batch 57: ~58 lines (1 component, 1 modal)
-- BasePanel adoptions: ~174 lines (batches 58-64)
+- BasePanel adoptions: ~176 lines (batches 58-65)
   - Batch 58: ~0 lines (1 component, 9 panels - consistency gain, CSS consolidation)
   - Batch 59: ~36 lines (1 component, 2 panels)
   - Batch 60: ~21 lines (1 component, 7 panels)
@@ -3585,12 +3670,13 @@ const createRipple = (event: TouchEvent) => {
   - Batch 62: ~2 lines (1 component, 6 panels)
   - Batch 63: ~54 lines (1 component, 14 panels)
   - Batch 64: ~30 lines (1 component, 6 panels)
-- **Total Progress**: ~3,548 lines / ~1,500-2,000 realistic target (177-237%) ✅ **TARGET EXCEEDED**
+  - Batch 65: ~2 lines (1 component, 5 panels)
+- **Total Progress**: ~3,550 lines / ~1,500-2,000 realistic target (178-237%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
 - **BaseButton Milestone**: 29 components using BaseButton (202 buttons consolidated) ✅ **100% ADOPTION**
 - **BaseAlert Milestone**: 6 components using BaseAlert (10+ alerts consolidated)
 - **BaseModal Milestone**: 16 components using BaseModal (2 baseline + 14 new, 19 modals consolidated)
-- **BasePanel Milestone**: 7 components using BasePanel (0 baseline + 7 new, 52 panels consolidated)
+- **BasePanel Milestone**: 8 components using BasePanel (0 baseline + 8 new, 57 panels consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
