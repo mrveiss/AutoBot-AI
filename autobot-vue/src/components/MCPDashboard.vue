@@ -16,14 +16,14 @@
 
     <div class="health-grid">
       <!-- Frontend Health -->
-      <div class="health-card" :class="getHealthClass(health.frontend)">
-        <div class="card-header">
+      <BasePanel variant="elevated" size="medium" :class="getHealthClass(health.frontend)">
+        <template #header>
           <i class="fas fa-desktop"></i>
           <h3>Frontend</h3>
           <span class="status-icon">
             <i :class="getStatusIcon(health.frontend.status)"></i>
           </span>
-        </div>
+        </template>
         <div class="card-body">
           <div class="metric">
             <span class="label">Console Errors:</span>
@@ -41,17 +41,17 @@
             </div>
           </div>
         </div>
-      </div>
+      </BasePanel>
 
       <!-- Backend Health -->
-      <div class="health-card" :class="getHealthClass(health.backend)">
-        <div class="card-header">
+      <BasePanel variant="elevated" size="medium" :class="getHealthClass(health.backend)">
+        <template #header>
           <i class="fas fa-server"></i>
           <h3>Backend API</h3>
           <span class="status-icon">
             <i :class="getStatusIcon(health.backend.status)"></i>
           </span>
-        </div>
+        </template>
         <div class="card-body">
           <div class="metric">
             <span class="label">API Status:</span>
@@ -66,17 +66,17 @@
             <span class="value">{{ health.backend.activeSessions }}</span>
           </div>
         </div>
-      </div>
+      </BasePanel>
 
       <!-- API Performance -->
-      <div class="health-card" :class="getHealthClass(health.api)">
-        <div class="card-header">
+      <BasePanel variant="elevated" size="medium" :class="getHealthClass(health.api)">
+        <template #header>
           <i class="fas fa-tachometer-alt"></i>
           <h3>API Performance</h3>
           <span class="status-icon">
             <i :class="getStatusIcon(health.api.status)"></i>
           </span>
-        </div>
+        </template>
         <div class="card-body">
           <div class="metric">
             <span class="label">Avg Response:</span>
@@ -93,17 +93,17 @@
             </span>
           </div>
         </div>
-      </div>
+      </BasePanel>
 
       <!-- WebSocket Health -->
-      <div class="health-card" :class="getHealthClass(health.websocket)">
-        <div class="card-header">
+      <BasePanel variant="elevated" size="medium" :class="getHealthClass(health.websocket)">
+        <template #header>
           <i class="fas fa-plug"></i>
           <h3>WebSocket</h3>
           <span class="status-icon">
             <i :class="getStatusIcon(health.websocket.status)"></i>
           </span>
-        </div>
+        </template>
         <div class="card-body">
           <div class="metric">
             <span class="label">Active Connections:</span>
@@ -120,12 +120,14 @@
             <span class="value">{{ health.websocket.messageRate }}/min</span>
           </div>
         </div>
-      </div>
+      </BasePanel>
     </div>
 
     <!-- Activity Log -->
-    <div class="activity-section">
-      <h3><i class="fas fa-history"></i> Recent Activity</h3>
+    <BasePanel variant="bordered" size="medium">
+      <template #header>
+        <h3><i class="fas fa-history"></i> Recent Activity</h3>
+      </template>
       <div class="activity-log">
         <div v-for="(log, idx) in recentLogs" :key="idx" class="log-entry" :class="'log-' + log.level.toLowerCase()">
           <span class="log-time">{{ formatTime(log.timestamp) }}</span>
@@ -133,11 +135,13 @@
           <span class="log-message">{{ log.message }}</span>
         </div>
       </div>
-    </div>
+    </BasePanel>
 
     <!-- MCP Tools Status -->
-    <div class="mcp-tools-section">
-      <h3><i class="fas fa-tools"></i> MCP Tools Status</h3>
+    <BasePanel variant="bordered" size="medium">
+      <template #header>
+        <h3><i class="fas fa-tools"></i> MCP Tools Status</h3>
+      </template>
       <div class="tools-grid">
         <div v-for="(tool, name) in mcpTools" :key="name" class="tool-status" :class="{ 'tool-active': tool.active }">
           <i :class="tool.icon"></i>
@@ -145,7 +149,7 @@
           <span class="tool-count">{{ tool.count }} tools</span>
         </div>
       </div>
-    </div>
+    </BasePanel>
   </div>
 </template>
 
@@ -154,6 +158,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '@/stores/app'
 import { formatTime } from '@/utils/formatHelpers'
+import BasePanel from '@/components/base/BasePanel.vue'
 
 // Store
 const appStore = useAppStore()
@@ -366,53 +371,27 @@ onUnmounted(() => {
   margin-bottom: 30px;
 }
 
-.health-card {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  padding: 0;
-  overflow: hidden;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.health-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-}
-
-.health-card.health-good {
+/* Health card conditional border styles - applied to BasePanel */
+.health-good {
   border-top: 4px solid #28a745;
 }
 
-.health-card.health-warning {
+.health-warning {
   border-top: 4px solid #ffc107;
 }
 
-.health-card.health-error {
+.health-error {
   border-top: 4px solid #dc3545;
 }
 
-.health-card.health-unknown {
+.health-unknown {
   border-top: 4px solid #6c757d;
 }
 
-.card-header {
-  padding: 15px 20px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.card-header h3 {
-  margin: 0;
-  font-size: 18px;
-  flex: 1;
-}
-
+/* Card header content styles - BasePanel handles structure */
 .status-icon {
   font-size: 20px;
+  margin-left: auto;
 }
 
 .card-body {
@@ -468,18 +447,9 @@ onUnmounted(() => {
   border-radius: 4px;
 }
 
-.activity-section,
-.mcp-tools-section {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  padding: 20px;
-  margin-bottom: 20px;
-}
-
-.activity-section h3,
-.mcp-tools-section h3 {
-  margin: 0 0 20px 0;
+/* Header styles - BasePanel handles section structure */
+h3 {
+  margin: 0;
   color: #333;
   display: flex;
   align-items: center;
