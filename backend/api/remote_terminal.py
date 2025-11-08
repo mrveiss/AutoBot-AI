@@ -488,6 +488,11 @@ async def list_remote_sessions():
 # WebSocket Endpoints
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="remote_terminal_websocket",
+    error_code_prefix="REMOTE_TERMINAL",
+)
 @router.websocket("/ws/{session_id}")
 async def remote_terminal_websocket(websocket: WebSocket, session_id: str):
     """

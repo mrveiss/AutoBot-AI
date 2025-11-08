@@ -30843,6 +30843,71 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("test_patterns", testing_source)
         self.assertIn("parallel_execution", testing_source)
 
+    # ==============================================
+    # BATCH 164: remote_terminal.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_164_remote_terminal_websocket_simple_pattern(self):
+        """Verify remote_terminal_websocket endpoint uses Simple Pattern"""
+        from backend.api import remote_terminal
+
+        source = inspect.getsource(remote_terminal.remote_terminal_websocket)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="remote_terminal_websocket"', source)
+        self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
+
+    def test_batch_164_remote_terminal_100_percent_milestone(self):
+        """Verify remote_terminal.py has reached 100% migration"""
+        from backend.api import remote_terminal
+
+        endpoint_functions = [
+            remote_terminal.remote_terminal_info,
+            remote_terminal.list_hosts,
+            remote_terminal.get_host_info,
+            remote_terminal.execute_remote_command,
+            remote_terminal.execute_batch_command,
+            remote_terminal.check_all_hosts_health,
+            remote_terminal.get_connection_pool_stats,
+            remote_terminal.create_remote_session,
+            remote_terminal.list_remote_sessions,
+            remote_terminal.remote_terminal_websocket,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 10
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_164_migration_preserves_websocket_functionality(self):
+        """Verify migration preserves WebSocket functionality"""
+        from backend.api import remote_terminal
+
+        # Verify WebSocket endpoint exists
+        source = inspect.getsource(remote_terminal.remote_terminal_websocket)
+
+        # Verify WebSocket accept
+        self.assertIn("await websocket.accept()", source)
+
+        # Verify session manager integration
+        self.assertIn("session_manager.create_session(", source)
+        self.assertIn("session_manager.update_activity(", source)
+        self.assertIn("session_manager.remove_session(", source)
+
+        # Verify real-time command execution
+        self.assertIn("ssh_manager.execute_command(", source)
+        self.assertIn("use_pty=True", source)
+
 
 if __name__ == "__main__":
     unittest.main()
