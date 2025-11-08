@@ -32092,6 +32092,314 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('"timeout"', status_source)
         self.assertIn('"max_retries"', status_source)
 
+    # ==============================================
+    # BATCH 170: infrastructure.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_170_list_hosts_simple_pattern(self):
+        """Verify list_hosts endpoint uses Simple Pattern"""
+        from backend.api import infrastructure
+
+        source = inspect.getsource(infrastructure.list_hosts)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_hosts"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE"', source)
+
+    def test_batch_170_create_host_simple_pattern(self):
+        """Verify create_host endpoint uses Simple Pattern"""
+        from backend.api import infrastructure
+
+        source = inspect.getsource(infrastructure.create_host)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="create_host"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE"', source)
+
+    def test_batch_170_get_host_simple_pattern(self):
+        """Verify get_host endpoint uses Simple Pattern"""
+        from backend.api import infrastructure
+
+        source = inspect.getsource(infrastructure.get_host)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_host"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE"', source)
+
+    def test_batch_170_update_host_simple_pattern(self):
+        """Verify update_host endpoint uses Simple Pattern"""
+        from backend.api import infrastructure
+
+        source = inspect.getsource(infrastructure.update_host)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="update_host"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE"', source)
+
+    def test_batch_170_delete_host_simple_pattern(self):
+        """Verify delete_host endpoint uses Simple Pattern"""
+        from backend.api import infrastructure
+
+        source = inspect.getsource(infrastructure.delete_host)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="delete_host"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE"', source)
+
+    def test_batch_170_get_host_status_simple_pattern(self):
+        """Verify get_host_status endpoint uses Simple Pattern"""
+        from backend.api import infrastructure
+
+        source = inspect.getsource(infrastructure.get_host_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_host_status"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE"', source)
+
+    def test_batch_170_create_deployment_simple_pattern(self):
+        """Verify create_deployment endpoint uses Simple Pattern"""
+        from backend.api import infrastructure
+
+        source = inspect.getsource(infrastructure.create_deployment)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="create_deployment"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE"', source)
+
+    def test_batch_170_get_deployment_simple_pattern(self):
+        """Verify get_deployment endpoint uses Simple Pattern"""
+        from backend.api import infrastructure
+
+        source = inspect.getsource(infrastructure.get_deployment)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_deployment"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE"', source)
+
+    def test_batch_170_list_deployments_simple_pattern(self):
+        """Verify list_deployments endpoint uses Simple Pattern"""
+        from backend.api import infrastructure
+
+        source = inspect.getsource(infrastructure.list_deployments)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_deployments"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE"', source)
+
+    def test_batch_170_provision_ssh_key_simple_pattern(self):
+        """Verify provision_ssh_key endpoint uses Simple Pattern"""
+        from backend.api import infrastructure
+
+        source = inspect.getsource(infrastructure.provision_ssh_key)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="provision_ssh_key"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE"', source)
+
+    def test_batch_170_list_roles_simple_pattern(self):
+        """Verify list_roles endpoint uses Simple Pattern"""
+        from backend.api import infrastructure
+
+        source = inspect.getsource(infrastructure.list_roles)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_roles"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE"', source)
+
+    def test_batch_170_get_statistics_simple_pattern(self):
+        """Verify get_statistics endpoint uses Simple Pattern"""
+        from backend.api import infrastructure
+
+        source = inspect.getsource(infrastructure.get_statistics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_statistics"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE"', source)
+
+    def test_batch_170_health_check_simple_pattern(self):
+        """Verify health_check endpoint uses Simple Pattern"""
+        from backend.api import infrastructure
+
+        source = inspect.getsource(infrastructure.health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="health_check"', source)
+        self.assertIn('error_code_prefix="INFRASTRUCTURE"', source)
+
+    def test_batch_170_all_infrastructure_endpoints_have_decorator(self):
+        """Verify all infrastructure endpoints have @with_error_handling decorator"""
+        from backend.api import infrastructure
+
+        endpoint_functions = [
+            infrastructure.list_hosts,
+            infrastructure.create_host,
+            infrastructure.get_host,
+            infrastructure.update_host,
+            infrastructure.delete_host,
+            infrastructure.get_host_status,
+            infrastructure.create_deployment,
+            infrastructure.get_deployment,
+            infrastructure.list_deployments,
+            infrastructure.provision_ssh_key,
+            infrastructure.list_roles,
+            infrastructure.get_statistics,
+            infrastructure.health_check,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_170_infrastructure_100_percent_milestone(self):
+        """Verify infrastructure.py has reached 100% migration"""
+        from backend.api import infrastructure
+
+        endpoint_functions = [
+            infrastructure.list_hosts,
+            infrastructure.create_host,
+            infrastructure.get_host,
+            infrastructure.update_host,
+            infrastructure.delete_host,
+            infrastructure.get_host_status,
+            infrastructure.create_deployment,
+            infrastructure.get_deployment,
+            infrastructure.list_deployments,
+            infrastructure.provision_ssh_key,
+            infrastructure.list_roles,
+            infrastructure.get_statistics,
+            infrastructure.health_check,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 13
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_170_migration_preserves_database_pagination(self):
+        """Verify migration preserves database-level pagination in list_hosts"""
+        from backend.api import infrastructure
+
+        # Verify InfrastructureDB is imported
+        self.assertTrue(hasattr(infrastructure, "InfrastructureDB"))
+
+        # Verify list_hosts uses db.get_hosts with pagination
+        list_hosts_source = inspect.getsource(infrastructure.list_hosts)
+        self.assertIn("db.get_hosts", list_hosts_source)
+        self.assertIn("page=page", list_hosts_source)
+        self.assertIn("page_size=page_size", list_hosts_source)
+        self.assertIn('result["hosts"]', list_hosts_source)
+        self.assertIn('result["total"]', list_hosts_source)
+        self.assertIn('result["page"]', list_hosts_source)
+        self.assertIn('result["total_pages"]', list_hosts_source)
+
+    def test_batch_170_migration_preserves_ssh_provisioner(self):
+        """Verify migration preserves SSHKeyProvisioner integration"""
+        from backend.api import infrastructure
+
+        # Verify SSHKeyProvisioner is imported
+        self.assertTrue(hasattr(infrastructure, "SSHKeyProvisioner"))
+
+        # Verify provision_ssh_key uses ssh_provisioner
+        provision_source = inspect.getsource(infrastructure.provision_ssh_key)
+        self.assertIn("ssh_provisioner.provision_key", provision_source)
+        self.assertIn("private_key_content", provision_source)
+        self.assertIn("public_key_content", provision_source)
+
+    def test_batch_170_migration_preserves_celery_integration(self):
+        """Verify migration preserves Celery async task integration"""
+        from backend.api import infrastructure
+
+        # Verify deploy_host task is imported
+        self.assertTrue(hasattr(infrastructure, "deploy_host"))
+
+        # Verify create_deployment uses Celery task
+        deploy_source = inspect.getsource(infrastructure.create_deployment)
+        self.assertIn("deploy_host.delay", deploy_source)
+        self.assertIn("task.id", deploy_source)
+        self.assertIn("ansible_run_id", deploy_source)
+
+    def test_batch_170_migration_preserves_pydantic_schemas(self):
+        """Verify migration preserves Pydantic schema usage"""
+        from backend.api import infrastructure
+
+        # Verify schemas are imported
+        self.assertTrue(hasattr(infrastructure, "HostCreate"))
+        self.assertTrue(hasattr(infrastructure, "HostUpdate"))
+        self.assertTrue(hasattr(infrastructure, "DeploymentCreate"))
+        self.assertTrue(hasattr(infrastructure, "ProvisionKeyRequest"))
+
+        # Verify update_host uses HostUpdate schema
+        update_source = inspect.getsource(infrastructure.update_host)
+        self.assertIn("HostUpdate", update_source)
+        self.assertIn("host_update.model_dump()", update_source)
+
+    def test_batch_170_migration_preserves_connectivity_check(self):
+        """Verify migration preserves socket connectivity check logic"""
+        from backend.api import infrastructure
+
+        # Verify get_host_status uses socket for connectivity
+        status_source = inspect.getsource(infrastructure.get_host_status)
+        self.assertIn("socket.socket", status_source)
+        self.assertIn("sock.connect_ex", status_source)
+        self.assertIn("is_reachable", status_source)
+        self.assertIn("response_time_ms", status_source)
+
+    def test_batch_170_migration_preserves_ssh_credential_storage(self):
+        """Verify migration preserves SSH credential encrypted storage"""
+        from backend.api import infrastructure
+
+        # Verify create_host stores credentials
+        create_source = inspect.getsource(infrastructure.create_host)
+        self.assertIn("db.store_ssh_credential", create_source)
+        self.assertIn('credential_type="ssh_key"', create_source)
+        self.assertIn('credential_type="password"', create_source)
+
+        # Verify provision_ssh_key deactivates old credentials
+        provision_source = inspect.getsource(infrastructure.provision_ssh_key)
+        self.assertIn("db.deactivate_credentials", provision_source)
+
+    def test_batch_170_migration_preserves_cascade_delete(self):
+        """Verify migration preserves cascade delete with file cleanup"""
+        from backend.api import infrastructure
+
+        # Verify delete_host removes SSH key file and cascades
+        delete_source = inspect.getsource(infrastructure.delete_host)
+        self.assertIn("host.ssh_key_path", delete_source)
+        self.assertIn("os.unlink", delete_source)
+        self.assertIn("db.delete_host", delete_source)
+
+    def test_batch_170_migration_preserves_response_models(self):
+        """Verify migration preserves FastAPI response models"""
+        from backend.api import infrastructure
+
+        # Verify response_model decorators exist
+        module_source = inspect.getsource(infrastructure)
+        self.assertIn("response_model=HostResponse", module_source)
+        self.assertIn("response_model=HostDetailResponse", module_source)
+        self.assertIn("response_model=List[DeploymentResponse]", module_source)
+        self.assertIn("response_model=DeploymentDetailResponse", module_source)
+        self.assertIn("response_model=ProvisionKeyResponse", module_source)
+        self.assertIn("response_model=List[RoleResponse]", module_source)
+        self.assertIn("response_model=StatisticsResponse", module_source)
+        self.assertIn("response_model=HostStatusResponse", module_source)
+
+
+
+
 
 
 

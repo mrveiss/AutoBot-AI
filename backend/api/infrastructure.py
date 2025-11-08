@@ -18,6 +18,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Upload
 from fastapi.responses import JSONResponse
 
 from backend.models.infrastructure import InfraHost, InfraRole
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from backend.schemas.infrastructure import (
     DeploymentCreate,
     DeploymentDetailResponse,
@@ -47,6 +48,11 @@ ssh_provisioner = SSHKeyProvisioner()
 # ==================== Host Management Endpoints ====================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_hosts",
+    error_code_prefix="INFRASTRUCTURE",
+)
 @router.get("/hosts")
 async def list_hosts(
     role: Optional[str] = Query(None, description="Filter by role name"),
@@ -103,6 +109,11 @@ async def list_hosts(
         raise HTTPException(status_code=500, detail=f"Error listing hosts: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_host",
+    error_code_prefix="INFRASTRUCTURE",
+)
 @router.post("/hosts", response_model=HostResponse, status_code=201)
 async def create_host(
     hostname: str = Form(..., description="Hostname of the infrastructure host"),
@@ -220,6 +231,11 @@ async def create_host(
         raise HTTPException(status_code=500, detail=f"Error creating host: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_host",
+    error_code_prefix="INFRASTRUCTURE",
+)
 @router.get("/hosts/{host_id}", response_model=HostDetailResponse)
 async def get_host(host_id: int):
     """
@@ -272,6 +288,11 @@ async def get_host(host_id: int):
         raise HTTPException(status_code=500, detail=f"Error getting host: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_host",
+    error_code_prefix="INFRASTRUCTURE",
+)
 @router.put("/hosts/{host_id}", response_model=HostResponse)
 async def update_host(host_id: int, host_update: HostUpdate):
     """
@@ -328,6 +349,11 @@ async def update_host(host_id: int, host_update: HostUpdate):
         raise HTTPException(status_code=500, detail=f"Error updating host: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_host",
+    error_code_prefix="INFRASTRUCTURE",
+)
 @router.delete("/hosts/{host_id}", status_code=204)
 async def delete_host(host_id: int):
     """
@@ -371,6 +397,11 @@ async def delete_host(host_id: int):
         raise HTTPException(status_code=500, detail=f"Error deleting host: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_host_status",
+    error_code_prefix="INFRASTRUCTURE",
+)
 @router.get("/hosts/{host_id}/status", response_model=HostStatusResponse)
 async def get_host_status(host_id: int):
     """
@@ -445,6 +476,11 @@ async def get_host_status(host_id: int):
 # ==================== Deployment Management Endpoints ====================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_deployment",
+    error_code_prefix="INFRASTRUCTURE",
+)
 @router.post("/deployments", response_model=List[DeploymentResponse], status_code=202)
 async def create_deployment(deployment: DeploymentCreate):
     """
@@ -523,6 +559,11 @@ async def create_deployment(deployment: DeploymentCreate):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_deployment",
+    error_code_prefix="INFRASTRUCTURE",
+)
 @router.get("/deployments/{deployment_id}", response_model=DeploymentDetailResponse)
 async def get_deployment(deployment_id: int):
     """
@@ -579,6 +620,11 @@ async def get_deployment(deployment_id: int):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_deployments",
+    error_code_prefix="INFRASTRUCTURE",
+)
 @router.get("/deployments", response_model=List[DeploymentResponse])
 async def list_deployments(
     host_id: Optional[int] = Query(None, description="Filter by host ID"),
@@ -617,6 +663,11 @@ async def list_deployments(
 # ==================== Credential Management Endpoints ====================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="provision_ssh_key",
+    error_code_prefix="INFRASTRUCTURE",
+)
 @router.post("/hosts/{host_id}/provision-key", response_model=ProvisionKeyResponse)
 async def provision_ssh_key(host_id: int, provision_request: ProvisionKeyRequest):
     """
@@ -713,6 +764,11 @@ async def provision_ssh_key(host_id: int, provision_request: ProvisionKeyRequest
 # ==================== Supporting Endpoints ====================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_roles",
+    error_code_prefix="INFRASTRUCTURE",
+)
 @router.get("/roles", response_model=List[RoleResponse])
 async def list_roles():
     """
@@ -736,6 +792,11 @@ async def list_roles():
         raise HTTPException(status_code=500, detail=f"Error listing roles: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_statistics",
+    error_code_prefix="INFRASTRUCTURE",
+)
 @router.get("/statistics", response_model=StatisticsResponse)
 async def get_statistics():
     """
@@ -761,6 +822,11 @@ async def get_statistics():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="INFRASTRUCTURE",
+)
 @router.get("/health")
 async def health_check():
     """
