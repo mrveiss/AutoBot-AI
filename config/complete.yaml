@@ -207,6 +207,35 @@ paths:
     uploads: "static/uploads"
     downloads: "static/downloads"
 
+# Knowledge Base Configuration
+knowledge:
+  # Advanced RAG (Retrieval-Augmented Generation) Settings
+  rag:
+    # Hybrid search weights (must sum to 1.0)
+    hybrid_weight_semantic: 0.7  # Weight for semantic/vector similarity
+    hybrid_weight_keyword: 0.3   # Weight for keyword/BM25 matching
+
+    # Search parameters
+    max_results_per_stage: 20    # Results to consider in each retrieval stage
+    diversity_threshold: 0.85    # Similarity threshold for result diversification
+    default_max_results: 5       # Default number of final results
+
+    # Context optimization
+    default_context_length: 2000 # Default context window for RAG
+    max_context_length: 5000     # Maximum allowed context length
+
+    # Reranking configuration
+    enable_reranking: true       # Enable cross-encoder reranking
+    reranking_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"  # Model for reranking
+
+    # Performance and caching
+    cache_ttl_seconds: 300       # Cache time-to-live (5 minutes)
+    timeout_seconds: 30.0        # Maximum time for RAG operations
+
+    # Feature flags
+    enable_advanced_rag: true    # Master switch for advanced RAG features
+    fallback_to_basic_search: true  # Fall back to basic search on errors
+
 # Service URLs and Endpoints
 services:
   # Backend service
