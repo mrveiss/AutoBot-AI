@@ -30909,5 +30909,291 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("use_pty=True", source)
 
 
+    # ==============================================
+    # BATCH 165: enterprise_features.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_165_get_enterprise_status_simple_pattern(self):
+        """Verify get_enterprise_status endpoint uses Simple Pattern"""
+        from backend.api import enterprise_features
+
+        source = inspect.getsource(enterprise_features.get_enterprise_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_enterprise_status"', source)
+        self.assertIn('error_code_prefix="ENTERPRISE_FEATURES"', source)
+
+    def test_batch_165_enable_enterprise_feature_simple_pattern(self):
+        """Verify enable_enterprise_feature endpoint uses Simple Pattern"""
+        from backend.api import enterprise_features
+
+        source = inspect.getsource(enterprise_features.enable_enterprise_feature)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="enable_enterprise_feature"', source)
+        self.assertIn('error_code_prefix="ENTERPRISE_FEATURES"', source)
+
+    def test_batch_165_enable_all_enterprise_features_simple_pattern(self):
+        """Verify enable_all_enterprise_features endpoint uses Simple Pattern"""
+        from backend.api import enterprise_features
+
+        source = inspect.getsource(enterprise_features.enable_all_enterprise_features)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="enable_all_enterprise_features"', source)
+        self.assertIn('error_code_prefix="ENTERPRISE_FEATURES"', source)
+
+    def test_batch_165_list_enterprise_features_simple_pattern(self):
+        """Verify list_enterprise_features endpoint uses Simple Pattern"""
+        from backend.api import enterprise_features
+
+        source = inspect.getsource(enterprise_features.list_enterprise_features)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="list_enterprise_features"', source)
+        self.assertIn('error_code_prefix="ENTERPRISE_FEATURES"', source)
+
+    def test_batch_165_bulk_enable_features_simple_pattern(self):
+        """Verify bulk_enable_features endpoint uses Simple Pattern"""
+        from backend.api import enterprise_features
+
+        source = inspect.getsource(enterprise_features.bulk_enable_features)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="bulk_enable_features"', source)
+        self.assertIn('error_code_prefix="ENTERPRISE_FEATURES"', source)
+
+    def test_batch_165_get_enterprise_health_simple_pattern(self):
+        """Verify get_enterprise_health endpoint uses Simple Pattern"""
+        from backend.api import enterprise_features
+
+        source = inspect.getsource(enterprise_features.get_enterprise_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_enterprise_health"', source)
+        self.assertIn('error_code_prefix="ENTERPRISE_FEATURES"', source)
+
+    def test_batch_165_optimize_system_performance_simple_pattern(self):
+        """Verify optimize_system_performance endpoint uses Simple Pattern"""
+        from backend.api import enterprise_features
+
+        source = inspect.getsource(enterprise_features.optimize_system_performance)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="optimize_system_performance"', source)
+        self.assertIn('error_code_prefix="ENTERPRISE_FEATURES"', source)
+
+    def test_batch_165_get_infrastructure_status_simple_pattern(self):
+        """Verify get_infrastructure_status endpoint uses Simple Pattern"""
+        from backend.api import enterprise_features
+
+        source = inspect.getsource(enterprise_features.get_infrastructure_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_infrastructure_status"', source)
+        self.assertIn('error_code_prefix="ENTERPRISE_FEATURES"', source)
+
+    def test_batch_165_deploy_zero_downtime_simple_pattern(self):
+        """Verify deploy_zero_downtime endpoint uses Simple Pattern"""
+        from backend.api import enterprise_features
+
+        source = inspect.getsource(enterprise_features.deploy_zero_downtime)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="deploy_zero_downtime"', source)
+        self.assertIn('error_code_prefix="ENTERPRISE_FEATURES"', source)
+
+    def test_batch_165_validate_phase4_completion_simple_pattern(self):
+        """Verify validate_phase4_completion endpoint uses Simple Pattern"""
+        from backend.api import enterprise_features
+
+        source = inspect.getsource(enterprise_features.validate_phase4_completion)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="validate_phase4_completion"', source)
+        self.assertIn('error_code_prefix="ENTERPRISE_FEATURES"', source)
+
+    def test_batch_165_all_enterprise_features_endpoints_have_decorator(self):
+        """Verify all enterprise_features endpoints have @with_error_handling decorator"""
+        from backend.api import enterprise_features
+
+        endpoint_functions = [
+            enterprise_features.get_enterprise_status,
+            enterprise_features.enable_enterprise_feature,
+            enterprise_features.enable_all_enterprise_features,
+            enterprise_features.list_enterprise_features,
+            enterprise_features.bulk_enable_features,
+            enterprise_features.get_enterprise_health,
+            enterprise_features.optimize_system_performance,
+            enterprise_features.get_infrastructure_status,
+            enterprise_features.deploy_zero_downtime,
+            enterprise_features.validate_phase4_completion,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_165_enterprise_features_100_percent_milestone(self):
+        """Verify enterprise_features.py has reached 100% migration"""
+        from backend.api import enterprise_features
+
+        endpoint_functions = [
+            enterprise_features.get_enterprise_status,
+            enterprise_features.enable_enterprise_feature,
+            enterprise_features.enable_all_enterprise_features,
+            enterprise_features.list_enterprise_features,
+            enterprise_features.bulk_enable_features,
+            enterprise_features.get_enterprise_health,
+            enterprise_features.optimize_system_performance,
+            enterprise_features.get_infrastructure_status,
+            enterprise_features.deploy_zero_downtime,
+            enterprise_features.validate_phase4_completion,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 10
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_165_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic request models"""
+        from backend.api import enterprise_features
+
+        # Verify models are defined
+        self.assertTrue(hasattr(enterprise_features, "FeatureEnableRequest"))
+        self.assertTrue(hasattr(enterprise_features, "BulkFeatureRequest"))
+        self.assertTrue(hasattr(enterprise_features, "PerformanceOptimizationRequest"))
+
+        # Verify FeatureEnableRequest is used in endpoint
+        enable_source = inspect.getsource(enterprise_features.enable_enterprise_feature)
+        self.assertIn("FeatureEnableRequest", enable_source)
+
+        # Verify BulkFeatureRequest is used in endpoint
+        bulk_source = inspect.getsource(enterprise_features.bulk_enable_features)
+        self.assertIn("BulkFeatureRequest", bulk_source)
+
+        # Verify PerformanceOptimizationRequest is used in endpoint
+        optimize_source = inspect.getsource(enterprise_features.optimize_system_performance)
+        self.assertIn("PerformanceOptimizationRequest", optimize_source)
+
+    def test_batch_165_migration_preserves_enterprise_manager_dependency(self):
+        """Verify migration preserves get_enterprise_manager singleton pattern"""
+        from backend.api import enterprise_features
+
+        # Verify get_enterprise_manager is imported
+        self.assertTrue(hasattr(enterprise_features, "get_enterprise_manager"))
+
+        # Verify it's used in endpoints
+        status_source = inspect.getsource(enterprise_features.get_enterprise_status)
+        self.assertIn("get_enterprise_manager()", status_source)
+
+        enable_source = inspect.getsource(enterprise_features.enable_enterprise_feature)
+        self.assertIn("get_enterprise_manager()", enable_source)
+
+    def test_batch_165_migration_preserves_feature_enums(self):
+        """Verify migration preserves FeatureCategory and FeatureStatus enums"""
+        from backend.api import enterprise_features
+
+        # Verify enums are imported
+        self.assertTrue(hasattr(enterprise_features, "FeatureCategory"))
+        self.assertTrue(hasattr(enterprise_features, "FeatureStatus"))
+
+        # Verify enums are used in filtering
+        list_source = inspect.getsource(enterprise_features.list_enterprise_features)
+        self.assertIn("FeatureCategory", list_source)
+        self.assertIn("FeatureStatus", list_source)
+
+    def test_batch_165_migration_preserves_json_response_usage(self):
+        """Verify migration preserves JSONResponse for custom status codes"""
+        from backend.api import enterprise_features
+
+        # Verify JSONResponse is imported
+        self.assertTrue(hasattr(enterprise_features, "JSONResponse"))
+
+        # Verify JSONResponse is used with status_code parameter
+        status_source = inspect.getsource(enterprise_features.get_enterprise_status)
+        self.assertIn("JSONResponse", status_source)
+        self.assertIn("status_code=200", status_source)
+
+        # Verify multi-status code (207) for partial success
+        enable_all_source = inspect.getsource(enterprise_features.enable_all_enterprise_features)
+        self.assertIn("207", enable_all_source)  # Multi-Status for partial success
+
+    def test_batch_165_migration_preserves_phase4_capabilities(self):
+        """Verify migration preserves Phase 4 enterprise capabilities"""
+        from backend.api import enterprise_features
+
+        # Verify enable_all_enterprise_features references Phase 4 capabilities
+        enable_all_source = inspect.getsource(enterprise_features.enable_all_enterprise_features)
+        self.assertIn("Phase 4", enable_all_source)
+        self.assertIn("web_research_orchestration", enable_all_source)
+        self.assertIn("cross_vm_load_balancing", enable_all_source)
+        self.assertIn("intelligent_task_routing", enable_all_source)
+        self.assertIn("comprehensive_health_monitoring", enable_all_source)
+        self.assertIn("graceful_degradation", enable_all_source)
+
+    def test_batch_165_migration_preserves_health_monitoring(self):
+        """Verify migration preserves comprehensive health monitoring"""
+        from backend.api import enterprise_features
+
+        # Verify get_enterprise_health checks feature health
+        health_source = inspect.getsource(enterprise_features.get_enterprise_health)
+        self.assertIn("_check_feature_health", health_source)
+        self.assertIn("critical_issues", health_source)
+        self.assertIn("warnings", health_source)
+        self.assertIn("overall_health", health_source)
+
+    def test_batch_165_migration_preserves_infrastructure_topology(self):
+        """Verify migration preserves VM topology and infrastructure status"""
+        from backend.api import enterprise_features
+
+        # Verify get_infrastructure_status uses vm_topology
+        infrastructure_source = inspect.getsource(enterprise_features.get_infrastructure_status)
+        self.assertIn("vm_topology", infrastructure_source)
+        self.assertIn("resource_pools", infrastructure_source)
+        self.assertIn("distributed_services", infrastructure_source)
+        self.assertIn("service_distribution", infrastructure_source)
+
+    def test_batch_165_migration_preserves_zero_downtime_deployment(self):
+        """Verify migration preserves zero-downtime deployment logic"""
+        from backend.api import enterprise_features
+
+        # Verify deploy_zero_downtime implements blue-green deployment
+        deploy_source = inspect.getsource(enterprise_features.deploy_zero_downtime)
+        self.assertIn("zero_downtime_deployment", deploy_source)
+        self.assertIn("blue_green", deploy_source)
+        self.assertIn("deployment_phases", deploy_source)
+        self.assertIn("rollback_available", deploy_source)
+
+    def test_batch_165_migration_preserves_phase4_validation(self):
+        """Verify migration preserves Phase 4 completion validation"""
+        from backend.api import enterprise_features
+
+        # Verify validate_phase4_completion checks enterprise features
+        validation_source = inspect.getsource(enterprise_features.validate_phase4_completion)
+        self.assertIn("Phase 4", validation_source)
+        self.assertIn("enterprise_features", validation_source)
+        self.assertIn("production_readiness", validation_source)
+        self.assertIn("transformation_summary", validation_source)
+        self.assertIn("completion_percentage", validation_source)
+
+
+
+
 if __name__ == "__main__":
     unittest.main()

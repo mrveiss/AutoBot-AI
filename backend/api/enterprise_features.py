@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.enterprise_feature_manager import (
     FeatureCategory,
     FeatureStatus,
@@ -36,6 +37,11 @@ class PerformanceOptimizationRequest(BaseModel):
     optimization_level: Optional[str] = "balanced"  # conservative, balanced, aggressive
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_enterprise_status",
+    error_code_prefix="ENTERPRISE_FEATURES",
+)
 @router.get("/status")
 async def get_enterprise_status():
     """
@@ -67,6 +73,11 @@ async def get_enterprise_status():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enable_enterprise_feature",
+    error_code_prefix="ENTERPRISE_FEATURES",
+)
 @router.post("/features/enable")
 async def enable_enterprise_feature(request: FeatureEnableRequest):
     """
@@ -115,6 +126,11 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="enable_all_enterprise_features",
+    error_code_prefix="ENTERPRISE_FEATURES",
+)
 @router.post("/features/enable-all")
 async def enable_all_enterprise_features():
     """
@@ -180,6 +196,11 @@ async def enable_all_enterprise_features():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_enterprise_features",
+    error_code_prefix="ENTERPRISE_FEATURES",
+)
 @router.get("/features")
 async def list_enterprise_features(
     category: Optional[FeatureCategory] = Query(
@@ -235,6 +256,11 @@ async def list_enterprise_features(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="bulk_enable_features",
+    error_code_prefix="ENTERPRISE_FEATURES",
+)
 @router.post("/features/bulk-enable")
 async def bulk_enable_features(request: BulkFeatureRequest):
     """
@@ -285,6 +311,11 @@ async def bulk_enable_features(request: BulkFeatureRequest):
         raise HTTPException(status_code=500, detail=f"Bulk enablement failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_enterprise_health",
+    error_code_prefix="ENTERPRISE_FEATURES",
+)
 @router.get("/health")
 async def get_enterprise_health():
     """
@@ -346,6 +377,11 @@ async def get_enterprise_health():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="optimize_system_performance",
+    error_code_prefix="ENTERPRISE_FEATURES",
+)
 @router.post("/performance/optimize")
 async def optimize_system_performance(request: PerformanceOptimizationRequest):
     """
@@ -407,6 +443,11 @@ async def optimize_system_performance(request: PerformanceOptimizationRequest):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_infrastructure_status",
+    error_code_prefix="ENTERPRISE_FEATURES",
+)
 @router.get("/infrastructure")
 async def get_infrastructure_status():
     """
@@ -465,6 +506,11 @@ async def get_infrastructure_status():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="deploy_zero_downtime",
+    error_code_prefix="ENTERPRISE_FEATURES",
+)
 @router.post("/deployment/zero-downtime")
 async def deploy_zero_downtime():
     """
@@ -532,6 +578,11 @@ async def deploy_zero_downtime():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="validate_phase4_completion",
+    error_code_prefix="ENTERPRISE_FEATURES",
+)
 @router.get("/phase4/validation")
 async def validate_phase4_completion():
     """
