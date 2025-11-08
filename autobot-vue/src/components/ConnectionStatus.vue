@@ -13,22 +13,24 @@
           ></div>
           <span class="font-medium text-sm">{{ statusText }}</span>
         </div>
-        <button 
+        <BaseButton
           @click="toggleDetails"
-          class="text-gray-400 hover:text-gray-600 ml-2"
+          variant="ghost"
+          size="sm"
           :aria-expanded="showDetails"
           aria-label="Toggle connection details"
+          class="ml-2 text-gray-400 hover:text-gray-600"
         >
-          <svg 
+          <svg
             class="w-4 h-4 transition-transform"
             :class="{ 'rotate-180': showDetails }"
-            fill="none" 
-            stroke="currentColor" 
+            fill="none"
+            stroke="currentColor"
             viewBox="0 0 24 24"
           >
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
           </svg>
-        </button>
+        </BaseButton>
       </div>
       
       <!-- Detailed Status -->
@@ -72,20 +74,26 @@
           
           <!-- Actions -->
           <div class="flex justify-between pt-2">
-            <button 
+            <BaseButton
               @click="forceReconnect"
-              class="text-blue-600 hover:text-blue-800 text-xs"
+              variant="link"
+              size="xs"
+              :loading="reconnecting"
               :disabled="reconnecting"
+              class="text-blue-600 hover:text-blue-800"
             >
               {{ reconnecting ? 'Reconnecting...' : 'Force Reconnect' }}
-            </button>
-            <button 
+            </BaseButton>
+            <BaseButton
               @click="runHealthCheck"
-              class="text-green-600 hover:text-green-800 text-xs"
+              variant="link"
+              size="xs"
+              :loading="healthChecking"
               :disabled="healthChecking"
+              class="text-green-600 hover:text-green-800"
             >
               {{ healthChecking ? 'Checking...' : 'Health Check' }}
-            </button>
+            </BaseButton>
           </div>
           
           <!-- Health Check Results -->
@@ -150,14 +158,17 @@
               <p v-if="toast.message" class="text-xs text-gray-600 mt-1">{{ toast.message }}</p>
             </div>
           </div>
-          <button 
+          <BaseButton
             @click="removeToast(toast.id)"
+            variant="ghost"
+            size="sm"
             class="ml-2 text-gray-400 hover:text-gray-600"
+            aria-label="Close notification"
           >
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
             </svg>
-          </button>
+          </BaseButton>
         </div>
       </div>
     </transition-group>
@@ -167,9 +178,13 @@
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import serviceIntegration from '@/config/OptimizedServiceIntegration.js';
+import BaseButton from '@/components/base/BaseButton.vue';
 
 export default {
   name: 'ConnectionStatus',
+  components: {
+    BaseButton
+  },
   setup() {
     const showDetails = ref(false);
     const connection = ref({
