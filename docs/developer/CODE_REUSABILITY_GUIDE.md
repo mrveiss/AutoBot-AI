@@ -3135,15 +3135,106 @@ const createRipple = (event: TouchEvent) => {
 
 ---
 
-**BasePanel Migration Summary (Batches 58-60)**:
-- **Components Migrated**: 3 components (ValidationDashboard, VoiceInterface, MonitoringDashboard)
-- **Panels Consolidated**: 18 panels (4 stat cards + 5 sections + 2 voice panels + 4 metric cards + 2 chart cards + 1 optimization section)
-- **Lines Saved**: ~57 lines total
+### **Batch 61 - CodebaseAnalytics.vue Migration** ✅ Completed
+
+**Goal**: Migrate real-time codebase analytics dashboard cards to BasePanel.
+
+**Component**: CodebaseAnalytics.vue (1607 → 1576 lines, ~31 lines saved, 1.9% reduction)
+
+**Panels Migrated**:
+1. **4 Analytics Cards** - Enhanced metrics with bordered variant (medium size)
+   - System Overview - API requests/min, response time, active connections, system health
+   - Communication Patterns - WebSocket connections, API call frequency, data transfer rate
+   - Code Quality - Overall score gauge, test coverage, code duplicates, technical debt
+   - Performance Metrics - Efficiency gauge, memory usage, CPU usage, load time
+
+2. **4 Stat Cards** - Codebase statistics with elevated variant (small size)
+   - Total Files - File count metric
+   - Lines of Code - Total lines metric
+   - Functions - Function count metric
+   - Classes - Class count metric
+
+**Template Changes**:
+```vue
+<!-- Before: Analytics Card -->
+<div class="analytics-card quality-card">
+  <div class="card-header">
+    <h3><i class="fas fa-code-branch"></i> Code Quality</h3>
+    <button @click="loadCodeQuality" class="refresh-btn">
+      <i class="fas fa-sync"></i>
+    </button>
+  </div>
+  <div class="card-content">
+    <div v-if="codeQuality" class="quality-metrics">...</div>
+    <EmptyState v-else icon="fas fa-star" message="No quality metrics" />
+  </div>
+</div>
+
+<!-- After: BasePanel with Header Wrapper -->
+<BasePanel variant="bordered" size="medium">
+  <template #header>
+    <div class="card-header-content">
+      <h3><i class="fas fa-code-branch"></i> Code Quality</h3>
+      <button @click="loadCodeQuality" class="refresh-btn">
+        <i class="fas fa-sync"></i>
+      </button>
+    </div>
+  </template>
+  <div v-if="codeQuality" class="quality-metrics">...</div>
+  <EmptyState v-else icon="fas fa-star" message="No quality metrics" />
+</BasePanel>
+
+<!-- Before: Stat Card -->
+<div class="stat-card">
+  <div class="stat-value">{{ codebaseStats.total_files || 0 }}</div>
+  <div class="stat-label">Total Files</div>
+</div>
+
+<!-- After: BasePanel -->
+<BasePanel variant="elevated" size="small">
+  <div class="stat-value">{{ codebaseStats.total_files || 0 }}</div>
+  <div class="stat-label">Total Files</div>
+</BasePanel>
+```
+
+**CSS Removed** (~52 lines):
+- `.analytics-card` structure (background, border, border-radius, overflow, transition) - 7 lines
+- `.analytics-card:hover` (transform, box-shadow, border-color) - 4 lines
+- `.card-header` layout (background, padding, border, flex, justify, align) - 8 lines
+- `.card-header h3` (margin, color, font-size, font-weight) - 6 lines
+- `.card-content` (padding) - 3 lines
+- `.stat-card` structure (background, padding, border-radius, text-align, border, transition) - 8 lines
+- `.stat-card:hover` (border-color, transform) - 3 lines
+- Plus hover states and spacing - 13 lines
+
+**CSS Added** (~10 lines):
+- `.card-header-content` (flex layout for header slot with controls) - 8 lines
+- `.stat-value`, `.stat-label` (text-align: center) - 2 lines (added to existing styles)
+
+**Features Preserved**:
+- Real-time analytics with live/static indicator toggle
+- EmptyState fallbacks for all 8 panels when data unavailable
+- System health status with color-coded badges
+- Quality score and efficiency gauges with dynamic classes
+- Refresh controls per analytics card
+- Statistics grid layout preserved
+- All metric calculations and formatting intact
+- Problems, duplicates, declarations sections NOT migrated (list items in v-for)
+
+**Key Pattern**: Header wrapper (`.card-header-content`) created to maintain flex layout for titles + refresh buttons in BasePanel header slot
+
+---
+
+**BasePanel Migration Summary (Batches 58-61)**:
+- **Components Migrated**: 4 components (ValidationDashboard, VoiceInterface, MonitoringDashboard, CodebaseAnalytics)
+- **Panels Consolidated**: 26 panels (8 stat cards + 5 sections + 2 voice panels + 4 metric cards + 2 chart cards + 1 optimization section + 4 analytics cards)
+- **Lines Saved**: ~88 lines total
   - Batch 58: ~0 lines (CSS consolidation, template overhead offset)
   - Batch 59: ~36 lines (CSS consolidation)
   - Batch 60: ~21 lines (CSS consolidation)
-- **Variants Used**: elevated (metric/stat cards), bordered (sections/charts/optimization)
-- **Sizes Used**: small (metric/stat cards), medium (sections/charts/optimization)
+  - Batch 61: ~31 lines (CSS consolidation)
+- **Variants Used**: elevated (metric/stat cards), bordered (sections/charts/optimization/analytics)
+- **Sizes Used**: small (metric/stat cards), medium (sections/charts/optimization/analytics)
 - **Key Patterns**: header slot for titles, header wrappers for controls, default slot for content
 
 ---
@@ -3198,16 +3289,17 @@ const createRipple = (event: TouchEvent) => {
   - Batch 55: ~0 lines (1 component, 1 modal - consistency gain)
   - Batch 56: ~-3 lines (1 component, 1 modal - consistency gain)
   - Batch 57: ~58 lines (1 component, 1 modal)
-- BasePanel adoptions: ~57 lines (batches 58-60)
+- BasePanel adoptions: ~88 lines (batches 58-61)
   - Batch 58: ~0 lines (1 component, 9 panels - consistency gain, CSS consolidation)
   - Batch 59: ~36 lines (1 component, 2 panels)
   - Batch 60: ~21 lines (1 component, 7 panels)
-- **Total Progress**: ~3,431 lines / ~1,500-2,000 realistic target (172-229%) ✅ **TARGET EXCEEDED**
+  - Batch 61: ~31 lines (1 component, 8 panels)
+- **Total Progress**: ~3,462 lines / ~1,500-2,000 realistic target (173-231%) ✅ **TARGET EXCEEDED**
 - **StatusBadge Milestone**: 15 instances across 11 components (650% increase from 2 baseline)
 - **BaseButton Milestone**: 29 components using BaseButton (202 buttons consolidated) ✅ **100% ADOPTION**
 - **BaseAlert Milestone**: 6 components using BaseAlert (10+ alerts consolidated)
 - **BaseModal Milestone**: 16 components using BaseModal (2 baseline + 14 new, 19 modals consolidated)
-- **BasePanel Milestone**: 3 components using BasePanel (0 baseline + 3 new, 18 panels consolidated)
+- **BasePanel Milestone**: 4 components using BasePanel (0 baseline + 4 new, 26 panels consolidated)
 
 **📊 Final Assessment: Underutilized Reusable Components** (January 2025):
 
