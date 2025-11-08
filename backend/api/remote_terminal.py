@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from backend.services.ssh_manager import RemoteCommandResult, SSHManager
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,11 @@ session_manager = RemoteSessionManager()
 # REST API Endpoints
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="remote_terminal_info",
+    error_code_prefix="REMOTE_TERMINAL",
+)
 @router.get("/")
 async def remote_terminal_info():
     """Get information about the remote terminal API"""
@@ -189,6 +195,11 @@ async def remote_terminal_info():
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_hosts",
+    error_code_prefix="REMOTE_TERMINAL",
+)
 @router.get("/hosts")
 async def list_hosts(ssh_manager: SSHManager = Depends(get_ssh_manager)):
     """List all configured SSH hosts"""
@@ -216,6 +227,11 @@ async def list_hosts(ssh_manager: SSHManager = Depends(get_ssh_manager)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_host_info",
+    error_code_prefix="REMOTE_TERMINAL",
+)
 @router.get("/hosts/{host}")
 async def get_host_info(host: str, ssh_manager: SSHManager = Depends(get_ssh_manager)):
     """Get information about a specific host"""
@@ -240,6 +256,11 @@ async def get_host_info(host: str, ssh_manager: SSHManager = Depends(get_ssh_man
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_remote_command",
+    error_code_prefix="REMOTE_TERMINAL",
+)
 @router.post("/execute")
 async def execute_remote_command(
     request: RemoteCommandRequest, ssh_manager: SSHManager = Depends(get_ssh_manager)
@@ -279,6 +300,11 @@ async def execute_remote_command(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_batch_command",
+    error_code_prefix="REMOTE_TERMINAL",
+)
 @router.post("/batch")
 async def execute_batch_command(
     request: BatchCommandRequest, ssh_manager: SSHManager = Depends(get_ssh_manager)
@@ -368,6 +394,11 @@ async def execute_batch_command(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="check_all_hosts_health",
+    error_code_prefix="REMOTE_TERMINAL",
+)
 @router.get("/health")
 async def check_all_hosts_health(ssh_manager: SSHManager = Depends(get_ssh_manager)):
     """Check health of all configured hosts"""
@@ -388,6 +419,11 @@ async def check_all_hosts_health(ssh_manager: SSHManager = Depends(get_ssh_manag
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_connection_pool_stats",
+    error_code_prefix="REMOTE_TERMINAL",
+)
 @router.get("/stats")
 async def get_connection_pool_stats(ssh_manager: SSHManager = Depends(get_ssh_manager)):
     """Get connection pool statistics"""
@@ -407,6 +443,11 @@ async def get_connection_pool_stats(ssh_manager: SSHManager = Depends(get_ssh_ma
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_remote_session",
+    error_code_prefix="REMOTE_TERMINAL",
+)
 @router.post("/sessions")
 async def create_remote_session(request: RemoteSessionRequest):
     """Create a new remote terminal session"""
@@ -426,6 +467,11 @@ async def create_remote_session(request: RemoteSessionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_remote_sessions",
+    error_code_prefix="REMOTE_TERMINAL",
+)
 @router.get("/sessions")
 async def list_remote_sessions():
     """List all active remote sessions"""
