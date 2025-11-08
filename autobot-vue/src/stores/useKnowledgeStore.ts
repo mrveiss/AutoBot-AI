@@ -34,6 +34,7 @@ export interface SearchResult {
   document: KnowledgeDocument
   score: number
   highlights: string[]
+  rerank_score?: number  // Neural reranking score (when enable_reranking=true)
 }
 
 export interface RagSearchResult {
