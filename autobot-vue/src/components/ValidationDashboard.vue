@@ -35,50 +35,60 @@
     <div v-if="reportData && !error" class="dashboard-content">
       <!-- System Overview Cards -->
       <div class="stats-grid">
-        <div class="stat-card maturity">
-          <div class="stat-icon">📈</div>
-          <div class="stat-content">
-            <div class="stat-value" :class="'health-' + reportData.system_overview.system_health">
-              {{ reportData.system_overview.overall_maturity.toFixed(1) }}%
+        <BasePanel variant="elevated" size="small">
+          <div class="stat-card-content maturity">
+            <div class="stat-icon">📈</div>
+            <div class="stat-content">
+              <div class="stat-value" :class="'health-' + reportData.system_overview.system_health">
+                {{ reportData.system_overview.overall_maturity.toFixed(1) }}%
+              </div>
+              <div class="stat-label">System Maturity</div>
             </div>
-            <div class="stat-label">System Maturity</div>
           </div>
-        </div>
+        </BasePanel>
 
-        <div class="stat-card phases">
-          <div class="stat-icon">🎯</div>
-          <div class="stat-content">
-            <div class="stat-value">
-              {{ reportData.system_overview.completed_phases }}/{{ reportData.system_overview.total_phases }}
+        <BasePanel variant="elevated" size="small">
+          <div class="stat-card-content phases">
+            <div class="stat-icon">🎯</div>
+            <div class="stat-content">
+              <div class="stat-value">
+                {{ reportData.system_overview.completed_phases }}/{{ reportData.system_overview.total_phases }}
+              </div>
+              <div class="stat-label">Phases Completed</div>
             </div>
-            <div class="stat-label">Phases Completed</div>
           </div>
-        </div>
+        </BasePanel>
 
-        <div class="stat-card capabilities">
-          <div class="stat-icon">⚡</div>
-          <div class="stat-content">
-            <div class="stat-value">{{ reportData.system_overview.active_capabilities }}</div>
-            <div class="stat-label">Active Capabilities</div>
-          </div>
-        </div>
-
-        <div class="stat-card health">
-          <div class="stat-icon">💚</div>
-          <div class="stat-content">
-            <div class="stat-value" :class="'health-' + reportData.system_overview.system_health">
-              {{ reportData.system_overview.system_health.replace('_', ' ') }}
+        <BasePanel variant="elevated" size="small">
+          <div class="stat-card-content capabilities">
+            <div class="stat-icon">⚡</div>
+            <div class="stat-content">
+              <div class="stat-value">{{ reportData.system_overview.active_capabilities }}</div>
+              <div class="stat-label">Active Capabilities</div>
             </div>
-            <div class="stat-label">System Health</div>
           </div>
-        </div>
+        </BasePanel>
+
+        <BasePanel variant="elevated" size="small">
+          <div class="stat-card-content health">
+            <div class="stat-icon">💚</div>
+            <div class="stat-content">
+              <div class="stat-value" :class="'health-' + reportData.system_overview.system_health">
+                {{ reportData.system_overview.system_health.replace('_', ' ') }}
+              </div>
+              <div class="stat-label">System Health</div>
+            </div>
+          </div>
+        </BasePanel>
       </div>
 
       <!-- Main Content Grid -->
       <div class="main-grid">
         <!-- Phase Progress Section -->
-        <div class="section phases-section">
-          <h2>📊 Phase Progress</h2>
+        <BasePanel variant="bordered" size="medium">
+          <template #header>
+            <h2>📊 Phase Progress</h2>
+          </template>
           <div class="phases-list">
             <div v-for="phase in reportData.phase_details" :key="phase.name" class="phase-item">
               <div class="phase-info">
@@ -98,13 +108,15 @@
               </div>
             </div>
           </div>
-        </div>
+        </BasePanel>
 
         <!-- Alerts and Recommendations Sidebar -->
         <div class="sidebar">
           <!-- System Alerts -->
-          <div class="section alerts-section">
-            <h3>🚨 System Alerts</h3>
+          <BasePanel variant="bordered" size="medium">
+            <template #header>
+              <h3>🚨 System Alerts</h3>
+            </template>
             <EmptyState
               v-if="reportData.alerts.length === 0"
               icon="fas fa-check-circle"
@@ -125,11 +137,13 @@
                 </template>
               </BaseAlert>
             </div>
-          </div>
+          </BasePanel>
 
           <!-- Recommendations -->
-          <div class="section recommendations-section">
-            <h3>💡 Recommendations</h3>
+          <BasePanel variant="bordered" size="medium">
+            <template #header>
+              <h3>💡 Recommendations</h3>
+            </template>
             <EmptyState
               v-if="(reportData.recommendations || []).length === 0"
               icon="fas fa-check-circle"
@@ -149,13 +163,15 @@
                 <div class="rec-action">💡 {{ rec.action }}</div>
               </div>
             </div>
-          </div>
+          </BasePanel>
         </div>
       </div>
 
       <!-- Progression Status -->
-      <div class="section progression-section">
-        <h2>🚀 Progression Status</h2>
+      <BasePanel variant="bordered" size="medium">
+        <template #header>
+          <h2>🚀 Progression Status</h2>
+        </template>
         <div class="progression-grid">
           <div class="progression-item">
             <div class="progression-label">Can Progress</div>
@@ -176,12 +192,12 @@
             <div class="progression-value">{{ reportData.progression_status.blocked_phases.length }}</div>
           </div>
         </div>
-      </div>
+      </BasePanel>
 
       <!-- Phase Progression Indicator -->
-      <div class="section phase-progression-section">
+      <BasePanel variant="bordered" size="medium">
         <PhaseProgressionIndicator />
-      </div>
+      </BasePanel>
     </div>
 
     <!-- Footer -->
@@ -200,13 +216,15 @@ import errorHandler from '../utils/ErrorHandler.js';
 import PhaseProgressionIndicator from './PhaseProgressionIndicator.vue';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import BaseAlert from '@/components/ui/BaseAlert.vue';
+import BasePanel from '@/components/base/BasePanel.vue';
 
 export default {
   name: 'ValidationDashboard',
   components: {
     PhaseProgressionIndicator,
     EmptyState,
-    BaseAlert
+    BaseAlert,
+    BasePanel
   },
   data() {
     return {
@@ -385,11 +403,7 @@ export default {
   margin-bottom: 30px;
 }
 
-.stat-card {
-  background: white;
-  padding: 25px;
-  border-radius: 10px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+.stat-card-content {
   display: flex;
   align-items: center;
   gap: 20px;
@@ -420,18 +434,6 @@ export default {
   grid-template-columns: 2fr 1fr;
   gap: 30px;
   margin-bottom: 30px;
-}
-
-.section {
-  background: white;
-  padding: 25px;
-  border-radius: 10px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.section h2, .section h3 {
-  margin: 0 0 20px 0;
-  color: #333;
 }
 
 .phases-list {
