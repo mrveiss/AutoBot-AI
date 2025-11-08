@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field, validator
 
 from src.autobot_memory_graph import AutoBotMemoryGraph
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # ====================================================================
 # Router Configuration
@@ -208,6 +209,11 @@ def generate_request_id() -> str:
 # ====================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_entity",
+    error_code_prefix="MEMORY",
+)
 @router.post("/entities", status_code=201)
 async def create_entity(
     entity_data: EntityCreateRequest,
@@ -264,6 +270,11 @@ async def create_entity(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_entity_by_id",
+    error_code_prefix="MEMORY",
+)
 @router.get("/entities/{entity_id}")
 async def get_entity_by_id(
     entity_id: str = Path(..., description="Entity UUID"),
@@ -315,6 +326,11 @@ async def get_entity_by_id(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_entity_by_name",
+    error_code_prefix="MEMORY",
+)
 @router.get("/entities")
 async def get_entity_by_name(
     name: str = Query(..., description="Entity name to search for"),
@@ -364,6 +380,11 @@ async def get_entity_by_name(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="add_observations",
+    error_code_prefix="MEMORY",
+)
 @router.patch("/entities/{entity_id}/observations")
 async def add_observations(
     entity_id: str = Path(..., description="Entity UUID"),
@@ -429,6 +450,11 @@ async def add_observations(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_entity",
+    error_code_prefix="MEMORY",
+)
 @router.delete("/entities/{entity_id}")
 async def delete_entity(
     entity_id: str = Path(..., description="Entity UUID"),
@@ -506,6 +532,11 @@ async def delete_entity(
 # ====================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_relation",
+    error_code_prefix="MEMORY",
+)
 @router.post("/relations", status_code=201)
 async def create_relation(
     relation_data: RelationCreateRequest,
@@ -563,6 +594,11 @@ async def create_relation(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_related_entities",
+    error_code_prefix="MEMORY",
+)
 @router.get("/entities/{entity_id}/relations")
 async def get_related_entities(
     entity_id: str = Path(..., description="Entity UUID"),
@@ -643,6 +679,11 @@ async def get_related_entities(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_relation",
+    error_code_prefix="MEMORY",
+)
 @router.delete("/relations")
 async def delete_relation(
     from_entity: str = Query(..., description="Source entity name"),
@@ -713,6 +754,11 @@ async def delete_relation(
 # ====================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="search_entities",
+    error_code_prefix="MEMORY",
+)
 @router.get("/search")
 async def search_entities(
     query: str = Query(..., min_length=1, description="Search query"),
@@ -783,6 +829,11 @@ async def search_entities(
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_entity_graph",
+    error_code_prefix="MEMORY",
+)
 @router.get("/graph")
 async def get_entity_graph(
     entity_id: Optional[str] = Query(None, description="Root entity ID (optional)"),
@@ -848,6 +899,11 @@ async def get_entity_graph(
 # ====================================================================
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="memory_health_check",
+    error_code_prefix="MEMORY",
+)
 @router.get("/health")
 async def memory_health_check(
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),

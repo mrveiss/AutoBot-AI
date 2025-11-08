@@ -32744,6 +32744,361 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
 
 
+    # ==============================================
+    # BATCH 172: memory.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_172_create_entity_simple_pattern(self):
+        """Verify create_entity endpoint uses Simple Pattern"""
+        from backend.api import memory
+
+        source = inspect.getsource(memory.create_entity)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="create_entity"', source)
+        self.assertIn('error_code_prefix="MEMORY"', source)
+
+    def test_batch_172_get_entity_by_id_simple_pattern(self):
+        """Verify get_entity_by_id endpoint uses Simple Pattern"""
+        from backend.api import memory
+
+        source = inspect.getsource(memory.get_entity_by_id)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_entity_by_id"', source)
+        self.assertIn('error_code_prefix="MEMORY"', source)
+
+    def test_batch_172_get_entity_by_name_simple_pattern(self):
+        """Verify get_entity_by_name endpoint uses Simple Pattern"""
+        from backend.api import memory
+
+        source = inspect.getsource(memory.get_entity_by_name)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_entity_by_name"', source)
+        self.assertIn('error_code_prefix="MEMORY"', source)
+
+    def test_batch_172_add_observations_simple_pattern(self):
+        """Verify add_observations endpoint uses Simple Pattern"""
+        from backend.api import memory
+
+        source = inspect.getsource(memory.add_observations)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="add_observations"', source)
+        self.assertIn('error_code_prefix="MEMORY"', source)
+
+    def test_batch_172_delete_entity_simple_pattern(self):
+        """Verify delete_entity endpoint uses Simple Pattern"""
+        from backend.api import memory
+
+        source = inspect.getsource(memory.delete_entity)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="delete_entity"', source)
+        self.assertIn('error_code_prefix="MEMORY"', source)
+
+    def test_batch_172_create_relation_simple_pattern(self):
+        """Verify create_relation endpoint uses Simple Pattern"""
+        from backend.api import memory
+
+        source = inspect.getsource(memory.create_relation)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="create_relation"', source)
+        self.assertIn('error_code_prefix="MEMORY"', source)
+
+    def test_batch_172_get_related_entities_simple_pattern(self):
+        """Verify get_related_entities endpoint uses Simple Pattern"""
+        from backend.api import memory
+
+        source = inspect.getsource(memory.get_related_entities)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_related_entities"', source)
+        self.assertIn('error_code_prefix="MEMORY"', source)
+
+    def test_batch_172_delete_relation_simple_pattern(self):
+        """Verify delete_relation endpoint uses Simple Pattern"""
+        from backend.api import memory
+
+        source = inspect.getsource(memory.delete_relation)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="delete_relation"', source)
+        self.assertIn('error_code_prefix="MEMORY"', source)
+
+    def test_batch_172_search_entities_simple_pattern(self):
+        """Verify search_entities endpoint uses Simple Pattern"""
+        from backend.api import memory
+
+        source = inspect.getsource(memory.search_entities)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="search_entities"', source)
+        self.assertIn('error_code_prefix="MEMORY"', source)
+
+    def test_batch_172_get_entity_graph_simple_pattern(self):
+        """Verify get_entity_graph endpoint uses Simple Pattern"""
+        from backend.api import memory
+
+        source = inspect.getsource(memory.get_entity_graph)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_entity_graph"', source)
+        self.assertIn('error_code_prefix="MEMORY"', source)
+
+    def test_batch_172_memory_health_check_simple_pattern(self):
+        """Verify memory_health_check endpoint uses Simple Pattern"""
+        from backend.api import memory
+
+        source = inspect.getsource(memory.memory_health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="memory_health_check"', source)
+        self.assertIn('error_code_prefix="MEMORY"', source)
+
+    def test_batch_172_all_memory_endpoints_have_decorator(self):
+        """Verify all memory endpoints have @with_error_handling decorator"""
+        from backend.api import memory
+
+        endpoint_functions = [
+            memory.create_entity,
+            memory.get_entity_by_id,
+            memory.get_entity_by_name,
+            memory.add_observations,
+            memory.delete_entity,
+            memory.create_relation,
+            memory.get_related_entities,
+            memory.delete_relation,
+            memory.search_entities,
+            memory.get_entity_graph,
+            memory.memory_health_check,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_172_memory_100_percent_milestone(self):
+        """Verify memory.py has reached 100% migration"""
+        from backend.api import memory
+
+        endpoint_functions = [
+            memory.create_entity,
+            memory.get_entity_by_id,
+            memory.get_entity_by_name,
+            memory.add_observations,
+            memory.delete_entity,
+            memory.create_relation,
+            memory.get_related_entities,
+            memory.delete_relation,
+            memory.search_entities,
+            memory.get_entity_graph,
+            memory.memory_health_check,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 11
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_172_migration_preserves_memory_graph_dependency(self):
+        """Verify migration preserves AutoBotMemoryGraph dependency injection"""
+        from backend.api import memory
+
+        # Verify AutoBotMemoryGraph is imported
+        self.assertTrue(hasattr(memory, "AutoBotMemoryGraph"))
+
+        # Verify get_memory_graph dependency function exists
+        self.assertTrue(hasattr(memory, "get_memory_graph"))
+
+        # Verify dependency function checks app state and initialization
+        dep_source = inspect.getsource(memory.get_memory_graph)
+        self.assertIn("request.app.state", dep_source)
+        self.assertIn("memory_graph", dep_source)
+        self.assertIn("initialized", dep_source)
+        self.assertIn("HTTPException", dep_source)
+        self.assertIn("status_code=503", dep_source)
+
+    def test_batch_172_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic request/response models"""
+        from backend.api import memory
+
+        # Verify request models are defined
+        self.assertTrue(hasattr(memory, "EntityCreateRequest"))
+        self.assertTrue(hasattr(memory, "ObservationAddRequest"))
+        self.assertTrue(hasattr(memory, "RelationCreateRequest"))
+
+        # Verify response models are defined
+        self.assertTrue(hasattr(memory, "EntityResponse"))
+        self.assertTrue(hasattr(memory, "RelationResponse"))
+        self.assertTrue(hasattr(memory, "GraphNodeResponse"))
+        self.assertTrue(hasattr(memory, "SearchResponse"))
+
+        # Verify validators exist
+        entity_create_source = inspect.getsource(memory.EntityCreateRequest)
+        self.assertIn("@validator", entity_create_source)
+        self.assertIn("validate_entity_type", entity_create_source)
+
+        relation_create_source = inspect.getsource(memory.RelationCreateRequest)
+        self.assertIn("@validator", relation_create_source)
+        self.assertIn("validate_relation_type", relation_create_source)
+
+    def test_batch_172_migration_preserves_entity_crud_operations(self):
+        """Verify migration preserves entity CRUD operations"""
+        from backend.api import memory
+
+        # Verify create_entity uses memory_graph.create_entity
+        create_source = inspect.getsource(memory.create_entity)
+        self.assertIn("memory_graph.create_entity", create_source)
+        self.assertIn("entity_type=entity_data.entity_type", create_source)
+        self.assertIn("name=entity_data.name", create_source)
+        self.assertIn("observations=entity_data.observations", create_source)
+
+        # Verify get_entity_by_id uses memory_graph.get_entity with entity_id
+        get_id_source = inspect.getsource(memory.get_entity_by_id)
+        self.assertIn("memory_graph.get_entity", get_id_source)
+        self.assertIn("entity_id=entity_id", get_id_source)
+        self.assertIn("include_relations=include_relations", get_id_source)
+
+        # Verify get_entity_by_name uses memory_graph.get_entity with entity_name
+        get_name_source = inspect.getsource(memory.get_entity_by_name)
+        self.assertIn("memory_graph.get_entity", get_name_source)
+        self.assertIn("entity_name=name", get_name_source)
+
+        # Verify delete_entity uses cascade_relations parameter
+        delete_source = inspect.getsource(memory.delete_entity)
+        self.assertIn("memory_graph.delete_entity", delete_source)
+        self.assertIn("cascade_relations=cascade_relations", delete_source)
+
+    def test_batch_172_migration_preserves_observation_management(self):
+        """Verify migration preserves observation addition logic"""
+        from backend.api import memory
+
+        # Verify add_observations retrieves entity first, then adds observations
+        add_obs_source = inspect.getsource(memory.add_observations)
+        self.assertIn("memory_graph.get_entity(entity_id=entity_id)", add_obs_source)
+        self.assertIn('entity["name"]', add_obs_source)
+        self.assertIn("memory_graph.add_observations", add_obs_source)
+        self.assertIn("entity_name=entity_name", add_obs_source)
+        self.assertIn("observations=observation_data.observations", add_obs_source)
+
+    def test_batch_172_migration_preserves_relation_management(self):
+        """Verify migration preserves relationship creation and deletion"""
+        from backend.api import memory
+
+        # Verify create_relation uses memory_graph.create_relation
+        create_rel_source = inspect.getsource(memory.create_relation)
+        self.assertIn("memory_graph.create_relation", create_rel_source)
+        self.assertIn("from_entity=relation_data.from_entity", create_rel_source)
+        self.assertIn("to_entity=relation_data.to_entity", create_rel_source)
+        self.assertIn("relation_type=relation_data.relation_type", create_rel_source)
+        self.assertIn("bidirectional=relation_data.bidirectional", create_rel_source)
+        self.assertIn("strength=relation_data.strength", create_rel_source)
+
+        # Verify delete_relation uses memory_graph.delete_relation
+        delete_rel_source = inspect.getsource(memory.delete_relation)
+        self.assertIn("memory_graph.delete_relation", delete_rel_source)
+        self.assertIn("from_entity=from_entity", delete_rel_source)
+        self.assertIn("to_entity=to_entity", delete_rel_source)
+        self.assertIn("relation_type=relation_type", delete_rel_source)
+
+    def test_batch_172_migration_preserves_graph_traversal(self):
+        """Verify migration preserves graph traversal features"""
+        from backend.api import memory
+
+        # Verify get_related_entities supports direction and depth parameters
+        related_source = inspect.getsource(memory.get_related_entities)
+        self.assertIn("memory_graph.get_related_entities", related_source)
+        self.assertIn("entity_name=entity_name", related_source)
+        self.assertIn("relation_type=relation_type", related_source)
+        self.assertIn("direction=direction", related_source)
+        self.assertIn("max_depth=max_depth", related_source)
+        self.assertIn('regex="^(outgoing|incoming|both)$"', related_source)
+
+        # Verify get_entity_graph supports optional root entity
+        graph_source = inspect.getsource(memory.get_entity_graph)
+        self.assertIn("if entity_id:", graph_source)
+        self.assertIn("include_relations=True", graph_source)
+
+    def test_batch_172_migration_preserves_semantic_search(self):
+        """Verify migration preserves semantic search capabilities"""
+        from backend.api import memory
+
+        # Verify search_entities supports multiple filters
+        search_source = inspect.getsource(memory.search_entities)
+        self.assertIn("memory_graph.search_entities", search_source)
+        self.assertIn("query=query", search_source)
+        self.assertIn("entity_type=entity_type", search_source)
+        self.assertIn("tags=tag_list", search_source)
+        self.assertIn("status=status", search_source)
+        self.assertIn("limit=limit", search_source)
+
+        # Verify tag parsing from comma-separated string
+        self.assertIn("tags.split", search_source)
+        self.assertIn("tag.strip()", search_source)
+
+    def test_batch_172_migration_preserves_request_id_tracking(self):
+        """Verify migration preserves request ID generation and logging"""
+        from backend.api import memory
+
+        # Verify generate_request_id function exists
+        self.assertTrue(hasattr(memory, "generate_request_id"))
+
+        # Verify create_entity uses request_id
+        create_source = inspect.getsource(memory.create_entity)
+        self.assertIn("request_id = generate_request_id()", create_source)
+        self.assertIn('"request_id": request_id', create_source)
+        self.assertIn("[{request_id}]", create_source)
+
+    def test_batch_172_migration_preserves_json_response_format(self):
+        """Verify migration preserves JSONResponse format with success field"""
+        from backend.api import memory
+
+        # Verify JSONResponse is imported
+        self.assertTrue(hasattr(memory, "JSONResponse"))
+
+        # Verify create_entity returns JSONResponse with success field
+        create_source = inspect.getsource(memory.create_entity)
+        self.assertIn("JSONResponse", create_source)
+        self.assertIn('"success": True', create_source)
+        self.assertIn('"data":', create_source)
+        self.assertIn('"message":', create_source)
+        self.assertIn('status_code=201', create_source)
+
+    def test_batch_172_migration_preserves_health_check_structure(self):
+        """Verify migration preserves health check component monitoring"""
+        from backend.api import memory
+
+        # Verify memory_health_check monitors all components
+        health_source = inspect.getsource(memory.memory_health_check)
+        self.assertIn('"status":', health_source)
+        self.assertIn('"components":', health_source)
+        self.assertIn('"memory_graph":', health_source)
+        self.assertIn('"redis_connection":', health_source)
+        self.assertIn('"knowledge_base":', health_source)
+        self.assertIn("memory_graph.initialized", health_source)
+        self.assertIn("memory_graph.redis_client", health_source)
+        self.assertIn("memory_graph.knowledge_base", health_source)
+        self.assertIn('status_code=503', health_source)
+
+
+
 
 
 if __name__ == "__main__":
