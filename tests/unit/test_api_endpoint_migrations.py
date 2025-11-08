@@ -31536,6 +31536,244 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("typescript", status_source)
         self.assertIn("supported_languages", status_source)
 
+    # ==============================================
+    # BATCH 168: workflow_automation.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_168_create_workflow_simple_pattern(self):
+        """Verify create_workflow endpoint uses Simple Pattern"""
+        from backend.api import workflow_automation
+
+        source = inspect.getsource(workflow_automation.create_workflow)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="create_workflow"', source)
+        self.assertIn('error_code_prefix="WORKFLOW_AUTOMATION"', source)
+
+    def test_batch_168_start_workflow_simple_pattern(self):
+        """Verify start_workflow endpoint uses Simple Pattern"""
+        from backend.api import workflow_automation
+
+        source = inspect.getsource(workflow_automation.start_workflow)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="start_workflow"', source)
+        self.assertIn('error_code_prefix="WORKFLOW_AUTOMATION"', source)
+
+    def test_batch_168_control_workflow_simple_pattern(self):
+        """Verify control_workflow endpoint uses Simple Pattern"""
+        from backend.api import workflow_automation
+
+        source = inspect.getsource(workflow_automation.control_workflow)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="control_workflow"', source)
+        self.assertIn('error_code_prefix="WORKFLOW_AUTOMATION"', source)
+
+    def test_batch_168_get_workflow_status_simple_pattern(self):
+        """Verify get_workflow_status endpoint uses Simple Pattern"""
+        from backend.api import workflow_automation
+
+        source = inspect.getsource(workflow_automation.get_workflow_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_workflow_status"', source)
+        self.assertIn('error_code_prefix="WORKFLOW_AUTOMATION"', source)
+
+    def test_batch_168_get_active_workflows_simple_pattern(self):
+        """Verify get_active_workflows endpoint uses Simple Pattern"""
+        from backend.api import workflow_automation
+
+        source = inspect.getsource(workflow_automation.get_active_workflows)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_active_workflows"', source)
+        self.assertIn('error_code_prefix="WORKFLOW_AUTOMATION"', source)
+
+    def test_batch_168_create_workflow_from_chat_simple_pattern(self):
+        """Verify create_workflow_from_chat endpoint uses Simple Pattern"""
+        from backend.api import workflow_automation
+
+        source = inspect.getsource(workflow_automation.create_workflow_from_chat)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="create_workflow_from_chat"', source)
+        self.assertIn('error_code_prefix="WORKFLOW_AUTOMATION"', source)
+
+    def test_batch_168_workflow_websocket_simple_pattern(self):
+        """Verify workflow_websocket endpoint uses Simple Pattern"""
+        from backend.api import workflow_automation
+
+        source = inspect.getsource(workflow_automation.workflow_websocket)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="workflow_websocket"', source)
+        self.assertIn('error_code_prefix="WORKFLOW_AUTOMATION"', source)
+
+    def test_batch_168_all_workflow_automation_endpoints_have_decorator(self):
+        """Verify all workflow_automation endpoints have @with_error_handling decorator"""
+        from backend.api import workflow_automation
+
+        endpoint_functions = [
+            workflow_automation.create_workflow,
+            workflow_automation.start_workflow,
+            workflow_automation.control_workflow,
+            workflow_automation.get_workflow_status,
+            workflow_automation.get_active_workflows,
+            workflow_automation.create_workflow_from_chat,
+            workflow_automation.workflow_websocket,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_168_workflow_automation_100_percent_milestone(self):
+        """Verify workflow_automation.py has reached 100% migration"""
+        from backend.api import workflow_automation
+
+        endpoint_functions = [
+            workflow_automation.create_workflow,
+            workflow_automation.start_workflow,
+            workflow_automation.control_workflow,
+            workflow_automation.get_workflow_status,
+            workflow_automation.get_active_workflows,
+            workflow_automation.create_workflow_from_chat,
+            workflow_automation.workflow_websocket,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 7
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_168_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic request models"""
+        from backend.api import workflow_automation
+
+        # Verify models are defined
+        self.assertTrue(hasattr(workflow_automation, "WorkflowStepRequest"))
+        self.assertTrue(hasattr(workflow_automation, "AutomatedWorkflowRequest"))
+        self.assertTrue(hasattr(workflow_automation, "WorkflowControlRequest"))
+
+        # Verify AutomatedWorkflowRequest is used in create_workflow
+        create_source = inspect.getsource(workflow_automation.create_workflow)
+        self.assertIn("AutomatedWorkflowRequest", create_source)
+
+        # Verify WorkflowControlRequest is used in control_workflow
+        control_source = inspect.getsource(workflow_automation.control_workflow)
+        self.assertIn("WorkflowControlRequest", control_source)
+
+    def test_batch_168_migration_preserves_enums(self):
+        """Verify migration preserves WorkflowStepStatus and AutomationMode enums"""
+        from backend.api import workflow_automation
+
+        # Verify enums are defined
+        self.assertTrue(hasattr(workflow_automation, "WorkflowStepStatus"))
+        self.assertTrue(hasattr(workflow_automation, "AutomationMode"))
+
+        # Verify AutomationMode is used in create_workflow
+        create_source = inspect.getsource(workflow_automation.create_workflow)
+        self.assertIn("AutomationMode", create_source)
+
+    def test_batch_168_migration_preserves_llm_judges_integration(self):
+        """Verify migration preserves LLM judges integration for workflow evaluation"""
+        from backend.api import workflow_automation
+
+        # Verify judges availability flag exists
+        self.assertTrue(hasattr(workflow_automation, "JUDGES_AVAILABLE"))
+
+        # Verify WorkflowAutomationManager class exists
+        self.assertTrue(hasattr(workflow_automation, "WorkflowAutomationManager"))
+
+        # Verify get_workflow_manager singleton pattern
+        self.assertTrue(hasattr(workflow_automation, "get_workflow_manager"))
+        get_manager_source = inspect.getsource(workflow_automation.get_workflow_manager)
+        self.assertIn("_workflow_manager", get_manager_source)
+        self.assertIn("global", get_manager_source)
+
+    def test_batch_168_migration_preserves_workflow_templates(self):
+        """Verify migration preserves workflow template functionality"""
+        from backend.api import workflow_automation
+
+        # Verify WorkflowAutomationManager has workflow template methods
+        manager_class = workflow_automation.WorkflowAutomationManager
+        self.assertTrue(hasattr(manager_class, "_create_system_update_workflow"))
+        self.assertTrue(hasattr(manager_class, "_create_dev_environment_workflow"))
+        self.assertTrue(hasattr(manager_class, "_create_security_scan_workflow"))
+        self.assertTrue(hasattr(manager_class, "_create_backup_workflow"))
+
+        # Verify workflow templates are referenced
+        manager_source = inspect.getsource(manager_class)
+        self.assertIn("system_update", manager_source)
+        self.assertIn("dev_environment", manager_source)
+        self.assertIn("security_scan", manager_source)
+        self.assertIn("backup_creation", manager_source)
+
+    def test_batch_168_migration_preserves_websocket_functionality(self):
+        """Verify migration preserves WebSocket workflow communication"""
+        from backend.api import workflow_automation
+
+        # Verify WebSocket endpoint exists
+        source = inspect.getsource(workflow_automation.workflow_websocket)
+
+        # Verify WebSocket accept
+        self.assertIn("await websocket.accept()", source)
+
+        # Verify terminal session registration
+        self.assertIn("terminal_sessions", source)
+
+        # Verify message handling loop
+        self.assertIn("while True:", source)
+        self.assertIn("await websocket.receive_text()", source)
+
+        # Verify automation control handling
+        self.assertIn("automation_control", source)
+
+    def test_batch_168_migration_preserves_orchestrator_integration(self):
+        """Verify migration preserves Orchestrator integration for chat workflow creation"""
+        from backend.api import workflow_automation
+
+        # Verify Orchestrator is imported
+        self.assertTrue(hasattr(workflow_automation, "Orchestrator"))
+        self.assertTrue(hasattr(workflow_automation, "EnhancedOrchestrator"))
+
+        # Verify create_workflow_from_chat uses orchestrator
+        chat_source = inspect.getsource(
+            workflow_automation.create_workflow_from_chat
+        )
+        self.assertIn("user_request", chat_source)
+        self.assertIn("session_id", chat_source)
+
+    def test_batch_168_migration_preserves_dataclasses(self):
+        """Verify migration preserves WorkflowStep and ActiveWorkflow dataclasses"""
+        from backend.api import workflow_automation
+
+        # Verify dataclasses are defined
+        self.assertTrue(hasattr(workflow_automation, "WorkflowStep"))
+        self.assertTrue(hasattr(workflow_automation, "ActiveWorkflow"))
+
+        # Verify WorkflowStep is used in create_workflow
+        create_source = inspect.getsource(workflow_automation.create_workflow)
+        self.assertIn("WorkflowStep", create_source)
+        self.assertIn("step_id", create_source)
+        self.assertIn("requires_confirmation", create_source)
+        self.assertIn("risk_level", create_source)
+
 
 
 
