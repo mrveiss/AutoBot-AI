@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.model_optimizer import TaskComplexity, TaskRequest, get_model_optimizer
 
 router = APIRouter()
@@ -41,6 +42,11 @@ class ModelPerformanceData(BaseModel):
     user_rating: Optional[float] = None
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_optimization_health",
+    error_code_prefix="LLM_OPTIMIZATION",
+)
 @router.get("/health")
 async def get_optimization_health():
     """Get model optimization system health status"""
@@ -67,6 +73,11 @@ async def get_optimization_health():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_available_models",
+    error_code_prefix="LLM_OPTIMIZATION",
+)
 @router.get("/models/available")
 async def get_available_models():
     """Get all available models with performance data"""
@@ -107,6 +118,11 @@ async def get_available_models():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="select_optimal_model",
+    error_code_prefix="LLM_OPTIMIZATION",
+)
 @router.post("/models/select")
 async def select_optimal_model(request: OptimizationRequest):
     """Select the optimal model for a given task"""
@@ -169,6 +185,11 @@ async def select_optimal_model(request: OptimizationRequest):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="track_model_performance",
+    error_code_prefix="LLM_OPTIMIZATION",
+)
 @router.post("/models/performance/track")
 async def track_model_performance(performance_data: ModelPerformanceData):
     """Track model performance for future optimization"""
@@ -200,6 +221,11 @@ async def track_model_performance(performance_data: ModelPerformanceData):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_model_performance_history",
+    error_code_prefix="LLM_OPTIMIZATION",
+)
 @router.get("/models/performance/history/{model_name}")
 async def get_model_performance_history(model_name: str):
     """Get performance history for a specific model"""
@@ -262,6 +288,11 @@ async def get_model_performance_history(model_name: str):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_optimization_suggestions",
+    error_code_prefix="LLM_OPTIMIZATION",
+)
 @router.get("/optimization/suggestions")
 async def get_optimization_suggestions():
     """Get optimization suggestions based on usage patterns"""
@@ -282,6 +313,11 @@ async def get_optimization_suggestions():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="compare_models",
+    error_code_prefix="LLM_OPTIMIZATION",
+)
 @router.get("/models/comparison")
 async def compare_models():
     """Compare all available models by performance metrics"""
@@ -355,6 +391,11 @@ async def compare_models():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="benchmark_model",
+    error_code_prefix="LLM_OPTIMIZATION",
+)
 @router.post("/models/benchmark/{model_name}")
 async def benchmark_model(
     model_name: str, test_queries: List[str] = None, iterations: int = 3
@@ -410,6 +451,11 @@ async def benchmark_model(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_resources",
+    error_code_prefix="LLM_OPTIMIZATION",
+)
 @router.get("/system/resources")
 async def get_system_resources():
     """Get current system resources for model optimization"""
@@ -463,6 +509,11 @@ async def get_system_resources():
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_optimization_config",
+    error_code_prefix="LLM_OPTIMIZATION",
+)
 @router.get("/config")
 async def get_optimization_config():
     """Get current optimization configuration"""
