@@ -101,19 +101,14 @@
     </div>
 
     <!-- Validation Report Modal -->
-    <div v-if="showReportModal" class="modal-overlay" @click.self="closeReport" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Project Validation Report</h3>
-          <button @click="closeReport" class="close-btn" aria-label="Close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <pre class="validation-report">{{ validationReport }}</pre>
-        </div>
-      </div>
-    </div>
+    <BaseModal
+      v-model="showReportModal"
+      title="Project Validation Report"
+      size="large"
+      scrollable
+    >
+      <pre class="validation-report">{{ validationReport }}</pre>
+    </BaseModal>
   </div>
 </template>
 
@@ -122,11 +117,13 @@ import { ref, onMounted, computed } from 'vue';
 import { apiService } from '../services/api';
 import { formatDateTime } from '@/utils/formatHelpers';
 import BaseButton from '@/components/base/BaseButton.vue';
+import BaseModal from '@/components/ui/BaseModal.vue';
 
 export default {
   name: 'PhaseStatusIndicator',
   components: {
-    BaseButton
+    BaseButton,
+    BaseModal
   },
   setup() {
     const isExpanded = ref(false);
@@ -556,61 +553,6 @@ export default {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 12px;
-  width: 90vw;
-  max-width: 800px;
-  max-height: 80vh;
-  overflow: hidden;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.modal-header h3 {
-  margin: 0;
-  color: #374151;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 18px;
-  cursor: pointer;
-  color: #9ca3af;
-  padding: 4px;
-}
-
-.close-btn:hover {
-  color: #374151;
-}
-
-.modal-body {
-  padding: 24px;
-  overflow-y: auto;
-  max-height: calc(80vh - 80px);
 }
 
 .validation-report {
