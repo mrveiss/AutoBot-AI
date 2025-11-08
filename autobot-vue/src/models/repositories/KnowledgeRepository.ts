@@ -10,6 +10,7 @@ export interface SearchKnowledgeRequest {
     types?: string[]
   }
   use_rag?: boolean
+  enable_reranking?: boolean
 }
 
 export interface RagSearchRequest {
@@ -77,6 +78,7 @@ export class KnowledgeRepository extends ApiRepository {
       query: request.query,
       limit: request.limit || 10,
       use_rag: request.use_rag || false,
+      enable_reranking: request.enable_reranking || false,
       ...request.filters
     })
     // Backend returns { results: [...], total_results: N, ... }

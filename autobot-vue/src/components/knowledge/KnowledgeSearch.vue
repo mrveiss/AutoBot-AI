@@ -67,6 +67,18 @@
         </div>
         <div class="option-group">
           <label>
+            <input
+              v-model="ragOptions.enableReranking"
+              type="checkbox"
+            >
+            <span class="reranking-label">
+              Enable neural reranking
+              <span class="reranking-badge">Slower but more accurate</span>
+            </span>
+          </label>
+        </div>
+        <div class="option-group">
+          <label>
             Results limit:
             <select v-model.number="ragOptions.limit" class="limit-select">
               <option value="5">5</option>
@@ -131,9 +143,15 @@
         >
           <div v-if="result && result.document" class="result-header">
             <h5 class="result-title">{{ result.document.title || 'Knowledge Document' }}</h5>
-            <span class="result-score" :class="getScoreClass(result.score)">
-              {{ Math.round(result.score * 100) }}% match
-            </span>
+            <div class="score-badges">
+              <span class="result-score" :class="getScoreClass(result.score)">
+                {{ Math.round(result.score * 100) }}% match
+              </span>
+              <span v-if="result.rerank_score" class="rerank-score" :class="getScoreClass(result.rerank_score)">
+                <i class="fas fa-brain"></i>
+                Rerank: {{ Math.round(result.rerank_score * 100) }}%
+              </span>
+            </div>
           </div>
           <div v-if="result && result.document" class="result-meta">
             <span class="result-type">
@@ -274,6 +292,7 @@ const loadingDocument = ref(false)
 // RAG Options
 const ragOptions = ref({
   reformulateQuery: true,
+  enableReranking: true,
   limit: 10
 })
 
@@ -304,20 +323,22 @@ const handleSearch = async () => {
       } catch (ragErr: any) {
         ragError.value = ragErr.message || 'RAG functionality is currently unavailable'
 
-        // Fallback to traditional search
+        // Fallback to traditional search with reranking if enabled
         const results = await knowledgeRepo.searchKnowledge({
           query: searchQuery.value,
           limit: ragOptions.value.limit,
-          use_rag: false
+          use_rag: false,
+          enable_reranking: ragOptions.value.enableReranking
         })
         searchResults.value = results
       }
     } else {
-      // Use traditional search
+      // Use traditional search (without reranking in non-RAG mode)
       const results = await knowledgeRepo.searchKnowledge({
         query: searchQuery.value,
         limit: 20,
-        use_rag: false
+        use_rag: false,
+        enable_reranking: false
       })
       searchResults.value = results
     }
@@ -454,6 +475,14 @@ const copyDocument = async () => {
   @apply ml-2 px-2 py-1 border border-gray-300 rounded text-xs;
 }
 
+.reranking-label {
+  @apply flex items-center gap-2;
+}
+
+.reranking-badge {
+  @apply text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-normal;
+}
+
 /* Search Input */
 .search-input-container {
   @apply mb-6;
@@ -557,8 +586,20 @@ const copyDocument = async () => {
   @apply font-medium text-gray-900;
 }
 
+.score-badges {
+  @apply flex items-center gap-2;
+}
+
 .result-score {
   @apply text-xs px-2 py-1 rounded-full;
+}
+
+.rerank-score {
+  @apply text-xs px-2 py-1 rounded-full flex items-center gap-1;
+}
+
+.rerank-score i {
+  @apply text-blue-500;
 }
 
 .score-high {
