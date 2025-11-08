@@ -29988,6 +29988,291 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("agent_usage", stats_source)
         self.assertIn("avg_duration", stats_source)
 
+    # ==============================================
+    # BATCH 161: llm_optimization.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_161_get_optimization_health_simple_pattern(self):
+        """Verify get_optimization_health endpoint uses Simple Pattern"""
+        from backend.api import llm_optimization
+
+        source = inspect.getsource(llm_optimization.get_optimization_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_optimization_health"', source)
+        self.assertIn('error_code_prefix="LLM_OPTIMIZATION"', source)
+
+    def test_batch_161_get_available_models_simple_pattern(self):
+        """Verify get_available_models endpoint uses Simple Pattern"""
+        from backend.api import llm_optimization
+
+        source = inspect.getsource(llm_optimization.get_available_models)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_available_models"', source)
+        self.assertIn('error_code_prefix="LLM_OPTIMIZATION"', source)
+
+    def test_batch_161_select_optimal_model_simple_pattern(self):
+        """Verify select_optimal_model endpoint uses Simple Pattern"""
+        from backend.api import llm_optimization
+
+        source = inspect.getsource(llm_optimization.select_optimal_model)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="select_optimal_model"', source)
+        self.assertIn('error_code_prefix="LLM_OPTIMIZATION"', source)
+
+    def test_batch_161_track_model_performance_simple_pattern(self):
+        """Verify track_model_performance endpoint uses Simple Pattern"""
+        from backend.api import llm_optimization
+
+        source = inspect.getsource(llm_optimization.track_model_performance)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="track_model_performance"', source)
+        self.assertIn('error_code_prefix="LLM_OPTIMIZATION"', source)
+
+    def test_batch_161_get_model_performance_history_simple_pattern(self):
+        """Verify get_model_performance_history endpoint uses Simple Pattern"""
+        from backend.api import llm_optimization
+
+        source = inspect.getsource(llm_optimization.get_model_performance_history)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_model_performance_history"', source)
+        self.assertIn('error_code_prefix="LLM_OPTIMIZATION"', source)
+
+    def test_batch_161_get_optimization_suggestions_simple_pattern(self):
+        """Verify get_optimization_suggestions endpoint uses Simple Pattern"""
+        from backend.api import llm_optimization
+
+        source = inspect.getsource(llm_optimization.get_optimization_suggestions)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_optimization_suggestions"', source)
+        self.assertIn('error_code_prefix="LLM_OPTIMIZATION"', source)
+
+    def test_batch_161_compare_models_simple_pattern(self):
+        """Verify compare_models endpoint uses Simple Pattern"""
+        from backend.api import llm_optimization
+
+        source = inspect.getsource(llm_optimization.compare_models)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="compare_models"', source)
+        self.assertIn('error_code_prefix="LLM_OPTIMIZATION"', source)
+
+    def test_batch_161_benchmark_model_simple_pattern(self):
+        """Verify benchmark_model endpoint uses Simple Pattern"""
+        from backend.api import llm_optimization
+
+        source = inspect.getsource(llm_optimization.benchmark_model)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="benchmark_model"', source)
+        self.assertIn('error_code_prefix="LLM_OPTIMIZATION"', source)
+
+    def test_batch_161_get_system_resources_simple_pattern(self):
+        """Verify get_system_resources endpoint uses Simple Pattern"""
+        from backend.api import llm_optimization
+
+        source = inspect.getsource(llm_optimization.get_system_resources)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_system_resources"', source)
+        self.assertIn('error_code_prefix="LLM_OPTIMIZATION"', source)
+
+    def test_batch_161_get_optimization_config_simple_pattern(self):
+        """Verify get_optimization_config endpoint uses Simple Pattern"""
+        from backend.api import llm_optimization
+
+        source = inspect.getsource(llm_optimization.get_optimization_config)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_optimization_config"', source)
+        self.assertIn('error_code_prefix="LLM_OPTIMIZATION"', source)
+
+    def test_batch_161_all_llm_optimization_endpoints_have_decorator(self):
+        """Verify all llm_optimization endpoints have @with_error_handling decorator"""
+        from backend.api import llm_optimization
+
+        endpoint_functions = [
+            llm_optimization.get_optimization_health,
+            llm_optimization.get_available_models,
+            llm_optimization.select_optimal_model,
+            llm_optimization.track_model_performance,
+            llm_optimization.get_model_performance_history,
+            llm_optimization.get_optimization_suggestions,
+            llm_optimization.compare_models,
+            llm_optimization.benchmark_model,
+            llm_optimization.get_system_resources,
+            llm_optimization.get_optimization_config,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_161_llm_optimization_100_percent_milestone(self):
+        """Verify llm_optimization.py has reached 100% migration"""
+        from backend.api import llm_optimization
+
+        endpoint_functions = [
+            llm_optimization.get_optimization_health,
+            llm_optimization.get_available_models,
+            llm_optimization.select_optimal_model,
+            llm_optimization.track_model_performance,
+            llm_optimization.get_model_performance_history,
+            llm_optimization.get_optimization_suggestions,
+            llm_optimization.compare_models,
+            llm_optimization.benchmark_model,
+            llm_optimization.get_system_resources,
+            llm_optimization.get_optimization_config,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 10
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_161_migration_preserves_model_optimizer_dependency(self):
+        """Verify migration preserves get_model_optimizer dependency"""
+        from backend.api import llm_optimization
+
+        # Verify get_model_optimizer is imported
+        self.assertTrue(hasattr(llm_optimization, "get_model_optimizer"))
+
+        # Verify it's used in endpoints
+        health_source = inspect.getsource(llm_optimization.get_optimization_health)
+        self.assertIn("get_model_optimizer()", health_source)
+
+        models_source = inspect.getsource(llm_optimization.get_available_models)
+        self.assertIn("get_model_optimizer()", models_source)
+
+    def test_batch_161_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic request models"""
+        from backend.api import llm_optimization
+
+        # Verify models are defined
+        self.assertTrue(hasattr(llm_optimization, "OptimizationRequest"))
+        self.assertTrue(hasattr(llm_optimization, "ModelPerformanceData"))
+
+        # Verify models are used in endpoints
+        select_source = inspect.getsource(llm_optimization.select_optimal_model)
+        self.assertIn("OptimizationRequest", select_source)
+
+        track_source = inspect.getsource(llm_optimization.track_model_performance)
+        self.assertIn("ModelPerformanceData", track_source)
+
+    def test_batch_161_migration_preserves_task_complexity_analysis(self):
+        """Verify migration preserves TaskComplexity analysis in select_optimal_model"""
+        from backend.api import llm_optimization
+
+        # Verify TaskComplexity is imported
+        self.assertTrue(hasattr(llm_optimization, "TaskComplexity"))
+
+        # Verify select_optimal_model analyzes task complexity
+        select_source = inspect.getsource(llm_optimization.select_optimal_model)
+        self.assertIn("analyze_task_complexity", select_source)
+        self.assertIn("complexity.value", select_source)
+
+    def test_batch_161_migration_preserves_task_request_creation(self):
+        """Verify migration preserves TaskRequest creation in select_optimal_model"""
+        from backend.api import llm_optimization
+
+        # Verify TaskRequest is imported
+        self.assertTrue(hasattr(llm_optimization, "TaskRequest"))
+
+        # Verify select_optimal_model creates TaskRequest
+        select_source = inspect.getsource(llm_optimization.select_optimal_model)
+        self.assertIn("TaskRequest(", select_source)
+        self.assertIn("request.query", select_source)
+        self.assertIn("request.task_type", select_source)
+
+    def test_batch_161_migration_preserves_model_performance_tracking(self):
+        """Verify migration preserves model performance tracking"""
+        from backend.api import llm_optimization
+
+        # Verify track_model_performance uses optimizer method
+        track_source = inspect.getsource(llm_optimization.track_model_performance)
+        self.assertIn("track_model_performance(", track_source)
+        self.assertIn("performance_data.model_name", track_source)
+        self.assertIn("performance_data.response_time", track_source)
+        self.assertIn("performance_data.response_tokens", track_source)
+
+    def test_batch_161_migration_preserves_efficiency_metrics_calculation(self):
+        """Verify migration preserves efficiency metrics calculation"""
+        from backend.api import llm_optimization
+
+        # Verify get_model_performance_history calculates efficiency metrics
+        history_source = inspect.getsource(llm_optimization.get_model_performance_history)
+        self.assertIn("efficiency_metrics", history_source)
+        self.assertIn("tokens_per_gb", history_source)
+        self.assertIn("response_efficiency", history_source)
+        self.assertIn("overall_score", history_source)
+
+    def test_batch_161_migration_preserves_model_comparison_logic(self):
+        """Verify migration preserves model comparison by performance level"""
+        from backend.api import llm_optimization
+
+        # Verify compare_models separates by performance level
+        compare_source = inspect.getsource(llm_optimization.compare_models)
+        self.assertIn("comparison_data", compare_source)
+        self.assertIn("lightweight", compare_source)
+        self.assertIn("standard", compare_source)
+        self.assertIn("advanced", compare_source)
+        self.assertIn("performance_score", compare_source)
+
+    def test_batch_161_migration_preserves_benchmark_validation(self):
+        """Verify migration preserves benchmark model validation"""
+        from backend.api import llm_optimization
+
+        # Verify benchmark_model validates iteration limit
+        benchmark_source = inspect.getsource(llm_optimization.benchmark_model)
+        self.assertIn("if iterations > 10:", benchmark_source)
+        self.assertIn("Maximum 10 iterations allowed", benchmark_source)
+
+        # Verify model existence check
+        self.assertIn("if not any(model.name == model_name", benchmark_source)
+
+    def test_batch_161_migration_preserves_resource_recommendations(self):
+        """Verify migration preserves system resource recommendations"""
+        from backend.api import llm_optimization
+
+        # Verify get_system_resources provides recommendations
+        resources_source = inspect.getsource(llm_optimization.get_system_resources)
+        self.assertIn("recommendations", resources_source)
+        self.assertIn("cpu_percent", resources_source)
+        self.assertIn("memory_percent", resources_source)
+        self.assertIn("optimal_model_size_gb", resources_source)
+
+    def test_batch_161_migration_preserves_config_helper_usage(self):
+        """Verify migration preserves cfg (config_helper) usage"""
+        from backend.api import llm_optimization
+
+        # Verify cfg is imported
+        self.assertTrue(hasattr(llm_optimization, "cfg"))
+
+        # Verify get_optimization_config uses cfg.get
+        config_source = inspect.getsource(llm_optimization.get_optimization_config)
+        self.assertIn("cfg.get(", config_source)
+        self.assertIn("llm.optimization.performance_threshold", config_source)
+        self.assertIn("llm.optimization.cache_ttl", config_source)
+
 
 if __name__ == "__main__":
     unittest.main()
