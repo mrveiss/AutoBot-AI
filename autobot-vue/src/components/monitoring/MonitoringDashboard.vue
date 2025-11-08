@@ -50,14 +50,14 @@
       <div class="row">
         <!-- Overall Health Card -->
         <div class="col-md-3">
-          <div class="metric-card overall-health">
-            <div class="card-header">
+          <BasePanel variant="elevated" size="small">
+            <template #header>
               <h5>
                 <i class="fas fa-heartbeat"></i>
                 Overall Health
               </h5>
-            </div>
-            <div class="card-body">
+            </template>
+            <div class="overall-health">
               <div :class="['health-score', overallHealth]">
                 {{ overallHealthText }}
               </div>
@@ -65,121 +65,115 @@
                 Score: {{ performanceScore }}/100
               </div>
             </div>
-          </div>
+          </BasePanel>
         </div>
 
         <!-- GPU Card -->
         <div class="col-md-3">
-          <div class="metric-card gpu-metrics">
-            <div class="card-header">
+          <BasePanel variant="elevated" size="small">
+            <template #header>
               <h5>
                 <i class="fas fa-microchip"></i>
                 NVIDIA RTX 4070
               </h5>
-            </div>
-            <div class="card-body">
-              <div v-if="gpuMetrics">
-                <div class="metric-row">
-                  <span>Utilization</span>
-                  <span class="metric-value">{{ gpuMetrics.utilization_percent }}%</span>
-                </div>
-                <div class="metric-row">
-                  <span>Memory</span>
-                  <span class="metric-value">{{ gpuMetrics.memory_utilization_percent }}%</span>
-                </div>
-                <div class="metric-row">
-                  <span>Temperature</span>
-                  <span class="metric-value">{{ gpuMetrics.temperature_c }}°C</span>
-                </div>
-                <div class="metric-row">
-                  <span>Power</span>
-                  <span class="metric-value">{{ gpuMetrics.power_draw_w }}W</span>
-                </div>
+            </template>
+            <div v-if="gpuMetrics">
+              <div class="metric-row">
+                <span>Utilization</span>
+                <span class="metric-value">{{ gpuMetrics.utilization_percent }}%</span>
               </div>
-              <EmptyState
-                v-else
-                icon="fas fa-microchip"
-                message="GPU not available"
-                compact
-              />
+              <div class="metric-row">
+                <span>Memory</span>
+                <span class="metric-value">{{ gpuMetrics.memory_utilization_percent }}%</span>
+              </div>
+              <div class="metric-row">
+                <span>Temperature</span>
+                <span class="metric-value">{{ gpuMetrics.temperature_c }}°C</span>
+              </div>
+              <div class="metric-row">
+                <span>Power</span>
+                <span class="metric-value">{{ gpuMetrics.power_draw_w }}W</span>
+              </div>
             </div>
-          </div>
+            <EmptyState
+              v-else
+              icon="fas fa-microchip"
+              message="GPU not available"
+              compact
+            />
+          </BasePanel>
         </div>
 
         <!-- NPU Card -->
         <div class="col-md-3">
-          <div class="metric-card npu-metrics">
-            <div class="card-header">
+          <BasePanel variant="elevated" size="small">
+            <template #header>
               <h5>
                 <i class="fas fa-brain"></i>
                 Intel NPU
               </h5>
-            </div>
-            <div class="card-body">
-              <div v-if="npuMetrics">
-                <div class="metric-row">
-                  <span>Utilization</span>
-                  <span class="metric-value">{{ npuMetrics.utilization_percent }}%</span>
-                </div>
-                <div class="metric-row">
-                  <span>Acceleration</span>
-                  <span class="metric-value">{{ npuMetrics.acceleration_ratio }}x</span>
-                </div>
-                <div class="metric-row">
-                  <span>Inferences</span>
-                  <span class="metric-value">{{ npuMetrics.inference_count }}</span>
-                </div>
-                <div class="metric-row">
-                  <span>Avg Time</span>
-                  <span class="metric-value">{{ npuMetrics.average_inference_time_ms }}ms</span>
-                </div>
+            </template>
+            <div v-if="npuMetrics">
+              <div class="metric-row">
+                <span>Utilization</span>
+                <span class="metric-value">{{ npuMetrics.utilization_percent }}%</span>
               </div>
-              <EmptyState
-                v-else
-                icon="fas fa-microchip"
-                message="NPU not available"
-                compact
-              />
+              <div class="metric-row">
+                <span>Acceleration</span>
+                <span class="metric-value">{{ npuMetrics.acceleration_ratio }}x</span>
+              </div>
+              <div class="metric-row">
+                <span>Inferences</span>
+                <span class="metric-value">{{ npuMetrics.inference_count }}</span>
+              </div>
+              <div class="metric-row">
+                <span>Avg Time</span>
+                <span class="metric-value">{{ npuMetrics.average_inference_time_ms }}ms</span>
+              </div>
             </div>
-          </div>
+            <EmptyState
+              v-else
+              icon="fas fa-microchip"
+              message="NPU not available"
+              compact
+            />
+          </BasePanel>
         </div>
 
         <!-- System Card -->
         <div class="col-md-3">
-          <div class="metric-card system-metrics">
-            <div class="card-header">
+          <BasePanel variant="elevated" size="small">
+            <template #header>
               <h5>
                 <i class="fas fa-server"></i>
                 System (22-core)
               </h5>
-            </div>
-            <div class="card-body">
-              <div v-if="systemMetrics">
-                <div class="metric-row">
-                  <span>CPU Usage</span>
-                  <span class="metric-value">{{ Math.round(systemMetrics.cpu?.percent_overall || 0) }}%</span>
-                </div>
-                <div class="metric-row">
-                  <span>Memory</span>
-                  <span class="metric-value">{{ systemMetrics.memory?.percent || 0 }}%</span>
-                </div>
-                <div class="metric-row">
-                  <span>Load Avg</span>
-                  <span class="metric-value">{{ systemMetrics.cpu?.load_average?.[0]?.toFixed(2) || '0.00' }}</span>
-                </div>
-                <div class="metric-row">
-                  <span>Network</span>
-                  <span class="metric-value">{{ Math.round((systemMetrics.network?.bytes_sent || 0) / 1024 / 1024) }}MB sent</span>
-                </div>
+            </template>
+            <div v-if="systemMetrics">
+              <div class="metric-row">
+                <span>CPU Usage</span>
+                <span class="metric-value">{{ Math.round(systemMetrics.cpu?.percent_overall || 0) }}%</span>
               </div>
-              <EmptyState
-                v-else
-                icon="fas fa-server"
-                message="System data unavailable"
-                compact
-              />
+              <div class="metric-row">
+                <span>Memory</span>
+                <span class="metric-value">{{ systemMetrics.memory?.percent || 0 }}%</span>
+              </div>
+              <div class="metric-row">
+                <span>Load Avg</span>
+                <span class="metric-value">{{ systemMetrics.cpu?.load_average?.[0]?.toFixed(2) || '0.00' }}</span>
+              </div>
+              <div class="metric-row">
+                <span>Network</span>
+                <span class="metric-value">{{ Math.round((systemMetrics.network?.bytes_sent || 0) / 1024 / 1024) }}MB sent</span>
+              </div>
             </div>
-          </div>
+            <EmptyState
+              v-else
+              icon="fas fa-server"
+              message="System data unavailable"
+              compact
+            />
+          </BasePanel>
         </div>
       </div>
     </div>
@@ -189,40 +183,44 @@
       <div class="row">
         <!-- GPU Utilization Chart -->
         <div class="col-md-6">
-          <div class="chart-card">
-            <div class="chart-header">
-              <h5>GPU Utilization Timeline</h5>
-              <div class="chart-controls">
-                <select v-model="gpuTimeRange" @change="updateGpuChart" class="form-select form-select-sm">
-                  <option value="5">Last 5 minutes</option>
-                  <option value="15">Last 15 minutes</option>
-                  <option value="60">Last hour</option>
-                </select>
+          <BasePanel variant="bordered" size="medium">
+            <template #header>
+              <div class="chart-header-content">
+                <h5>GPU Utilization Timeline</h5>
+                <div class="chart-controls">
+                  <select v-model="gpuTimeRange" @change="updateGpuChart" class="form-select form-select-sm">
+                    <option value="5">Last 5 minutes</option>
+                    <option value="15">Last 15 minutes</option>
+                    <option value="60">Last hour</option>
+                  </select>
+                </div>
               </div>
-            </div>
+            </template>
             <div class="chart-container">
               <canvas ref="gpuChart" id="gpuUtilizationChart"></canvas>
             </div>
-          </div>
+          </BasePanel>
         </div>
 
         <!-- System Performance Chart -->
         <div class="col-md-6">
-          <div class="chart-card">
-            <div class="chart-header">
-              <h5>System Performance Timeline</h5>
-              <div class="chart-controls">
-                <select v-model="systemTimeRange" @change="updateSystemChart" class="form-select form-select-sm">
-                  <option value="5">Last 5 minutes</option>
-                  <option value="15">Last 15 minutes</option>
-                  <option value="60">Last hour</option>
-                </select>
+          <BasePanel variant="bordered" size="medium">
+            <template #header>
+              <div class="chart-header-content">
+                <h5>System Performance Timeline</h5>
+                <div class="chart-controls">
+                  <select v-model="systemTimeRange" @change="updateSystemChart" class="form-select form-select-sm">
+                    <option value="5">Last 5 minutes</option>
+                    <option value="15">Last 15 minutes</option>
+                    <option value="60">Last hour</option>
+                  </select>
+                </div>
               </div>
-            </div>
+            </template>
             <div class="chart-container">
               <canvas ref="systemChart" id="systemPerformanceChart"></canvas>
             </div>
-          </div>
+          </BasePanel>
         </div>
       </div>
     </div>
@@ -268,21 +266,23 @@
     </div>
 
     <!-- Optimization Recommendations -->
-    <div class="optimization-section">
-      <div class="section-header">
-        <h4>
-          <i class="fas fa-lightbulb"></i>
-          Performance Optimization Recommendations
-        </h4>
-        <BaseButton variant="outline" size="sm" @click="refreshRecommendations" class="btn-outline-primary">
-          <i class="fas fa-sync"></i>
-          Refresh
-        </BaseButton>
-      </div>
-      
+    <BasePanel variant="bordered" size="medium">
+      <template #header>
+        <div class="section-header-content">
+          <h4>
+            <i class="fas fa-lightbulb"></i>
+            Performance Optimization Recommendations
+          </h4>
+          <BaseButton variant="outline" size="sm" @click="refreshRecommendations" class="btn-outline-primary">
+            <i class="fas fa-sync"></i>
+            Refresh
+          </BaseButton>
+        </div>
+      </template>
+
       <div v-if="recommendations.length > 0" class="recommendations-list">
-        <div 
-          v-for="rec in recommendations" 
+        <div
+          v-for="rec in recommendations"
           :key="rec.category + rec.recommendation"
           :class="['recommendation-card', rec.priority]"
         >
@@ -305,7 +305,7 @@
         <i class="fas fa-check-circle"></i>
         No optimization recommendations at this time. System performing optimally!
       </div>
-    </div>
+    </BasePanel>
 
     <!-- Performance Alerts Modal -->
     <BaseModal
@@ -347,6 +347,7 @@ import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import BasePanel from '@/components/base/BasePanel.vue'
 
 Chart.register(...registerables)
 
@@ -357,7 +358,8 @@ export default {
     StatusBadge,
     BaseButton,
     BaseAlert,
-    BaseModal
+    BaseModal,
+    BasePanel
   },
   data() {
     return {
@@ -1016,32 +1018,6 @@ export default {
   margin-bottom: 30px;
 }
 
-.metric-card {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  overflow: hidden;
-  height: 200px;
-}
-
-.metric-card .card-header {
-  background: #f8f9fa;
-  padding: 15px 20px;
-  border-bottom: 1px solid #dee2e6;
-}
-
-.metric-card .card-header h5 {
-  margin: 0;
-  color: #333;
-  font-size: 1em;
-}
-
-.metric-card .card-body {
-  padding: 20px;
-  height: calc(100% - 60px);
-  overflow-y: auto;
-}
-
 .overall-health .health-score {
   font-size: 1.5em;
   font-weight: bold;
@@ -1074,23 +1050,14 @@ export default {
   margin-bottom: 30px;
 }
 
-.chart-card {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  overflow: hidden;
-}
-
-.chart-header {
+.chart-header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 20px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
+  width: 100%;
 }
 
-.chart-header h5 {
+.chart-header-content h5 {
   margin: 0;
   color: #333;
   font-size: 1em;
@@ -1101,7 +1068,7 @@ export default {
   height: 300px;
 }
 
-.service-health, .optimization-section {
+.service-health {
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -1109,7 +1076,7 @@ export default {
   margin-bottom: 20px;
 }
 
-.section-header {
+.service-health .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1118,7 +1085,20 @@ export default {
   border-bottom: 1px solid #dee2e6;
 }
 
-.section-header h4 {
+.service-health .section-header h4 {
+  margin: 0;
+  color: #333;
+  font-size: 1.2em;
+}
+
+.section-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.section-header-content h4 {
   margin: 0;
   color: #333;
   font-size: 1.2em;
