@@ -348,37 +348,40 @@
   </div>
 
   <!-- Edit Message Modal -->
-  <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-    <div class="bg-white rounded-lg p-6 w-96 max-w-90vw max-h-80vh overflow-hidden flex flex-col">
-      <h3 class="text-lg font-semibold mb-4">Edit Message</h3>
-      <textarea
-        v-model="editingContent"
-        class="flex-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-        placeholder="Enter your message..."
-        @keydown.ctrl.enter="saveEditedMessage"
-        @keydown.meta.enter="saveEditedMessage"
-        ref="editTextarea"
-      ></textarea>
-      <div class="flex justify-end gap-2 mt-4">
-        <BaseButton
-          variant="secondary"
-          @click="cancelEdit"
-        >
-          Cancel
-        </BaseButton>
-        <BaseButton
-          variant="primary"
-          @click="saveEditedMessage"
-          :disabled="!editingContent.trim()"
-        >
-          Save
-        </BaseButton>
-      </div>
-      <div class="text-xs text-gray-500 mt-2">
-        Press Ctrl+Enter (Cmd+Enter on Mac) to save
-      </div>
+  <BaseModal
+    v-model="showEditModal"
+    title="Edit Message"
+    size="medium"
+  >
+    <textarea
+      v-model="editingContent"
+      class="flex-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+      placeholder="Enter your message..."
+      @keydown.ctrl.enter="saveEditedMessage"
+      @keydown.meta.enter="saveEditedMessage"
+      ref="editTextarea"
+      rows="6"
+    ></textarea>
+    <div class="text-xs text-gray-500 mt-2">
+      Press Ctrl+Enter (Cmd+Enter on Mac) to save
     </div>
-  </div>
+
+    <template #actions>
+      <BaseButton
+        variant="secondary"
+        @click="cancelEdit"
+      >
+        Cancel
+      </BaseButton>
+      <BaseButton
+        variant="primary"
+        @click="saveEditedMessage"
+        :disabled="!editingContent.trim()"
+      >
+        Save
+      </BaseButton>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
@@ -392,6 +395,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import appConfig from '@/config/AppConfig.js'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 
