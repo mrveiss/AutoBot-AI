@@ -42,22 +42,22 @@
     </div>
 
     <div class="secrets-stats" v-if="stats">
-      <div class="stat-card">
+      <BasePanel variant="elevated" size="small">
         <h4>Total Secrets</h4>
         <span class="stat-value">{{ stats.total_secrets }}</span>
-      </div>
-      <div class="stat-card">
+      </BasePanel>
+      <BasePanel variant="elevated" size="small">
         <h4>Chat-scoped</h4>
         <span class="stat-value">{{ stats.by_scope?.chat || 0 }}</span>
-      </div>
-      <div class="stat-card">
+      </BasePanel>
+      <BasePanel variant="elevated" size="small">
         <h4>General</h4>
         <span class="stat-value">{{ stats.by_scope?.general || 0 }}</span>
-      </div>
-      <div class="stat-card" v-if="stats.expired_count > 0">
+      </BasePanel>
+      <BasePanel variant="elevated" size="small" v-if="stats.expired_count > 0">
         <h4>Expired</h4>
         <span class="stat-value expired">{{ stats.expired_count }}</span>
-      </div>
+      </BasePanel>
     </div>
 
     <div class="secrets-list">
@@ -324,13 +324,15 @@ import { formatDateTime } from '@/utils/formatHelpers';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
+import BasePanel from '@/components/base/BasePanel.vue';
 
 export default {
   name: 'SecretsManager',
   components: {
     EmptyState,
     StatusBadge,
-    BaseModal
+    BaseModal,
+    BasePanel
   },
   setup() {
     // State
@@ -738,25 +740,21 @@ export default {
   margin-bottom: 20px;
 }
 
-.stat-card {
-  background: white;
-  padding: 15px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  text-align: center;
-}
-
-.stat-card h4 {
+/* Stat card content styles - BasePanel handles structure */
+.secrets-stats h4 {
   margin: 0 0 5px 0;
   font-size: 12px;
   color: #666;
   text-transform: uppercase;
+  text-align: center;
 }
 
 .stat-value {
   font-size: 24px;
   font-weight: bold;
   color: #333;
+  display: block;
+  text-align: center;
 }
 
 .stat-value.expired {
