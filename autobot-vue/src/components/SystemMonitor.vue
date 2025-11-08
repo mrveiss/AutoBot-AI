@@ -73,11 +73,13 @@
     <!-- Detailed System Monitor Grid -->
     <div class="monitor-grid">
       <!-- Performance Metrics -->
-      <div class="metric-card glass-card">
-        <div class="card-header">
-          <h3>System Performance</h3>
-          <div class="refresh-indicator" :class="{ spinning: isRefreshing }">⟳</div>
-        </div>
+      <BasePanel variant="elevated" size="medium">
+        <template #header>
+          <div class="card-header-content">
+            <h3>System Performance</h3>
+            <div class="refresh-indicator" :class="{ spinning: isRefreshing }">⟳</div>
+          </div>
+        </template>
         <div class="metric-content">
           <div class="metric-item">
             <div class="metric-label">CPU Usage</div>
@@ -115,14 +117,16 @@
             </div>
           </div>
         </div>
-      </div>
+      </BasePanel>
 
       <!-- Service Status -->
-      <div class="status-card glass-card">
-        <div class="card-header">
-          <h3>Service Status</h3>
-          <div class="status-summary">{{ onlineServices }}/{{ totalServices }} Online</div>
-        </div>
+      <BasePanel variant="elevated" size="medium">
+        <template #header>
+          <div class="card-header-content">
+            <h3>Service Status</h3>
+            <div class="status-summary">{{ onlineServices }}/{{ totalServices }} Online</div>
+          </div>
+        </template>
         <div class="status-content">
           <div class="service-item" v-for="service in services" :key="service.name">
             <div class="service-info">
@@ -135,35 +139,39 @@
             </div>
           </div>
         </div>
-      </div>
+      </BasePanel>
 
       <!-- Real-time Chart -->
-      <div class="chart-card glass-card">
-        <div class="card-header">
-          <h3>Performance History</h3>
-          <div class="chart-controls">
-            <button
-              v-for="timeframe in timeframes"
-              :key="timeframe.value"
-              class="time-btn"
-              :class="{ active: selectedTimeframe === timeframe.value }"
-              @click="selectedTimeframe = timeframe.value"
-              :aria-label="timeframe.label">
-              {{ timeframe.label }}
-            </button>
+      <BasePanel variant="elevated" size="medium">
+        <template #header>
+          <div class="card-header-content">
+            <h3>Performance History</h3>
+            <div class="chart-controls">
+              <button
+                v-for="timeframe in timeframes"
+                :key="timeframe.value"
+                class="time-btn"
+                :class="{ active: selectedTimeframe === timeframe.value }"
+                @click="selectedTimeframe = timeframe.value"
+                :aria-label="timeframe.label">
+                {{ timeframe.label }}
+              </button>
+            </div>
           </div>
-        </div>
+        </template>
         <div class="chart-content">
           <canvas ref="performanceChart" width="400" height="200"></canvas>
         </div>
-      </div>
+      </BasePanel>
 
       <!-- API Health -->
-      <div class="api-card glass-card">
-        <div class="card-header">
-          <h3>API Health</h3>
-          <div class="api-stats">{{ healthyEndpoints }}/{{ totalEndpoints }} Healthy</div>
-        </div>
+      <BasePanel variant="elevated" size="medium">
+        <template #header>
+          <div class="card-header-content">
+            <h3>API Health</h3>
+            <div class="api-stats">{{ healthyEndpoints }}/{{ totalEndpoints }} Healthy</div>
+          </div>
+        </template>
         <div class="api-content">
           <div class="endpoint-group" v-for="group in apiEndpoints" :key="group.name">
             <div class="group-name">{{ group.name }}</div>
@@ -179,13 +187,13 @@
             </div>
           </div>
         </div>
-      </div>
+      </BasePanel>
 
       <!-- Quick Actions -->
-      <div class="actions-card glass-card">
-        <div class="card-header">
+      <BasePanel variant="elevated" size="medium">
+        <template #header>
           <h3>Quick Actions</h3>
-        </div>
+        </template>
         <div class="actions-content">
           <router-link to="/chat" class="action-item">
             <i class="fas fa-comments text-blue-500"></i>
@@ -204,13 +212,13 @@
             <span>View Logs</span>
           </router-link>
         </div>
-      </div>
+      </BasePanel>
 
       <!-- Recent Activity -->
-      <div class="activity-card glass-card">
-        <div class="card-header">
+      <BasePanel variant="elevated" size="medium">
+        <template #header>
           <h3>Recent Activity</h3>
-        </div>
+        </template>
         <div class="activity-content">
           <div v-for="activity in recentActivity" :key="activity.id" class="activity-item">
             <div class="activity-icon">
@@ -222,7 +230,7 @@
             </div>
           </div>
         </div>
-      </div>
+      </BasePanel>
     </div>
   </div>
 </template>
@@ -236,6 +244,7 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useServiceMonitor } from '@/composables/useServiceMonitor.js'
 import MultiMachineHealth from './MultiMachineHealth.vue'
 import { formatFileSize as formatBytes } from '@/utils/formatHelpers'
+import BasePanel from '@/components/base/BasePanel.vue'
 
 const appStore = useAppStore()
 const chatStore = useChatStore()
@@ -451,25 +460,14 @@ onUnmounted(() => {
   gap: 1.5rem;
 }
 
-.glass-card {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  padding: 1.5rem;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-}
-
-.card-header {
+.card-header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  width: 100%;
 }
 
-.card-header h3 {
+.card-header-content h3 {
   font-size: 1.1rem;
   font-weight: 600;
   color: #374151;
