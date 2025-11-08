@@ -44,151 +44,151 @@
     <!-- Enhanced Analytics Dashboard Cards -->
     <div class="enhanced-analytics-grid">
       <!-- System Overview -->
-      <div class="analytics-card overview-card">
-        <div class="card-header">
-          <h3><i class="fas fa-tachometer-alt"></i> System Overview</h3>
-          <div class="refresh-indicator" :class="{ active: realTimeEnabled }">
-            <i class="fas fa-circle"></i>
-            {{ realTimeEnabled ? 'Live' : 'Static' }}
-          </div>
-        </div>
-        <div class="card-content">
-          <div v-if="systemOverview" class="metrics-grid">
-            <div class="metric-item">
-              <div class="metric-label">API Requests/Min</div>
-              <div class="metric-value">{{ systemOverview.api_requests_per_minute || 0 }}</div>
-            </div>
-            <div class="metric-item">
-              <div class="metric-label">Avg Response Time</div>
-              <div class="metric-value">{{ systemOverview.average_response_time || 0 }}ms</div>
-            </div>
-            <div class="metric-item">
-              <div class="metric-label">Active Connections</div>
-              <div class="metric-value">{{ systemOverview.active_connections || 0 }}</div>
-            </div>
-            <div class="metric-item">
-              <div class="metric-label">System Health</div>
-              <div class="metric-value" :class="getHealthClass(systemOverview.system_health)">
-                {{ systemOverview.system_health || 'Unknown' }}
-              </div>
+      <BasePanel variant="bordered" size="medium">
+        <template #header>
+          <div class="card-header-content">
+            <h3><i class="fas fa-tachometer-alt"></i> System Overview</h3>
+            <div class="refresh-indicator" :class="{ active: realTimeEnabled }">
+              <i class="fas fa-circle"></i>
+              {{ realTimeEnabled ? 'Live' : 'Static' }}
             </div>
           </div>
-          <EmptyState
-            v-else
-            icon="fas fa-database"
-            message="No system metrics available"
-          >
-            <template #actions>
-              <button @click="loadSystemOverview" class="btn-link">Load Metrics</button>
-            </template>
-          </EmptyState>
+        </template>
+        <div v-if="systemOverview" class="metrics-grid">
+          <div class="metric-item">
+            <div class="metric-label">API Requests/Min</div>
+            <div class="metric-value">{{ systemOverview.api_requests_per_minute || 0 }}</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-label">Avg Response Time</div>
+            <div class="metric-value">{{ systemOverview.average_response_time || 0 }}ms</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-label">Active Connections</div>
+            <div class="metric-value">{{ systemOverview.active_connections || 0 }}</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-label">System Health</div>
+            <div class="metric-value" :class="getHealthClass(systemOverview.system_health)">
+              {{ systemOverview.system_health || 'Unknown' }}
+            </div>
+          </div>
         </div>
-      </div>
+        <EmptyState
+          v-else
+          icon="fas fa-database"
+          message="No system metrics available"
+        >
+          <template #actions>
+            <button @click="loadSystemOverview" class="btn-link">Load Metrics</button>
+          </template>
+        </EmptyState>
+      </BasePanel>
 
       <!-- Communication Patterns -->
-      <div class="analytics-card communication-card">
-        <div class="card-header">
-          <h3><i class="fas fa-network-wired"></i> Communication Patterns</h3>
-          <button @click="loadCommunicationPatterns" class="refresh-btn">
-            <i class="fas fa-sync"></i>
-          </button>
-        </div>
-        <div class="card-content">
-          <div v-if="communicationPatterns" class="communication-metrics">
-            <div class="pattern-item">
-              <div class="pattern-label">WebSocket Connections</div>
-              <div class="pattern-value">{{ communicationPatterns.websocket_connections || 0 }}</div>
-            </div>
-            <div class="pattern-item">
-              <div class="pattern-label">API Call Frequency</div>
-              <div class="pattern-value">{{ communicationPatterns.api_call_frequency || 0 }}/min</div>
-            </div>
-            <div class="pattern-item">
-              <div class="pattern-label">Data Transfer Rate</div>
-              <div class="pattern-value">{{ communicationPatterns.data_transfer_rate || 0 }} KB/s</div>
-            </div>
+      <BasePanel variant="bordered" size="medium">
+        <template #header>
+          <div class="card-header-content">
+            <h3><i class="fas fa-network-wired"></i> Communication Patterns</h3>
+            <button @click="loadCommunicationPatterns" class="refresh-btn">
+              <i class="fas fa-sync"></i>
+            </button>
           </div>
-          <EmptyState
-            v-else
-            icon="fas fa-wifi"
-            message="No communication data"
-          />
+        </template>
+        <div v-if="communicationPatterns" class="communication-metrics">
+          <div class="pattern-item">
+            <div class="pattern-label">WebSocket Connections</div>
+            <div class="pattern-value">{{ communicationPatterns.websocket_connections || 0 }}</div>
+          </div>
+          <div class="pattern-item">
+            <div class="pattern-label">API Call Frequency</div>
+            <div class="pattern-value">{{ communicationPatterns.api_call_frequency || 0 }}/min</div>
+          </div>
+          <div class="pattern-item">
+            <div class="pattern-label">Data Transfer Rate</div>
+            <div class="pattern-value">{{ communicationPatterns.data_transfer_rate || 0 }} KB/s</div>
+          </div>
         </div>
-      </div>
+        <EmptyState
+          v-else
+          icon="fas fa-wifi"
+          message="No communication data"
+        />
+      </BasePanel>
 
       <!-- Code Quality -->
-      <div class="analytics-card quality-card">
-        <div class="card-header">
-          <h3><i class="fas fa-code-branch"></i> Code Quality</h3>
-          <button @click="loadCodeQuality" class="refresh-btn">
-            <i class="fas fa-sync"></i>
-          </button>
-        </div>
-        <div class="card-content">
-          <div v-if="codeQuality" class="quality-metrics">
-            <div class="quality-score" :class="getQualityClass(codeQuality.overall_score)">
-              <div class="score-value">{{ codeQuality.overall_score || 0 }}</div>
-              <div class="score-label">Overall Score</div>
+      <BasePanel variant="bordered" size="medium">
+        <template #header>
+          <div class="card-header-content">
+            <h3><i class="fas fa-code-branch"></i> Code Quality</h3>
+            <button @click="loadCodeQuality" class="refresh-btn">
+              <i class="fas fa-sync"></i>
+            </button>
+          </div>
+        </template>
+        <div v-if="codeQuality" class="quality-metrics">
+          <div class="quality-score" :class="getQualityClass(codeQuality.overall_score)">
+            <div class="score-value">{{ codeQuality.overall_score || 0 }}</div>
+            <div class="score-label">Overall Score</div>
+          </div>
+          <div class="quality-details">
+            <div class="quality-item">
+              <span class="quality-label">Test Coverage:</span>
+              <span class="quality-value">{{ codeQuality.test_coverage || 0 }}%</span>
             </div>
-            <div class="quality-details">
-              <div class="quality-item">
-                <span class="quality-label">Test Coverage:</span>
-                <span class="quality-value">{{ codeQuality.test_coverage || 0 }}%</span>
-              </div>
-              <div class="quality-item">
-                <span class="quality-label">Code Duplicates:</span>
-                <span class="quality-value">{{ codeQuality.code_duplicates || 0 }}</span>
-              </div>
-              <div class="quality-item">
-                <span class="quality-label">Technical Debt:</span>
-                <span class="quality-value">{{ codeQuality.technical_debt || 0 }}h</span>
-              </div>
+            <div class="quality-item">
+              <span class="quality-label">Code Duplicates:</span>
+              <span class="quality-value">{{ codeQuality.code_duplicates || 0 }}</span>
+            </div>
+            <div class="quality-item">
+              <span class="quality-label">Technical Debt:</span>
+              <span class="quality-value">{{ codeQuality.technical_debt || 0 }}h</span>
             </div>
           </div>
-          <EmptyState
-            v-else
-            icon="fas fa-star"
-            message="No quality metrics"
-          />
         </div>
-      </div>
+        <EmptyState
+          v-else
+          icon="fas fa-star"
+          message="No quality metrics"
+        />
+      </BasePanel>
 
       <!-- Performance Metrics -->
-      <div class="analytics-card performance-card">
-        <div class="card-header">
-          <h3><i class="fas fa-bolt"></i> Performance Metrics</h3>
-          <button @click="loadPerformanceMetrics" class="refresh-btn">
-            <i class="fas fa-sync"></i>
-          </button>
-        </div>
-        <div class="card-content">
-          <div v-if="performanceMetrics" class="performance-metrics">
-            <div class="performance-gauge" :class="getEfficiencyClass(performanceMetrics.efficiency_score)">
-              <div class="gauge-value">{{ performanceMetrics.efficiency_score || 0 }}%</div>
-              <div class="gauge-label">Efficiency</div>
+      <BasePanel variant="bordered" size="medium">
+        <template #header>
+          <div class="card-header-content">
+            <h3><i class="fas fa-bolt"></i> Performance Metrics</h3>
+            <button @click="loadPerformanceMetrics" class="refresh-btn">
+              <i class="fas fa-sync"></i>
+            </button>
+          </div>
+        </template>
+        <div v-if="performanceMetrics" class="performance-metrics">
+          <div class="performance-gauge" :class="getEfficiencyClass(performanceMetrics.efficiency_score)">
+            <div class="gauge-value">{{ performanceMetrics.efficiency_score || 0 }}%</div>
+            <div class="gauge-label">Efficiency</div>
+          </div>
+          <div class="performance-details">
+            <div class="performance-item">
+              <span class="performance-label">Memory Usage:</span>
+              <span class="performance-value">{{ performanceMetrics.memory_usage || 0 }}MB</span>
             </div>
-            <div class="performance-details">
-              <div class="performance-item">
-                <span class="performance-label">Memory Usage:</span>
-                <span class="performance-value">{{ performanceMetrics.memory_usage || 0 }}MB</span>
-              </div>
-              <div class="performance-item">
-                <span class="performance-label">CPU Usage:</span>
-                <span class="performance-value">{{ performanceMetrics.cpu_usage || 0 }}%</span>
-              </div>
-              <div class="performance-item">
-                <span class="performance-label">Load Time:</span>
-                <span class="performance-value">{{ performanceMetrics.load_time || 0 }}ms</span>
-              </div>
+            <div class="performance-item">
+              <span class="performance-label">CPU Usage:</span>
+              <span class="performance-value">{{ performanceMetrics.cpu_usage || 0 }}%</span>
+            </div>
+            <div class="performance-item">
+              <span class="performance-label">Load Time:</span>
+              <span class="performance-value">{{ performanceMetrics.load_time || 0 }}ms</span>
             </div>
           </div>
-          <EmptyState
-            v-else
-            icon="fas fa-rocket"
-            message="No performance data"
-          />
         </div>
-      </div>
+        <EmptyState
+          v-else
+          icon="fas fa-rocket"
+          message="No performance data"
+        />
+      </BasePanel>
     </div>
 
     <!-- Traditional Analytics Section -->
@@ -209,22 +209,22 @@
       <div class="stats-section">
         <h3><i class="fas fa-chart-pie"></i> Codebase Statistics</h3>
         <div v-if="codebaseStats" class="stats-grid">
-          <div class="stat-card">
+          <BasePanel variant="elevated" size="small">
             <div class="stat-value">{{ codebaseStats.total_files || 0 }}</div>
             <div class="stat-label">Total Files</div>
-          </div>
-          <div class="stat-card">
+          </BasePanel>
+          <BasePanel variant="elevated" size="small">
             <div class="stat-value">{{ codebaseStats.total_lines || 0 }}</div>
             <div class="stat-label">Lines of Code</div>
-          </div>
-          <div class="stat-card">
+          </BasePanel>
+          <BasePanel variant="elevated" size="small">
             <div class="stat-value">{{ codebaseStats.total_functions || 0 }}</div>
             <div class="stat-label">Functions</div>
-          </div>
-          <div class="stat-card">
+          </BasePanel>
+          <BasePanel variant="elevated" size="small">
             <div class="stat-value">{{ codebaseStats.total_classes || 0 }}</div>
             <div class="stat-label">Classes</div>
-          </div>
+          </BasePanel>
         </div>
         <EmptyState
           v-else
@@ -322,6 +322,7 @@
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import BasePanel from '@/components/base/BasePanel.vue'
 
 // Reactive data
 // FIXED: Fetch project root from backend config (no hardcoding)
@@ -1153,30 +1154,14 @@ const getQualityClass = (score) => {
   margin-bottom: 32px;
 }
 
-.analytics-card {
-  background: #1f2937;
-  border: 1px solid #374151;
-  border-radius: 12px;
-  overflow: hidden;
-  transition: all 0.3s ease;
-}
-
-.analytics-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
-  border-color: #4b5563;
-}
-
-.card-header {
-  background: #111827;
-  padding: 16px 20px;
-  border-bottom: 1px solid #374151;
+.card-header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 100%;
 }
 
-.card-header h3 {
+.card-header-content h3 {
   margin: 0;
   color: #f9fafb;
   font-size: 1.1em;
@@ -1212,10 +1197,6 @@ const getQualityClass = (score) => {
 .refresh-btn:hover {
   background: #4b5563;
   color: #ffffff;
-}
-
-.card-content {
-  padding: 20px;
 }
 
 .metrics-grid {
@@ -1411,30 +1392,18 @@ const getQualityClass = (score) => {
   gap: 16px;
 }
 
-.stat-card {
-  background: #111827;
-  padding: 16px;
-  border-radius: 8px;
-  text-align: center;
-  border: 1px solid #374151;
-  transition: all 0.2s;
-}
-
-.stat-card:hover {
-  border-color: #4b5563;
-  transform: translateY(-1px);
-}
-
 .stat-value {
   font-size: 2em;
   font-weight: 700;
   color: #22c55e;
   margin-bottom: 4px;
+  text-align: center;
 }
 
 .stat-label {
   color: #9ca3af;
   font-size: 0.9em;
+  text-align: center;
 }
 
 .problems-list, .duplicates-list, .declarations-list {
