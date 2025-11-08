@@ -23,7 +23,7 @@
       </div>
 
       <div class="vector-overview-grid">
-        <div class="vector-stat-card">
+        <BasePanel variant="elevated" size="medium">
           <div class="vector-stat-icon facts">
             <i class="fas fa-lightbulb"></i>
           </div>
@@ -32,9 +32,9 @@
             <p class="vector-stat-value">{{ vectorStats.total_facts || 0 }}</p>
             <p class="vector-stat-label">Knowledge items stored</p>
           </div>
-        </div>
+        </BasePanel>
 
-        <div class="vector-stat-card" :class="{ 'needs-attention': needsVectorization }">
+        <BasePanel variant="elevated" size="medium" :class="{ 'needs-attention': needsVectorization }">
           <div class="vector-stat-icon vectors">
             <i class="fas fa-cubes"></i>
           </div>
@@ -46,9 +46,9 @@
             </p>
             <p v-else class="vector-stat-label">Embeddings generated</p>
           </div>
-        </div>
+        </BasePanel>
 
-        <div class="vector-stat-card">
+        <BasePanel variant="elevated" size="medium">
           <div class="vector-stat-icon database">
             <i class="fas fa-database"></i>
           </div>
@@ -57,9 +57,9 @@
             <p class="vector-stat-value">{{ formatFileSize(vectorStats.db_size || 0) }}</p>
             <p class="vector-stat-label">Storage used</p>
           </div>
-        </div>
+        </BasePanel>
 
-        <div class="vector-stat-card">
+        <BasePanel variant="elevated" size="medium">
           <div class="vector-stat-icon status">
             <i class="fas fa-check-circle"></i>
           </div>
@@ -70,7 +70,7 @@
             </StatusBadge>
             <p class="vector-stat-label">RAG: {{ vectorStats.rag_available ? 'Available' : 'Unavailable' }}</p>
           </div>
-        </div>
+        </BasePanel>
       </div>
 
       <!-- Vectorization Notice -->
@@ -187,7 +187,7 @@
 
     <!-- Overview Cards -->
     <div class="stats-overview" role="region" aria-label="Knowledge base overview statistics">
-      <div class="stat-card" role="article" aria-labelledby="facts-title">
+      <BasePanel variant="elevated" size="small" role="article" aria-labelledby="facts-title">
         <div class="stat-icon facts" aria-hidden="true">
           <i class="fas fa-lightbulb"></i>
         </div>
@@ -198,9 +198,9 @@
             Knowledge items in Redis
           </p>
         </div>
-      </div>
+      </BasePanel>
 
-      <div class="stat-card" role="article" aria-labelledby="documents-title">
+      <BasePanel variant="elevated" size="small" role="article" aria-labelledby="documents-title">
         <div class="stat-icon documents" aria-hidden="true">
           <i class="fas fa-file-alt"></i>
         </div>
@@ -213,9 +213,9 @@
             {{ needsVectorization ? 'Not vectorized' : 'Vectorized for RAG' }}
           </p>
         </div>
-      </div>
+      </BasePanel>
 
-      <div class="stat-card" role="article" aria-labelledby="categories-title">
+      <BasePanel variant="elevated" size="small" role="article" aria-labelledby="categories-title">
         <div class="stat-icon categories" aria-hidden="true">
           <i class="fas fa-folder"></i>
         </div>
@@ -226,9 +226,9 @@
             {{ avgDocsPerCategory }} avg docs/category
           </p>
         </div>
-      </div>
+      </BasePanel>
 
-      <div class="stat-card">
+      <BasePanel variant="elevated" size="small">
         <div class="stat-icon tags">
           <i class="fas fa-tags"></i>
         </div>
@@ -239,9 +239,9 @@
             {{ avgTagsPerDoc }} avg tags/doc
           </p>
         </div>
-      </div>
+      </BasePanel>
 
-      <div class="stat-card">
+      <BasePanel variant="elevated" size="small">
         <div class="stat-icon storage">
           <i class="fas fa-database"></i>
         </div>
@@ -252,13 +252,13 @@
             {{ formatFileSize(avgDocSize) }} avg/doc
           </p>
         </div>
-      </div>
+      </BasePanel>
     </div>
 
     <!-- Charts Section -->
     <div class="charts-section">
       <!-- Documents by Category -->
-      <div class="chart-container">
+      <BasePanel variant="bordered" size="medium">
         <h4>Documents by Category</h4>
         <div class="bar-chart">
           <div
@@ -279,10 +279,10 @@
             </div>
           </div>
         </div>
-      </div>
+      </BasePanel>
 
       <!-- Documents by Type -->
-      <div class="chart-container">
+      <BasePanel variant="bordered" size="medium">
         <h4>Documents by Type</h4>
         <div class="pie-chart">
           <div class="type-stats">
@@ -294,11 +294,11 @@
             </div>
           </div>
         </div>
-      </div>
+      </BasePanel>
     </div>
 
     <!-- Recent Activity -->
-    <div class="activity-section">
+    <BasePanel variant="bordered" size="medium">
       <h4>Recent Activity</h4>
       <div class="activity-timeline">
         <div v-for="activity in recentActivities" :key="activity.id" class="activity-item">
@@ -316,10 +316,10 @@
           message="No recent activity"
         />
       </div>
-    </div>
+    </BasePanel>
 
     <!-- Tag Cloud -->
-    <div class="tag-cloud-section">
+    <BasePanel variant="bordered" size="medium">
       <h4>Popular Tags</h4>
       <div class="tag-cloud" role="list" aria-label="Popular tags in knowledge base">
         <span
@@ -337,12 +337,12 @@
           {{ tag.name }}
         </span>
       </div>
-    </div>
+    </BasePanel>
 
     <!-- Man Pages Section -->
-    <div class="manpages-section">
+    <BasePanel variant="bordered" size="medium">
       <ManPageManager />
-    </div>
+    </BasePanel>
 
     <!-- Actions -->
     <div class="stats-actions">
@@ -379,6 +379,7 @@ import {
 } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
+import BasePanel from '@/components/base/BasePanel.vue'
 
 // Import shared document feed wrapper styles
 import '@/styles/document-feed-wrapper.css'
@@ -937,14 +938,7 @@ onMounted(() => {
   margin-bottom: 2rem;
 }
 
-.stat-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  display: flex;
-  gap: 1rem;
-}
+/* stat-card structure removed - now using BasePanel */
 
 .stat-icon {
   width: 3.5rem;
@@ -1019,14 +1013,9 @@ onMounted(() => {
   margin-bottom: 2rem;
 }
 
-.chart-container {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-}
+/* chart-container structure removed - now using BasePanel */
 
-.chart-container h4 {
+.charts-section h4 {
   font-weight: 600;
   color: #1f2937;
   margin-bottom: 1rem;
@@ -1114,19 +1103,8 @@ onMounted(() => {
 }
 
 /* Activity Section */
-.activity-section {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.activity-section h4 {
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 1rem;
-}
+/* activity-section structure removed - now using BasePanel */
+/* h4 styling now handled by component-level styles */
 
 .activity-timeline {
   display: flex;
@@ -1183,19 +1161,8 @@ onMounted(() => {
 }
 
 /* Tag Cloud */
-.tag-cloud-section {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.tag-cloud-section h4 {
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 1rem;
-}
+/* tag-cloud-section structure removed - now using BasePanel */
+/* h4 styling now handled by component-level styles */
 
 .tag-cloud {
   display: flex;
@@ -1327,25 +1294,10 @@ onMounted(() => {
   margin-bottom: 2rem;
 }
 
-.vector-stat-card {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  transition: all 0.3s ease;
-}
+/* vector-stat-card structure removed - now using BasePanel */
+/* BasePanel handles background, border, padding automatically */
 
-.vector-stat-card:hover {
-  background: rgba(255, 255, 255, 0.15);
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-}
-
-.vector-stat-card.needs-attention {
+.needs-attention {
   border-color: rgba(251, 191, 36, 0.5);
   animation: pulse-card 2s ease-in-out infinite;
 }
@@ -1561,13 +1513,7 @@ onMounted(() => {
 }
 
 /* Man Pages Section */
-.manpages-section {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
-}
+/* manpages-section structure removed - now using BasePanel */
 
 /* Actions */
 .stats-actions {
