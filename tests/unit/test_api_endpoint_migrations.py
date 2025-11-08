@@ -29125,6 +29125,284 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("timestamp", unified_source)
         self.assertIn("source_type", unified_source)
 
+    # ==============================================
+    # BATCH 158: llm_awareness.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_158_get_awareness_status_simple_pattern(self):
+        """Verify get_awareness_status endpoint uses Simple Pattern"""
+        from backend.api import llm_awareness
+
+        source = inspect.getsource(llm_awareness.get_awareness_status)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_awareness_status"', source)
+        self.assertIn('error_code_prefix="LLM_AWARENESS"', source)
+
+    def test_batch_158_get_system_context_simple_pattern(self):
+        """Verify get_system_context endpoint uses Simple Pattern"""
+        from backend.api import llm_awareness
+
+        source = inspect.getsource(llm_awareness.get_system_context)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_system_context"', source)
+        self.assertIn('error_code_prefix="LLM_AWARENESS"', source)
+
+    def test_batch_158_get_capabilities_summary_simple_pattern(self):
+        """Verify get_capabilities_summary endpoint uses Simple Pattern"""
+        from backend.api import llm_awareness
+
+        source = inspect.getsource(llm_awareness.get_capabilities_summary)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_capabilities_summary"', source)
+        self.assertIn('error_code_prefix="LLM_AWARENESS"', source)
+
+    def test_batch_158_inject_awareness_context_simple_pattern(self):
+        """Verify inject_awareness_context endpoint uses Simple Pattern"""
+        from backend.api import llm_awareness
+
+        source = inspect.getsource(llm_awareness.inject_awareness_context)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="inject_awareness_context"', source)
+        self.assertIn('error_code_prefix="LLM_AWARENESS"', source)
+
+    def test_batch_158_analyze_query_with_awareness_simple_pattern(self):
+        """Verify analyze_query_with_awareness endpoint uses Simple Pattern"""
+        from backend.api import llm_awareness
+
+        source = inspect.getsource(llm_awareness.analyze_query_with_awareness)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="analyze_query_with_awareness"', source)
+        self.assertIn('error_code_prefix="LLM_AWARENESS"', source)
+
+    def test_batch_158_get_capability_summary_text_simple_pattern(self):
+        """Verify get_capability_summary_text endpoint uses Simple Pattern"""
+        from backend.api import llm_awareness
+
+        source = inspect.getsource(llm_awareness.get_capability_summary_text)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_capability_summary_text"', source)
+        self.assertIn('error_code_prefix="LLM_AWARENESS"', source)
+
+    def test_batch_158_get_phase_information_simple_pattern(self):
+        """Verify get_phase_information endpoint uses Simple Pattern"""
+        from backend.api import llm_awareness
+
+        source = inspect.getsource(llm_awareness.get_phase_information)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_phase_information"', source)
+        self.assertIn('error_code_prefix="LLM_AWARENESS"', source)
+
+    def test_batch_158_get_awareness_metrics_simple_pattern(self):
+        """Verify get_awareness_metrics endpoint uses Simple Pattern"""
+        from backend.api import llm_awareness
+
+        source = inspect.getsource(llm_awareness.get_awareness_metrics)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_awareness_metrics"', source)
+        self.assertIn('error_code_prefix="LLM_AWARENESS"', source)
+
+    def test_batch_158_export_awareness_data_simple_pattern(self):
+        """Verify export_awareness_data endpoint uses Simple Pattern"""
+        from backend.api import llm_awareness
+
+        source = inspect.getsource(llm_awareness.export_awareness_data)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="export_awareness_data"', source)
+        self.assertIn('error_code_prefix="LLM_AWARENESS"', source)
+
+    def test_batch_158_llm_awareness_health_simple_pattern(self):
+        """Verify llm_awareness_health endpoint uses Simple Pattern"""
+        from backend.api import llm_awareness
+
+        source = inspect.getsource(llm_awareness.llm_awareness_health)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="llm_awareness_health"', source)
+        self.assertIn('error_code_prefix="LLM_AWARENESS"', source)
+
+    def test_batch_158_all_llm_awareness_endpoints_have_decorator(self):
+        """Verify all llm_awareness endpoints have @with_error_handling decorator"""
+        from backend.api import llm_awareness
+
+        endpoint_functions = [
+            llm_awareness.get_awareness_status,
+            llm_awareness.get_system_context,
+            llm_awareness.get_capabilities_summary,
+            llm_awareness.inject_awareness_context,
+            llm_awareness.analyze_query_with_awareness,
+            llm_awareness.get_capability_summary_text,
+            llm_awareness.get_phase_information,
+            llm_awareness.get_awareness_metrics,
+            llm_awareness.export_awareness_data,
+            llm_awareness.llm_awareness_health,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_158_llm_awareness_100_percent_milestone(self):
+        """Verify llm_awareness.py has reached 100% migration"""
+        from backend.api import llm_awareness
+
+        endpoint_functions = [
+            llm_awareness.get_awareness_status,
+            llm_awareness.get_system_context,
+            llm_awareness.get_capabilities_summary,
+            llm_awareness.inject_awareness_context,
+            llm_awareness.analyze_query_with_awareness,
+            llm_awareness.get_capability_summary_text,
+            llm_awareness.get_phase_information,
+            llm_awareness.get_awareness_metrics,
+            llm_awareness.export_awareness_data,
+            llm_awareness.llm_awareness_health,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 10
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_158_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic request models"""
+        from backend.api import llm_awareness
+
+        # Verify models are defined
+        self.assertTrue(hasattr(llm_awareness, "ContextRequest"))
+        self.assertTrue(hasattr(llm_awareness, "PromptInjectionRequest"))
+        self.assertTrue(hasattr(llm_awareness, "QueryAnalysisRequest"))
+
+        # Verify models are used in endpoints
+        inject_source = inspect.getsource(llm_awareness.inject_awareness_context)
+        self.assertIn("PromptInjectionRequest", inject_source)
+
+        analyze_source = inspect.getsource(llm_awareness.analyze_query_with_awareness)
+        self.assertIn("QueryAnalysisRequest", analyze_source)
+
+    def test_batch_158_migration_preserves_get_llm_self_awareness(self):
+        """Verify migration preserves get_llm_self_awareness integration"""
+        from backend.api import llm_awareness
+
+        # Verify all endpoints call get_llm_self_awareness
+        status_source = inspect.getsource(llm_awareness.get_awareness_status)
+        self.assertIn("get_llm_self_awareness()", status_source)
+
+        context_source = inspect.getsource(llm_awareness.get_system_context)
+        self.assertIn("get_llm_self_awareness()", context_source)
+
+        capabilities_source = inspect.getsource(llm_awareness.get_capabilities_summary)
+        self.assertIn("get_llm_self_awareness()", capabilities_source)
+
+    def test_batch_158_migration_preserves_context_levels(self):
+        """Verify migration preserves context level validation"""
+        from backend.api import llm_awareness
+
+        # Verify get_system_context validates levels
+        context_source = inspect.getsource(llm_awareness.get_system_context)
+        self.assertIn('["basic", "detailed", "full"]', context_source)
+        self.assertIn("Invalid context level", context_source)
+
+        # Verify inject_awareness_context validates levels
+        inject_source = inspect.getsource(llm_awareness.inject_awareness_context)
+        self.assertIn('["basic", "detailed", "full"]', inject_source)
+        self.assertIn("Invalid context level", inject_source)
+
+    def test_batch_158_migration_preserves_format_options(self):
+        """Verify migration preserves format options"""
+        from backend.api import llm_awareness
+
+        # Verify get_system_context supports format parameter
+        context_source = inspect.getsource(llm_awareness.get_system_context)
+        self.assertIn("format", context_source)
+        self.assertIn("summary", context_source)
+        self.assertIn("json", context_source)
+
+    def test_batch_158_migration_preserves_query_parameters(self):
+        """Verify migration preserves Query parameter validation"""
+        from backend.api import llm_awareness
+
+        # Verify get_system_context has Query parameters
+        context_source = inspect.getsource(llm_awareness.get_system_context)
+        self.assertIn("Query", context_source)
+        self.assertIn("level", context_source)
+        self.assertIn("format", context_source)
+
+        # Verify export_awareness_data has Query parameters
+        export_source = inspect.getsource(llm_awareness.export_awareness_data)
+        self.assertIn("Query", export_source)
+        self.assertIn("include_history", export_source)
+
+    def test_batch_158_migration_preserves_phase_aware_response(self):
+        """Verify migration preserves phase-aware response functionality"""
+        from backend.api import llm_awareness
+
+        # Verify analyze_query_with_awareness uses get_phase_aware_response
+        analyze_source = inspect.getsource(llm_awareness.analyze_query_with_awareness)
+        self.assertIn("get_phase_aware_response", analyze_source)
+
+    def test_batch_158_migration_preserves_awareness_context_injection(self):
+        """Verify migration preserves awareness context injection"""
+        from backend.api import llm_awareness
+
+        # Verify inject_awareness_context uses inject_awareness_context method
+        inject_source = inspect.getsource(llm_awareness.inject_awareness_context)
+        self.assertIn("inject_awareness_context", inject_source)
+        self.assertIn("context_level", inject_source)
+
+    def test_batch_158_migration_preserves_capability_summary(self):
+        """Verify migration preserves capability summary creation"""
+        from backend.api import llm_awareness
+
+        # Verify get_capability_summary_text uses create_capability_summary
+        summary_source = inspect.getsource(llm_awareness.get_capability_summary_text)
+        self.assertIn("create_capability_summary", summary_source)
+
+    def test_batch_158_migration_preserves_metrics_cache_info(self):
+        """Verify migration preserves cache information in metrics"""
+        from backend.api import llm_awareness
+
+        # Verify get_awareness_metrics includes cache info
+        metrics_source = inspect.getsource(llm_awareness.get_awareness_metrics)
+        self.assertIn("cache_info", metrics_source)
+        self.assertIn("_context_cache", metrics_source)
+        self.assertIn("_cache_timestamp", metrics_source)
+        self.assertIn("_cache_ttl", metrics_source)
+
+
+
+        """Verify migration preserves unified log merging by timestamp"""
+        from backend.api import logs
+
+        # Verify get_unified_logs merges logs
+        unified_source = inspect.getsource(logs.get_unified_logs)
+        self.assertIn("all_logs", unified_source)
+        self.assertIn("sort", unified_source)
+        self.assertIn("timestamp", unified_source)
+        self.assertIn("source_type", unified_source)
+
 
 
         """Verify migration preserves RemoteSessionType enum"""
