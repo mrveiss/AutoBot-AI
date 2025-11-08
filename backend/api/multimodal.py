@@ -23,6 +23,7 @@ from src.ai_hardware_accelerator import HardwareDevice, accelerated_embedding_ge
 
 # Import AutoBot multi-modal components
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.npu_semantic_search import get_npu_search_engine
 from src.unified_multimodal_processor import (
     ModalityType,
@@ -112,6 +113,11 @@ def _get_modality_type(modality_str: str) -> ModalityType:
 # API Endpoints
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="process_image",
+    error_code_prefix="MULTIMODAL",
+)
 @router.post("/process/image", response_model=MultiModalResponse)
 async def process_image(
     file: UploadFile = File(...),
@@ -177,6 +183,11 @@ async def process_image(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="process_audio",
+    error_code_prefix="MULTIMODAL",
+)
 @router.post("/process/audio", response_model=MultiModalResponse)
 async def process_audio(
     file: UploadFile = File(...), intent: str = Form(default="voice_command")
@@ -238,6 +249,11 @@ async def process_audio(
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="process_text",
+    error_code_prefix="MULTIMODAL",
+)
 @router.post("/process/text", response_model=MultiModalResponse)
 async def process_text(request: TextProcessingRequest):
     """Process text with contextual understanding."""
@@ -285,6 +301,11 @@ async def process_text(request: TextProcessingRequest):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="generate_embedding",
+    error_code_prefix="MULTIMODAL",
+)
 @router.post("/embeddings/generate")
 async def generate_embedding(request: EmbeddingRequest):
     """Generate embeddings for any modality."""
@@ -325,6 +346,11 @@ async def generate_embedding(request: EmbeddingRequest):
         return {"success": False, "error": str(e), "processing_time": processing_time}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cross_modal_search",
+    error_code_prefix="MULTIMODAL",
+)
 @router.post("/search/cross-modal", response_model=CrossModalSearchResponse)
 async def cross_modal_search(request: CrossModalSearchRequest):
     """Perform cross-modal similarity search."""
@@ -386,6 +412,11 @@ async def cross_modal_search(request: CrossModalSearchRequest):
         )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_multimodal_stats",
+    error_code_prefix="MULTIMODAL",
+)
 @router.get("/stats")
 async def get_multimodal_stats():
     """Get multi-modal processing statistics and system status."""
@@ -436,6 +467,11 @@ async def get_multimodal_stats():
         }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="combine_multimodal_inputs",
+    error_code_prefix="MULTIMODAL",
+)
 @router.post("/fusion/combine")
 async def combine_multimodal_inputs(
     text: Optional[str] = Form(default=None),
@@ -537,6 +573,11 @@ async def combine_multimodal_inputs(
 
 
 # Performance monitoring endpoints
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_performance_stats",
+    error_code_prefix="MULTIMODAL",
+)
 @router.get("/performance/stats")
 async def get_performance_stats():
     """Get comprehensive performance statistics for multi-modal processing."""
@@ -568,6 +609,11 @@ async def get_performance_stats():
         return {"success": False, "error": str(e), "timestamp": time.time()}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="optimize_performance",
+    error_code_prefix="MULTIMODAL",
+)
 @router.post("/performance/optimize")
 async def optimize_performance():
     """Manually trigger performance optimization."""
@@ -588,6 +634,11 @@ async def optimize_performance():
         return {"success": False, "error": str(e), "timestamp": time.time()}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_performance_summary",
+    error_code_prefix="MULTIMODAL",
+)
 @router.get("/performance/summary")
 async def get_performance_summary():
     """Get a concise performance summary."""
@@ -601,6 +652,11 @@ async def get_performance_summary():
         return {"success": False, "error": str(e), "timestamp": time.time()}
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_batch_size",
+    error_code_prefix="MULTIMODAL",
+)
 @router.post("/performance/batch-size")
 async def update_batch_size(modality: str, batch_size: int):
     """Update optimal batch size for a specific modality."""
@@ -635,6 +691,11 @@ async def update_batch_size(modality: str, batch_size: int):
 
 
 # Health check endpoint
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="health_check",
+    error_code_prefix="MULTIMODAL",
+)
 @router.get("/health")
 async def health_check():
     """Health check for multi-modal API."""

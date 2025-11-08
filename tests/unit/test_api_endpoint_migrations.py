@@ -32405,6 +32405,346 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
 
 
+    # ==============================================
+    # BATCH 171: multimodal.py - COMPLETE (100%)
+    # ==============================================
+
+    def test_batch_171_process_image_simple_pattern(self):
+        """Verify process_image endpoint uses Simple Pattern"""
+        from backend.api import multimodal
+
+        source = inspect.getsource(multimodal.process_image)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="process_image"', source)
+        self.assertIn('error_code_prefix="MULTIMODAL"', source)
+
+    def test_batch_171_process_audio_simple_pattern(self):
+        """Verify process_audio endpoint uses Simple Pattern"""
+        from backend.api import multimodal
+
+        source = inspect.getsource(multimodal.process_audio)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="process_audio"', source)
+        self.assertIn('error_code_prefix="MULTIMODAL"', source)
+
+    def test_batch_171_process_text_simple_pattern(self):
+        """Verify process_text endpoint uses Simple Pattern"""
+        from backend.api import multimodal
+
+        source = inspect.getsource(multimodal.process_text)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="process_text"', source)
+        self.assertIn('error_code_prefix="MULTIMODAL"', source)
+
+    def test_batch_171_generate_embedding_simple_pattern(self):
+        """Verify generate_embedding endpoint uses Simple Pattern"""
+        from backend.api import multimodal
+
+        source = inspect.getsource(multimodal.generate_embedding)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="generate_embedding"', source)
+        self.assertIn('error_code_prefix="MULTIMODAL"', source)
+
+    def test_batch_171_cross_modal_search_simple_pattern(self):
+        """Verify cross_modal_search endpoint uses Simple Pattern"""
+        from backend.api import multimodal
+
+        source = inspect.getsource(multimodal.cross_modal_search)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="cross_modal_search"', source)
+        self.assertIn('error_code_prefix="MULTIMODAL"', source)
+
+    def test_batch_171_get_multimodal_stats_simple_pattern(self):
+        """Verify get_multimodal_stats endpoint uses Simple Pattern"""
+        from backend.api import multimodal
+
+        source = inspect.getsource(multimodal.get_multimodal_stats)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_multimodal_stats"', source)
+        self.assertIn('error_code_prefix="MULTIMODAL"', source)
+
+    def test_batch_171_combine_multimodal_inputs_simple_pattern(self):
+        """Verify combine_multimodal_inputs endpoint uses Simple Pattern"""
+        from backend.api import multimodal
+
+        source = inspect.getsource(multimodal.combine_multimodal_inputs)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="combine_multimodal_inputs"', source)
+        self.assertIn('error_code_prefix="MULTIMODAL"', source)
+
+    def test_batch_171_get_performance_stats_simple_pattern(self):
+        """Verify get_performance_stats endpoint uses Simple Pattern"""
+        from backend.api import multimodal
+
+        source = inspect.getsource(multimodal.get_performance_stats)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_performance_stats"', source)
+        self.assertIn('error_code_prefix="MULTIMODAL"', source)
+
+    def test_batch_171_optimize_performance_simple_pattern(self):
+        """Verify optimize_performance endpoint uses Simple Pattern"""
+        from backend.api import multimodal
+
+        source = inspect.getsource(multimodal.optimize_performance)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="optimize_performance"', source)
+        self.assertIn('error_code_prefix="MULTIMODAL"', source)
+
+    def test_batch_171_get_performance_summary_simple_pattern(self):
+        """Verify get_performance_summary endpoint uses Simple Pattern"""
+        from backend.api import multimodal
+
+        source = inspect.getsource(multimodal.get_performance_summary)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="get_performance_summary"', source)
+        self.assertIn('error_code_prefix="MULTIMODAL"', source)
+
+    def test_batch_171_update_batch_size_simple_pattern(self):
+        """Verify update_batch_size endpoint uses Simple Pattern"""
+        from backend.api import multimodal
+
+        source = inspect.getsource(multimodal.update_batch_size)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="update_batch_size"', source)
+        self.assertIn('error_code_prefix="MULTIMODAL"', source)
+
+    def test_batch_171_health_check_simple_pattern(self):
+        """Verify health_check endpoint uses Simple Pattern"""
+        from backend.api import multimodal
+
+        source = inspect.getsource(multimodal.health_check)
+        self.assertIn("@with_error_handling", source)
+        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
+        self.assertIn('operation="health_check"', source)
+        self.assertIn('error_code_prefix="MULTIMODAL"', source)
+
+    def test_batch_171_all_multimodal_endpoints_have_decorator(self):
+        """Verify all multimodal endpoints have @with_error_handling decorator"""
+        from backend.api import multimodal
+
+        endpoint_functions = [
+            multimodal.process_image,
+            multimodal.process_audio,
+            multimodal.process_text,
+            multimodal.generate_embedding,
+            multimodal.cross_modal_search,
+            multimodal.get_multimodal_stats,
+            multimodal.combine_multimodal_inputs,
+            multimodal.get_performance_stats,
+            multimodal.optimize_performance,
+            multimodal.get_performance_summary,
+            multimodal.update_batch_size,
+            multimodal.health_check,
+        ]
+
+        for func in endpoint_functions:
+            source = inspect.getsource(func)
+            self.assertIn(
+                "@with_error_handling",
+                source,
+                f"Endpoint {func.__name__} missing @with_error_handling decorator",
+            )
+
+    def test_batch_171_multimodal_100_percent_milestone(self):
+        """Verify multimodal.py has reached 100% migration"""
+        from backend.api import multimodal
+
+        endpoint_functions = [
+            multimodal.process_image,
+            multimodal.process_audio,
+            multimodal.process_text,
+            multimodal.generate_embedding,
+            multimodal.cross_modal_search,
+            multimodal.get_multimodal_stats,
+            multimodal.combine_multimodal_inputs,
+            multimodal.get_performance_stats,
+            multimodal.optimize_performance,
+            multimodal.get_performance_summary,
+            multimodal.update_batch_size,
+            multimodal.health_check,
+        ]
+
+        migrated_count = sum(
+            1
+            for func in endpoint_functions
+            if "@with_error_handling" in inspect.getsource(func)
+        )
+
+        total_endpoints = 12
+        self.assertEqual(
+            migrated_count,
+            total_endpoints,
+            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
+        )
+        progress_percentage = (migrated_count / total_endpoints) * 100
+        self.assertEqual(progress_percentage, 100.0)
+
+    def test_batch_171_migration_preserves_unified_processor(self):
+        """Verify migration preserves unified_processor integration"""
+        from backend.api import multimodal
+
+        # Verify unified_processor is imported
+        self.assertTrue(hasattr(multimodal, "unified_processor"))
+
+        # Verify process_image uses unified_processor.process
+        image_source = inspect.getsource(multimodal.process_image)
+        self.assertIn("unified_processor.process", image_source)
+        self.assertIn("MultiModalInput", image_source)
+
+        # Verify process_audio uses unified_processor.process
+        audio_source = inspect.getsource(multimodal.process_audio)
+        self.assertIn("unified_processor.process", audio_source)
+
+        # Verify process_text uses unified_processor.process
+        text_source = inspect.getsource(multimodal.process_text)
+        self.assertIn("unified_processor.process", text_source)
+
+    def test_batch_171_migration_preserves_modality_types(self):
+        """Verify migration preserves ModalityType enum usage"""
+        from backend.api import multimodal
+
+        # Verify ModalityType is imported
+        self.assertTrue(hasattr(multimodal, "ModalityType"))
+
+        # Verify process_image uses ModalityType.IMAGE
+        image_source = inspect.getsource(multimodal.process_image)
+        self.assertIn("ModalityType.IMAGE", image_source)
+
+        # Verify process_audio uses ModalityType.AUDIO
+        audio_source = inspect.getsource(multimodal.process_audio)
+        self.assertIn("ModalityType.AUDIO", audio_source)
+
+        # Verify process_text uses ModalityType.TEXT
+        text_source = inspect.getsource(multimodal.process_text)
+        self.assertIn("ModalityType.TEXT", text_source)
+
+        # Verify combine uses ModalityType.COMBINED
+        combine_source = inspect.getsource(multimodal.combine_multimodal_inputs)
+        self.assertIn("ModalityType.COMBINED", combine_source)
+
+    def test_batch_171_migration_preserves_processing_intent(self):
+        """Verify migration preserves ProcessingIntent usage"""
+        from backend.api import multimodal
+
+        # Verify ProcessingIntent is imported
+        self.assertTrue(hasattr(multimodal, "ProcessingIntent"))
+
+        # Verify _get_processing_intent helper exists
+        self.assertTrue(hasattr(multimodal, "_get_processing_intent"))
+
+        # Verify helper is used in endpoints
+        image_source = inspect.getsource(multimodal.process_image)
+        self.assertIn("_get_processing_intent", image_source)
+
+    def test_batch_171_migration_preserves_hardware_acceleration(self):
+        """Verify migration preserves hardware acceleration features"""
+        from backend.api import multimodal
+
+        # Verify accelerated_embedding_generation is imported
+        self.assertTrue(hasattr(multimodal, "accelerated_embedding_generation"))
+
+        # Verify HardwareDevice enum is imported
+        self.assertTrue(hasattr(multimodal, "HardwareDevice"))
+
+        # Verify generate_embedding uses accelerated_embedding_generation
+        embedding_source = inspect.getsource(multimodal.generate_embedding)
+        self.assertIn("accelerated_embedding_generation", embedding_source)
+        self.assertIn("HardwareDevice.GPU", embedding_source)
+        self.assertIn("HardwareDevice.NPU", embedding_source)
+        self.assertIn("HardwareDevice.CPU", embedding_source)
+
+    def test_batch_171_migration_preserves_npu_search(self):
+        """Verify migration preserves NPU search engine integration"""
+        from backend.api import multimodal
+
+        # Verify get_npu_search_engine is imported
+        self.assertTrue(hasattr(multimodal, "get_npu_search_engine"))
+
+        # Verify cross_modal_search uses NPU search engine
+        search_source = inspect.getsource(multimodal.cross_modal_search)
+        self.assertIn("get_npu_search_engine", search_source)
+        self.assertIn("search_engine.cross_modal_search", search_source)
+
+    def test_batch_171_migration_preserves_pydantic_models(self):
+        """Verify migration preserves Pydantic request/response models"""
+        from backend.api import multimodal
+
+        # Verify models are defined
+        self.assertTrue(hasattr(multimodal, "MultiModalResponse"))
+        self.assertTrue(hasattr(multimodal, "CrossModalSearchResponse"))
+        self.assertTrue(hasattr(multimodal, "TextProcessingRequest"))
+        self.assertTrue(hasattr(multimodal, "EmbeddingRequest"))
+        self.assertTrue(hasattr(multimodal, "CrossModalSearchRequest"))
+
+        # Verify response_model usage
+        module_source = inspect.getsource(multimodal)
+        self.assertIn("response_model=MultiModalResponse", module_source)
+        self.assertIn("response_model=CrossModalSearchResponse", module_source)
+
+    def test_batch_171_migration_preserves_performance_monitor(self):
+        """Verify migration preserves performance monitoring integration"""
+        from backend.api import multimodal
+
+        # Verify get_performance_stats uses performance_monitor
+        stats_source = inspect.getsource(multimodal.get_performance_stats)
+        self.assertIn("unified_processor.performance_monitor", stats_source)
+        self.assertIn("monitor_processing_performance", stats_source)
+
+        # Verify optimize_performance uses optimization method
+        optimize_source = inspect.getsource(multimodal.optimize_performance)
+        self.assertIn("optimize_gpu_memory", optimize_source)
+
+        # Verify get_performance_summary uses summary method
+        summary_source = inspect.getsource(multimodal.get_performance_summary)
+        self.assertIn("get_performance_summary", summary_source)
+
+        # Verify update_batch_size uses batch_sizes
+        batch_source = inspect.getsource(multimodal.update_batch_size)
+        self.assertIn("batch_sizes", batch_source)
+
+    def test_batch_171_migration_preserves_gpu_stats(self):
+        """Verify migration preserves GPU statistics and torch integration"""
+        from backend.api import multimodal
+
+        # Verify torch is imported
+        self.assertTrue(hasattr(multimodal, "torch"))
+
+        # Verify get_multimodal_stats uses torch.cuda
+        stats_source = inspect.getsource(multimodal.get_multimodal_stats)
+        self.assertIn("torch.cuda.is_available()", stats_source)
+        self.assertIn("torch.cuda.memory_allocated()", stats_source)
+        self.assertIn("torch.cuda.device_count()", stats_source)
+
+        # Verify health_check uses torch.cuda
+        health_source = inspect.getsource(multimodal.health_check)
+        self.assertIn("torch.cuda.is_available()", health_source)
+
+    def test_batch_171_migration_preserves_multimodal_fusion(self):
+        """Verify migration preserves multi-modal fusion capabilities"""
+        from backend.api import multimodal
+
+        # Verify combine_multimodal_inputs handles multiple modalities
+        combine_source = inspect.getsource(multimodal.combine_multimodal_inputs)
+        self.assertIn("text_input", combine_source)
+        self.assertIn("image_input", combine_source)
+        self.assertIn("audio_input", combine_source)
+        self.assertIn("_process_combined", combine_source)
+        self.assertIn("fusion_result", combine_source)
+
+
+
+
 
 if __name__ == "__main__":
     unittest.main()
