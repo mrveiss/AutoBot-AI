@@ -405,39 +405,96 @@ class AdvancedRAGOptimizer:
     async def _rerank_with_cross_encoder(
         self, query: str, results: List[SearchResult]
     ) -> List[SearchResult]:
-        """Rerank results using cross-encoder for improved relevance."""
+        """
+        Rerank results using cross-encoder model for improved relevance.
+
+        Uses sentence-transformers cross-encoder which is specifically trained
+        for search result reranking tasks. This provides much better relevance
+        scoring than simple term matching.
+        """
         try:
-            # For now, implement a simple reranking based on query-content overlap
-            # In a full implementation, this would use a cross-encoder model
+            # Lazy load cross-encoder model
+            if not hasattr(self, "_cross_encoder"):
+                try:
+                    from sentence_transformers import CrossEncoder
 
-            for result in results:
-                # Simple reranking based on query term frequency in content
-                query_terms = query.lower().split()
-                content_lower = result.content.lower()
+                    model_name = getattr(
+                        self,
+                        "reranking_model",
+                        "cross-encoder/ms-marco-MiniLM-L-6-v2",
+                    )
+                    logger.info(f"Loading cross-encoder model: {model_name}")
+                    self._cross_encoder = CrossEncoder(model_name)
+                    logger.info("Cross-encoder model loaded successfully")
+                except ImportError:
+                    logger.warning(
+                        "sentence-transformers not available, using fallback reranking"
+                    )
+                    self._cross_encoder = None
+                except Exception as e:
+                    logger.error(f"Failed to load cross-encoder model: {e}")
+                    self._cross_encoder = None
 
-                # Count query terms in content
-                term_matches = sum(1 for term in query_terms if term in content_lower)
+            # Use full cross-encoder model if available
+            if self._cross_encoder is not None:
+                # Prepare query-document pairs for cross-encoder
+                pairs = [(query, result.content) for result in results]
 
-                # Bonus for exact query match
-                exact_match_bonus = 2 if query.lower() in content_lower else 0
-
-                # Combine with existing hybrid score
-                rerank_score = (
-                    result.hybrid_score * 0.7
-                    + (term_matches / len(query_terms)) * 0.2
-                    + exact_match_bonus * 0.1
+                # Get relevance scores from cross-encoder
+                # Run in thread pool to avoid blocking async event loop
+                cross_encoder_scores = await asyncio.to_thread(
+                    self._cross_encoder.predict, pairs
                 )
 
-                result.rerank_score = rerank_score
+                # Apply scores to results
+                for result, ce_score in zip(results, cross_encoder_scores):
+                    # Combine cross-encoder score with hybrid score
+                    # Cross-encoder gets 80% weight as it's more accurate
+                    result.rerank_score = float(ce_score) * 0.8 + result.hybrid_score * 0.2
+
+                logger.debug(
+                    f"Cross-encoder reranking completed with model for {len(results)} results"
+                )
+
+            else:
+                # Fallback to simple term-based reranking
+                logger.debug("Using fallback term-based reranking")
+
+                for result in results:
+                    # Simple reranking based on query term frequency in content
+                    query_terms = query.lower().split()
+                    content_lower = result.content.lower()
+
+                    # Count query terms in content
+                    term_matches = sum(
+                        1 for term in query_terms if term in content_lower
+                    )
+
+                    # Bonus for exact query match
+                    exact_match_bonus = 2 if query.lower() in content_lower else 0
+
+                    # Combine with existing hybrid score
+                    rerank_score = (
+                        result.hybrid_score * 0.7
+                        + (term_matches / len(query_terms)) * 0.2
+                        + exact_match_bonus * 0.1
+                    )
+
+                    result.rerank_score = rerank_score
 
             # Sort by rerank score
             results.sort(key=lambda x: x.rerank_score or 0, reverse=True)
 
-            logger.debug("Cross-encoder reranking completed")
+            # Update ranks after reranking
+            for i, result in enumerate(results):
+                result.relevance_rank = i + 1
+
+            logger.debug(f"Reranking completed: top score = {results[0].rerank_score:.3f}")
             return results
 
         except Exception as e:
             logger.error(f"Reranking failed: {e}")
+            # Return original results on error
             return results
 
     async def advanced_search(
