@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from backend.api.terminal import ConsolidatedTerminalWebSocket
 from src.constants.network_constants import NetworkConstants
 from src.enhanced_orchestrator import EnhancedOrchestrator
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import existing orchestrator and workflow components
 from src.orchestrator import Orchestrator
@@ -896,6 +897,11 @@ def get_workflow_manager() -> WorkflowAutomationManager:
 
 
 # API Endpoints
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_workflow",
+    error_code_prefix="WORKFLOW_AUTOMATION",
+)
 @router.post("/create_workflow")
 async def create_workflow(request: AutomatedWorkflowRequest):
     """Create new automated workflow"""
@@ -934,6 +940,11 @@ async def create_workflow(request: AutomatedWorkflowRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_workflow",
+    error_code_prefix="WORKFLOW_AUTOMATION",
+)
 @router.post("/start_workflow/{workflow_id}")
 async def start_workflow(workflow_id: str):
     """Start executing automated workflow"""
@@ -953,6 +964,11 @@ async def start_workflow(workflow_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="control_workflow",
+    error_code_prefix="WORKFLOW_AUTOMATION",
+)
 @router.post("/control_workflow")
 async def control_workflow(request: WorkflowControlRequest):
     """Control workflow execution (pause, resume, cancel, approve, skip)"""
@@ -974,6 +990,11 @@ async def control_workflow(request: WorkflowControlRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_workflow_status",
+    error_code_prefix="WORKFLOW_AUTOMATION",
+)
 @router.get("/workflow_status/{workflow_id}")
 async def get_workflow_status(workflow_id: str):
     """Get current workflow status"""
@@ -990,6 +1011,11 @@ async def get_workflow_status(workflow_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_active_workflows",
+    error_code_prefix="WORKFLOW_AUTOMATION",
+)
 @router.get("/active_workflows")
 async def get_active_workflows():
     """Get list of all active workflows"""
@@ -1007,6 +1033,11 @@ async def get_active_workflows():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_workflow_from_chat",
+    error_code_prefix="WORKFLOW_AUTOMATION",
+)
 @router.post("/create_from_chat")
 async def create_workflow_from_chat(request: dict):
     """Create workflow from natural language chat request"""
@@ -1044,6 +1075,11 @@ async def create_workflow_from_chat(request: dict):
 
 
 # WebSocket endpoint for real-time workflow communication
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="workflow_websocket",
+    error_code_prefix="WORKFLOW_AUTOMATION",
+)
 @router.websocket("/workflow_ws/{session_id}")
 async def workflow_websocket(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for real-time workflow communication"""
