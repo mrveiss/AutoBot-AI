@@ -15,6 +15,7 @@ import structlog
 from fastapi import HTTPException, Request
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 
 logger = structlog.get_logger()
 
@@ -120,14 +121,14 @@ class ServiceAuthManager:
                 has_signature=bool(signature),
                 has_timestamp=bool(timestamp_str),
             )
-            raise HTTPException(401, "Missing authentication headers")
+            raise_auth_error("AUTH_0002", "Missing required headers")
 
         # Validate timestamp (prevent replay attacks)
         try:
             timestamp = int(timestamp_str)
         except ValueError:
             logger.warning("Invalid timestamp format", timestamp=timestamp_str)
-            raise HTTPException(401, "Invalid timestamp format")
+            raise_auth_error("AUTH_0004", "Invalid timestamp format")
 
         current_time = int(time.time())
         time_diff = abs(current_time - timestamp)
@@ -139,16 +140,16 @@ class ServiceAuthManager:
                 time_diff=time_diff,
                 max_window=self.timestamp_window,
             )
-            raise HTTPException(
-                401,
-                f"Timestamp outside {self.timestamp_window}s window (diff: {time_diff}s)",
+            raise_auth_error(
+                "AUTH_0001",
+                f"Timestamp outside {self.timestamp_window}s window (diff: {time_diff}s)"
             )
 
         # Get service key from Redis
         service_key = await self.get_service_key(service_id)
         if not service_key:
             logger.warning("Unknown service ID", service_id=service_id)
-            raise HTTPException(401, f"Unknown service: {service_id}")
+            raise_auth_error("AUTH_0004", f"Unknown service: {service_id}")
 
         # Validate HMAC signature
         expected_sig = self.generate_signature(
@@ -163,7 +164,7 @@ class ServiceAuthManager:
                 method=request.method,
                 path=request.url.path,
             )
-            raise HTTPException(401, "Invalid signature")
+            raise_auth_error("AUTH_0004", "Invalid signature")
 
         logger.info(
             "✅ Service authentication successful",
@@ -213,4 +214,4 @@ async def validate_service_auth(request: Request) -> Dict:
         logger.error(
             "Service auth validation error", error=str(e), path=request.url.path
         )
-        raise HTTPException(500, f"Authentication service error: {str(e)}")
+        raise_server_error("API_0003", f"Authentication service error: {str(e)}")
