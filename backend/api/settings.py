@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from backend.services.config_service import ConfigService
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.catalog_http_exceptions import raise_server_error
 
 router = APIRouter()
 
@@ -23,7 +24,7 @@ async def get_settings():
         return ConfigService.get_full_config()
     except Exception as e:
         logger.error(f"Error getting settings: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error getting settings: {str(e)}")
+        raise_server_error("API_0003", f"Error getting settings: {str(e)}")
 
 
 @with_error_handling(
@@ -38,7 +39,7 @@ async def get_settings_explicit():
         return ConfigService.get_full_config()
     except Exception as e:
         logger.error(f"Error getting settings: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error getting settings: {str(e)}")
+        raise_server_error("API_0003", f"Error getting settings: {str(e)}")
 
 
 @with_error_handling(
@@ -59,7 +60,7 @@ async def save_settings(settings_data: dict):
         return result
     except Exception as e:
         logger.error(f"Error saving settings: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error saving settings: {str(e)}")
+        raise_server_error("API_0003", f"Error saving settings: {str(e)}")
 
 
 @with_error_handling(
@@ -80,7 +81,7 @@ async def save_settings_explicit(settings_data: dict):
         return result
     except Exception as e:
         logger.error(f"Error saving settings: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error saving settings: {str(e)}")
+        raise_server_error("API_0003", f"Error saving settings: {str(e)}")
 
 
 @with_error_handling(
@@ -95,9 +96,7 @@ async def get_backend_settings():
         return ConfigService.get_backend_settings()
     except Exception as e:
         logger.error(f"Error getting backend settings: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting backend settings: {str(e)}"
-        )
+        raise_server_error("API_0003", f"Error getting backend settings: {str(e)}")
 
 
 @with_error_handling(
@@ -113,9 +112,7 @@ async def save_backend_settings(backend_settings: dict):
         return result
     except Exception as e:
         logger.error(f"Error saving backend settings: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error saving backend settings: {str(e)}"
-        )
+        raise_server_error("API_0003", f"Error saving backend settings: {str(e)}")
 
 
 @with_error_handling(
@@ -130,9 +127,7 @@ async def get_full_config():
         return ConfigService.get_full_config()
     except Exception as e:
         logger.error(f"Error getting full config: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting full config: {str(e)}"
-        )
+        raise_server_error("API_0003", f"Error getting full config: {str(e)}")
 
 
 @with_error_handling(
@@ -149,9 +144,7 @@ async def save_full_config(config_data: dict):
         return result
     except Exception as e:
         logger.error(f"Error saving full config: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error saving full config: {str(e)}"
-        )
+        raise_server_error("API_0003", f"Error saving full config: {str(e)}")
 
 
 @with_error_handling(
@@ -179,6 +172,4 @@ async def clear_cache():
         }
     except Exception as e:
         logger.error(f"Error in clear-cache endpoint: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error in clear-cache endpoint: {str(e)}"
-        )
+        raise_server_error("API_0003", f"Error in clear-cache endpoint: {str(e)}")
