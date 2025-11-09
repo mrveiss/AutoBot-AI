@@ -41,6 +41,12 @@ from pypdf import PdfReader
 from src.circuit_breaker import circuit_breaker_async
 from src.constants.network_constants import NetworkConstants
 from src.unified_config import config
+from src.utils.error_boundaries import (
+    ErrorCategory,
+    ErrorContext,
+    error_boundary,
+    get_error_boundary_manager,
+)
 from src.utils.knowledge_base_timeouts import kb_timeouts
 from src.utils.redis_database_manager import redis_db_manager
 
@@ -89,6 +95,9 @@ class KnowledgeBase:
         self.initialized = False
         self.initialization_lock = asyncio.Lock()
 
+        # Error boundary manager for enhanced error tracking
+        self.error_manager = get_error_boundary_manager()
+
         # Configuration from unified config
         self.redis_host = config.get("redis.host")
         self.redis_port = config.get("redis.port")
@@ -125,6 +134,7 @@ class KnowledgeBase:
 
         logger.info("KnowledgeBase instance created (not yet initialized)")
 
+    @error_boundary(component="knowledge_base", function="initialize")
     async def initialize(self) -> bool:
         """Async initialization method - must be called after construction"""
         if self.initialized:
@@ -462,6 +472,7 @@ class KnowledgeBase:
 
         return None
 
+    @error_boundary(component="knowledge_base", function="search")
     async def search(self, query: str, top_k: int = 10, similarity_top_k: int = None, filters: Optional[Dict[str, Any]] = None, mode: str = "auto") -> List[Dict[str, Any]]:
         """Search the knowledge base with multiple search modes.
 
@@ -1660,6 +1671,7 @@ class KnowledgeBase:
                 "message": f"Failed to update fact: {str(e)}",
             }
 
+    @error_boundary(component="knowledge_base", function="delete_fact")
     async def delete_fact(self, fact_id: str) -> dict:
         """
         Delete a fact and its vectorization.

@@ -42,6 +42,12 @@ from src.constants.network_constants import NetworkConstants
 from src.redis_pool_manager import get_redis_async
 from src.retry_mechanism import retry_network_operation
 from src.unified_config import config
+from src.utils.error_boundaries import (
+    ErrorCategory,
+    ErrorContext,
+    error_boundary,
+    get_error_boundary_manager,
+)
 
 from .utils.async_stream_processor import StreamCompletionSignal, StreamProcessor
 
@@ -260,6 +266,9 @@ class LLMInterface:
     def __init__(self, settings: Optional[LLMSettings] = None):
         # Initialize settings
         self.settings = settings or LLMSettings()
+
+        # Error boundary manager for enhanced error tracking
+        self.error_manager = get_error_boundary_manager()
 
         # Use unified configuration - NO HARDCODED VALUES
         self.ollama_host = config.get_service_url("ollama")
@@ -521,6 +530,7 @@ class LLMInterface:
             logger.error(f"Error loading composite prompt from {base_file_path}: {e}")
             return ""
 
+    @error_boundary(component="llm_interface", function="check_ollama_connection")
     async def check_ollama_connection(self) -> bool:
         """Check if Ollama service is available"""
         # CRITICAL FIX: Ensure Ollama host from environment variables
