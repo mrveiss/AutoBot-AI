@@ -87,12 +87,12 @@ class NotificationChannelRequest(BaseModel):
     enabled: bool = True
 
 
-@router.get("/health")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="alerts_health_check",
     error_code_prefix="MONITORING_ALERTS",
 )
+@router.get("/health")
 async def alerts_health_check():
     """Health check for monitoring alerts system"""
     alerts_manager = get_alerts_manager()
@@ -110,12 +110,12 @@ async def alerts_health_check():
     }
 
 
-@router.get("/status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_alerts_status",
     error_code_prefix="MONITORING_ALERTS",
 )
+@router.get("/status")
 async def get_alerts_status():
     """Get comprehensive alerts system status"""
     alerts_manager = get_alerts_manager()
@@ -168,12 +168,12 @@ async def get_alerts_status():
     }
 
 
-@router.get("/alerts", response_model=List[AlertResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_active_alerts",
     error_code_prefix="MONITORING_ALERTS",
 )
+@router.get("/alerts", response_model=List[AlertResponse])
 async def get_active_alerts(
     severity: Optional[str] = Query(None, description="Filter by severity"),
     status: Optional[str] = Query(None, description="Filter by status"),
@@ -222,12 +222,12 @@ async def get_active_alerts(
     return response_alerts
 
 
-@router.post("/alerts/{rule_id}/acknowledge")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="acknowledge_alert",
     error_code_prefix="MONITORING_ALERTS",
 )
+@router.post("/alerts/{rule_id}/acknowledge")
 async def acknowledge_alert(rule_id: str, acknowledged_by: str = "api_user"):
     """Acknowledge an active alert"""
     alerts_manager = get_alerts_manager()
@@ -243,12 +243,12 @@ async def acknowledge_alert(rule_id: str, acknowledged_by: str = "api_user"):
         raise HTTPException(status_code=404, detail="Alert not found or not active")
 
 
-@router.get("/rules", response_model=List[AlertRuleResponse])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_alert_rules",
     error_code_prefix="MONITORING_ALERTS",
 )
+@router.get("/rules", response_model=List[AlertRuleResponse])
 async def get_alert_rules(
     enabled_only: bool = Query(False, description="Return only enabled rules")
 ):
@@ -280,12 +280,12 @@ async def get_alert_rules(
     return response_rules
 
 
-@router.post("/rules", response_model=AlertRuleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_alert_rule",
     error_code_prefix="MONITORING_ALERTS",
 )
+@router.post("/rules", response_model=AlertRuleResponse)
 async def create_alert_rule(rule_request: AlertRuleRequest):
     """Create a new alert rule"""
     alerts_manager = get_alerts_manager()
@@ -340,12 +340,12 @@ async def create_alert_rule(rule_request: AlertRuleRequest):
     )
 
 
-@router.put("/rules/{rule_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_alert_rule",
     error_code_prefix="MONITORING_ALERTS",
 )
+@router.put("/rules/{rule_id}")
 async def update_alert_rule(rule_id: str, rule_request: AlertRuleRequest):
     """Update an existing alert rule"""
     alerts_manager = get_alerts_manager()
@@ -392,12 +392,12 @@ async def update_alert_rule(rule_id: str, rule_request: AlertRuleRequest):
     }
 
 
-@router.delete("/rules/{rule_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_alert_rule",
     error_code_prefix="MONITORING_ALERTS",
 )
+@router.delete("/rules/{rule_id}")
 async def delete_alert_rule(rule_id: str):
     """Delete an alert rule"""
     alerts_manager = get_alerts_manager()
@@ -414,12 +414,12 @@ async def delete_alert_rule(rule_id: str):
     }
 
 
-@router.post("/rules/{rule_id}/enable")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enable_alert_rule",
     error_code_prefix="MONITORING_ALERTS",
 )
+@router.post("/rules/{rule_id}/enable")
 async def enable_alert_rule(rule_id: str):
     """Enable an alert rule"""
     alerts_manager = get_alerts_manager()
@@ -437,12 +437,12 @@ async def enable_alert_rule(rule_id: str):
     }
 
 
-@router.post("/rules/{rule_id}/disable")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="disable_alert_rule",
     error_code_prefix="MONITORING_ALERTS",
 )
+@router.post("/rules/{rule_id}/disable")
 async def disable_alert_rule(rule_id: str):
     """Disable an alert rule"""
     alerts_manager = get_alerts_manager()
@@ -464,12 +464,12 @@ async def disable_alert_rule(rule_id: str):
     }
 
 
-@router.post("/monitoring/start")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_monitoring",
     error_code_prefix="MONITORING_ALERTS",
 )
+@router.post("/monitoring/start")
 async def start_monitoring(background_tasks: BackgroundTasks):
     """Start the monitoring system"""
     alerts_manager = get_alerts_manager()
@@ -491,12 +491,12 @@ async def start_monitoring(background_tasks: BackgroundTasks):
     }
 
 
-@router.post("/monitoring/stop")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_monitoring",
     error_code_prefix="MONITORING_ALERTS",
 )
+@router.post("/monitoring/stop")
 async def stop_monitoring():
     """Stop the monitoring system"""
     alerts_manager = get_alerts_manager()
@@ -509,12 +509,12 @@ async def stop_monitoring():
     }
 
 
-@router.get("/channels")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_notification_channels",
     error_code_prefix="MONITORING_ALERTS",
 )
+@router.get("/channels")
 async def get_notification_channels():
     """Get all notification channels"""
     alerts_manager = get_alerts_manager()
@@ -533,12 +533,12 @@ async def get_notification_channels():
     return {"channels": channels_info, "timestamp": datetime.now().isoformat()}
 
 
-@router.post("/test-alert")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_alert_system",
     error_code_prefix="MONITORING_ALERTS",
 )
+@router.post("/test-alert")
 async def test_alert_system():
     """Send a test alert through all notification channels"""
     alerts_manager = get_alerts_manager()

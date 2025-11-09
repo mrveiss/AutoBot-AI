@@ -83,12 +83,12 @@ async def get_rag_service_dependency(request: Request) -> RAGService:
 # ===== ENDPOINTS =====
 
 
-@router.post("/advanced_search")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="advanced_rag_search",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/advanced_search")
 async def advanced_search(
     request: AdvancedSearchRequest,
     rag_service: RAGService = Depends(get_rag_service_dependency),
@@ -169,12 +169,12 @@ async def advanced_search(
     return response
 
 
-@router.post("/rerank_results")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rerank_results",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/rerank_results")
 async def rerank_results(
     request: RerankRequest,
     rag_service: RAGService = Depends(get_rag_service_dependency),
@@ -209,12 +209,12 @@ async def rerank_results(
     }
 
 
-@router.get("/config/rag")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_rag_config",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/config/rag")
 async def get_rag_configuration():
     """
     Get current RAG configuration settings.
@@ -232,12 +232,12 @@ async def get_rag_configuration():
     }
 
 
-@router.put("/config/rag")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_rag_config",
     error_code_prefix="KNOWLEDGE",
 )
+@router.put("/config/rag")
 async def update_rag_configuration(request: RAGConfigUpdate):
     """
     Update RAG configuration at runtime.
@@ -273,12 +273,12 @@ async def update_rag_configuration(request: RAGConfigUpdate):
     }
 
 
-@router.get("/stats/rag")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_rag_stats",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/stats/rag")
 async def get_rag_stats(rag_service: RAGService = Depends(get_rag_service_dependency)):
     """
     Get RAG service statistics and status.

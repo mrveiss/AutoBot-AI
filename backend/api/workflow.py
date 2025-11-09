@@ -63,12 +63,12 @@ active_workflows: Dict[str, Dict[str, Any]] = {}
 pending_approvals: Dict[str, asyncio.Future] = {}
 
 
-@router.get("/workflows")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_active_workflows",
     error_code_prefix="WORKFLOW",
 )
+@router.get("/workflows")
 async def list_active_workflows():
     """List all active workflows with their current status."""
     workflows_summary = []
@@ -94,12 +94,12 @@ async def list_active_workflows():
     }
 
 
-@router.get("/workflow/{workflow_id}")
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="get_workflow_details",
     error_code_prefix="WORKFLOW",
 )
+@router.get("/workflow/{workflow_id}")
 async def get_workflow_details(workflow_id: str):
     """Get detailed information about a specific workflow."""
     if workflow_id not in active_workflows:
@@ -110,12 +110,12 @@ async def get_workflow_details(workflow_id: str):
     return {"success": True, "workflow": workflow}
 
 
-@router.get("/workflow/{workflow_id}/status")
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="get_workflow_status",
     error_code_prefix="WORKFLOW",
 )
+@router.get("/workflow/{workflow_id}/status")
 async def get_workflow_status(workflow_id: str):
     """Get current status of a workflow."""
     if workflow_id not in active_workflows:
@@ -142,12 +142,12 @@ async def get_workflow_status(workflow_id: str):
     }
 
 
-@router.post("/workflow/{workflow_id}/approve")
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="approve_workflow_step",
     error_code_prefix="WORKFLOW",
 )
+@router.post("/workflow/{workflow_id}/approve")
 async def approve_workflow_step(workflow_id: str, approval: WorkflowApprovalResponse):
     """Approve or deny a workflow step that requires user confirmation."""
     if workflow_id not in active_workflows:
@@ -207,12 +207,12 @@ async def approve_workflow_step(workflow_id: str, approval: WorkflowApprovalResp
     }
 
 
-@router.post("/execute")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_workflow",
     error_code_prefix="WORKFLOW",
 )
+@router.post("/execute")
 async def execute_workflow(
     workflow_request: WorkflowExecutionRequest,
     background_tasks: BackgroundTasks,
@@ -745,12 +745,12 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
             )
 
 
-@router.delete("/workflow/{workflow_id}")
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="cancel_workflow",
     error_code_prefix="WORKFLOW",
 )
+@router.delete("/workflow/{workflow_id}")
 async def cancel_workflow(workflow_id: str):
     """Cancel an active workflow."""
     if workflow_id not in active_workflows:
@@ -775,12 +775,12 @@ async def cancel_workflow(workflow_id: str):
     return {"success": True, "message": "Workflow cancelled successfully"}
 
 
-@router.get("/workflow/{workflow_id}/pending_approvals")
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="get_pending_approvals",
     error_code_prefix="WORKFLOW",
 )
+@router.get("/workflow/{workflow_id}/pending_approvals")
 async def get_pending_approvals(workflow_id: str):
     """Get pending approval requests for a workflow."""
     if workflow_id not in active_workflows:

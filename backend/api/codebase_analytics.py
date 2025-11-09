@@ -939,12 +939,12 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
         indexing_tasks[task_id]["failed_at"] = datetime.now().isoformat()
 
 
-@router.post("/index")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="index_codebase",
     error_code_prefix="CODEBASE",
 )
+@router.post("/index")
 async def index_codebase():
     """
     Start background indexing of the AutoBot codebase
@@ -983,12 +983,12 @@ async def index_codebase():
     })
 
 
-@router.get("/index/status/{task_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_indexing_status",
     error_code_prefix="CODEBASE",
 )
+@router.get("/index/status/{task_id}")
 async def get_indexing_status(task_id: str):
     """
     Get the status of a background indexing task
@@ -1028,12 +1028,12 @@ async def get_indexing_status(task_id: str):
     return JSONResponse(response)
 
 
-@router.get("/stats")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_codebase_stats",
     error_code_prefix="CODEBASE",
 )
+@router.get("/stats")
 async def get_codebase_stats():
     """Get real codebase statistics from storage"""
     # Try ChromaDB first
@@ -1110,12 +1110,12 @@ async def get_codebase_stats():
         )
 
 
-@router.get("/hardcodes")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_hardcoded_values",
     error_code_prefix="CODEBASE",
 )
+@router.get("/hardcodes")
 async def get_hardcoded_values(hardcode_type: Optional[str] = None):
     """Get real hardcoded values found in the codebase"""
     redis_client = await get_redis_connection()
@@ -1172,12 +1172,12 @@ async def get_hardcoded_values(hardcode_type: Optional[str] = None):
     )
 
 
-@router.get("/problems")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_codebase_problems",
     error_code_prefix="CODEBASE",
 )
+@router.get("/problems")
 async def get_codebase_problems(problem_type: Optional[str] = None):
     """Get real code problems detected during analysis"""
     # Try ChromaDB first
@@ -1261,12 +1261,12 @@ async def get_codebase_problems(problem_type: Optional[str] = None):
     )
 
 
-@router.get("/declarations")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_declarations",
     error_code_prefix="CODEBASE",
 )
+@router.get("/declarations")
 async def get_code_declarations(declaration_type: Optional[str] = None):
     """Get code declarations (functions, classes, variables) detected during analysis"""
     # Try ChromaDB first
@@ -1335,12 +1335,12 @@ async def get_code_declarations(declaration_type: Optional[str] = None):
     )
 
 
-@router.get("/duplicates")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_duplicate_code",
     error_code_prefix="CODEBASE",
 )
+@router.get("/duplicates")
 async def get_duplicate_code():
     """Get duplicate code detected during analysis (using semantic similarity in ChromaDB)"""
     # Try ChromaDB first
@@ -1399,12 +1399,12 @@ async def get_duplicate_code():
     )
 
 
-@router.delete("/cache")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_codebase_cache",
     error_code_prefix="CODEBASE",
 )
+@router.delete("/cache")
 async def clear_codebase_cache():
     """Clear codebase analysis cache from storage"""
     redis_client = await get_redis_connection()

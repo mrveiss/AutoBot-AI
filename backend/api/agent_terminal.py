@@ -114,12 +114,12 @@ def get_agent_terminal_service(
 # API Endpoints
 
 
-@router.post("/sessions")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_agent_terminal_session",
     error_code_prefix="AGENT_TERMINAL",
 )
+@router.post("/sessions")
 async def create_agent_terminal_session(
     request: CreateSessionRequest,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
@@ -164,12 +164,12 @@ async def create_agent_terminal_session(
     }
 
 
-@router.get("/sessions")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_agent_terminal_sessions",
     error_code_prefix="AGENT_TERMINAL",
 )
+@router.get("/sessions")
 async def list_agent_terminal_sessions(
     agent_id: Optional[str] = None,
     conversation_id: Optional[str] = None,
@@ -208,12 +208,12 @@ async def list_agent_terminal_sessions(
     }
 
 
-@router.get("/sessions/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_terminal_session",
     error_code_prefix="AGENT_TERMINAL",
 )
+@router.get("/sessions/{session_id}")
 async def get_agent_terminal_session(
     session_id: str,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
@@ -232,12 +232,12 @@ async def get_agent_terminal_session(
     }
 
 
-@router.delete("/sessions/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_agent_terminal_session",
     error_code_prefix="AGENT_TERMINAL",
 )
+@router.delete("/sessions/{session_id}")
 async def delete_agent_terminal_session(
     session_id: str,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
@@ -256,12 +256,12 @@ async def delete_agent_terminal_session(
     }
 
 
-@router.post("/execute")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_agent_command",
     error_code_prefix="AGENT_TERMINAL",
 )
+@router.post("/execute")
 async def execute_agent_command(
     session_id: str,
     request: ExecuteCommandRequest,
@@ -291,12 +291,12 @@ async def execute_agent_command(
     return result
 
 
-@router.post("/sessions/{session_id}/approve")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="approve_agent_command",
     error_code_prefix="AGENT_TERMINAL",
 )
+@router.post("/sessions/{session_id}/approve")
 async def approve_agent_command(
     session_id: str,
     request: ApproveCommandRequest,
@@ -325,12 +325,12 @@ async def approve_agent_command(
     return result
 
 
-@router.post("/sessions/{session_id}/interrupt")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="interrupt_agent_session",
     error_code_prefix="AGENT_TERMINAL",
 )
+@router.post("/sessions/{session_id}/interrupt")
 async def interrupt_agent_session(
     session_id: str,
     request: InterruptRequest,
@@ -353,12 +353,12 @@ async def interrupt_agent_session(
     return result
 
 
-@router.post("/sessions/{session_id}/resume")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resume_agent_session",
     error_code_prefix="AGENT_TERMINAL",
 )
+@router.post("/sessions/{session_id}/resume")
 async def resume_agent_session(
     session_id: str,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
@@ -372,12 +372,12 @@ async def resume_agent_session(
     return result
 
 
-@router.get("/")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="agent_terminal_info",
     error_code_prefix="AGENT_TERMINAL",
 )
+@router.get("/")
 async def agent_terminal_info():
     """
     Get information about the Agent Terminal API.

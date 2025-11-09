@@ -135,12 +135,12 @@ class HealthResponse(BaseModel):
 router = APIRouter(tags=["intelligent-agent"])
 
 
-@router.post("/process", response_model=GoalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="process_natural_language_goal",
     error_code_prefix="INTELLIGENT_AGENT",
 )
+@router.post("/process", response_model=GoalResponse)
 async def process_natural_language_goal(request: GoalRequest):
     """
     Process a natural language goal and return the complete result.
@@ -188,12 +188,12 @@ async def process_natural_language_goal(request: GoalRequest):
     )
 
 
-@router.get("/system-info", response_model=SystemInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_info",
     error_code_prefix="INTELLIGENT_AGENT",
 )
+@router.get("/system-info", response_model=SystemInfoResponse)
 async def get_system_info():
     """Get comprehensive system information and capabilities."""
     agent = await get_agent()
@@ -222,12 +222,12 @@ async def get_system_info():
     )
 
 
-@router.get("/health", response_model=HealthResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="INTELLIGENT_AGENT",
 )
+@router.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check for the intelligent agent system."""
     try:
@@ -253,12 +253,12 @@ async def health_check():
         )
 
 
-@router.post("/reload")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reload_agent",
     error_code_prefix="INTELLIGENT_AGENT",
 )
+@router.post("/reload")
 async def reload_agent():
     """Reload the intelligent agent (development endpoint)."""
     global _agent_instance

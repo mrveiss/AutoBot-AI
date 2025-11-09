@@ -115,12 +115,12 @@ DEFAULT_AGENT_CONFIGS = {
 }
 
 
-@router.get("/agents")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_agents",
     error_code_prefix="AGENT_CONFIG",
 )
+@router.get("/agents")
 async def list_agents():
     """Get list of all available agents with their configurations"""
     from src.unified_config_manager import unified_config_manager
@@ -174,12 +174,12 @@ async def list_agents():
     )
 
 
-@router.get("/agents/{agent_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agent_config",
     error_code_prefix="AGENT_CONFIG",
 )
+@router.get("/agents/{agent_id}")
 async def get_agent_config(agent_id: str):
     """Get detailed configuration for a specific agent"""
     if agent_id not in DEFAULT_AGENT_CONFIGS:
@@ -227,12 +227,12 @@ async def get_agent_config(agent_id: str):
     return JSONResponse(status_code=200, content=agent_config)
 
 
-@router.post("/agents/{agent_id}/model")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_agent_model",
     error_code_prefix="AGENT_CONFIG",
 )
+@router.post("/agents/{agent_id}/model")
 async def update_agent_model(agent_id: str, update: AgentModelUpdate):
     """Update the LLM model for a specific agent"""
     if agent_id not in DEFAULT_AGENT_CONFIGS:
@@ -283,12 +283,12 @@ async def update_agent_model(agent_id: str, update: AgentModelUpdate):
     )
 
 
-@router.post("/agents/{agent_id}/enable")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enable_agent",
     error_code_prefix="AGENT_CONFIG",
 )
+@router.post("/agents/{agent_id}/enable")
 async def enable_agent(agent_id: str):
     """Enable a specific agent"""
     if agent_id not in DEFAULT_AGENT_CONFIGS:
@@ -312,12 +312,12 @@ async def enable_agent(agent_id: str):
     )
 
 
-@router.post("/agents/{agent_id}/disable")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="disable_agent",
     error_code_prefix="AGENT_CONFIG",
 )
+@router.post("/agents/{agent_id}/disable")
 async def disable_agent(agent_id: str):
     """Disable a specific agent"""
     if agent_id not in DEFAULT_AGENT_CONFIGS:
@@ -341,12 +341,12 @@ async def disable_agent(agent_id: str):
     )
 
 
-@router.get("/agents/{agent_id}/health")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_agent_health",
     error_code_prefix="AGENT_CONFIG",
 )
+@router.get("/agents/{agent_id}/health")
 async def check_agent_health(agent_id: str):
     """Perform health check on a specific agent"""
     if agent_id not in DEFAULT_AGENT_CONFIGS:
@@ -413,12 +413,12 @@ async def check_agent_health(agent_id: str):
     return JSONResponse(status_code=200, content=health_status)
 
 
-@router.get("/status/overview")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agents_overview",
     error_code_prefix="AGENT_CONFIG",
 )
+@router.get("/status/overview")
 async def get_agents_overview():
     """Get overview of all agents' status for dashboard"""
     from src.unified_config_manager import unified_config_manager

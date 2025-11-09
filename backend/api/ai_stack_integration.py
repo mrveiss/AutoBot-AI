@@ -145,12 +145,12 @@ def create_success_response(
 # ====================================================================
 
 
-@router.get("/health")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="ai_stack_health_check",
     error_code_prefix="AI_STACK",
 )
+@router.get("/health")
 async def ai_stack_health_check():
     """Check AI Stack health and connectivity."""
     try:
@@ -176,12 +176,12 @@ async def ai_stack_health_check():
         )
 
 
-@router.get("/agents")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_ai_agents",
     error_code_prefix="AI_STACK",
 )
+@router.get("/agents")
 async def list_ai_agents():
     """List all available AI agents."""
     ai_client = await get_ai_stack_client()
@@ -195,12 +195,12 @@ async def list_ai_agents():
 # ====================================================================
 
 
-@router.post("/rag/query")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rag_query",
     error_code_prefix="AI_STACK",
 )
+@router.post("/rag/query")
 async def rag_query(
     request: RAGQueryRequest, knowledge_base=Depends(get_knowledge_base)
 ):
@@ -235,12 +235,12 @@ async def rag_query(
     return create_success_response(rag_result, "RAG query completed successfully")
 
 
-@router.post("/rag/reformulate")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reformulate_query",
     error_code_prefix="AI_STACK",
 )
+@router.post("/rag/reformulate")
 async def reformulate_query(query: str, context: Optional[str] = None):
     """Reformulate query for better retrieval results."""
     ai_client = await get_ai_stack_client()
@@ -249,12 +249,12 @@ async def reformulate_query(query: str, context: Optional[str] = None):
     return create_success_response(result, "Query reformulated successfully")
 
 
-@router.post("/rag/analyze-documents")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_documents",
     error_code_prefix="AI_STACK",
 )
+@router.post("/rag/analyze-documents")
 async def analyze_documents(documents: List[Dict[str, Any]]):
     """Analyze and synthesize multiple documents."""
     ai_client = await get_ai_stack_client()
@@ -270,12 +270,12 @@ async def analyze_documents(documents: List[Dict[str, Any]]):
 # ====================================================================
 
 
-@router.post("/chat/enhanced")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_chat",
     error_code_prefix="AI_STACK",
 )
+@router.post("/chat/enhanced")
 async def enhanced_chat(
     request: EnhancedChatRequest, knowledge_base=Depends(get_knowledge_base)
 ):
@@ -323,12 +323,12 @@ async def enhanced_chat(
 # ====================================================================
 
 
-@router.post("/knowledge/extract")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="extract_knowledge",
     error_code_prefix="AI_STACK",
 )
+@router.post("/knowledge/extract")
 async def extract_knowledge(request: KnowledgeExtractionRequest):
     """Extract structured knowledge from content."""
     ai_client = await get_ai_stack_client()
@@ -343,12 +343,12 @@ async def extract_knowledge(request: KnowledgeExtractionRequest):
     )
 
 
-@router.post("/knowledge/enhanced-search")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_knowledge_search",
     error_code_prefix="AI_STACK",
 )
+@router.post("/knowledge/enhanced-search")
 async def enhanced_knowledge_search(
     query: str,
     search_type: str = "comprehensive",
@@ -387,12 +387,12 @@ async def enhanced_knowledge_search(
     return create_success_response(results, "Enhanced knowledge search completed")
 
 
-@router.get("/knowledge/system")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_knowledge",
     error_code_prefix="AI_STACK",
 )
+@router.get("/knowledge/system")
 async def get_system_knowledge(knowledge_category: Optional[str] = None):
     """Get system-wide knowledge insights."""
     ai_client = await get_ai_stack_client()
@@ -408,12 +408,12 @@ async def get_system_knowledge(knowledge_category: Optional[str] = None):
 # ====================================================================
 
 
-@router.post("/research/comprehensive")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="comprehensive_research",
     error_code_prefix="AI_STACK",
 )
+@router.post("/research/comprehensive")
 async def comprehensive_research(request: ResearchRequest):
     """Perform comprehensive research with multiple AI agents."""
     ai_client = await get_ai_stack_client()
@@ -443,12 +443,12 @@ async def comprehensive_research(request: ResearchRequest):
     )
 
 
-@router.post("/research/web")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="web_research",
     error_code_prefix="AI_STACK",
 )
+@router.post("/research/web")
 async def web_research(query: str, max_pages: int = 10, include_analysis: bool = True):
     """Perform web research with analysis."""
     ai_client = await get_ai_stack_client()
@@ -464,12 +464,12 @@ async def web_research(query: str, max_pages: int = 10, include_analysis: bool =
 # ====================================================================
 
 
-@router.post("/development/search-code")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_code",
     error_code_prefix="AI_STACK",
 )
+@router.post("/development/search-code")
 async def search_code(request: CodeSearchRequest):
     """Search codebase using NPU-accelerated AI."""
     ai_client = await get_ai_stack_client()
@@ -482,12 +482,12 @@ async def search_code(request: CodeSearchRequest):
     return create_success_response(result, "Code search completed successfully")
 
 
-@router.post("/development/analyze-speedup")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_development_speedup",
     error_code_prefix="AI_STACK",
 )
+@router.post("/development/analyze-speedup")
 async def analyze_development_speedup(request: DevelopmentAnalysisRequest):
     """Analyze codebase for development speedup opportunities."""
     ai_client = await get_ai_stack_client()
@@ -505,12 +505,12 @@ async def analyze_development_speedup(request: DevelopmentAnalysisRequest):
 # ====================================================================
 
 
-@router.post("/classification/classify")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="classify_content",
     error_code_prefix="AI_STACK",
 )
+@router.post("/classification/classify")
 async def classify_content(request: ContentClassificationRequest):
     """Classify content using AI classification agents."""
     ai_client = await get_ai_stack_client()
@@ -528,12 +528,12 @@ async def classify_content(request: ContentClassificationRequest):
 # ====================================================================
 
 
-@router.post("/orchestrate/multi-agent-query")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="multi_agent_query",
     error_code_prefix="AI_STACK",
 )
+@router.post("/orchestrate/multi-agent-query")
 async def multi_agent_query(
     query: str, agents: List[str], coordination_mode: str = "parallel"
 ):
@@ -624,24 +624,24 @@ async def multi_agent_query(
 # ====================================================================
 
 
-@router.post("/legacy/rag-search")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="legacy_rag_search",
     error_code_prefix="AI_STACK",
 )
+@router.post("/legacy/rag-search")
 async def legacy_rag_search(query: str, max_results: int = 10):
     """Legacy RAG search endpoint for backward compatibility."""
     request = RAGQueryRequest(query=query, max_results=max_results)
     return await rag_query(request)
 
 
-@router.post("/legacy/enhanced-chat")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="legacy_enhanced_chat",
     error_code_prefix="AI_STACK",
 )
+@router.post("/legacy/enhanced-chat")
 async def legacy_enhanced_chat(message: str, context: Optional[str] = None):
     """Legacy enhanced chat endpoint for backward compatibility."""
     request = EnhancedChatRequest(message=message, context=context)

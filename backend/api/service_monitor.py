@@ -667,34 +667,34 @@ def get_monitor():
     return monitor
 
 
-@router.get("/services/status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_service_status",
     error_code_prefix="SERVICE_MONITOR",
 )
+@router.get("/services/status")
 async def get_service_status():
     """Get comprehensive service status for dashboard"""
     return await get_monitor().get_all_services()
 
 
-@router.get("/services/ping")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="ping",
     error_code_prefix="SERVICE_MONITOR",
 )
+@router.get("/services/ping")
 async def ping():
     """Ultra simple ping endpoint"""
     return {"ping": "pong", "timestamp": datetime.now().isoformat()}
 
 
-@router.get("/services/health")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_service_health",
     error_code_prefix="SERVICE_MONITOR",
 )
+@router.get("/services/health")
 async def get_service_health():
     """Get ultra-lightweight health check - just return that backend is responding"""
     try:
@@ -719,12 +719,12 @@ async def get_service_health():
         }
 
 
-@router.get("/resources")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_resources",
     error_code_prefix="SERVICE_MONITOR",
 )
+@router.get("/resources")
 async def get_system_resources():
     """Get system resource utilization (CPU, memory, disk)"""
     try:
@@ -783,12 +783,12 @@ async def get_system_resources():
         return {"error": str(e), "status": "error"}
 
 
-@router.get("/services")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_services",
     error_code_prefix="SERVICE_MONITOR",
 )
+@router.get("/services")
 async def get_all_services():
     """Get status of all AutoBot services"""
     try:
@@ -869,12 +869,12 @@ async def get_all_services():
         return {"error": str(e), "status": "error"}
 
 
-@router.get("/health")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_redirect",
     error_code_prefix="SERVICE_MONITOR",
 )
+@router.get("/health")
 async def health_redirect():
     """Redirect common /health requests to correct /services/health endpoint"""
     return {
@@ -885,12 +885,12 @@ async def health_redirect():
     }
 
 
-@router.get("/vms/status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_vm_status",
     error_code_prefix="SERVICE_MONITOR",
 )
+@router.get("/vms/status")
 async def get_vm_status():
     """Get comprehensive VM infrastructure status for dashboard"""
     vm_statuses = await get_monitor().check_all_vms()
@@ -919,12 +919,12 @@ async def get_vm_status():
     }
 
 
-@router.get("/vms/{vm_name}/status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_single_vm_status",
     error_code_prefix="SERVICE_MONITOR",
 )
+@router.get("/vms/{vm_name}/status")
 async def get_single_vm_status(vm_name: str):
     """Get status of a specific VM"""
     # Get VM definitions from config
@@ -956,12 +956,12 @@ async def get_single_vm_status(vm_name: str):
     return vm_status.dict()
 
 
-@router.get("/debug/vm-config")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="debug_vm_config",
     error_code_prefix="SERVICE_MONITOR",
 )
+@router.get("/debug/vm-config")
 async def debug_vm_config():
     """Debug endpoint to check VM configuration"""
     try:
@@ -979,12 +979,12 @@ async def debug_vm_config():
         return {"config_available": False, "error": str(e)}
 
 
-@router.get("/debug/vm-test")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="debug_vm_test",
     error_code_prefix="SERVICE_MONITOR",
 )
+@router.get("/debug/vm-test")
 async def debug_vm_test():
     """Debug endpoint to test VM monitoring directly"""
     try:

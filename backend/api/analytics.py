@@ -571,12 +571,12 @@ analytics_controller = AnalyticsController()
 # ============================================================================
 
 
-@router.get("/dashboard/overview", response_model=AnalyticsOverview)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dashboard_overview",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/dashboard/overview", response_model=AnalyticsOverview)
 async def get_dashboard_overview():
     """Get comprehensive dashboard overview combining all analytics data"""
     timestamp = datetime.now().isoformat()
@@ -657,12 +657,12 @@ async def get_dashboard_overview():
     return overview
 
 
-@router.get("/system/health-detailed")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_detailed_system_health",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/system/health-detailed")
 async def get_detailed_system_health():
     """Get detailed system health with enhanced analytics"""
     # Get base system health from existing monitor
@@ -754,12 +754,12 @@ async def get_detailed_system_health():
     return detailed_health
 
 
-@router.get("/performance/metrics")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_metrics",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/performance/metrics")
 async def get_performance_metrics():
     """Get comprehensive performance metrics"""
     metrics = await analytics_controller.collect_performance_metrics()
@@ -798,12 +798,12 @@ async def get_performance_metrics():
 # ============================================================================
 
 
-@router.get("/communication/patterns")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_communication_patterns",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/communication/patterns")
 async def get_communication_patterns():
     """Get detailed communication pattern analysis"""
     patterns = await analytics_controller.analyze_communication_patterns()
@@ -847,12 +847,12 @@ async def get_communication_patterns():
     return patterns
 
 
-@router.get("/usage/statistics")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_usage_statistics",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/usage/statistics")
 async def get_usage_statistics():
     """Get comprehensive usage statistics"""
     stats = await analytics_controller.get_usage_statistics()
@@ -874,12 +874,12 @@ async def get_usage_statistics():
 # ============================================================================
 
 
-@router.post("/code/index")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="index_codebase",
     error_code_prefix="ANALYTICS",
 )
+@router.post("/code/index")
 async def index_codebase(request: CodeAnalysisRequest):
     """Trigger codebase indexing and analysis"""
     # Validate request
@@ -900,12 +900,12 @@ async def index_codebase(request: CodeAnalysisRequest):
     }
 
 
-@router.get("/code/status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_analysis_status",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/code/status")
 async def get_code_analysis_status():
     """Get current code analysis status and capabilities"""
     status = {
@@ -941,12 +941,12 @@ async def get_code_analysis_status():
     return status
 
 
-@router.get("/quality/assessment")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_assessment",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/quality/assessment")
 async def get_code_quality_assessment():
     """Get comprehensive code quality assessment for frontend dashboard"""
     # Get cached analysis or trigger new one
@@ -1004,12 +1004,12 @@ async def get_code_quality_assessment():
     return quality_assessment
 
 
-@router.get("/code/quality-metrics")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_metrics",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/code/quality-metrics")
 async def get_code_quality_metrics():
     """Get code quality metrics from cached analysis"""
     cached_analysis = analytics_state.get("code_analysis_cache")
@@ -1062,12 +1062,12 @@ async def get_code_quality_metrics():
     return quality_metrics
 
 
-@router.get("/code/communication-chains")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_communication_chains",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/code/communication-chains")
 async def get_communication_chains():
     """Get communication chain analysis from code analysis"""
     cached_analysis = analytics_state.get("code_analysis_cache")
@@ -1135,12 +1135,12 @@ async def get_communication_chains():
 # ============================================================================
 
 
-@router.get("/realtime/metrics")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_realtime_metrics",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/realtime/metrics")
 async def get_realtime_metrics():
     """Get current real-time metrics snapshot"""
     # Get current system metrics
@@ -1182,12 +1182,12 @@ async def get_realtime_metrics():
     return realtime_data
 
 
-@router.post("/events/track")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="track_analytics_event",
     error_code_prefix="ANALYTICS",
 )
+@router.post("/events/track")
 async def track_analytics_event(event: RealTimeEvent):
     """Track a real-time analytics event"""
     # Store event in analytics state
@@ -1236,12 +1236,12 @@ async def track_analytics_event(event: RealTimeEvent):
     }
 
 
-@router.get("/trends/historical")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_historical_trends",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/trends/historical")
 async def get_historical_trends(
     hours: int = Query(24, description="Number of hours to analyze", ge=1, le=168)
 ):
@@ -1425,12 +1425,12 @@ async def websocket_realtime_analytics(websocket: WebSocket):
 # ============================================================================
 
 
-@router.post("/collection/start")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_analytics_collection",
     error_code_prefix="ANALYTICS",
 )
+@router.post("/collection/start")
 async def start_analytics_collection():
     """Start continuous analytics collection"""
     # Initialize session tracking
@@ -1450,12 +1450,12 @@ async def start_analytics_collection():
     }
 
 
-@router.post("/collection/stop")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_analytics_collection",
     error_code_prefix="ANALYTICS",
 )
+@router.post("/collection/stop")
 async def stop_analytics_collection():
     """Stop continuous analytics collection"""
     # Stop metrics collection
@@ -1470,12 +1470,12 @@ async def stop_analytics_collection():
     }
 
 
-@router.get("/status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_analytics_status",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/status")
 async def get_analytics_status():
     """Get comprehensive analytics system status"""
     collector = analytics_controller.metrics_collector
@@ -1537,12 +1537,12 @@ async def get_analytics_status():
 # ============================================================================
 
 
-@router.get("/monitoring/phase9/status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_monitoring_status",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/monitoring/phase9/status")
 async def get_monitoring_status():
     """Get Phase 9 monitoring status for dashboard"""
     collector = analytics_controller.metrics_collector
@@ -1568,12 +1568,12 @@ async def get_monitoring_status():
     return status
 
 
-@router.get("/monitoring/phase9/dashboard")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_phase9_dashboard_data",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/monitoring/phase9/dashboard")
 async def get_phase9_dashboard_data():
     """Get comprehensive Phase 9 dashboard data"""
     # Get performance metrics
@@ -1644,12 +1644,12 @@ async def get_phase9_dashboard_data():
     return dashboard_data
 
 
-@router.get("/monitoring/phase9/alerts")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_phase9_alerts",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/monitoring/phase9/alerts")
 async def get_phase9_alerts():
     """Get Phase 9 monitoring alerts"""
     alerts = []
@@ -1748,12 +1748,12 @@ async def get_phase9_alerts():
     return alerts
 
 
-@router.get("/monitoring/phase9/optimization/recommendations")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_phase9_optimization_recommendations",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/monitoring/phase9/optimization/recommendations")
 async def get_phase9_optimization_recommendations():
     """Get Phase 9 optimization recommendations"""
     recommendations = []
@@ -1848,12 +1848,12 @@ async def get_phase9_optimization_recommendations():
     return recommendations
 
 
-@router.post("/monitoring/phase9/start")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_monitoring",
     error_code_prefix="ANALYTICS",
 )
+@router.post("/monitoring/phase9/start")
 async def start_monitoring():
     """Start Phase 9 monitoring"""
     # Start metrics collection
@@ -1871,12 +1871,12 @@ async def start_monitoring():
     }
 
 
-@router.post("/monitoring/phase9/stop")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_monitoring",
     error_code_prefix="ANALYTICS",
 )
+@router.post("/monitoring/phase9/stop")
 async def stop_monitoring():
     """Stop Phase 9 monitoring"""
     # Stop metrics collection
@@ -1891,12 +1891,12 @@ async def stop_monitoring():
     }
 
 
-@router.post("/monitoring/phase9/metrics/query")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="query_phase9_metrics",
     error_code_prefix="ANALYTICS",
 )
+@router.post("/monitoring/phase9/metrics/query")
 async def query_phase9_metrics(query_request: dict):
     """Query Phase 9 metrics with filtering"""
     metric_name = query_request.get("metric", "all")
@@ -1947,12 +1947,12 @@ async def query_phase9_metrics(query_request: dict):
 # ============================================================================
 
 
-@router.post("/code/analyze/communication-chains")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_communication_chains_detailed",
     error_code_prefix="ANALYTICS",
 )
+@router.post("/code/analyze/communication-chains")
 async def analyze_communication_chains_detailed():
     """Perform detailed communication chain analysis"""
     # Run communication chain analysis
@@ -2025,12 +2025,12 @@ async def analyze_communication_chains_detailed():
     return results
 
 
-@router.get("/code/metrics/quality-score")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_quality_score",
     error_code_prefix="ANALYTICS",
 )
+@router.get("/code/metrics/quality-score")
 async def get_code_quality_score():
     """Get comprehensive code quality score"""
     cached_analysis = analytics_state.get("code_analysis_cache")

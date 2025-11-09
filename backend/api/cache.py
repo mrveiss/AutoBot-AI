@@ -94,12 +94,12 @@ def get_redis_connection(db_number: int = 0):
             raise
 
 
-@router.get("/stats")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cache_stats",
     error_code_prefix="CACHE",
 )
+@router.get("/stats")
 async def get_cache_stats():
     """Get comprehensive cache statistics from all sources"""
     try:
@@ -151,12 +151,12 @@ async def get_cache_stats():
         )
 
 
-@router.post("/redis/clear/{database}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_redis_cache",
     error_code_prefix="CACHE",
 )
+@router.post("/redis/clear/{database}")
 async def clear_redis_cache(database: str):
     """Clear Redis cache for specific database or all databases"""
     try:
@@ -229,12 +229,12 @@ async def clear_redis_cache(database: str):
         )
 
 
-@router.post("/clear/{cache_type}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_cache_type",
     error_code_prefix="CACHE",
 )
+@router.post("/clear/{cache_type}")
 async def clear_cache_type(cache_type: str):
     """Clear specific backend cache type"""
     try:
@@ -272,12 +272,12 @@ async def clear_cache_type(cache_type: str):
         )
 
 
-@router.post("/config")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_cache_config",
     error_code_prefix="CACHE",
 )
+@router.post("/config")
 async def save_cache_config(config_data: Dict[str, Any]):
     """Save cache configuration settings"""
     try:
@@ -319,12 +319,12 @@ async def save_cache_config(config_data: Dict[str, Any]):
         )
 
 
-@router.get("/config")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cache_config",
     error_code_prefix="CACHE",
 )
+@router.get("/config")
 async def get_cache_config():
     """Get current cache configuration"""
     try:
@@ -358,12 +358,12 @@ async def get_cache_config():
         )
 
 
-@router.post("/warmup")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="warmup_caches",
     error_code_prefix="CACHE",
 )
+@router.post("/warmup")
 async def warmup_caches():
     """Warm up commonly used caches"""
     try:

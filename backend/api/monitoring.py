@@ -172,12 +172,12 @@ class MonitoringWebSocketManager:
 ws_manager = MonitoringWebSocketManager()
 
 
-@router.get("/status", response_model=MonitoringStatus)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_monitoring_status",
     error_code_prefix="MONITORING",
 )
+@router.get("/status", response_model=MonitoringStatus)
 async def get_monitoring_status():
     """Get current monitoring system status"""
     dashboard = get_phase9_performance_dashboard()
@@ -207,12 +207,12 @@ async def get_monitoring_status():
     )
 
 
-@router.post("/start")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_monitoring",
     error_code_prefix="MONITORING",
 )
+@router.post("/start")
 async def start_monitoring_endpoint(background_tasks: BackgroundTasks):
     """Start AutoBot performance monitoring"""
     if phase9_monitor.monitoring_active:
@@ -243,12 +243,12 @@ async def start_monitoring_endpoint(background_tasks: BackgroundTasks):
     }
 
 
-@router.post("/stop")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stop_monitoring",
     error_code_prefix="MONITORING",
 )
+@router.post("/stop")
 async def stop_monitoring_endpoint():
     """Stop AutoBot performance monitoring"""
     if not phase9_monitor.monitoring_active:
@@ -265,12 +265,12 @@ async def stop_monitoring_endpoint():
     }
 
 
-@router.get("/dashboard")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_dashboard",
     error_code_prefix="MONITORING",
 )
+@router.get("/dashboard")
 async def get_performance_dashboard():
     """Get comprehensive performance dashboard"""
     dashboard = get_phase9_performance_dashboard()
@@ -286,12 +286,12 @@ async def get_performance_dashboard():
     return dashboard
 
 
-@router.get("/dashboard/overview")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dashboard_overview",
     error_code_prefix="MONITORING",
 )
+@router.get("/dashboard/overview")
 async def get_dashboard_overview():
     """Get dashboard overview data for frontend"""
     dashboard = get_phase9_performance_dashboard()
@@ -307,12 +307,12 @@ async def get_dashboard_overview():
     return dashboard
 
 
-@router.get("/metrics/current")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_current_metrics",
     error_code_prefix="MONITORING",
 )
+@router.get("/metrics/current")
 async def get_current_metrics():
     """Get current performance metrics snapshot"""
     metrics = await collect_phase9_metrics()
@@ -323,12 +323,12 @@ async def get_current_metrics():
     }
 
 
-@router.post("/metrics/query")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="query_metrics",
     error_code_prefix="MONITORING",
 )
+@router.post("/metrics/query")
 async def query_metrics(query: MetricsQuery):
     """Query historical performance metrics with filters"""
     result = {
@@ -419,13 +419,13 @@ async def query_metrics(query: MetricsQuery):
     return result
 
 
-@router.get(
-    "/optimization/recommendations", response_model=List[OptimizationRecommendation]
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_optimization_recommendations",
     error_code_prefix="MONITORING",
+)
+@router.get(
+    "/optimization/recommendations", response_model=List[OptimizationRecommendation]
 )
 async def get_optimization_recommendations():
     """Get performance optimization recommendations"""
@@ -443,12 +443,12 @@ async def get_optimization_recommendations():
     ]
 
 
-@router.get("/alerts", response_model=List[PerformanceAlert])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_alerts",
     error_code_prefix="MONITORING",
 )
+@router.get("/alerts", response_model=List[PerformanceAlert])
 async def get_performance_alerts(
     severity: Optional[str] = Query(None, description="Filter by severity"),
     category: Optional[str] = Query(None, description="Filter by category"),
@@ -480,12 +480,12 @@ async def get_performance_alerts(
     ]
 
 
-@router.get("/alerts/check")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_alerts",
     error_code_prefix="MONITORING",
 )
+@router.get("/alerts/check")
 async def check_alerts():
     """Check for performance alerts"""
     alerts = list(phase9_monitor.performance_alerts)
@@ -499,12 +499,12 @@ async def check_alerts():
     }
 
 
-@router.post("/thresholds/update")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_performance_threshold",
     error_code_prefix="MONITORING",
 )
+@router.post("/thresholds/update")
 async def update_performance_threshold(threshold: ThresholdUpdate):
     """Update performance monitoring thresholds"""
     # Update threshold in monitoring system
@@ -530,12 +530,12 @@ async def update_performance_threshold(threshold: ThresholdUpdate):
         }
 
 
-@router.get("/hardware/gpu")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_gpu_details",
     error_code_prefix="MONITORING",
 )
+@router.get("/hardware/gpu")
 async def get_gpu_details():
     """Get detailed GPU information and metrics"""
     gpu_metrics = await phase9_monitor.collect_gpu_metrics()
@@ -568,12 +568,12 @@ async def get_gpu_details():
     }
 
 
-@router.get("/hardware/npu")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_npu_details",
     error_code_prefix="MONITORING",
 )
+@router.get("/hardware/npu")
 async def get_npu_details():
     """Get detailed NPU information and metrics"""
     npu_metrics = await phase9_monitor.collect_npu_metrics()
@@ -605,12 +605,12 @@ async def get_npu_details():
     }
 
 
-@router.get("/services/health")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_services_health",
     error_code_prefix="MONITORING",
 )
+@router.get("/services/health")
 async def get_services_health():
     """Get health status of all monitored services"""
     service_metrics = await phase9_monitor.collect_service_performance_metrics()
@@ -668,12 +668,12 @@ async def get_services_health():
     return services_health
 
 
-@router.get("/export/metrics")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_metrics",
     error_code_prefix="MONITORING",
 )
+@router.get("/export/metrics")
 async def export_metrics(
     format: str = Query("json", pattern="^(json|csv)$"),
     time_range_hours: int = Query(1, ge=1, le=168),  # Max 1 week
@@ -1025,13 +1025,13 @@ def _convert_metrics_to_csv(data: Dict[str, Any]) -> str:
 
 
 # Performance monitoring decorator endpoint
-@router.post("/test/performance")
-@monitor_performance("api_test")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_performance_monitoring",
     error_code_prefix="MONITORING",
 )
+@router.post("/test/performance")
+@monitor_performance("api_test")
 async def test_performance_monitoring():
     """Test endpoint to demonstrate performance monitoring"""
     # Simulate some work
@@ -1164,15 +1164,15 @@ hardware_monitor = HardwareMonitor()
 from src.monitoring.prometheus_metrics import get_metrics_manager
 
 
-@router.get(
-    "/metrics",
-    summary="Prometheus Metrics Endpoint",
-    description="Exposes metrics in Prometheus format for scraping",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_prometheus_metrics",
     error_code_prefix="MONITORING",
+)
+@router.get(
+    "/metrics",
+    summary="Prometheus Metrics Endpoint",
+    description="Exposes metrics in Prometheus format for scraping",
 )
 async def get_prometheus_metrics():
     """
@@ -1190,15 +1190,15 @@ async def get_prometheus_metrics():
     )
 
 
-@router.get(
-    "/health/metrics",
-    summary="Metrics Health Check",
-    description="Verify metrics collection is working",
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="metrics_health_check",
     error_code_prefix="MONITORING",
+)
+@router.get(
+    "/health/metrics",
+    summary="Metrics Health Check",
+    description="Verify metrics collection is working",
 )
 async def metrics_health_check():
     """Health check for Prometheus metrics system"""
