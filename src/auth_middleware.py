@@ -20,6 +20,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from src.constants.network_constants import NetworkConstants
 from src.security_layer import SecurityLayer
 from src.unified_config import config
+from src.utils.catalog_http_exceptions import raise_auth_error
 
 logger = logging.getLogger(__name__)
 
@@ -188,9 +189,9 @@ class AuthenticationMiddleware:
                 outcome="denied",
                 details={"ip": ip_address, "reason": "account_locked"},
             )
-            raise HTTPException(
-                status_code=423,
-                detail="Account is temporarily locked due to excessive failed attempts",
+            raise_auth_error(
+                "AUTH_0001",
+                "Account is temporarily locked due to excessive failed attempts",
             )
 
         # Get user from configuration
@@ -516,7 +517,7 @@ def get_current_user(request: Request) -> Dict:
     """
     user_data = auth_middleware.get_user_from_request(request)
     if not user_data:
-        raise HTTPException(status_code=401, detail="Authentication required")
+        raise_auth_error("AUTH_0002", "Authentication required")
     return user_data
 
 
@@ -531,9 +532,9 @@ def require_file_permission(operation: str):
                 request, operation
             )
             if not has_permission:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Insufficient permissions for file {operation} operation",
+                raise_auth_error(
+                    "AUTH_0003",
+                    f"Insufficient permissions for file {operation} operation",
                 )
             # Add user data to request state for use in endpoint
             request.state.user = user_data

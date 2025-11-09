@@ -30,6 +30,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants, ServiceURLs
+from src.utils.catalog_http_exceptions import (
+    raise_validation_error,
+    raise_server_error,
+    raise_not_found_error,
+)
 
 from .long_running_operations_framework import (
     LongRunningOperation,
@@ -161,17 +166,17 @@ class OperationIntegrationManager:
                 return {"operation_id": operation_id, "status": "created"}
 
             except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                raise_validation_error("API_0001", str(e))
             except Exception as e:
                 logger.error(f"Failed to create operation: {e}")
-                raise HTTPException(status_code=500, detail="Internal server error")
+                raise_server_error("API_0003", "Internal server error")
 
         @self.router.get("/{operation_id}", response_model=OperationResponse)
         async def get_operation(operation_id: str):
             """Get operation details"""
             operation = self.operation_manager.get_operation(operation_id)
             if not operation:
-                raise HTTPException(status_code=404, detail="Operation not found")
+                raise_not_found_error("API_0002", "Operation not found")
 
             return self._convert_operation_to_response(operation)
 
@@ -227,7 +232,7 @@ class OperationIntegrationManager:
             """Cancel a running operation"""
             success = await self.operation_manager.cancel_operation(operation_id)
             if not success:
-                raise HTTPException(status_code=404, detail="Operation not found")
+                raise_not_found_error("API_0002", "Operation not found")
 
             return {"status": "cancelled"}
 
@@ -241,8 +246,8 @@ class OperationIntegrationManager:
                     )
                 )
                 if not checkpoints:
-                    raise HTTPException(
-                        status_code=404, detail="No checkpoints found for operation"
+                    raise_not_found_error(
+                        "API_0002", "No checkpoints found for operation"
                     )
 
                 # Use latest checkpoint
@@ -259,7 +264,7 @@ class OperationIntegrationManager:
 
             except Exception as e:
                 logger.error(f"Failed to resume operation: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise_server_error("API_0003", str(e))
 
         @self.router.post("/{operation_id}/progress")
         async def update_operation_progress(
@@ -268,7 +273,7 @@ class OperationIntegrationManager:
             """Manually update operation progress (for external integrations)"""
             operation = self.operation_manager.get_operation(operation_id)
             if not operation:
-                raise HTTPException(status_code=404, detail="Operation not found")
+                raise_not_found_error("API_0002", "Operation not found")
 
             await self.operation_manager.progress_tracker.update_progress(
                 operation,
@@ -338,7 +343,7 @@ class OperationIntegrationManager:
                 return {"operation_id": operation_id, "status": "started"}
             except Exception as e:
                 logger.error(f"Failed to start codebase indexing: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise_server_error("API_0003", str(e))
 
         @self.router.post("/testing/comprehensive")
         async def start_comprehensive_testing(
@@ -354,7 +359,7 @@ class OperationIntegrationManager:
                 return {"operation_id": operation_id, "status": "started"}
             except Exception as e:
                 logger.error(f"Failed to start comprehensive testing: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise_server_error("API_0003", str(e))
 
     def _get_operation_function(
         self, operation_type: OperationType, context: Dict[str, Any]

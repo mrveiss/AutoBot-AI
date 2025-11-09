@@ -26,6 +26,7 @@ from src.advanced_rag_optimizer import get_rag_optimizer
 from src.constants.network_constants import NetworkConstants
 from src.knowledge_sync_incremental import IncrementalKnowledgeSync, SyncMetrics
 from src.utils.logging_manager import get_llm_logger
+from src.utils.catalog_http_exceptions import raise_kb_error
 
 logger = get_llm_logger("knowledge_sync_service")
 
@@ -384,7 +385,7 @@ async def trigger_manual_sync(
 
     except Exception as e:
         logger.error(f"Manual sync API error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise_kb_error("KB_0004", str(e))
 
 
 @router.get("/status")
@@ -397,7 +398,7 @@ async def get_sync_status():
 
     except Exception as e:
         logger.error(f"Sync status API error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise_kb_error("KB_0004", str(e))
 
 
 @router.get("/metrics")
@@ -410,7 +411,7 @@ async def get_performance_metrics():
 
     except Exception as e:
         logger.error(f"Performance metrics API error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise_kb_error("KB_0004", str(e))
 
 
 @router.post("/daemon/start")
@@ -444,7 +445,7 @@ async def start_sync_daemon(interval_minutes: int = 15):
 
     except Exception as e:
         logger.error(f"Start daemon API error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise_kb_error("KB_0004", str(e))
 
 
 @router.post("/daemon/stop")
@@ -470,7 +471,7 @@ async def stop_sync_daemon():
 
     except Exception as e:
         logger.error(f"Stop daemon API error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise_kb_error("KB_0004", str(e))
 
 
 @router.get("/history")
@@ -495,7 +496,7 @@ async def get_sync_history(limit: int = 20):
 
     except Exception as e:
         logger.error(f"Sync history API error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise_kb_error("KB_0004", str(e))
 
 
 # Integration with AutoBot's main application
