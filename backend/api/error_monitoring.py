@@ -22,6 +22,7 @@ from src.utils.error_boundaries import (
     get_error_statistics,
     with_error_handling,
 )
+from src.utils.error_metrics import get_metrics_collector
 
 # Add project root to path for imports
 # Add project root to path for imports
@@ -342,3 +343,205 @@ def _get_health_recommendations(health_status: str, stats: Dict[str, Any]) -> li
         )
 
     return recommendations
+
+
+# =============================================================================
+# NEW: Error Metrics Endpoints (Phase 5)
+# =============================================================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_metrics_summary",
+    error_code_prefix="ERROR_MONITORING",
+)
+@router.get("/metrics/summary")
+async def get_metrics_summary():
+    """
+    Get comprehensive error metrics summary
+
+    Returns aggregated metrics including error rates, retry counts,
+    and breakdowns by category and component.
+    """
+    try:
+        collector = get_metrics_collector()
+        summary = collector.get_summary()
+
+        return {"status": "success", "data": summary}
+    except Exception as e:
+        logger.error(f"Failed to get metrics summary: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_error_timeline",
+    error_code_prefix="ERROR_MONITORING",
+)
+@router.get("/metrics/timeline")
+async def get_error_timeline_endpoint(hours: int = 24, component: Optional[str] = None):
+    """
+    Get error timeline data for visualization
+
+    Args:
+        hours: Number of hours to include (1-168)
+        component: Optional component filter
+    """
+    try:
+        hours = min(max(hours, 1), 168)  # Clamp to 1-168 hours
+
+        collector = get_metrics_collector()
+        timeline = collector.get_error_timeline(hours=hours, component=component)
+
+        return {
+            "status": "success",
+            "data": {
+                "timeline": [
+                    {"hour": hour, "error_count": len(errors), "errors": errors}
+                    for hour, errors in timeline.items()
+                ],
+                "hours": hours,
+                "component": component,
+            },
+        }
+    except Exception as e:
+        logger.error(f"Failed to get error timeline: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_top_errors",
+    error_code_prefix="ERROR_MONITORING",
+)
+@router.get("/metrics/top-errors")
+async def get_top_errors_endpoint(limit: int = 10):
+    """
+    Get top N most frequent errors
+
+    Args:
+        limit: Number of top errors to return (1-50)
+    """
+    try:
+        limit = min(max(limit, 1), 50)  # Clamp to 1-50
+
+        collector = get_metrics_collector()
+        top_errors = collector.get_top_errors(limit=limit)
+
+        return {
+            "status": "success",
+            "data": {"top_errors": [stats.to_dict() for stats in top_errors]},
+        }
+    except Exception as e:
+        logger.error(f"Failed to get top errors: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="mark_error_resolved",
+    error_code_prefix="ERROR_MONITORING",
+)
+@router.post("/metrics/resolve/{trace_id}")
+async def mark_error_resolved_endpoint(trace_id: str):
+    """
+    Mark an error as resolved
+
+    Args:
+        trace_id: Trace ID of the error to mark as resolved
+    """
+    try:
+        collector = get_metrics_collector()
+        success = await collector.mark_resolved(trace_id)
+
+        if success:
+            return {
+                "status": "success",
+                "message": f"Error {trace_id} marked as resolved",
+            }
+        else:
+            return {
+                "status": "not_found",
+                "message": f"Error {trace_id} not found",
+            }
+    except Exception as e:
+        logger.error(f"Failed to mark error resolved: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
+
+
+class AlertThresholdRequest(BaseModel):
+    component: str
+    error_code: Optional[str] = None
+    threshold: int
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_alert_threshold",
+    error_code_prefix="ERROR_MONITORING",
+)
+@router.post("/metrics/alert-threshold")
+async def set_alert_threshold_endpoint(request: AlertThresholdRequest):
+    """
+    Set alert threshold for a component/error
+
+    Args:
+        component: Component name
+        error_code: Optional error code (None = any error in component)
+        threshold: Error count threshold for alerts
+    """
+    try:
+        collector = get_metrics_collector()
+        collector.set_alert_threshold(
+            request.component, request.error_code, request.threshold
+        )
+
+        threshold_key = f"{request.component}:{request.error_code or 'any'}"
+
+        return {
+            "status": "success",
+            "message": f"Set alert threshold: {threshold_key} = {request.threshold}",
+            "threshold_key": threshold_key,
+            "threshold": request.threshold,
+        }
+    except Exception as e:
+        logger.error(f"Failed to set alert threshold: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cleanup_metrics",
+    error_code_prefix="ERROR_MONITORING",
+)
+@router.post("/metrics/cleanup")
+async def cleanup_metrics_endpoint():
+    """
+    Clean up old metrics beyond retention period
+
+    Removes metrics older than the configured retention period.
+    """
+    try:
+        collector = get_metrics_collector()
+        removed = await collector.cleanup_old_metrics()
+
+        return {
+            "status": "success",
+            "message": f"Cleaned up {removed} old metrics",
+            "removed_count": removed,
+        }
+    except Exception as e:
+        logger.error(f"Failed to cleanup metrics: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
