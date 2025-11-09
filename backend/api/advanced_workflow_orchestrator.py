@@ -23,6 +23,7 @@ from backend.api.workflow_automation import (
 
 # Import existing components
 from src.constants.network_constants import NetworkConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.enhanced_orchestrator import EnhancedOrchestrator
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
@@ -1185,6 +1186,7 @@ class WorkflowLearningEngine:
 
 
 # API Endpoints for Advanced Workflow Orchestration
+@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.post("/generate_intelligent")
 async def generate_intelligent_workflow(request_data: dict, request: Request):
     """Generate AI-optimized workflow from user request"""
@@ -1215,6 +1217,7 @@ async def generate_intelligent_workflow(request_data: dict, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.get("/intelligence/{workflow_id}")
 async def get_workflow_intelligence(workflow_id: str, request: Request):
     """Get AI intelligence data for workflow"""
@@ -1244,6 +1247,7 @@ async def get_workflow_intelligence(workflow_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.get("/analytics")
 async def get_advanced_analytics(request: Request):
     """Get advanced workflow analytics"""
@@ -1274,6 +1278,7 @@ async def get_advanced_analytics(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.get("/templates")
 async def get_workflow_templates(request: Request):
     """Get all available intelligent workflow templates"""
@@ -1305,6 +1310,7 @@ async def get_workflow_templates(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.post("/templates/{template_id}/execute")
 async def execute_workflow_template(
     template_id: str, request_data: dict, request: Request
