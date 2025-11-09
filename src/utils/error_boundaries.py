@@ -38,6 +38,13 @@ except ImportError:
     def get_redis_client():
         return None
 
+try:
+    from src.utils.error_metrics import record_error_metric
+except ImportError:
+    # Fallback if error_metrics not available
+    async def record_error_metric(*args, **kwargs):
+        pass
+
 
 logger = logging.getLogger(__name__)
 
@@ -414,6 +421,19 @@ class ErrorBoundaryManager:
 
         # Store error report
         self.store_error_report(error_report)
+
+        # Record error metric
+        try:
+            await record_error_metric(
+                error_code=None,  # Will be populated from catalog if available
+                category=error_report.category,
+                component=context.component,
+                function=context.function,
+                message=error_report.message,
+                trace_id=error_report.error_id,
+            )
+        except Exception as metrics_error:
+            logger.debug(f"Failed to record error metric: {metrics_error}")
 
         # Try recovery handlers
         for handler in self.recovery_handlers:
