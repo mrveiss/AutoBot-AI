@@ -32,6 +32,12 @@ from backend.utils.async_redis_manager import get_redis_manager
 from src.async_chat_workflow import AsyncChatWorkflow, MessageType, WorkflowMessage
 from src.constants.network_constants import NetworkConstants
 from src.prompt_manager import get_prompt
+from src.utils.error_boundaries import (
+    ErrorCategory,
+    ErrorContext,
+    error_boundary,
+    get_error_boundary_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -299,6 +305,9 @@ class ChatWorkflowManager:
         self.redis_client = None  # Main database connection
         self.conversation_history_ttl = 86400  # 24 hours in seconds
         self.transcript_dir = "data/conversation_transcripts"  # Long-term file storage
+
+        # Error boundary manager for enhanced error tracking
+        self.error_manager = get_error_boundary_manager()
 
         # Terminal tool integration
         self.terminal_tool = None
@@ -615,6 +624,7 @@ class ChatWorkflowManager:
             logger.error(f"Failed to load transcript file: {e}")
             return []
 
+    @error_boundary(component="chat_workflow_manager", function="initialize")
     async def initialize(self) -> bool:
         """Initialize the workflow manager with default workflow and async Redis."""
         try:
@@ -647,6 +657,7 @@ class ChatWorkflowManager:
             logger.error(f"❌ Failed to initialize ChatWorkflowManager: {e}")
             return False
 
+    @error_boundary(component="chat_workflow_manager", function="get_or_create_session")
     async def get_or_create_session(self, session_id: str) -> WorkflowSession:
         """Get existing session or create new one, loading history from Redis."""
         async with self._lock:
@@ -671,6 +682,7 @@ class ChatWorkflowManager:
             self.sessions[session_id].last_activity = time.time()
             return self.sessions[session_id]
 
+    @error_boundary(component="chat_workflow_manager", function="process_message")
     async def process_message(
         self, session_id: str, message: str, context: Optional[Dict[str, Any]] = None
     ) -> List[WorkflowMessage]:

@@ -37,6 +37,12 @@ from cachetools import LRUCache
 
 from src.constants.network_constants import NetworkConstants
 from src.unified_config import config
+from src.utils.error_boundaries import (
+    ErrorCategory,
+    ErrorContext,
+    error_boundary,
+    get_error_boundary_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +105,9 @@ class AutoBotMemoryGraph:
         self.initialized = False
         self.initialization_lock = asyncio.Lock()
 
+        # Error boundary manager for enhanced error tracking
+        self.error_manager = get_error_boundary_manager()
+
         # Configuration
         self.redis_host = redis_host or config.get_host("redis")
         self.redis_port = redis_port or config.get_port("redis")
@@ -124,6 +133,7 @@ class AutoBotMemoryGraph:
 
         logger.info("AutoBotMemoryGraph instance created (not yet initialized)")
 
+    @error_boundary(component="autobot_memory_graph", function="initialize")
     async def initialize(self) -> bool:
         """Async initialization method - must be called after construction"""
         if self.initialized:
