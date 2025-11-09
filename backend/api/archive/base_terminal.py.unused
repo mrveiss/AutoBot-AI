@@ -1,0 +1,457 @@
+"""
+Base Terminal WebSocket Handler
+Provides common terminal functionality for websocket handlers including PTY management
+Updated to use improved TerminalWebSocketManager for race condition fixes
+"""
+
+import asyncio
+import logging
+import os
+import subprocess
+import threading
+from abc import ABC, abstractmethod
+from typing import Optional
+
+from fastapi import APIRouter
+
+from src.constants.network_constants import NetworkConstants
+from src.constants.path_constants import PATH
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.terminal_websocket_manager import TerminalWebSocketAdapter
+
+logger = logging.getLogger(__name__)
+
+# Create FastAPI router for terminal management endpoints
+router = APIRouter()
+
+
+class BaseTerminalWebSocket(ABC):
+    """Base class for terminal WebSocket handlers with improved race condition
+    handling"""
+
+    def __init__(self):
+        # Use new terminal manager for race condition fixes
+        self.terminal_adapter = TerminalWebSocketAdapter(self, self.terminal_type)
+
+        # Legacy compatibility properties
+        self.websocket = None
+        self.pty_fd: Optional[int] = None
+        self.process: Optional[subprocess.Popen] = None
+        self.reader_thread: Optional[threading.Thread] = None
+        self.active = False
+        self.current_dir = str(PATH.USER_HOME)
+        self.env = os.environ.copy()
+
+    @abstractmethod
+    async def send_message(self, message: dict):
+        """Send message to WebSocket client"""
+
+    @property
+    @abstractmethod
+    def terminal_type(self) -> str:
+        """Get terminal type for logging"""
+
+    async def start_pty_shell(self):
+        """Start a PTY shell process using improved terminal manager"""
+        try:
+            self.active = True
+            await self.terminal_adapter.start_session(self.websocket)
+
+            # Update legacy properties for compatibility
+            self.pty_fd = self.terminal_adapter.manager.pty_fd
+            self.process = self.terminal_adapter.manager.process
+
+            logger.info(f"PTY shell started for {self.terminal_type}")
+
+        except Exception as e:
+            self.active = False
+            logger.error(f"Failed to start PTY shell: {e}")
+            await self.send_message(
+                {
+                    "type": "error",
+                    "message": f"Failed to start {self.terminal_type}: {str(e)}",
+                }
+            )
+
+    def _read_pty_output(self):
+        """Read output from PTY in separate thread with queue-based delivery"""
+        import queue
+        import select
+        import time
+
+        # Create output queue for thread-safe message passing
+        self.output_queue = queue.Queue()
+
+        # Start async message sender task
+        if hasattr(self, "_output_sender_task"):
+            self._output_sender_task.cancel()
+
+        # Schedule async output sender
+        try:
+            loop = asyncio.get_event_loop()
+            self._output_sender_task = asyncio.run_coroutine_threadsafe(
+                self._async_output_sender(), loop
+            )
+        except RuntimeError:
+            # No loop available - will handle synchronously
+            self._output_sender_task = None
+
+        try:
+            while self.active and self.pty_fd:
+                try:
+                    # Read with timeout
+                    ready, _, _ = select.select([self.pty_fd], [], [], 0.1)
+
+                    if ready:
+                        data = os.read(self.pty_fd, 1024)
+                        if data:
+                            try:
+                                output = data.decode("utf-8", errors="replace")
+                                # Call hook for processing output
+                                processed_output = self.process_output(output)
+
+                                # Queue message for async delivery
+                                message = {
+                                    "type": "output",
+                                    # Standardized field name
+                                    "content": processed_output,
+                                    "timestamp": time.time(),
+                                }
+
+                                try:
+                                    self.output_queue.put_nowait(message)
+                                except queue.Full:
+                                    # Queue is full, drop oldest message to
+                                    # prevent blocking
+                                    try:
+                                        self.output_queue.get_nowait()
+                                        self.output_queue.put_nowait(message)
+                                    except queue.Empty:
+                                        pass
+
+                            except Exception as e:
+                                logger.error(f"Error processing PTY data: {e}")
+                        else:
+                            # PTY closed
+                            break
+                except OSError:
+                    break
+                except Exception as e:
+                    logger.error(f"Error reading PTY: {e}")
+                    break
+        except Exception as e:
+            logger.error(f"PTY reader thread error: {e}")
+        finally:
+            # Signal async sender to stop
+            if hasattr(self, "output_queue"):
+                try:
+                    self.output_queue.put_nowait({"type": "stop"})
+                except queue.Full:
+                    pass
+
+    async def _async_output_sender(self):
+        """Async task to send queued output messages to WebSocket"""
+        import queue
+
+        if not hasattr(self, "output_queue"):
+            return
+
+        try:
+            while self.active:
+                try:
+                    # Non-blocking queue check - immediate success/failure
+                    try:
+                        message = self.output_queue.get_nowait()
+                    except queue.Empty:
+                        await asyncio.sleep(0.01)  # Yield control briefly
+                        continue
+
+                    if message.get("type") == "stop":
+                        break
+
+                    # Send message if WebSocket is active
+                    if self.websocket and self.active:
+                        await self.send_message(message)
+
+                except asyncio.TimeoutError:
+                    continue
+                except queue.Empty:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error in async output sender: {e}")
+
+        except Exception as e:
+            logger.error(f"Async output sender error: {e}")
+
+    def process_output(self, output: str) -> str:
+        """Process PTY output before sending - override in subclasses"""
+        return output
+
+    async def send_input(self, text: str):
+        """Send input to PTY shell using improved terminal manager"""
+        if self.active:
+            try:
+                await self.terminal_adapter.send_input(text)
+            except Exception as e:
+                logger.error(f"Error writing to PTY: {e}")
+
+    async def process_input(self, text: str) -> str:
+        """Process input before sending to PTY - override in subclasses"""
+        return text
+
+    async def cleanup(self):
+        """Clean up PTY resources - consolidated implementation"""
+        logger.info(f"Cleaning up {self.terminal_type} session")
+
+        self.active = False
+
+        # Cancel async output sender task
+        if hasattr(self, "_output_sender_task") and self._output_sender_task:
+            try:
+                self._output_sender_task.cancel()
+                # Let task cancel naturally without timeout
+                try:
+                    await self._output_sender_task
+                except asyncio.CancelledError:
+                    pass  # Expected when cancelling
+            except Exception as e:
+                logger.warning(f"Error cancelling output sender task: {e}")
+
+        # Clear output queue
+        if hasattr(self, "output_queue"):
+            try:
+                # Drain the queue
+                while not self.output_queue.empty():
+                    try:
+                        self.output_queue.get_nowait()
+                    except Exception:
+                        break
+            except Exception as e:
+                logger.warning(f"Error clearing output queue: {e}")
+
+        # Use new terminal manager for cleanup
+        try:
+            await self.terminal_adapter.stop_session()
+
+            # Clear legacy properties
+            self.pty_fd = None
+            self.process = None
+            self.reader_thread = None
+            self.websocket = None
+
+        except Exception as e:
+            logger.error(f"Error during improved cleanup: {e}")
+
+        logger.info(f"{self.terminal_type} cleanup completed")
+
+    async def execute_command(self, command: str) -> bool:
+        """Send command to PTY shell with security validation"""
+        if not command.strip():
+            return False
+
+        # SECURITY: Validate command before execution
+        if not await self.validate_command(command):
+            logger.warning(f"SECURITY: Command blocked by validation: {command}")
+            await self.send_message(
+                {
+                    "type": "error",
+                    "message": f"Command blocked by security policy: {command}",
+                }
+            )
+            return False
+
+        logger.info(f"{self.terminal_type} executing validated command: {command}")
+
+        try:
+            # Send command to PTY shell
+            await self.send_input(command + "\n")
+            return True
+
+        except Exception as e:
+            logger.error(f"{self.terminal_type} command error: {e}")
+            await self.send_message(
+                {"type": "error", "message": f"{self.terminal_type} error: {str(e)}"}
+            )
+            return False
+
+    async def validate_command(self, command: str) -> bool:
+        """Validate command before execution with security policy"""
+        if not command or not command.strip():
+            return False
+
+        try:
+            # Import here to avoid circular imports
+            from src.secure_command_executor import CommandRisk, SecureCommandExecutor
+
+            # Lazy initialize secure executor
+            if not hasattr(self, "_secure_executor"):
+                self._secure_executor = SecureCommandExecutor()
+
+            # Assess command risk
+            risk, reasons = self._secure_executor.assess_command_risk(command)
+
+            if risk == CommandRisk.FORBIDDEN:
+                logger.warning(
+                    f"SECURITY: Blocked forbidden command in {self.terminal_type}: {command} - {reasons}"
+                )
+                return False
+            elif risk == CommandRisk.HIGH:
+                logger.warning(
+                    f"SECURITY: Blocked high-risk command in {self.terminal_type}: {command} - {reasons}"
+                )
+                return False
+            elif risk == CommandRisk.MODERATE:
+                logger.info(
+                    f"SECURITY: Moderate-risk command in {self.terminal_type}: {command} - {reasons}"
+                )
+                # Could implement approval mechanism here if needed
+                # For now, allow moderate risk commands with logging
+                return True
+            else:
+                logger.debug(
+                    f"SECURITY: Safe command in {self.terminal_type}: {command}"
+                )
+                return True
+
+        except ImportError:
+            logger.error(
+                "SECURITY WARNING: SecureCommandExecutor not available, allowing command without validation"
+            )
+            return (
+                True  # Fail open to prevent system lockout, but log the security issue
+            )
+        except Exception as e:
+            logger.error(
+                f"SECURITY ERROR: Command validation failed for {command}: {e}"
+            )
+            return False  # Fail closed on validation errors
+
+    def get_terminal_stats(self) -> dict:
+        """Get terminal session statistics"""
+        try:
+            return self.terminal_adapter.get_stats()
+        except Exception as e:
+            logger.error(f"Error getting terminal stats: {e}")
+            return {"error": str(e)}
+
+
+# ============================================================================
+# FastAPI Router Endpoints for Terminal Management
+# ============================================================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_terminal_system_status",
+    error_code_prefix="BASE_TERMINAL",
+)
+@router.get("/status")
+async def get_terminal_system_status():
+    """Get overall terminal system status"""
+    return {
+        "status": "operational",
+        "terminal_types": ["standard_terminal", "agent_terminal", "remote_terminal"],
+        "features": {
+            "pty_support": True,
+            "websocket_support": True,
+            "command_validation": True,
+            "security_policies": True,
+        },
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="terminal_health_check",
+    error_code_prefix="BASE_TERMINAL",
+)
+@router.get("/health")
+async def terminal_health_check():
+    """Health check for terminal system"""
+    return {
+        "status": "healthy",
+        "service": "terminal_system",
+        "components": {
+            "base_terminal": "operational",
+            "websocket_manager": "operational",
+            "pty_system": "operational",
+        },
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_terminal_capabilities",
+    error_code_prefix="BASE_TERMINAL",
+)
+@router.get("/capabilities")
+async def get_terminal_capabilities():
+    """Get terminal system capabilities"""
+    return {
+        "pty_management": True,
+        "websocket_streaming": True,
+        "command_execution": True,
+        "security_validation": True,
+        "session_management": True,
+        "output_processing": True,
+        "input_processing": True,
+        "race_condition_handling": True,
+        "async_output_delivery": True,
+        "queue_based_messaging": True,
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_security_policies",
+    error_code_prefix="BASE_TERMINAL",
+)
+@router.get("/security")
+async def get_security_policies():
+    """Get terminal security policies and command validation info"""
+    return {
+        "command_validation": "enabled",
+        "risk_assessment": "multi-level",
+        "blocked_commands": {
+            "forbidden": "Commands that could damage system",
+            "high_risk": "Potentially dangerous operations",
+            "moderate": "Logged but allowed with caution",
+        },
+        "security_executor": "SecureCommandExecutor",
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_terminal_features",
+    error_code_prefix="BASE_TERMINAL",
+)
+@router.get("/features")
+async def get_terminal_features():
+    """Get available terminal features and implementation details"""
+    return {
+        "base_class": "BaseTerminalWebSocket",
+        "implementations": [
+            {
+                "name": "standard_terminal",
+                "description": "Standard PTY terminal with WebSocket streaming",
+            },
+            {
+                "name": "agent_terminal",
+                "description": "AI agent terminal with enhanced features",
+            },
+            {
+                "name": "remote_terminal",
+                "description": "Remote machine terminal access",
+            },
+        ],
+        "features": {
+            "pty_shell": "Full PTY shell support with proper terminal emulation",
+            "websocket_streaming": "Real-time bidirectional communication",
+            "output_processing": "Customizable output processing hooks",
+            "input_processing": "Customizable input processing hooks",
+            "security_validation": "Command validation before execution",
+            "session_cleanup": "Proper resource cleanup on disconnect",
+            "race_condition_fixes": "Improved terminal manager with queue-based messaging",
+        },
+    }

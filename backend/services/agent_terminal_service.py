@@ -77,12 +77,13 @@ class AgentTerminalService:
     - Comprehensive audit logging
     """
 
-    def __init__(self, redis_client=None):
+    def __init__(self, redis_client=None, chat_workflow_manager=None):
         """
         Initialize agent terminal service.
 
         Args:
             redis_client: Redis client for session persistence
+            chat_workflow_manager: Existing ChatWorkflowManager instance (prevents circular initialization)
         """
         self.redis_client = redis_client
         self.sessions: Dict[str, AgentTerminalSession] = {}
@@ -96,8 +97,8 @@ class AgentTerminalService:
         # CRITICAL FIX: Initialize ChatHistoryManager for chat integration
         self.chat_history_manager = ChatHistoryManager()
 
-        # CRITICAL FIX: Initialize ChatWorkflowManager for LLM interpretation
-        self.chat_workflow_manager = ChatWorkflowManager()
+        # CRITICAL FIX: Use passed ChatWorkflowManager instead of creating new one (prevents circular loop)
+        self.chat_workflow_manager = chat_workflow_manager
 
         # REFACTOR: Use CommandApprovalManager for reusable approval logic
         self.approval_manager = CommandApprovalManager()

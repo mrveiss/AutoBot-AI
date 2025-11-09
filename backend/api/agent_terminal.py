@@ -1,15 +1,225 @@
 """
-Agent Terminal API
+Agent Terminal API - Chat Terminal with Command Approval Workflow
 
-REST API for agent terminal access with security controls and approval workflow.
+This module provides the REST API layer for the Chat Terminal, which enables
+AI agents to execute commands with user oversight. It implements a sophisticated
+approval workflow to prevent unauthorized or dangerous command execution.
+
+Purpose:
+-------
+The Chat Terminal is DIFFERENT from the Tools Terminal:
+- Tools Terminal: Direct command execution, no chat link, no approval
+- Chat Terminal: AI agent execution, chat-linked, approval workflow
+
+This is the backend for Chat Terminal, managing agent sessions and command approval.
+
+Architecture:
+------------
+┌────────────────────────────────────────────────────────────────┐
+│  ChatTerminal.vue (Frontend)                                   │
+│  • Links to chat session ID                                    │
+│  • Shows approval dialogs                                      │
+│  • Displays command output                                     │
+└───────────────────────┬────────────────────────────────────────┘
+                        │
+                        │ POST /api/agent-terminal/sessions
+                        ▼
+┌────────────────────────────────────────────────────────────────┐
+│  backend/api/agent_terminal.py (THIS MODULE)                   │
+│  • REST API for session management                             │
+│  • Command execution requests                                  │
+│  • Approval/denial endpoints                                   │
+│  • User takeover mechanism                                     │
+└───────────────────────┬────────────────────────────────────────┘
+                        │
+                        │ Delegates to
+                        ▼
+┌────────────────────────────────────────────────────────────────┐
+│  backend/services/agent_terminal_service.py                    │
+│  • Business logic for approval workflow                        │
+│  • Risk assessment (via SecureCommandExecutor)                 │
+│  • State machine (AGENT_CONTROL ↔ USER_CONTROL)                │
+│  • Chat integration (ChatHistoryManager)                       │
+│  • Audit logging (TerminalLogger)                              │
+└───────────────────────┬────────────────────────────────────────┘
+                        │
+                        │ Uses PTY from
+                        ▼
+┌────────────────────────────────────────────────────────────────┐
+│  backend/api/terminal.py                                       │
+│  • WebSocket: /api/terminal/ws/{pty_session_id}                │
+│  • Shared PTY infrastructure                                   │
+└────────────────────────────────────────────────────────────────┘
+
+Approval Workflow:
+-----------------
+1. Agent Requests Command
+   POST /api/agent-terminal/sessions/{id}/execute
+   {
+     "command": "sudo apt install nginx",
+     "description": "Install nginx web server"
+   }
+
+2. Risk Assessment (SecureCommandExecutor)
+   • SAFE → Execute immediately
+   • MODERATE/HIGH → Require user approval
+   • FORBIDDEN → Block completely
+
+3. User Approval (if required)
+   Frontend shows approval dialog
+   User clicks [Approve] or [Deny]
+
+4. Approval Response
+   POST /api/agent-terminal/sessions/{id}/approve
+   {
+     "approved": true,
+     "user_id": "user123",
+     "comment": "Approved for nginx installation"
+   }
+
+5. Command Execution
+   • Sent to PTY via terminal.py
+   • Output captured and sent to chat
+   • Logged to command history
+
+State Machine:
+-------------
+AGENT_CONTROL → (user interrupt) → USER_INTERRUPT → USER_CONTROL
+                                                           │
+                                                           │
+AGENT_CONTROL ← (agent resume) ← AGENT_RESUME ← (user release)
+
+REST API Endpoints:
+------------------
+# Session Management
+POST   /api/agent-terminal/sessions           - Create agent session
+GET    /api/agent-terminal/sessions           - List sessions
+GET    /api/agent-terminal/sessions/{id}      - Get session details
+DELETE /api/agent-terminal/sessions/{id}      - Close session
+
+# Command Execution
+POST   /api/agent-terminal/sessions/{id}/execute  - Execute command
+POST   /api/agent-terminal/sessions/{id}/approve  - Approve/deny command
+
+# User Control
+POST   /api/agent-terminal/sessions/{id}/interrupt - User takes control
+POST   /api/agent-terminal/sessions/{id}/release   - User releases control
+
+# Information
+GET    /api/agent-terminal/sessions/{id}/history   - Command history
+GET    /api/agent-terminal/sessions/{id}/state     - Current state
 
 Security Features:
-- Integration with SecureCommandExecutor
-- Command risk assessment and approval workflow
-- User interrupt/takeover mechanism
-- Comprehensive audit logging
-- RBAC enforcement (CVE-003 fix)
-- Prompt injection protection (CVE-002 fix)
+-----------------
+1. **CVE-003 Fix: No God Mode**
+   - All agents subject to RBAC
+   - Agent role determines permission level
+   - No agent can bypass security checks
+
+2. **CVE-002 Fix: Prompt Injection Protection**
+   - Command text validated before execution
+   - Risk assessment on every command
+   - User approval required for suspicious patterns
+
+3. **Command Risk Assessment**
+   - FORBIDDEN: rm -rf /, dd, mkfs, fork bombs
+   - HIGH: sudo commands, package installs, system modifications
+   - MODERATE: chmod, chown, kill commands
+   - SAFE: ls, pwd, cat, grep, etc.
+
+4. **Audit Trail**
+   - All commands logged with TerminalLogger
+   - Linked to conversation_id for full context
+   - Timestamp, risk level, approval status recorded
+
+5. **User Override**
+   - User can interrupt agent at any time
+   - User can deny dangerous commands
+   - User can take direct control of terminal
+
+Request/Response Examples:
+-------------------------
+# Create Session
+POST /api/agent-terminal/sessions
+{
+  "agent_id": "chat_agent_abc123",
+  "agent_role": "chat_agent",
+  "conversation_id": "chat_xyz",
+  "host": "main"
+}
+→ {
+  "session_id": "agent-session-456",
+  "pty_session_id": "pty-789",  # Use this for WebSocket
+  "state": "agent_control",
+  "created_at": 1704801234.56
+}
+
+# Execute Command (Approval Required)
+POST /api/agent-terminal/sessions/agent-session-456/execute
+{
+  "command": "sudo apt install nginx",
+  "description": "Install nginx"
+}
+→ {
+  "status": "approval_required",
+  "command": "sudo apt install nginx",
+  "risk": "high",
+  "reasons": ["Requires sudo", "Package installation"],
+  "session_id": "agent-session-456"
+}
+
+# Approve Command
+POST /api/agent-terminal/sessions/agent-session-456/approve
+{
+  "approved": true,
+  "user_id": "user123"
+}
+→ {
+  "status": "approved",
+  "command": "sudo apt install nginx",
+  "executed": true
+}
+
+# User Takeover
+POST /api/agent-terminal/sessions/agent-session-456/interrupt
+{
+  "user_id": "user123"
+}
+→ {
+  "status": "success",
+  "previous_state": "agent_control",
+  "new_state": "user_control",
+  "session_id": "agent-session-456"
+}
+
+Integration Points:
+------------------
+1. **ChatHistoryManager**
+   - All terminal output saved to chat history
+   - Commands shown as [TERMINAL] messages
+   - Complete transcript available
+
+2. **TerminalLogger**
+   - Commands logged with metadata
+   - Risk level, timestamp, approval status
+   - Linked to conversation_id
+
+3. **SecureCommandExecutor**
+   - Risk assessment engine
+   - Pattern matching for dangerous commands
+   - Returns risk level + reasons
+
+4. **CommandApprovalManager**
+   - Tracks pending approvals
+   - Auto-approval rules (future)
+   - Approval history
+
+See Also:
+--------
+- backend/api/terminal.py - Shared PTY infrastructure
+- backend/services/agent_terminal_service.py - Business logic
+- docs/architecture/TERMINAL_APPROVAL_WORKFLOW.md - Detailed workflow
+- docs/architecture/TERMINAL_ARCHITECTURE_DIAGRAM.md - System architecture
 """
 
 import logging
