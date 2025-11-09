@@ -48,6 +48,7 @@ from src.chat_workflow_manager import ChatWorkflowManager
 from src.security_layer import SecurityLayer
 from src.unified_config_manager import UnifiedConfigManager
 from src.utils.background_llm_sync import BackgroundLLMSync
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Enhanced routers with optional imports
 optional_routers = []
@@ -1056,6 +1057,7 @@ class AppFactory:
 
         # Add root-level endpoints that frontend expects directly under /api
         @app.get("/api/health")
+        @with_error_handling(category=ErrorCategory.SYSTEM)
         async def root_health_check():
             """Root health endpoint that frontend expects"""
             return {
@@ -1065,6 +1067,7 @@ class AppFactory:
             }
 
         @app.get("/api/version")
+        @with_error_handling(category=ErrorCategory.SYSTEM)
         async def root_version():
             """Root version endpoint that frontend expects"""
             return {
@@ -1092,16 +1095,6 @@ class AppFactory:
                 logger.warning(f"⚠️ Failed to register optional router {name}: {e}")
 
         logger.info("✅ API routes configured with optional AI Stack integration")
-
-        # Add root-level health endpoint that many clients expect
-        @app.get("/api/health")
-        async def root_health_check():
-            """Root-level health check endpoint"""
-            return {
-                "status": "healthy",
-                "timestamp": datetime.now(),
-                "service": "autobot-backend",
-            }
 
         # Mount static files for serving frontend assets
         try:

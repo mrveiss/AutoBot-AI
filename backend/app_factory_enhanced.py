@@ -58,6 +58,7 @@ from backend.services.ai_stack_client import close_ai_stack_client, get_ai_stack
 
 # Import additional modules
 from src.api_registry import APIRegistry
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import authentication and security middleware
 from src.auth_middleware import AuthenticationMiddleware
@@ -354,6 +355,7 @@ def create_enhanced_app() -> FastAPI:
 
     # Enhanced health check endpoint
     @app.get("/api/health")
+    @with_error_handling(category=ErrorCategory.SYSTEM)
     async def enhanced_health_check():
         """Enhanced health check endpoint with AI Stack status."""
         return {
@@ -393,21 +395,19 @@ def create_enhanced_app() -> FastAPI:
 
     # AI Stack specific health endpoint
     @app.get("/api/health/ai-stack")
+    @with_error_handling(category=ErrorCategory.SYSTEM)
     async def ai_stack_health():
         """Dedicated AI Stack health endpoint."""
-        try:
-            if hasattr(app.state, "ai_stack_client"):
-                ai_client = app.state.ai_stack_client
-                health_status = await ai_client.health_check()
-                return health_status
-            else:
-                return {
-                    "status": "unavailable",
-                    "message": "AI Stack client not initialized",
-                    "timestamp": time.time(),
-                }
-        except Exception as e:
-            return {"status": "error", "message": str(e), "timestamp": time.time()}
+        if hasattr(app.state, "ai_stack_client"):
+            ai_client = app.state.ai_stack_client
+            health_status = await ai_client.health_check()
+            return health_status
+        else:
+            return {
+                "status": "unavailable",
+                "message": "AI Stack client not initialized",
+                "timestamp": time.time(),
+            }
 
     # Add static files
     add_static_files(app)
