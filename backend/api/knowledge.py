@@ -242,12 +242,12 @@ async def _check_vectorization_batch_internal(
 # ===== ENDPOINTS =====
 
 
-@router.get("/stats")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_knowledge_stats",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/stats")
 async def get_knowledge_stats(req: Request):
     """Get knowledge base statistics - FIXED to use proper instance"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -283,12 +283,12 @@ async def get_knowledge_stats(req: Request):
     return stats
 
 
-@router.get("/test_categories_main")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_main_categories",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/test_categories_main")
 async def test_main_categories():
     """Test endpoint to verify file is loaded"""
     from backend.knowledge_categories import CATEGORY_METADATA
@@ -296,12 +296,12 @@ async def test_main_categories():
     return {"status": "working", "categories": list(CATEGORY_METADATA.keys())}
 
 
-@router.get("/stats/basic")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_knowledge_stats_basic",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/stats/basic")
 async def get_knowledge_stats_basic(req: Request):
     """Get basic knowledge base statistics for quick display"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -320,12 +320,12 @@ async def get_knowledge_stats_basic(req: Request):
     }
 
 
-@router.get("/categories/main")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_main_categories",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/categories/main")
 async def get_main_categories(req: Request):
     """
     Get the 3 main knowledge base categories with their metadata and stats.
@@ -449,12 +449,12 @@ async def get_main_categories(req: Request):
     return {"categories": main_categories, "total": len(main_categories)}
 
 
-@router.post("/vectorization_status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_vectorization_status_batch",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/vectorization_status")
 async def check_vectorization_status_batch(request: dict, req: Request):
     """
     Check vectorization status for multiple facts in a single efficient batch operation.
@@ -567,12 +567,12 @@ async def check_vectorization_status_batch(request: dict, req: Request):
     return result
 
 
-@router.get("/categories")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_knowledge_categories",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/categories")
 async def get_knowledge_categories(req: Request):
     """Get all knowledge base categories with fact counts"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -610,12 +610,12 @@ async def get_knowledge_categories(req: Request):
     return {"categories": categories, "total": len(categories)}
 
 
-@router.post("/add_text")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_text_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/add_text")
 async def add_text_to_knowledge(request: dict, req: Request):
     """Add text to knowledge base - FIXED to use proper instance"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -663,12 +663,12 @@ async def add_text_to_knowledge(request: dict, req: Request):
     }
 
 
-@router.post("/search")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_knowledge",
     error_code_prefix="KB",
 )
+@router.post("/search")
 async def search_knowledge(request: dict, req: Request):
     """Search knowledge base with optional RAG enhancement - FIXED parameter mismatch between KnowledgeBase and KnowledgeBaseV2"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -778,12 +778,12 @@ async def search_knowledge(request: dict, req: Request):
     }
 
 
-@router.post("/rag_search")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rag_enhanced_search",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/rag_search")
 async def rag_enhanced_search(request: dict, req: Request):
     """RAG-enhanced knowledge search for comprehensive document synthesis"""
     if not RAG_AVAILABLE:
@@ -981,12 +981,12 @@ async def rag_enhanced_search(request: dict, req: Request):
         }
 
 
-@router.post("/similarity_search")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="similarity_search",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/similarity_search")
 async def similarity_search(request: dict, req: Request):
     """Perform similarity search with optional RAG enhancement - FIXED parameter mismatch between KnowledgeBase and KnowledgeBaseV2"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -1052,12 +1052,12 @@ async def similarity_search(request: dict, req: Request):
     }
 
 
-@router.get("/health")
 @with_error_handling(
     category=ErrorCategory.SERVICE_UNAVAILABLE,
     operation="get_knowledge_health",
     error_code_prefix="KB",
 )
+@router.get("/health")
 async def get_knowledge_health(req: Request):
     """Get knowledge base health status with RAG capability status - FIXED to use proper instance"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -1102,12 +1102,12 @@ async def get_knowledge_health(req: Request):
 # === NEW REPOPULATE ENDPOINTS ===
 
 
-@router.post("/populate_system_commands")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="populate_system_commands",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/populate_system_commands")
 async def populate_system_commands(request: dict, req: Request):
     """Populate knowledge base with common system commands and usage examples"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -1522,12 +1522,12 @@ Command: {command}
         return 0
 
 
-@router.post("/populate_man_pages")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="populate_man_pages",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/populate_man_pages")
 async def populate_man_pages(
     request: dict, req: Request, background_tasks: BackgroundTasks
 ):
@@ -1552,12 +1552,12 @@ async def populate_man_pages(
     }
 
 
-@router.post("/refresh_system_knowledge")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refresh_system_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/refresh_system_knowledge")
 async def refresh_system_knowledge(request: dict, req: Request):
     """
     Refresh ALL system knowledge (man pages + AutoBot docs) - BACKGROUND JOB
@@ -1593,12 +1593,12 @@ async def refresh_system_knowledge(request: dict, req: Request):
     }
 
 
-@router.get("/job_status/{task_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_job_status",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/job_status/{task_id}")
 async def get_job_status(task_id: str, req: Request):
     """
     Get status of a background knowledge base job.
@@ -1663,12 +1663,12 @@ def extract_category_from_path(doc_file: str) -> str:
     return "root"
 
 
-@router.post("/populate_autobot_docs")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="populate_autobot_docs",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/populate_autobot_docs")
 async def populate_autobot_docs(request: dict, req: Request):
     """Populate knowledge base with AutoBot-specific documentation"""
     from backend.models.knowledge_import_tracking import ImportTracker
@@ -1876,12 +1876,12 @@ Type: System Configuration
     }
 
 
-@router.get("/entries")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_knowledge_entries",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/entries")
 async def get_knowledge_entries(
     req: Request,
     limit: int = Query(default=100, ge=1, le=1000),
@@ -1992,12 +1992,12 @@ async def get_knowledge_entries(
         }
 
 
-@router.get("/detailed_stats")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_detailed_stats",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/detailed_stats")
 async def get_detailed_stats(req: Request):
     """Get detailed knowledge base statistics with additional metrics"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -2077,12 +2077,12 @@ async def get_detailed_stats(req: Request):
     }
 
 
-@router.get("/machine_profile")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_machine_profile",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/machine_profile")
 async def get_machine_profile(req: Request):
     """Get machine profile with system information and capabilities"""
     import platform
@@ -2125,12 +2125,12 @@ async def get_machine_profile(req: Request):
     }
 
 
-@router.get("/man_pages/summary")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_man_pages_summary",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/man_pages/summary")
 async def get_man_pages_summary(req: Request):
     """Get summary of man pages integration status"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -2198,12 +2198,12 @@ async def get_man_pages_summary(req: Request):
         }
 
 
-@router.post("/machine_knowledge/initialize")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="initialize_machine_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/machine_knowledge/initialize")
 async def initialize_machine_knowledge(request: dict, req: Request):
     """Initialize machine-specific knowledge including man pages and system commands"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -2232,12 +2232,12 @@ async def initialize_machine_knowledge(request: dict, req: Request):
     }
 
 
-@router.post("/man_pages/integrate")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="integrate_man_pages",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/man_pages/integrate")
 async def integrate_man_pages(req: Request, background_tasks: BackgroundTasks):
     """Integrate system man pages into knowledge base (background task)"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -2260,12 +2260,12 @@ async def integrate_man_pages(req: Request, background_tasks: BackgroundTasks):
     }
 
 
-@router.get("/man_pages/search")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_man_pages",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/man_pages/search")
 async def search_man_pages(req: Request, query: str, limit: int = 10):
     """Search specifically for man pages in knowledge base"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -2298,12 +2298,12 @@ async def search_man_pages(req: Request, query: str, limit: int = 10):
     }
 
 
-@router.post("/clear_all")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_all_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/clear_all")
 async def clear_all_knowledge(request: dict, req: Request):
     """Clear all entries from the knowledge base - DESTRUCTIVE OPERATION"""
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -2371,23 +2371,23 @@ async def clear_all_knowledge(request: dict, req: Request):
 
 
 # Legacy endpoints for backward compatibility
-@router.post("/add_document")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_document_to_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/add_document")
 async def add_document_to_knowledge(request: dict, req: Request):
     """Legacy endpoint - redirects to add_text"""
     return await add_text_to_knowledge(request, req)
 
 
-@router.post("/query")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="query_knowledge",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/query")
 async def query_knowledge(request: dict, req: Request):
     """Legacy endpoint - redirects to search"""
     return await search_knowledge(request, req)
@@ -2445,12 +2445,12 @@ async def _enhance_search_with_rag(
         }
 
 
-@router.get("/facts/by_category")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_facts_by_category",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/facts/by_category")
 async def get_facts_by_category(
     req: Request, category: Optional[str] = None, limit: int = 100
 ):
@@ -2573,12 +2573,12 @@ async def get_facts_by_category(
     return result
 
 
-@router.get("/fact/{fact_key}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_fact_by_key",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/fact/{fact_key}")
 async def get_fact_by_key(
     fact_key: str = Path(..., regex=r"^[a-zA-Z0-9_:-]+$", max_length=255),
     req: Request = None,
@@ -2641,12 +2641,12 @@ async def get_fact_by_key(
     }
 
 
-@router.post("/vectorize_facts")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="vectorize_existing_facts",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/vectorize_facts")
 async def vectorize_existing_facts(
     req: Request,
     batch_size: int = 50,
@@ -2783,12 +2783,12 @@ async def vectorize_existing_facts(
     }
 
 
-@router.get("/import/status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_import_status",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/import/status")
 async def get_import_status(
     req: Request, file_path: Optional[str] = None, category: Optional[str] = None
 ):
@@ -2801,12 +2801,12 @@ async def get_import_status(
     return {"status": "success", "imports": results, "total": len(results)}
 
 
-@router.get("/import/statistics")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_import_statistics",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/import/statistics")
 async def get_import_statistics(req: Request):
     """Get import statistics"""
     from backend.models.knowledge_import_tracking import ImportTracker
@@ -2949,12 +2949,12 @@ async def _vectorize_fact_background(
         )
 
 
-@router.post("/vectorize_fact/{fact_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="vectorize_individual_fact",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/vectorize_fact/{fact_id}")
 async def vectorize_individual_fact(
     fact_id: str, req: Request, background_tasks: BackgroundTasks, force: bool = False
 ):
@@ -3020,12 +3020,12 @@ async def vectorize_individual_fact(
     }
 
 
-@router.get("/vectorize_job/{job_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_vectorization_job_status",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/vectorize_job/{job_id}")
 async def get_vectorization_job_status(job_id: str, req: Request):
     """
     Get the status of a vectorization job.
@@ -3056,12 +3056,12 @@ async def get_vectorization_job_status(job_id: str, req: Request):
     return {"status": "success", "job": job_data}
 
 
-@router.get("/vectorize_jobs/failed")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_failed_vectorization_jobs",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/vectorize_jobs/failed")
 async def get_failed_vectorization_jobs(req: Request):
     """
     Get all failed vectorization jobs from Redis.
@@ -3108,12 +3108,12 @@ async def get_failed_vectorization_jobs(req: Request):
     }
 
 
-@router.post("/vectorize_jobs/{job_id}/retry")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="retry_vectorization_job",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/vectorize_jobs/{job_id}/retry")
 async def retry_vectorization_job(
     job_id: str, req: Request, background_tasks: BackgroundTasks, force: bool = False
 ):
@@ -3180,12 +3180,12 @@ async def retry_vectorization_job(
     }
 
 
-@router.delete("/vectorize_jobs/{job_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_vectorization_job",
     error_code_prefix="KNOWLEDGE",
 )
+@router.delete("/vectorize_jobs/{job_id}")
 async def delete_vectorization_job(job_id: str, req: Request):
     """
     Delete a vectorization job record from Redis.
@@ -3218,12 +3218,12 @@ async def delete_vectorization_job(job_id: str, req: Request):
     }
 
 
-@router.delete("/vectorize_jobs/failed/clear")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_failed_vectorization_jobs",
     error_code_prefix="KNOWLEDGE",
 )
+@router.delete("/vectorize_jobs/failed/clear")
 async def clear_failed_vectorization_jobs(req: Request):
     """
     Clear all failed vectorization jobs from Redis.
@@ -3279,12 +3279,12 @@ async def clear_failed_vectorization_jobs(req: Request):
     }
 
 
-@router.post("/deduplicate")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="deduplicate_facts",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/deduplicate")
 async def deduplicate_facts(req: Request, dry_run: bool = True):
     """
     Remove duplicate facts based on category + title.
@@ -3416,12 +3416,12 @@ async def deduplicate_facts(req: Request, dry_run: bool = True):
     }
 
 
-@router.post("/scan_host_changes")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="scan_host_changes",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/scan_host_changes")
 async def scan_host_changes(
     req: Request,
     request_data: ScanHostChangesRequest
@@ -3577,12 +3577,12 @@ async def scan_host_changes(
     return result
 
 
-@router.get("/orphans")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="find_orphaned_facts",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/orphans")
 async def find_orphaned_facts(req: Request):
     """
     Find facts whose source files no longer exist.
@@ -3660,12 +3660,12 @@ async def find_orphaned_facts(req: Request):
     }
 
 
-@router.delete("/orphans")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_orphaned_facts",
     error_code_prefix="KNOWLEDGE",
 )
+@router.delete("/orphans")
 async def cleanup_orphaned_facts(req: Request, dry_run: bool = True):
     """
     Remove facts whose source files no longer exist.
@@ -3714,12 +3714,12 @@ async def cleanup_orphaned_facts(req: Request, dry_run: bool = True):
     }
 
 
-@router.post("/import/scan")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="scan_for_unimported_files",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/import/scan")
 async def scan_for_unimported_files(req: Request, directory: str = "docs"):
     """Scan directory for files that need to be imported"""
     from backend.models.knowledge_import_tracking import ImportTracker
@@ -3755,12 +3755,12 @@ async def scan_for_unimported_files(req: Request, directory: str = "docs"):
     }
 
 
-@router.post("/vectorize_facts/background")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="start_background_vectorization",
     error_code_prefix="KNOWLEDGE",
 )
+@router.post("/vectorize_facts/background")
 async def start_background_vectorization(
     req: Request, background_tasks: BackgroundTasks
 ):
@@ -3789,12 +3789,12 @@ async def start_background_vectorization(
     }
 
 
-@router.get("/vectorize_facts/status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_vectorization_status",
     error_code_prefix="KNOWLEDGE",
 )
+@router.get("/vectorize_facts/status")
 async def get_vectorization_status(req: Request):
     """Get the status of background vectorization"""
     vectorizer = get_background_vectorizer()
@@ -3828,12 +3828,12 @@ class UpdateFactRequest(BaseModel):
         return v
 
 
-@router.put("/fact/{fact_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_fact",
     error_code_prefix="KNOWLEDGE",
 )
+@router.put("/fact/{fact_id}")
 async def update_fact(
     fact_id: str = Path(..., description="Fact ID to update"),
     request: UpdateFactRequest = ...,
@@ -3906,12 +3906,12 @@ async def update_fact(
             raise HTTPException(status_code=500, detail=error_message)
 
 
-@router.delete("/fact/{fact_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_fact",
     error_code_prefix="KNOWLEDGE",
 )
+@router.delete("/fact/{fact_id}")
 async def delete_fact(
     fact_id: str = Path(..., description="Fact ID to delete"), req: Request = None
 ):

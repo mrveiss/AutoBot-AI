@@ -35,12 +35,12 @@ class SessionAction(BaseModel):
     timeout_seconds: Optional[int] = 300
 
 
-@router.get("/health")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="health_check",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@router.get("/health")
 async def health_check():
     """Health check endpoint for research browser service"""
     # Check if browser manager is initialized
@@ -62,12 +62,12 @@ async def health_check():
     }
 
 
-@router.post("/url")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="research_url",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@router.post("/url")
 async def research_url(request: ResearchRequest):
     """Research a URL with automatic fallbacks and interaction handling"""
     result = await research_browser_manager.research_url(
@@ -77,12 +77,12 @@ async def research_url(request: ResearchRequest):
     return JSONResponse(status_code=200, content=result)
 
 
-@router.post("/session/action")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="handle_session_action",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@router.post("/session/action")
 async def handle_session_action(request: SessionAction):
     """Handle actions on a research session"""
     session = research_browser_manager.get_session(request.session_id)
@@ -128,12 +128,12 @@ async def handle_session_action(request: SessionAction):
     return JSONResponse(status_code=200, content=result)
 
 
-@router.get("/session/{session_id}/status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_status",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@router.get("/session/{session_id}/status")
 async def get_session_status(session_id: str):
     """Get the status of a research session"""
     session = research_browser_manager.get_session(session_id)
@@ -156,12 +156,12 @@ async def get_session_status(session_id: str):
     )
 
 
-@router.get("/session/{session_id}/mhtml/{filename}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="download_mhtml",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@router.get("/session/{session_id}/mhtml/{filename}")
 async def download_mhtml(session_id: str, filename: str):
     """Download an MHTML file from a research session"""
     session = research_browser_manager.get_session(session_id)
@@ -191,12 +191,12 @@ async def download_mhtml(session_id: str, filename: str):
     )
 
 
-@router.delete("/session/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@router.delete("/session/{session_id}")
 async def cleanup_session(session_id: str):
     """Clean up a research session"""
     await research_browser_manager.cleanup_session(session_id)
@@ -207,12 +207,12 @@ async def cleanup_session(session_id: str):
     )
 
 
-@router.get("/sessions")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_sessions",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@router.get("/sessions")
 async def list_sessions():
     """List all active research sessions"""
     sessions_info = []
@@ -240,12 +240,12 @@ class NavigationRequest(BaseModel):
     url: str
 
 
-@router.post("/session/{session_id}/navigate")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="navigate_session",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@router.post("/session/{session_id}/navigate")
 async def navigate_session(session_id: str, request: NavigationRequest):
     """Navigate a research session to a specific URL"""
     session = research_browser_manager.get_session(session_id)
@@ -258,12 +258,12 @@ async def navigate_session(session_id: str, request: NavigationRequest):
 
 
 # Browser integration endpoints for frontend
-@router.get("/browser/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_browser_info",
     error_code_prefix="RESEARCH_BROWSER",
 )
+@router.get("/browser/{session_id}")
 async def get_browser_info(session_id: str):
     """Get browser information for frontend integration"""
     session = research_browser_manager.get_session(session_id)

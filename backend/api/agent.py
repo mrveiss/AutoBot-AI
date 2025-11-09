@@ -29,12 +29,12 @@ class CommandApprovalPayload(BaseModel):
     user_role: str = "user"
 
 
-@router.post("/goal")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="receive_goal",
     error_code_prefix="AGENT",
 )
+@router.post("/goal")
 async def receive_goal(request: Request, payload: GoalPayload):
     """
     Receives a goal from the user to be executed by the orchestrator.
@@ -163,12 +163,12 @@ async def receive_goal(request: Request, payload: GoalPayload):
     return {"message": response_message}
 
 
-@router.post("/pause")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="pause_agent",
     error_code_prefix="AGENT",
 )
+@router.post("/pause")
 async def pause_agent_api(request: Request, user_role: str = Form("user")):
     """
     Pauses the agent's current operation.
@@ -194,12 +194,12 @@ async def pause_agent_api(request: Request, user_role: str = Form("user")):
     return {"message": "Agent paused successfully."}
 
 
-@router.post("/resume")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resume_agent",
     error_code_prefix="AGENT",
 )
+@router.post("/resume")
 async def resume_agent_api(request: Request, user_role: str = Form("user")):
     """
     Resumes the agent's operation if paused.
@@ -227,12 +227,12 @@ async def resume_agent_api(request: Request, user_role: str = Form("user")):
     return {"message": "Agent resumed successfully."}
 
 
-@router.post("/command_approval")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="command_approval",
     error_code_prefix="AGENT",
 )
+@router.post("/command_approval")
 async def command_approval(request: Request, payload: CommandApprovalPayload):
     """
     Receives user approval/denial for a command execution.
@@ -277,12 +277,12 @@ async def command_approval(request: Request, payload: CommandApprovalPayload):
         return JSONResponse(status_code=500, content={"message": error_message})
 
 
-@router.post("/execute_command")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_command",
     error_code_prefix="AGENT",
 )
+@router.post("/execute_command")
 async def execute_command(
     request: Request, command_data: dict, user_role: str = Form("user")
 ):

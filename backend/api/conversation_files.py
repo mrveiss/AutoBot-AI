@@ -266,12 +266,12 @@ def is_safe_file(filename: str) -> bool:
     return True
 
 
-@router.post("/conversation/{session_id}/upload", response_model=FileUploadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="upload_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.post("/conversation/{session_id}/upload", response_model=FileUploadResponse)
 async def upload_conversation_file(
     request: Request,
     session_id: str,
@@ -385,13 +385,13 @@ async def upload_conversation_file(
         raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
 
 
-@router.get(
-    "/conversation/{session_id}/list", response_model=ConversationFileListResponse
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_conversation_files",
     error_code_prefix="CONVERSATION_FILES",
+)
+@router.get(
+    "/conversation/{session_id}/list", response_model=ConversationFileListResponse
 )
 async def list_conversation_files(
     request: Request, session_id: str, page: int = 1, page_size: int = 50
@@ -458,12 +458,12 @@ async def list_conversation_files(
         raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
 
 
-@router.get("/conversation/{session_id}/download/{file_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="download_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.get("/conversation/{session_id}/download/{file_id}")
 async def download_conversation_file(request: Request, session_id: str, file_id: str):
     """
     Download a specific file from a conversation
@@ -541,13 +541,13 @@ async def download_conversation_file(request: Request, session_id: str, file_id:
         raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
 
 
-@router.get(
-    "/conversation/{session_id}/preview/{file_id}", response_model=FilePreviewResponse
-)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="preview_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
+)
+@router.get(
+    "/conversation/{session_id}/preview/{file_id}", response_model=FilePreviewResponse
 )
 async def preview_conversation_file(request: Request, session_id: str, file_id: str):
     """
@@ -629,12 +629,12 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
         raise HTTPException(status_code=500, detail=f"Error previewing file: {str(e)}")
 
 
-@router.delete("/conversation/{session_id}/files/{file_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_conversation_file",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.delete("/conversation/{session_id}/files/{file_id}")
 async def delete_conversation_file(request: Request, session_id: str, file_id: str):
     """
     Delete a specific file from a conversation
@@ -710,12 +710,12 @@ async def delete_conversation_file(request: Request, session_id: str, file_id: s
         raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
 
 
-@router.post("/conversation/{session_id}/transfer", response_model=FileTransferResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="transfer_conversation_files",
     error_code_prefix="CONVERSATION_FILES",
 )
+@router.post("/conversation/{session_id}/transfer", response_model=FileTransferResponse)
 async def transfer_conversation_files(
     request: Request, session_id: str, transfer_request: FileTransferRequest
 ):

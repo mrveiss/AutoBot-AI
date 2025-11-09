@@ -21,13 +21,13 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/frontend-config")
-@cache_response(cache_key="frontend_config", ttl=60)  # Cache for 1 minute
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_frontend_config",
     error_code_prefix="SYSTEM",
 )
+@router.get("/frontend-config")
+@cache_response(cache_key="frontend_config", ttl=60)  # Cache for 1 minute
 async def get_frontend_config():
     """Get configuration values needed by the frontend.
 
@@ -104,14 +104,14 @@ async def get_frontend_config():
     }
 
 
-@router.get("/health")
-@router.get("/system/health")  # Frontend compatibility alias
-@cache_response(cache_key="system_health", ttl=30)  # Cache for 30 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_health",
     error_code_prefix="SYSTEM",
 )
+@router.get("/health")
+@router.get("/system/health")  # Frontend compatibility alias
+@cache_response(cache_key="system_health", ttl=30)  # Cache for 30 seconds
 async def get_system_health(request: Request = None):
     """Get system health status"""
     try:
@@ -190,13 +190,13 @@ async def get_system_health(request: Request = None):
         }
 
 
-@router.get("/info")
-@cache_response(cache_key="system_info", ttl=300)  # Cache for 5 minutes
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_info",
     error_code_prefix="SYSTEM",
 )
+@router.get("/info")
+@cache_response(cache_key="system_info", ttl=300)  # Cache for 5 minutes
 async def get_system_info():
     """Get system information"""
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
@@ -218,12 +218,12 @@ async def get_system_info():
     return system_info
 
 
-@router.post("/reload_config")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reload_system_config",
     error_code_prefix="SYSTEM",
 )
+@router.post("/reload_config")
 async def reload_system_config():
     """Reload system configuration and clear caches"""
     logger.info("Reloading system configuration...")
@@ -247,12 +247,12 @@ async def reload_system_config():
     }
 
 
-@router.get("/prompt_reload")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reload_prompts",
     error_code_prefix="SYSTEM",
 )
+@router.get("/prompt_reload")
 async def reload_prompts():
     """Reload prompt templates"""
     logger.info("Reloading prompt templates...")
@@ -275,12 +275,12 @@ async def reload_prompts():
     }
 
 
-@router.get("/admin_check")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="admin_check",
     error_code_prefix="SYSTEM",
 )
+@router.get("/admin_check")
 async def admin_check():
     """Check admin status and permissions"""
     import os
@@ -294,12 +294,12 @@ async def admin_check():
     return admin_status
 
 
-@router.post("/dynamic_import")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="dynamic_import",
     error_code_prefix="SYSTEM",
 )
+@router.post("/dynamic_import")
 async def dynamic_import(request: Request, module_name: str = Form(...)):
     """Dynamically import a module (admin only)"""
     logger.info(f"Dynamic import requested for module: {module_name}")
@@ -338,13 +338,13 @@ async def dynamic_import(request: Request, module_name: str = Form(...)):
     }
 
 
-@router.get("/health/detailed")
-@cache_response(cache_key="system_health_detailed", ttl=30)  # Cache for 30 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_detailed_health",
     error_code_prefix="SYSTEM",
 )
+@router.get("/health/detailed")
+@cache_response(cache_key="system_health_detailed", ttl=30)  # Cache for 30 seconds
 async def get_detailed_health(request: Request):
     """Get detailed system health status including all components"""
     try:
@@ -446,13 +446,13 @@ async def get_detailed_health(request: Request):
         }
 
 
-@router.get("/cache/stats")
-@cache_response(cache_key="cache_stats", ttl=15)  # Cache for 15 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cache_stats",
     error_code_prefix="SYSTEM",
 )
+@router.get("/cache/stats")
+@cache_response(cache_key="cache_stats", ttl=15)  # Cache for 15 seconds
 async def get_cache_stats():
     """Get cache statistics and performance metrics"""
     try:
@@ -505,13 +505,13 @@ async def get_cache_stats():
         }
 
 
-@router.get("/cache/activity")
-@cache_response(cache_key="cache_activity", ttl=10)  # Cache for 10 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cache_activity",
     error_code_prefix="SYSTEM",
 )
+@router.get("/cache/activity")
+@cache_response(cache_key="cache_activity", ttl=10)  # Cache for 10 seconds
 async def get_cache_activity():
     """Get recent cache activity and key information"""
     try:
@@ -579,13 +579,13 @@ async def get_cache_activity():
         }
 
 
-@router.get("/metrics")
-@cache_response(cache_key="system_metrics", ttl=15)  # Cache for 15 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_metrics",
     error_code_prefix="SYSTEM",
 )
+@router.get("/metrics")
+@cache_response(cache_key="system_metrics", ttl=15)  # Cache for 15 seconds
 async def get_system_metrics():
     """Get system performance metrics"""
     try:

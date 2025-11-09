@@ -198,12 +198,12 @@ async def get_optimal_agents_for_goal(
 # ====================================================================
 
 
-@router.post("/goal/enhanced")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_enhanced_goal",
     error_code_prefix="AGENT_ENHANCED",
 )
+@router.post("/goal/enhanced")
 async def execute_enhanced_goal(
     payload: EnhancedGoalPayload,
     request: Request,
@@ -312,12 +312,12 @@ async def execute_enhanced_goal(
 # ====================================================================
 
 
-@router.post("/multi-agent/coordinate")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="coordinate_multi_agent_task",
     error_code_prefix="AGENT_ENHANCED",
 )
+@router.post("/multi-agent/coordinate")
 async def coordinate_multi_agent_task(payload: MultiAgentTaskPayload, request: Request):
     """
     Coordinate complex multi-agent tasks with dependency management.
@@ -378,12 +378,12 @@ async def coordinate_multi_agent_task(payload: MultiAgentTaskPayload, request: R
 # ====================================================================
 
 
-@router.post("/research/comprehensive")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="comprehensive_research_task",
     error_code_prefix="AGENT_ENHANCED",
 )
+@router.post("/research/comprehensive")
 async def comprehensive_research_task(
     request_data: ResearchTaskRequest, knowledge_base=Depends(get_knowledge_base)
 ):
@@ -435,12 +435,12 @@ async def comprehensive_research_task(
         await handle_ai_stack_error(e, "Comprehensive research")
 
 
-@router.post("/development/analyze")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_development_task",
     error_code_prefix="AGENT_ENHANCED",
 )
+@router.post("/development/analyze")
 async def analyze_development_task(request_data: AgentAnalysisRequest):
     """
     Analyze codebase using development-focused AI agents.
@@ -476,12 +476,12 @@ async def analyze_development_task(request_data: AgentAnalysisRequest):
 # ====================================================================
 
 
-@router.get("/agents/available")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_available_agents",
     error_code_prefix="AGENT_ENHANCED",
 )
+@router.get("/agents/available")
 async def list_available_agents():
     """List all available AI Stack agents with their capabilities."""
     try:
@@ -589,12 +589,12 @@ async def list_available_agents():
         await handle_ai_stack_error(e, "List available agents")
 
 
-@router.get("/agents/status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_agents_status",
     error_code_prefix="AGENT_ENHANCED",
 )
+@router.get("/agents/status")
 async def get_agents_status():
     """Get comprehensive status of all AI Stack agents."""
     try:
@@ -631,12 +631,12 @@ async def get_agents_status():
 # ====================================================================
 
 
-@router.post("/goal")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="receive_goal_compat",
     error_code_prefix="AGENT_ENHANCED",
 )
+@router.post("/goal")
 async def receive_goal_compat(
     goal: str = Form(...),
     use_phi2: bool = Form(False),
@@ -695,12 +695,12 @@ async def receive_goal_compat(
 # ====================================================================
 
 
-@router.get("/health/enhanced")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_agent_health",
     error_code_prefix="AGENT_ENHANCED",
 )
+@router.get("/health/enhanced")
 async def enhanced_agent_health():
     """Enhanced health check for agent services."""
     try:

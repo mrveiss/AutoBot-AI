@@ -269,12 +269,12 @@ def is_safe_file(filename: str) -> bool:
     return True
 
 
-@router.get("/list", response_model=DirectoryListing)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_files",
     error_code_prefix="FILES",
 )
+@router.get("/list", response_model=DirectoryListing)
 async def list_files(request: Request, path: str = ""):
     """
     List files in the specified directory within the sandbox.
@@ -396,12 +396,12 @@ def validate_file_content(content: bytes, filename: str) -> bool:
     return True
 
 
-@router.post("/upload", response_model=FileUploadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="upload_file",
     error_code_prefix="FILES",
 )
+@router.post("/upload", response_model=FileUploadResponse)
 async def upload_file(
     request: Request,
     file: UploadFile = File(...),
@@ -510,12 +510,12 @@ async def upload_file(
     )
 
 
-@router.get("/download/{path:path}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="download_file",
     error_code_prefix="FILES",
 )
+@router.get("/download/{path:path}")
 async def download_file(request: Request, path: str):
     """
     Download a file from the sandbox.
@@ -565,12 +565,12 @@ async def download_file(request: Request, path: str):
     )
 
 
-@router.get("/view/{path:path}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="view_file",
     error_code_prefix="FILES",
 )
+@router.get("/view/{path:path}")
 async def view_file(request: Request, path: str):
     """
     View file content (for text files) or get file info.
@@ -618,12 +618,12 @@ async def view_file(request: Request, path: str):
     }
 
 
-@router.post("/rename")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rename_file_or_directory",
     error_code_prefix="FILES",
 )
+@router.post("/rename")
 async def rename_file_or_directory(
     request: Request, path: str = Form(...), new_name: str = Form(...)
 ):
@@ -692,12 +692,12 @@ async def rename_file_or_directory(
     }
 
 
-@router.get("/preview")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="preview_file",
     error_code_prefix="FILES",
 )
+@router.get("/preview")
 async def preview_file(request: Request, path: str):
     """
     Get file preview with content and download URL.
@@ -758,12 +758,12 @@ async def preview_file(request: Request, path: str):
     }
 
 
-@router.delete("/delete")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_file",
     error_code_prefix="FILES",
 )
+@router.delete("/delete")
 async def delete_file(request: Request, path: str):
     """
     Delete a file or directory within the sandbox.
@@ -851,12 +851,12 @@ async def delete_file(request: Request, path: str):
             }
 
 
-@router.post("/create_directory")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_directory",
     error_code_prefix="FILES",
 )
+@router.post("/create_directory")
 async def create_directory(
     request: Request, path: str = Form(...), name: str = Form(...)
 ):
@@ -916,12 +916,12 @@ async def create_directory(
     }
 
 
-@router.get("/tree")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_directory_tree",
     error_code_prefix="FILES",
 )
+@router.get("/tree")
 async def get_directory_tree(request: Request, path: str = ""):
     """Get directory tree structure for file browser"""
     # SECURITY FIX: Enable proper authentication and authorization
@@ -982,12 +982,12 @@ async def get_directory_tree(request: Request, path: str = ""):
     return {"path": path, "tree": tree_data}
 
 
-@router.get("/stats")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_file_stats",
     error_code_prefix="FILES",
 )
+@router.get("/stats")
 async def get_file_stats(request: Request):
     """Get file system statistics for the sandbox"""
     # SECURITY FIX: Enable proper authentication and authorization

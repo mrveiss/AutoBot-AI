@@ -67,12 +67,12 @@ class SystemMonitoringResponse(BaseModel):
 
 
 # Desktop Streaming Endpoints
-@router.post("/streaming/create", response_model=StreamingSessionResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_streaming_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.post("/streaming/create", response_model=StreamingSessionResponse)
 async def create_streaming_session(request: StreamingSessionRequest):
     """Create a new desktop streaming session"""
     async with task_tracker.track_task(
@@ -95,12 +95,12 @@ async def create_streaming_session(request: StreamingSessionRequest):
         return response
 
 
-@router.delete("/streaming/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="terminate_streaming_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.delete("/streaming/{session_id}")
 async def terminate_streaming_session(session_id: str):
     """Terminate a desktop streaming session"""
     success = await desktop_streaming.terminate_streaming_session(session_id)
@@ -111,24 +111,24 @@ async def terminate_streaming_session(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
 
 
-@router.get("/streaming/sessions")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_streaming_sessions",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.get("/streaming/sessions")
 async def list_streaming_sessions():
     """List all active streaming sessions"""
     sessions = desktop_streaming.vnc_manager.list_active_sessions()
     return {"sessions": sessions, "count": len(sessions)}
 
 
-@router.get("/streaming/capabilities")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_streaming_capabilities",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.get("/streaming/capabilities")
 async def get_streaming_capabilities():
     """Get desktop streaming system capabilities"""
     capabilities = desktop_streaming.get_system_capabilities()
@@ -136,12 +136,12 @@ async def get_streaming_capabilities():
 
 
 # Takeover Management Endpoints
-@router.post("/takeover/request")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="request_takeover",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.post("/takeover/request")
 async def request_takeover(request: TakeoverRequest):
     """Request human takeover of autonomous operations"""
     # Convert string enum to TakeoverTrigger
@@ -185,12 +185,12 @@ async def request_takeover(request: TakeoverRequest):
     return {"success": True, "request_id": request_id}
 
 
-@router.post("/takeover/{request_id}/approve")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="approve_takeover",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.post("/takeover/{request_id}/approve")
 async def approve_takeover(request_id: str, approval: TakeoverApprovalRequest):
     """Approve a takeover request and start session"""
     try:
@@ -209,12 +209,12 @@ async def approve_takeover(request_id: str, approval: TakeoverApprovalRequest):
         raise HTTPException(status_code=409, detail=str(e))
 
 
-@router.post("/takeover/sessions/{session_id}/action")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_takeover_action",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.post("/takeover/sessions/{session_id}/action")
 async def execute_takeover_action(session_id: str, action: TakeoverActionRequest):
     """Execute an action during a takeover session"""
     try:
@@ -233,12 +233,12 @@ async def execute_takeover_action(session_id: str, action: TakeoverActionRequest
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.post("/takeover/sessions/{session_id}/pause")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="pause_takeover_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.post("/takeover/sessions/{session_id}/pause")
 async def pause_takeover_session(session_id: str):
     """Pause an active takeover session"""
     success = await takeover_manager.pause_takeover_session(session_id)
@@ -250,12 +250,12 @@ async def pause_takeover_session(session_id: str):
         )
 
 
-@router.post("/takeover/sessions/{session_id}/resume")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="resume_takeover_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.post("/takeover/sessions/{session_id}/resume")
 async def resume_takeover_session(session_id: str):
     """Resume a paused takeover session"""
     success = await takeover_manager.resume_takeover_session(session_id)
@@ -267,12 +267,12 @@ async def resume_takeover_session(session_id: str):
         )
 
 
-@router.post("/takeover/sessions/{session_id}/complete")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="complete_takeover_session",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.post("/takeover/sessions/{session_id}/complete")
 async def complete_takeover_session(session_id: str, completion_data: Dict[str, Any]):
     """Complete a takeover session and return control"""
     success = await takeover_manager.complete_takeover_session(
@@ -287,36 +287,36 @@ async def complete_takeover_session(session_id: str, completion_data: Dict[str, 
         raise HTTPException(status_code=404, detail="Session not found")
 
 
-@router.get("/takeover/pending")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pending_takeovers",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.get("/takeover/pending")
 async def get_pending_takeovers():
     """Get all pending takeover requests"""
     pending = takeover_manager.get_pending_requests()
     return {"pending_requests": pending, "count": len(pending)}
 
 
-@router.get("/takeover/active")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_active_takeovers",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.get("/takeover/active")
 async def get_active_takeovers():
     """Get all active takeover sessions"""
     active = takeover_manager.get_active_sessions()
     return {"active_sessions": active, "count": len(active)}
 
 
-@router.get("/takeover/status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_takeover_status",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.get("/takeover/status")
 async def get_takeover_status():
     """Get takeover system status"""
     status = takeover_manager.get_system_status()
@@ -324,12 +324,12 @@ async def get_takeover_status():
 
 
 # System Monitoring and Control
-@router.get("/system/status", response_model=SystemMonitoringResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_status",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.get("/system/status", response_model=SystemMonitoringResponse)
 async def get_system_status():
     """Get comprehensive system monitoring status"""
     # Get resource usage
@@ -369,12 +369,12 @@ async def get_system_status():
     return response
 
 
-@router.post("/system/emergency-stop")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="emergency_system_stop",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.post("/system/emergency-stop")
 async def emergency_system_stop():
     """Emergency stop for all autonomous operations"""
     # Request emergency takeover
@@ -394,12 +394,12 @@ async def emergency_system_stop():
     }
 
 
-@router.get("/system/health")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_health",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.get("/system/health")
 async def get_system_health():
     """Quick health check endpoint"""
     try:
@@ -482,12 +482,12 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
         logger.info(f"Desktop streaming WebSocket client disconnected: {session_id}")
 
 
-@router.get("/")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="advanced_control_info",
     error_code_prefix="ADVANCED_CONTROL",
 )
+@router.get("/")
 async def advanced_control_info():
     """Get information about advanced control capabilities"""
     return {

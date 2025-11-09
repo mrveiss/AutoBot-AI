@@ -564,13 +564,13 @@ async def stream_chat_response(
 # ====================================================================
 
 
-@router.get("/chats")
-@router.get("/chat/chats")  # Frontend compatibility alias
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_chats",
     error_code_prefix="CHAT",
 )
+@router.get("/chats")
+@router.get("/chat/chats")  # Frontend compatibility alias
 async def list_chats(request: Request):
     """List all available chat sessions with improved error handling (consolidated)"""
     request_id = generate_request_id()
@@ -595,13 +595,13 @@ async def list_chats(request: Request):
     return JSONResponse(status_code=200, content=sessions)
 
 
-@router.post("/chat")
-@router.post("/chat/message")  # Alternative endpoint
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_message",
     error_code_prefix="CHAT",
 )
+@router.post("/chat")
+@router.post("/chat/message")  # Alternative endpoint
 async def send_message(
     message: ChatMessage,
     request: Request,
@@ -650,12 +650,12 @@ async def send_message(
     )
 
 
-@router.post("/chat/stream")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="stream_message",
     error_code_prefix="CHAT",
 )
+@router.post("/chat/stream")
 async def stream_message(message: ChatMessage, request: Request):
     """Stream chat response for real-time communication"""
     request_id = generate_request_id()
@@ -681,12 +681,12 @@ async def stream_message(message: ChatMessage, request: Request):
     )
 
 
-@router.get("/chat/sessions/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_messages",
     error_code_prefix="CHAT",
 )
+@router.get("/chat/sessions/{session_id}")
 async def get_session_messages(
     session_id: str,
     request: Request,
@@ -758,12 +758,12 @@ async def get_session_messages(
     )
 
 
-@router.get("/chat/sessions")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_sessions",
     error_code_prefix="CHAT",
 )
+@router.get("/chat/sessions")
 async def list_sessions(request: Request):
     """List all available chat sessions (REST-compliant endpoint)"""
     request_id = generate_request_id()
@@ -791,12 +791,12 @@ async def list_sessions(request: Request):
     )
 
 
-@router.post("/chat/sessions")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_session",
     error_code_prefix="CHAT",
 )
+@router.post("/chat/sessions")
 async def create_session(session_data: SessionCreate, request: Request):
     """Create a new chat session"""
     request_id = generate_request_id()
@@ -838,12 +838,12 @@ async def create_session(session_data: SessionCreate, request: Request):
     )
 
 
-@router.put("/chat/sessions/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_session",
     error_code_prefix="CHAT",
 )
+@router.put("/chat/sessions/{session_id}")
 async def update_session(
     session_id: str,
     session_data: SessionUpdate,
@@ -900,12 +900,12 @@ async def update_session(
     )
 
 
-@router.delete("/chat/sessions/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_session",
     error_code_prefix="CHAT",
 )
+@router.delete("/chat/sessions/{session_id}")
 async def delete_session(
     session_id: str,
     request: Request,
@@ -1091,12 +1091,12 @@ async def delete_session(
     )
 
 
-@router.get("/chat/sessions/{session_id}/export")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_session",
     error_code_prefix="CHAT",
 )
+@router.get("/chat/sessions/{session_id}/export")
 async def export_session(session_id: str, request: Request, format: str = "json"):
     """Export a chat session in various formats"""
     request_id = generate_request_id()
@@ -1165,12 +1165,12 @@ async def export_session(session_id: str, request: Request, format: str = "json"
 # ====================================================================
 
 
-@router.get("/chat/health")
 @with_error_handling(
     category=ErrorCategory.SERVICE_UNAVAILABLE,
     operation="chat_health_check",
     error_code_prefix="CHAT",
 )
+@router.get("/chat/health")
 async def chat_health_check(request: Request):
     """Health check for chat service"""
     chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
@@ -1199,12 +1199,12 @@ async def chat_health_check(request: Request):
     )
 
 
-@router.get("/chat/stats")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="chat_statistics",
     error_code_prefix="CHAT",
 )
+@router.get("/chat/stats")
 async def chat_statistics(request: Request):
     """Get chat service statistics"""
     request_id = generate_request_id()
@@ -1226,12 +1226,12 @@ async def chat_statistics(request: Request):
 # MISSING ENDPOINTS FOR FRONTEND COMPATIBILITY
 
 
-@router.post("/chats/{chat_id}/message")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_chat_message_by_id",
     error_code_prefix="CHAT",
 )
+@router.post("/chats/{chat_id}/message")
 async def send_chat_message_by_id(
     chat_id: str,
     request_data: dict,
@@ -1426,12 +1426,12 @@ async def merge_messages(
     return merged
 
 
-@router.post("/chats/{chat_id}/save")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_chat_by_id",
     error_code_prefix="CHAT",
 )
+@router.post("/chats/{chat_id}/save")
 async def save_chat_by_id(
     chat_id: str,
     request_data: dict,
@@ -1492,12 +1492,12 @@ async def save_chat_by_id(
     )
 
 
-@router.delete("/chats/{chat_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_chat_by_id",
     error_code_prefix="CHAT",
 )
+@router.delete("/chats/{chat_id}")
 async def delete_chat_by_id(
     chat_id: str,
     request: Request,
@@ -1534,12 +1534,12 @@ async def delete_chat_by_id(
     )
 
 
-@router.post("/chat/direct")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_direct_chat_response",
     error_code_prefix="CHAT",
 )
+@router.post("/chat/direct")
 async def send_direct_chat_response(
     request: Request,
     message: str = Body(...),

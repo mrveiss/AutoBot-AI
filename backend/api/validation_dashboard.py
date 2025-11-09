@@ -202,12 +202,12 @@ class DashboardGenerateRequest(BaseModel):
     refresh_interval: int = 30  # seconds
 
 
-@router.get("/status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dashboard_status",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@router.get("/status")
 async def get_dashboard_status():
     """Get validation dashboard service status"""
     generator = get_dashboard_generator()
@@ -237,12 +237,12 @@ async def get_dashboard_status():
         raise HTTPException(status_code=503, detail="Dashboard generator not available")
 
 
-@router.get("/report")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_validation_report",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@router.get("/report")
 async def get_validation_report():
     """Get current validation report data"""
     try:
@@ -280,12 +280,12 @@ async def get_validation_report():
         return generate_fallback_report()
 
 
-@router.get("/dashboard", response_class=HTMLResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dashboard_html",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@router.get("/dashboard", response_class=HTMLResponse)
 async def get_dashboard_html():
     """Get HTML validation dashboard"""
     generator = get_dashboard_generator()
@@ -338,12 +338,12 @@ async def get_dashboard_html():
         )
 
 
-@router.get("/dashboard/file")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dashboard_file",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@router.get("/dashboard/file")
 async def get_dashboard_file():
     """Get dashboard HTML file for download"""
     generator = get_dashboard_generator()
@@ -371,12 +371,12 @@ async def get_dashboard_file():
         raise HTTPException(status_code=500, detail="File system error")
 
 
-@router.post("/generate")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_dashboard",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@router.post("/generate")
 async def generate_dashboard(
     request: DashboardGenerateRequest, background_tasks: BackgroundTasks
 ):
@@ -432,12 +432,12 @@ async def generate_dashboard(
         raise HTTPException(status_code=503, detail="Dashboard generator not available")
 
 
-@router.get("/metrics")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dashboard_metrics",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@router.get("/metrics")
 async def get_dashboard_metrics():
     """Get dashboard-specific metrics"""
     generator = get_dashboard_generator()
@@ -493,12 +493,12 @@ async def get_dashboard_metrics():
         raise HTTPException(status_code=503, detail="Dashboard generator not available")
 
 
-@router.get("/trends")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_trend_data",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@router.get("/trends")
 async def get_trend_data():
     """Get trend data for charts"""
     generator = get_dashboard_generator()
@@ -523,12 +523,12 @@ async def get_trend_data():
         raise HTTPException(status_code=503, detail="Dashboard generator not available")
 
 
-@router.get("/alerts")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_alerts",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@router.get("/alerts")
 async def get_system_alerts():
     """Get current system alerts"""
     generator = get_dashboard_generator()
@@ -562,12 +562,12 @@ async def get_system_alerts():
         raise HTTPException(status_code=503, detail="Dashboard generator not available")
 
 
-@router.get("/recommendations")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_recommendations",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@router.get("/recommendations")
 async def get_system_recommendations():
     """Get current system recommendations"""
     generator = get_dashboard_generator()
@@ -610,12 +610,12 @@ async def get_system_recommendations():
 # Use /api/system/health?detailed=true for comprehensive status
 
 
-@router.post("/judge_workflow_step")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="judge_workflow_step",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@router.post("/judge_workflow_step")
 async def judge_workflow_step(request: dict):
     """Use LLM judges to evaluate a workflow step"""
     try:
@@ -669,12 +669,12 @@ async def judge_workflow_step(request: dict):
         raise HTTPException(status_code=400, detail="Invalid workflow step data")
 
 
-@router.post("/judge_agent_response")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="judge_agent_response",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@router.post("/judge_agent_response")
 async def judge_agent_response(request: dict):
     """Use LLM judges to evaluate an agent response"""
     judges = get_validation_judges()
@@ -729,12 +729,12 @@ async def judge_agent_response(request: dict):
         raise HTTPException(status_code=400, detail="Invalid agent response data")
 
 
-@router.get("/judge_status")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_judge_status",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
+@router.get("/judge_status")
 async def get_judge_status():
     """Get status of validation judges"""
     judges = get_validation_judges()

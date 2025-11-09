@@ -929,12 +929,12 @@ session_manager = ConsolidatedTerminalManager()
 # REST API Endpoints
 
 
-@router.post("/sessions")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_terminal_session",
     error_code_prefix="TERMINAL",
 )
+@router.post("/sessions")
 async def create_terminal_session(request: TerminalSessionRequest):
     """Create a new terminal session with enhanced security options"""
     session_id = str(uuid.uuid4())
@@ -965,12 +965,12 @@ async def create_terminal_session(request: TerminalSessionRequest):
     }
 
 
-@router.get("/sessions")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_terminal_sessions",
     error_code_prefix="TERMINAL",
 )
+@router.get("/sessions")
 async def list_terminal_sessions():
     """List all active terminal sessions"""
     sessions = []
@@ -993,12 +993,12 @@ async def list_terminal_sessions():
     }
 
 
-@router.get("/sessions/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_terminal_session",
     error_code_prefix="TERMINAL",
 )
+@router.get("/sessions/{session_id}")
 async def get_terminal_session(session_id: str):
     """Get information about a specific terminal session"""
     config = session_manager.session_configs.get(session_id)
@@ -1020,12 +1020,12 @@ async def get_terminal_session(session_id: str):
     }
 
 
-@router.delete("/sessions/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_terminal_session",
     error_code_prefix="TERMINAL",
 )
+@router.delete("/sessions/{session_id}")
 async def delete_terminal_session(session_id: str):
     """Delete a terminal session and close any active connections"""
     config = session_manager.session_configs.get(session_id)
@@ -1044,12 +1044,12 @@ async def delete_terminal_session(session_id: str):
     return {"session_id": session_id, "status": "deleted"}
 
 
-@router.post("/command")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_single_command",
     error_code_prefix="TERMINAL",
 )
+@router.post("/command")
 async def execute_single_command(request: CommandRequest):
     """Execute a single command with security assessment"""
     # Assess command for security risk
@@ -1083,12 +1083,12 @@ async def execute_single_command(request: CommandRequest):
     }
 
 
-@router.post("/sessions/{session_id}/input")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_terminal_input",
     error_code_prefix="TERMINAL",
 )
+@router.post("/sessions/{session_id}/input")
 async def send_terminal_input(session_id: str, request: TerminalInputRequest):
     """Send input to a specific terminal session"""
     if not session_manager.has_connection(session_id):
@@ -1108,12 +1108,12 @@ async def send_terminal_input(session_id: str, request: TerminalInputRequest):
         raise HTTPException(status_code=500, detail="Failed to send input")
 
 
-@router.post("/sessions/{session_id}/signal/{signal_name}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_terminal_signal",
     error_code_prefix="TERMINAL",
 )
+@router.post("/sessions/{session_id}/signal/{signal_name}")
 async def send_terminal_signal(session_id: str, signal_name: str):
     """Send a signal to a terminal session"""
     if not session_manager.has_connection(session_id):
@@ -1139,12 +1139,12 @@ async def send_terminal_signal(session_id: str, signal_name: str):
         raise HTTPException(status_code=500, detail="Failed to send signal")
 
 
-@router.get("/sessions/{session_id}/history")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_terminal_command_history",
     error_code_prefix="TERMINAL",
 )
+@router.get("/sessions/{session_id}/history")
 async def get_terminal_command_history(session_id: str):
     """Get command history for a terminal session"""
     config = session_manager.session_configs.get(session_id)
@@ -1173,12 +1173,12 @@ async def get_terminal_command_history(session_id: str):
     }
 
 
-@router.get("/audit/{session_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_audit_log",
     error_code_prefix="TERMINAL",
 )
+@router.get("/audit/{session_id}")
 async def get_session_audit_log(session_id: str):
     """Get security audit log for a session (elevated access required)"""
     config = session_manager.session_configs.get(session_id)
@@ -1325,12 +1325,12 @@ async def secure_terminal_websocket_compat(websocket: WebSocket, session_id: str
 # Tool Management endpoints
 
 
-@router.post("/terminal/install-tool")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="install_tool",
     error_code_prefix="TERMINAL",
 )
+@router.post("/terminal/install-tool")
 async def install_tool(request: ToolInstallRequest):
     """Install a tool with terminal streaming"""
     # Import system command agent for tool installation
@@ -1350,12 +1350,12 @@ async def install_tool(request: ToolInstallRequest):
     return result
 
 
-@router.post("/terminal/check-tool")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_tool_installed",
     error_code_prefix="TERMINAL",
 )
+@router.post("/terminal/check-tool")
 async def check_tool_installed(tool_name: str):
     """Check if a tool is installed"""
     from src.agents.system_command_agent import SystemCommandAgent
@@ -1365,12 +1365,12 @@ async def check_tool_installed(tool_name: str):
     return result
 
 
-@router.post("/terminal/validate-command")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="validate_command",
     error_code_prefix="TERMINAL",
 )
+@router.post("/terminal/validate-command")
 async def validate_command(command: str):
     """Validate command safety"""
     from src.agents.system_command_agent import SystemCommandAgent
@@ -1380,12 +1380,12 @@ async def validate_command(command: str):
     return result
 
 
-@router.get("/terminal/package-managers")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_package_managers",
     error_code_prefix="TERMINAL",
 )
+@router.get("/terminal/package-managers")
 async def get_package_managers():
     """Get available package managers"""
     from src.agents.system_command_agent import SystemCommandAgent
@@ -1404,12 +1404,12 @@ async def get_package_managers():
 # Information endpoints
 
 
-@router.get("/")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="terminal_info",
     error_code_prefix="TERMINAL",
 )
+@router.get("/")
 async def terminal_info():
     """Get information about the consolidated terminal API"""
     return {
