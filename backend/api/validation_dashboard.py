@@ -18,6 +18,12 @@ from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.catalog_http_exceptions import (
+    raise_server_error,
+    raise_service_unavailable,
+    raise_not_found_error,
+    raise_validation_error,
+)
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
@@ -234,7 +240,7 @@ async def get_dashboard_status():
         }
     except (ImportError, AttributeError) as e:
         logger.error(f"Error getting dashboard status due to missing dependency: {e}")
-        raise HTTPException(status_code=503, detail="Dashboard generator not available")
+        raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
 @with_error_handling(
@@ -349,9 +355,7 @@ async def get_dashboard_file():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise HTTPException(
-            status_code=503, detail="Validation dashboard generator not available"
-        )
+        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
 
     try:
         # Generate dashboard
@@ -365,10 +369,10 @@ async def get_dashboard_file():
 
     except FileNotFoundError as e:
         logger.error(f"Dashboard file not found: {e}")
-        raise HTTPException(status_code=404, detail="Dashboard file not found")
+        raise_not_found_error("API_0002", "Dashboard file not found")
     except (OSError, IOError) as e:
         logger.error(f"Error serving dashboard file due to file system error: {e}")
-        raise HTTPException(status_code=500, detail="File system error")
+        raise_server_error("API_0003", "File system error")
 
 
 @with_error_handling(
@@ -385,8 +389,8 @@ async def generate_dashboard(
         generator = get_dashboard_generator()
 
         if generator is None:
-            raise HTTPException(
-                status_code=503, detail="Validation dashboard generator not available"
+            raise_service_unavailable(
+                "API_0005", "Validation dashboard generator not available"
             )
 
         # Update generator settings
@@ -429,7 +433,7 @@ async def generate_dashboard(
         logger.error(
             f"Error initiating dashboard generation due to missing dependency: {e}"
         )
-        raise HTTPException(status_code=503, detail="Dashboard generator not available")
+        raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
 @with_error_handling(
@@ -443,9 +447,7 @@ async def get_dashboard_metrics():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise HTTPException(
-            status_code=503, detail="Validation dashboard generator not available"
-        )
+        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
 
     try:
         # Get basic metrics
@@ -490,7 +492,7 @@ async def get_dashboard_metrics():
 
     except (ImportError, AttributeError) as e:
         logger.error(f"Error getting dashboard metrics due to missing dependency: {e}")
-        raise HTTPException(status_code=503, detail="Dashboard generator not available")
+        raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
 @with_error_handling(
@@ -504,9 +506,7 @@ async def get_trend_data():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise HTTPException(
-            status_code=503, detail="Validation dashboard generator not available"
-        )
+        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
 
     try:
         # Get trend data
@@ -520,7 +520,7 @@ async def get_trend_data():
 
     except (ImportError, AttributeError) as e:
         logger.error(f"Error getting trend data due to missing dependency: {e}")
-        raise HTTPException(status_code=503, detail="Dashboard generator not available")
+        raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
 @with_error_handling(
@@ -534,9 +534,7 @@ async def get_system_alerts():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise HTTPException(
-            status_code=503, detail="Validation dashboard generator not available"
-        )
+        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
 
     try:
         # Get current report
@@ -559,7 +557,7 @@ async def get_system_alerts():
 
     except (ImportError, AttributeError) as e:
         logger.error(f"Error getting system alerts due to missing dependency: {e}")
-        raise HTTPException(status_code=503, detail="Dashboard generator not available")
+        raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
 @with_error_handling(
@@ -573,9 +571,7 @@ async def get_system_recommendations():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise HTTPException(
-            status_code=503, detail="Validation dashboard generator not available"
-        )
+        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
 
     try:
         # Get current report
@@ -602,7 +598,7 @@ async def get_system_recommendations():
         logger.error(
             f"Error getting system recommendations due to missing dependency: {e}"
         )
-        raise HTTPException(status_code=503, detail="Dashboard generator not available")
+        raise_service_unavailable("API_0005", "Dashboard generator not available")
 
 
 # Health check moved to consolidated health service
@@ -622,16 +618,14 @@ async def judge_workflow_step(request: dict):
         judges = get_validation_judges()
 
         if judges is None:
-            raise HTTPException(
-                status_code=503, detail="Validation judges not available"
-            )
+            raise_service_unavailable("API_0005", "Validation judges not available")
 
         step_data = request.get("step_data", {})
         workflow_context = request.get("workflow_context", {})
         user_context = request.get("user_context", {})
 
         if not step_data:
-            raise HTTPException(status_code=400, detail="step_data is required")
+            raise_validation_error("API_0001", "step_data is required")
 
         # Evaluate with workflow step judge
         workflow_judge = judges["workflow_step_judge"]
@@ -663,10 +657,10 @@ async def judge_workflow_step(request: dict):
 
     except (ImportError, AttributeError) as e:
         logger.error(f"Error in workflow step judgment due to missing dependency: {e}")
-        raise HTTPException(status_code=503, detail="Validation judges not available")
+        raise_service_unavailable("API_0005", "Validation judges not available")
     except ValueError as e:
         logger.error(f"Error in workflow step judgment due to invalid input: {e}")
-        raise HTTPException(status_code=400, detail="Invalid workflow step data")
+        raise_validation_error("API_0001", "Invalid workflow step data")
 
 
 @with_error_handling(
@@ -680,9 +674,7 @@ async def judge_agent_response(request: dict):
     judges = get_validation_judges()
 
     if judges is None:
-        raise HTTPException(
-            status_code=503, detail="Validation judges not available"
-        )
+        raise_service_unavailable("API_0005", "Validation judges not available")
 
     user_request = request.get("request", {})
     response = request.get("response", {})
@@ -690,7 +682,7 @@ async def judge_agent_response(request: dict):
     context = request.get("context", {})
 
     if not response:
-        raise HTTPException(status_code=400, detail="response is required")
+        raise_validation_error("API_0001", "response is required")
 
     try:
         # Evaluate with agent response judge
@@ -723,10 +715,10 @@ async def judge_agent_response(request: dict):
 
     except (ImportError, AttributeError) as e:
         logger.error(f"Error in agent response judgment due to missing dependency: {e}")
-        raise HTTPException(status_code=503, detail="Validation judges not available")
+        raise_service_unavailable("API_0005", "Validation judges not available")
     except ValueError as e:
         logger.error(f"Error in agent response judgment due to invalid input: {e}")
-        raise HTTPException(status_code=400, detail="Invalid agent response data")
+        raise_validation_error("API_0001", "Invalid agent response data")
 
 
 @with_error_handling(

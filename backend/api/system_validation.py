@@ -13,6 +13,11 @@ from pydantic import BaseModel
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.system_validator import get_system_validator
+from src.utils.catalog_http_exceptions import (
+    raise_server_error,
+    raise_service_unavailable,
+    raise_not_found_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +65,7 @@ async def validation_health():
         }
     except Exception as e:
         logger.error(f"Validation health check failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+        raise_server_error("API_0003", f"Health check failed: {str(e)}")
 
 
 @with_error_handling(
@@ -80,9 +85,8 @@ async def run_comprehensive_validation(
         result = await validator.run_comprehensive_validation()
 
         if not result["success"]:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Validation failed: {result.get('error', 'Unknown error')}",
+            raise_server_error(
+                "API_0003", f"Validation failed: {result.get('error', 'Unknown error')}"
             )
 
         # Format response
@@ -101,7 +105,7 @@ async def run_comprehensive_validation(
 
     except Exception as e:
         logger.error(f"Comprehensive validation failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Validation error: {str(e)}")
+        raise_server_error("API_0003", f"Validation error: {str(e)}")
 
 
 @with_error_handling(
@@ -168,7 +172,7 @@ async def run_quick_validation():
 
     except Exception as e:
         logger.error(f"Quick validation failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Quick validation error: {str(e)}")
+        raise_server_error("API_0003", f"Quick validation error: {str(e)}")
 
 
 @with_error_handling(
@@ -195,9 +199,9 @@ async def validate_component(component_name: str):
         }
 
         if component_name.lower() not in component_methods:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Component '{component_name}' not found. Available: {list(component_methods.keys())}",
+            raise_not_found_error(
+                "API_0002",
+                f"Component '{component_name}' not found. Available: {list(component_methods.keys())}",
             )
 
         # Run specific validation
@@ -216,9 +220,7 @@ async def validate_component(component_name: str):
         raise
     except Exception as e:
         logger.error(f"Component validation failed for {component_name}: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Component validation error: {str(e)}"
-        )
+        raise_server_error("API_0003", f"Component validation error: {str(e)}")
 
 
 @with_error_handling(
@@ -283,7 +285,7 @@ async def get_optimization_recommendations():
 
     except Exception as e:
         logger.error(f"Failed to get recommendations: {e}")
-        raise HTTPException(status_code=500, detail=f"Recommendations error: {str(e)}")
+        raise_server_error("API_0003", f"Recommendations error: {str(e)}")
 
 
 @with_error_handling(
@@ -315,7 +317,7 @@ async def get_validation_status():
 
     except Exception as e:
         logger.error(f"Failed to get validation status: {e}")
-        raise HTTPException(status_code=500, detail=f"Status error: {str(e)}")
+        raise_server_error("API_0003", f"Status error: {str(e)}")
 
 
 @with_error_handling(
@@ -363,4 +365,4 @@ async def run_performance_benchmark():
 
     except Exception as e:
         logger.error(f"Performance benchmark failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Benchmark error: {str(e)}")
+        raise_server_error("API_0003", f"Benchmark error: {str(e)}")
