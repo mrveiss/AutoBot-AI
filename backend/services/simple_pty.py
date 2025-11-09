@@ -19,10 +19,24 @@ logger = logging.getLogger(__name__)
 
 
 class SimplePTY:
-    """Simple PTY implementation using synchronous I/O"""
+    """Simple PTY implementation using synchronous I/O
 
-    def __init__(self, session_id: str):
+    Args:
+        session_id: Unique identifier for this PTY session
+        use_login_shell: If True, starts bash as login shell (--login flag)
+                        Login shells load profile files like ~/.bash_profile
+        custom_ps1: Optional custom PS1 prompt (e.g., r"\\u@\\h:\\w\\$ ")
+    """
+
+    def __init__(
+        self,
+        session_id: str,
+        use_login_shell: bool = False,
+        custom_ps1: Optional[str] = None,
+    ):
         self.session_id = session_id
+        self.use_login_shell = use_login_shell
+        self.custom_ps1 = custom_ps1
         self.master_fd = None
         self.process = None
         self.output_queue = queue.Queue()
@@ -98,8 +112,23 @@ class SimplePTY:
             env = os.environ.copy()
             env["TERM"] = "xterm-256color"
 
+            # Set custom PS1 prompt if provided
+            if self.custom_ps1:
+                env["PS1"] = self.custom_ps1
+                logger.info(
+                    f"Setting custom PS1 prompt for session {self.session_id}: {self.custom_ps1}"
+                )
+
+            # Build bash command with optional --login flag
+            bash_cmd = ["/bin/bash"]
+            if self.use_login_shell:
+                bash_cmd.append("--login")
+                logger.info(
+                    f"Starting login shell for session {self.session_id} (loads profile files)"
+                )
+
             self.process = subprocess.Popen(
-                ["/bin/bash"],
+                bash_cmd,
                 stdin=slave_fd,
                 stdout=slave_fd,
                 stderr=slave_fd,

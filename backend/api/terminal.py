@@ -1,12 +1,108 @@
 """
-Consolidated Terminal API - Merges all 4 terminal implementations
-Provides unified REST API and WebSocket endpoints for terminal operations
+Terminal API - Unified Terminal System for AutoBot
 
-Features consolidated from:
-- terminal.py: Main REST API endpoints
-- simple_terminal_websocket.py: Simple WebSocket + workflow control
-- secure_terminal_websocket.py: Security auditing + command logging
-- base_terminal.py: Infrastructure + PTY management
+This module provides the core terminal infrastructure used by both Tools Terminal
+and Chat Terminal. It implements WebSocket-based PTY (pseudo-terminal) access with
+real-time bidirectional communication.
+
+Architecture:
+-----------
+┌────────────────────────────────────────────────────────────┐
+│ Tools Terminal (Standalone) │ Chat Terminal (AI-Integrated)│
+└────────────┬────────────────┴──────────────┬───────────────┘
+             │                               │
+             │  Both use this module         │
+             └───────────────┬───────────────┘
+                             │
+         ┌───────────────────▼────────────────────┐
+         │  backend/api/terminal.py               │
+         │  • REST API for session management     │
+         │  • WebSocket for real-time I/O         │
+         │  • PTY process management              │
+         │  • Output buffering for chat           │
+         └───────────────────┬────────────────────┘
+                             │
+         ┌───────────────────▼────────────────────┐
+         │  backend/services/simple_pty.py        │
+         │  • Real PTY creation (pty.openpty())   │
+         │  • /bin/bash process spawning          │
+         │  • Input/output queues                 │
+         └────────────────────────────────────────┘
+
+Key Components:
+--------------
+1. ConsolidatedTerminalWebSocket
+   - WebSocket handler for real-time terminal I/O
+   - Manages PTY process lifecycle
+   - Buffers output for chat integration
+   - Sends output to ChatHistoryManager when linked to conversation
+
+2. ConsolidatedTerminalManager
+   - Session registry and lifecycle management
+   - Signal handling (SIGINT, SIGTERM, etc.)
+   - Session cleanup and resource management
+
+3. REST API Endpoints
+   - POST /api/terminal/sessions - Create new session
+   - GET /api/terminal/sessions - List active sessions
+   - GET /api/terminal/sessions/{id} - Get session details
+   - POST /api/terminal/sessions/{id}/input - Send input
+   - POST /api/terminal/sessions/{id}/signal/{name} - Send signal
+   - GET /api/terminal/sessions/{id}/history - Get command history
+
+4. WebSocket Endpoints
+   - /api/terminal/ws/{session_id} - Primary WebSocket endpoint
+   - /api/terminal/ws/simple/{session_id} - Simple WebSocket (legacy)
+   - /api/terminal/ws/secure/{session_id} - Secure WebSocket (legacy)
+
+Message Protocol:
+----------------
+Client → Server:
+    {"type": "input", "text": "ls -la\\n"}
+    {"type": "resize", "rows": 24, "cols": 80}
+    {"type": "ping"}
+
+Server → Client:
+    {"type": "output", "content": "file1.txt\\nfile2.txt\\n"}
+    {"type": "connected", "content": "Connected to terminal"}
+    {"type": "error", "content": "Terminal error message"}
+    {"type": "pong"}
+
+Chat Integration:
+----------------
+When conversation_id is provided:
+1. All terminal output is buffered
+2. Output saved to ChatHistoryManager every 500ms or 1000 chars
+3. Commands logged with TerminalLogger
+4. Provides complete terminal transcript in chat history
+
+Usage Examples:
+--------------
+# Tools Terminal (Standalone)
+1. POST /api/terminal/sessions
+   → { session_id, websocket_url }
+2. WebSocket /api/terminal/ws/{session_id}
+3. Send/receive terminal I/O
+
+# Chat Terminal (AI-Integrated)
+1. POST /api/agent-terminal/sessions (creates agent session)
+   → { session_id, pty_session_id }
+2. WebSocket /api/terminal/ws/{pty_session_id} (uses this module)
+3. Output automatically saved to chat history
+
+Security:
+--------
+- Command validation via SecureCommandExecutor (optional)
+- Security levels: STANDARD, ELEVATED, RESTRICTED
+- Audit logging for sensitive operations
+- Session isolation (each PTY is independent)
+
+See Also:
+--------
+- backend/api/agent_terminal.py - Agent terminal with approval workflow
+- backend/services/agent_terminal_service.py - Agent terminal business logic
+- backend/services/simple_pty.py - PTY implementation
+- docs/architecture/TERMINAL_ARCHITECTURE_DIAGRAM.md - Architecture details
 """
 
 import asyncio
@@ -922,6 +1018,64 @@ class ConsolidatedTerminalManager:
                         )
         return count
 
+    def get_terminal_stats(self, session_id: str = None) -> dict:
+        """Get terminal statistics for a specific session or all sessions
+
+        Args:
+            session_id: Optional session ID. If provided, returns stats for that session.
+                       If None, returns overall system statistics.
+
+        Returns:
+            Dictionary containing terminal statistics including:
+            - Session counts (total, active)
+            - Per-session statistics (if session_id provided)
+            - Overall system metrics
+        """
+        if session_id:
+            # Return stats for specific session
+            if session_id not in self.sessions:
+                return {"error": f"Session {session_id} not found"}
+
+            session = self.sessions[session_id]
+            session_stats = self.session_stats.get(session_id, {})
+
+            # Calculate uptime
+            uptime = 0
+            if "connected_at" in session_stats:
+                uptime = (datetime.now() - session_stats["connected_at"]).total_seconds()
+
+            return {
+                "session_id": session_id,
+                "config": self.session_configs.get(session_id, {}),
+                "is_connected": session_id in self.active_connections,
+                "pty_alive": session.is_alive() if hasattr(session, "is_alive") else False,
+                "uptime_seconds": uptime,
+                "statistics": session_stats,
+            }
+        else:
+            # Return overall system statistics
+            total_sessions = len(self.sessions)
+            active_connections = len(self.active_connections)
+            total_commands = sum(
+                stats.get("commands_executed", 0)
+                for stats in self.session_stats.values()
+            )
+
+            return {
+                "total_sessions": total_sessions,
+                "active_connections": active_connections,
+                "total_commands_executed": total_commands,
+                "sessions": {
+                    sid: {
+                        "is_connected": sid in self.active_connections,
+                        "commands_executed": self.session_stats.get(sid, {}).get(
+                            "commands_executed", 0
+                        ),
+                    }
+                    for sid in self.sessions.keys()
+                },
+            }
+
 
 # Global session manager
 session_manager = ConsolidatedTerminalManager()
@@ -1438,3 +1592,258 @@ async def terminal_info():
             "base_terminal.py",
         ],
     }
+
+
+# Health and Status endpoints
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="terminal_health_check",
+    error_code_prefix="TERMINAL",
+)
+@router.get("/health")
+async def terminal_health_check():
+    """Health check for consolidated terminal system
+
+    Returns:
+        Health status of all terminal components including:
+        - Consolidated terminal manager
+        - WebSocket manager
+        - PTY system (SimplePTY)
+        - Session management
+    """
+    try:
+        # Check if manager is operational
+        active_sessions = len(manager.sessions)
+
+        return {
+            "status": "healthy",
+            "service": "consolidated_terminal_system",
+            "components": {
+                "terminal_manager": "operational",
+                "websocket_manager": "operational",
+                "pty_system": "operational",
+                "session_manager": "operational",
+            },
+            "metrics": {
+                "active_sessions": active_sessions,
+                "manager_initialized": manager is not None,
+            },
+        }
+    except Exception as e:
+        return {
+            "status": "degraded",
+            "service": "consolidated_terminal_system",
+            "error": str(e),
+        }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_terminal_system_status",
+    error_code_prefix="TERMINAL",
+)
+@router.get("/status")
+async def get_terminal_system_status():
+    """Get overall terminal system status and configuration
+
+    Returns:
+        System status including:
+        - Operational status
+        - Supported terminal types (Tools Terminal, Chat Terminal)
+        - Available features
+        - Session statistics
+    """
+    try:
+        return {
+            "status": "operational",
+            "terminal_types": ["tools_terminal", "chat_terminal"],
+            "features": {
+                "pty_support": True,
+                "websocket_support": True,
+                "command_validation": True,
+                "security_policies": True,
+                "approval_workflow": True,  # Chat Terminal feature
+                "agent_integration": True,  # Chat Terminal feature
+            },
+            "session_info": {
+                "active_sessions": len(manager.sessions),
+                "max_concurrent_sessions": None,  # No hard limit
+            },
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+        }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_terminal_capabilities",
+    error_code_prefix="TERMINAL",
+)
+@router.get("/capabilities")
+async def get_terminal_capabilities():
+    """Get terminal system capabilities
+
+    Returns:
+        Detailed list of all capabilities supported by the consolidated
+        terminal system, including PTY management, WebSocket streaming,
+        security validation, and more.
+    """
+    return {
+        "pty_management": True,
+        "websocket_streaming": True,
+        "command_execution": True,
+        "security_validation": True,
+        "session_management": True,
+        "terminal_types": {
+            "tools_terminal": {
+                "description": "Standalone system terminal for direct command execution",
+                "features": ["direct_execution", "no_approval", "system_admin"],
+            },
+            "chat_terminal": {
+                "description": "AI-integrated terminal with approval workflow",
+                "features": [
+                    "approval_workflow",
+                    "risk_assessment",
+                    "agent_integration",
+                    "chat_history_logging",
+                    "user_takeover",
+                ],
+            },
+        },
+        "pty_features": {
+            "echo_control": True,
+            "terminal_resize": True,
+            "signal_handling": True,
+            "queue_based_io": True,
+            "non_blocking_output": True,
+        },
+        "websocket_features": {
+            "real_time_streaming": True,
+            "bidirectional_communication": True,
+            "multiple_connection_types": ["primary", "simple", "secure"],
+        },
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_security_policies",
+    error_code_prefix="TERMINAL",
+)
+@router.get("/security")
+async def get_security_policies():
+    """Get terminal security policies and command validation info
+
+    Returns:
+        Security configuration including:
+        - Command validation settings
+        - Risk assessment levels
+        - Blocked command categories
+        - Security executor information
+    """
+    return {
+        "command_validation": "enabled",
+        "risk_assessment": "multi-level",
+        "risk_levels": {
+            "SAFE": "Commands that are safe to execute automatically",
+            "MODERATE": "Commands that require logging but are generally safe",
+            "HIGH": "Potentially dangerous commands requiring approval",
+            "FORBIDDEN": "Commands that are blocked completely",
+        },
+        "security_executor": "SecureCommandExecutor",
+        "approval_workflow": {
+            "enabled_for": "chat_terminal",
+            "disabled_for": "tools_terminal",
+            "approval_required_for": ["HIGH", "FORBIDDEN"],
+        },
+        "audit_logging": {
+            "enabled": True,
+            "logs_to": "chat_history",
+            "includes": ["command", "output", "risk_level", "user_approval"],
+        },
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_terminal_features",
+    error_code_prefix="TERMINAL",
+)
+@router.get("/features")
+async def get_terminal_features():
+    """Get available terminal features and implementation details
+
+    Returns:
+        Comprehensive feature list including:
+        - Terminal implementations (Tools, Chat)
+        - Feature descriptions
+        - Technical capabilities
+        - Integration points
+    """
+    return {
+        "manager_class": "ConsolidatedTerminalManager",
+        "websocket_class": "ConsolidatedTerminalWebSocket",
+        "pty_implementation": "SimplePTY",
+        "implementations": [
+            {
+                "name": "tools_terminal",
+                "description": "Standalone system terminal for direct administration",
+                "frontend_component": "ToolsTerminal.vue",
+                "backend_api": "terminal.py (direct)",
+                "approval_workflow": False,
+            },
+            {
+                "name": "chat_terminal",
+                "description": "AI-integrated terminal with command approval workflow",
+                "frontend_component": "ChatTerminal.vue",
+                "backend_api": "agent_terminal.py + terminal.py",
+                "approval_workflow": True,
+                "service_layer": "agent_terminal_service.py",
+            },
+        ],
+        "features": {
+            "pty_shell": "Full PTY shell support with SimplePTY implementation",
+            "websocket_streaming": "Real-time bidirectional communication via WebSocket",
+            "security_validation": "Command risk assessment via SecureCommandExecutor",
+            "session_cleanup": "Proper resource cleanup on disconnect",
+            "approval_workflow": "User approval for high-risk commands (Chat Terminal)",
+            "agent_integration": "AI agent command execution with chat logging",
+            "multi_host_support": "Execute on different hosts (main, frontend, etc.)",
+        },
+        "shared_infrastructure": {
+            "websocket_transport": "terminal.py WebSocket endpoints",
+            "pty_layer": "simple_pty.py (SimplePTY class)",
+            "security": "SecureCommandExecutor for risk assessment",
+        },
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_terminal_statistics",
+    error_code_prefix="TERMINAL",
+)
+@router.get("/stats")
+async def get_terminal_statistics(session_id: str = None):
+    """Get terminal statistics for specific session or all sessions
+
+    Args:
+        session_id: Optional query parameter. If provided, returns stats for that
+                   specific session. If omitted, returns overall system statistics.
+
+    Returns:
+        Terminal statistics including:
+        - Overall system metrics (if session_id not provided)
+        - Per-session statistics (if session_id provided)
+        - Session counts, command counts, uptime, etc.
+
+    Examples:
+        GET /api/terminal/stats - Get overall system statistics
+        GET /api/terminal/stats?session_id=abc123 - Get stats for session abc123
+    """
+    return manager.get_terminal_stats(session_id)

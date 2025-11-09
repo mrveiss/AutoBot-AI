@@ -26340,9 +26340,13 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("cache system health", source)
 
     # ==============================================
-    # BATCH 144: base_terminal.py - COMPLETE (100%)
+    # BATCH 144: base_terminal.py - ARCHIVED (Migrated to terminal.py)
     # ==============================================
+    # NOTE: base_terminal.py has been archived to backend/api/archive/base_terminal.py.unused
+    # All endpoints from base_terminal.py have been migrated to terminal.py in Phase 1
+    # These tests are skipped as the file no longer exists in the active codebase
 
+    @unittest.skip("base_terminal.py archived - endpoints migrated to terminal.py")
     def test_batch_144_get_terminal_system_status_simple_pattern(self):
         """Verify get_terminal_system_status endpoint uses Simple Pattern"""
         from backend.api import base_terminal
@@ -26353,6 +26357,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="get_terminal_system_status"', source)
         self.assertIn('error_code_prefix="BASE_TERMINAL"', source)
 
+    @unittest.skip("base_terminal.py archived - endpoints migrated to terminal.py")
     def test_batch_144_terminal_health_check_simple_pattern(self):
         """Verify terminal_health_check endpoint uses Simple Pattern"""
         from backend.api import base_terminal
@@ -26363,6 +26368,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="terminal_health_check"', source)
         self.assertIn('error_code_prefix="BASE_TERMINAL"', source)
 
+    @unittest.skip("base_terminal.py archived - endpoints migrated to terminal.py")
     def test_batch_144_get_terminal_capabilities_simple_pattern(self):
         """Verify get_terminal_capabilities endpoint uses Simple Pattern"""
         from backend.api import base_terminal
@@ -26373,6 +26379,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="get_terminal_capabilities"', source)
         self.assertIn('error_code_prefix="BASE_TERMINAL"', source)
 
+    @unittest.skip("base_terminal.py archived - endpoints migrated to terminal.py")
     def test_batch_144_get_security_policies_simple_pattern(self):
         """Verify get_security_policies endpoint uses Simple Pattern"""
         from backend.api import base_terminal
@@ -26383,6 +26390,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="get_security_policies"', source)
         self.assertIn('error_code_prefix="BASE_TERMINAL"', source)
 
+    @unittest.skip("base_terminal.py archived - endpoints migrated to terminal.py")
     def test_batch_144_get_terminal_features_simple_pattern(self):
         """Verify get_terminal_features endpoint uses Simple Pattern"""
         from backend.api import base_terminal
@@ -26393,6 +26401,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="get_terminal_features"', source)
         self.assertIn('error_code_prefix="BASE_TERMINAL"', source)
 
+    @unittest.skip("base_terminal.py archived - endpoints migrated to terminal.py")
     def test_batch_144_all_base_terminal_endpoints_have_decorator(self):
         """Verify all base_terminal endpoints have @with_error_handling decorator"""
         from backend.api import base_terminal
@@ -26413,6 +26422,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
                 f"Endpoint {func.__name__} missing @with_error_handling decorator",
             )
 
+    @unittest.skip("base_terminal.py archived - endpoints migrated to terminal.py")
     def test_batch_144_base_terminal_100_percent_milestone(self):
         """Verify base_terminal.py has reached 100% migration"""
         from backend.api import base_terminal
@@ -26440,6 +26450,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         progress_percentage = (migrated_count / total_endpoints) * 100
         self.assertEqual(progress_percentage, 100.0)
 
+    @unittest.skip("base_terminal.py archived - endpoints migrated to terminal.py")
     def test_batch_144_migration_preserves_terminal_types(self):
         """Verify migration preserves terminal type enumeration"""
         from backend.api import base_terminal
@@ -26450,6 +26461,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("agent_terminal", source)
         self.assertIn("remote_terminal", source)
 
+    @unittest.skip("base_terminal.py archived - endpoints migrated to terminal.py")
     def test_batch_144_migration_preserves_health_components(self):
         """Verify migration preserves terminal health component structure"""
         from backend.api import base_terminal
@@ -26460,6 +26472,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("websocket_manager", source)
         self.assertIn("pty_system", source)
 
+    @unittest.skip("base_terminal.py archived - endpoints migrated to terminal.py")
     def test_batch_144_migration_preserves_capabilities(self):
         """Verify migration preserves terminal capability flags"""
         from backend.api import base_terminal
@@ -26470,6 +26483,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("security_validation", source)
         self.assertIn("race_condition_handling", source)
 
+    @unittest.skip("base_terminal.py archived - endpoints migrated to terminal.py")
     def test_batch_144_migration_preserves_security_policies(self):
         """Verify migration preserves security policy structure"""
         from backend.api import base_terminal
@@ -26479,6 +26493,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("risk_assessment", source)
         self.assertIn("SecureCommandExecutor", source)
 
+    @unittest.skip("base_terminal.py archived - endpoints migrated to terminal.py")
     def test_batch_144_migration_preserves_features_documentation(self):
         """Verify migration preserves terminal feature documentation"""
         from backend.api import base_terminal
@@ -28624,9 +28639,13 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("max_results", test_source)
 
     # ==============================================
-    # BATCH 156: remote_terminal.py - COMPLETE (100%)
+    # BATCH 156: remote_terminal.py - ARCHIVED (Future Feature)
     # ==============================================
+    # NOTE: remote_terminal.py has been archived to backend/api/archive/remote_terminal.py.feature
+    # This is a complete SSH multi-host terminal feature not yet exposed in the UI
+    # These tests are skipped as the file is archived pending future UI implementation
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_remote_terminal_info_simple_pattern(self):
         """Verify remote_terminal_info endpoint uses Simple Pattern"""
         from backend.api import remote_terminal
@@ -28637,6 +28656,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="remote_terminal_info"', source)
         self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_list_hosts_simple_pattern(self):
         """Verify list_hosts endpoint uses Simple Pattern"""
         from backend.api import remote_terminal
@@ -28647,6 +28667,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="list_hosts"', source)
         self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_get_host_info_simple_pattern(self):
         """Verify get_host_info endpoint uses Simple Pattern"""
         from backend.api import remote_terminal
@@ -28657,6 +28678,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="get_host_info"', source)
         self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_execute_remote_command_simple_pattern(self):
         """Verify execute_remote_command endpoint uses Simple Pattern"""
         from backend.api import remote_terminal
@@ -28667,6 +28689,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="execute_remote_command"', source)
         self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_execute_batch_command_simple_pattern(self):
         """Verify execute_batch_command endpoint uses Simple Pattern"""
         from backend.api import remote_terminal
@@ -28677,6 +28700,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="execute_batch_command"', source)
         self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_check_all_hosts_health_simple_pattern(self):
         """Verify check_all_hosts_health endpoint uses Simple Pattern"""
         from backend.api import remote_terminal
@@ -28687,6 +28711,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="check_all_hosts_health"', source)
         self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_get_connection_pool_stats_simple_pattern(self):
         """Verify get_connection_pool_stats endpoint uses Simple Pattern"""
         from backend.api import remote_terminal
@@ -28697,6 +28722,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="get_connection_pool_stats"', source)
         self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_create_remote_session_simple_pattern(self):
         """Verify create_remote_session endpoint uses Simple Pattern"""
         from backend.api import remote_terminal
@@ -28707,6 +28733,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="create_remote_session"', source)
         self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_list_remote_sessions_simple_pattern(self):
         """Verify list_remote_sessions endpoint uses Simple Pattern"""
         from backend.api import remote_terminal
@@ -28717,6 +28744,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="list_remote_sessions"', source)
         self.assertIn('error_code_prefix="REMOTE_TERMINAL"', source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_all_remote_terminal_endpoints_have_decorator(self):
         """Verify all remote_terminal endpoints have @with_error_handling decorator"""
         from backend.api import remote_terminal
@@ -28741,6 +28769,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
                 f"Endpoint {func.__name__} missing @with_error_handling decorator",
             )
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_remote_terminal_100_percent_milestone(self):
         """Verify remote_terminal.py has reached 100% migration"""
         from backend.api import remote_terminal
@@ -28772,6 +28801,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         progress_percentage = (migrated_count / total_endpoints) * 100
         self.assertEqual(progress_percentage, 100.0)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_migration_preserves_ssh_manager_dependency(self):
         """Verify migration preserves SSHManager dependency injection"""
         from backend.api import remote_terminal
@@ -28786,6 +28816,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         batch_source = inspect.getsource(remote_terminal.execute_batch_command)
         self.assertIn("ssh_manager: SSHManager = Depends(get_ssh_manager)", batch_source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_migration_preserves_pydantic_models(self):
         """Verify migration preserves Pydantic request models"""
         from backend.api import remote_terminal
@@ -28805,6 +28836,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         session_source = inspect.getsource(remote_terminal.create_remote_session)
         self.assertIn("RemoteSessionRequest", session_source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_migration_preserves_multi_host_execution(self):
         """Verify migration preserves multi-host command execution"""
         from backend.api import remote_terminal
@@ -28815,6 +28847,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("parallel", batch_source)
         self.assertIn("asyncio.gather", batch_source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_migration_preserves_remote_session_management(self):
         """Verify migration preserves remote session management"""
         from backend.api import remote_terminal
@@ -28827,6 +28860,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         list_source = inspect.getsource(remote_terminal.list_remote_sessions)
         self.assertIn("session_manager.list_sessions", list_source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_migration_preserves_connection_pool_stats(self):
         """Verify migration preserves connection pool statistics"""
         from backend.api import remote_terminal
@@ -28838,6 +28872,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("active_connections", stats_source)
         self.assertIn("idle_connections", stats_source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_migration_preserves_health_check(self):
         """Verify migration preserves health check functionality"""
         from backend.api import remote_terminal
@@ -28849,6 +28884,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("unhealthy", health_source)
         self.assertIn("disabled", health_source)
 
+    @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_migration_preserves_remote_session_type_enum(self):
         """Verify migration preserves RemoteSessionType enum"""
         from backend.api import remote_terminal
