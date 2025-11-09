@@ -176,13 +176,13 @@
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { isPerformanceModeEnabled, getPerformanceInterval, logPerformanceIssue } from '@/config/performance.js'
+import { useAsyncOperation } from '@/composables/useAsyncOperation'
 
 export default {
   name: 'RumDashboard',
   setup() {
     // Reactive state
     const isVisible = ref(false)
-    const isLoading = ref(false)
     const lastUpdated = ref(Date.now())
 
     // System data
@@ -218,38 +218,32 @@ export default {
       isVisible.value = !isVisible.value
     }
 
-    const refreshData = async () => {
-      if (isLoading.value) return
+    // Use composable for async data fetching
+    const { execute: refreshData, loading: isLoading } = useAsyncOperation(async () => {
+      // PERFORMANCE: Only fetch essential data in performance mode
+      if (isPerformanceModeEnabled()) {
+        // Lightweight data collection
+        await Promise.all([
+          fetchSystemDataLightweight(),
+          fetchCriticalIssuesOnly()
+        ])
+      } else {
+        // Full data collection
+        await Promise.all([
+          fetchSystemData(),
+          fetchPerformanceData(),
+          fetchCriticalIssues(),
+          fetchRecentEvents()
+        ])
+      }
 
-      isLoading.value = true
-
-      try {
-        // PERFORMANCE: Only fetch essential data in performance mode
-        if (isPerformanceModeEnabled()) {
-          // Lightweight data collection
-          await Promise.all([
-            fetchSystemDataLightweight(),
-            fetchCriticalIssuesOnly()
-          ])
-        } else {
-          // Full data collection
-          await Promise.all([
-            fetchSystemData(),
-            fetchPerformanceData(),
-            fetchCriticalIssues(),
-            fetchRecentEvents()
-          ])
-        }
-
-        lastUpdated.value = Date.now()
-
-      } catch (error) {
+      lastUpdated.value = Date.now()
+    }, {
+      onError: (error) => {
         console.error('[RumDashboard] Error refreshing data:', error)
         logPerformanceIssue('RumDashboard', 'Data refresh failed', { error: error.message })
-      } finally {
-        isLoading.value = false
       }
-    }
+    })
 
     const fetchSystemDataLightweight = async () => {
       // PERFORMANCE: Basic system info only
@@ -392,7 +386,6 @@ export default {
     return {
       // Reactive state
       isVisible,
-      isLoading,
       lastUpdated,
       systemData,
       performanceData,
@@ -404,6 +397,7 @@ export default {
       isDev,
       isPerformanceModeEnabled: isPerformanceModeEnabled(),
       refreshInterval,
+      isLoading,
 
       // Methods
       toggleVisibility,

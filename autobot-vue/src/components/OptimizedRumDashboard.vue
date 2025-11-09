@@ -267,13 +267,13 @@
 <script>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js'
+import { useAsyncOperation } from '@/composables/useAsyncOperation'
 
 export default {
   name: 'OptimizedRumDashboard',
   setup() {
     // Reactive state
     const isVisible = ref(false)
-    const isLoading = ref(false)
     const isLiveMode = ref(false)
     const showRefreshOptions = ref(false)
     const lastUpdated = ref(Date.now())
@@ -387,32 +387,28 @@ export default {
       }
     }
 
-    const performManualRefresh = async () => {
-      if (isLoading.value) return
+    // Use composable for async data fetching
+    const { execute: performManualRefresh, loading: isLoading } = useAsyncOperation(async () => {
+      // Get health status from optimized monitor
+      const healthData = optimizedHealthMonitor.getHealthStatus()
 
-      isLoading.value = true
+      // Update health status
+      healthStatus.value = { ...healthData }
 
-      try {
-        // Get health status from optimized monitor
-        const healthData = optimizedHealthMonitor.getHealthStatus()
+      // Update performance data
+      performanceData.value = {
+        monitoringOverhead: optimizedHealthMonitor.performanceBudget.currentOverhead,
+        checksPerformed: healthData.performanceMetrics?.checksPerformed || 0,
+        averageCheckTime: healthData.performanceMetrics?.averageCheckTime || 0,
+        memoryUsage: getMemoryUsage()
+      }
 
-        // Update health status
-        healthStatus.value = { ...healthData }
+      // Update active issues based on health status
+      updateActiveIssues(healthData)
 
-        // Update performance data
-        performanceData.value = {
-          monitoringOverhead: optimizedHealthMonitor.performanceBudget.currentOverhead,
-          checksPerformed: healthData.performanceMetrics?.checksPerformed || 0,
-          averageCheckTime: healthData.performanceMetrics?.averageCheckTime || 0,
-          memoryUsage: getMemoryUsage()
-        }
-
-        // Update active issues based on health status
-        updateActiveIssues(healthData)
-
-        lastUpdated.value = Date.now()
-
-      } catch (error) {
+      lastUpdated.value = Date.now()
+    }, {
+      onError: (error) => {
         console.error('[OptimizedRumDashboard] Error refreshing data:', error)
 
         // Add error as active issue
@@ -422,11 +418,8 @@ export default {
           message: error.message,
           timestamp: Date.now()
         })
-
-      } finally {
-        isLoading.value = false
       }
-    }
+    })
 
     const updateActiveIssues = (healthData) => {
       const issues = []
