@@ -24,6 +24,11 @@ from backend.services.audit_logger import AuditEntry, AuditResult, get_audit_log
 from src.auth_middleware import auth_middleware
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.catalog_http_exceptions import (
+    raise_auth_error,
+    raise_server_error,
+    raise_validation_error,
+)
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 logger = logging.getLogger(__name__)
@@ -75,16 +80,12 @@ def check_admin_permission(request: Request) -> bool:
         user_data = auth_middleware.get_user_from_request(request)
 
         if not user_data:
-            raise HTTPException(
-                status_code=401, detail="Authentication required for audit log access"
-            )
+            raise_auth_error("AUTH_0002", "Authentication required for audit log access")
 
         # Check for admin role
         user_role = user_data.get("role", "guest")
         if user_role != "admin":
-            raise HTTPException(
-                status_code=403, detail="Admin permission required for audit log access"
-            )
+            raise_auth_error("AUTH_0003", "Admin permission required for audit log access")
 
         return True
 
@@ -92,7 +93,7 @@ def check_admin_permission(request: Request) -> bool:
         raise
     except Exception as e:
         logger.error(f"Permission check failed: {e}")
-        raise HTTPException(status_code=500, detail="Permission check error")
+        raise_server_error("API_0003", "Permission check error")
 
 
 @with_error_handling(
@@ -202,7 +203,7 @@ async def query_audit_logs(
         raise
     except Exception as e:
         logger.error(f"Audit log query failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Audit log query error: {str(e)}")
+        raise_server_error("API_0003", f"Audit log query error: {str(e)}")
 
 
 @with_error_handling(
@@ -234,7 +235,7 @@ async def get_audit_statistics(
 
     except Exception as e:
         logger.error(f"Failed to get audit statistics: {e}")
-        raise HTTPException(status_code=500, detail=f"Statistics error: {str(e)}")
+        raise_server_error("API_0003", f"Statistics error: {str(e)}")
 
 
 @with_error_handling(
@@ -290,9 +291,7 @@ async def get_session_audit_trail(
 
     except Exception as e:
         logger.error(f"Session audit trail query failed: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Session audit query error: {str(e)}"
-        )
+        raise_server_error("API_0003", f"Session audit query error: {str(e)}")
 
 
 @with_error_handling(
@@ -348,7 +347,7 @@ async def get_user_audit_trail(
 
     except Exception as e:
         logger.error(f"User audit trail query failed: {e}")
-        raise HTTPException(status_code=500, detail=f"User audit query error: {str(e)}")
+        raise_server_error("API_0003", f"User audit query error: {str(e)}")
 
 
 @with_error_handling(
@@ -410,9 +409,7 @@ async def get_failed_operations(
 
     except Exception as e:
         logger.error(f"Failed operations query error: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed operations query error: {str(e)}"
-        )
+        raise_server_error("API_0003", f"Failed operations query error: {str(e)}")
 
 
 @with_error_handling(
@@ -436,9 +433,8 @@ async def cleanup_old_logs(
     """
     try:
         if not cleanup_request.confirm:
-            raise HTTPException(
-                status_code=400,
-                detail="Cleanup requires confirmation (set 'confirm' to true)",
+            raise_validation_error(
+                "API_0001", "Cleanup requires confirmation (set 'confirm' to true)"
             )
 
         audit_logger = await get_audit_logger()
@@ -456,7 +452,7 @@ async def cleanup_old_logs(
         raise
     except Exception as e:
         logger.error(f"Audit log cleanup failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Cleanup error: {str(e)}")
+        raise_server_error("API_0003", f"Cleanup error: {str(e)}")
 
 
 @with_error_handling(
@@ -492,6 +488,4 @@ async def list_operation_types(
 
     except Exception as e:
         logger.error(f"Failed to list operations: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Operation listing error: {str(e)}"
-        )
+        raise_server_error("API_0003", f"Operation listing error: {str(e)}")
