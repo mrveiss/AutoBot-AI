@@ -200,6 +200,92 @@ def strip_ansi_codes(text: str) -> str:
     return text.strip()
 
 
+def is_terminal_prompt(text: str) -> bool:
+    """
+    Detect if text is a terminal prompt (should not be saved to chat).
+
+    Identifies prompts by looking for characteristic patterns:
+    - Box-drawing characters (┌, └, ─, │, etc.)
+    - Prompt symbols at end ($, #, >, %)
+    - Typical prompt patterns without actual command output
+    - Short length (< 300 chars) with mostly whitespace and symbols
+
+    Args:
+        text: Text to check (should already have ANSI codes stripped)
+
+    Returns:
+        True if text appears to be a terminal prompt, False otherwise
+
+    Examples:
+        >>> is_terminal_prompt("┌──(venv)(kali@host)-[~/path]\\n└─$ ")
+        True
+        >>> is_terminal_prompt("$ ")
+        True
+        >>> is_terminal_prompt("└─$")
+        True
+        >>> is_terminal_prompt("ls -la\\ntotal 42\\nfile.txt")
+        False
+        >>> is_terminal_prompt("command output here")
+        False
+    """
+    import re
+
+    if not text:
+        return True  # Empty text is effectively a prompt
+
+    # Strip whitespace for analysis
+    stripped = text.strip()
+
+    if not stripped:
+        return True  # Only whitespace
+
+    # Box-drawing characters commonly used in fancy prompts
+    box_chars = set('┌┐└┘├┤┬┴┼─│╭╮╰╯╱╲╳')
+
+    # Prompt ending symbols
+    prompt_symbols = set('$#>%')
+
+    # Check for box-drawing characters
+    has_box_chars = any(char in box_chars for char in stripped)
+
+    # Check if it ends with a prompt symbol (possibly with trailing whitespace)
+    ends_with_prompt = any(stripped.rstrip().endswith(sym) for sym in prompt_symbols)
+
+    # Check if text is very short and only contains prompt-like content
+    # (Less than 300 chars and mostly symbols/whitespace)
+    is_short = len(stripped) < 300
+
+    # Calculate ratio of alphanumeric vs special characters
+    alphanumeric_count = sum(1 for c in stripped if c.isalnum())
+    total_chars = len(stripped.replace(' ', '').replace('\r', '').replace('\n', ''))
+
+    # If mostly special characters (less than 40% alphanumeric), likely a prompt
+    is_mostly_symbols = total_chars > 0 and (alphanumeric_count / total_chars) < 0.4
+
+    # Patterns that indicate this is a prompt
+    prompt_patterns = [
+        r'^\s*[\$#>%]\s*$',  # Just a prompt symbol
+        r'└─[\$#>%]\s*$',  # Ending prompt line
+        r'┌──.*┘\s*$',  # Box prompt pattern
+        r'^\(.*\).*[\$#>%]\s*$',  # (env) or (venv) with prompt
+        r'^.*@.*:.*[\$#>%]\s*$',  # user@host:path$
+    ]
+
+    matches_pattern = any(re.search(pattern, stripped, re.MULTILINE) for pattern in prompt_patterns)
+
+    # It's a prompt if:
+    # 1. It has box-drawing chars AND ends with prompt symbol, OR
+    # 2. It matches a known prompt pattern, OR
+    # 3. It's short and mostly symbols with a prompt ending
+    is_prompt = (
+        (has_box_chars and ends_with_prompt) or
+        matches_pattern or
+        (is_short and is_mostly_symbols and ends_with_prompt)
+    )
+
+    return is_prompt
+
+
 def normalize_line_endings(text: str, target: str = '\n') -> str:
     """
     Normalize line endings to target format.

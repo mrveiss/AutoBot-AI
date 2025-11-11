@@ -935,15 +935,18 @@ class ConsolidatedTerminalWebSocket:
                     or "\n" in content
                 )
 
-                # CRITICAL FIX: Strip ANSI codes before checking if buffer has content
-                # Prevents saving blank terminal prompts (which contain only ANSI escape codes)
+                # CRITICAL FIX: Strip ANSI codes and detect terminal prompts before saving
+                # Prevents saving blank prompts and terminal UI elements to chat
                 if should_save and self._output_buffer.strip():
-                    from src.utils.encoding_utils import strip_ansi_codes
+                    from src.utils.encoding_utils import strip_ansi_codes, is_terminal_prompt
 
                     clean_content = strip_ansi_codes(self._output_buffer).strip()
 
-                    # Only save if there's actual text content after removing ANSI codes
-                    if clean_content:
+                    # Check if this is a terminal prompt (not real output)
+                    is_prompt = is_terminal_prompt(clean_content)
+
+                    # Only save if there's actual text content AND it's not a terminal prompt
+                    if clean_content and not is_prompt:
                         try:
                             buffer_to_save = self._output_buffer
                             logger.info(
@@ -962,9 +965,10 @@ class ConsolidatedTerminalWebSocket:
                         except Exception as e:
                             logger.error(f"Failed to save output to chat: {e}")
                     else:
-                        # Buffer contains only ANSI codes, clear it without saving
+                        # Buffer contains only ANSI codes or is a terminal prompt, skip saving
+                        skip_reason = "terminal prompt" if is_prompt else "only ANSI codes"
                         logger.debug(
-                            f"[CHAT INTEGRATION] Skipping save - buffer contains only ANSI codes ({len(self._output_buffer)} chars)"
+                            f"[CHAT INTEGRATION] Skipping save - buffer is {skip_reason} ({len(self._output_buffer)} chars, clean: '{clean_content[:100]}')"
                         )
                         self._output_buffer = ""
                         self._last_output_save_time = current_time
