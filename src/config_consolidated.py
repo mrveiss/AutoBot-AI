@@ -52,7 +52,7 @@ from src.constants.network_constants import NetworkConstants, ServiceURLs
 
 # Optional imports for advanced features
 try:
-    from src.utils.async_redis_manager import redis_get, redis_set
+    from src.utils.redis_client import get_redis_client
 
     REDIS_AVAILABLE = True
 except ImportError:

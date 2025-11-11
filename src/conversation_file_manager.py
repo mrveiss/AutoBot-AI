@@ -28,7 +28,8 @@ from redis.exceptions import (
 )
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
-from backend.utils.async_redis_manager import AsyncRedisDatabase, get_redis_manager
+from src.utils.redis_client import get_redis_client as get_redis_manager
+import redis.asyncio as async_redis
 from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import unified_config_manager
 
@@ -106,7 +107,7 @@ class ConversationFileManager:
         self.redis_host = redis_host or redis_config.get("host")
         self.redis_port = redis_port or redis_config.get("port")
         self._redis_manager = None
-        self._redis_sessions: Optional[AsyncRedisDatabase] = None
+        self._redis_sessions: Optional[async_redis.Redis] = None
 
         # SQLite connection (will be created per-operation for thread safety)
         self._lock = asyncio.Lock()
@@ -164,12 +165,12 @@ class ConversationFileManager:
         finally:
             connection.close()
 
-    async def _get_redis_sessions(self) -> AsyncRedisDatabase:
+    async def _get_redis_sessions(self) -> async_redis.Redis:
         """
         Get Redis sessions database (DB 2) for caching.
 
         Returns:
-            AsyncRedisDatabase: Redis sessions database connection
+            async_redis.Redis: Redis sessions database connection
 
         Raises:
             RuntimeError: If Redis connection cannot be established

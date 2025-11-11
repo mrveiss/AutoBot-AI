@@ -306,7 +306,7 @@ async def create_service_client(
         ValueError: If service key not found
     """
     if redis_manager is None:
-        from backend.utils.async_redis_manager import get_redis_manager
+        from src.utils.redis_client import get_redis_client as get_redis_manager
 
         redis_manager = await get_redis_manager()
 

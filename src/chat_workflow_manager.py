@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 
 from backend.dependencies import global_config_manager
-from backend.utils.async_redis_manager import get_redis_manager
+from src.utils.redis_client import get_redis_client as get_redis_manager
 from src.async_chat_workflow import AsyncChatWorkflow, MessageType, WorkflowMessage
 from src.constants.network_constants import NetworkConstants
 from src.prompt_manager import get_prompt

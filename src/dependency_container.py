@@ -14,11 +14,8 @@ from typing import Any, AsyncGenerator, Callable, Dict, Optional, Type, TypeVar
 from src.constants.network_constants import NetworkConstants
 from src.llm_interface import LLMInterface, LLMSettings, get_llm_interface
 from src.unified_config_manager import UnifiedConfigManager, unified_config_manager
-from src.utils.async_redis_manager import (
-    AsyncRedisManager,
-    async_redis_manager,
-    initialize_default_redis,
-)
+from src.utils.redis_client import get_redis_client
+import redis.asyncio as async_redis
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +55,7 @@ class AsyncServiceContainer:
 
         # Redis Manager
         self._services["redis"] = ServiceDescriptor(
-            service_type=AsyncRedisManager,
+            service_type=async_redis.Redis,
             factory=self._create_redis_manager,
             singleton=True,
         )
@@ -78,10 +75,9 @@ class AsyncServiceContainer:
             dependencies=["config"],
         )
 
-    async def _create_redis_manager(self) -> AsyncRedisManager:
+    async def _create_redis_manager(self) -> async_redis.Redis:
         """Factory for Redis manager"""
-        await initialize_default_redis()
-        return async_redis_manager
+        return await get_redis_client(async_client=True, database="main")
 
     async def _create_config_manager(self) -> UnifiedConfigManager:
         """Factory for config manager"""
@@ -348,7 +344,7 @@ container = AsyncServiceContainer()
 
 
 # Convenience functions for common services
-async def get_redis() -> AsyncRedisManager:
+async def get_redis() -> async_redis.Redis:
     """Get Redis manager"""
     return await container.get_service("redis")
 

@@ -36,7 +36,7 @@ from typing import List, Dict, Optional
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from backend.utils.async_redis_manager import get_redis_manager
+from src.utils.redis_client import get_redis_client as get_redis_manager
 from backend.security.session_ownership import SessionOwnershipValidator
 
 logging.basicConfig(

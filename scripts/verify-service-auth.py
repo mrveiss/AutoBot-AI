@@ -8,7 +8,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backend.utils.async_redis_manager import get_redis_manager
+from src.utils.redis_client import get_redis_client as get_redis_manager
 from backend.security.service_auth import ServiceAuthManager
 
 # All 6 services that should have keys
