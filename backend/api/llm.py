@@ -5,8 +5,8 @@ from fastapi.responses import JSONResponse
 
 from backend.services.config_service import ConfigService
 
-# Import caching utilities (RESTORED - Fixed FastAPI 0.115.9 compatibility)
-from backend.utils.cache_manager import cache_response
+# Import caching utilities from unified cache manager (P4 Cache Consolidation)
+from src.utils.advanced_cache_manager import cache_response
 from backend.utils.connection_utils import ConnectionTester, ModelManager
 from src.constants.network_constants import NetworkConstants
 

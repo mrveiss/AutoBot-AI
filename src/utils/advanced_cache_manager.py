@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.redis_client import get_redis_client
@@ -27,6 +27,7 @@ class CacheStrategy(Enum):
     USER_SCOPED = "user_scoped"  # User-specific data (preferences, history)
     COMPUTED = "computed"  # Expensive computation results
     TEMPORARY = "temporary"  # Short-lived data (session data)
+    KNOWLEDGE = "knowledge"  # Knowledge base queries and embeddings
 
 
 @dataclass
@@ -70,6 +71,13 @@ class AdvancedCacheManager:
             # Temporary data - short TTL
             "session_data": CacheConfig(CacheStrategy.TEMPORARY, ttl=300),
             "api_rate_limits": CacheConfig(CacheStrategy.TEMPORARY, ttl=60),
+            # Knowledge base data - medium TTL with size limits
+            "knowledge_queries": CacheConfig(
+                CacheStrategy.KNOWLEDGE, ttl=300, max_size=1000
+            ),  # 5 min
+            "knowledge_embeddings": CacheConfig(
+                CacheStrategy.KNOWLEDGE, ttl=3600, max_size=5000
+            ),  # 1 hour
         }
 
         if self.sync_redis_client:
@@ -351,6 +359,142 @@ class AdvancedCacheManager:
             logger.error(f"Error warming cache for {data_type}: {e}")
             return False
 
+    # =========================================================================
+    # KNOWLEDGE-SPECIFIC CACHING METHODS (from knowledge_cache.py)
+    # =========================================================================
+
+    def _generate_knowledge_key(
+        self, query: str, top_k: int, filters: Optional[Dict] = None
+    ) -> str:
+        """Generate cache key for knowledge base queries"""
+        cache_data = {
+            "query": query.lower().strip(),
+            "top_k": top_k,
+            "filters": filters or {},
+        }
+        cache_string = json.dumps(cache_data, sort_keys=True)
+        cache_hash = hashlib.sha256(cache_string.encode()).hexdigest()[:16]
+        return f"kb_query:{cache_hash}"
+
+    async def get_cached_knowledge_results(
+        self, query: str, top_k: int, filters: Optional[Dict] = None
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        Retrieve cached knowledge base search results.
+        Compatible with knowledge_cache.py API.
+        """
+        cache_key = self._generate_knowledge_key(query, top_k, filters)
+        result = await self.get("knowledge_queries", cache_key)
+
+        if result and "data" in result:
+            logger.debug(f"Knowledge cache HIT for query: '{query}' (top_k={top_k})")
+            return result["data"]
+
+        logger.debug(f"Knowledge cache MISS for query: '{query}'")
+        return None
+
+    async def cache_knowledge_results(
+        self,
+        query: str,
+        top_k: int,
+        results: List[Dict[str, Any]],
+        filters: Optional[Dict] = None,
+    ) -> bool:
+        """
+        Cache knowledge base search results.
+        Compatible with knowledge_cache.py API.
+        """
+        cache_key = self._generate_knowledge_key(query, top_k, filters)
+        success = await self.set(
+            "knowledge_queries",
+            cache_key,
+            results,
+            custom_ttl=None,  # Use default TTL from config
+        )
+
+        if success:
+            # Manage cache size for knowledge queries
+            await self._manage_cache_size("knowledge_queries")
+            logger.debug(
+                f"Cached {len(results)} knowledge results for query: '{query}'"
+            )
+
+        return success
+
+    async def _manage_cache_size(self, data_type: str):
+        """
+        Manage cache size using LRU eviction.
+        Implements max_size limits from CacheConfig.
+        """
+        await self._ensure_redis_client()
+        if not self.redis_client:
+            return
+
+        try:
+            config = self.cache_configs.get(data_type)
+            if not config or not config.max_size:
+                return  # No size limit configured
+
+            # Count current cache entries for this data type
+            pattern = f"{self.cache_prefix}{data_type}:*"
+            keys_with_time = []
+
+            async for key in self.redis_client.scan_iter(match=pattern):
+                # Get timestamp from cache entry
+                cached_data = await self.redis_client.get(key)
+                if cached_data:
+                    try:
+                        entry = json.loads(cached_data)
+                        timestamp = entry.get("timestamp", 0)
+                        keys_with_time.append((timestamp, key))
+                    except Exception:
+                        continue
+
+            # Check if we exceed max_size
+            if len(keys_with_time) > config.max_size:
+                # Sort by timestamp (oldest first) and remove excess
+                keys_with_time.sort()
+                excess_count = len(keys_with_time) - config.max_size + 100  # Buffer
+                keys_to_remove = [key for _, key in keys_with_time[:excess_count]]
+
+                if keys_to_remove:
+                    deleted_count = await self.redis_client.delete(*keys_to_remove)
+                    logger.info(
+                        f"LRU eviction: Removed {deleted_count} old entries from {data_type} cache"
+                    )
+
+        except Exception as e:
+            logger.error(f"Error managing cache size for {data_type}: {e}")
+
+    # =========================================================================
+    # BACKWARD COMPATIBILITY METHODS (from backend/utils/cache_manager.py)
+    # =========================================================================
+
+    async def simple_get(self, key: str) -> Optional[Any]:
+        """
+        Simple cache get (backward compatible with CacheManager).
+        Uses DYNAMIC strategy with default TTL.
+        """
+        result = await self.get("session_data", key)
+        return result.get("data") if result else None
+
+    async def simple_set(
+        self, key: str, value: Any, ttl: Optional[int] = None
+    ) -> bool:
+        """
+        Simple cache set (backward compatible with CacheManager).
+        Uses DYNAMIC strategy with custom or default TTL.
+        """
+        return await self.set("session_data", key, value, custom_ttl=ttl)
+
+    async def simple_delete(self, key: str) -> int:
+        """Simple cache delete (backward compatible with CacheManager)"""
+        return await self.invalidate("session_data", key)
+
+    async def simple_clear(self) -> int:
+        """Simple cache clear all (backward compatible with CacheManager)"""
+        return await self.invalidate("session_data", "*")
+
 
 # Global advanced cache manager instance
 advanced_cache = AdvancedCacheManager()
@@ -435,3 +579,321 @@ async def invalidate_user_cache(user_id: str) -> int:
     for data_type in ["user_preferences", "user_history"]:
         count += await advanced_cache.invalidate(data_type, "*", user_id)
     return count
+
+
+# ============================================================================
+# KNOWLEDGE CACHE CONVENIENCE FUNCTIONS (knowledge_cache.py compatibility)
+# ============================================================================
+
+
+async def get_cached_knowledge_results(
+    query: str, top_k: int, filters: Optional[Dict] = None
+) -> Optional[List[Dict[str, Any]]]:
+    """
+    Get cached knowledge base search results.
+    Drop-in replacement for knowledge_cache.KnowledgeCache.get_cached_results().
+    """
+    return await advanced_cache.get_cached_knowledge_results(query, top_k, filters)
+
+
+async def cache_knowledge_results(
+    query: str,
+    top_k: int,
+    results: List[Dict[str, Any]],
+    filters: Optional[Dict] = None,
+) -> bool:
+    """
+    Cache knowledge base search results.
+    Drop-in replacement for knowledge_cache.KnowledgeCache.cache_results().
+    """
+    return await advanced_cache.cache_knowledge_results(query, top_k, results, filters)
+
+
+async def clear_knowledge_cache(pattern: Optional[str] = None) -> int:
+    """Clear knowledge base cache (optionally by pattern)"""
+    if pattern:
+        # Pattern-based clearing
+        return await advanced_cache.invalidate("knowledge_queries", pattern)
+    else:
+        # Clear all knowledge queries
+        return await advanced_cache.invalidate("knowledge_queries", "*")
+
+
+async def get_knowledge_cache_stats() -> Dict[str, Any]:
+    """Get knowledge cache statistics"""
+    return await advanced_cache.get_stats("knowledge_queries")
+
+
+def get_knowledge_cache():
+    """
+    Get knowledge cache instance (backward compatibility).
+    Returns AdvancedCacheManager with knowledge-specific methods.
+    """
+    return advanced_cache
+
+
+# ============================================================================
+# SIMPLE CACHE CONVENIENCE FUNCTIONS (cache_manager.py compatibility)
+# ============================================================================
+
+
+class SimpleCacheManager:
+    """
+    Backward compatibility wrapper for backend/utils/cache_manager.py.
+    Provides simple TTL-based caching API using AdvancedCacheManager backend.
+    """
+
+    def __init__(self, default_ttl: int = 300):
+        self.default_ttl = default_ttl
+        self._cache = advanced_cache
+        self.cache_prefix = "cache:"  # Match original CacheManager prefix
+
+    @property
+    def _redis_client(self):
+        """Access to underlying Redis client (for backward compatibility)"""
+        return self._cache.redis_client
+
+    @property
+    def _redis_initialized(self):
+        """Check if Redis is initialized"""
+        return self._cache.redis_client is not None
+
+    async def _ensure_redis_client(self):
+        """Ensure Redis client is initialized (backward compatibility)"""
+        # AdvancedCacheManager auto-initializes, so this is a no-op
+        # But we keep it for API compatibility
+        pass
+
+    async def get(self, key: str) -> Optional[Any]:
+        """Get cached value"""
+        return await self._cache.simple_get(key)
+
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
+        """Set cached value with TTL"""
+        return await self._cache.simple_set(key, value, ttl or self.default_ttl)
+
+    async def delete(self, key: str) -> int:
+        """Delete cached value"""
+        return await self._cache.simple_delete(key)
+
+    async def clear(self) -> int:
+        """Clear all cached values"""
+        return await self._cache.simple_clear()
+
+    async def clear_pattern(self, pattern: str) -> int:
+        """
+        Clear multiple cache keys matching pattern.
+        Backward compatibility for CacheManager.clear_pattern()
+        """
+        try:
+            # Build search pattern with cache prefix
+            search_pattern = f"{self.cache_prefix}{pattern}"
+
+            if not self._cache.redis_client:
+                logger.warning("Redis client not available for pattern clear")
+                return 0
+
+            # Find matching keys
+            keys = []
+            async for key in self._cache.redis_client.scan_iter(match=search_pattern):
+                keys.append(key)
+
+            # Delete all matching keys
+            if keys:
+                deleted_count = await self._cache.redis_client.delete(*keys)
+                logger.info(
+                    f"Cache CLEAR: {deleted_count} keys deleted for pattern: {pattern}"
+                )
+                return deleted_count
+            else:
+                logger.debug(f"Cache CLEAR: No keys found for pattern: {pattern}")
+                return 0
+
+        except Exception as e:
+            logger.error(f"Error clearing cache for pattern {pattern}: {e}")
+            return 0
+
+    async def get_stats(self) -> Dict[str, Any]:
+        """
+        Get cache statistics.
+        Backward compatibility for CacheManager.get_stats()
+        """
+        if not self._cache.redis_client:
+            return {"status": "disabled", "total_keys": 0}
+
+        try:
+            # Count keys with cache prefix
+            cache_keys = []
+            async for key in self._cache.redis_client.scan_iter(
+                match=f"{self.cache_prefix}*"
+            ):
+                cache_keys.append(key)
+            total_keys = len(cache_keys)
+
+            # Get memory usage info if available
+            try:
+                info = await self._cache.redis_client.info("memory")
+                memory_usage = info.get("used_memory_human", "N/A")
+            except Exception:
+                memory_usage = "N/A"
+
+            return {
+                "status": "enabled",
+                "total_keys": total_keys,
+                "memory_usage": memory_usage,
+                "default_ttl": self.default_ttl,
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting cache stats: {e}")
+            return {"status": "error", "error": str(e)}
+
+    def cache_response(self, cache_key: str = None, ttl: int = None):
+        """
+        Decorator for caching HTTP responses.
+        Compatible with original CacheManager.cache_response().
+        Supports FastAPI Request objects for automatic key generation.
+        """
+        actual_ttl = ttl or self.default_ttl
+
+        def decorator(func):
+            @wraps(func)
+            async def wrapper(*args, **kwargs):
+                from fastapi import Request
+
+                # Extract request object from FastAPI dependency injection
+                request = None
+
+                # Check for Request object in kwargs
+                for key, value in kwargs.items():
+                    if isinstance(value, Request):
+                        request = value
+                        break
+
+                # Fallback: check args for Request object
+                if not request:
+                    for arg in args:
+                        if isinstance(arg, Request):
+                            request = arg
+                            break
+
+                # Generate cache key based on request or function
+                if cache_key:
+                    key = cache_key
+                elif request:
+                    # Include query parameters in cache key for uniqueness
+                    query_hash = hash(str(sorted(request.query_params.items())))
+                    key = f"endpoint:{request.url.path}:{query_hash}"
+                else:
+                    # Fallback for non-HTTP endpoints
+                    params_hash = hash(str(sorted(kwargs.items())))
+                    key = f"func:{func.__name__}:{params_hash}"
+
+                # Try to get from cache first
+                try:
+                    cached_result = await self.get(key)
+                    if cached_result is not None:
+                        logger.debug(f"Cache HIT: {key} - serving from cache")
+                        return cached_result
+                except Exception as e:
+                    logger.error(f"Cache retrieval error for key {key}: {e}")
+
+                # Execute function and cache result
+                logger.debug(f"Cache MISS: {key} - executing function")
+                result = await func(*args, **kwargs)
+
+                # Cache successful responses
+                if self._is_cacheable_response(result):
+                    try:
+                        await self.set(key, result, actual_ttl)
+                        logger.debug(f"Cache SET: {key} - cached for {actual_ttl}s")
+                    except Exception as e:
+                        logger.error(f"Cache storage error for key {key}: {e}")
+
+                return result
+
+            return wrapper
+
+        return decorator
+
+    @staticmethod
+    def _is_cacheable_response(result: Any) -> bool:
+        """Check if a response should be cached"""
+        if not isinstance(result, dict):
+            return False
+
+        # Don't cache error responses
+        if result.get("error") or result.get("status") == "error":
+            return False
+
+        # Don't cache empty responses
+        if not result:
+            return False
+
+        return True
+
+
+# ============================================================================
+# GLOBAL INSTANCE & CONVENIENCE FUNCTIONS (cache_manager.py compatibility)
+# ============================================================================
+
+# Create global cache manager instance (backward compatibility)
+cache_manager = SimpleCacheManager()
+
+
+# Standalone cache_response decorator (backward compatibility)
+def cache_response(cache_key: str = None, ttl: int = 300):
+    """
+    Standalone decorator for caching API endpoint responses.
+    Backward compatibility for: from backend.utils.cache_manager import cache_response
+
+    Args:
+        cache_key: Custom cache key (optional, defaults to endpoint path)
+        ttl: Time to live in seconds (default: 5 minutes)
+    """
+    return cache_manager.cache_response(cache_key=cache_key, ttl=ttl)
+
+
+# Simple cache decorator for non-HTTP functions (backward compatibility)
+def cache_function(cache_key: str = None, ttl: int = 300):
+    """
+    Simple cache decorator for non-FastAPI functions.
+    Backward compatibility for original cache_manager.cache_function()
+
+    Args:
+        cache_key: Custom cache key (optional, defaults to function name + args hash)
+        ttl: Time to live in seconds (default: 5 minutes)
+    """
+
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Generate cache key
+            if cache_key:
+                key = cache_key
+            else:
+                args_hash = hash(str(args) + str(sorted(kwargs.items())))
+                key = f"func:{func.__name__}:{args_hash}"
+
+            # Try to get from cache
+            try:
+                cached_result = await cache_manager.get(key)
+                if cached_result is not None:
+                    return cached_result
+            except Exception as e:
+                logger.error(f"Cache retrieval error for key {key}: {e}")
+
+            # Execute and cache
+            result = await func(*args, **kwargs)
+
+            if cache_manager._is_cacheable_response(result):
+                try:
+                    await cache_manager.set(key, result, ttl)
+                except Exception as e:
+                    logger.error(f"Cache storage error for key {key}: {e}")
+
+            return result
+
+        return wrapper
+
+    return decorator
