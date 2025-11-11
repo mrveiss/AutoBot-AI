@@ -823,7 +823,7 @@ class ChatHistoryManager:
             "sender": sender,
             "text": text,
             "messageType": message_type,
-            "rawData": raw_data,
+            "metadata": raw_data,  # CRITICAL FIX: Use 'metadata' to match frontend expectations
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
