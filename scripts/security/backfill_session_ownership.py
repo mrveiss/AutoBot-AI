@@ -70,8 +70,7 @@ class SessionOwnershipBackfill:
     async def initialize(self):
         """Initialize Redis connections"""
         logger.info("Initializing Redis connections...")
-        redis_manager = await get_redis_manager()
-        self.redis = await redis_manager.main()
+        self.redis = await get_redis_client(async_client=True, database="main")
         self.validator = SessionOwnershipValidator(self.redis)
         logger.info("✓ Connected to Redis")
 

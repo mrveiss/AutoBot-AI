@@ -198,10 +198,8 @@ async def validate_service_auth(request: Request) -> Dict:
         # Always use AsyncRedisManager for service auth (not RedisPoolManager from app state)
         from src.utils.redis_client import get_redis_client as get_redis_manager
 
-        redis_manager = await get_redis_manager()
-
         # Get main Redis database for service key storage
-        redis = await redis_manager.main()
+        redis = await get_redis_client(async_client=True, database="main")
 
         # Create auth manager and validate
         auth_manager = ServiceAuthManager(redis)

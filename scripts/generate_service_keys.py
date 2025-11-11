@@ -42,9 +42,8 @@ async def generate_keys():
     print(f"Services: {len(SERVICES)}")
     print()
 
-    # Get Redis manager
-    redis_manager = await get_redis_manager()
-    redis = await redis_manager.main()
+    # Get Redis client for main database
+    redis = await get_redis_client(async_client=True, database="main")
 
     # Create auth manager
     auth_manager = ServiceAuthManager(redis)

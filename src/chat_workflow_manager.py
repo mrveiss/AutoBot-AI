@@ -633,18 +633,16 @@ class ChatWorkflowManager:
                 if self._initialized:
                     return True
 
-                # Initialize AsyncRedisManager for conversation history
+                # Initialize Redis client for conversation history
                 try:
-                    self.redis_manager = await get_redis_manager()
-                    self.redis_client = await self.redis_manager.main()
+                    self.redis_client = await get_redis_client(async_client=True, database="main")
                     logger.info(
-                        "✅ Async Redis manager initialized for conversation history"
+                        "✅ Redis client initialized for conversation history"
                     )
                 except Exception as redis_error:
                     logger.warning(
                         f"⚠️ Redis initialization failed: {redis_error} - continuing without persistence"
                     )
-                    self.redis_manager = None
                     self.redis_client = None
 
                 # Create default workflow instance
