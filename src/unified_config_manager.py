@@ -183,11 +183,11 @@ class UnifiedConfigManager:
             redis_host = cfg.get_host("redis")
             redis_port = cfg.get_port("redis")
         except Exception:
-            # Fallback values
-            ollama_host = "127.0.0.1"
-            ollama_port = 11434
-            redis_host = "127.0.0.1"
-            redis_port = 6379
+            # Fallback to NetworkConstants
+            ollama_host = NetworkConstants.AI_STACK_HOST
+            ollama_port = NetworkConstants.OLLAMA_PORT
+            redis_host = NetworkConstants.REDIS_HOST
+            redis_port = NetworkConstants.REDIS_PORT
 
         return {
             "backend": {
@@ -230,14 +230,105 @@ class UnifiedConfigManager:
                 "max_retries": 3,
                 "streaming": False,
             },
+            "deployment": {
+                "mode": "local",
+                "host": redis_host,
+                "port": int(
+                    os.getenv(
+                        "AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT)
+                    )
+                ),
+            },
+            "data": {
+                "reliability_stats_file": "data/reliability_stats.json",
+                "long_term_db_path": "data/agent_memory.db",
+                "chat_history_file": "data/chat_history.json",
+                "chats_directory": "data/chats",
+            },
+            "redis": {
+                "host": redis_host,
+                "port": redis_port,
+                "db": int(os.getenv("AUTOBOT_REDIS_DB", "0")),
+                "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
+            },
             "memory": {
                 "redis": {
                     "enabled": True,
                     "host": redis_host,
                     "port": redis_port,
-                    "db": int(os.getenv("AUTOBOT_REDIS_DB", "1")),
+                    "db": int(os.getenv("AUTOBOT_REDIS_MEMORY_DB", "1")),
                     "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
                 }
+            },
+            "multimodal": {
+                "vision": {
+                    "enabled": True,
+                    "confidence_threshold": 0.7,
+                    "processing_timeout": 30,
+                },
+                "voice": {
+                    "enabled": True,
+                    "confidence_threshold": 0.8,
+                    "processing_timeout": 15,
+                },
+                "context": {
+                    "enabled": True,
+                    "decision_threshold": 0.9,
+                    "processing_timeout": 10,
+                },
+            },
+            "npu": {
+                "enabled": False,
+                "device": "CPU",
+                "model_path": None,
+                "optimization_level": "PERFORMANCE",
+            },
+            "hardware": {
+                "environment_variables": {
+                    "cuda_device_order": "PCI_BUS_ID",
+                    "gpu_max_heap_size": "100",
+                    "gpu_use_sync_objects": "1",
+                    "openvino_device_priorities": "NPU,GPU,CPU",
+                    "intel_npu_enabled": "1",
+                    "omp_num_threads": "4",
+                    "mkl_num_threads": "4",
+                    "openblas_num_threads": "4",
+                },
+                "acceleration": {
+                    "enabled": True,
+                    "priority_order": ["npu", "gpu", "cpu"],
+                    "cpu_reserved_cores": 2,
+                    "memory_optimization": "enabled",
+                },
+            },
+            "system": {
+                "environment": {"DISPLAY": ":0", "USER": "unknown", "SHELL": "unknown"},
+                "desktop_streaming": {
+                    "default_resolution": os.getenv(
+                        "AUTOBOT_DESKTOP_RESOLUTION", "1024x768"
+                    ),
+                    "default_depth": int(os.getenv("AUTOBOT_DESKTOP_DEPTH", "24")),
+                    "max_sessions": int(
+                        os.getenv("AUTOBOT_DESKTOP_MAX_SESSIONS", "10")
+                    ),
+                },
+            },
+            "network": {"share": {"username": None, "password": None}},
+            "task_transport": {
+                "type": "redis",
+                "redis": {
+                    "host": redis_host,
+                    "port": redis_port,
+                    "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
+                    "db": int(os.getenv("AUTOBOT_REDIS_TASK_DB", "0")),
+                },
+            },
+            "security": {
+                "enable_sandboxing": True,
+                "allowed_commands": [],
+                "blocked_commands": ["rm -rf", "format", "delete"],
+                "secrets_key": None,
+                "audit_log_file": "data/audit.log",
             },
             "ui": {
                 "theme": "light",
@@ -602,8 +693,8 @@ class UnifiedConfigManager:
             default_host = cfg.get_host("redis")
             default_port = cfg.get_port("redis")
         except Exception:
-            default_host = "127.0.0.1"
-            default_port = 6379
+            default_host = NetworkConstants.REDIS_HOST
+            default_port = NetworkConstants.REDIS_PORT
 
         # FIX: Don't override password with None - let it come from redis_config
         defaults = {
@@ -684,6 +775,105 @@ class UnifiedConfigManager:
             self._async_lock = asyncio.Lock()
         return self._async_lock
 
+    def _filter_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Filter sensitive data before caching to Redis.
+        Redacts passwords, credentials, API keys, and other secrets.
+        """
+        import copy
+
+        filtered = copy.deepcopy(data)
+
+        # List of sensitive field patterns to redact
+        sensitive_patterns = [
+            "password",
+            "passwd",
+            "pwd",
+            "secret",
+            "api_key",
+            "apikey",
+            "token",
+            "credential",
+            "auth",
+        ]
+
+        def redact_sensitive_fields(obj: Any, path: str = "") -> Any:
+            """Recursively redact sensitive fields"""
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    key_lower = key.lower()
+                    current_path = f"{path}.{key}" if path else key
+
+                    # Check if field name contains sensitive pattern
+                    if any(pattern in key_lower for pattern in sensitive_patterns):
+                        obj[key] = "***REDACTED***"
+                        logger.debug(f"Redacted sensitive field: {current_path}")
+                    elif isinstance(value, (dict, list)):
+                        obj[key] = redact_sensitive_fields(value, current_path)
+
+            elif isinstance(obj, list):
+                return [redact_sensitive_fields(item, f"{path}[{i}]") for i, item in enumerate(obj)]
+
+            return obj
+
+        return redact_sensitive_fields(filtered)
+
+    def _get_redis_cache_key(self, config_type: str) -> str:
+        """Get Redis cache key for config type"""
+        return f"{self.settings.redis_key_prefix}{config_type}"
+
+    async def _load_from_redis_cache(
+        self, config_type: str
+    ) -> Optional[Dict[str, Any]]:
+        """Load config from Redis cache"""
+        if not self.settings.use_redis_cache:
+            return None
+
+        try:
+            from src.utils.redis_client import get_redis_client
+
+            cache_key = self._get_redis_cache_key(config_type)
+            redis_client = await get_redis_client(async_client=True, database="main")
+
+            if redis_client:
+                cached_data = await redis_client.get(cache_key)
+                if cached_data:
+                    data = json.loads(cached_data.decode())
+                    logger.debug(f"Loaded {config_type} config from Redis cache")
+                    return data
+
+        except Exception as e:
+            logger.debug(f"Failed to load {config_type} from Redis cache: {e}")
+
+        return None
+
+    async def _save_to_redis_cache(
+        self, config_type: str, data: Dict[str, Any]
+    ) -> None:
+        """Save config to Redis cache (with sensitive data filtering)"""
+        if not self.settings.use_redis_cache:
+            return
+
+        try:
+            from src.utils.redis_client import get_redis_client
+
+            # Filter sensitive data before caching
+            filtered_data = self._filter_sensitive_data(data)
+
+            cache_key = self._get_redis_cache_key(config_type)
+            redis_client = await get_redis_client(async_client=True, database="main")
+
+            if redis_client:
+                await redis_client.set(
+                    cache_key,
+                    json.dumps(filtered_data, default=str),
+                    ex=self.settings.cache_ttl,
+                )
+                logger.debug(f"Saved {config_type} config to Redis cache (sensitive data filtered)")
+
+        except Exception as e:
+            logger.debug(f"Failed to save {config_type} to Redis cache: {e}")
+
     @retry(
         stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5)
     )
@@ -730,13 +920,19 @@ class UnifiedConfigManager:
     async def load_config_async(
         self, config_type: str = "main", use_cache: bool = True
     ) -> Dict[str, Any]:
-        """Load configuration asynchronously"""
+        """Load configuration asynchronously with Redis caching"""
         async with await self._get_async_lock():
             # For main config, return current config
             if config_type == "main":
                 if self._should_refresh_sync_cache():
                     self._load_configuration()
                 return self._config.copy()
+
+            # Try Redis cache first for other config types
+            if use_cache:
+                redis_data = await self._load_from_redis_cache(config_type)
+                if redis_data:
+                    return redis_data
 
             # For other config types, use file-based loading
             if config_type == "settings":
@@ -745,10 +941,15 @@ class UnifiedConfigManager:
                 file_path = self.config_dir / f"{config_type}.json"
 
             file_data = await self._read_file_async(file_path)
+
+            # Save to Redis cache if loaded from file
+            if file_data and use_cache:
+                await self._save_to_redis_cache(config_type, file_data)
+
             return file_data or {}
 
     async def save_config_async(self, config_type: str, data: Dict[str, Any]) -> None:
-        """Save configuration asynchronously"""
+        """Save configuration asynchronously with Redis caching"""
         async with await self._get_async_lock():
             # Filter out prompts
             import copy
@@ -772,6 +973,9 @@ class UnifiedConfigManager:
             if config_type == "main":
                 self._config = filtered_data
                 self._sync_cache_timestamp = time.time()
+
+            # Save to Redis cache
+            await self._save_to_redis_cache(config_type, filtered_data)
 
             logger.info(f"Saved {config_type} config asynchronously")
 
@@ -829,6 +1033,75 @@ class UnifiedConfigManager:
                 except Exception as e:
                     logger.error(f"Config callback error for {config_type}: {e}")
 
+    async def start_file_watcher(self, config_type: str) -> None:
+        """Start watching config file for changes"""
+        if not self.settings.auto_reload:
+            return
+
+        if config_type in self._file_watchers:
+            return  # Already watching
+
+        # Determine file path
+        if config_type == "settings":
+            file_path = self.settings_file
+        elif config_type == "main":
+            file_path = self.base_config_file
+        else:
+            file_path = self.config_dir / f"{config_type}.json"
+
+        async def watch_file():
+            last_modified = None
+
+            while True:
+                try:
+                    if file_path.exists():
+                        current_modified = file_path.stat().st_mtime
+
+                        if (
+                            last_modified is not None
+                            and current_modified != last_modified
+                        ):
+                            logger.info(f"Config file {file_path} changed, reloading")
+
+                            # Reload config
+                            new_data = await self._read_file_async(file_path)
+                            if new_data:
+                                # Update cache
+                                if config_type == "main":
+                                    self._config = new_data
+                                    self._sync_cache_timestamp = time.time()
+
+                                # Save to Redis cache
+                                await self._save_to_redis_cache(config_type, new_data)
+
+                                # Notify callbacks
+                                await self._notify_callbacks(config_type, new_data)
+
+                        last_modified = current_modified
+
+                    await asyncio.sleep(1.0)  # Check every second
+
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"File watcher error for {config_type}: {e}")
+                    await asyncio.sleep(5.0)  # Wait before retrying
+
+        self._file_watchers[config_type] = asyncio.create_task(watch_file())
+        logger.info(f"Started file watcher for {config_type} config")
+
+    async def stop_file_watcher(self, config_type: str) -> None:
+        """Stop watching config file"""
+        if config_type in self._file_watchers:
+            self._file_watchers[config_type].cancel()
+            try:
+                await self._file_watchers[config_type]
+            except asyncio.CancelledError:
+                pass
+
+            del self._file_watchers[config_type]
+            logger.info(f"Stopped file watcher for {config_type} config")
+
     async def close(self) -> None:
         """Clean up async resources"""
         # Stop all file watchers
@@ -841,16 +1114,6 @@ class UnifiedConfigManager:
         self._callbacks.clear()
 
         logger.info("Unified config manager closed")
-
-    async def stop_file_watcher(self, config_type: str) -> None:
-        """Stop watching config file"""
-        if config_type in self._file_watchers:
-            self._file_watchers[config_type].cancel()
-            try:
-                await self._file_watchers[config_type]
-            except asyncio.CancelledError:
-                pass
-            del self._file_watchers[config_type]
 
     # VALIDATION AND UTILITIES
 
