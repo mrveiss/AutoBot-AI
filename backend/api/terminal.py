@@ -273,6 +273,12 @@ class ConsolidatedTerminalWebSocket:
         self._last_output_save_time = time.time()
         self._output_lock = asyncio.Lock()  # Protect concurrent buffer access
 
+        # Phase 3: Queue-based output delivery for better responsiveness
+        import queue
+
+        self.output_queue = queue.Queue(maxsize=1000)  # Limit queue size
+        self._output_sender_task = None  # Will be created in start()
+
         # Initialize TerminalLogger for persistent command logging
         if conversation_id:
             from src.logging.terminal_logger import TerminalLogger
@@ -382,6 +388,12 @@ class ConsolidatedTerminalWebSocket:
         """Start the terminal session"""
         self.active = True
 
+        # Phase 3: Start async output sender task for queue-based delivery
+        self._output_sender_task = asyncio.create_task(self._async_output_sender())
+        logger.info(
+            f"Async output sender started for session {self.session_id}"
+        )
+
         # Start PTY output reader task if PTY is available
         if self.pty_process and self.pty_process.is_alive():
             self.pty_output_task = asyncio.create_task(self._read_pty_output())
@@ -425,6 +437,17 @@ class ConsolidatedTerminalWebSocket:
             except Exception as e:
                 logger.error(f"Failed to flush output buffer: {e}")
 
+        # Phase 3: Signal async output sender to stop
+        if hasattr(self, "output_queue"):
+            try:
+                import queue
+
+                self.output_queue.put_nowait({"type": "stop"})
+            except queue.Full:
+                pass  # Queue full, sender will stop when it checks active flag
+            except Exception as e:
+                logger.error(f"Error signaling output sender to stop: {e}")
+
         # Cancel output reader task if running
         if hasattr(self, "pty_output_task") and self.pty_output_task:
             try:
@@ -434,6 +457,16 @@ class ConsolidatedTerminalWebSocket:
                 pass
             except Exception as e:
                 logger.error(f"Error cancelling output task: {e}")
+
+        # Cancel async output sender task if running
+        if hasattr(self, "_output_sender_task") and self._output_sender_task:
+            try:
+                self._output_sender_task.cancel()
+                await asyncio.wait_for(self._output_sender_task, timeout=1.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+            except Exception as e:
+                logger.error(f"Error cancelling output sender task: {e}")
 
         # Close PTY session using manager
         if self.pty_process:
@@ -828,7 +861,11 @@ class ConsolidatedTerminalWebSocket:
         logger.info(f"Terminal audit: {json.dumps(log_entry)}")
 
     async def send_output(self, content: str):
-        """Enhanced output sending with standardized format"""
+        """Enhanced output sending with standardized format
+
+        Phase 3: Uses queue-based delivery for better responsiveness.
+        Messages are queued and sent asynchronously by _async_output_sender().
+        """
         # Standardize message format for frontend compatibility
         message = {
             "type": "output",
@@ -841,7 +878,28 @@ class ConsolidatedTerminalWebSocket:
             },
         }
 
-        await self.send_message(message)
+        # Phase 3: Queue message for async delivery instead of sending directly
+        # This prevents blocking on slow WebSocket send operations
+        import queue
+
+        try:
+            self.output_queue.put_nowait(message)
+        except queue.Full:
+            # Queue is full, drop oldest message to prevent blocking
+            try:
+                self.output_queue.get_nowait()  # Remove oldest
+                self.output_queue.put_nowait(message)  # Add new
+                logger.warning(
+                    f"Output queue full for session {self.session_id}, dropped oldest message"
+                )
+            except (queue.Empty, queue.Full):
+                logger.error(
+                    f"Failed to queue output for session {self.session_id}"
+                )
+        except Exception as e:
+            logger.error(f"Error queuing output: {e}")
+            # Fallback: Send directly if queuing fails
+            await self.send_message(message)
 
         # CRITICAL: Log ALL terminal output to transcript file
         # This creates a complete record of the terminal session
@@ -904,6 +962,60 @@ class ConsolidatedTerminalWebSocket:
                     "output_length": len(content),
                     "timestamp": datetime.now().isoformat(),
                 },
+            )
+
+    async def _async_output_sender(self):
+        """
+        Phase 3 Enhancement: Async task to send queued output messages to WebSocket
+
+        This prevents the PTY reader from blocking on slow WebSocket send operations.
+        Messages are queued and sent asynchronously, improving responsiveness under
+        heavy terminal load.
+        """
+        import queue
+
+        logger.info(
+            f"Starting async output sender for session {self.session_id}"
+        )
+
+        try:
+            while self.active:
+                try:
+                    # Non-blocking queue check
+                    try:
+                        message = self.output_queue.get_nowait()
+                    except queue.Empty:
+                        # No messages in queue, yield control briefly
+                        await asyncio.sleep(0.01)
+                        continue
+
+                    # Check for stop signal
+                    if message.get("type") == "stop":
+                        logger.info(
+                            f"Stop signal received in output sender for session {self.session_id}"
+                        )
+                        break
+
+                    # Send message if WebSocket is still active
+                    if self.websocket and self.active:
+                        try:
+                            await self.websocket.send_text(json.dumps(message))
+                        except Exception as e:
+                            logger.error(
+                                f"Error sending queued message to WebSocket: {e}"
+                            )
+                            # WebSocket may be closed, stop sender
+                            break
+
+                except Exception as e:
+                    logger.error(f"Error in async output sender loop: {e}")
+                    await asyncio.sleep(0.1)  # Prevent tight error loop
+
+        except Exception as e:
+            logger.error(f"Async output sender error: {e}")
+        finally:
+            logger.info(
+                f"Async output sender stopped for session {self.session_id}"
             )
 
 
