@@ -438,10 +438,12 @@ class RedisConnectionManager:
         self._active_async_connections: weakref.WeakSet = weakref.WeakSet()
 
         # PHASE 3: NEW - TCP keepalive configuration (from optimized_redis_manager.py)
+        # FIXED: Use correct Linux socket constants (not sequential numbers)
+        import socket
         self._tcp_keepalive_options = {
-            1: 600,  # TCP_KEEPIDLE - Seconds before sending keepalive probes
-            2: 60,  # TCP_KEEPINTVL - Interval between keepalive probes
-            3: 5,  # TCP_KEEPCNT - Number of keepalive probes
+            socket.TCP_KEEPIDLE: 600,  # Seconds before sending keepalive probes
+            socket.TCP_KEEPINTVL: 60,  # Interval between keepalive probes
+            socket.TCP_KEEPCNT: 5,  # Number of keepalive probes
         }
 
         # PHASE 3: NEW - Idle connection cleanup configuration
