@@ -342,6 +342,7 @@
 <script>
 import { Chart, registerables } from 'chart.js'
 import 'chartjs-adapter-date-fns'
+import { getStatusIcon as getStatusIconUtil } from '@/utils/iconMappings'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -911,14 +912,18 @@ export default {
       }
     },
     
+    // Icon mapping centralized in @/utils/iconMappings
     getStatusIcon(status) {
-      switch (status) {
-        case 'healthy': return 'fas fa-check-circle'
-        case 'degraded': return 'fas fa-exclamation-triangle'
-        case 'critical': return 'fas fa-times-circle'
-        case 'offline': return 'fas fa-power-off'
-        default: return 'fas fa-question-circle'
+      // Map component-specific statuses to standard statuses
+      const statusMap = {
+        'healthy': 'healthy',
+        'degraded': 'warning',
+        'critical': 'error',
+        'offline': 'offline'
       }
+
+      const mappedStatus = statusMap[status] || status
+      return getStatusIconUtil(mappedStatus)
     },
     
     formatTimestamp(timestamp) {

@@ -807,6 +807,13 @@ EOF
 start_redis_stack() {
     log "Starting Redis Stack service on VM3..."
 
+    # Load Redis password from .env for authentication
+    if [ -f ".env" ]; then
+        set -a  # Export all variables
+        source .env
+        set +a  # Disable export
+    fi
+
     if [ ! -f "$SSH_KEY" ]; then
         warning "SSH key not found - skipping Redis Stack auto-start"
         return 0
@@ -814,7 +821,7 @@ start_redis_stack() {
 
     # Check if Redis Stack is already running
     echo -n "  Checking Redis Stack status... "
-    if timeout 3 redis-cli -h "${VMS["redis"]}" ping 2>/dev/null | grep -q PONG; then
+    if timeout 3 redis-cli -h "${VMS["redis"]}" -a "${AUTOBOT_REDIS_PASSWORD:-}" --no-auth-warning ping 2>/dev/null | grep -q PONG; then
         echo -e "${GREEN}✅ Already running${NC}"
         return 0
     fi
@@ -866,7 +873,7 @@ EOF
         local retries=0
         local max_retries=600  # Up to 10 minutes for large datasets (3+ GB)
         while [ $retries -lt $max_retries ]; do
-            local redis_response=$(timeout 2 redis-cli -h "${VMS["redis"]}" ping 2>&1 || true)
+            local redis_response=$(timeout 2 redis-cli -h "${VMS["redis"]}" -a "${AUTOBOT_REDIS_PASSWORD:-}" --no-auth-warning ping 2>&1 || true)
 
             # Check if Redis is ready (responds with PONG)
             if echo "$redis_response" | grep -q "^PONG$"; then

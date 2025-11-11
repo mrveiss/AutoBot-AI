@@ -54,17 +54,18 @@ class AuthenticationMiddleware:
         )
 
     def _init_session_storage(self):
-        """Initialize Redis session storage using standardized pool manager"""
+        """Initialize Redis session storage using centralized client management"""
         try:
             redis_config = config.get_redis_config()
             if redis_config["enabled"]:
-                from src.redis_pool_manager import get_redis_sync
+                from src.utils.redis_client import get_redis_client
 
                 # Use sessions database for authentication sessions
-                self.redis_client = get_redis_sync("sessions")
+                # REFACTORED: Use centralized Redis client management
+                self.redis_client = get_redis_client(database="sessions", async_client=False)
                 # Test connection
                 self.redis_client.ping()
-                logger.info("Redis session storage initialized with pool manager")
+                logger.info("Redis session storage initialized with centralized client management")
         except Exception as e:
             logger.warning(
                 f"Failed to initialize Redis session storage, using in-memory: {e}"

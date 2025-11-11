@@ -856,6 +856,71 @@ class ChatHistoryManager:
         """Returns the entire chat history."""
         return self.history
 
+    async def update_message_metadata(
+        self,
+        session_id: str,
+        metadata_filter: Dict[str, Any],
+        metadata_updates: Dict[str, Any]
+    ) -> bool:
+        """
+        Update metadata for a specific message in a session.
+
+        CRITICAL FIX: Allows updating approval_status to persist across frontend polling.
+
+        Args:
+            session_id: Session ID containing the message
+            metadata_filter: Dict of metadata key-value pairs to match the message
+            metadata_updates: Dict of metadata key-value pairs to update
+
+        Returns:
+            True if message was found and updated, False otherwise
+
+        Example:
+            # Update approval status for a message
+            await manager.update_message_metadata(
+                session_id="abc123",
+                metadata_filter={"terminal_session_id": "xyz789", "requires_approval": True},
+                metadata_updates={"approval_status": "approved", "approval_comment": "Looks good"}
+            )
+        """
+        try:
+            messages = await self.load_session(session_id)
+
+            # Find message matching all filter criteria
+            for message in messages:
+                msg_metadata = message.get("metadata", {})
+
+                # Check if all filter criteria match
+                matches = all(
+                    msg_metadata.get(key) == value
+                    for key, value in metadata_filter.items()
+                )
+
+                if matches:
+                    # Update metadata
+                    if "metadata" not in message:
+                        message["metadata"] = {}
+
+                    message["metadata"].update(metadata_updates)
+
+                    # Save updated messages
+                    await self.save_session(session_id, messages=messages)
+
+                    logging.info(
+                        f"Updated message metadata in session {session_id}: "
+                        f"filter={metadata_filter}, updates={metadata_updates}"
+                    )
+                    return True
+
+            logging.warning(
+                f"No message found matching metadata filter in session {session_id}: {metadata_filter}"
+            )
+            return False
+
+        except Exception as e:
+            logging.error(f"Error updating message metadata in session {session_id}: {e}")
+            return False
+
     async def clear_history(self):
         """
         Clears the entire chat history and saves the empty history to file.

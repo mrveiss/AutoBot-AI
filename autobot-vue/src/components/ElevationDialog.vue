@@ -109,6 +109,8 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { apiService } from '../services/api';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import BaseButton from '@/components/base/BaseButton.vue';
+import { useModal } from '@/composables/useModal';
+import { useAsyncOperation } from '@/composables/useAsyncOperation';
 
 export default {
   name: 'ElevationDialog',
@@ -145,48 +147,44 @@ export default {
   },
   emits: ['approved', 'cancelled', 'close'],
   setup(props, { emit }) {
-    const showDialog = ref(false);
+    const { isOpen: showDialog } = useModal('elevation-dialog');
+    const { execute: authorize, loading: isProcessing, error } = useAsyncOperation();
     const password = ref('');
     const showPassword = ref(false);
     const rememberForSession = ref(false);
-    const isProcessing = ref(false);
-    const error = ref('');
 
     const togglePasswordVisibility = () => {
       showPassword.value = !showPassword.value;
     };
 
-    const handleApprove = async () => {
+    const authorizeFn = async () => {
       if (!password.value.trim()) {
-        error.value = 'Password is required';
-        return;
+        throw new Error('Password is required');
       }
 
-      isProcessing.value = true;
-      error.value = '';
+      // Send elevation request to backend
+      const response = await apiService.post('/system/elevation/authorize', {
+        request_id: props.requestId,
+        password: password.value,
+        remember_session: rememberForSession.value
+      });
 
-      try {
-        // Send elevation request to backend
-        const response = await apiService.post('/system/elevation/authorize', {
-          request_id: props.requestId,
-          password: password.value,
-          remember_session: rememberForSession.value
+      if (response.data.success) {
+        emit('approved', {
+          requestId: props.requestId,
+          sessionToken: response.data.session_token
         });
-
-        if (response.data.success) {
-          emit('approved', {
-            requestId: props.requestId,
-            sessionToken: response.data.session_token
-          });
-          closeDialog();
-        } else {
-          error.value = response.data.message || 'Authorization failed';
-        }
-      } catch (err) {
-        error.value = err.response?.data?.message || 'Authorization failed';
-      } finally {
-        isProcessing.value = false;
+        closeDialog();
+      } else {
+        throw new Error(response.data.message || 'Authorization failed');
       }
+    };
+
+    const handleApprove = async () => {
+      await authorize(authorizeFn).catch(err => {
+        // Error already handled by useAsyncOperation
+        console.error('Authorization error:', err);
+      });
     };
 
     const handleCancel = () => {
@@ -197,8 +195,6 @@ export default {
     const closeDialog = () => {
       showDialog.value = false;
       password.value = '';
-      error.value = '';
-      isProcessing.value = false;
       emit('close');
     };
 
@@ -221,7 +217,6 @@ export default {
     const updateShow = (newValue) => {
       showDialog.value = newValue;
       if (newValue) {
-        error.value = '';
         password.value = '';
       }
     };

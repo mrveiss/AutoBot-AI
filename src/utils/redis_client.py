@@ -1391,3 +1391,45 @@ async def redis_context(database: str = "main") -> AsyncGenerator[async_redis.Re
     finally:
         # Connection returned to pool automatically
         pass
+
+
+# ============================================================================
+# BACKWARD COMPATIBILITY LAYER
+# ============================================================================
+# Support for old redis_database_manager imports (archived in P1)
+
+class RedisDatabaseManager:
+    """
+    DEPRECATED: Backward compatibility wrapper for archived redis_database_manager
+
+    This class provides compatibility for code still using the old
+    RedisDatabaseManager interface. All new code should use get_redis_client() directly.
+
+    Migration:
+        OLD: manager = RedisDatabaseManager()
+             client = await manager.get_async_connection(RedisDatabase.MAIN)
+
+        NEW: client = await get_redis_client(async_client=True, database="main")
+    """
+
+    def __init__(self):
+        logger.warning(
+            "DEPRECATED: RedisDatabaseManager is deprecated. "
+            "Use get_redis_client() from src.utils.redis_client instead."
+        )
+
+    def get_connection(self, database: Union[RedisDatabase, str]) -> Optional[redis.Redis]:
+        """Get synchronous Redis connection (DEPRECATED)"""
+        db_name = database.name.lower() if isinstance(database, RedisDatabase) else database
+        return get_redis_client(async_client=False, database=db_name)
+
+    async def get_async_connection(
+        self, database: Union[RedisDatabase, str]
+    ) -> Optional[async_redis.Redis]:
+        """Get asynchronous Redis connection (DEPRECATED)"""
+        db_name = database.name.lower() if isinstance(database, RedisDatabase) else database
+        return await get_redis_client(async_client=True, database=db_name)
+
+
+# Global instance for backward compatibility
+redis_db_manager = RedisDatabaseManager()

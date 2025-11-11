@@ -17,7 +17,7 @@ import psutil
 
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
-from src.utils.redis_database_manager import get_redis_client
+from src.utils.redis_client import get_redis_client
 
 
 @dataclass
@@ -37,11 +37,13 @@ class SystemMetricsCollector:
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self._redis_client = None
+        # REFACTORED: Centralized Redis client management
+        # Don't cache clients - always use get_redis_client() for proper connection pooling
         self._metrics_buffer = deque(maxlen=1000)  # Buffer for recent metrics
         self._collection_interval = cfg.get("monitoring.metrics.collection_interval", 5)
         self._retention_hours = cfg.get("monitoring.metrics.retention_hours", 24)
         self._is_collecting = False
+        self._auth_error_logged = False  # Track if auth error was already logged
 
         # Metric categories to collect
         self.metric_categories = {
@@ -52,19 +54,27 @@ class SystemMetricsCollector:
             "llm": ["ollama_requests", "model_switches", "token_usage"],
         }
 
-    async def _get_redis_client(self):
-        """Get Redis client for metrics storage"""
-        if self._redis_client is None:
-            try:
-                self._redis_client = get_redis_client(
-                    database="metrics", async_client=True
-                )
-                if asyncio.iscoroutine(self._redis_client):
-                    self._redis_client = await self._redis_client
-            except Exception as e:
-                self.logger.error(f"Failed to initialize metrics Redis client: {e}")
-                self._redis_client = None
-        return self._redis_client
+    async def _get_redis_client(self, database: str = "metrics"):
+        """
+        Get Redis client for specified database using centralized client management.
+
+        REFACTORED: Always use get_redis_client() for proper connection pooling.
+        Do not cache clients - let the centralized manager handle that.
+
+        Args:
+            database: Redis database name ("metrics", "knowledge", etc.)
+
+        Returns:
+            Redis client or None if unavailable
+        """
+        try:
+            client = get_redis_client(database=database, async_client=True)
+            if asyncio.iscoroutine(client):
+                client = await client
+            return client
+        except Exception as e:
+            self.logger.error(f"Failed to get {database} Redis client: {e}")
+            return None
 
     async def collect_system_metrics(self) -> Dict[str, SystemMetric]:
         """Collect system-level metrics (CPU, memory, disk, network)"""
@@ -214,14 +224,18 @@ class SystemMetricsCollector:
         timestamp = time.time()
 
         try:
-            redis_client = await self._get_redis_client()
-            if not redis_client:
+            # REFACTORED: Use centralized client management for "knowledge" database
+            # Knowledge base data (doc:*, kb_cache:*) is stored in the "knowledge" Redis database
+            kb_redis_client = await self._get_redis_client(database="knowledge")
+
+            if not kb_redis_client:
+                self.logger.debug("Knowledge base Redis client not available, skipping KB metrics")
                 return metrics
 
             # Get knowledge base statistics from Redis
             # Count vector entries
             vector_count = 0
-            async for key in redis_client.scan_iter(match="doc:*"):
+            async for key in kb_redis_client.scan_iter(match="doc:*"):
                 vector_count += 1
 
             metrics["kb_vector_count"] = SystemMetric(
@@ -234,7 +248,7 @@ class SystemMetricsCollector:
 
             # Get cache statistics
             cache_count = 0
-            async for key in redis_client.scan_iter(match="kb_cache:*"):
+            async for key in kb_redis_client.scan_iter(match="kb_cache:*"):
                 cache_count += 1
 
             metrics["kb_cache_entries"] = SystemMetric(
@@ -247,7 +261,7 @@ class SystemMetricsCollector:
 
             # Estimate cache hit rate (if available)
             cache_stats_key = "kb_cache_stats"
-            cache_stats = await redis_client.hgetall(cache_stats_key)
+            cache_stats = await kb_redis_client.hgetall(cache_stats_key)
             if cache_stats:
                 hits = int(cache_stats.get(b"hits") or cache_stats.get("hits", 0))
                 misses = int(cache_stats.get(b"misses") or cache_stats.get("misses", 0))
@@ -264,7 +278,17 @@ class SystemMetricsCollector:
                     )
 
         except Exception as e:
-            self.logger.error(f"Error collecting knowledge base metrics: {e}")
+            # CRITICAL FIX: Don't spam logs with authentication errors - log once and skip
+            error_msg = str(e)
+            if "Authentication required" in error_msg or "NOAUTH" in error_msg:
+                if not self._auth_error_logged:
+                    self.logger.warning(
+                        "Knowledge base metrics collection skipped: Redis authentication required. "
+                        "Configure Redis credentials in get_redis_client() to enable KB metrics."
+                    )
+                    self._auth_error_logged = True
+            else:
+                self.logger.error(f"Error collecting knowledge base metrics: {e}")
 
         return metrics
 
@@ -327,7 +351,17 @@ class SystemMetricsCollector:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error storing metrics: {e}")
+            # CRITICAL FIX: Don't spam logs with authentication errors - log once and skip
+            error_msg = str(e)
+            if "Authentication required" in error_msg or "NOAUTH" in error_msg:
+                if not self._auth_error_logged:
+                    self.logger.warning(
+                        "Metrics storage skipped: Redis authentication required. "
+                        "Metrics will be buffered in memory only until authentication is configured."
+                    )
+                    self._auth_error_logged = True
+            else:
+                self.logger.error(f"Error storing metrics: {e}")
             return False
 
     async def get_recent_metrics(

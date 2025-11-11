@@ -59,198 +59,7 @@
         </BaseButton>
         <h3>{{ getSelectedCategoryName() }}</h3>
       </div>
-      <KnowledgeBrowser :mode="selectedMainCategory" :preselected-category="selectedMainCategory" />
-    </div>
-
-    <!-- Legacy User Categories (keeping for possible future use) -->
-    <div v-if="false" class="user-categories">
-      <div class="categories-header">
-        <h3>User Categories</h3>
-        <BaseButton
-          variant="primary"
-          size="sm"
-          @click="showCreateDialog = true"
-          class="create-category-btn"
-        >
-          <i class="fas fa-plus"></i> New Category
-        </BaseButton>
-      </div>
-
-    <div v-if="store.isLoading" class="loading-state">
-      <i class="fas fa-spinner fa-spin"></i>
-      <p>Loading categories...</p>
-    </div>
-
-    <EmptyState
-      v-else-if="store.categories.length === 0"
-      icon="fas fa-folder-open"
-      message="No categories yet"
-    >
-      <p class="empty-hint">Create your first category to organize knowledge</p>
-    </EmptyState>
-
-    <div v-else class="categories-grid">
-      <div
-        v-for="category in sortedCategories"
-        :key="category.id"
-        class="category-card"
-        :class="{ 'selected': selectedCategory?.id === category.id }"
-        @click="selectCategory(category)"
-      >
-        <div class="category-header">
-          <div class="category-icon" :style="{ backgroundColor: category.color || '#6b7280' }">
-            <i class="fas fa-folder"></i>
-          </div>
-          <div class="category-actions">
-            <BaseButton
-              variant="ghost"
-              size="xs"
-              @click.stop="editCategory(category)"
-              class="action-btn"
-              title="Edit"
-            >
-              <i class="fas fa-edit"></i>
-            </BaseButton>
-            <BaseButton
-              variant="ghost"
-              size="xs"
-              @click.stop="deleteCategory(category)"
-              class="action-btn danger"
-              title="Delete"
-            >
-              <i class="fas fa-trash"></i>
-            </BaseButton>
-          </div>
-        </div>
-
-        <h4 class="category-name">{{ category.name }}</h4>
-        <p class="category-description">{{ category.description || 'No description' }}</p>
-
-        <div class="category-stats">
-          <span class="stat-item">
-            <i class="fas fa-file-alt"></i>
-            {{ category.documentCount }} documents
-          </span>
-          <span class="stat-item">
-            <i class="fas fa-clock"></i>
-            {{ formatDate(category.updatedAt) }}
-          </span>
-        </div>
-
-        <div class="category-actions-bottom">
-          <BaseButton
-            variant="outline"
-            size="sm"
-            @click.stop="viewDocuments(category)"
-            class="view-docs-btn"
-          >
-            View Documents
-          </BaseButton>
-        </div>
-      </div>
-    </div>
-
-    <!-- Create/Edit Category Dialog -->
-    <BaseModal
-      v-model="showCategoryDialog"
-      :title="showEditDialog ? 'Edit Category' : 'Create Category'"
-      size="small"
-      @close="closeDialogs"
-    >
-      <div class="form-group">
-        <label for="category-name">Category Name *</label>
-        <input
-          id="category-name"
-          v-model="categoryForm.name"
-          type="text"
-          class="form-input"
-          placeholder="e.g., Technical Documentation"
-          required
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="category-description">Description</label>
-        <textarea
-          id="category-description"
-          v-model="categoryForm.description"
-          class="form-textarea"
-          rows="3"
-          placeholder="Brief description of this category..."
-        ></textarea>
-      </div>
-
-      <div class="form-group">
-        <label for="category-color">Color</label>
-        <div class="color-picker">
-          <div
-            v-for="color in colorOptions"
-            :key="color"
-            class="color-option"
-            :class="{ 'selected': categoryForm.color === color }"
-            :style="{ backgroundColor: color }"
-            @click="categoryForm.color = color"
-          ></div>
-        </div>
-      </div>
-
-      <template #actions>
-        <BaseButton
-          variant="secondary"
-          @click="closeDialogs"
-          class="cancel-btn"
-        >
-          Cancel
-        </BaseButton>
-        <BaseButton
-          variant="primary"
-          @click="saveCategory"
-          :disabled="!categoryForm.name.trim()"
-          class="save-btn"
-        >
-          {{ showEditDialog ? 'Update' : 'Create' }}
-        </BaseButton>
-      </template>
-    </BaseModal>
-
-    <!-- Documents View Panel (User Categories) -->
-    <div v-if="showDocumentsPanel" class="documents-panel">
-      <div class="panel-header">
-        <h3>{{ selectedCategory?.name }} - Documents</h3>
-        <BaseButton
-          variant="ghost"
-          size="sm"
-          @click="closeDocumentsPanel"
-          class="close-panel-btn"
-        >
-          <i class="fas fa-times"></i>
-        </BaseButton>
-      </div>
-
-      <div class="documents-list">
-        <EmptyState
-          v-if="categoryDocuments.length === 0"
-          icon="fas fa-file-alt"
-          message="No documents in this category yet."
-        />
-
-        <div
-          v-for="doc in categoryDocuments"
-          :key="doc.id"
-          class="document-item"
-          @click="viewDocument(doc)"
-        >
-          <div class="doc-icon">
-            <i :class="getTypeIcon(doc.type)"></i>
-          </div>
-          <div class="doc-info">
-            <h5>{{ doc.title || 'Untitled' }}</h5>
-            <p class="doc-meta">
-              {{ doc.type }} • {{ formatDate(doc.updatedAt) }}
-            </p>
-          </div>
-        </div>
-      </div>
+      <KnowledgeBrowser :mode="selectedMainCategory!" :preselected-category="selectedMainCategory" />
     </div>
 
     <!-- System Category Documents Panel -->
@@ -327,15 +136,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
-import { useKnowledgeController } from '@/models/controllers'
-import { useAppStore } from '@/stores/useAppStore'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
-import type { KnowledgeCategory, KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import KnowledgeBrowser from './KnowledgeBrowser.vue'
-import ManPageManager from '@/components/ManPageManager.vue'
 import DocumentChangeFeed from './DocumentChangeFeed.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -358,25 +162,7 @@ const {
 const router = useRouter()
 const route = useRoute()
 
-// Stores and controller
-const store = useKnowledgeStore()
-const controller = useKnowledgeController()
-const appStore = useAppStore()
-
 // UI state
-const showCreateDialog = ref(false)
-const showEditDialog = ref(false)
-const showCategoryDialog = computed({
-  get: () => showCreateDialog.value || showEditDialog.value,
-  set: (val) => {
-    if (!val) {
-      showCreateDialog.value = false
-      showEditDialog.value = false
-    }
-  }
-})
-const showDocumentsPanel = ref(false)
-const selectedCategory = ref<KnowledgeCategory | null>(null)
 const selectedMainCategory = ref<string | null>(null)
 
 // Shared state
@@ -396,102 +182,6 @@ const currentDocument = ref<any>(null)
 const systemCategories = computed(() => {
   return kbStats.value?.categories || []
 })
-
-// Form state
-const categoryForm = ref({
-  name: '',
-  description: '',
-  color: '#6b7280'
-})
-
-// Color options for categories
-const colorOptions = [
-  '#ef4444', '#f59e0b', '#10b981', '#3b82f6',
-  '#6366f1', '#8b5cf6', '#ec4899', '#6b7280'
-]
-
-// Computed
-const sortedCategories = computed(() => {
-  return [...store.categories].sort((a, b) => {
-    return b.documentCount - a.documentCount
-  })
-})
-
-// Methods
-const selectCategory = (category: KnowledgeCategory) => {
-  selectedCategory.value = category
-}
-
-const editCategory = (category: KnowledgeCategory) => {
-  selectedCategory.value = category
-  categoryForm.value = {
-    name: category.name,
-    description: category.description || '',
-    color: category.color || '#6b7280'
-  }
-  showEditDialog.value = true
-}
-
-const deleteCategory = async (category: KnowledgeCategory) => {
-  if (!confirm(`Delete category "${category.name}"? Documents will be moved to "Uncategorized".`)) {
-    return
-  }
-
-  try {
-    controller.deleteCategory(category.id)
-    appStore.setGlobalError(null)
-  } catch (error) {
-    console.error('Failed to delete category:', error)
-  }
-}
-
-const viewDocuments = async (category: KnowledgeCategory) => {
-  selectedCategory.value = category
-  categoryDocuments.value = store.documentsByCategory.get(category.name) || []
-  showDocumentsPanel.value = true
-}
-
-const viewDocument = (doc: KnowledgeDocument) => {
-  store.selectDocument(doc)
-  store.setActiveTab('entries')
-}
-
-const saveCategory = async () => {
-  if (!categoryForm.value.name.trim()) return
-
-  try {
-    if (showEditDialog.value && selectedCategory.value) {
-      controller.updateCategory(selectedCategory.value.id, categoryForm.value)
-    } else {
-      controller.addCategory(categoryForm.value.name, categoryForm.value.description)
-    }
-    closeDialogs()
-  } catch (error) {
-    console.error('Failed to save category:', error)
-  }
-}
-
-const closeDialogs = () => {
-  showCreateDialog.value = false
-  showEditDialog.value = false
-  categoryForm.value = {
-    name: '',
-    description: '',
-    color: '#6b7280'
-  }
-  selectedCategory.value = null
-}
-
-const closeDocumentsPanel = () => {
-  showDocumentsPanel.value = false
-  categoryDocuments.value = []
-}
-
-// Utility functions (now using composable)
-// Removed: formatDate - now using composable
-// Removed: getTypeIcon - now using composable
-// Removed: getCategoryIcon - now using composable
-// Removed: formatCategoryName - now using composable
 
 const getKBStats = async () => {
   isLoadingKBStats.value = true
@@ -574,7 +264,6 @@ const getSelectedCategoryName = () => {
 
 // Load data on mount
 onMounted(() => {
-  controller.loadCategories()
   getKBStats()
   loadMainCategories()
 })
@@ -584,14 +273,10 @@ onUnmounted(() => {
   // Close all modals to prevent teleport elements from accumulating
   showCategoryDocuments.value = false
   showDocumentModal.value = false
-  showCreateDialog.value = false
-  showEditDialog.value = false
-  showDocumentsPanel.value = false
 
   // Clear modal data
   categoryDocuments.value = []
   currentDocument.value = null
-  selectedCategory.value = null
   selectedCategoryPath.value = ''
 })
 </script>

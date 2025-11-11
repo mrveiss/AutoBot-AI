@@ -1,5 +1,11 @@
 <template>
   <div id="app" class="h-screen bg-gray-100 flex flex-col overflow-hidden">
+    <!-- Skip Navigation Links -->
+    <div class="skip-links">
+      <a href="#main-content" class="skip-link sr-only-focusable">Skip to main content</a>
+      <a href="#navigation" class="skip-link sr-only-focusable">Skip to navigation</a>
+    </div>
+
     <!-- Header -->
     <header class="bg-gradient-to-r from-indigo-600 to-purple-600 shadow-sm relative z-30">
       <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
@@ -29,7 +35,7 @@
           </div>
 
           <!-- Desktop Navigation -->
-          <nav class="hidden lg:block">
+          <nav id="navigation" class="hidden lg:block" role="navigation" aria-label="Main navigation">
             <div class="hidden lg:flex items-center space-x-8">
               <div class="flex items-center space-x-4">
                 <router-link
@@ -760,6 +766,40 @@ export default {
 </script>
 
 <style scoped>
+/* Skip Navigation Links */
+.skip-links {
+  position: relative;
+  z-index: 9999;
+}
+
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #000;
+  color: #fff;
+  padding: 8px 16px;
+  text-decoration: none;
+  border-radius: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 500;
+  transition: top 0.2s ease-in-out;
+  z-index: 10000;
+}
+
+.skip-link:focus {
+  top: 0;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* Navigation link focus indicators */
+nav a:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.8);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+}
+
 /* Add any component-specific styles here */
 .fade-enter-active, .fade-leave-active {
   transition: opacity 0.5s;

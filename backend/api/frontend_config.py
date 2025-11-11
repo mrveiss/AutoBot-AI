@@ -36,17 +36,13 @@ async def get_frontend_config():
                 "version": "1.5.0"
             },
             "api": {
-                "base_url": full_config.get("backend", {}).get(
-                    "host", backend_config.get("host")
-                ),
-                "port": full_config.get("backend", {}).get(
-                    "port", backend_config.get("port")
-                ),
+                "base_url": NetworkConstants.MAIN_MACHINE_IP,
+                "port": NetworkConstants.BACKEND_PORT,
                 "timeout": full_config.get("api", {}).get("timeout", 30),
                 "retry_attempts": full_config.get("api", {}).get("retry_attempts", 3),
             },
             "websocket": {
-                "url": f"ws://{full_config.get('backend', {}).get('host', backend_config.get('host'))}:{full_config.get('backend', {}).get('port', backend_config.get('port'))}/ws",
+                "url": f"ws://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/ws",
                 "reconnect_attempts": full_config.get("websocket", {}).get(
                     "reconnect_attempts", 5
                 ),

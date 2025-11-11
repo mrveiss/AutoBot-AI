@@ -39,7 +39,8 @@ from tenacity import (
 # Import unified configuration and dependencies
 from src.circuit_breaker import circuit_breaker_async
 from src.constants.network_constants import NetworkConstants
-from src.redis_pool_manager import get_redis_async
+# REFACTORED: Removed unused import from deprecated redis_pool_manager
+# from src.redis_pool_manager import get_redis_async
 from src.retry_mechanism import retry_network_operation
 from src.unified_config import config
 from src.utils.error_boundaries import (

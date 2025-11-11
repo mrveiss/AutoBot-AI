@@ -28,10 +28,100 @@ from src.secure_command_executor import (
     SecureCommandExecutor,
     SecurityPolicy,
 )
+
+# REUSABLE PRINCIPLE: Dependency Injection - import queue manager
+from backend.models.command_execution import CommandExecution, CommandState, RiskLevel
+from backend.services.command_execution_queue import get_command_queue
 from backend.services.command_approval_manager import (
     AgentRole,
     CommandApprovalManager,
 )
+
+
+# ============================================================================
+# REUSABLE HELPER FUNCTIONS (Single Responsibility Principle)
+# ============================================================================
+
+
+def map_risk_to_level(risk: CommandRisk) -> RiskLevel:
+    """
+    Convert CommandRisk to RiskLevel enum.
+
+    REUSABLE PRINCIPLE: Single function, clear responsibility, reusable across codebase.
+
+    CommandRisk enum values: SAFE, MODERATE, HIGH, CRITICAL, FORBIDDEN
+    RiskLevel enum values: LOW, MEDIUM, HIGH, CRITICAL
+
+    Args:
+        risk: CommandRisk from security assessment
+
+    Returns:
+        Corresponding RiskLevel enum
+    """
+    risk_mapping = {
+        CommandRisk.SAFE: RiskLevel.LOW,           # Safe commands → Low risk
+        CommandRisk.MODERATE: RiskLevel.MEDIUM,    # Moderate commands → Medium risk
+        CommandRisk.HIGH: RiskLevel.HIGH,          # High risk commands → High risk
+        CommandRisk.CRITICAL: RiskLevel.CRITICAL,  # Critical commands → Critical risk
+        CommandRisk.FORBIDDEN: RiskLevel.CRITICAL, # Forbidden commands → Critical risk (blocked)
+    }
+    return risk_mapping.get(risk, RiskLevel.MEDIUM)
+
+
+def extract_terminal_and_chat_ids(session: "AgentTerminalSession") -> tuple[str, str]:
+    """
+    Extract terminal session ID and chat ID from agent session.
+
+    REUSABLE PRINCIPLE: DRY - centralize ID extraction logic.
+
+    Args:
+        session: Agent terminal session
+
+    Returns:
+        Tuple of (terminal_session_id, chat_id)
+    """
+    terminal_session_id = session.pty_session_id or session.session_id
+    chat_id = session.conversation_id or ""
+    return terminal_session_id, chat_id
+
+
+def create_command_execution(
+    session: "AgentTerminalSession",
+    command: str,
+    description: str,
+    risk: "CommandRisk",
+    risk_reasons: list[str],
+) -> CommandExecution:
+    """
+    Create CommandExecution object from session and command details.
+
+    REUSABLE PRINCIPLE: Factory function - encapsulates object creation logic.
+    Single responsibility: Create CommandExecution, nothing else.
+
+    Args:
+        session: Agent terminal session
+        command: Command to execute
+        description: Command purpose/description
+        risk: CommandRisk level
+        risk_reasons: List of risk reasons
+
+    Returns:
+        CommandExecution object ready to add to queue
+    """
+    # Use helper functions (DRY principle)
+    terminal_session_id, chat_id = extract_terminal_and_chat_ids(session)
+    risk_level = map_risk_to_level(risk)
+
+    return CommandExecution(
+        terminal_session_id=terminal_session_id,
+        chat_id=chat_id,
+        command=command,
+        purpose=description,
+        risk_level=risk_level,
+        risk_reasons=risk_reasons,
+        state=CommandState.PENDING_APPROVAL,
+    )
+
 
 logger = logging.getLogger(__name__)
 
@@ -77,13 +167,16 @@ class AgentTerminalService:
     - Comprehensive audit logging
     """
 
-    def __init__(self, redis_client=None, chat_workflow_manager=None):
+    def __init__(self, redis_client=None, chat_workflow_manager=None, command_queue=None):
         """
         Initialize agent terminal service.
+
+        REUSABLE PRINCIPLE: Dependency Injection - all dependencies injected for testability.
 
         Args:
             redis_client: Redis client for session persistence
             chat_workflow_manager: Existing ChatWorkflowManager instance (prevents circular initialization)
+            command_queue: Command execution queue (default: singleton instance)
         """
         self.redis_client = redis_client
         self.sessions: Dict[str, AgentTerminalSession] = {}
@@ -103,7 +196,10 @@ class AgentTerminalService:
         # REFACTOR: Use CommandApprovalManager for reusable approval logic
         self.approval_manager = CommandApprovalManager()
 
-        logger.info("AgentTerminalService initialized with security controls")
+        # REUSABLE PRINCIPLE: Command queue - single source of truth for command state
+        self.command_queue = command_queue or get_command_queue()
+
+        logger.info("AgentTerminalService initialized with security controls and command queue")
 
     async def create_session(
         self,
@@ -203,6 +299,10 @@ class AgentTerminalService:
             f"PTY session: {pty_session_id}"
         )
 
+        # CRITICAL: Restore pending approvals from chat history (survives restarts)
+        if conversation_id:
+            await self._restore_pending_approval(session, conversation_id)
+
         # Persist to Redis if available
         if self.redis_client:
             await self._persist_session(session)
@@ -246,6 +346,90 @@ class AgentTerminalService:
             )
         except Exception as e:
             logger.error(f"Failed to persist session to Redis: {e}")
+
+    async def _restore_pending_approval(
+        self, session: AgentTerminalSession, conversation_id: str
+    ):
+        """
+        Restore pending approval from chat history (survives backend restarts).
+
+        Scans recent chat messages for unapproved command_approval_request messages
+        and restores the pending_approval state so users can approve after restart.
+
+        Args:
+            session: Agent terminal session to restore state for
+            conversation_id: Chat conversation ID to check
+        """
+        try:
+            # Get recent messages from chat history (last 50 messages)
+            messages = await self.chat_history_manager.get_session_messages(
+                session_id=conversation_id,
+                limit=50
+            )
+
+            if not messages:
+                logger.debug(f"No messages found for conversation {conversation_id}, skipping approval restoration")
+                return
+
+            # Search for most recent command_approval_request
+            approval_request = None
+            for msg in reversed(messages):  # Search newest first
+                if msg.get("message_type") == "command_approval_request":
+                    approval_request = msg
+                    break
+
+            if not approval_request:
+                logger.debug(f"No pending approval requests found in conversation {conversation_id}")
+                return
+
+            # Check if this approval was already responded to
+            # Look for approval/denial messages AFTER the request
+            request_timestamp = approval_request.get("timestamp", 0)
+
+            for msg in reversed(messages):
+                msg_time = msg.get("timestamp", 0)
+                if msg_time > request_timestamp:
+                    # Check if this is an approval or denial response
+                    content = msg.get("text", "").lower()
+                    if any(keyword in content for keyword in ["approved", "denied", "executed", "rejected"]):
+                        logger.info(
+                            f"Approval request already responded to in conversation {conversation_id}, "
+                            f"skipping restoration"
+                        )
+                        return
+
+            # Approval is still pending! Restore state from metadata
+            metadata = approval_request.get("metadata", {})
+            command = metadata.get("command")
+
+            if command:
+                session.pending_approval = {
+                    "command": command,
+                    "risk": metadata.get("risk_level", "MEDIUM"),
+                    "reasons": metadata.get("reasons", []),
+                    "description": metadata.get("description", ""),
+                    "terminal_session_id": metadata.get("terminal_session_id"),
+                    "conversation_id": conversation_id,
+                    "timestamp": request_timestamp,
+                }
+                session.state = AgentSessionState.AWAITING_APPROVAL
+
+                logger.info(
+                    f"✅ [APPROVAL RESTORED] Restored pending approval for session {session.session_id}: "
+                    f"command='{command}', risk={metadata.get('risk_level')}"
+                )
+                logger.info(
+                    f"✅ [APPROVAL RESTORED] User can now approve this command even after backend restart"
+                )
+            else:
+                logger.warning(
+                    f"Found approval request but no command in metadata for conversation {conversation_id}"
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to restore pending approval from chat history: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
 
     async def _save_command_to_chat(
         self, conversation_id: str, command: str, result: dict, command_type: str = "agent"
@@ -521,6 +705,83 @@ class AgentTerminalService:
             logger.error(f"Error writing to PTY: {e}")
             return False
 
+    async def _execute_in_pty(self, session: AgentTerminalSession, command: str, timeout: float = 5.0) -> Dict[str, Any]:
+        """
+        Execute command directly in PTY shell (true collaboration mode).
+        User and agent work as one in the same terminal.
+
+        Args:
+            session: Agent terminal session
+            command: Command to execute
+            timeout: Max seconds to wait for output
+
+        Returns:
+            Dict with status, stdout, stderr, return_code
+        """
+        import asyncio
+        import time as time_module
+        from backend.services.simple_pty import simple_pty_manager
+
+        logger.info(f"[PTY_EXEC] Executing in PTY: {command}")
+
+        # Write command to PTY (shell will execute it)
+        if not self._write_to_pty(session, f"{command}\n"):
+            return {
+                "status": "error",
+                "stdout": "",
+                "stderr": "Failed to write command to PTY",
+                "return_code": 1
+            }
+
+        # CRITICAL: Do NOT collect from PTY output queue directly!
+        # The WebSocket handler consumes from the same queue (race condition).
+        # Instead, wait for WebSocket to save output to chat, then read from there.
+
+        # Wait for command to execute and WebSocket to save output
+        logger.info(f"[PTY_EXEC] Waiting {timeout}s for command to complete and output to be saved to chat...")
+        await asyncio.sleep(min(timeout, 3.0))  # Wait max 3 seconds
+
+        # Read output from chat history (WebSocket saved it there)
+        full_output = ""
+        try:
+            if session.conversation_id:
+                # Get recent terminal messages from chat
+                messages = await self.chat_history_manager.get_session_messages(
+                    session_id=session.conversation_id,
+                    limit=5  # Get last 5 messages
+                )
+
+                # Find the most recent terminal output message
+                for msg in reversed(messages):
+                    if msg.get("sender") == "terminal" and msg.get("text"):
+                        terminal_text = msg["text"]
+
+                        # Strip ANSI escape codes to get clean output
+                        from src.utils.encoding_utils import strip_ansi_codes
+                        clean_output = strip_ansi_codes(terminal_text)
+
+                        # Extract just the output (after the command line)
+                        # Format is usually: "command\r\noutput\r\n"
+                        lines = clean_output.split('\n')
+                        if len(lines) > 1:
+                            # Skip first line (command echo), get the output
+                            full_output = '\n'.join(lines[1:]).strip()
+                            logger.info(f"[PTY_EXEC] Extracted output from chat: {full_output[:100]}...")
+                        break
+
+        except Exception as e:
+            logger.error(f"[PTY_EXEC] Failed to read output from chat: {e}")
+            full_output = ""
+
+        logger.info(f"[PTY_EXEC] Command written to PTY. Output collected from chat for interpretation.")
+
+        return {
+            "status": "success",
+            "stdout": full_output,
+            "stderr": "",  # PTY combines stdout/stderr
+            "return_code": 0  # PTY doesn't provide return code directly
+        }
+
     async def execute_command(
         self,
         session_id: str,
@@ -628,13 +889,32 @@ class AgentTerminalService:
                 )
                 # Fall through to execute command below
             else:
-                # Store command in pending approval
+                # REUSABLE PRINCIPLE: Use queue as single source of truth
+                # Create CommandExecution object using factory function
+                cmd_execution = create_command_execution(
+                    session=session,
+                    command=command,
+                    description=description,
+                    risk=risk,
+                    risk_reasons=reasons,
+                )
+
+                # Add to command queue (persistent, survives restarts)
+                await self.command_queue.add_command(cmd_execution)
+                logger.info(
+                    f"✅ [QUEUE] Added command {cmd_execution.command_id} to queue: "
+                    f"terminal={cmd_execution.terminal_session_id}, chat={cmd_execution.chat_id}"
+                )
+
+                # BACKWARD COMPATIBILITY: Keep session.pending_approval for now
+                # (Will be removed in Phase 4 cleanup)
                 session.pending_approval = {
                     "command": command,
                     "description": description,
                     "risk": risk.value,
                     "reasons": reasons,
                     "timestamp": time.time(),
+                    "command_id": cmd_execution.command_id,  # Link to queue
                 }
 
                 # CRITICAL: Persist session to Redis so pending approval survives page reload
@@ -643,7 +923,7 @@ class AgentTerminalService:
 
                 logger.info(
                     f"Command requires approval: {command} "
-                    f"(agent: {session.agent_id}, risk: {risk.value})"
+                    f"(agent: {session.agent_id}, risk: {risk.value}, command_id: {cmd_execution.command_id})"
                 )
 
                 # Log pending approval command
@@ -664,6 +944,8 @@ class AgentTerminalService:
                     "description": description,
                     "agent_role": session.agent_role.value,
                     "approval_required": True,
+                    "command_id": cmd_execution.command_id,  # CRITICAL: Return command_id to frontend
+                    "terminal_session_id": cmd_execution.terminal_session_id,  # For frontend linking
                 }
 
         # Execute command (auto-approved safe commands)
@@ -678,8 +960,9 @@ class AgentTerminalService:
                     user_id=None,
                 )
 
-            # Execute the command
-            result = await executor.run_shell_command(command, force_approval=False)
+            # CRITICAL: Execute in PTY (true collaboration mode - works on any host)
+            # User and agent work as one in the same terminal
+            result = await self._execute_in_pty(session, command)
 
             # Log command execution result
             if session.conversation_id:
@@ -712,26 +995,9 @@ class AgentTerminalService:
                 except Exception as e:
                     logger.error(f"[INTERPRETATION] Failed to interpret command results: {e}")
 
-            # CRITICAL FIX: Write formatted command and output to PTY terminal for display
-            # The command executes via subprocess (NOT in PTY shell), so we write
-            # a formatted display to PTY for users to see it in the terminal tab.
-            #
-            # IMPORTANT: We write the OUTPUT, not the command itself, to prevent double execution.
-            # Writing "command\n" would cause PTY shell to execute it again.
-
-            # Format output for terminal display
-            terminal_output = f"\r\n$ {command}\r\n"
-            if result.get("stdout"):
-                terminal_output += result["stdout"]
-                if not result["stdout"].endswith("\n"):
-                    terminal_output += "\r\n"
-            if result.get("stderr"):
-                terminal_output += result["stderr"]
-                if not result["stderr"].endswith("\n"):
-                    terminal_output += "\r\n"
-
-            # Write formatted output to PTY (for terminal tab display)
-            self._write_to_pty(session, terminal_output)
+            # NOTE: Output already appears naturally in PTY terminal (executed in shell)
+            # No need to write it back - user and agent work as one in the same terminal
+            # LLM interpretation appears in chat UI (not terminal)
 
             # Add to command history
             session.command_history.append(
@@ -825,8 +1091,19 @@ class AgentTerminalService:
 
         command = session.pending_approval.get("command")
         risk_level = session.pending_approval.get("risk")  # Save before clearing
+        command_id = session.pending_approval.get("command_id")  # Get command_id from pending approval
 
         if approved:
+            # REUSABLE PRINCIPLE: Update command state in queue
+            if command_id:
+                await self.command_queue.approve_command(
+                    command_id=command_id,
+                    user_id=user_id or "web_user",
+                    comment=comment,
+                )
+                logger.info(
+                    f"✅ [QUEUE] Command {command_id} approved in queue by {user_id or 'web_user'}"
+                )
             # Execute approved command
             # User has already approved, so callback always returns True
             async def pre_approved_callback(approval_data):
@@ -849,8 +1126,75 @@ class AgentTerminalService:
                         user_id=user_id,
                     )
 
-                # Execute the command
-                result = await executor.run_shell_command(command, force_approval=False)
+                # REUSABLE PRINCIPLE: Mark execution start in queue
+                if command_id:
+                    await self.command_queue.start_execution(command_id)
+                    logger.info(f"✅ [QUEUE] Command {command_id} marked as EXECUTING in queue")
+
+                # CRITICAL: Execute in PTY (true collaboration mode - works on any host)
+                # User and agent work as one in the same terminal
+                result = await self._execute_in_pty(session, command)
+
+                # CRITICAL FIX: Poll chat history for output (event-driven, no fixed timeout)
+                # WebSocket handler saves output to chat asynchronously - poll until it appears
+                if session.conversation_id:
+                    try:
+                        logger.info("[OUTPUT FETCH] Polling chat history for terminal output...")
+
+                        # Poll chat history until output appears (max 10 seconds)
+                        max_attempts = 50  # 50 attempts * 200ms = 10 seconds max
+                        attempt = 0
+                        terminal_output = ""
+
+                        while attempt < max_attempts and not terminal_output:
+                            # Fetch recent messages from chat
+                            recent_messages = await self.chat_history_manager.get_session_messages(
+                                session_id=session.conversation_id,
+                                limit=10  # Get last 10 messages
+                            )
+
+                            # Search for most recent terminal_output message
+                            for msg in reversed(recent_messages):
+                                if msg.get("message_type") == "terminal_output":
+                                    terminal_output = msg.get("text", "")
+                                    elapsed_ms = attempt * 200
+                                    logger.info(
+                                        f"[OUTPUT FETCH] ✅ Found terminal output after {elapsed_ms}ms: "
+                                        f"{len(terminal_output)} chars"
+                                    )
+                                    break
+
+                            if not terminal_output:
+                                await asyncio.sleep(0.2)  # 200ms between polling attempts
+                                attempt += 1
+
+                        # Populate result with the output from chat
+                        if terminal_output:
+                            result["stdout"] = terminal_output
+                            logger.info(f"[OUTPUT FETCH] Populated result[stdout] with {len(terminal_output)} chars")
+                        else:
+                            logger.warning(
+                                f"[OUTPUT FETCH] No terminal output found after {max_attempts * 200}ms "
+                                f"({max_attempts} attempts)"
+                            )
+
+                    except Exception as e:
+                        logger.error(f"[OUTPUT FETCH] Failed to poll chat history for output: {e}")
+
+                # REUSABLE PRINCIPLE: Write output to queue (single source of truth)
+                if command_id:
+                    await self.command_queue.complete_command(
+                        command_id=command_id,
+                        output=result.get("stdout", ""),
+                        stderr=result.get("stderr", ""),
+                        return_code=result.get("return_code", 0),
+                    )
+                    logger.info(
+                        f"✅ [QUEUE] Command {command_id} completed in queue: "
+                        f"stdout={len(result.get('stdout', ''))} chars, "
+                        f"stderr={len(result.get('stderr', ''))} chars, "
+                        f"return_code={result.get('return_code', 0)}"
+                    )
 
                 # Log command execution result
                 if session.conversation_id:
@@ -885,26 +1229,9 @@ class AgentTerminalService:
                     except Exception as e:
                         logger.error(f"[INTERPRETATION] Failed to interpret approved command results: {e}")
 
-                # CRITICAL FIX: Write formatted command and output to PTY terminal for display
-                # The command executes via subprocess (NOT in PTY shell), so we write
-                # a formatted display to PTY for users to see it in the terminal tab.
-                #
-                # IMPORTANT: We write the OUTPUT, not the command itself, to prevent double execution.
-                # Writing "command\n" would cause PTY shell to execute it again.
-
-                # Format output for terminal display
-                terminal_output = f"\r\n$ {command}\r\n"
-                if result.get("stdout"):
-                    terminal_output += result["stdout"]
-                    if not result["stdout"].endswith("\n"):
-                        terminal_output += "\r\n"
-                if result.get("stderr"):
-                    terminal_output += result["stderr"]
-                    if not result["stderr"].endswith("\n"):
-                        terminal_output += "\r\n"
-
-                # Write formatted output to PTY (for terminal tab display)
-                self._write_to_pty(session, terminal_output)
+                # NOTE: Output already appears naturally in PTY terminal (executed in shell)
+                # No need to write it back - user and agent work as one in the same terminal
+                # LLM interpretation appears in chat UI (not terminal)
 
                 # Add to command history
                 session.command_history.append(
@@ -940,6 +1267,39 @@ class AgentTerminalService:
                         risk_level=risk_level,
                     )
 
+                # CRITICAL FIX: Update chat message metadata to persist approval status
+                # This prevents the approval UI from reverting to "pending" when frontend polls
+                if session.conversation_id:
+                    try:
+                        updated = await self.chat_history_manager.update_message_metadata(
+                            session_id=session.conversation_id,
+                            metadata_filter={
+                                "terminal_session_id": session_id,
+                                "requires_approval": True
+                            },
+                            metadata_updates={
+                                "approval_status": "approved",
+                                "approval_comment": comment,
+                                "approved_by": user_id,
+                                "approved_at": time.time()
+                            }
+                        )
+                        if updated:
+                            logger.info(
+                                f"✅ Updated chat message with approval status: "
+                                f"session={session.conversation_id}, terminal_session={session_id}"
+                            )
+                        else:
+                            logger.warning(
+                                f"⚠️ Could not find chat message to update approval status: "
+                                f"session={session.conversation_id}, terminal_session={session_id}"
+                            )
+                    except Exception as metadata_update_error:
+                        logger.error(
+                            f"Failed to update chat message metadata (non-fatal): {metadata_update_error}",
+                            exc_info=True
+                        )
+
                 # Broadcast approval status update to WebSocket clients
                 await self._broadcast_approval_status(
                     session,
@@ -965,6 +1325,17 @@ class AgentTerminalService:
                 }
         else:
             # Command denied
+            # REUSABLE PRINCIPLE: Update command state in queue
+            if command_id:
+                await self.command_queue.deny_command(
+                    command_id=command_id,
+                    user_id=user_id or "web_user",
+                    comment=comment,
+                )
+                logger.info(
+                    f"✅ [QUEUE] Command {command_id} denied in queue by {user_id or 'web_user'}"
+                )
+
             logger.info(
                 f"Command denied by user: {command}"
                 + (f" with reason: {comment}" if comment else "")
@@ -980,6 +1351,22 @@ class AgentTerminalService:
                     user_id=user_id,
                 )
 
+                # CRITICAL: Save denial with user's alternative suggestion to chat
+                # This allows the agent to see the feedback and propose a different approach
+                if comment:
+                    try:
+                        await self.chat_history_manager.add_message(
+                            sender="user",
+                            text=f"❌ Command denied: `{command}`\n\n💡 **Alternative approach suggested:**\n{comment}",
+                            message_type="command_denial",
+                            session_id=session.conversation_id,
+                        )
+                        logger.info(
+                            f"✅ [DENIAL FEEDBACK] Saved user's alternative suggestion to chat: {comment[:50]}..."
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to save denial feedback to chat: {e}")
+
             # Add to command history (for audit trail)
             session.command_history.append(
                 {
@@ -994,6 +1381,39 @@ class AgentTerminalService:
 
             session.pending_approval = None
             session.state = AgentSessionState.AGENT_CONTROL
+
+            # CRITICAL FIX: Update chat message metadata to persist denial status
+            # This prevents the approval UI from reverting to "pending" when frontend polls
+            if session.conversation_id:
+                try:
+                    updated = await self.chat_history_manager.update_message_metadata(
+                        session_id=session.conversation_id,
+                        metadata_filter={
+                            "terminal_session_id": session_id,
+                            "requires_approval": True
+                        },
+                        metadata_updates={
+                            "approval_status": "denied",
+                            "approval_comment": comment,
+                            "denied_by": user_id,
+                            "denied_at": time.time()
+                        }
+                    )
+                    if updated:
+                        logger.info(
+                            f"✅ Updated chat message with denial status: "
+                            f"session={session.conversation_id}, terminal_session={session_id}"
+                        )
+                    else:
+                        logger.warning(
+                            f"⚠️ Could not find chat message to update denial status: "
+                            f"session={session.conversation_id}, terminal_session={session_id}"
+                        )
+                except Exception as metadata_update_error:
+                    logger.error(
+                        f"Failed to update chat message metadata (non-fatal): {metadata_update_error}",
+                        exc_info=True
+                    )
 
             # Broadcast denial status update to WebSocket clients
             await self._broadcast_approval_status(
@@ -1211,19 +1631,34 @@ class AgentTerminalService:
             else:
                 status = "denied"
 
-            # TODO: Implement WebSocket broadcasting for real-time UI updates
-            # For now, log the approval status (will be picked up on next message/refresh)
-            logger.info(
-                f"Approval status update (WebSocket broadcast pending): "
-                f"conversation_id={session.conversation_id}, "
-                f"status={status}, "
-                f"command={command}, "
-                f"comment={comment}"
-            )
+            # IMPLEMENTED: Real-time WebSocket broadcasting via event_manager
+            try:
+                from src.event_manager import event_manager
 
-            # Future implementation:
-            # from backend.api.websockets import websocket_manager
-            # await websocket_manager.broadcast_to_conversation(...)
+                await event_manager.publish(
+                    event_type="command_approval_status",
+                    payload={
+                        "conversation_id": session.conversation_id,
+                        "terminal_session_id": session.session_id,
+                        "command": command,
+                        "status": status,
+                        "approved": approved,
+                        "comment": comment,
+                        "pre_approved": pre_approved,
+                    },
+                )
+                logger.info(
+                    f"✅ Approval status broadcast sent: "
+                    f"conversation_id={session.conversation_id}, "
+                    f"status={status}, "
+                    f"command={command}, "
+                    f"comment={comment}"
+                )
+            except Exception as broadcast_error:
+                logger.warning(
+                    f"Failed to broadcast approval status (non-fatal): {broadcast_error}"
+                )
+                # Continue - don't fail the approval process if broadcast fails
 
         except Exception as e:
             logger.error(f"Error in approval status update: {e}", exc_info=True)

@@ -1,4 +1,40 @@
 """
+⚠️⚠️⚠️ DEPRECATED - DO NOT USE ⚠️⚠️⚠️
+
+This module is DEPRECATED and scheduled for removal.
+
+USE INSTEAD: src.utils.redis_client::get_redis_client()
+
+CORRECT USAGE:
+    from src.utils.redis_client import get_redis_client
+
+    # Synchronous client
+    redis_client = get_redis_client(database="main", async_client=False)
+
+    # Asynchronous client
+    async_redis = await get_redis_client(database="knowledge", async_client=True)
+
+WHY DEPRECATED:
+- Duplicates functionality of src.utils.redis_client
+- Not using circuit breaker pattern
+- Inconsistent with centralized Redis client management policy
+- Missing advanced features (health monitoring, metrics, retry logic)
+
+MIGRATION GUIDE:
+See: REDIS_CENTRALIZATION_AUDIT.md
+
+FILES STILL USING THIS (MUST MIGRATE):
+- ❌ None remaining - all files migrated to centralized client
+
+REMOVAL TIMELINE:
+- Phase 1 (Complete): All production files migrated to get_redis_client()
+- Phase 2 (Next): Add runtime deprecation warnings
+- Phase 3 (Future): Remove this file entirely
+
+---
+
+OLD DOCUMENTATION (DEPRECATED):
+
 Redis Connection Pool Manager - Standardized Redis Connections
 
 This module provides a centralized, standardized way to manage Redis connections
@@ -15,7 +51,7 @@ Key Features:
 - Connection metrics and monitoring
 - Graceful degradation on failures
 
-Usage:
+Usage (DEPRECATED - See above for correct usage):
     from src.redis_pool_manager import get_redis_pool, get_async_redis_pool
 
     # Get connection for specific database
@@ -76,9 +112,24 @@ class PoolConfig:
 
 
 class RedisPoolManager:
-    """Centralized Redis connection pool manager"""
+    """
+    ⚠️ DEPRECATED - Use src.utils.redis_client::get_redis_client() instead
+
+    Centralized Redis connection pool manager
+    """
 
     def __init__(self):
+        import warnings
+        warnings.warn(
+            "RedisPoolManager is DEPRECATED. Use src.utils.redis_client::get_redis_client() instead. "
+            "See REDIS_CENTRALIZATION_AUDIT.md for migration guide.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        logger.warning(
+            "⚠️ DEPRECATION WARNING: RedisPoolManager is deprecated. "
+            "Use src.utils.redis_client::get_redis_client() instead."
+        )
         self._sync_pools: Dict[str, ConnectionPool] = {}
         self._async_pools: Dict[str, aioredis.ConnectionPool] = {}
         self._clients: Dict[str, Union[redis.Redis, aioredis.Redis]] = {}
@@ -400,14 +451,44 @@ def get_pool_manager() -> RedisPoolManager:
     return _pool_manager
 
 
-# Convenience functions for easy access
+# Convenience functions for easy access (DEPRECATED)
 def get_redis_sync(database_name: str = "main") -> redis.Redis:
-    """Get synchronous Redis client"""
+    """
+    ⚠️ DEPRECATED - Use src.utils.redis_client::get_redis_client() instead
+
+    Get synchronous Redis client
+    """
+    import warnings
+    warnings.warn(
+        "get_redis_sync() is DEPRECATED. Use get_redis_client(database=..., async_client=False) instead. "
+        "See REDIS_CENTRALIZATION_AUDIT.md for migration guide.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    logger.warning(
+        f"⚠️ DEPRECATION WARNING: get_redis_sync('{database_name}') called. "
+        "Use src.utils.redis_client::get_redis_client() instead."
+    )
     return get_pool_manager().get_sync_client(database_name)
 
 
 async def get_redis_async(database_name: str = "main") -> aioredis.Redis:
-    """Get asynchronous Redis client"""
+    """
+    ⚠️ DEPRECATED - Use src.utils.redis_client::get_redis_client() instead
+
+    Get asynchronous Redis client
+    """
+    import warnings
+    warnings.warn(
+        "get_redis_async() is DEPRECATED. Use get_redis_client(database=..., async_client=True) instead. "
+        "See REDIS_CENTRALIZATION_AUDIT.md for migration guide.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    logger.warning(
+        f"⚠️ DEPRECATION WARNING: get_redis_async('{database_name}') called. "
+        "Use src.utils.redis_client::get_redis_client() instead."
+    )
     return await get_pool_manager().get_async_client(database_name)
 
 

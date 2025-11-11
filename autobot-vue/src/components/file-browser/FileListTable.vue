@@ -23,11 +23,21 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(file, index) in files" :key="file.name || file.id || `file-${index}`">
+        <tr
+          v-for="(file, index) in files"
+          :key="file.name || file.id || `file-${index}`"
+          :ref="el => setRowRef(el, index)"
+          :tabindex="index === focusedIndex ? 0 : -1"
+          :aria-selected="index === focusedIndex"
+          role="button"
+          @click="handleRowClick(file, index)"
+          @keydown="handleRowKeydown($event, file, index)"
+          @focus="focusedIndex = index"
+          class="file-row"
+        >
           <td class="file-name-cell">
-            <i :class="getFileIcon(file)" class="file-icon"></i>
+            <i :class="getFileIcon(file)" class="file-icon" aria-hidden="true"></i>
             <span
-              @click="file.is_dir ? $emit('navigate', file.path) : null"
               :class="{ clickable: file.is_dir }"
               class="file-name"
             >
@@ -43,43 +53,43 @@
                 v-if="!file.is_dir"
                 variant="ghost"
                 size="sm"
-                @click="$emit('view-file', file)"
+                @click.stop="$emit('view-file', file)"
                 class="action-btn view-btn"
                 aria-label="View file"
                 title="View file"
               >
-                <i class="fas fa-eye"></i>
+                <i class="fas fa-eye" aria-hidden="true"></i>
               </BaseButton>
               <BaseButton
                 v-if="file.is_dir"
                 variant="ghost"
                 size="sm"
-                @click="$emit('navigate', file.path)"
+                @click.stop="$emit('navigate', file.path)"
                 class="action-btn open-btn"
                 aria-label="Open directory"
                 title="Open directory"
               >
-                <i class="fas fa-folder-open"></i>
+                <i class="fas fa-folder-open" aria-hidden="true"></i>
               </BaseButton>
               <BaseButton
                 variant="ghost"
                 size="sm"
-                @click="$emit('rename-file', file)"
+                @click.stop="$emit('rename-file', file)"
                 class="action-btn rename-btn"
                 aria-label="Rename"
                 title="Rename"
               >
-                <i class="fas fa-edit"></i>
+                <i class="fas fa-edit" aria-hidden="true"></i>
               </BaseButton>
               <BaseButton
                 variant="ghost"
                 size="sm"
-                @click="$emit('delete-file', file)"
+                @click.stop="$emit('delete-file', file)"
                 class="action-btn delete-btn"
                 aria-label="Delete"
                 title="Delete"
               >
-                <i class="fas fa-trash"></i>
+                <i class="fas fa-trash" aria-hidden="true"></i>
               </BaseButton>
             </div>
           </td>
@@ -95,8 +105,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, nextTick } from 'vue'
 import { formatDateTime } from '@/utils/formatHelpers'
+import { getFileIcon as getFileIconUtil } from '@/utils/iconMappings'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
@@ -125,7 +136,76 @@ interface Emits {
 }
 
 const props = defineProps<Props>()
-defineEmits<Emits>()
+const emit = defineEmits<Emits>()
+
+// Keyboard navigation state
+const focusedIndex = ref(0)
+const rowRefs = ref<(HTMLElement | null)[]>([])
+
+// Set row reference for keyboard navigation
+const setRowRef = (el: HTMLElement | null, index: number) => {
+  if (el) {
+    rowRefs.value[index] = el
+  }
+}
+
+// Handle row click (mouse or keyboard activation)
+const handleRowClick = (file: FileItem, index: number) => {
+  focusedIndex.value = index
+
+  if (file.is_dir) {
+    emit('navigate', file.path)
+  } else {
+    emit('view-file', file)
+  }
+}
+
+// Handle keyboard navigation
+const handleRowKeydown = (event: KeyboardEvent, file: FileItem, index: number) => {
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      if (index < props.files.length - 1) {
+        focusedIndex.value = index + 1
+        nextTick(() => {
+          rowRefs.value[index + 1]?.focus()
+        })
+      }
+      break
+
+    case 'ArrowUp':
+      event.preventDefault()
+      if (index > 0) {
+        focusedIndex.value = index - 1
+        nextTick(() => {
+          rowRefs.value[index - 1]?.focus()
+        })
+      }
+      break
+
+    case 'Home':
+      event.preventDefault()
+      focusedIndex.value = 0
+      nextTick(() => {
+        rowRefs.value[0]?.focus()
+      })
+      break
+
+    case 'End':
+      event.preventDefault()
+      focusedIndex.value = props.files.length - 1
+      nextTick(() => {
+        rowRefs.value[props.files.length - 1]?.focus()
+      })
+      break
+
+    case 'Enter':
+    case ' ':
+      event.preventDefault()
+      handleRowClick(file, index)
+      break
+  }
+}
 
 // Methods
 const getSortIcon = (field: string): string => {
@@ -133,49 +213,58 @@ const getSortIcon = (field: string): string => {
   return props.sortOrder === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down'
 }
 
+// Icon mapping centralized in @/utils/iconMappings
+// Color classes added for visual distinction
 const getFileIcon = (file: FileItem): string => {
-  if (file.is_dir) return 'fas fa-folder text-blue-500'
+  const icon = getFileIconUtil(file.name, file.is_dir)
+
+  // Add color classes based on file type
+  if (file.is_dir) return `${icon} text-blue-500`
 
   const extension = file.name.split('.').pop()?.toLowerCase()
 
-  switch (extension) {
-    case 'txt':
-    case 'md':
-    case 'readme':
-      return 'fas fa-file-alt text-gray-500'
-    case 'js':
-    case 'ts':
-    case 'html':
-    case 'css':
-    case 'vue':
-    case 'json':
-      return 'fas fa-file-code text-green-500'
-    case 'jpg':
-    case 'jpeg':
-    case 'png':
-    case 'gif':
-    case 'svg':
-    case 'webp':
-      return 'fas fa-file-image text-purple-500'
-    case 'pdf':
-      return 'fas fa-file-pdf text-red-500'
-    case 'zip':
-    case 'tar':
-    case 'gz':
-    case 'rar':
-      return 'fas fa-file-archive text-orange-500'
-    case 'mp4':
-    case 'avi':
-    case 'mov':
-    case 'webm':
-      return 'fas fa-file-video text-pink-500'
-    case 'mp3':
-    case 'wav':
-    case 'ogg':
-      return 'fas fa-file-audio text-indigo-500'
-    default:
-      return 'fas fa-file text-gray-400'
+  // Map extensions to color classes for visual distinction
+  const colorMap: Record<string, string> = {
+    // Text files
+    'txt': 'text-gray-500',
+    'md': 'text-gray-500',
+    'readme': 'text-gray-500',
+    // Code files
+    'js': 'text-green-500',
+    'ts': 'text-green-500',
+    'jsx': 'text-green-500',
+    'tsx': 'text-green-500',
+    'html': 'text-green-500',
+    'css': 'text-green-500',
+    'vue': 'text-green-500',
+    'json': 'text-green-500',
+    'py': 'text-green-500',
+    // Images
+    'jpg': 'text-purple-500',
+    'jpeg': 'text-purple-500',
+    'png': 'text-purple-500',
+    'gif': 'text-purple-500',
+    'svg': 'text-purple-500',
+    'webp': 'text-purple-500',
+    // Documents
+    'pdf': 'text-red-500',
+    // Archives
+    'zip': 'text-orange-500',
+    'tar': 'text-orange-500',
+    'gz': 'text-orange-500',
+    'rar': 'text-orange-500',
+    // Media
+    'mp4': 'text-pink-500',
+    'avi': 'text-pink-500',
+    'mov': 'text-pink-500',
+    'webm': 'text-pink-500',
+    'mp3': 'text-indigo-500',
+    'wav': 'text-indigo-500',
+    'ogg': 'text-indigo-500'
   }
+
+  const color = colorMap[extension || ''] || 'text-gray-400'
+  return `${icon} ${color}`
 }
 
 const getFileType = (filename: string): string => {
@@ -244,6 +333,14 @@ const formatDate = formatDateTime
 
 .file-table tbody tr:hover {
   @apply bg-gray-50;
+}
+
+.file-table tbody tr:focus {
+  @apply outline-none bg-blue-50 ring-2 ring-blue-500 ring-inset;
+}
+
+.file-table tbody tr:focus-visible {
+  @apply outline-none bg-blue-50 ring-2 ring-blue-500 ring-inset;
 }
 
 .file-name-cell {

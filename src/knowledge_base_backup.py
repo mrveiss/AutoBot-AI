@@ -54,7 +54,7 @@ from src.unified_config_manager import config as global_config_manager
 from src.utils.logging_manager import get_llm_logger
 
 # Knowledge base specific settings
-from src.utils.redis_database_manager import get_redis_client
+from src.utils.redis_client import get_redis_client
 
 # GPU OPTIMIZATION: Use GPU-optimized semantic chunker for 5x performance improvement
 from src.utils.semantic_chunker_gpu_optimized import get_optimized_semantic_chunker

@@ -34,7 +34,7 @@ from backend.security.session_ownership import validate_session_ownership
 from src.auth_middleware import auth_middleware
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.redis_database_manager import get_redis_client
+from src.utils.redis_client import get_redis_client
 
 # Import models - DISABLED: Models don't exist yet
 # from src.models.conversation import ConversationModel
@@ -1057,6 +1057,52 @@ async def delete_session(
             f"ConversationFileManager not available, skipping file handling for session {session_id}"
         )
 
+    # CRITICAL FIX: Clean up associated terminal sessions BEFORE deleting chat session
+    # This prevents orphaned terminal sessions with stale pending_approval states
+    terminal_cleanup_result = {
+        "terminal_sessions_closed": 0,
+        "pending_approvals_cleared": 0
+    }
+
+    agent_terminal_service = getattr(request.app.state, "agent_terminal_service", None)
+    if agent_terminal_service:
+        try:
+            # Find all terminal sessions associated with this chat session
+            terminal_sessions = await agent_terminal_service.list_sessions(
+                conversation_id=session_id
+            )
+
+            for terminal_session in terminal_sessions:
+                # Check if session has pending approval
+                if terminal_session.pending_approval is not None:
+                    terminal_cleanup_result["pending_approvals_cleared"] += 1
+                    logger.info(
+                        f"Clearing pending approval for terminal session {terminal_session.session_id} "
+                        f"(command: {terminal_session.pending_approval.get('command')})"
+                    )
+
+                # Close the terminal session (clears pending_approval and removes from Redis)
+                await agent_terminal_service.close_session(terminal_session.session_id)
+                terminal_cleanup_result["terminal_sessions_closed"] += 1
+
+            if terminal_cleanup_result["terminal_sessions_closed"] > 0:
+                logger.info(
+                    f"Cleaned up {terminal_cleanup_result['terminal_sessions_closed']} terminal session(s) "
+                    f"for chat session {session_id}, cleared {terminal_cleanup_result['pending_approvals_cleared']} "
+                    f"pending approval(s)"
+                )
+        except Exception as terminal_cleanup_error:
+            logger.error(
+                f"Failed to cleanup terminal sessions for chat {session_id}: {terminal_cleanup_error}",
+                exc_info=True
+            )
+            # Don't fail the chat deletion if terminal cleanup fails
+            terminal_cleanup_result["error"] = str(terminal_cleanup_error)
+    else:
+        logger.warning(
+            f"AgentTerminalService not available, skipping terminal session cleanup for session {session_id}"
+        )
+
     # Delete session from chat history (synchronous method)
     deleted = chat_history_manager.delete_session(session_id)
 
@@ -1077,6 +1123,7 @@ async def delete_session(
             "request_id": request_id,
             "file_action": file_action,
             "file_deletion_result": file_deletion_result,
+            "terminal_cleanup_result": terminal_cleanup_result,
         },
     )
 
@@ -1085,6 +1132,7 @@ async def delete_session(
             "session_id": session_id,
             "deleted": True,
             "file_handling": file_deletion_result,
+            "terminal_cleanup": terminal_cleanup_result,
         },
         message="Session deleted successfully",
         request_id=request_id,

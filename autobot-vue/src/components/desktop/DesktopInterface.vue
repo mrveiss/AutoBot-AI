@@ -71,6 +71,11 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 // MIGRATED: Removed environment.js, using AppConfig.js only
 import appConfig from '@/config/AppConfig.js'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
+import { useAsyncOperation } from '@/composables/useAsyncOperation'
+
+// Async operation composables
+const { execute: executeLoadVnc, loading: loadingVnc, error: errorVnc } = useAsyncOperation()
+const { execute: executeCheckConnection, loading: loadingCheck, error: errorCheck } = useAsyncOperation()
 
 const vncFrame = ref(null)
 const loading = ref(true)
@@ -82,15 +87,17 @@ const connectionStatus = ref('Connecting...')
 const vncUrl = ref('') // Will be loaded on mount
 
 // Load dynamic VNC URL on component mount
+const loadVncUrlFn = async () => {
+  const dynamicVncUrl = await appConfig.getVncUrl('desktop');
+  vncUrl.value = dynamicVncUrl;
+  // Clear any previous errors and update status
+  error.value = null;
+  loading.value = false;
+  connectionStatus.value = 'Connected';
+}
+
 const loadVncUrl = async () => {
-  try {
-    const dynamicVncUrl = await appConfig.getVncUrl('desktop');
-    vncUrl.value = dynamicVncUrl;
-    // Clear any previous errors and update status
-    error.value = null;
-    loading.value = false;
-    connectionStatus.value = 'Connected';
-  } catch (err) {
+  await executeLoadVnc(loadVncUrlFn).catch(err => {
     console.error('[DesktopInterface] Failed to load VNC URL from config:', err);
 
     // CRITICAL: No fallbacks - config failure is real failure
@@ -114,7 +121,7 @@ const loadVncUrl = async () => {
     // CRITICAL: No hardcoded fallbacks - config file is the only source of truth
     // Desktop cannot function without configuration - this is a real error state
     console.error('[DesktopInterface] Desktop unavailable - no configuration loaded');
-  }
+  });
 }
 
 const connectionStatusClass = computed(() => {
@@ -157,39 +164,41 @@ const reconnect = () => {
   }
 }
 
+const checkConnectionFn = async () => {
+  // Check the actual desktop VNC server health (backend server)
+  const vncBaseUrl = await appConfig.getServiceUrl('vnc_desktop');
+
+  // Create controller for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+  const response = await fetch(`${vncBaseUrl}/vnc.html`, {
+    method: 'HEAD',
+    signal: controller.signal
+  });
+
+  clearTimeout(timeoutId);
+
+  if (response.ok) {
+    connectionStatus.value = 'Connected'
+    loading.value = false
+    error.value = null
+  } else {
+    throw new Error(`HTTP ${response.status}`)
+  }
+}
+
 const checkConnection = async () => {
-  try {
-    // Check the actual desktop VNC server health (backend server)
-    const vncBaseUrl = await appConfig.getServiceUrl('vnc_desktop');
-    
-    // Create controller for timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    
-    const response = await fetch(`${vncBaseUrl}/vnc.html`, { 
-      method: 'HEAD',
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (response.ok) {
-      connectionStatus.value = 'Connected'
-      loading.value = false
-      error.value = null
-    } else {
-      throw new Error(`HTTP ${response.status}`)
-    }
-  } catch (err) {
+  await executeCheckConnection(checkConnectionFn).catch(err => {
     connectionStatus.value = 'Disconnected'
-    
+
     if (err.name === 'AbortError') {
       error.value = 'Desktop service connection timeout. Service may be starting up.';
     } else {
-      const isServiceDisabled = err.message.includes('Connection refused') || 
+      const isServiceDisabled = err.message.includes('Connection refused') ||
                                 err.message.includes('Network Error') ||
                                 err.message.includes('Failed to fetch');
-      
+
       if (isServiceDisabled) {
         error.value = 'Desktop service is currently disabled. Start AutoBot with desktop access enabled to use this feature.';
       } else {
@@ -197,7 +206,7 @@ const checkConnection = async () => {
       }
     }
     loading.value = false
-  }
+  });
 }
 
 // UnifiedLoadingView event handlers

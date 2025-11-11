@@ -605,12 +605,12 @@ class UnifiedConfigManager:
             default_host = "127.0.0.1"
             default_port = 6379
 
+        # FIX: Don't override password with None - let it come from redis_config
         defaults = {
             "enabled": True,
             "host": default_host,
             "port": default_port,
             "db": 1,
-            "password": None,
         }
 
         return self._deep_merge(defaults, redis_config)

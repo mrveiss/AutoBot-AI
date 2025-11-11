@@ -48,7 +48,7 @@ from src.utils.error_boundaries import (
     get_error_boundary_manager,
 )
 from src.utils.knowledge_base_timeouts import kb_timeouts
-from src.utils.redis_database_manager import redis_db_manager
+from src.utils.redis_client import redis_db_manager
 
 logger = logging.getLogger(__name__)
 

@@ -1094,17 +1094,40 @@ const testGPU = async () => {
   hardwareStatus.gpu.message = 'Testing GPU...'
 
   try {
-    // Implement GPU testing logic
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    hardwareStatus.gpu.status = 'available'
-    hardwareStatus.gpu.message = 'GPU acceleration available'
-    hardwareStatus.gpu.details = {
-      utilization: 15,
-      memory: '4GB / 8GB'
+    // Real GPU detection API call
+    const endpoint = props.backendSettings?.api_endpoint || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`
+    const response = await fetch(`${endpoint}/api/monitoring/hardware/gpu`)
+
+    if (response.ok) {
+      const data = await response.json()
+
+      if (data.available) {
+        hardwareStatus.gpu.status = 'available'
+        hardwareStatus.gpu.message = 'GPU acceleration available'
+
+        // Extract real GPU metrics
+        const metrics = data.current_metrics || {}
+        const memoryGB = metrics.memory_used && metrics.memory_total
+          ? `${(metrics.memory_used / 1024).toFixed(1)}GB / ${(metrics.memory_total / 1024).toFixed(1)}GB`
+          : 'Unknown'
+
+        hardwareStatus.gpu.details = {
+          utilization: metrics.utilization_percent || 0,
+          memory: memoryGB,
+          temperature: metrics.temperature_celsius ? `${metrics.temperature_celsius}°C` : 'N/A',
+          name: metrics.gpu_name || 'Unknown GPU'
+        }
+      } else {
+        hardwareStatus.gpu.status = 'unavailable'
+        hardwareStatus.gpu.message = data.message || 'GPU not available or accessible'
+      }
+    } else {
+      hardwareStatus.gpu.status = 'error'
+      hardwareStatus.gpu.message = 'Failed to query GPU status'
     }
   } catch (error) {
-    hardwareStatus.gpu.status = 'unavailable'
-    hardwareStatus.gpu.message = 'GPU not available'
+    hardwareStatus.gpu.status = 'error'
+    hardwareStatus.gpu.message = `GPU test failed: ${error.message}`
   } finally {
     isTestingGPU.value = false
   }
@@ -1146,17 +1169,40 @@ const refreshMemoryStatus = async () => {
   hardwareStatus.memory.message = 'Checking memory status...'
 
   try {
-    // Simulate memory check
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    hardwareStatus.memory.status = 'available'
-    hardwareStatus.memory.message = 'Memory status healthy'
-    hardwareStatus.memory.details = {
-      total: '16 GB',
-      available: '8.2 GB'
+    // Real system metrics API call
+    const endpoint = props.backendSettings?.api_endpoint || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`
+    const response = await fetch(`${endpoint}/api/system/metrics`)
+
+    if (response.ok) {
+      const data = await response.json()
+
+      if (data.system && data.system.memory) {
+        const memory = data.system.memory
+        hardwareStatus.memory.status = 'available'
+        hardwareStatus.memory.message = 'Memory status healthy'
+
+        // Convert bytes to GB for display
+        const totalGB = (memory.total / (1024 ** 3)).toFixed(1)
+        const availableGB = (memory.available / (1024 ** 3)).toFixed(1)
+        const usedGB = (memory.used / (1024 ** 3)).toFixed(1)
+
+        hardwareStatus.memory.details = {
+          total: `${totalGB} GB`,
+          available: `${availableGB} GB`,
+          used: `${usedGB} GB`,
+          percent: memory.percent.toFixed(1) + '%'
+        }
+      } else {
+        hardwareStatus.memory.status = 'unavailable'
+        hardwareStatus.memory.message = 'Memory data not available'
+      }
+    } else {
+      hardwareStatus.memory.status = 'error'
+      hardwareStatus.memory.message = 'Failed to query memory status'
     }
   } catch (error) {
     hardwareStatus.memory.status = 'error'
-    hardwareStatus.memory.message = 'Failed to get memory status'
+    hardwareStatus.memory.message = `Failed to get memory status: ${error.message}`
   }
 }
 

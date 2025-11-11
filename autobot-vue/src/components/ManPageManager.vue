@@ -319,6 +319,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import ApiClient from '../utils/ApiClient'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
+import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
@@ -366,14 +367,21 @@ export default {
       messages: []
     })
 
-    // Loading states - initialized with all properties
-    const loading = ref({
-      profile: false,
-      status: false,  
-      initialize: false,
-      integrate: false,
-      search: false
-    })
+    // Use composables for async operations
+    const { execute: fetchProfileOp, loading: loadingProfile } = useAsyncOperation()
+    const { execute: fetchStatusOp, loading: loadingStatus } = useAsyncOperation()
+    const { execute: initializeOp, loading: loadingInitialize } = useAsyncOperation()
+    const { execute: integrateOp, loading: loadingIntegrate } = useAsyncOperation()
+    const { execute: searchOp, loading: loadingSearch } = useAsyncOperation()
+
+    // Computed loading states for backward compatibility
+    const loading = computed(() => ({
+      profile: loadingProfile.value,
+      status: loadingStatus.value,
+      initialize: loadingInitialize.value,
+      integrate: loadingIntegrate.value,
+      search: loadingSearch.value
+    }))
 
     // Computed properties
     const canInitialize = computed(() => {

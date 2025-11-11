@@ -261,9 +261,9 @@ const handleTerminalReady = (term: Terminal) => {
     term.writeln('\x1b[1;33m--- Session Restored ---\x1b[0m')
   } else {
     // Write initial message only for new sessions
+    // FIXED: Removed redundant "Control: X" line (already shown in header badge)
     term.writeln('\x1b[1;36mChat Terminal Initialized\x1b[0m')
     term.writeln(`Session: ${props.chatSessionId || 'None'}`)
-    term.writeln(`Control: ${controlState.value.toUpperCase()}`)
     term.writeln('')
   }
 
@@ -308,7 +308,7 @@ const connectTerminal = async () => {
   if (isConnected.value) return
 
   try {
-    // Create session in store
+    // Create session in store (defaults to 'agent' mode - user approves commands via dialog)
     const host = terminalStore.selectedHost
     terminalStore.createSession(sessionId.value, host)
 
@@ -390,7 +390,8 @@ const connectTerminal = async () => {
           saveScrollback(content)
         }
       },
-      onPromptChange: (prompt: string) => {
+      onPromptChange: (_prompt: string) => {
+        // Prompt changes are not currently used in chat terminal
       },
       onStatusChange: (status: string) => {
         terminalStore.updateSessionStatus(sessionId.value, status as any)

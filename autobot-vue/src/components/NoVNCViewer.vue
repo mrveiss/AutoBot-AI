@@ -199,6 +199,10 @@ import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import appConfig from '@/config/AppConfig.js'
 import { NetworkConstants } from '@/constants/network-constants.js'
 import { formatTime } from '@/utils/formatHelpers'
+import { useAsyncOperation } from '@/composables/useAsyncOperation'
+
+// Async operation for service checks
+const { execute: executeServiceCheck, loading: isChecking } = useAsyncOperation()
 
 // Component state
 const vncHost = ref('')  // Will be loaded from appConfig
@@ -207,7 +211,6 @@ const novncUrl = ref('')  // Will be loaded from appConfig.getVncUrl()
 const isLoading = ref(true)
 const isRefreshing = ref(false)
 const isRetrying = ref(false)
-const isChecking = ref(false)
 const connectionError = ref(false)
 const errorDetails = ref('')
 const errorCount = ref(0)
@@ -276,33 +279,33 @@ const measureLatency = async () => {
   }
 }
 
-const checkVNCService = async () => {
-  isChecking.value = true
+const checkVNCServiceFn = async () => {
   lastServiceCheck.value = new Date().toLocaleTimeString()
 
-  try {
-    // Try to reach the VNC service
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000)
+  // Try to reach the VNC service
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 5000)
 
-    const testUrl = `${vncHost.value}:${vncPort.value}`
-    await fetch(`http://${testUrl}/`, {
-      method: 'HEAD',
-      signal: controller.signal,
-      mode: 'no-cors'
-    })
+  const testUrl = `${vncHost.value}:${vncPort.value}`
+  await fetch(`http://${testUrl}/`, {
+    method: 'HEAD',
+    signal: controller.signal,
+    mode: 'no-cors'
+  })
 
-    clearTimeout(timeoutId)
-    serviceStatus.value = `Service responding (${new Date().toLocaleTimeString()})`
+  clearTimeout(timeoutId)
+  serviceStatus.value = `Service responding (${new Date().toLocaleTimeString()})`
 
-    // If we can reach the service but iframe is broken, try refresh
-    if (connectionError.value) {
-      setTimeout(() => {
-        refreshViewer()
-      }, 1000)
-    }
+  // If we can reach the service but iframe is broken, try refresh
+  if (connectionError.value) {
+    setTimeout(() => {
+      refreshViewer()
+    }, 1000)
+  }
+}
 
-  } catch (error: any) {
+const checkVNCService = async () => {
+  await executeServiceCheck(checkVNCServiceFn).catch(async (error: any) => {
     console.warn('VNC service check failed:', error.message)
     if (error.name === 'AbortError') {
       errorDetails.value = 'Connection timeout - service may be starting up'
@@ -312,9 +315,7 @@ const checkVNCService = async () => {
 
     // Try alternative ports
     await checkAlternativePorts()
-  }
-
-  isChecking.value = false
+  })
 }
 
 const checkAlternativePorts = async () => {

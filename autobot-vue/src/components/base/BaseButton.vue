@@ -149,7 +149,12 @@ const createRipple = (event: TouchEvent) => {
 
 .base-button:focus {
   outline: none;
-  box-shadow: 0 0 0 2px var(--indigo-500);
+}
+
+.base-button:focus-visible {
+  outline: 2px solid var(--indigo-500);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
 }
 
 .base-button:active:not(.btn-disabled):not(.btn-loading) {
