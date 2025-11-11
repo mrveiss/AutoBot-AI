@@ -322,7 +322,7 @@ async def validate_session_ownership(session_id: str, request: Request) -> Dict:
     """
     from backend.services.access_control_metrics import get_metrics_service
     from backend.services.feature_flags import get_feature_flags
-    from backend.utils.async_redis_manager import get_redis_manager
+    from src.utils.redis_client import get_redis_client as get_redis_manager
 
     # Get Redis connection
     redis_manager = await get_redis_manager()

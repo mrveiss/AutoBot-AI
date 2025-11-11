@@ -196,7 +196,7 @@ async def validate_service_auth(request: Request) -> Dict:
     # Get Redis manager from app state or dependencies
     try:
         # Always use AsyncRedisManager for service auth (not RedisPoolManager from app state)
-        from backend.utils.async_redis_manager import get_redis_manager
+        from src.utils.redis_client import get_redis_client as get_redis_manager
 
         redis_manager = await get_redis_manager()
 

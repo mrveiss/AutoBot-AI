@@ -37,7 +37,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
-from backend.utils.async_redis_manager import AsyncRedisDatabase, get_redis_manager
+from src.utils.redis_client import get_redis_client as get_redis_manager
+import redis.asyncio as async_redis
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -220,7 +221,7 @@ class AuditLogger:
         }
         return vm_mapping.get(self.vm_source, socket.gethostname())
 
-    async def _get_audit_db(self) -> Optional[AsyncRedisDatabase]:
+    async def _get_audit_db(self) -> Optional[async_redis.Redis]:
         """Get Redis audit database (DB 10)"""
         try:
             redis_manager = await get_redis_manager()
@@ -516,7 +517,7 @@ class AuditLogger:
 
     async def _query_time_range(
         self,
-        audit_db: AsyncRedisDatabase,
+        audit_db: async_redis.Redis,
         start_time: datetime,
         end_time: datetime,
         limit: int,
@@ -556,7 +557,7 @@ class AuditLogger:
 
     async def _query_session(
         self,
-        audit_db: AsyncRedisDatabase,
+        audit_db: async_redis.Redis,
         session_id: str,
         start_time: datetime,
         end_time: datetime,
@@ -585,7 +586,7 @@ class AuditLogger:
 
     async def _query_user(
         self,
-        audit_db: AsyncRedisDatabase,
+        audit_db: async_redis.Redis,
         user_id: str,
         start_time: datetime,
         end_time: datetime,
@@ -618,7 +619,7 @@ class AuditLogger:
 
     async def _query_operation(
         self,
-        audit_db: AsyncRedisDatabase,
+        audit_db: async_redis.Redis,
         operation: str,
         start_time: datetime,
         end_time: datetime,
@@ -651,7 +652,7 @@ class AuditLogger:
 
     async def _query_vm(
         self,
-        audit_db: AsyncRedisDatabase,
+        audit_db: async_redis.Redis,
         vm_name: str,
         start_time: datetime,
         end_time: datetime,
@@ -684,7 +685,7 @@ class AuditLogger:
 
     async def _query_result(
         self,
-        audit_db: AsyncRedisDatabase,
+        audit_db: async_redis.Redis,
         result: AuditResult,
         start_time: datetime,
         end_time: datetime,
@@ -717,7 +718,7 @@ class AuditLogger:
 
     async def _query_user_operation(
         self,
-        audit_db: AsyncRedisDatabase,
+        audit_db: async_redis.Redis,
         user_id: str,
         operation: str,
         start_time: datetime,
@@ -737,7 +738,7 @@ class AuditLogger:
 
     async def _fetch_entry_by_id(
         self,
-        audit_db: AsyncRedisDatabase,
+        audit_db: async_redis.Redis,
         entry_id: str,
         start_time: datetime,
         end_time: datetime,
