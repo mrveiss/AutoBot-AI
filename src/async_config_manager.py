@@ -17,7 +17,7 @@ from pydantic_settings import BaseSettings
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.constants.network_constants import NetworkConstants
-from src.utils.async_redis_manager import redis_get, redis_set
+from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -141,12 +141,13 @@ class AsyncConfigManager:
 
         try:
             cache_key = self._get_cache_key(config_type)
-            cached_data = await redis_get(cache_key)
-
-            if cached_data:
-                data = json.loads(cached_data.decode())
-                logger.debug(f"Loaded {config_type} config from Redis cache")
-                return data
+            redis_client = await get_redis_client(async_client=True, database="main")
+            if redis_client:
+                cached_data = await redis_client.get(cache_key)
+                if cached_data:
+                    data = json.loads(cached_data.decode())
+                    logger.debug(f"Loaded {config_type} config from Redis cache")
+                    return data
 
         except Exception as e:
             logger.debug(f"Failed to load {config_type} from Redis cache: {e}")
@@ -162,10 +163,12 @@ class AsyncConfigManager:
 
         try:
             cache_key = self._get_cache_key(config_type)
-            await redis_set(
-                cache_key, json.dumps(data, default=str), ex=self.settings.cache_ttl
-            )
-            logger.debug(f"Saved {config_type} config to Redis cache")
+            redis_client = await get_redis_client(async_client=True, database="main")
+            if redis_client:
+                await redis_client.set(
+                    cache_key, json.dumps(data, default=str), ex=self.settings.cache_ttl
+                )
+                logger.debug(f"Saved {config_type} config to Redis cache")
 
         except Exception as e:
             logger.debug(f"Failed to save {config_type} to Redis cache: {e}")
