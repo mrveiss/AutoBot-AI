@@ -242,9 +242,8 @@ async def test_7_backward_compatibility_longterm():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_longterm.db"
 
-        # Override default path
-        manager = LongTermMemoryManager()
-        manager._unified.db_path = db_path
+        # Use db_path parameter (new in fix #4 for 10/10 score)
+        manager = LongTermMemoryManager(db_path=str(db_path))
 
         # Use old API (category as string, not enum)
         entry_id = await manager.store_memory(
