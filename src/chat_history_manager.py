@@ -221,7 +221,7 @@ class ChatHistoryManager:
         sender: str,
         text: str,
         message_type: str = "default",
-        raw_data: Any = None,
+        metadata: Any = None,
     ):
         """
         Adds a new message to the history and saves it to file.
@@ -230,13 +230,13 @@ class ChatHistoryManager:
             sender (str): The sender of the message (e.g., 'user', 'bot').
             text (str): The content of the message.
             message_type (str): The type of message (default is 'default').
-            raw_data (Any): Additional raw data associated with the message.
+            metadata (Any): Additional metadata associated with the message.
         """
         message = {
             "sender": sender,
             "text": text,
             "messageType": message_type,
-            "rawData": raw_data,
+            "metadata": metadata,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
         self.history.append(message)

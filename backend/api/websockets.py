@@ -50,102 +50,102 @@ async def websocket_endpoint(websocket: WebSocket):
             sender = "system"
             text = ""
             message_type = event_data.get("type", "default")
-            raw_data = event_data.get("payload", {})
+            metadata = event_data.get("payload", {})
 
             # Map event types to human-readable chat messages
             if message_type == "goal_received":
-                text = "Goal received: \"{raw_data.get('goal', 'N/A')}\""
+                text = "Goal received: \"{metadata.get('goal', 'N/A')}\""
             elif message_type == "plan_ready":
-                plan_text = raw_data.get("llm_response", "No plan text available.")
+                plan_text = metadata.get("llm_response", "No plan text available.")
                 text = f"Here is the plan:\n{plan_text}"
                 sender = "bot"
             elif message_type == "goal_completed":
-                results = json.dumps(raw_data.get("results", {}), indent=2)
+                results = json.dumps(metadata.get("results", {}), indent=2)
                 text = f"Goal completed. Result: {results}"
             elif message_type == "command_execution_start":
-                text = f"Executing command: {raw_data.get('command', 'N/A')}"
+                text = f"Executing command: {metadata.get('command', 'N/A')}"
             elif message_type == "command_execution_end":
-                status = raw_data.get("status", "N/A")
-                output = raw_data.get("output", "")
-                error = raw_data.get("error", "")
+                status = metadata.get("status", "N/A")
+                output = metadata.get("output", "")
+                error = metadata.get("error", "")
                 text = f"Command finished ({status}). Output: {output or error}"
             elif message_type == "error":
-                text = f"Error: {raw_data.get('message', 'Unknown error')}"
+                text = f"Error: {metadata.get('message', 'Unknown error')}"
                 sender = "error"
             elif message_type == "progress":
-                text = f"Progress: {raw_data.get('message', 'N/A')}"
+                text = f"Progress: {metadata.get('message', 'N/A')}"
             elif message_type == "llm_response":
-                text = raw_data.get("response", "N/A")
+                text = metadata.get("response", "N/A")
                 sender = "bot"
             elif message_type == "user_message":
-                text = raw_data.get("message", "N/A")
+                text = metadata.get("message", "N/A")
                 sender = "user"
             elif message_type == "thought":
-                text = json.dumps(raw_data.get("thought", {}), indent=2)
+                text = json.dumps(metadata.get("thought", {}), indent=2)
                 sender = "thought"
             elif message_type == "tool_code":
-                text = raw_data.get("code", "N/A")
+                text = metadata.get("code", "N/A")
                 sender = "tool-code"
             elif message_type == "tool_output":
-                text = raw_data.get("output", "N/A")
+                text = metadata.get("output", "N/A")
                 sender = "tool-output"
             elif message_type == "settings_updated":
                 text = "Settings updated successfully."
             elif message_type == "file_uploaded":
-                text = f"File uploaded: {raw_data.get('filename', 'N/A')}"
+                text = f"File uploaded: {metadata.get('filename', 'N/A')}"
             elif message_type == "knowledge_base_update":
-                text = f"Knowledge Base updated: {raw_data.get('type', 'N/A')}"
+                text = f"Knowledge Base updated: {metadata.get('type', 'N/A')}"
             elif message_type == "llm_status":
-                status = raw_data.get("status", "N/A")
-                model = raw_data.get("model", "N/A")
-                message = raw_data.get("message", "")
+                status = metadata.get("status", "N/A")
+                model = metadata.get("model", "N/A")
+                message = metadata.get("message", "")
                 text = f"LLM ({model}) connection {status}. {message}"
                 if status == "disconnected":
                     sender = "error"
             elif message_type == "diagnostics_report":
-                text = f"Diagnostics Report: {json.dumps(raw_data, indent=2)}"
+                text = f"Diagnostics Report: {json.dumps(metadata, indent=2)}"
             elif message_type == "user_permission_request":
-                text = f"User Permission Request: {json.dumps(raw_data, indent=2)}"
+                text = f"User Permission Request: {json.dumps(metadata, indent=2)}"
             elif message_type == "workflow_step_started":
-                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
-                step_desc = raw_data.get("description", "N/A")
+                workflow_id = metadata.get("workflow_id", "N/A")[:8]
+                step_desc = metadata.get("description", "N/A")
                 text = f"🔄 Workflow {workflow_id}: Started step - {step_desc}"
                 sender = "workflow"
             elif message_type == "workflow_step_completed":
-                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
-                step_desc = raw_data.get("description", "N/A")
-                result = raw_data.get("result", "Completed")
+                workflow_id = metadata.get("workflow_id", "N/A")[:8]
+                step_desc = metadata.get("description", "N/A")
+                result = metadata.get("result", "Completed")
                 text = (
                     f"✅ Workflow {workflow_id}: Completed step - {step_desc}. "
                     f"Result: {result}"
                 )
                 sender = "workflow"
             elif message_type == "workflow_approval_required":
-                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
-                step_desc = raw_data.get("description", "N/A")
+                workflow_id = metadata.get("workflow_id", "N/A")[:8]
+                step_desc = metadata.get("description", "N/A")
                 text = f"⏸️ Workflow {workflow_id}: Approval required for - {step_desc}"
                 sender = "workflow"
             elif message_type == "workflow_completed":
-                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
-                total_steps = raw_data.get("total_steps", 0)
+                workflow_id = metadata.get("workflow_id", "N/A")[:8]
+                total_steps = metadata.get("total_steps", 0)
                 text = (
                     f"🎉 Workflow {workflow_id}: Completed successfully with "
                     f"{total_steps} steps"
                 )
                 sender = "workflow"
             elif message_type == "workflow_failed":
-                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
-                error = raw_data.get("error", "Unknown error")
+                workflow_id = metadata.get("workflow_id", "N/A")[:8]
+                error = metadata.get("error", "Unknown error")
                 text = f"❌ Workflow {workflow_id}: Failed - {error}"
                 sender = "workflow-error"
             elif message_type == "workflow_cancelled":
-                workflow_id = raw_data.get("workflow_id", "N/A")[:8]
+                workflow_id = metadata.get("workflow_id", "N/A")[:8]
                 text = f"🛑 Workflow {workflow_id}: Cancelled by user"
                 sender = "workflow"
 
             # Add to chat history if we have meaningful text
             if text:
-                chat_history_manager.add_message(sender, text, message_type, raw_data)
+                chat_history_manager.add_message(sender, text, message_type, metadata)
 
         except RuntimeError as e:
             logger.error(f"Error sending to WebSocket: {e}")
