@@ -112,6 +112,21 @@ export default defineConfig({
         target: process.env.VITE_PLAYWRIGHT_VNC_URL || `${process.env.VITE_HTTP_PROTOCOL || 'http'}://${process.env.VITE_PLAYWRIGHT_HOST || DEFAULT_CONFIG.browser.host}:${process.env.VITE_PLAYWRIGHT_VNC_PORT || DEFAULT_CONFIG.browser.port}`,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/vnc-proxy/, '')
+      },
+      // Desktop VNC (noVNC) access - WSL Desktop
+      '/tools/novnc': {
+        target: `http://${process.env.VITE_VNC_HOST || DEFAULT_CONFIG.vnc.host}:${process.env.VITE_VNC_PORT || DEFAULT_CONFIG.vnc.port}`,
+        changeOrigin: true,
+        ws: true,  // Enable WebSocket support for noVNC
+        rewrite: (path) => path.replace(/^\/tools\/novnc/, ''),
+        configure: (proxy, options) => {
+          proxy.on('error', (err, req, res) => {
+            console.error('noVNC proxy error:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('noVNC proxy request:', req.url);
+          });
+        }
       }
     }
   },
