@@ -61,6 +61,7 @@ redis_client.py (THIS FILE - CONSOLIDATED)
 import asyncio
 import logging
 import os
+import socket
 import time
 import weakref
 from contextlib import asynccontextmanager
@@ -439,7 +440,6 @@ class RedisConnectionManager:
 
         # PHASE 3: NEW - TCP keepalive configuration (from optimized_redis_manager.py)
         # FIXED: Use correct Linux socket constants (not sequential numbers)
-        import socket
         self._tcp_keepalive_options = {
             socket.TCP_KEEPIDLE: 600,  # Seconds before sending keepalive probes
             socket.TCP_KEEPINTVL: 60,  # Interval between keepalive probes
@@ -562,48 +562,65 @@ class RedisConnectionManager:
         logger.error(f"Redis '{database_name}' did not become ready within {max_wait}s")
         return False
 
-    @retry(
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=2, min=2, max=30),
-        retry=retry_if_exception_type((ConnectionError, asyncio.TimeoutError)),
-    )
     async def _create_async_pool_with_retry(
         self, database_name: str, config: RedisConfig
     ) -> async_redis.ConnectionPool:
         """
-        PHASE 3: Create async pool with tenacity retry logic
+        PHASE 3: Create async pool with retry logic
 
         Features:
-        - Exponential backoff retry (2s min, 30s max, multiplier 2)
+        - Manual retry with exponential backoff (removed @retry decorator to avoid coroutine reuse)
         - Up to 5 attempts
         - Retries on ConnectionError and TimeoutError
         - Loading dataset handling
         - TCP keepalive configuration
         """
-        pool = async_redis.ConnectionPool(
-            host=config.host,
-            port=config.port,
-            db=config.db,
-            password=config.password,
-            decode_responses=config.decode_responses,
-            max_connections=config.max_connections,
-            socket_timeout=config.socket_timeout,
-            socket_connect_timeout=config.socket_connect_timeout,
-            socket_keepalive=config.socket_keepalive,
-            socket_keepalive_options=config.socket_keepalive_options or self._tcp_keepalive_options,
-            retry_on_timeout=config.retry_on_timeout,
-            health_check_interval=config.health_check_interval,
-        )
+        logger.warning(f"🔧 REDIS FIX ACTIVE: Creating async pool for '{database_name}' with MANUAL RETRY (no @retry decorator)")
+        max_attempts = 5
+        base_wait = 2
+        max_wait = 30
 
-        # Test connection and wait for Redis to be ready
-        client = async_redis.Redis(connection_pool=pool)
-        ready = await self._wait_for_redis_ready(client, database_name)
+        for attempt in range(max_attempts):
+            try:
+                pool = async_redis.ConnectionPool(
+                    host=config.host,
+                    port=config.port,
+                    db=config.db,
+                    password=config.password,
+                    decode_responses=config.decode_responses,
+                    max_connections=config.max_connections,
+                    socket_timeout=config.socket_timeout,
+                    socket_connect_timeout=config.socket_connect_timeout,
+                    socket_keepalive=config.socket_keepalive,
+                    socket_keepalive_options=config.socket_keepalive_options or self._tcp_keepalive_options,
+                    retry_on_timeout=config.retry_on_timeout,
+                    health_check_interval=0,  # Disable auto health checks - we check manually
+                )
 
-        if not ready:
-            raise ConnectionError(f"Redis database '{database_name}' not ready after waiting")
+                # Test connection and wait for Redis to be ready (create fresh client each time)
+                client = async_redis.Redis(connection_pool=pool)
+                ready = await self._wait_for_redis_ready(client, database_name)
+                await client.aclose()  # Close test client
 
-        logger.info(f"Created async pool for '{database_name}' with retry protection")
-        return pool
+                if not ready:
+                    await pool.disconnect()  # Clean up pool before retry
+                    raise ConnectionError(f"Redis database '{database_name}' not ready after waiting")
+
+                logger.info(f"Created async pool for '{database_name}' with retry protection")
+                return pool
+
+            except (ConnectionError, asyncio.TimeoutError) as e:
+                if attempt < max_attempts - 1:
+                    # Calculate exponential backoff wait time
+                    wait_time = min(base_wait * (2 ** attempt), max_wait)
+                    logger.warning(
+                        f"Redis connection attempt {attempt + 1}/{max_attempts} failed for '{database_name}', "
+                        f"retrying in {wait_time}s: {e}"
+                    )
+                    await asyncio.sleep(wait_time)
+                else:
+                    logger.error(f"All {max_attempts} connection attempts failed for '{database_name}'")
+                    raise
 
     def _create_sync_pool_with_keepalive(
         self, database_name: str, config: RedisConfig
