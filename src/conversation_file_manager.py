@@ -176,12 +176,7 @@ class ConversationFileManager:
             RuntimeError: If Redis connection cannot be established
         """
         if self._redis_sessions is None:
-            if self._redis_manager is None:
-                self._redis_manager = await get_redis_manager(
-                    host=self.redis_host, port=self.redis_port
-                )
-
-            self._redis_sessions = await self._redis_manager.sessions()
+            self._redis_sessions = await get_redis_client(async_client=True, database="sessions")
 
         return self._redis_sessions
 

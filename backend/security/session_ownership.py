@@ -324,9 +324,8 @@ async def validate_session_ownership(session_id: str, request: Request) -> Dict:
     from backend.services.feature_flags import get_feature_flags
     from src.utils.redis_client import get_redis_client as get_redis_manager
 
-    # Get Redis connection
-    redis_manager = await get_redis_manager()
-    redis = await redis_manager.main()
+    # Get Redis connection for main database
+    redis = await get_redis_client(async_client=True, database="main")
 
     # Get feature flags service (optional, gracefully degrade if unavailable)
     try:

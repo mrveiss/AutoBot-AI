@@ -44,9 +44,8 @@ async def export_service_configs():
     export_dir = Path("/tmp/service-keys")
     export_dir.mkdir(parents=True, exist_ok=True)
 
-    # Get Redis manager
-    redis_manager = await get_redis_manager()
-    redis = await redis_manager.main()
+    # Get Redis client for main database
+    redis = await get_redis_client(async_client=True, database="main")
 
     # Create auth manager
     auth_manager = ServiceAuthManager(redis)
@@ -127,9 +126,8 @@ async def verify_exports():
         print("❌ Export directory not found!")
         return False
 
-    # Get Redis manager
-    redis_manager = await get_redis_manager()
-    redis = await redis_manager.main()
+    # Get Redis client for main database
+    redis = await get_redis_client(async_client=True, database="main")
 
     # Create auth manager
     auth_manager = ServiceAuthManager(redis)
