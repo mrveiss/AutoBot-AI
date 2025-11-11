@@ -62,8 +62,8 @@ class FeatureFlags:
     async def _get_redis(self):
         """Get Redis connection for feature flags (uses cache DB)"""
         if not self.redis:
-            # Get async Redis client for cache database
-            self.redis = get_redis_client(async_client=True, database="cache")
+            # Get async Redis client for cache database (returns coroutine, must await)
+            self.redis = await get_redis_client(async_client=True, database="cache")
         return self.redis
 
     async def get_enforcement_mode(self) -> EnforcementMode:
