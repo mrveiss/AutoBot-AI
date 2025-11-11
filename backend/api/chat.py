@@ -118,7 +118,7 @@ async def _send_typed_message(
         "sender": "bot",
         "text": content,
         "messageType": message_type,
-        "rawData": None,
+        "metadata": None,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     existing_history.append(typed_message)
@@ -538,7 +538,7 @@ async def create_new_chat(request: Request):
             "sender": "bot",
             "text": "Hello! How can I assist you today?",
             "messageType": "response",
-            "rawData": None,
+            "metadata": None,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
         name = f"Chat {chat_id[:8]}"
@@ -773,7 +773,7 @@ async def reset_chat(chat_id: str, request: Request):
             "sender": "bot",
             "text": "Hello! How can I assist you today?",
             "messageType": "response",
-            "rawData": None,
+            "metadata": None,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
         chat_history_manager.save_session(chat_id, messages=[initial_message])
@@ -841,7 +841,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                     "content": f"I'm having trouble initializing the AI system right now. Your message '{message}' was received but I can't process it.",
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                     "messageType": "response",
-                    "rawData": None,
+                    "metadata": None,
                 }
                 return JSONResponse(status_code=200, content=response_data)
 
@@ -908,9 +908,9 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                     # User approved command execution
                     # Try both old and new command storage formats
                     command_to_run = last_message.get("command", "")
-                    if not command_to_run and "rawData" in last_message:
-                        # New format - command stored in rawData
-                        command_to_run = last_message.get("rawData", {}).get(
+                    if not command_to_run and "metadata" in last_message:
+                        # New format - command stored in metadata
+                        command_to_run = last_message.get("metadata", {}).get(
                             "command", ""
                         )
                     if command_to_run:
@@ -961,7 +961,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                                     "content": f"✅ Command executed successfully!\n\n**Command**: `{command_to_run}`\n**Output**: ```\n{output}\n```\n\n**Interpretation**: {interpretation}",
                                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                                     "messageType": "command_result",
-                                    "rawData": result_data,
+                                    "metadata": result_data,
                                 }
                                 return JSONResponse(
                                     status_code=200, content=response_data
@@ -976,7 +976,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                                     "content": f"❌ {error_msg}\n\nOutput: ```\n{output}\n```",
                                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                                     "messageType": "error",
-                                    "rawData": result_data,
+                                    "metadata": result_data,
                                 }
                                 return JSONResponse(
                                     status_code=200, content=response_data
@@ -989,7 +989,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                                 "content": f"❌ Failed to execute command: {str(cmd_error)}",
                                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                                 "messageType": "error",
-                                "rawData": None,
+                                "metadata": None,
                             }
                             return JSONResponse(status_code=200, content=response_data)
 
@@ -1000,7 +1000,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                         "content": "👌 Command execution cancelled. Is there anything else I can help you with?",
                         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                         "messageType": "info",
-                        "rawData": None,
+                        "metadata": None,
                     }
                     return JSONResponse(status_code=200, content=response_data)
                 else:
@@ -1010,7 +1010,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                         "content": "Please respond with 'yes' to execute the command, or 'no' to cancel.",
                         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                         "messageType": "clarification",
-                        "rawData": None,
+                        "metadata": None,
                     }
                     return JSONResponse(status_code=200, content=response_data)
 
@@ -1018,7 +1018,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
         if is_command_feedback:
             # Extract the feedback from the message
             feedback_text = message[len("command feedback:") :].strip()
-            original_command = last_message.get("rawData", {}).get(
+            original_command = last_message.get("metadata", {}).get(
                 "command", "unknown command"
             )
 
@@ -1027,7 +1027,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                 "content": f"Thank you for the feedback on the command `{original_command}`!\n\n**Your feedback**: {feedback_text}\n\nI'll take this into consideration. Would you like me to:\n1. Try a different command based on your suggestion\n2. Explain alternative approaches\n3. Skip this operation entirely\n\nPlease let me know how you'd like to proceed.",
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "messageType": "feedback_response",
-                "rawData": {
+                "metadata": {
                     "original_command": original_command,
                     "user_feedback": feedback_text,
                     "options": [
@@ -1056,7 +1056,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                     "riskLevel": command_needed.get("risk_level", "LOW"),
                     "originalMessage": message,
                 },
-                "rawData": command_needed,
+                "metadata": command_needed,
             }
 
             # Save this request to chat history with the command data
@@ -1064,7 +1064,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                 "sender": "bot",
                 "text": response_data["content"],
                 "messageType": "command_permission_request",
-                "rawData": command_needed,
+                "metadata": command_needed,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             }
             existing_history.append(approval_message)
@@ -1141,7 +1141,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                                 "content": "Information sourced from the web. Please check the source approval message above.",
                                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                                 "messageType": "info",
-                                "rawData": None,
+                                "metadata": None,
                             },
                         )
                     else:
@@ -1204,7 +1204,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                 "content": content,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "messageType": "response",
-                "rawData": None,
+                "metadata": None,
             }
             logger.info(f"Returning response data: {response_data}")
             return JSONResponse(status_code=200, content=response_data)
@@ -1217,7 +1217,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                         "sender": "user",
                         "text": message,
                         "messageType": "user",
-                        "rawData": None,
+                        "metadata": None,
                         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                     }
 
@@ -1226,7 +1226,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                         "sender": "bot",
                         "text": content,
                         "messageType": "response",
-                        "rawData": None,
+                        "metadata": None,
                         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                     }
 
@@ -1253,7 +1253,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                 "content": content,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "messageType": "response",
-                "rawData": None,
+                "metadata": None,
             }
 
             return JSONResponse(status_code=200, content=response_data)
@@ -1269,7 +1269,7 @@ async def send_direct_chat_message(chat_message: dict, request: Request):
                 "content": f"I'm having trouble processing your request right now. Your message '{message}' was received but I encountered an error.",
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "messageType": "response",
-                "rawData": None,
+                "metadata": None,
             }
             return JSONResponse(status_code=200, content=fallback_response)
 
@@ -1339,7 +1339,7 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
             "sender": "user",
             "text": message,
             "messageType": "user",
-            "rawData": None,
+            "metadata": None,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
@@ -1821,7 +1821,7 @@ User Approvals Needed: {tool_args.get('user_approvals_needed', 0)}"""
                 "sender": "bot",
                 "text": response_message,
                 "messageType": "response",
-                "rawData": result_dict,
+                "metadata": result_dict,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             }
             # Add KB search results to metadata if available
