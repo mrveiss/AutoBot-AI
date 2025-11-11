@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-import redis
+# REFACTORED: Removed unused import from direct redis module
+# import redis
 
 # Add the project root to Python path for absolute imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -749,23 +750,12 @@ class AppFactory:
                 app_state["security_layer"] = security_layer
                 logger.info("✅ [ 15%] Security: Security layer initialized successfully")
 
-                # Initialize Redis Stack - CRITICAL (but with graceful degradation)
+                # REFACTORED: Removed deprecated RedisPoolManager initialization
+                # Redis connections are now managed centrally via src.utils.redis_client::get_redis_client()
+                # Each component that needs Redis should call get_redis_client() directly
                 logger.info(
-                    "✅ [ 20%] Redis Stack: Initializing Redis Stack connection..."
+                    "✅ [ 20%] Redis: Using centralized Redis client management (src.utils.redis_client)"
                 )
-                try:
-                    from src.redis_pool_manager import RedisPoolManager
-
-                    redis_manager = RedisPoolManager()
-                    app.state.redis_manager = redis_manager
-                    logger.info(
-                        "✅ [ 20%] Redis Stack: Pool Manager initialized successfully"
-                    )
-                except Exception as redis_error:
-                    logger.error(f"Redis Stack initialization failed: {redis_error}")
-                    logger.warning(
-                        "⚠️ Continuing without Redis Stack - some features may be limited"
-                    )
 
                 # Initialize Chat History Manager - CRITICAL
                 logger.info(
@@ -969,8 +959,8 @@ class AppFactory:
                     await app.state.background_llm_sync.stop()
                 if hasattr(app.state, "memory_graph") and app.state.memory_graph:
                     await app.state.memory_graph.close()
-                if hasattr(app.state, "redis_manager") and app.state.redis_manager:
-                    await app.state.redis_manager.close_all_pools()
+                # REFACTORED: Removed redis_manager cleanup - using centralized Redis client management
+                # Redis connections are automatically managed by get_redis_client()
                 logger.info("✅ Cleanup completed successfully")
             except Exception as e:
                 logger.error(f"Error during shutdown: {e}")

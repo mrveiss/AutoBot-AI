@@ -4,6 +4,11 @@
     ref="messagesContainer"
     v-bind="$attrs"
   >
+    <!-- Screen reader status announcements -->
+    <div role="status" aria-live="polite" aria-atomic="true" class="sr-only">
+      {{ screenReaderStatus }}
+    </div>
+
     <EmptyState
       v-if="store.currentMessages.length === 0"
       icon="fas fa-comments"
@@ -11,7 +16,15 @@
       message="Send a message to begin chatting with the AI assistant."
     />
 
-    <div v-else class="space-y-1">
+    <div
+      v-else
+      class="space-y-1"
+      role="log"
+      aria-live="polite"
+      aria-atomic="false"
+      aria-relevant="additions"
+      aria-label="Chat conversation"
+    >
       <div
         v-for="message in filteredMessages"
         :key="message.id"
@@ -22,7 +35,7 @@
         <div class="message-header">
           <div class="flex items-center gap-1.5">
             <div class="message-avatar" :class="getAvatarClass(message.sender)">
-              <i :class="getSenderIcon(message.sender)"></i>
+              <i :class="getSenderIcon(message.sender)" aria-hidden="true"></i>
             </div>
             <div class="message-info">
               <span class="sender-name">{{ getSenderName(message.sender) }}</span>
@@ -37,27 +50,30 @@
               size="xs"
               @click="editMessage(message)"
               class="action-btn"
+              aria-label="Edit message"
               title="Edit message"
             >
-              <i class="fas fa-edit"></i>
+              <i class="fas fa-edit" aria-hidden="true"></i>
             </BaseButton>
             <BaseButton
               variant="ghost"
               size="xs"
               @click="copyMessage(message)"
               class="action-btn"
+              aria-label="Copy message"
               title="Copy message"
             >
-              <i class="fas fa-copy"></i>
+              <i class="fas fa-copy" aria-hidden="true"></i>
             </BaseButton>
             <BaseButton
               variant="ghost"
               size="xs"
               @click="deleteMessage(message)"
               class="action-btn danger"
+              aria-label="Delete message"
               title="Delete message"
             >
-              <i class="fas fa-trash"></i>
+              <i class="fas fa-trash" aria-hidden="true"></i>
             </BaseButton>
           </div>
         </div>
@@ -94,15 +110,15 @@
           <div v-if="message.metadata && shouldShowMetadata(message)" class="message-metadata">
             <div class="metadata-items">
               <span v-if="message.metadata.model" class="metadata-item">
-                <i class="fas fa-robot"></i>
+                <i class="fas fa-robot" aria-hidden="true"></i>
                 {{ message.metadata.model }}
               </span>
               <span v-if="message.metadata.tokens" class="metadata-item">
-                <i class="fas fa-coins"></i>
+                <i class="fas fa-coins" aria-hidden="true"></i>
                 {{ message.metadata.tokens }} tokens
               </span>
               <span v-if="message.metadata.duration" class="metadata-item">
-                <i class="fas fa-clock"></i>
+                <i class="fas fa-clock" aria-hidden="true"></i>
                 {{ message.metadata.duration }}ms
               </span>
             </div>
@@ -111,7 +127,7 @@
           <!-- Attachments -->
           <div v-if="message.attachments && message.attachments.length > 0" class="message-attachments">
             <div class="attachment-header">
-              <i class="fas fa-paperclip"></i>
+              <i class="fas fa-paperclip" aria-hidden="true"></i>
               <span>{{ message.attachments.length }} attachment{{ message.attachments.length > 1 ? 's' : '' }}</span>
             </div>
             <div class="attachment-list">
@@ -137,7 +153,7 @@
           <!-- PRE-APPROVED STATE - Show blue auto-approval -->
           <div v-if="message.metadata?.approval_status === 'pre_approved'" class="approval-confirmed approval-pre-approved">
             <div class="approval-header">
-              <i class="fas fa-shield-check text-blue-600"></i>
+              <i class="fas fa-shield-check text-blue-600" aria-hidden="true"></i>
               <span class="font-semibold">Auto-Approved</span>
             </div>
             <div class="approval-details">
@@ -155,7 +171,7 @@
           <!-- USER APPROVED STATE - Show green confirmation -->
           <div v-else-if="message.metadata?.approval_status === 'approved'" class="approval-confirmed approval-approved">
             <div class="approval-header">
-              <i class="fas fa-check-circle text-green-600"></i>
+              <i class="fas fa-check-circle text-green-600" aria-hidden="true"></i>
               <span class="font-semibold">Command Approved</span>
             </div>
             <div class="approval-details">
@@ -173,7 +189,7 @@
           <!-- DENIED STATE - Show red rejection -->
           <div v-else-if="message.metadata?.approval_status === 'denied'" class="approval-confirmed approval-denied">
             <div class="approval-header">
-              <i class="fas fa-times-circle text-red-600"></i>
+              <i class="fas fa-times-circle text-red-600" aria-hidden="true"></i>
               <span class="font-semibold">Command Denied</span>
             </div>
             <div class="approval-details">
@@ -189,9 +205,10 @@
           </div>
 
           <!-- PENDING APPROVAL STATE - Show approval buttons -->
-          <div v-else-if="message.metadata?.requires_approval" class="approval-request">
+          <!-- FIXED: Only show if requires_approval AND no approval_status yet -->
+          <div v-else-if="message.metadata?.requires_approval && !message.metadata?.approval_status" class="approval-request">
             <div class="approval-header">
-              <i class="fas fa-exclamation-triangle text-yellow-600"></i>
+              <i class="fas fa-exclamation-triangle text-yellow-600" aria-hidden="true"></i>
               <span class="font-semibold">Command Approval Required</span>
             </div>
             <div class="approval-details">
@@ -230,8 +247,9 @@
                   size="sm"
                   @click="cancelComment"
                   class="cancel-comment-btn"
+                  aria-label="Cancel comment"
                 >
-                  <i class="fas fa-times"></i>
+                  <i class="fas fa-times" aria-hidden="true"></i>
                   <span>Cancel</span>
                 </BaseButton>
                 <BaseButton
@@ -240,8 +258,9 @@
                   @click="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
                   :disabled="!approvalComment.trim()"
                   class="submit-comment-btn"
+                  :aria-label="`Submit ${pendingApprovalDecision ? 'approval' : 'denial'} with comment`"
                 >
-                  <i class="fas fa-check"></i>
+                  <i class="fas fa-check" aria-hidden="true"></i>
                   <span>Submit {{ pendingApprovalDecision ? 'Approval' : 'Denial' }}</span>
                 </BaseButton>
               </div>
@@ -256,12 +275,12 @@
                   class="checkbox-input"
                 />
                 <span class="checkbox-label">
-                  <i class="fas fa-shield-check"></i>
+                  <i class="fas fa-shield-check" aria-hidden="true"></i>
                   Automatically approve similar commands in the future
                 </span>
               </label>
               <div v-if="autoApproveFuture" class="auto-approve-hint">
-                <i class="fas fa-info-circle"></i>
+                <i class="fas fa-info-circle" aria-hidden="true"></i>
                 <span>Commands with the same pattern and risk level will be auto-approved</span>
               </div>
             </div>
@@ -270,11 +289,12 @@
               <BaseButton
                 variant="success"
                 size="sm"
-                @click="approveCommand(message.metadata.terminal_session_id, true)"
+                @click="approveCommand(message.metadata.terminal_session_id, true, undefined, message.metadata.command_id)"
                 :disabled="processingApproval || showCommentInput"
                 class="approve-btn"
+                aria-label="Approve command"
               >
-                <i class="fas fa-check"></i>
+                <i class="fas fa-check" aria-hidden="true"></i>
                 <span>Approve</span>
               </BaseButton>
               <BaseButton
@@ -283,18 +303,20 @@
                 @click="promptForComment(message.metadata.terminal_session_id)"
                 :disabled="processingApproval || showCommentInput"
                 class="comment-btn"
+                aria-label="Add comment to approval decision"
               >
-                <i class="fas fa-comment"></i>
+                <i class="fas fa-comment" aria-hidden="true"></i>
                 <span>Comment</span>
               </BaseButton>
               <BaseButton
                 variant="danger"
                 size="sm"
-                @click="approveCommand(message.metadata.terminal_session_id, false)"
+                @click="approveCommand(message.metadata.terminal_session_id, false, undefined, message.metadata.command_id)"
                 :disabled="processingApproval || showCommentInput"
                 class="deny-btn"
+                aria-label="Deny command"
               >
-                <i class="fas fa-times"></i>
+                <i class="fas fa-times" aria-hidden="true"></i>
                 <span>Deny</span>
               </BaseButton>
             </div>
@@ -422,6 +444,9 @@ const { displaySettings } = useDisplaySettings()
 // Refs
 const messagesContainer = ref<HTMLElement>()
 const editTextarea = ref<HTMLTextAreaElement>()
+
+// Screen reader announcements
+const screenReaderStatus = ref('')
 
 // Edit modal state
 const showEditModal = ref(false)
@@ -728,8 +753,73 @@ const detectToolCalls = (message: ChatMessage) => {
   }
 }
 
+// Poll command state from queue (event-driven, no timeouts!)
+const pollCommandState = async (command_id: string, callback: (result: any) => void) => {
+  const maxAttempts = 100  // 100 * 500ms = 50 seconds max
+  let attempt = 0
+
+  const poll = async () => {
+    try {
+      const backendUrl = await appConfig.getApiUrl(`/api/agent-terminal/commands/${command_id}`)
+      const response = await fetch(backendUrl)
+
+      if (!response.ok) {
+        console.error('[POLL] Failed to get command state:', response.status)
+        if (attempt < maxAttempts) {
+          attempt++
+          setTimeout(poll, 500)
+        } else {
+          callback({ state: 'error', error: 'HTTP error' })
+        }
+        return
+      }
+
+      const command = await response.json()
+      console.log(`[POLL] Command state (attempt ${attempt + 1}):`, command.state)
+
+      // Check if command is finished
+      if (command.state === 'completed' || command.state === 'failed' || command.state === 'denied') {
+        console.log('[POLL] ✅ Command finished:', {
+          state: command.state,
+          output_length: command.output?.length || 0,
+          return_code: command.return_code
+        })
+        callback({
+          state: command.state,
+          output: command.output,
+          stderr: command.stderr,
+          return_code: command.return_code,
+          command: command.command
+        })
+        return  // Stop polling
+      }
+
+      // Command still running - poll again
+      if (attempt < maxAttempts) {
+        attempt++
+        setTimeout(poll, 500)  // Poll every 500ms
+      } else {
+        console.error('[POLL] ⏱️ Polling timed out after 50 seconds')
+        callback({ state: 'timeout', error: 'Polling timeout' })
+      }
+    } catch (error) {
+      console.error('[POLL] Error:', error)
+      if (attempt < maxAttempts) {
+        attempt++
+        setTimeout(poll, 500)
+      } else {
+        callback({ state: 'error', error: (error as Error).message })
+      }
+    }
+  }
+
+  // Start polling
+  console.log('[POLL] 🚀 Starting command state polling for:', command_id)
+  poll()
+}
+
 // Command Approval - Use HTTP POST to agent-terminal API with dynamic URL
-const approveCommand = async (terminal_session_id: string, approved: boolean, comment?: string) => {
+const approveCommand = async (terminal_session_id: string, approved: boolean, comment?: string, command_id?: string) => {
   if (!terminal_session_id) {
     console.error('No terminal_session_id provided for approval')
     return
@@ -779,6 +869,30 @@ const approveCommand = async (terminal_session_id: string, approved: boolean, co
         console.log('Updated message approval status:', targetMessage.metadata)
       } else {
         console.warn('Could not find message to update approval status')
+      }
+
+      // START POLLING: If approved and we have command_id, poll for completion
+      if (result.status === 'approved' && approved && command_id) {
+        console.log('[POLL] Starting polling for approved command:', command_id)
+
+        pollCommandState(command_id, (pollResult) => {
+          console.log('[POLL] 🎯 Command execution complete:', pollResult)
+
+          if (pollResult.state === 'completed') {
+            console.log('[POLL] ✅ Command completed successfully')
+            console.log('[POLL] Output:', pollResult.output)
+            // Note: Backend already handles LLM interpretation and sends it to chat
+            // The output will appear naturally through the WebSocket/streaming flow
+          } else if (pollResult.state === 'failed') {
+            console.error('[POLL] ❌ Command failed:', pollResult.stderr)
+          } else if (pollResult.state === 'timeout') {
+            console.warn('[POLL] ⏱️ Polling timed out')
+          } else if (pollResult.state === 'error') {
+            console.error('[POLL] ❌ Polling error:', pollResult.error)
+          }
+        })
+      } else if (!command_id && approved) {
+        console.warn('[POLL] ⚠️ No command_id available for polling (legacy approval flow)')
       }
 
       // Reset auto-approve checkbox after submission
@@ -854,6 +968,24 @@ const scrollToBottom = () => {
 watch(() => store.currentMessages.length, () => {
   nextTick(scrollToBottom)
 })
+
+// Announce new messages to screen readers
+watch(() => store.currentMessages, (newMessages, oldMessages) => {
+  // Only announce if a new message was added
+  if (newMessages.length > (oldMessages?.length || 0)) {
+    const latestMessage = newMessages[newMessages.length - 1]
+    if (latestMessage) {
+      const sender = getSenderName(latestMessage.sender)
+      const preview = latestMessage.content.substring(0, 100).replace(/<[^>]*>/g, '') // Strip HTML
+      screenReaderStatus.value = `New message from ${sender}: ${preview}${preview.length < latestMessage.content.length ? '...' : ''}`
+
+      // Clear announcement after 2 seconds to allow new announcements
+      setTimeout(() => {
+        screenReaderStatus.value = ''
+      }, 2000)
+    }
+  }
+}, { deep: true })
 
 // Watch typing status to manage timing
 watch(() => store.isTyping, (isTyping) => {

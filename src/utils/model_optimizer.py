@@ -20,7 +20,7 @@ import yaml
 
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
-from src.utils.redis_database_manager import get_redis_client
+from src.utils.redis_client import get_redis_client
 
 
 class TaskComplexity(Enum):

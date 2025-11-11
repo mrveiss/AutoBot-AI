@@ -50,6 +50,7 @@
 </template>
 
 <script setup lang="ts">
+import { getFileIcon as getFileIconUtil } from '@/utils/iconMappings'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
 interface TreeItem {
@@ -74,43 +75,45 @@ interface Emits {
 defineProps<Props>()
 defineEmits<Emits>()
 
-// Methods
+// Icon mapping centralized in @/utils/iconMappings
+// Color classes added for visual distinction
 const getFileIcon = (item: TreeItem): string => {
   if (item.is_dir) {
     return item.expanded ? 'fas fa-folder-open text-blue-500' : 'fas fa-folder text-blue-500'
   }
 
+  const icon = getFileIconUtil(item.name, false)
   const extension = item.name.split('.').pop()?.toLowerCase()
 
-  switch (extension) {
-    case 'txt':
-    case 'md':
-    case 'readme':
-      return 'fas fa-file-alt text-gray-500'
-    case 'js':
-    case 'ts':
-    case 'html':
-    case 'css':
-    case 'vue':
-    case 'json':
-      return 'fas fa-file-code text-green-500'
-    case 'jpg':
-    case 'jpeg':
-    case 'png':
-    case 'gif':
-    case 'svg':
-    case 'webp':
-      return 'fas fa-file-image text-purple-500'
-    case 'pdf':
-      return 'fas fa-file-pdf text-red-500'
-    case 'zip':
-    case 'tar':
-    case 'gz':
-    case 'rar':
-      return 'fas fa-file-archive text-orange-500'
-    default:
-      return 'fas fa-file text-gray-400'
+  // Map extensions to color classes for visual distinction
+  const colorMap: Record<string, string> = {
+    'txt': 'text-gray-500',
+    'md': 'text-gray-500',
+    'readme': 'text-gray-500',
+    'js': 'text-green-500',
+    'ts': 'text-green-500',
+    'jsx': 'text-green-500',
+    'tsx': 'text-green-500',
+    'html': 'text-green-500',
+    'css': 'text-green-500',
+    'vue': 'text-green-500',
+    'json': 'text-green-500',
+    'py': 'text-green-500',
+    'jpg': 'text-purple-500',
+    'jpeg': 'text-purple-500',
+    'png': 'text-purple-500',
+    'gif': 'text-purple-500',
+    'svg': 'text-purple-500',
+    'webp': 'text-purple-500',
+    'pdf': 'text-red-500',
+    'zip': 'text-orange-500',
+    'tar': 'text-orange-500',
+    'gz': 'text-orange-500',
+    'rar': 'text-orange-500'
   }
+
+  const color = colorMap[extension || ''] || 'text-gray-400'
+  return `${icon} ${color}`
 }
 </script>
 

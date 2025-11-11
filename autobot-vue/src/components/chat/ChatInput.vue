@@ -28,7 +28,7 @@
           class="retry-upload-btn"
           aria-label="Retry upload"
         >
-          <i class="fas fa-redo"></i>
+          <i class="fas fa-redo" aria-hidden="true"></i>
         </BaseButton>
       </div>
     </div>
@@ -37,7 +37,7 @@
     <div v-if="attachedFiles.length > 0" class="attached-files mb-4">
       <div class="attached-files-header">
         <h4 class="text-sm font-medium text-gray-700">
-          <i class="fas fa-paperclip mr-1"></i>
+          <i class="fas fa-paperclip mr-1" aria-hidden="true"></i>
           {{ attachedFiles.length }} file{{ attachedFiles.length > 1 ? 's' : '' }} attached
         </h4>
         <BaseButton variant="ghost" size="sm" @click="clearAllFiles" class="text-red-600 hover:text-red-800">
@@ -65,7 +65,7 @@
             class="remove-file-btn"
             aria-label="Remove file"
           >
-            <i class="fas fa-times"></i>
+            <i class="fas fa-times" aria-hidden="true"></i>
           </BaseButton>
         </div>
       </div>
@@ -89,18 +89,25 @@
           class="message-input-wrapper"
           :class="{ 'focused': isInputFocused }"
         >
+          <label for="chat-message-input" class="sr-only">Chat message</label>
           <textarea
+            id="chat-message-input"
             ref="messageInput"
             v-model="messageText"
             :placeholder="inputPlaceholder"
             class="message-input"
             :disabled="isDisabled"
+            aria-label="Type your chat message here. Press Enter to send, Shift+Enter for new line"
+            aria-describedby="chat-input-help"
             @keydown="handleKeydown"
             @focus="isInputFocused = true"
             @blur="isInputFocused = false"
             @input="handleInput"
             rows="1"
           ></textarea>
+          <span id="chat-input-help" class="sr-only">
+            Press Enter to send your message. Press Shift+Enter to create a new line.
+          </span>
 
           <!-- Input Actions -->
           <div class="input-actions">
@@ -113,7 +120,7 @@
               :disabled="isDisabled"
               aria-label="Attach file"
             >
-              <i class="fas fa-paperclip"></i>
+              <i class="fas fa-paperclip" aria-hidden="true"></i>
             </BaseButton>
 
             <!-- Voice Input Button -->
@@ -126,7 +133,7 @@
               :disabled="isDisabled"
               aria-label="Voice input"
             >
-              <i :class="isVoiceRecording ? 'fas fa-stop' : 'fas fa-microphone'"></i>
+              <i :class="isVoiceRecording ? 'fas fa-stop' : 'fas fa-microphone'" aria-hidden="true"></i>
             </BaseButton>
 
             <!-- Emoji Button -->
@@ -138,7 +145,7 @@
               :disabled="isDisabled"
               aria-label="Add emoji"
             >
-              <i class="fas fa-smile"></i>
+              <i class="fas fa-smile" aria-hidden="true"></i>
             </BaseButton>
 
             <!-- Vertical Divider -->
@@ -172,10 +179,10 @@
           :aria-label="isSending ? 'Sending...' : canSend ? 'Send message (Enter)' : 'Enter a message to send'"
         >
           <div v-if="!isSending && messageQueueLength > 0" class="queue-indicator">
-            <i class="fas fa-paper-plane"></i>
+            <i class="fas fa-paper-plane" aria-hidden="true"></i>
             <span class="queue-count">{{ messageQueueLength }}</span>
           </div>
-          <i v-else-if="!isSending" class="fas fa-paper-plane"></i>
+          <i v-else-if="!isSending" class="fas fa-paper-plane" aria-hidden="true"></i>
         </BaseButton>
       </div>
 
@@ -183,7 +190,7 @@
       <div class="input-status-bar">
         <div class="status-left">
           <span v-if="isTypingIndicatorVisible" class="typing-indicator">
-            <i class="fas fa-keyboard"></i>
+            <i class="fas fa-keyboard" aria-hidden="true"></i>
             Typing...
           </span>
           <span v-if="characterCount > 0" class="character-count" :class="{ 'warning': isNearLimit }">
@@ -193,7 +200,7 @@
 
         <div class="status-right">
           <span v-if="isVoiceRecording" class="voice-status">
-            <i class="fas fa-circle text-red-500 animate-pulse"></i>
+            <i class="fas fa-circle text-red-500 animate-pulse" aria-hidden="true"></i>
             Recording...
           </span>
           <span class="keyboard-hint">Enter to send • Shift+Enter for new line</span>
@@ -206,7 +213,7 @@
       <div class="emoji-header">
         <span class="emoji-title">Add Emoji</span>
         <BaseButton variant="ghost" size="xs" @click="showEmojiPicker = false" class="close-emoji-btn" aria-label="Close emoji picker">
-          <i class="fas fa-times"></i>
+          <i class="fas fa-times" aria-hidden="true"></i>
         </BaseButton>
       </div>
       <div class="emoji-grid">
@@ -235,6 +242,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import ProgressBar from '@/components/ui/ProgressBar.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
+import { getFileIconByMimeType } from '@/utils/iconMappings'
 
 const store = useChatStore()
 const controller = useChatController()
@@ -414,21 +422,26 @@ const handleFileSelect = async (event: Event) => {
       status: string;
       current: number;
       total: number;
+      file: File;  // Store original file for retry
+      fileId?: string;
+      uploadId?: string;
       error?: string;
+      eta?: number;
     } = {
       id: uploadId,
       filename: file.name,
       progress: 0,
       status: 'Preparing...',
       current: 0,
-      total: file.size
+      total: file.size,
+      file: file  // Store file reference for retry
     }
 
     uploadProgress.value.push(upload)
 
     try {
-      // Simulate upload progress (replace with actual upload logic)
-      await simulateUpload(upload, file)
+      // Real upload with progress tracking
+      await uploadFile(upload, file)
       attachedFiles.value.push(file)
     } catch (error) {
       upload.error = error instanceof Error ? error.message : 'Upload failed'
@@ -522,16 +535,24 @@ const resetTextareaHeight = () => {
   })
 }
 
-// Utility functions
+// Icon mapping centralized in @/utils/iconMappings
+// Color classes added for visual distinction
 const getFileIcon = (type: string): string => {
-  if (type.startsWith('image/')) return 'fas fa-image text-green-600'
-  if (type.startsWith('video/')) return 'fas fa-video text-blue-600'
-  if (type.startsWith('audio/')) return 'fas fa-music text-purple-600'
-  if (type.includes('pdf')) return 'fas fa-file-pdf text-red-600'
-  if (type.includes('word')) return 'fas fa-file-word text-blue-600'
-  if (type.includes('excel')) return 'fas fa-file-excel text-green-600'
-  if (type.includes('text')) return 'fas fa-file-alt text-gray-600'
-  return 'fas fa-file text-gray-600'
+  const icon = getFileIconByMimeType(type)
+
+  // Add color classes based on MIME type
+  const colorMap: Record<string, string> = {
+    'fas fa-image': 'text-green-600',
+    'fas fa-video': 'text-blue-600',
+    'fas fa-music': 'text-purple-600',
+    'fas fa-file-pdf': 'text-red-600',
+    'fas fa-file-word': 'text-blue-600',
+    'fas fa-file-excel': 'text-green-600',
+    'fas fa-file-alt': 'text-gray-600'
+  }
+
+  const color = colorMap[icon] || 'text-gray-600'
+  return `${icon} ${color}`
 }
 
 // NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
@@ -540,61 +561,109 @@ const generateId = (): string => {
   return Date.now().toString(36) + Math.random().toString(36).substr(2)
 }
 
-// Enhanced UX methods
-const simulateUpload = async (upload: any, file: File): Promise<void> => {
-  const chunkSize = Math.max(file.size / 10, 1024) // 10 chunks minimum
-  let uploaded = 0
-  const startTime = Date.now()
+// Real file upload implementation
+const uploadFile = async (upload: any, file: File): Promise<void> => {
+  const formData = new FormData()
+  formData.append('file', file)
 
+  const startTime = Date.now()
   upload.status = 'Uploading...'
 
-  while (uploaded < file.size) {
-    await new Promise(resolve => setTimeout(resolve, 100)) // Simulate network delay
+  try {
+    await new Promise<string>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
 
-    uploaded = Math.min(uploaded + chunkSize, file.size)
-    upload.current = uploaded
-    upload.progress = (uploaded / file.size) * 100
+      // Track upload progress
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          upload.current = event.loaded
+          upload.total = event.total
+          upload.progress = (event.loaded / event.total) * 100
 
-    // Calculate ETA
-    const elapsed = Date.now() - startTime
-    const rate = uploaded / elapsed
-    const remaining = (file.size - uploaded) / rate / 1000
-    upload.eta = remaining > 1 ? remaining : undefined
+          // Calculate ETA
+          const elapsed = Date.now() - startTime
+          if (elapsed > 0) {
+            const rate = event.loaded / elapsed // bytes per millisecond
+            const remaining = (event.total - event.loaded) / rate / 1000 // seconds
+            upload.eta = remaining > 1 ? remaining : undefined
+          }
 
-    // Update status
-    if (upload.progress >= 100) {
-      upload.status = 'Processing...'
-      await new Promise(resolve => setTimeout(resolve, 500))
-      upload.status = 'Complete'
+          upload.status = `Uploading... ${Math.round(upload.progress)}%`
+        }
+      })
 
-      // Remove from progress after delay
-      setTimeout(() => {
-        const index = uploadProgress.value.findIndex(u => u.id === upload.id)
-        if (index !== -1) uploadProgress.value.splice(index, 1)
-      }, 2000)
-    }
+      // Handle successful completion
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 200) {
+          upload.status = 'Complete'
+          upload.progress = 100
+
+          try {
+            const response = JSON.parse(xhr.responseText)
+            upload.fileId = response.file_info?.file_id
+            upload.uploadId = response.upload_id
+
+            // Remove from progress after delay
+            setTimeout(() => {
+              const index = uploadProgress.value.findIndex(u => u.id === upload.id)
+              if (index !== -1) uploadProgress.value.splice(index, 1)
+            }, 2000)
+
+            resolve(response.file_info?.file_id || '')
+          } catch (e) {
+            reject(new Error('Invalid response from server'))
+          }
+        } else {
+          reject(new Error(`Upload failed with status: ${xhr.status}`))
+        }
+      })
+
+      // Handle errors
+      xhr.addEventListener('error', () => {
+        reject(new Error('Network error during upload'))
+      })
+
+      xhr.addEventListener('abort', () => {
+        reject(new Error('Upload cancelled'))
+      })
+
+      // Send request
+      const sessionId = store.currentSessionId || 'default'
+      xhr.open('POST', `/api/conversation-files/conversation/${sessionId}/upload`)
+      xhr.send(formData)
+    })
+  } catch (error) {
+    upload.error = error instanceof Error ? error.message : 'Upload failed'
+    upload.status = 'Failed'
+    upload.progress = 0
+    throw error
   }
 }
 
 const retryUpload = async (uploadId: string) => {
   const upload = uploadProgress.value.find(u => u.id === uploadId)
-  if (!upload) return
+  if (!upload || !upload.file) {
+    console.error('Cannot retry upload: Upload or file not found')
+    return
+  }
 
+  // Reset upload state
   upload.error = undefined
   upload.progress = 0
   upload.current = 0
   upload.status = 'Retrying...'
 
-  // Find corresponding file and retry upload
-  // This is a simplified retry - in production, you'd need to track the original file
-  await new Promise(resolve => setTimeout(resolve, 1000))
-  upload.status = 'Complete'
-  upload.progress = 100
-
-  setTimeout(() => {
-    const index = uploadProgress.value.findIndex(u => u.id === uploadId)
-    if (index !== -1) uploadProgress.value.splice(index, 1)
-  }, 2000)
+  try {
+    // Use real upload function
+    await uploadFile(upload, upload.file)
+    // Re-add to attached files if successful
+    if (!attachedFiles.value.find(f => f.name === upload.file.name)) {
+      attachedFiles.value.push(upload.file)
+    }
+  } catch (error) {
+    upload.error = error instanceof Error ? error.message : 'Retry failed'
+    upload.status = 'Failed'
+  }
 }
 
 const updateTypingIndicator = () => {

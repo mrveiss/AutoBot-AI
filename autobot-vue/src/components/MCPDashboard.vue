@@ -163,6 +163,8 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '@/stores/app'
 import { formatTime } from '@/utils/formatHelpers'
+import { getStatusIcon as getStatusIconUtil } from '@/utils/iconMappings'
+import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import BasePanel from '@/components/base/BasePanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
@@ -170,8 +172,10 @@ import BaseButton from '@/components/base/BaseButton.vue'
 const appStore = useAppStore()
 const { settings } = storeToRefs(appStore)
 
+// Use composable for async operations
+const { execute: refreshData, loading } = useAsyncOperation()
+
 // State
-const loading = ref(false)
 const lastUpdate = ref('Never')
 const refreshInterval = ref(null)
 
@@ -223,25 +227,32 @@ const getHealthClass = (section) => {
   }
 }
 
+// Icon mapping centralized in @/utils/iconMappings
+// Custom color classes kept for component-specific styling
 const getStatusIcon = (status) => {
-  switch (status) {
-    case 'healthy': return 'fas fa-check-circle text-success'
-    case 'warning': return 'fas fa-exclamation-triangle text-warning'
-    case 'error': return 'fas fa-times-circle text-danger'
-    default: return 'fas fa-question-circle text-muted'
+  const icon = getStatusIconUtil(status)
+
+  // Map status to custom color classes (defined in <style> section)
+  const colorClassMap = {
+    'healthy': 'text-success',
+    'success': 'text-success',
+    'warning': 'text-warning',
+    'error': 'text-danger',
+    'failed': 'text-danger',
+    'unknown': 'text-muted'
   }
+
+  const colorClass = colorClassMap[status] || 'text-muted'
+  return `${icon} ${colorClass}`
 }
 
 
-const refreshData = async () => {
-  loading.value = true
-  
-  try {
-    // In a real implementation, this would call the MCP servers
-    // For now, we'll simulate the data
-    
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000))
+const refreshDataFn = async () => {
+  // In a real implementation, this would call the MCP servers
+  // For now, we'll simulate the data
+
+  // Simulate API call delay
+  await new Promise(resolve => setTimeout(resolve, 1000))
     
     // Update health data
     health.value = {
@@ -272,36 +283,26 @@ const refreshData = async () => {
     }
     
     // Add a log entry
-    recentLogs.value.unshift({
-      timestamp: new Date(),
-      level: 'INFO',
-      message: 'Health check completed successfully'
-    })
-    
-    // Keep only last 10 logs
-    if (recentLogs.value.length > 10) {
-      recentLogs.value = recentLogs.value.slice(0, 10)
-    }
-    
-    lastUpdate.value = new Date().toLocaleTimeString()
-  } catch (error) {
-    console.error('Failed to refresh health data:', error)
-    recentLogs.value.unshift({
-      timestamp: new Date(),
-      level: 'ERROR',
-      message: 'Failed to fetch health data'
-    })
-  } finally {
-    loading.value = false
+  recentLogs.value.unshift({
+    timestamp: new Date(),
+    level: 'INFO',
+    message: 'Health check completed successfully'
+  })
+
+  // Keep only last 10 logs
+  if (recentLogs.value.length > 10) {
+    recentLogs.value = recentLogs.value.slice(0, 10)
   }
+
+  lastUpdate.value = new Date().toLocaleTimeString()
 }
 
 // Lifecycle
 onMounted(() => {
-  refreshData()
-  
+  refreshData(refreshDataFn)
+
   // Auto-refresh every 30 seconds
-  refreshInterval.value = setInterval(refreshData, 30000)
+  refreshInterval.value = setInterval(() => refreshData(refreshDataFn), 30000)
 })
 
 onUnmounted(() => {

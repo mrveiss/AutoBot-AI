@@ -17,7 +17,7 @@ from src.knowledge_base import KnowledgeBase
 from src.langchain_agent_orchestrator import LangChainAgentOrchestrator
 from src.unified_config_manager import config as global_config_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.redis_database_manager import RedisDatabase, RedisDatabaseManager
+from src.utils.redis_client import RedisDatabase, RedisDatabaseManager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])

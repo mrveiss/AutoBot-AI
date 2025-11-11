@@ -1,20 +1,32 @@
 <template>
-  <div
-    class="terminal-output"
-    data-testid="terminal-output"
-    ref="terminalOutput"
-    @click="$emit('focus-input')"
-    tabindex="0"
-    @keyup.enter="$event.target.click()"
-    @keyup.space="$event.target.click()"
-  >
+  <div class="terminal-output-wrapper">
+    <!-- Screen reader status announcements -->
+    <div role="status" aria-live="polite" aria-atomic="true" class="sr-only">
+      {{ screenReaderStatus }}
+    </div>
+
     <div
-      v-for="(line, index) in outputLines"
-      :key="index"
-      class="terminal-line"
-      :class="getLineClass(line)"
-      v-html="formatTerminalLine(line)"
-    ></div>
+      class="terminal-output"
+      data-testid="terminal-output"
+      ref="terminalOutput"
+      role="log"
+      aria-live="polite"
+      aria-atomic="false"
+      aria-relevant="additions"
+      aria-label="Terminal command output"
+      @click="$emit('focus-input')"
+      tabindex="0"
+      @keyup.enter="$event.target.click()"
+      @keyup.space="$event.target.click()"
+    >
+      <div
+        v-for="(line, index) in outputLines"
+        :key="index"
+        class="terminal-line"
+        :class="getLineClass(line)"
+        v-html="formatTerminalLine(line)"
+      ></div>
+    </div>
   </div>
 </template>
 
@@ -41,6 +53,9 @@ defineEmits<Emits>()
 
 const terminalOutput = ref<HTMLElement>()
 
+// Screen reader announcements
+const screenReaderStatus = ref('')
+
 // Auto-scroll when new lines are added
 watch(() => props.outputLines.length, () => {
   nextTick(() => {
@@ -49,6 +64,29 @@ watch(() => props.outputLines.length, () => {
     }
   })
 })
+
+// Announce new terminal output to screen readers
+watch(() => props.outputLines, (newLines, oldLines) => {
+  // Only announce if a new line was added
+  if (newLines.length > (oldLines?.length || 0)) {
+    const latestLine = newLines[newLines.length - 1]
+    if (latestLine) {
+      // Strip HTML and ANSI codes for announcement
+      const cleanContent = latestLine.content
+        .replace(/\x1b\[[0-9;]*m/g, '')  // Remove ANSI codes
+        .replace(/<[^>]*>/g, '')          // Remove HTML tags
+        .substring(0, 150)                 // Limit to 150 chars
+
+      const lineType = latestLine.type ? ` (${latestLine.type})` : ''
+      screenReaderStatus.value = `New terminal output${lineType}: ${cleanContent}`
+
+      // Clear announcement after 2 seconds
+      setTimeout(() => {
+        screenReaderStatus.value = ''
+      }, 2000)
+    }
+  }
+}, { deep: true })
 
 // Format terminal line content
 const formatTerminalLine = (line: OutputLine): string => {

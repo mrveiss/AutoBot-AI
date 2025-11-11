@@ -206,6 +206,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase';
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore';  // NEW: Use shared store
+import { useAsyncOperation } from '@/composables/useAsyncOperation';
 import appConfig from '@/config/AppConfig.js';
 import BaseButton from '@/components/base/BaseButton.vue';
 import BasePanel from '@/components/base/BasePanel.vue';
@@ -238,17 +239,19 @@ export default {
     const docsIndexed = ref(0);
     const selectedHost = ref('all');
     const machines = ref([]);  // Will be loaded from appConfig
-    const isLoading = ref(false);
-    const isInitializing = ref(false);
-    const isReindexing = ref(false);
-    const isRefreshing = ref(false);
-    const isPopulating = ref(false);
-    const isDocPopulating = ref(false);
-    const isVectorizing = ref(false);
     const progressMessage = ref('');
     const progressPercent = ref(0);
     const lastResult = ref(null);
     const activityLog = ref([]);
+
+    // Use composables for async operations
+    const { execute: fetchStatsOp, loading: isLoading } = useAsyncOperation();
+    const { execute: initializeMachineKnowledgeOp, loading: isInitializing } = useAsyncOperation();
+    const { execute: reindexDocumentsOp, loading: isReindexing } = useAsyncOperation();
+    const { execute: refreshSystemKnowledgeOp, loading: isRefreshing } = useAsyncOperation();
+    const { execute: populateManPagesOp, loading: isPopulating } = useAsyncOperation();
+    const { execute: populateAutoBotDocsOp, loading: isDocPopulating } = useAsyncOperation();
+    const { execute: generateVectorEmbeddingsOp, loading: isVectorizing } = useAsyncOperation();
 
     const addLogEntry = (message, status) => {
       const time = new Date().toLocaleTimeString();
@@ -260,8 +263,7 @@ export default {
 
     // NEW: Use shared store's refreshStats action (consolidates API calls)
     const fetchStats = async () => {
-      isLoading.value = true;
-      try {
+      await fetchStatsOp(async () => {
         // Call store's refreshStats - this makes the API call and updates shared state
         await knowledgeStore.refreshStats();
 
@@ -274,12 +276,10 @@ export default {
         }
 
         addLogEntry('Stats refreshed successfully', 'success');
-      } catch (error) {
+      }).catch(error => {
         console.error('Failed to fetch stats:', error);
         addLogEntry('Failed to fetch stats', 'error');
-      } finally {
-        isLoading.value = false;
-      }
+      });
     };
 
     const initializeMachineKnowledge = async () => {

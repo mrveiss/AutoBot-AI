@@ -69,6 +69,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import appConfig from '@/config/AppConfig.js'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 // Props
 interface Props {
@@ -86,11 +87,9 @@ const props = withDefaults(defineProps<Props>(), {
 // State
 // CRITICAL: Session ID will be retrieved from backend (for chat) or generated (for system terminal)
 const sessionId = ref<string | null>(null)
-const isConnected = ref(false)
-const isConnecting = ref(false)
 const sessionInitialized = ref(false)
-const websocket = ref<WebSocket | null>(null)
 const statusMessage = ref('')
+const wsUrl = ref('')
 const terminalLines = ref<Array<{prefix: string, content: string, type: string}>>([])
 const currentCommand = ref('')
 const currentPrompt = ref('$ ')
@@ -100,6 +99,51 @@ const historyIndex = ref(-1)
 // Refs
 const terminalElement = ref<HTMLElement>()
 const commandInput = ref<HTMLInputElement>()
+
+// WebSocket composable for terminal connection
+const { isConnected, isConnecting, send: wsSend, connect: wsConnect, disconnect: wsDisconnect } = useWebSocket(
+  wsUrl,
+  {
+    autoConnect: false,
+    autoReconnect: false, // Terminal handles reconnection explicitly via user action
+    parseJSON: true,
+    onOpen: () => {
+      statusMessage.value = 'Connected to terminal'
+      addTerminalLine('system', 'Terminal connected successfully', 'success')
+
+      // Focus input
+      nextTick(() => {
+        commandInput.value?.focus()
+      })
+
+      setTimeout(() => {
+        statusMessage.value = ''
+      }, 3000)
+    },
+    onMessage: (data) => {
+      try {
+        handleTerminalMessage(data)
+      } catch (error) {
+        // Handle plain text messages
+        addTerminalLine('', data, 'output')
+      }
+    },
+    onError: (error) => {
+      console.error('[WorkingTerminal] WebSocket error:', error)
+      statusMessage.value = 'Connection error'
+      addTerminalLine('system', 'Connection error occurred', 'error')
+    },
+    onClose: (event) => {
+      if (event.code !== 1000) {
+        statusMessage.value = 'Connection lost'
+        addTerminalLine('system', `Connection closed (${event.code})`, 'error')
+      } else {
+        statusMessage.value = 'Disconnected'
+        addTerminalLine('system', 'Terminal disconnected', 'info')
+      }
+    }
+  }
+)
 
 // Computed
 const connectionButtonClass = computed(() => ({
@@ -206,76 +250,26 @@ const connectTerminal = async () => {
   if (isConnecting.value || isConnected.value) return
 
   try {
-    isConnecting.value = true
     statusMessage.value = 'Initializing terminal session...'
 
     // CRITICAL: Initialize session first to get correct session ID
     await initializeSession()
 
     statusMessage.value = 'Connecting to terminal...'
-    const wsUrl = await getWebSocketUrl()
+    wsUrl.value = await getWebSocketUrl()
 
-    websocket.value = new WebSocket(wsUrl)
-
-    websocket.value.onopen = () => {
-      isConnected.value = true
-      isConnecting.value = false
-      statusMessage.value = 'Connected to terminal'
-      addTerminalLine('system', 'Terminal connected successfully', 'success')
-
-      // Focus input
-      nextTick(() => {
-        commandInput.value?.focus()
-      })
-
-      setTimeout(() => {
-        statusMessage.value = ''
-      }, 3000)
-    }
-
-    websocket.value.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        handleTerminalMessage(data)
-      } catch (error) {
-        // Handle plain text messages
-        addTerminalLine('', event.data, 'output')
-      }
-    }
-
-    websocket.value.onerror = (error) => {
-      console.error('[WorkingTerminal] WebSocket error:', error)
-      statusMessage.value = 'Connection error'
-      addTerminalLine('system', 'Connection error occurred', 'error')
-    }
-
-    websocket.value.onclose = (event) => {
-      isConnected.value = false
-      isConnecting.value = false
-      if (event.code !== 1000) {
-        statusMessage.value = 'Connection lost'
-        addTerminalLine('system', `Connection closed (${event.code})`, 'error')
-      } else {
-        statusMessage.value = 'Disconnected'
-        addTerminalLine('system', 'Terminal disconnected', 'info')
-      }
-    }
+    // Connect using WebSocket composable
+    wsConnect()
 
   } catch (error) {
     console.error('[WorkingTerminal] Connection failed:', error)
-    isConnecting.value = false
     statusMessage.value = 'Failed to connect'
     addTerminalLine('system', `Connection failed: ${error}`, 'error')
   }
 }
 
 const disconnectTerminal = () => {
-  if (websocket.value) {
-    websocket.value.close(1000, 'User disconnected')
-    websocket.value = null
-  }
-  isConnected.value = false
-  isConnecting.value = false
+  wsDisconnect(1000, 'User disconnected')
   statusMessage.value = 'Disconnected'
 }
 
@@ -288,7 +282,7 @@ const toggleConnection = () => {
 }
 
 const sendCommand = (command: string) => {
-  if (!isConnected.value || !websocket.value) {
+  if (!isConnected.value) {
     addTerminalLine('system', 'Not connected to terminal', 'error')
     return
   }
@@ -313,7 +307,7 @@ const sendCommand = (command: string) => {
       session_id: sessionId.value
     }
 
-    websocket.value.send(JSON.stringify(message))
+    wsSend(message) // useWebSocket handles JSON.stringify
     currentCommand.value = ''
 
   } catch (error) {

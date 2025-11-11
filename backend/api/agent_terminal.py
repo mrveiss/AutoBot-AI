@@ -234,6 +234,7 @@ from backend.services.agent_terminal_service import (
     AgentSessionState,
     AgentTerminalService,
 )
+from backend.services.command_execution_queue import get_command_queue
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -584,6 +585,75 @@ async def resume_agent_session(
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="get_command_state",
+    error_code_prefix="AGENT_TERMINAL",
+)
+@router.get("/commands/{command_id}")
+async def get_command_state(command_id: str):
+    """
+    Get command state and output from the command execution queue.
+
+    This endpoint enables event-driven polling for command state changes.
+    Frontend polls this endpoint to check if a command has completed and
+    to retrieve its output.
+
+    Args:
+        command_id: Unique identifier for the command
+
+    Returns:
+        Command state, output, and metadata
+
+    Raises:
+        HTTPException 404: Command not found in queue
+
+    Example Response:
+        {
+            "command_id": "abc-123-def",
+            "command": "whoami",
+            "state": "completed",
+            "output": "kali",
+            "stderr": "",
+            "return_code": 0,
+            "requested_at": 1699564800.123,
+            "execution_completed_at": 1699564802.456
+        }
+    """
+    # Get command queue singleton
+    queue = get_command_queue()
+
+    # Retrieve command from queue
+    command = await queue.get_command(command_id)
+
+    if not command:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Command {command_id} not found in queue"
+        )
+
+    # Return command state and output
+    return {
+        "command_id": command.command_id,
+        "terminal_session_id": command.terminal_session_id,
+        "chat_id": command.chat_id,
+        "command": command.command,
+        "purpose": command.purpose,
+        "state": command.state.value,
+        "output": command.output,
+        "stderr": command.stderr,
+        "return_code": command.return_code,
+        "risk_level": command.risk_level.value,
+        "risk_reasons": command.risk_reasons,
+        "requested_at": command.requested_at,
+        "approved_at": command.approved_at,
+        "execution_started_at": command.execution_started_at,
+        "execution_completed_at": command.execution_completed_at,
+        "approved_by_user_id": command.approved_by_user_id,
+        "approval_comment": command.approval_comment,
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="agent_terminal_info",
     error_code_prefix="AGENT_TERMINAL",
 )
@@ -614,6 +684,7 @@ async def agent_terminal_info():
             "delete_session": "DELETE /api/agent-terminal/sessions/{session_id}",
             "execute_command": "POST /api/agent-terminal/execute?session_id={session_id}",
             "approve_command": "POST /api/agent-terminal/sessions/{session_id}/approve",
+            "get_command_state": "GET /api/agent-terminal/commands/{command_id}",
             "interrupt": "POST /api/agent-terminal/sessions/{session_id}/interrupt",
             "resume": "POST /api/agent-terminal/sessions/{session_id}/resume",
         },

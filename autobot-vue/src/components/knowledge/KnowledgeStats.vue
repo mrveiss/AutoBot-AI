@@ -1341,7 +1341,7 @@ onMounted(() => {
 
 .vector-stat-content h4 {
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.8);
+  color: #6b7280;
   margin-bottom: 0.5rem;
   font-weight: 500;
 }
@@ -1349,14 +1349,14 @@ onMounted(() => {
 .vector-stat-value {
   font-size: 2rem;
   font-weight: 700;
-  color: white;
+  color: #1f2937;
   margin-bottom: 0.25rem;
   line-height: 1;
 }
 
 .vector-stat-label {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: #6b7280;
 }
 
 .vector-stat-label.warning {

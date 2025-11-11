@@ -252,6 +252,8 @@ import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
+import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { usePagination } from '@/composables/usePagination'
 import TreeNodeComponent, { type TreeNode } from './TreeNodeComponent.vue'
 import VectorizationProgressModal from './VectorizationProgressModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -303,14 +305,10 @@ interface CategoryOption {
 }
 
 // State
-const isLoading = ref(false)
-const error = ref<string | null>(null)
 const treeData = ref<TreeNode[]>([])
 const expandedNodes = ref<Set<string>>(new Set())
 const selectedFile = ref<TreeNode | null>(null)
 const fileContent = ref('')
-const isLoadingContent = ref(false)
-const contentError = ref<string | null>(null)
 const searchQuery = ref('')
 const selectedCategory = ref<string | null>(null)
 const selectedMainCategory = ref<string | null>(null)
@@ -323,11 +321,58 @@ const populationStates = ref<Record<string, { isPopulating: boolean; progress: n
   'system-knowledge': { isPopulating: false, progress: 0 }
 })
 
-// Cursor-based pagination state
-const entriesCursor = ref<string>('0')
-const hasMoreEntries = ref<boolean>(false)
-const isLoadingMore = ref<boolean>(false)
-const allLoadedEntries = ref<any[]>([])
+// Use composables for async operations
+const {
+  execute: loadKnowledgeTree,
+  loading: isLoading,
+  error
+} = useAsyncOperation()
+
+const {
+  execute: loadFileContentOp,
+  loading: isLoadingContent,
+  error: contentError
+} = useAsyncOperation()
+
+// Pagination for user knowledge entries
+const {
+  items: allLoadedEntries,
+  cursor: entriesCursor,
+  hasMore: hasMoreEntries,
+  isLoading: isLoadingMore,
+  loadMore,
+  reset: resetPagination
+} = usePagination({
+  fetchFn: async (cursor) => {
+    const params = new URLSearchParams({
+      limit: '100',
+      cursor: cursor || '0'
+    })
+    const response = await apiClient.get(`/api/knowledge_base/entries?${params}`)
+    const data = await parseApiResponse(response)
+
+    // Handle both cursor-based and offset-based formats
+    if (data.next_cursor !== undefined) {
+      return {
+        items: data.entries || [],
+        nextCursor: data.next_cursor || '0',
+        hasMore: data.has_more || false
+      }
+    } else if (data.offset !== undefined) {
+      const total = data.total || 0
+      const currentOffset = data.offset || 0
+      const entries = data.entries || []
+      const hasMore = (currentOffset + entries.length) < total
+      return {
+        items: entries,
+        nextCursor: hasMore ? String(currentOffset + entries.length) : '0',
+        hasMore
+      }
+    }
+    return { items: data.entries || [], nextCursor: '0', hasMore: false }
+  },
+  initialCursor: '0'
+})
 
 // Computed
 const breadcrumbParts = computed(() => {
@@ -577,157 +622,54 @@ const loadMainCategories = async () => {
   }
 }
 
-const loadKnowledgeTree = async () => {
-  isLoading.value = true
-  error.value = null
 
-  try {
-    // Load facts from knowledge base by category
-    const response = await apiClient.get('/api/knowledge_base/facts/by_category')
-    const data = await parseApiResponse(response)
+// Load main knowledge tree with useAsyncOperation wrapper
+const loadKnowledgeTreeFn = async () => {
+  // Load facts from knowledge base by category
+  const response = await apiClient.get('/api/knowledge_base/facts/by_category')
+  const data = await parseApiResponse(response)
 
-    if (data && data.categories) {
-      // Build tree structure from categories
-      const categories = Object.keys(data.categories)
+  if (data && data.categories) {
+    // Build tree structure from categories
+    const categories = Object.keys(data.categories)
 
-      // Update category counts
-      const counts: Record<string, number> = {}
-      categories.forEach(cat => {
-        counts[cat] = data.categories[cat].length
-      })
-      categoryCounts.value = counts
+    // Update category counts
+    const counts: Record<string, number> = {}
+    categories.forEach(cat => {
+      counts[cat] = data.categories[cat].length
+    })
+    categoryCounts.value = counts
 
-      treeData.value = categories.map((category: string, idx: number) => {
-        const facts = data.categories[category] || []
+    treeData.value = categories.map((category: string, idx: number) => {
+      const facts = data.categories[category] || []
 
-        // Build nested folder structure based on file paths
-        const children = buildNestedTree(facts, category)
+      // Build nested folder structure based on file paths
+      const children = buildNestedTree(facts, category)
 
-        return {
-          id: `folder-${idx}`,
-          name: formatCategoryName(category),
-          type: 'folder' as const,
-          path: `/${category}`,
-          category: category,
-          children: children
-        }
-      })
-    }
-  } catch (err: any) {
-    console.error('Failed to load knowledge tree:', err)
-    error.value = err.message || 'Failed to load knowledge base'
-  } finally {
-    isLoading.value = false
+      return {
+        id: `folder-${idx}`,
+        name: formatCategoryName(category),
+        type: 'folder' as const,
+        path: `/${category}`,
+        category: category,
+        children: children
+      }
+    })
   }
 }
 
 const loadUserKnowledge = async () => {
-  try {
-    // Reset cursor and accumulated entries for fresh load
-    entriesCursor.value = '0'
-    allLoadedEntries.value = []
-
-    // Build initial query parameters
-    const params = new URLSearchParams({
-      limit: '100',
-      cursor: entriesCursor.value
-    })
-
-    // apiClient.get() already returns parsed JSON, not a Response object
-    const response = await apiClient.get(`/api/knowledge_base/entries?${params}`)
-    const data = await parseApiResponse(response)
-
-    // Handle both old (offset) and new (cursor) response formats for backward compatibility
-    let entries: any[] = []
-    let nextCursor = '0'
-    let hasMore = false
-
-    if (data.next_cursor !== undefined) {
-      // New cursor-based format
-      entries = data.entries || []
-      nextCursor = data.next_cursor || '0'
-      hasMore = data.has_more || false
-    } else if (data.offset !== undefined) {
-      // Old offset-based format (backward compatibility)
-      entries = data.entries || []
-      const total = data.total || 0
-      const currentOffset = data.offset || 0
-      hasMore = (currentOffset + entries.length) < total
-      nextCursor = hasMore ? String(currentOffset + entries.length) : '0'
-    } else {
-      // Fallback: just entries
-      entries = data.entries || []
-      hasMore = false
-      nextCursor = '0'
-    }
-
-    // Update cursor state
-    entriesCursor.value = nextCursor
-    hasMoreEntries.value = hasMore
-    allLoadedEntries.value = entries
-
-    // Build tree from entries (group by category)
-    buildTreeFromEntries(allLoadedEntries.value)
-  } catch (err: any) {
-    console.error('Failed to load user knowledge:', err)
-    error.value = err.message || 'Failed to load user knowledge'
-  }
+  // Reset pagination and load first page
+  resetPagination()
+  await loadMore()
+  // Build tree from loaded entries
+  buildTreeFromEntries(allLoadedEntries.value)
 }
 
 const loadMoreEntries = async () => {
-  if (!hasMoreEntries.value || isLoadingMore.value) {
-    return
-  }
-
-  isLoadingMore.value = true
-
-  try {
-    const params = new URLSearchParams({
-      limit: '100',
-      cursor: entriesCursor.value
-    })
-
-    const response = await apiClient.get(`/api/knowledge_base/entries?${params}`)
-    const data = await parseApiResponse(response)
-
-    // Handle response format
-    let entries: any[] = []
-    let nextCursor = '0'
-    let hasMore = false
-
-    if (data.next_cursor !== undefined) {
-      // New cursor-based format
-      entries = data.entries || []
-      nextCursor = data.next_cursor || '0'
-      hasMore = data.has_more || false
-    } else if (data.offset !== undefined) {
-      // Old offset-based format (backward compatibility)
-      entries = data.entries || []
-      const total = data.total || 0
-      const currentOffset = data.offset || 0
-      hasMore = (currentOffset + entries.length) < total
-      nextCursor = hasMore ? String(currentOffset + entries.length) : '0'
-    } else {
-      entries = data.entries || []
-      hasMore = false
-      nextCursor = '0'
-    }
-
-    // Update cursor state
-    entriesCursor.value = nextCursor
-    hasMoreEntries.value = hasMore
-
-    // Append new entries to existing ones
-    allLoadedEntries.value = [...allLoadedEntries.value, ...entries]
-
-    // Rebuild tree with all accumulated entries
-    buildTreeFromEntries(allLoadedEntries.value)
-  } catch (err: any) {
-    console.error('Failed to load more entries:', err)
-    error.value = err.message || 'Failed to load more entries'
-  } finally {
-    isLoadingMore.value = false
-  }
+  await loadMore()
+  // Rebuild tree with all accumulated entries
+  buildTreeFromEntries(allLoadedEntries.value)
 }
 
 const buildTreeFromEntries = (entries: any[]) => {
@@ -973,10 +915,7 @@ const loadFolderContents = async (folder: TreeNode) => {
 }
 
 const loadFileContent = async (file: TreeNode) => {
-  isLoadingContent.value = true
-  contentError.value = null
-
-  try {
+  await loadFileContentOp(async () => {
     // First check if we have full_content in metadata
     if (file.metadata?.full_content) {
       fileContent.value = file.metadata.full_content
@@ -1002,14 +941,7 @@ const loadFileContent = async (file: TreeNode) => {
         fileContent.value = file.content || 'Content not available'
       }
     }
-  } catch (err: any) {
-    console.error('Failed to load file content:', err)
-    contentError.value = err.message || 'Failed to load file content'
-    // Fallback to showing whatever content we have
-    fileContent.value = file.content || 'Failed to load full content'
-  } finally {
-    isLoadingContent.value = false
-  }
+  })
 }
 
 const findNode = (nodes: TreeNode[], id: string): TreeNode | null => {
@@ -1050,7 +982,7 @@ const getFileIcon = (node: TreeNode): string => {
 // Lifecycle
 onMounted(() => {
   loadMainCategories()
-  loadKnowledgeTree()
+  loadKnowledgeTree(loadKnowledgeTreeFn)
 
   // Set preselected category from props
   if (props.preselectedCategory) {
@@ -1064,7 +996,7 @@ onUnmounted(() => {
 
 // Watch mode changes
 watch(() => props.mode, () => {
-  loadKnowledgeTree()
+  loadKnowledgeTree(loadKnowledgeTreeFn)
   clearSelection()
   expandedNodes.value.clear()
 })

@@ -25,7 +25,7 @@ from src.config_helper import cfg
 from src.constants import PATH
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.redis_database_manager import RedisDatabase, RedisDatabaseManager
+from src.utils.redis_client import RedisDatabase, RedisDatabaseManager
 from src.utils.system_metrics import get_metrics_collector
 
 # Import existing monitoring infrastructure

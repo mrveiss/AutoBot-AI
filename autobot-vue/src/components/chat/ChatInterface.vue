@@ -158,7 +158,7 @@ const currentChatContext = ref<any>(null)
 const pendingCommand = ref({
   command: '',
   purpose: '',
-  riskLevel: 'MEDIUM' as const,
+  riskLevel: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH',
   originalMessage: '',
   terminalSessionId: null as string | null
 })
@@ -400,9 +400,38 @@ const onCommandDenied = (reason: string) => {
   // Handle command denial
 }
 
-const onCommandCommented = (comment: string) => {
-  console.log('Command commented:', comment)
-  // Handle command comment
+const onCommandCommented = async (commentData: any) => {
+  console.log('[ChatInterface] Command commented:', commentData)
+
+  try {
+    // CRITICAL: Send denial with comment/feedback to agent terminal
+    // This allows the agent to receive the user's alternative approach suggestion
+    if (pendingCommand.value.terminalSessionId) {
+      const approvalUrl = await appConfig.getApiUrl(
+        `/api/agent-terminal/sessions/${pendingCommand.value.terminalSessionId}/approve`
+      )
+
+      await fetch(approvalUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          approved: false,  // Deny the command
+          user_id: 'web_user',
+          comment: commentData.comment || commentData  // User's alternative suggestion
+        })
+      })
+
+      console.log('[ChatInterface] Command denied with user feedback/alternative approach')
+    }
+
+    // Close the dialog
+    showCommandDialog.value = false
+
+    // The comment was already sent to chat via CommandPermissionDialog
+    // The agent will receive the denial + feedback and can propose an alternative
+  } catch (error) {
+    console.error('[ChatInterface] Error sending command comment/denial:', error)
+  }
 }
 
 // Connection monitoring - MIGRATED to use AppConfig
@@ -428,6 +457,7 @@ const checkConnection = async () => {
 // Interval refs for proper cleanup
 const heartbeatInterval = ref<number | null>(null)
 const autoSaveInterval = ref<number | null>(null)
+const messagePollingInterval = ref<number | null>(null)
 
 const startHeartbeat = () => {
   // Clear any existing interval first
@@ -451,6 +481,35 @@ const enableAutoSave = () => {
         .catch((error: any) => console.warn('Auto-save failed:', error))
     }
   }, 2 * 60 * 1000)
+}
+
+// Message polling functionality - fetches new messages periodically
+// OPTIMIZED: Slower polling to reduce UI flicker and server load
+const startMessagePolling = () => {
+  // Clear any existing interval first
+  if (messagePollingInterval.value) {
+    clearInterval(messagePollingInterval.value)
+  }
+
+  console.log('[ChatInterface] Starting message polling (10s interval - optimized)')
+
+  // Poll for new messages every 10 seconds (reduced from 3s to prevent flicker)
+  // This still picks up LLM interpretations and new messages, just less aggressively
+  messagePollingInterval.value = setInterval(async () => {
+    if (store.currentSessionId) {
+      try {
+        // Silently reload messages for current session
+        // This will pick up any new interpretations or messages saved by backend
+        await controller.loadChatMessages(store.currentSessionId)
+      } catch (error) {
+        // Fail silently - don't spam console with polling errors
+        // Only log if it's not a simple 404 (session not found)
+        if (error && typeof error === 'object' && 'status' in error && error.status !== 404) {
+          console.warn('[ChatInterface] Message polling failed:', error)
+        }
+      }
+    }
+  }, 10000)  // Poll every 10 seconds (optimized from 3s)
 }
 
 // Keyboard shortcuts
@@ -496,11 +555,10 @@ const initializeChatInterface = async () => {
       // Race initialization with timeout
       const data = await Promise.race([loadPromise, timeoutPromise])
 
-      // Process results
+      // Process results - sync with backend (source of truth)
       if (data.chat_sessions && !data.chat_sessions.error && Array.isArray(data.chat_sessions)) {
-        data.chat_sessions.forEach((session: any) => {
-          store.importSession(session)
-        })
+        // Use syncSessionsWithBackend to remove deleted sessions and add new ones
+        store.syncSessionsWithBackend(data.chat_sessions)
       }
 
       // Update connection status
@@ -542,6 +600,9 @@ onMounted(async () => {
   startHeartbeat()
   enableAutoSave()
 
+  // Start message polling to fetch new messages
+  startMessagePolling()
+
   // Add keyboard shortcuts
   document.addEventListener('keydown', handleKeyboardShortcuts)
 })
@@ -559,6 +620,12 @@ onUnmounted(() => {
   if (autoSaveInterval.value) {
     clearInterval(autoSaveInterval.value)
     autoSaveInterval.value = null
+  }
+
+  if (messagePollingInterval.value) {
+    console.log('[ChatInterface] Stopping message polling')
+    clearInterval(messagePollingInterval.value)
+    messagePollingInterval.value = null
   }
 })
 

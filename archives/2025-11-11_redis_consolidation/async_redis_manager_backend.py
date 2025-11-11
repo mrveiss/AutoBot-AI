@@ -141,11 +141,15 @@ class AsyncRedisDatabase:
                 return True
 
             try:
+                # Get Redis password from environment
+                redis_password = os.getenv("AUTOBOT_REDIS_PASSWORD")
+
                 # Create connection pool
                 self._pool = ConnectionPool(
                     host=self.host,
                     port=self.port,
                     db=self.config.db,
+                    password=redis_password,  # FIX: Add missing password parameter
                     max_connections=self.config.max_connections,
                     socket_connect_timeout=self.config.timeout_seconds,
                     socket_timeout=self.config.timeout_seconds,

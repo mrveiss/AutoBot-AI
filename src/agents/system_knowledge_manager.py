@@ -133,7 +133,7 @@ class SystemKnowledgeManager:
     async def _load_file_state_cache(self) -> Optional[Dict[str, str]]:
         """Load cached file states from Redis"""
         try:
-            from src.utils.redis_database_manager import (
+            from src.utils.redis_client import (
                 RedisDatabase,
                 RedisDatabaseManager,
             )
@@ -160,7 +160,7 @@ class SystemKnowledgeManager:
     async def _update_system_knowledge_cache(self):
         """Update the cached file states in Redis"""
         try:
-            from src.utils.redis_database_manager import (
+            from src.utils.redis_client import (
                 RedisDatabase,
                 RedisDatabaseManager,
             )

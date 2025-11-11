@@ -53,7 +53,7 @@ class RedisCompatibilityWrapper:
         if self._sync_client is None:
             # Import the old database manager for fallback
             try:
-                from src.utils.redis_database_manager import redis_db_manager
+                from src.utils.redis_client import redis_db_manager
 
                 self._sync_client = redis_db_manager.get_connection(self.database_name)
                 logger.warning(

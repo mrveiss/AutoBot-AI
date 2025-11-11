@@ -13,6 +13,7 @@ import {
   formatFileSize as formatFileSizeHelper,
   formatCategoryName as formatCategoryHelper
 } from '@/utils/formatHelpers'
+import { getFileIcon as getFileIconUtil } from '@/utils/iconMappings'
 import appConfig from '@/config/AppConfig.js'
 import type {
   KnowledgeStats,
@@ -565,45 +566,63 @@ export function useKnowledgeBase() {
 
   /**
    * Get icon for file based on name and type
+   * Icon mapping centralized in @/utils/iconMappings
+   * Color classes added for visual distinction in knowledge base
    */
   const getFileIcon = (name: string, isDir: boolean = false): string => {
     if (isDir) {
       return 'fas fa-folder'
     }
 
+    const icon = getFileIconUtil(name, false)
     const extension = name.split('.').pop()?.toLowerCase() || ''
 
-    // Code files
-    if (['js', 'ts', 'jsx', 'tsx', 'vue'].includes(extension)) {
-      return 'fas fa-file-code text-blue-500'
-    }
-    if (['py', 'rb', 'go', 'java', 'c', 'cpp', 'h'].includes(extension)) {
-      return 'fas fa-file-code text-green-500'
+    // Map extensions to color classes for visual distinction
+    const colorMap: Record<string, string> = {
+      // Code files - blue/green
+      'js': 'text-blue-500',
+      'ts': 'text-blue-500',
+      'jsx': 'text-blue-500',
+      'tsx': 'text-blue-500',
+      'vue': 'text-blue-500',
+      'py': 'text-green-500',
+      'rb': 'text-green-500',
+      'go': 'text-green-500',
+      'java': 'text-green-500',
+      'c': 'text-green-500',
+      'cpp': 'text-green-500',
+      'h': 'text-green-500',
+      // Data files - orange
+      'json': 'text-orange-500',
+      'yaml': 'text-orange-500',
+      'yml': 'text-orange-500',
+      'toml': 'text-orange-500',
+      // Documents - varied
+      'md': 'text-gray-600',
+      'txt': 'text-gray-600',
+      'pdf': 'text-red-600',
+      'doc': 'text-blue-600',
+      'docx': 'text-blue-600',
+      'xls': 'text-green-600',
+      'xlsx': 'text-green-600',
+      'csv': 'text-green-600',
+      // Images - purple
+      'png': 'text-purple-500',
+      'jpg': 'text-purple-500',
+      'jpeg': 'text-purple-500',
+      'gif': 'text-purple-500',
+      'svg': 'text-purple-500',
+      'webp': 'text-purple-500',
+      // Archives - yellow
+      'zip': 'text-yellow-600',
+      'tar': 'text-yellow-600',
+      'gz': 'text-yellow-600',
+      'rar': 'text-yellow-600',
+      '7z': 'text-yellow-600'
     }
 
-    // Documents
-    if (['md', 'txt'].includes(extension)) return 'fas fa-file-alt text-gray-600'
-    if (['pdf'].includes(extension)) return 'fas fa-file-pdf text-red-600'
-    if (['doc', 'docx'].includes(extension)) return 'fas fa-file-word text-blue-600'
-    if (['xls', 'xlsx'].includes(extension)) return 'fas fa-file-excel text-green-600'
-
-    // Data files
-    if (['json', 'yaml', 'yml', 'toml'].includes(extension)) {
-      return 'fas fa-file-code text-orange-500'
-    }
-    if (['csv'].includes(extension)) return 'fas fa-file-csv text-green-600'
-
-    // Images
-    if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(extension)) {
-      return 'fas fa-file-image text-purple-500'
-    }
-
-    // Archives
-    if (['zip', 'tar', 'gz', 'rar', '7z'].includes(extension)) {
-      return 'fas fa-file-archive text-yellow-600'
-    }
-
-    return 'fas fa-file text-gray-600'
+    const color = colorMap[extension] || 'text-gray-600'
+    return `${icon} ${color}`
   }
 
   const getOSBadgeClass = (osType: string): string => {

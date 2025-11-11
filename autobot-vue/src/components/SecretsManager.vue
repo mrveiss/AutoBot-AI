@@ -3,7 +3,7 @@
     <div class="secrets-header">
       <h2>Secrets Management</h2>
       <div class="secrets-actions">
-        <button @click="showCreateModal = true" class="btn-primary">
+        <button @click="openCreateModal" class="btn-primary">
           <i class="icon-plus"></i> Add Secret
         </button>
         <button @click="loadSecrets" class="btn-secondary" :disabled="loading">
@@ -69,7 +69,7 @@
         message="No secrets found matching your criteria."
       >
         <template #actions>
-          <button @click="showCreateModal = true" class="btn-primary">
+          <button @click="openCreateModal()" class="btn-primary">
             Create your first secret
           </button>
         </template>
@@ -255,7 +255,7 @@
                 />
                 <button 
                   type="button" 
-                  @click="showSecretValue = !showSecretValue" 
+                  @click="toggleSecretValue()" 
                   class="btn-toggle-secret"
                 >
                   {{ showSecretValue ? 'Hide' : 'Show' }}
@@ -281,7 +281,7 @@
           </div>
 
       <template #actions>
-        <button @click="showViewModal = false" class="btn-secondary">Close</button>
+        <button @click="closeViewModal()" class="btn-secondary">Close</button>
         <button @click="copySecretValue" class="btn-primary">
           Copy Value
         </button>
@@ -307,7 +307,7 @@
         </form>
 
       <template #actions>
-        <button type="button" @click="showTransferModal = false" class="btn-secondary">Cancel</button>
+        <button type="button" @click="closeTransferModal()" class="btn-secondary">Cancel</button>
         <button type="submit" @click="confirmTransfer" class="btn-primary" :disabled="!transferConfirmed || transferring">
           {{ transferring ? 'Transferring...' : 'Transfer to General' }}
         </button>
@@ -321,6 +321,9 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { secretsApiClient } from '../utils/SecretsApiClient';
 import { useAppStore } from '../stores/useAppStore.ts';
 import { formatDateTime } from '@/utils/formatHelpers';
+import { useDebounce } from '@/composables/useDebounce';
+import { useModal } from '@/composables/useModal';
+import { useAsyncOperation } from '@/composables/useAsyncOperation';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
@@ -339,21 +342,24 @@ export default {
     const secrets = ref([]);
     const secretTypes = ref([]);
     const stats = ref(null);
-    const loading = ref(false);
-    const saving = ref(false);
-    const transferring = ref(false);
-    
+
     // Filters
     const selectedScope = ref('');
     const selectedType = ref('');
     const searchQuery = ref('');
-    
-    // Modals
-    const showCreateModal = ref(false);
-    const showEditModal = ref(false);
-    const showViewModal = ref(false);
-    const showTransferModal = ref(false);
-    const showSecretValue = ref(false);
+    const debouncedSearchQuery = useDebounce(searchQuery, 300); // Debounce search for better performance
+
+    // Use composables for modals
+    const { isOpen: showCreateModal, open: openCreateModal, close: closeCreateModal } = useModal('create-secret');
+    const { isOpen: showEditModal, open: openEditModal, close: closeEditModal } = useModal('edit-secret');
+    const { isOpen: showViewModal, open: openViewModal, close: closeViewModal } = useModal('view-secret');
+    const { isOpen: showTransferModal, open: openTransferModal, close: closeTransferModal } = useModal('transfer-secret');
+    const { isOpen: showSecretValue, toggle: toggleSecretValue } = useModal('secret-value');
+
+    // Use composables for async operations
+    const { execute: loadSecretsOp, loading } = useAsyncOperation();
+    const { execute: saveSecretOp, loading: saving } = useAsyncOperation();
+    const { execute: transferSecretOp, loading: transferring } = useAsyncOperation();
     
     // Forms
     const secretForm = reactive({
@@ -376,24 +382,25 @@ export default {
     // Computed
     const filteredSecrets = computed(() => {
       let filtered = secrets.value;
-      
+
       if (selectedScope.value) {
         filtered = filtered.filter(s => s.scope === selectedScope.value);
       }
-      
+
       if (selectedType.value) {
         filtered = filtered.filter(s => s.type === selectedType.value);
       }
-      
-      if (searchQuery.value) {
-        const query = searchQuery.value.toLowerCase();
-        filtered = filtered.filter(s => 
+
+      // Use debounced search for better performance
+      if (debouncedSearchQuery.value) {
+        const query = debouncedSearchQuery.value.toLowerCase();
+        filtered = filtered.filter(s =>
           s.name.toLowerCase().includes(query) ||
           s.description?.toLowerCase().includes(query) ||
           s.tags?.some(tag => tag.toLowerCase().includes(query))
         );
       }
-      
+
       return filtered;
     });
     

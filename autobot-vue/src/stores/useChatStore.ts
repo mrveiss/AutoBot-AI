@@ -247,6 +247,54 @@ export const useChatStore = defineStore('chat', () => {
     sessions.value.push(session)
   }
 
+  function syncSessionsWithBackend(backendSessions: ChatSession[]) {
+    /**
+     * Synchronize store sessions with backend sessions.
+     *
+     * This is the SOURCE OF TRUTH sync:
+     * - Backend sessions are authoritative
+     * - Removes sessions that exist in store but not on backend (deleted sessions)
+     * - Adds sessions that exist on backend but not in store (new sessions)
+     * - Updates existing sessions with backend data
+     *
+     * This fixes the bug where deleted sessions reappear after page reload.
+     */
+    console.log(`🔄 Syncing sessions: Store has ${sessions.value.length}, Backend has ${backendSessions.length}`)
+
+    const backendIds = new Set(backendSessions.map(s => s.id))
+    const storeIds = new Set(sessions.value.map(s => s.id))
+
+    // Find sessions to remove (exist in store but not on backend)
+    const sessionsToRemove = sessions.value.filter(s => !backendIds.has(s.id))
+    if (sessionsToRemove.length > 0) {
+      console.log(`🗑️ Removing ${sessionsToRemove.length} stale sessions from store:`, sessionsToRemove.map(s => s.id))
+      sessions.value = sessions.value.filter(s => backendIds.has(s.id))
+    }
+
+    // Find sessions to add (exist on backend but not in store)
+    const sessionsToAdd = backendSessions.filter(s => !storeIds.has(s.id))
+    if (sessionsToAdd.length > 0) {
+      console.log(`➕ Adding ${sessionsToAdd.length} new sessions to store:`, sessionsToAdd.map(s => s.id))
+      sessions.value.push(...sessionsToAdd)
+    }
+
+    // Update existing sessions with backend data (in case of changes)
+    backendSessions.forEach(backendSession => {
+      const storeSession = sessions.value.find(s => s.id === backendSession.id)
+      if (storeSession) {
+        // Update session data (preserve messages if loaded)
+        storeSession.title = backendSession.title || storeSession.title
+        storeSession.updatedAt = backendSession.updatedAt || storeSession.updatedAt
+        storeSession.createdAt = backendSession.createdAt || storeSession.createdAt
+        if (!storeSession.messages || storeSession.messages.length === 0) {
+          storeSession.messages = backendSession.messages || []
+        }
+      }
+    })
+
+    console.log(`✅ Session sync complete: ${sessions.value.length} sessions in store`)
+  }
+
   // Desktop session management
   function createDesktopSession(sessionId: string): string {
     const session = sessions.value.find(s => s.id === sessionId)
@@ -389,6 +437,7 @@ export const useChatStore = defineStore('chat', () => {
     setTyping,
     exportSession,
     importSession,
+    syncSessionsWithBackend,
     // Desktop session management
     createDesktopSession,
     getDesktopUrl,

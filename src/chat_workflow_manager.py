@@ -326,8 +326,9 @@ class ChatWorkflowManager:
             if agent_terminal_api._agent_terminal_service_instance is None:
                 from backend.services.agent_terminal_service import AgentTerminalService
 
+                # Pass self to prevent circular initialization loop
                 agent_terminal_api._agent_terminal_service_instance = (
-                    AgentTerminalService()
+                    AgentTerminalService(chat_workflow_manager=self)
                 )
                 logger.info("Initialized global AgentTerminalService singleton")
 

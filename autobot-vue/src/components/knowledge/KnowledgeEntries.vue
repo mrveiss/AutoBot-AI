@@ -178,7 +178,7 @@
             </td>
             <td>
               <span class="type-badge">
-                <i :class="getTypeIcon(entry.type)"></i>
+                <i :class="getDocumentTypeIcon(entry.type)"></i>
                 {{ entry.type }}
               </span>
             </td>
@@ -277,7 +277,7 @@
           <div class="meta-item">
             <label>Type:</label>
             <span class="type-badge">
-              <i :class="getTypeIcon(currentEntry.type)"></i>
+              <i :class="getDocumentTypeIcon(currentEntry.type)"></i>
               {{ currentEntry.type }}
             </span>
           </div>
@@ -403,9 +403,12 @@ import ManPageManager from '@/components/ManPageManager.vue'
 import FailedVectorizationsManager from '@/components/knowledge/FailedVectorizationsManager.vue'
 import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vue'
 import { formatDate, formatDateTime } from '@/utils/formatHelpers'
+import { getDocumentTypeIcon } from '@/utils/iconMappings'
+import { useDebounce } from '@/composables/useDebounce'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import { useModal } from '@/composables/useModal'
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
@@ -415,6 +418,7 @@ const manageTab = ref<'upload' | 'manage' | 'advanced'>('upload')
 
 // Search and filter state
 const searchQuery = ref('')
+const debouncedSearchQuery = useDebounce(searchQuery, 300) // Debounce search for better performance
 const filterCategory = ref('')
 const filterType = ref('')
 const sortBy = ref('updatedAt')
@@ -427,7 +431,7 @@ const itemsPerPage = 20
 const selectedEntries = ref<string[]>([])
 
 // Dialog state
-const showDialog = ref(false)
+const { isOpen: showDialog, open: openDialog, close: closeDialogModal } = useModal('entry-dialog')
 const dialogMode = ref<'view' | 'edit'>('view')
 const currentEntry = ref<KnowledgeDocument | null>(null)
 
@@ -443,9 +447,9 @@ const editForm = reactive({
 const filteredDocuments = computed(() => {
   let docs = [...store.documents]
 
-  // Apply search filter
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase()
+  // Apply search filter (debounced for better performance)
+  if (debouncedSearchQuery.value) {
+    const query = debouncedSearchQuery.value.toLowerCase()
     docs = docs.filter(doc =>
       doc.title?.toLowerCase().includes(query) ||
       doc.content.toLowerCase().includes(query) ||
@@ -544,7 +548,7 @@ const toggleSelectAll = () => {
 const viewEntry = (entry: KnowledgeDocument) => {
   currentEntry.value = entry
   dialogMode.value = 'view'
-  showDialog.value = true
+  openDialog()
 }
 
 const editEntry = (entry: KnowledgeDocument) => {
@@ -555,7 +559,7 @@ const editEntry = (entry: KnowledgeDocument) => {
   editForm.content = entry.content
   editForm.tagsInput = entry.tags.join(', ')
   dialogMode.value = 'edit'
-  showDialog.value = true
+  openDialog()
 }
 
 const deleteEntry = async (entry: KnowledgeDocument) => {
@@ -637,7 +641,7 @@ const saveEdit = async () => {
 }
 
 const closeDialog = () => {
-  showDialog.value = false
+  closeDialogModal()
   currentEntry.value = null
   dialogMode.value = 'view'
 }
@@ -653,15 +657,8 @@ const formatContent = (content: string): string => {
     .replace(/`(.*?)`/g, '<code>$1</code>')
 }
 
-const getTypeIcon = (type: string): string => {
-  const icons: Record<string, string> = {
-    document: 'fas fa-file-alt',
-    webpage: 'fas fa-globe',
-    api: 'fas fa-code',
-    upload: 'fas fa-upload'
-  }
-  return icons[type] || 'fas fa-file'
-}
+// Icon mapping now centralized in @/utils/iconMappings
+// Use getDocumentTypeIcon() directly
 
 const getCategoryStyle = (category: string) => {
   const cat = store.categories.find(c => c.name === category)
@@ -675,8 +672,8 @@ onMounted(async () => {
   }
 })
 
-// Reset page when filters change
-watch([searchQuery, filterCategory, filterType], () => {
+// Reset page when filters change (use debounced search for better performance)
+watch([debouncedSearchQuery, filterCategory, filterType], () => {
   currentPage.value = 1
 })
 </script>

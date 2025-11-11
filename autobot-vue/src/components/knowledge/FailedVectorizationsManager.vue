@@ -102,6 +102,7 @@ import { ref, onMounted } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatDateTime } from '@/utils/formatHelpers'
+import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
@@ -116,35 +117,26 @@ interface FailedJob {
 
 // State
 const failedJobs = ref<FailedJob[]>([])
-const loading = ref(false)
-const error = ref<string | null>(null)
 const retryingJobs = ref<Set<string>>(new Set())
 
+// Use composable for async operations
+const { execute: fetchFailedJobs, loading, error } = useAsyncOperation()
+
 // Fetch failed jobs
-const fetchFailedJobs = async () => {
-  loading.value = true
-  error.value = null
+const fetchFailedJobsFn = async () => {
+  const response = await apiClient.get('/api/knowledge_base/vectorize_jobs/failed')
+  const data = await parseApiResponse(response)
 
-  try {
-    const response = await apiClient.get('/api/knowledge_base/vectorize_jobs/failed')
-    const data = await parseApiResponse(response)
-
-    if (data.status === 'success') {
-      failedJobs.value = data.failed_jobs
-    } else {
-      error.value = 'Failed to load failed jobs'
-    }
-  } catch (err) {
-    console.error('Error fetching failed jobs:', err)
-    error.value = `Error loading failed jobs: ${err}`
-  } finally {
-    loading.value = false
+  if (data.status === 'success') {
+    failedJobs.value = data.failed_jobs
+  } else {
+    throw new Error('Failed to load failed jobs')
   }
 }
 
 // Refresh failed jobs
 const refreshFailedJobs = async () => {
-  await fetchFailedJobs()
+  await fetchFailedJobs(fetchFailedJobsFn)
 }
 
 // Retry a single job
@@ -177,9 +169,7 @@ const deleteJob = async (jobId: string) => {
     return
   }
 
-  loading.value = true
-
-  try {
+  await fetchFailedJobs(async () => {
     const response = await apiClient.delete(`/api/knowledge_base/vectorize_jobs/${jobId}`)
     const data = await parseApiResponse(response)
 
@@ -187,14 +177,9 @@ const deleteJob = async (jobId: string) => {
       // Remove from list
       failedJobs.value = failedJobs.value.filter(job => job.job_id !== jobId)
     } else {
-      error.value = `Failed to delete job: ${data.message || 'Unknown error'}`
+      throw new Error(data.message || 'Failed to delete job')
     }
-  } catch (err) {
-    console.error('Error deleting job:', err)
-    error.value = `Error deleting job: ${err}`
-  } finally {
-    loading.value = false
-  }
+  })
 }
 
 // Clear all failed jobs
@@ -203,9 +188,7 @@ const clearAllFailed = async () => {
     return
   }
 
-  loading.value = true
-
-  try {
+  await fetchFailedJobs(async () => {
     const response = await apiClient.delete('/api/knowledge_base/vectorize_jobs/failed/clear')
     const data = await parseApiResponse(response)
 
@@ -213,14 +196,9 @@ const clearAllFailed = async () => {
       failedJobs.value = []
       console.log(`Cleared ${data.deleted_count} failed jobs`)
     } else {
-      error.value = `Failed to clear jobs: ${data.message || 'Unknown error'}`
+      throw new Error(data.message || 'Failed to clear jobs')
     }
-  } catch (err) {
-    console.error('Error clearing failed jobs:', err)
-    error.value = `Error clearing failed jobs: ${err}`
-  } finally {
-    loading.value = false
-  }
+  })
 }
 
 // Use shared datetime formatting utility
@@ -228,7 +206,7 @@ const formatTime = formatDateTime
 
 // Load on mount
 onMounted(() => {
-  fetchFailedJobs()
+  fetchFailedJobs(fetchFailedJobsFn)
 })
 </script>
 

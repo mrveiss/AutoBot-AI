@@ -1,9 +1,14 @@
 <template>
   <div class="log-viewer">
+    <!-- Screen reader status announcements -->
+    <div role="status" aria-live="polite" aria-atomic="true" class="sr-only">
+      {{ screenReaderStatus }}
+    </div>
+
     <div class="log-controls">
       <div class="log-selector">
-        <label>Log Source:</label>
-        <select v-model="selectedSource" @change="loadLog">
+        <label for="log-source-select">Log Source:</label>
+        <select id="log-source-select" v-model="selectedSource" @change="loadLog">
           <option value="">Select a log source...</option>
           <option value="unified">🔗 All Sources (Unified)</option>
           <optgroup label="📄 File Logs">
@@ -20,7 +25,8 @@
       </div>
       
       <div class="log-filters">
-        <select v-model="selectedLevel" @change="loadLog">
+        <label for="log-level-select" class="sr-only">Log Level</label>
+        <select id="log-level-select" v-model="selectedLevel" @change="loadLog">
           <option value="">All Levels</option>
           <option value="DEBUG">🐛 Debug</option>
           <option value="INFO">ℹ️ Info</option>
@@ -28,42 +34,63 @@
           <option value="ERROR">❌ Error</option>
           <option value="CRITICAL">🚨 Critical</option>
         </select>
-        
-        <input type="number" v-model.number="maxLines" @change="loadLog" 
-               min="10" max="1000" step="10" placeholder="Lines">
+
+        <label for="max-lines-input" class="sr-only">Maximum lines to display</label>
+        <input
+          id="max-lines-input"
+          type="number"
+          v-model.number="maxLines"
+          @change="loadLog"
+          min="10"
+          max="1000"
+          step="10"
+          placeholder="Lines"
+          aria-label="Maximum number of log lines to display"
+        />
       </div>
-      
+
       <div class="log-actions">
-        <button @click="refreshFiles" :disabled="loading">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i> Refresh
+        <button @click="refreshFiles" :disabled="loading" aria-label="Refresh log sources">
+          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }" aria-hidden="true"></i> Refresh
         </button>
-        <button @click="toggleAutoScroll" :class="{ active: autoScroll }">
-          <i class="fas fa-arrow-down"></i> Auto Scroll
+        <button @click="toggleAutoScroll" :class="{ active: autoScroll }" aria-label="Toggle auto scroll">
+          <i class="fas fa-arrow-down" aria-hidden="true"></i> Auto Scroll
         </button>
-        <button @click="searchLogs" v-if="selectedSource">
-          <i class="fas fa-search"></i> Search
+        <button @click="searchLogs" v-if="selectedSource" aria-label="Search logs">
+          <i class="fas fa-search" aria-hidden="true"></i> Search
         </button>
       </div>
     </div>
 
     <div class="search-panel" v-if="showSearch">
-      <input 
-        v-model="searchQuery" 
+      <label for="log-search-input" class="sr-only">Search in logs</label>
+      <input
+        id="log-search-input"
+        v-model="searchQuery"
         @keyup.enter="performSearch"
         placeholder="Search in logs..."
         class="search-input"
+        aria-label="Search query"
       />
-      <button @click="performSearch" :disabled="!searchQuery">Search</button>
-      <button @click="showSearch = false">Cancel</button>
+      <button @click="performSearch" :disabled="!searchQuery" aria-label="Perform search">Search</button>
+      <button @click="showSearch = false" aria-label="Cancel search">Cancel</button>
     </div>
 
-    <div class="log-content" ref="logContentRef">
+    <div
+      class="log-content"
+      ref="logContentRef"
+      role="log"
+      aria-live="polite"
+      aria-atomic="false"
+      aria-relevant="additions"
+      :aria-label="`Log output from ${selectedSource || 'no source'}`"
+    >
       <div v-if="loading" class="loading">
-        <i class="fas fa-spinner fa-spin"></i> Loading...
+        <i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Loading...
       </div>
-      
-      <div v-else-if="error" class="error">
-        <i class="fas fa-exclamation-triangle"></i> {{ error }}
+
+      <div v-else-if="error" class="error" role="alert">
+        <i class="fas fa-exclamation-triangle" aria-hidden="true"></i> {{ error }}
       </div>
 
       <EmptyState
@@ -86,8 +113,10 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useApiService } from '@/composables/useApiService'
+import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { useWebSocket } from '@/composables/useWebSocket'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
 export default {
@@ -97,50 +126,76 @@ export default {
   },
   setup() {
     const apiService = useApiService()
+    // Use composable for async operations
+    const { execute: refreshFilesOp, loading, error } = useAsyncOperation()
+    const { execute: loadLogOp, loading: loadingLog } = useAsyncOperation()
+
     const logSources = ref({ file_logs: [], container_logs: [], total_sources: 0 })
     const selectedSource = ref('')
     const selectedLevel = ref('')
     const maxLines = ref(100)
     const logContent = ref('')
     const logs = ref([])
-    const loading = ref(false)
-    const error = ref('')
     const autoScroll = ref(true)
     const showSearch = ref(false)
     const searchQuery = ref('')
     const lineCount = ref(0)
     const logContentRef = ref(null)
     const lastUpdated = ref('')
-    
-    let refreshInterval = null
-    let websocket = null
 
-    const refreshFiles = async () => {
-      try {
-        loading.value = true
-        error.value = ''
-        const response = await apiService.get('/api/logs/sources')
-        logSources.value = response
-      } catch (err) {
-        error.value = 'Failed to load log sources'
-        console.error(err)
-      } finally {
-        loading.value = false
+    // Screen reader announcements
+    const screenReaderStatus = ref('')
+    const previousLogLength = ref(0)
+
+    let refreshInterval = null
+
+    // Compute WebSocket URL based on selected source
+    const wsUrl = computed(() => {
+      if (!selectedSource.value) return ''
+      return `${apiService.getWebSocketUrl()}/api/logs/tail/${selectedSource.value}`
+    })
+
+    // Use WebSocket composable for log streaming
+    const { isConnected: wsConnected, lastMessage: wsMessage, connect: wsConnect, disconnect: wsDisconnect } = useWebSocket(
+      wsUrl,
+      {
+        autoConnect: false,
+        autoReconnect: true,
+        onMessage: (data) => {
+          // Append incoming log data
+          logContent.value += '\n' + data
+          lineCount.value++
+
+          // Limit content size to prevent memory issues
+          const lines = logContent.value.split('\n')
+          if (lines.length > 5000) {
+            logContent.value = lines.slice(-4000).join('\n')
+          }
+
+          if (autoScroll.value) {
+            nextTick(() => scrollToBottom())
+          }
+        },
+        onError: (error) => {
+          console.error('WebSocket error:', error)
+        }
       }
+    )
+
+    const refreshFilesFn = async () => {
+      const response = await apiService.get('/api/logs/sources')
+      logSources.value = response
     }
 
-    const loadLog = async () => {
-      if (!selectedSource.value) return
-      
-      try {
-        loading.value = true
-        error.value = ''
-        
-        // Close existing websocket
-        if (websocket) {
-          websocket.close()
-          websocket = null
-        }
+    const refreshFiles = async () => {
+      await refreshFilesOp(refreshFilesFn).catch(err => {
+        console.error('Failed to load log sources:', err)
+      })
+    }
+
+    const loadLogFn = async () => {
+      // Disconnect WebSocket before loading new log
+      wsDisconnect()
         
         let endpoint = '/api/logs/unified'
         let params = new URLSearchParams({
@@ -199,20 +254,20 @@ export default {
           lineCount.value = 0
         }
         
-        lastUpdated.value = new Date().toLocaleTimeString()
-        
-        // Auto scroll to bottom
-        if (autoScroll.value) {
-          await nextTick()
-          scrollToBottom()
-        }
-        
-      } catch (err) {
-        error.value = `Failed to load log: ${err.message}`
-        console.error('Load log error:', err)
-      } finally {
-        loading.value = false
+      lastUpdated.value = new Date().toLocaleTimeString()
+
+      // Auto scroll to bottom
+      if (autoScroll.value) {
+        await nextTick()
+        scrollToBottom()
       }
+    }
+
+    const loadLog = async () => {
+      if (!selectedSource.value) return
+      await loadLogOp(loadLogFn).catch(err => {
+        console.error('Load log error:', err)
+      })
     }
     
     const formatStructuredLogs = (logEntries) => {
@@ -229,33 +284,10 @@ export default {
       }).join('\n')
     }
 
+    // WebSocket streaming replaced by useWebSocket composable
     const startWebSocket = () => {
       if (!selectedSource.value) return
-      
-      const wsUrl = `${apiService.getWebSocketUrl()}/api/logs/tail/${selectedSource.value}`
-      websocket = new WebSocket(wsUrl)
-      
-      websocket.onmessage = (event) => {
-        logContent.value += '\n' + event.data
-        lineCount.value++
-        
-        // Limit content size to prevent memory issues
-        const lines = logContent.value.split('\n')
-        if (lines.length > 5000) {
-          logContent.value = lines.slice(-4000).join('\n')
-        }
-        
-        if (autoScroll.value) {
-          nextTick(() => scrollToBottom())
-        }
-      }
-      
-      websocket.onerror = (error) => {
-        console.error('WebSocket error:', error)
-      }
-      
-      websocket.onclose = () => {
-      }
+      wsConnect()
     }
 
     const scrollToBottom = () => {
@@ -307,6 +339,31 @@ export default {
       }
     }
 
+    // Announce new log entries to screen readers
+    watch(logContent, (newContent, oldContent) => {
+      // Only announce when content is added (streaming or refresh)
+      if (newContent && newContent.length > (oldContent?.length || 0)) {
+        const currentLines = newContent.split('\n').length
+        const newLinesCount = currentLines - previousLogLength.value
+
+        if (newLinesCount > 0) {
+          // Get the last few lines for preview
+          const lines = newContent.split('\n')
+          const recentLines = lines.slice(-Math.min(3, newLinesCount))
+          const preview = recentLines.join(' ').substring(0, 150)
+
+          screenReaderStatus.value = `${newLinesCount} new log ${newLinesCount === 1 ? 'entry' : 'entries'}: ${preview}...`
+
+          // Clear announcement after 2 seconds
+          setTimeout(() => {
+            screenReaderStatus.value = ''
+          }, 2000)
+        }
+
+        previousLogLength.value = currentLines
+      }
+    })
+
     onMounted(() => {
       refreshFiles()
       // Auto refresh file list every 30 seconds
@@ -317,9 +374,7 @@ export default {
       if (refreshInterval) {
         clearInterval(refreshInterval)
       }
-      if (websocket) {
-        websocket.close()
-      }
+      // WebSocket cleanup handled automatically by useWebSocket composable
     })
 
     return {
@@ -337,6 +392,7 @@ export default {
       lineCount,
       lastUpdated,
       logContentRef,
+      screenReaderStatus,
       refreshFiles,
       loadLog,
       toggleAutoScroll,

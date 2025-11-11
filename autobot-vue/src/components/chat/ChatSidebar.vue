@@ -46,8 +46,9 @@
         <!-- FIXED: Scrollable chat history container -->
         <div class="flex-1 overflow-y-auto space-y-1.5 pr-1 mb-3" style="scrollbar-width: thin;">
           <div
-            v-for="session in store.sessions"
+            v-for="(session, index) in store.sessions"
             :key="session.id"
+            :ref="el => setSessionRef(el, index)"
             class="p-2.5 rounded-lg transition-all duration-150 group relative"
             :class="[
               selectionMode ? 'cursor-default' : 'cursor-pointer',
@@ -57,10 +58,12 @@
                 ? 'bg-red-50 border border-red-200'
                 : 'bg-white hover:bg-blueGray-50 border border-blueGray-200'
             ]"
-            @click="selectionMode ? toggleSelection(session.id) : controller.switchToSession(session.id)"
-            tabindex="0"
-            @keyup.enter="selectionMode ? toggleSelection(session.id) : controller.switchToSession(session.id)"
-            @keyup.space="selectionMode ? toggleSelection(session.id) : controller.switchToSession(session.id)"
+            :tabindex="index === focusedIndex ? 0 : -1"
+            :aria-selected="index === focusedIndex"
+            role="button"
+            @click="handleSessionClick(session, index)"
+            @keydown="handleSessionKeydown($event, session, index)"
+            @focus="focusedIndex = index"
           >
             <!-- Selection checkbox -->
             <div v-if="selectionMode" class="absolute left-1 top-1">
@@ -291,6 +294,75 @@ const systemStatus = ref('Ready')
 const selectionMode = ref(false)
 const selectedSessions = ref(new Set<string>())
 
+// Keyboard navigation state
+const focusedIndex = ref(0)
+const sessionRefs = ref<(HTMLElement | null)[]>([])
+
+// Set session reference for keyboard navigation
+const setSessionRef = (el: HTMLElement | null, index: number) => {
+  if (el) {
+    sessionRefs.value[index] = el
+  }
+}
+
+// Handle session click (mouse or keyboard activation)
+const handleSessionClick = (session: ChatSession, index: number) => {
+  focusedIndex.value = index
+
+  if (selectionMode.value) {
+    toggleSelection(session.id)
+  } else {
+    controller.switchToSession(session.id)
+  }
+}
+
+// Handle keyboard navigation
+const handleSessionKeydown = (event: KeyboardEvent, session: ChatSession, index: number) => {
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      if (index < store.sessions.length - 1) {
+        focusedIndex.value = index + 1
+        nextTick(() => {
+          sessionRefs.value[index + 1]?.focus()
+        })
+      }
+      break
+
+    case 'ArrowUp':
+      event.preventDefault()
+      if (index > 0) {
+        focusedIndex.value = index - 1
+        nextTick(() => {
+          sessionRefs.value[index - 1]?.focus()
+        })
+      }
+      break
+
+    case 'Home':
+      event.preventDefault()
+      focusedIndex.value = 0
+      nextTick(() => {
+        sessionRefs.value[0]?.focus()
+      })
+      break
+
+    case 'End':
+      event.preventDefault()
+      focusedIndex.value = store.sessions.length - 1
+      nextTick(() => {
+        sessionRefs.value[store.sessions.length - 1]?.focus()
+      })
+      break
+
+    case 'Enter':
+    case ' ':
+      event.preventDefault()
+      handleSessionClick(session, index)
+      break
+  }
+}
+
 // Delete dialog state
 const showDeleteDialog = ref(false)
 const deleteTargetSessionId = ref<string | null>(null)
@@ -400,9 +472,20 @@ const reloadSystem = async () => {
   systemStatus.value = 'Reloading...'
 
   try {
-    // This would call system reload API
-    await new Promise(resolve => setTimeout(resolve, 2000)) // Simulate reload
-    systemStatus.value = 'Ready'
+    // Call real system reload API
+    const response = await ApiClient.post('/api/system/reload_config')
+
+    if (response.data && response.data.success) {
+      systemStatus.value = 'Ready'
+
+      // Log reloaded components for debugging
+      if (response.data.reloaded_components) {
+        console.log('Reloaded components:', response.data.reloaded_components)
+      }
+    } else {
+      systemStatus.value = 'Error'
+      console.error('System reload failed:', response.data?.message || 'Unknown error')
+    }
   } catch (error) {
     systemStatus.value = 'Error'
     console.error('System reload failed:', error)
@@ -467,5 +550,16 @@ const deleteSelectedSessions = async () => {
 
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+/* Keyboard focus indicator for chat sessions */
+.group:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+}
+
+.group:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
 }
 </style>

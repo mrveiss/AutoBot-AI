@@ -64,7 +64,9 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.auth_middleware import AuthenticationMiddleware
 from src.chat_workflow_manager import ChatWorkflowManager
 from src.constants.network_constants import NetworkConstants
-from src.redis_pool_manager import RedisPoolManager
+# REFACTORED: Removed deprecated RedisPoolManager import
+# from src.redis_pool_manager import RedisPoolManager
+# Redis connections now managed centrally via src.utils.redis_client::get_redis_client()
 from src.security_layer import SecurityLayer
 from src.utils.background_llm_sync import background_llm_sync
 
@@ -187,16 +189,21 @@ async def enhanced_background_init(app: FastAPI):
         # Original initialization tasks
         tasks = []
 
-        # Redis pools initialization
+        # REFACTORED: Redis now uses centralized client management
+        # Redis connections are handled by get_redis_client() when needed
         async def init_redis():
             try:
-                pools = RedisPoolManager()
-                await pools.initialize_pools()
-                app.state.redis_pools = pools
+                # Mark Redis as ready - no initialization needed with centralized client
+                # Components will call get_redis_client() directly when they need Redis
                 background_init_status["redis_pools"] = "ready"
-                log_initialization_step("Redis", "Redis pools initialized", 90, True)
+                log_initialization_step(
+                    "Redis",
+                    "Using centralized Redis client management (src.utils.redis_client)",
+                    90,
+                    True
+                )
             except Exception as e:
-                logger.error(f"Redis initialization failed: {e}")
+                logger.error(f"Redis status check failed: {e}")
                 background_init_status["redis_pools"] = "failed"
                 background_init_status["errors"].append(f"Redis: {str(e)}")
 
@@ -296,13 +303,9 @@ async def enhanced_lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Error closing AI Stack client: {e}")
 
-    # Cleanup Redis pools
-    if hasattr(app.state, "redis_pools"):
-        try:
-            await app.state.redis_pools.close_all_pools()
-            logger.info("✅ Redis pools closed successfully")
-        except Exception as e:
-            logger.error(f"❌ Error closing Redis pools: {e}")
+    # REFACTORED: Removed redis_pools cleanup - using centralized Redis client management
+    # Redis connections are automatically managed by get_redis_client()
+    logger.info("✅ Redis connections managed by centralized client (src.utils.redis_client)")
 
     logger.info("✅ Enhanced AutoBot Backend shutdown complete")
 

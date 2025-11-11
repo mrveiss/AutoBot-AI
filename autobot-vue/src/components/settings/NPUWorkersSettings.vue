@@ -5,7 +5,7 @@
         <h3 class="text-xl font-semibold text-gray-800">NPU Worker Management</h3>
         <p class="text-sm text-gray-600 mt-1">Manage distributed NPU workers for AI processing</p>
       </div>
-      <button @click="showAddWorkerDialog = true" class="btn-primary">
+      <button @click="openAddWorkerDialog" class="btn-primary">
         <i class="fas fa-plus mr-2"></i>
         Add Worker
       </button>
@@ -63,7 +63,7 @@
         message="No NPU workers registered"
       >
         <template #actions>
-          <button @click="showAddWorkerDialog = true" class="btn-secondary mt-4">
+          <button @click="openAddWorkerDialog" class="btn-secondary mt-4">
             <i class="fas fa-plus mr-2"></i>
             Add Your First Worker
           </button>
@@ -309,7 +309,7 @@
       </p>
 
       <template #actions>
-        <button @click="showDeleteDialog = false" class="btn-secondary">
+        <button @click="closeDeleteDialog" class="btn-secondary">
           Cancel
         </button>
         <button @click="deleteWorker" :disabled="isDeletingWorker || operationInProgress" class="btn-danger">
@@ -358,7 +358,7 @@
       </div>
 
       <template #actions>
-        <button @click="showMetricsDialog = false" class="btn-secondary">
+        <button @click="closeMetricsDialog" class="btn-secondary">
           Close
         </button>
       </template>
@@ -370,6 +370,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { NetworkConstants } from '@/constants/network-constants.js'
+import { useModal } from '@/composables/useModal'
+import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
@@ -461,19 +463,23 @@ const emit = defineEmits<Emits>()
 // ===== STATE =====
 
 const workers = ref<NPUWorker[]>([])
-const isLoading = ref(true)
-const showAddWorkerDialog = ref(false)
-const showEditWorkerDialog = ref(false)
-const showDeleteDialog = ref(false)
-const showMetricsDialog = ref(false)
 const workerToDelete = ref<NPUWorker | null>(null)
 const selectedWorkerMetrics = ref<NPUWorker | null>(null)
 const editingWorker = ref<NPUWorker | null>(null)
-const isSavingWorker = ref(false)
-const isDeletingWorker = ref(false)
 const isTestingWorker = ref<Record<string, boolean>>({})
 const workerFormError = ref<string | null>(null)
 const operationInProgress = ref(false)
+
+// Use composables for modals
+const { isOpen: showAddWorkerDialog, open: openAddWorkerDialog, close: closeAddWorkerDialog } = useModal('add-worker')
+const { isOpen: showEditWorkerDialog, open: openEditWorkerDialog, close: closeEditWorkerDialog } = useModal('edit-worker')
+const { isOpen: showDeleteDialog, open: openDeleteDialog, close: closeDeleteDialog } = useModal('delete-worker')
+const { isOpen: showMetricsDialog, open: openMetricsDialog, close: closeMetricsDialog } = useModal('metrics')
+
+// Use composables for async operations
+const { execute: loadWorkersOp, loading: isLoading } = useAsyncOperation()
+const { execute: saveWorkerOp, loading: isSavingWorker } = useAsyncOperation()
+const { execute: deleteWorkerOp, loading: isDeletingWorker } = useAsyncOperation()
 
 const loadBalancingConfig = ref<LoadBalancingConfig>({
   strategy: 'round-robin',
@@ -638,7 +644,7 @@ const editWorker = (worker: NPUWorker) => {
     priority: worker.priority,
     weight: worker.weight
   }
-  showEditWorkerDialog.value = true
+  openEditWorkerDialog()
 }
 
 /**
@@ -704,7 +710,7 @@ const saveWorker = async () => {
 
 const confirmDeleteWorker = (worker: NPUWorker) => {
   workerToDelete.value = worker
-  showDeleteDialog.value = true
+  openDeleteDialog()
 }
 
 /**
@@ -761,15 +767,15 @@ const viewWorkerMetrics = async (worker: NPUWorker) => {
   try {
     const response = await axios.get(`/api/npu/workers/${worker.id}/metrics`)
     selectedWorkerMetrics.value = { ...worker, performance_metrics: response.data }
-    showMetricsDialog.value = true
+    openMetricsDialog()
   } catch (error) {
     console.error('Failed to load worker metrics:', error)
   }
 }
 
 const closeWorkerDialog = () => {
-  showAddWorkerDialog.value = false
-  showEditWorkerDialog.value = false
+  closeAddWorkerDialog()
+  closeEditWorkerDialog()
   editingWorker.value = null
   workerFormError.value = null
   workerForm.value = {
