@@ -1,16 +1,4 @@
 """
-DEPRECATED: This module is deprecated as of 2025-11-11 (Phase 4 Cache Consolidation)
-Use src.utils.advanced_cache_manager instead.
-
-Migration:
-    OLD: from src.utils.knowledge_cache import get_knowledge_cache
-    NEW: from src.utils.advanced_cache_manager import get_knowledge_cache
-
-All knowledge cache functionality preserved in unified AdvancedCacheManager.
-Archived: archives/2025-11-11_cache_consolidation/knowledge_cache.py
-
----
-
 Knowledge Base Query Caching System
 Implements Redis-based caching for knowledge base search results to improve performance.
 """
