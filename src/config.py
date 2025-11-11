@@ -666,6 +666,7 @@ class ConfigManager:
             "cors_origins": [
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
+                "http://172.16.168.21:5173",
             ],  # Vue frontend only
         }
 
