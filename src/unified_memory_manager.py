@@ -871,16 +871,25 @@ class UnifiedMemoryManager:
             MemoryMonitor() if enable_monitoring else None
         )
 
-        # Database initialization flag (lazy initialization)
+        # Database initialization flag and lock (thread-safe lazy initialization)
         self._initialized = False
+        self._init_lock = asyncio.Lock()
 
         logger.info(f"Unified Memory Manager created at {self.db_path}")
 
     async def _ensure_initialized(self):
-        """Ensure database is initialized (lazy initialization)"""
+        """
+        Ensure database is initialized (thread-safe lazy initialization)
+
+        Uses double-check locking to prevent race conditions when multiple
+        concurrent calls attempt to initialize the database simultaneously.
+        """
         if not self._initialized:
-            await self._init_database()
-            self._initialized = True
+            async with self._init_lock:
+                # Double-check after acquiring lock
+                if not self._initialized:
+                    await self._init_database()
+                    self._initialized = True
 
     async def _init_database(self):
         """Initialize database schema"""
@@ -900,7 +909,16 @@ class UnifiedMemoryManager:
 
         Returns:
             task_id of logged record
+
+        Raises:
+            ValueError: If task_id or task_name is empty
         """
+        # Input validation
+        if not record.task_id or not record.task_id.strip():
+            raise ValueError("task_id cannot be empty")
+        if not record.task_name or not record.task_name.strip():
+            raise ValueError("task_name cannot be empty")
+
         await self._ensure_initialized()
         return await self._task_storage.log_task(record)
 
@@ -909,6 +927,13 @@ class UnifiedMemoryManager:
         Log task execution record (sync wrapper)
 
         Backward compatibility wrapper for synchronous code.
+
+        ⚠️ WARNING: DO NOT call from async code - use log_task() instead.
+        This uses asyncio.run() which creates a new event loop. It will fail
+        if called from within an existing async context (RuntimeError: cannot
+        be called from a running event loop).
+
+        For async code, always use: await manager.log_task(record)
         """
         return asyncio.run(self.log_task(record))
 
@@ -934,7 +959,18 @@ class UnifiedMemoryManager:
 
         Returns:
             True if updated, False otherwise
+
+        Raises:
+            ValueError: If task_id is empty or invalid kwargs provided
         """
+        # Input validation
+        if not task_id or not task_id.strip():
+            raise ValueError("task_id cannot be empty")
+        if "duration_seconds" in kwargs and kwargs["duration_seconds"] < 0:
+            raise ValueError("duration_seconds cannot be negative")
+        if "retry_count" in kwargs and kwargs["retry_count"] < 0:
+            raise ValueError("retry_count cannot be negative")
+
         await self._ensure_initialized()
         return await self._task_storage.update_task(
             task_id, status=status, **kwargs
@@ -1024,7 +1060,16 @@ class UnifiedMemoryManager:
 
         Returns:
             Entry ID
+
+        Raises:
+            ValueError: If category or content is empty/invalid
         """
+        # Input validation
+        if isinstance(category, str) and (not category or not category.strip()):
+            raise ValueError("category cannot be empty string")
+        if not content or not content.strip():
+            raise ValueError("content cannot be empty")
+
         await self._ensure_initialized()
         entry = MemoryEntry(
             id=None,
@@ -1057,7 +1102,18 @@ class UnifiedMemoryManager:
 
         Returns:
             List of MemoryEntry matching filters
+
+        Raises:
+            ValueError: If limit is invalid or date range is invalid
         """
+        # Input validation
+        if limit <= 0:
+            raise ValueError("limit must be positive")
+        if limit > 10000:
+            raise ValueError("limit cannot exceed 10000")
+        if start_date and end_date and start_date > end_date:
+            raise ValueError("start_date cannot be after end_date")
+
         await self._ensure_initialized()
         filters = {
             "limit": limit,
@@ -1326,7 +1382,13 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
         logger.info("EnhancedMemoryManager compatibility wrapper initialized")
 
     def log_task_execution(self, record: TaskExecutionRecord) -> str:
-        """Alias for log_task (backward compatibility)"""
+        """
+        Alias for log_task (backward compatibility)
+
+        ⚠️ WARNING: This is a synchronous method. DO NOT call from async code.
+        For async code, create UnifiedMemoryManager directly and use:
+            await manager.log_task(record)
+        """
         return self.log_task_sync(record)
 
 
@@ -1339,15 +1401,21 @@ class LongTermMemoryManager:
     - analysis/refactoring/test_memory_path_utils.py
     """
 
-    def __init__(self, config_path: Optional[str] = None):
-        """Initialize with memory_manager.py defaults"""
+    def __init__(self, config_path: Optional[str] = None, db_path: str = "data/agent_memory.db"):
+        """
+        Initialize with memory_manager.py defaults
+
+        Args:
+            config_path: Legacy parameter (ignored, kept for backward compatibility)
+            db_path: Path to SQLite database (default: "data/agent_memory.db")
+        """
         self._unified = UnifiedMemoryManager(
-            db_path="data/agent_memory.db",
+            db_path=db_path,
             enable_cache=True,
             enable_monitoring=False,
             retention_days=90
         )
-        logger.info("LongTermMemoryManager compatibility wrapper initialized")
+        logger.info(f"LongTermMemoryManager compatibility wrapper initialized at {db_path}")
 
     async def store_memory(
         self,
