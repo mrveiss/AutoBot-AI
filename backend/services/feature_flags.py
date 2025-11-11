@@ -30,7 +30,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from src.utils.redis_client import get_redis_client as get_redis_manager
+from src.utils.redis_client import get_redis_client
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -62,8 +62,8 @@ class FeatureFlags:
     async def _get_redis(self):
         """Get Redis connection for feature flags (uses cache DB)"""
         if not self.redis:
-            redis_manager = await get_redis_manager()
-            self.redis = await redis_manager.cache()
+            # Get async Redis client for cache database
+            self.redis = get_redis_client(async_client=True, database="cache")
         return self.redis
 
     async def get_enforcement_mode(self) -> EnforcementMode:
