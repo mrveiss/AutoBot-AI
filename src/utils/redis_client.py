@@ -140,6 +140,12 @@ class RedisConfig:
     max_retries: int = 3
     description: str = ""
 
+    def __post_init__(self):
+        """Auto-load password from environment if not provided"""
+        if self.password is None:
+            # Try REDIS_PASSWORD first, then AUTOBOT_REDIS_PASSWORD
+            self.password = os.getenv("REDIS_PASSWORD") or os.getenv("AUTOBOT_REDIS_PASSWORD")
+
 
 class RedisConfigLoader:
     """Load Redis configurations from multiple sources"""
