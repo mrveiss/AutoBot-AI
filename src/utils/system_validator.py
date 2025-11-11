@@ -120,7 +120,7 @@ class SystemValidator:
 
         try:
             from src.knowledge_base import KnowledgeBase
-            from src.utils.knowledge_cache import get_knowledge_cache
+            from src.utils.advanced_cache_manager import get_knowledge_cache
 
             # Test 1: Cache system initialization
             start_time = time.time()

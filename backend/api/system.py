@@ -8,8 +8,8 @@ from fastapi.responses import JSONResponse
 
 from backend.services.config_service import ConfigService
 
-# Add caching support for performance improvement
-from backend.utils.cache_manager import cache_response
+# Add caching support from unified cache manager (P4 Cache Consolidation)
+from src.utils.advanced_cache_manager import cache_response, cache_manager
 from backend.utils.connection_utils import ModelManager
 from src.constants.network_constants import NetworkConstants
 from src.constants.model_constants import ModelConstants as ModelConsts
@@ -232,7 +232,7 @@ async def reload_system_config():
     config.reload()
 
     # Clear configuration-related caches
-    from backend.utils.cache_manager import cache_manager
+    # cache_manager already imported at top
 
     await cache_manager.clear_pattern("frontend_config*")
     await cache_manager.clear_pattern("system_*")
@@ -356,7 +356,7 @@ async def get_detailed_health(request: Request):
 
         # Check Redis connection
         try:
-            from backend.utils.cache_manager import cache_manager
+            # cache_manager already imported at top
 
             await cache_manager._ensure_redis_client()
             if cache_manager._redis_client:
@@ -624,7 +624,7 @@ async def get_system_metrics():
 
         # Add cache statistics if available
         try:
-            from backend.utils.cache_manager import cache_manager
+            # cache_manager already imported at top
 
             cache_stats = await cache_manager.get_stats()
             metrics["cache"] = cache_stats
