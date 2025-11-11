@@ -935,24 +935,39 @@ class ConsolidatedTerminalWebSocket:
                     or "\n" in content
                 )
 
+                # CRITICAL FIX: Strip ANSI codes before checking if buffer has content
+                # Prevents saving blank terminal prompts (which contain only ANSI escape codes)
                 if should_save and self._output_buffer.strip():
-                    try:
-                        buffer_to_save = self._output_buffer
-                        logger.info(
-                            f"[CHAT INTEGRATION] Saving output to chat: {len(buffer_to_save)} chars"
+                    from src.utils.encoding_utils import strip_ansi_codes
+
+                    clean_content = strip_ansi_codes(self._output_buffer).strip()
+
+                    # Only save if there's actual text content after removing ANSI codes
+                    if clean_content:
+                        try:
+                            buffer_to_save = self._output_buffer
+                            logger.info(
+                                f"[CHAT INTEGRATION] Saving output to chat: {len(buffer_to_save)} chars (clean: {len(clean_content)} chars)"
+                            )
+                            await self.chat_history_manager.add_message(
+                                sender="terminal",
+                                text=buffer_to_save,
+                                message_type="terminal_output",
+                                session_id=self.conversation_id,
+                            )
+                            # Reset buffer after saving
+                            self._output_buffer = ""
+                            self._last_output_save_time = current_time
+                            logger.info(f"[CHAT INTEGRATION] Output saved successfully")
+                        except Exception as e:
+                            logger.error(f"Failed to save output to chat: {e}")
+                    else:
+                        # Buffer contains only ANSI codes, clear it without saving
+                        logger.debug(
+                            f"[CHAT INTEGRATION] Skipping save - buffer contains only ANSI codes ({len(self._output_buffer)} chars)"
                         )
-                        await self.chat_history_manager.add_message(
-                            sender="terminal",
-                            text=buffer_to_save,
-                            message_type="terminal_output",
-                            session_id=self.conversation_id,
-                        )
-                        # Reset buffer after saving
                         self._output_buffer = ""
                         self._last_output_save_time = current_time
-                        logger.info(f"[CHAT INTEGRATION] Output saved successfully")
-                    except Exception as e:
-                        logger.error(f"Failed to save output to chat: {e}")
 
         # Log output if security logging enabled
         if self.enable_logging and len(content.strip()) > 0:
