@@ -1179,6 +1179,23 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                 },
                             )
                             break
+                        else:
+                            # CRITICAL FIX: Command in history doesn't match - wait a bit longer
+                            # but don't poll forever (max 10 seconds after pending_approval is None)
+                            if elapsed_time > max_wait_time - 3590:  # 10 seconds after approval cleared
+                                logger.warning(
+                                    f"⚠️ [APPROVAL POLLING] Timeout: pending_approval is None but command not found in history. "
+                                    f"Expected: '{command}', Last in history: '{last_command.get('command')}'. "
+                                    f"Breaking after {elapsed_time:.1f}s."
+                                )
+                                break
+                    else:
+                        # CRITICAL FIX: No command history but approval is cleared - break immediately
+                        logger.warning(
+                            f"⚠️ [APPROVAL POLLING] pending_approval is None but no command history. "
+                            f"Breaking after {elapsed_time:.1f}s to prevent infinite loop."
+                        )
+                        break
             except Exception as check_error:
                 logger.error(
                     f"Error checking approval status: {check_error}"
