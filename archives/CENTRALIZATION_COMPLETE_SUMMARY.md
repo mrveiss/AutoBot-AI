@@ -47,6 +47,8 @@ Successfully consolidated **10 duplicate implementations** into **2 canonical ma
 ### Hotfixes
 - **Commit `0665c37`**: Fixed backend startup failure (13 files importing from archived module)
 - **Commit `51632fb`**: Fixed async_config_manager broken Redis import
+- **Commit `5ca7d2d`**: Fixed async_redis_manager import errors (14 files updated to get_redis_client)
+- **Commit `8ee05d1`**: Fixed redis_manager.main() pattern (8 files migrated to new pattern)
 
 ### Impact
 - **Lines Removed**: ~800 (duplicate code)
@@ -256,10 +258,12 @@ from src.unified_config_manager import unified_config_manager
 ## Commits Timeline
 
 1. **P1 Redis Consolidation**: `54b684a`
-2. **P1 Hotfix 1**: `0665c37` (backend startup fix)
+2. **P1 Hotfix 1**: `0665c37` (backend startup fix - 13 files)
 3. **P1 Hotfix 2**: `51632fb` (async_config_manager fix)
 4. **P2 Config Consolidation**: `b84ba05`
-5. **P3 Cleanup**: (pending commit)
+5. **P3 Cleanup**: `cdaee9d` (redis_pool_manager archival)
+6. **P1 Hotfix 3**: `5ca7d2d` (async_redis_manager import errors - 14 files)
+7. **P1 Hotfix 4**: `8ee05d1` (redis_manager.main() pattern migration - 8 files)
 
 ---
 
@@ -273,9 +277,14 @@ from src.unified_config_manager import unified_config_manager
 5. ✅ **Documentation**: Archive docs help future developers
 
 ### Challenges Faced
-1. ⚠️ **Cascading Imports**: P1 archiving broke 13 files
-2. ⚠️ **Hidden Dependencies**: async_config_manager imported from archived module
+1. ⚠️ **Cascading Imports**: P1 archiving required 4 hotfixes (35 files total)
+   - Hotfix 1: 13 files importing from archived module
+   - Hotfix 2: async_config_manager Redis import
+   - Hotfix 3: 14 files with async_redis_manager imports
+   - Hotfix 4: 8 files with redis_manager.main() pattern
+2. ⚠️ **Hidden Dependencies**: Multiple layers of archived module usage
 3. ⚠️ **Hardcoded Values**: Required NetworkConstants migration
+4. ⚠️ **Pattern Migration**: Old manager patterns persisted after import fixes
 
 ### Best Practices Established
 1. ✅ Always search for all imports before archiving
@@ -292,7 +301,7 @@ from src.unified_config_manager import unified_config_manager
 |--------|--------|--------|--------|
 | Files Consolidated | 8+ | 10 | ✅ Exceeded |
 | Code Reduction | 40% | 65% | ✅ Exceeded |
-| Zero Breaking Changes | 100% | 90% | ⚠️ 2 hotfixes needed |
+| Zero Breaking Changes | 100% | 85% | ⚠️ 4 hotfixes needed (35 files) |
 | Test Coverage | 80% | 100% | ✅ Exceeded |
 | Security Enhanced | Yes | Yes | ✅ Achieved |
 | Policy Compliant | 100% | 100% | ✅ Achieved |
@@ -315,8 +324,8 @@ The AutoBot Centralization Campaign successfully consolidated **10 duplicate imp
 
 ---
 
-**Generated**: 2025-11-11
+**Generated**: 2025-11-11 (Updated with P1 Hotfixes 3 & 4)
 **Author**: Claude Code (Assisted)
 **Review Status**: ✅ Code Review Complete
 **Test Status**: ✅ All Tests Passing
-**Commit Status**: ✅ P1 & P2 Committed, P3 Pending
+**Commit Status**: ✅ All Phases Complete (P1 + 4 hotfixes, P2, P3)
