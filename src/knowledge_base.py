@@ -102,8 +102,9 @@ class KnowledgeBase:
         self.redis_host = config.get("redis.host")
         self.redis_port = config.get("redis.port")
         self.redis_password = config.get("redis.password")
-        # Knowledge base DB number from redis-databases.yaml (facts stored in DB 1)
-        self.redis_db = redis_db_manager.config.get('redis_databases', {}).get('knowledge', {}).get('db', 1)
+        # Knowledge base DB number - now managed by get_redis_client(database="knowledge")
+        # The database mapping is handled automatically by redis_client utility
+        self.redis_db = 1  # Default for knowledge base (historical compatibility)
 
         # ChromaDB configuration
         self.chromadb_path = config.get("memory.chromadb.path", "data/chromadb")
@@ -1756,6 +1757,252 @@ class KnowledgeBase:
                 "fact_id": fact_id,
                 "message": f"Failed to delete fact: {str(e)}",
             }
+
+    async def add_document_from_file(
+        self,
+        file_path: Path,
+        category: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Add a document from file (PDF, DOCX, TXT, MD) to knowledge base
+
+        Uses reusable DocumentExtractor utility to extract text from various formats.
+
+        Supported formats:
+        - PDF (.pdf)
+        - Microsoft Word (.docx, .doc)
+        - Plain text (.txt, .md, .rst, .markdown)
+
+        Args:
+            file_path: Path to document file
+            category: Category/namespace for the document (default: 'documents')
+            metadata: Additional metadata to store with document
+
+        Returns:
+            dict: {
+                "success": bool,
+                "document_id": str,
+                "source": str,
+                "file_type": str,
+                "chars_extracted": int,
+                "message": str
+            }
+
+        Raises:
+            FileNotFoundError: If file doesn't exist
+            ValueError: If file type not supported
+
+        Example:
+            result = await kb.add_document_from_file(
+                Path("report.pdf"),
+                category="research",
+                metadata={"author": "John Doe", "year": 2024}
+            )
+        """
+        from src.utils.document_extractors import DocumentExtractor
+
+        self.ensure_initialized()
+
+        try:
+            file_path = Path(file_path)
+
+            # Extract text using reusable utility
+            logger.info(f"Extracting text from {file_path.name}...")
+            text = await DocumentExtractor.extract_from_file(file_path)
+
+            if not text or not text.strip():
+                raise ValueError(f"No text extracted from {file_path}")
+
+            # Build metadata
+            doc_metadata = {
+                'source': str(file_path),
+                'filename': file_path.name,
+                'file_type': file_path.suffix,
+                'category': category or 'documents',
+                'extracted_at': datetime.utcnow().isoformat()
+            }
+            if metadata:
+                doc_metadata.update(metadata)
+
+            # Add to knowledge base using existing add_document method
+            result = await self.add_document(
+                content=text,
+                metadata=doc_metadata
+            )
+
+            logger.info(f"✅ Added {file_path.name} to knowledge base ({len(text)} chars)")
+
+            return {
+                "success": True,
+                "document_id": result.get("document_id", "unknown"),
+                "source": str(file_path),
+                "file_type": file_path.suffix,
+                "chars_extracted": len(text),
+                "message": f"Successfully added {file_path.name} to knowledge base"
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to add document from {file_path}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "success": False,
+                "source": str(file_path),
+                "message": f"Failed to add document: {str(e)}"
+            }
+
+    async def add_documents_from_directory(
+        self,
+        directory_path: Path,
+        file_types: Optional[List[str]] = None,
+        category: Optional[str] = None,
+        recursive: bool = True,
+        max_files: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Batch process all documents in a directory
+
+        Uses reusable DocumentExtractor utility for parallel file processing.
+
+        Args:
+            directory_path: Path to directory containing documents
+            file_types: List of file extensions to process (default: all supported)
+            category: Category/namespace for documents (default: 'documents')
+            recursive: Process subdirectories recursively (default: True)
+            max_files: Maximum number of files to process (default: unlimited)
+
+        Returns:
+            dict: {
+                "success": bool,
+                "processed": int,
+                "failed": int,
+                "total": int,
+                "directory": str,
+                "files": List[str],  # List of successfully processed files
+                "errors": List[dict],  # List of errors encountered
+                "message": str
+            }
+
+        Example:
+            # Process all supported files in directory
+            result = await kb.add_documents_from_directory(
+                Path("docs/"),
+                category="documentation"
+            )
+
+            # Process only PDFs, limit to 100 files
+            result = await kb.add_documents_from_directory(
+                Path("research/"),
+                file_types=['.pdf'],
+                category="research",
+                max_files=100
+            )
+        """
+        from src.utils.document_extractors import DocumentExtractor
+
+        self.ensure_initialized()
+
+        directory_path = Path(directory_path)
+        processed_files = []
+        errors = []
+
+        try:
+            logger.info(f"Processing documents from directory: {directory_path}")
+
+            # Extract all documents using reusable utility
+            extracted_texts = await DocumentExtractor.extract_from_directory(
+                directory_path=directory_path,
+                file_types=file_types,
+                recursive=recursive,
+                max_files=max_files
+            )
+
+            total_files = len(extracted_texts)
+            logger.info(f"Extracted text from {total_files} files, adding to knowledge base...")
+
+            # Add each document to knowledge base
+            for file_path, text in extracted_texts.items():
+                try:
+                    result = await self.add_document_from_file(
+                        file_path=file_path,
+                        category=category
+                    )
+
+                    if result.get("success"):
+                        processed_files.append(str(file_path))
+                    else:
+                        errors.append({
+                            "file": str(file_path),
+                            "error": result.get("message", "Unknown error")
+                        })
+
+                except Exception as e:
+                    logger.error(f"Failed to add {file_path} to KB: {e}")
+                    errors.append({
+                        "file": str(file_path),
+                        "error": str(e)
+                    })
+
+            processed_count = len(processed_files)
+            failed_count = len(errors)
+
+            logger.info(
+                f"✅ Directory processing complete: {processed_count} succeeded, "
+                f"{failed_count} failed out of {total_files} total"
+            )
+
+            return {
+                "success": failed_count == 0,
+                "processed": processed_count,
+                "failed": failed_count,
+                "total": total_files,
+                "directory": str(directory_path),
+                "files": processed_files,
+                "errors": errors,
+                "message": (
+                    f"Successfully processed {processed_count}/{total_files} documents"
+                    if failed_count == 0
+                    else f"Processed {processed_count}/{total_files} documents with {failed_count} errors"
+                )
+            }
+
+        except Exception as e:
+            logger.error(f"Error processing directory {directory_path}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "success": False,
+                "processed": len(processed_files),
+                "failed": len(errors),
+                "total": len(processed_files) + len(errors),
+                "directory": str(directory_path),
+                "files": processed_files,
+                "errors": errors,
+                "message": f"Directory processing failed: {str(e)}"
+            }
+
+    def get_librarian(self):
+        """
+        Get KB librarian agent for research assistance
+
+        Returns a KBLibrarianAgent instance configured with this knowledge base.
+        Lazy import to avoid circular dependencies.
+
+        Returns:
+            KBLibrarianAgent: Librarian agent instance
+
+        Example:
+            kb = KnowledgeBase()
+            await kb.initialize()
+
+            librarian = kb.get_librarian()
+            response = await librarian.research_topic("machine learning")
+        """
+        self.ensure_initialized()
+
+        from src.agents.kb_librarian_agent import KBLibrarianAgent
+        return KBLibrarianAgent(knowledge_base=self)
 
     async def close(self):
         """Close all connections and cleanup resources"""
