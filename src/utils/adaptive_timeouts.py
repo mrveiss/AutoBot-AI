@@ -1,6 +1,6 @@
 """
-Performance-Optimized Timeout Handlers for AutoBot
-Replaces dangerous timeout anti-patterns throughout the system
+Adaptive Timeout Handlers for AutoBot
+Intelligent timeout management with adaptive behavior and fallback strategies
 """
 
 import asyncio
@@ -26,10 +26,10 @@ class TimeoutCategory(Enum):
     DATABASE_OPERATION = "database_operation"  # Redis, SQLite, ChromaDB operations
 
 
-class OptimizedTimeoutConfig:
-    """Optimized timeout configuration replacing dangerous static timeouts"""
+class AdaptiveTimeoutConfig:
+    """Adaptive timeout configuration with intelligent defaults for different operation types"""
 
-    # PERFORMANCE OPTIMIZED TIMEOUTS (Reduced from original dangerous values)
+    # ADAPTIVE TIMEOUTS (Dynamically adjusted based on operation type)
     TIMEOUTS = {
         TimeoutCategory.USER_INTERACTION: {
             "default": 30.0,  # Was 600s (10min) → 30s
@@ -80,7 +80,7 @@ class OptimizedTimeoutConfig:
         operation_type: str = "default",
         fallback: float = 30.0,
     ) -> float:
-        """Get optimized timeout for operation"""
+        """Get adaptive timeout for operation"""
         try:
             return cls.TIMEOUTS[category].get(operation_type, fallback)
         except KeyError:
@@ -90,14 +90,14 @@ class OptimizedTimeoutConfig:
             return fallback
 
 
-class PerformanceOptimizedTimeout:
+class AdaptiveTimeout:
     """
     Intelligent timeout handler with adaptive behavior and fallback strategies
     """
 
     def __init__(self, category: TimeoutCategory):
         self.category = category
-        self.config = OptimizedTimeoutConfig()
+        self.config = AdaptiveTimeoutConfig()
         self.start_time = None
         self.warning_sent = False
 
@@ -308,8 +308,8 @@ async def execute_installation_with_timeout(
     package_type: str = "default",
     context: Optional[Dict[str, Any]] = None,
 ) -> Any:
-    """Execute package installation with optimized timeout handling"""
-    timeout_handler = PerformanceOptimizedTimeout(TimeoutCategory.SYSTEM_INSTALLATION)
+    """Execute package installation with adaptive timeout handling"""
+    timeout_handler = AdaptiveTimeout(TimeoutCategory.SYSTEM_INSTALLATION)
     return await timeout_handler.execute_with_intelligent_timeout(
         operation=operation,
         operation_type=package_type,
@@ -322,8 +322,8 @@ async def execute_installation_with_timeout(
 async def execute_user_permission_with_timeout(
     operation: Callable, context: Optional[Dict[str, Any]] = None
 ) -> Any:
-    """Execute user permission request with optimized timeout"""
-    timeout_handler = PerformanceOptimizedTimeout(TimeoutCategory.USER_INTERACTION)
+    """Execute user permission request with adaptive timeout"""
+    timeout_handler = AdaptiveTimeout(TimeoutCategory.USER_INTERACTION)
     return await timeout_handler.execute_with_intelligent_timeout(
         operation=operation,
         operation_type="default",
@@ -338,8 +338,8 @@ async def execute_command_with_timeout(
     context: Optional[Dict[str, Any]] = None,
     background_allowed: bool = True,
 ) -> Any:
-    """Execute command with optimized timeout handling"""
-    timeout_handler = PerformanceOptimizedTimeout(TimeoutCategory.COMMAND_EXECUTION)
+    """Execute command with adaptive timeout handling"""
+    timeout_handler = AdaptiveTimeout(TimeoutCategory.COMMAND_EXECUTION)
     return await timeout_handler.execute_with_intelligent_timeout(
         operation=operation,
         operation_type=command_type,
@@ -349,11 +349,11 @@ async def execute_command_with_timeout(
     )
 
 
-# Performance monitoring functions
-def log_timeout_performance_improvement(
+# Monitoring functions
+def log_adaptive_timeout_metrics(
     original_timeout: float, new_timeout: float, operation_type: str
 ):
-    """Log performance improvements from timeout optimization"""
+    """Log timeout adaptation metrics"""
     improvement_seconds = original_timeout - new_timeout
     improvement_percent = (improvement_seconds / original_timeout) * 100
 
@@ -392,10 +392,10 @@ if __name__ == "__main__":
         )
         print(f"Installation result: {result}")
 
-        # Log performance improvements
-        log_timeout_performance_improvement(600, 30, "user_permission")
-        log_timeout_performance_improvement(600, 120, "installation")
-        log_timeout_performance_improvement(300, 60, "command_execution")
+        # Log timeout metrics
+        log_adaptive_timeout_metrics(600, 30, "user_permission")
+        log_adaptive_timeout_metrics(600, 120, "installation")
+        log_adaptive_timeout_metrics(300, 60, "command_execution")
 
     # Run test
     asyncio.run(test_timeout_optimization())
