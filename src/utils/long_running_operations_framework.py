@@ -44,9 +44,9 @@ import redis.asyncio as redis
 from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 
-from .performance_optimized_timeouts import (
-    OptimizedTimeoutConfig,
-    PerformanceOptimizedTimeout,
+from .adaptive_timeouts import (
+    AdaptiveTimeoutConfig,
+    AdaptiveTimeout,
     TimeoutCategory,
 )
 
