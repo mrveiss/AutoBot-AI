@@ -18,11 +18,11 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Protocol
 
 from src.constants.network_constants import NetworkConstants
-from utils.optimized_memory_manager import get_optimized_memory_manager
+from utils.adaptive_memory_manager import get_adaptive_memory_manager
 from utils.optimized_redis_manager import get_optimized_redis_manager
 
-# Import optimized components
-from utils.optimized_stream_processor import get_optimized_llm_interface
+# Import streaming components
+from utils.llm_stream_processor import get_llm_streaming_interface
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +157,7 @@ class GeneralChatProcessor:
     async def _ensure_llm_interface(self):
         """Lazy load LLM interface"""
         if self.llm_interface is None:
-            self.llm_interface = await get_optimized_llm_interface()
+            self.llm_interface = await get_llm_streaming_interface()
 
     async def process_message(self, message: ChatMessage) -> ChatResult:
         """Process general chat message with optimized streaming"""
@@ -364,7 +364,7 @@ class UnifiedChatService:
             self.redis_manager = get_optimized_redis_manager()
 
         if self.memory_manager is None:
-            self.memory_manager = get_optimized_memory_manager()
+            self.memory_manager = get_adaptive_memory_manager()
             self.session_cache = self.memory_manager.create_lru_cache(
                 "chat_sessions", 1000
             )
