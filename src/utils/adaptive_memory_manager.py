@@ -1,7 +1,7 @@
 """
-Optimized Memory Manager - Performance Fix for Memory Leaks
+Adaptive Memory Manager - Intelligent Memory Management with LRU Caching
 Addresses unbounded growth in chat history, source attribution, and conversation data
-Implements LRU eviction and adaptive cleanup to prevent 50MB/hour memory growth
+Implements LRU eviction and adaptive cleanup to prevent memory growth
 """
 
 import asyncio
@@ -17,7 +17,7 @@ from src.constants.network_constants import NetworkConstants
 logger = logging.getLogger(__name__)
 
 
-class OptimizedMemoryManager:
+class AdaptiveMemoryManager:
     """
     Intelligent memory management with LRU eviction and adaptive cleanup
     """
@@ -141,7 +141,7 @@ class OptimizedMemoryManager:
 
     async def start_memory_monitor(self):
         """Start background memory monitoring"""
-        logger.info("Starting optimized memory monitor")
+        logger.info("Starting adaptive memory monitor")
 
         try:
             while True:
@@ -196,15 +196,15 @@ class OptimizedMemoryManager:
         return cleaned
 
 
-# Global optimized memory manager instance
+# Global adaptive memory manager instance
 _memory_manager = None
 
 
-def get_optimized_memory_manager() -> OptimizedMemoryManager:
-    """Get global optimized memory manager instance"""
+def get_adaptive_memory_manager() -> AdaptiveMemoryManager:
+    """Get global adaptive memory manager instance"""
     global _memory_manager
     if _memory_manager is None:
-        _memory_manager = OptimizedMemoryManager()
+        _memory_manager = AdaptiveMemoryManager()
         _memory_manager.start_monitoring()
     return _memory_manager
 
@@ -212,17 +212,17 @@ def get_optimized_memory_manager() -> OptimizedMemoryManager:
 # Helper functions for common memory operations
 def create_managed_cache(name: str, max_size: int = 1000) -> OrderedDict:
     """Create a managed LRU cache"""
-    manager = get_optimized_memory_manager()
+    manager = get_adaptive_memory_manager()
     return manager.create_lru_cache(name, max_size)
 
 
 def cache_get(cache_name: str, key: str) -> Optional[Any]:
     """Get item from managed cache"""
-    manager = get_optimized_memory_manager()
+    manager = get_adaptive_memory_manager()
     return manager.get_from_cache(cache_name, key)
 
 
 def cache_put(cache_name: str, key: str, value: Any):
     """Put item in managed cache"""
-    manager = get_optimized_memory_manager()
+    manager = get_adaptive_memory_manager()
     return manager.put_in_cache(cache_name, key, value)
