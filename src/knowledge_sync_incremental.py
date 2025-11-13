@@ -34,9 +34,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.knowledge_base import KnowledgeBase
 from src.utils.logging_manager import get_llm_logger
-from src.utils.semantic_chunker_gpu_optimized import (
+from src.utils.semantic_chunker_gpu import (
     SemanticChunk,
-    get_optimized_semantic_chunker,
+    get_gpu_semantic_chunker,
 )
 
 logger = get_llm_logger("knowledge_sync_incremental")
@@ -151,9 +151,9 @@ class IncrementalKnowledgeSync:
             await self.kb.ainit()
             logger.info("Knowledge base initialized")
 
-            # Initialize GPU-optimized semantic chunker
-            self.semantic_chunker = get_optimized_semantic_chunker()
-            logger.info("GPU-optimized semantic chunker initialized")
+            # Initialize GPU semantic chunker
+            self.semantic_chunker = get_gpu_semantic_chunker()
+            logger.info("GPU semantic chunker initialized")
 
             # Load existing sync state
             await self._load_sync_state()
@@ -321,7 +321,7 @@ class IncrementalKnowledgeSync:
             base_metadata["category"] = category
 
             # Use GPU semantic chunker
-            chunks = await self.semantic_chunker.chunk_text_optimized(
+            chunks = await self.semantic_chunker.chunk_text(
                 content, base_metadata
             )
 
