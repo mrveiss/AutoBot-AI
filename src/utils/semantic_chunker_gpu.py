@@ -41,7 +41,7 @@ import psutil
 # Import centralized logging
 from src.utils.logging_manager import get_llm_logger
 
-logger = get_llm_logger("semantic_chunker_gpu_optimized")
+logger = get_llm_logger("semantic_chunker_gpu")
 
 
 @dataclass
@@ -56,9 +56,9 @@ class SemanticChunk:
     metadata: Dict[str, Any]
 
 
-class OptimizedGPUSemanticChunker:
+class GPUSemanticChunker:
     """
-    GPU-Optimized Semantic Chunker for AutoBot
+    GPU-Accelerated Semantic Chunker for AutoBot
 
     Specifically optimized for:
     - Intel Ultra 9 185H (22 cores)
@@ -98,12 +98,12 @@ class OptimizedGPUSemanticChunker:
         self._model_lock = threading.Lock()
         self._gpu_memory_pool_initialized = False
 
-        logger.info(f"OptimizedGPUSemanticChunker initialized:")
+        logger.info(f"GPUSemanticChunker initialized:")
         logger.info(f"  - Model: {embedding_model}")
         logger.info(f"  - GPU Batch Size: {gpu_batch_size} (optimized for RTX 4070)")
         logger.info(f"  - GPU Memory Pooling: {enable_gpu_memory_pool}")
 
-    async def _initialize_optimized_model(self):
+    async def _initialize_model(self):
         """Initialize model with aggressive GPU optimizations for RTX 4070."""
         if self._embedding_model is not None:
             return
@@ -114,7 +114,7 @@ class OptimizedGPUSemanticChunker:
 
             try:
 
-                def load_optimized_model():
+                def load_model():
                     import torch
                     from sentence_transformers import SentenceTransformer
 
@@ -206,15 +206,15 @@ class OptimizedGPUSemanticChunker:
                 # Load model in thread pool to avoid blocking
                 loop = asyncio.get_event_loop()
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    logger.info("Loading optimized embedding model...")
+                    logger.info("Loading GPU embedding model...")
                     self._embedding_model = await loop.run_in_executor(
-                        executor, load_optimized_model
+                        executor, load_model
                     )
 
-                logger.info("Optimized model loading completed")
+                logger.info("GPU model loading completed")
 
             except Exception as e:
-                logger.error(f"Failed to load optimized model: {e}")
+                logger.error(f"Failed to load GPU model: {e}")
                 # Fallback to basic model
                 import torch
                 from sentence_transformers import SentenceTransformer
@@ -225,11 +225,11 @@ class OptimizedGPUSemanticChunker:
                 )
                 logger.warning("Using basic model fallback")
 
-    async def chunk_text_optimized(
+    async def chunk_text(
         self, text: str, metadata: Optional[Dict[str, Any]] = None
     ) -> List[SemanticChunk]:
         """
-        Main optimized chunking method with performance monitoring.
+        Main GPU-accelerated chunking method with performance monitoring.
 
         Target: 3x performance improvement over basic implementation.
         """
@@ -237,7 +237,7 @@ class OptimizedGPUSemanticChunker:
 
         try:
             logger.info(
-                f"Starting optimized semantic chunking ({len(text)} characters)"
+                f"Starting GPU semantic chunking ({len(text)} characters)"
             )
 
             # For testing, create simple chunks based on paragraphs/sentences
@@ -255,10 +255,10 @@ class OptimizedGPUSemanticChunker:
                 return [chunk]
 
             # Initialize model for GPU processing
-            await self._initialize_optimized_model()
+            await self._initialize_model()
 
-            # Process embeddings with GPU optimization
-            embeddings = await self._compute_optimized_embeddings(sentences)
+            # Process embeddings with GPU acceleration
+            embeddings = await self._compute_embeddings(sentences)
 
             # Compute semantic distances
             distances = self._compute_semantic_distances(embeddings)
@@ -288,7 +288,7 @@ class OptimizedGPUSemanticChunker:
             total_time = time.time() - start_time
             sentences_per_sec = len(sentences) / total_time if total_time > 0 else 0
 
-            logger.info(f"Optimized chunking completed:")
+            logger.info(f"GPU chunking completed:")
             logger.info(f"  - Total time: {total_time:.3f}s")
             logger.info(f"  - Performance: {sentences_per_sec:.1f} sentences/sec")
             logger.info(f"  - Chunks created: {len(chunks)}")
@@ -296,12 +296,12 @@ class OptimizedGPUSemanticChunker:
             return chunks
 
         except Exception as e:
-            logger.error(f"Optimized chunking failed: {e}")
+            logger.error(f"GPU chunking failed: {e}")
             # Fallback to basic chunking
             return await self._fallback_basic_chunking(text, metadata)
 
-    async def _compute_optimized_embeddings(self, sentences: List[str]) -> np.ndarray:
-        """Compute embeddings with RTX 4070 optimizations."""
+    async def _compute_embeddings(self, sentences: List[str]) -> np.ndarray:
+        """Compute embeddings with RTX 4070 GPU acceleration."""
         if not sentences:
             return np.array([])
 
@@ -509,7 +509,7 @@ class OptimizedGPUSemanticChunker:
         self, content: str, metadata: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """Main interface method compatible with LlamaIndex."""
-        semantic_chunks = await self.chunk_text_optimized(content, metadata)
+        semantic_chunks = await self.chunk_text(content, metadata)
 
         documents = []
         for chunk in semantic_chunks:
@@ -527,16 +527,16 @@ class OptimizedGPUSemanticChunker:
         return documents
 
 
-# Global optimized instance
-_optimized_chunker_instance = None
+# Global GPU chunker instance
+_gpu_chunker_instance = None
 
 
-def get_optimized_semantic_chunker():
-    """Get the global optimized semantic chunker instance."""
-    global _optimized_chunker_instance
-    if _optimized_chunker_instance is None:
-        _optimized_chunker_instance = OptimizedGPUSemanticChunker(
+def get_gpu_semantic_chunker():
+    """Get the global GPU semantic chunker instance."""
+    global _gpu_chunker_instance
+    if _gpu_chunker_instance is None:
+        _gpu_chunker_instance = GPUSemanticChunker(
             gpu_batch_size=500,  # Large batches for RTX 4070
             enable_gpu_memory_pool=True,
         )
-    return _optimized_chunker_instance
+    return _gpu_chunker_instance
