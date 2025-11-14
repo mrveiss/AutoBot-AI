@@ -149,9 +149,9 @@ export default class ServiceDiscovery {
         envVar: 'VITE_PLAYWRIGHT_VNC_URL',
         hostVar: 'VITE_PLAYWRIGHT_VNC_HOST',
         portVar: 'VITE_PLAYWRIGHT_VNC_PORT',
-        port: '6081',
+        port: '6080',
         protocol: 'http',
-        fallbackHosts: [NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP] // Usually same machine as frontend
+        fallbackHosts: [NetworkConstants.BROWSER_VM_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP] // Browser VM first for headed mode VNC
       },
       npu_worker: {
         envVar: 'VITE_NPU_WORKER_URL',

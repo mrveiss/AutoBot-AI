@@ -1,0 +1,16 @@
+[Unit]
+Description=WebSockify for Browser VM noVNC Access
+After=network.target
+
+[Service]
+Type=simple
+User=autobot
+WorkingDirectory=/home/autobot
+ExecStart=/usr/bin/websockify --web /usr/share/novnc 0.0.0.0:6080 localhost:5901
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
