@@ -31,6 +31,20 @@ from backend.dependencies import get_config, get_knowledge_base
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from backend.security.session_ownership import validate_session_ownership
+
+# Import reusable chat utilities - Phase 1 Utility Extraction
+from backend.utils.chat_utils import (
+    create_error_response,
+    create_success_response,
+    generate_chat_session_id,
+    generate_message_id,
+    generate_request_id,
+    get_chat_history_manager,
+    log_chat_error,
+    log_chat_event,
+    validate_chat_session_id,
+    validate_message_content,
+)
 from src.auth_middleware import auth_middleware
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -63,22 +77,6 @@ async def validate_chat_ownership(chat_id: str, request: Request) -> Dict:
     return await validate_session_ownership(session_id=chat_id, request=request)
 
 
-def get_chat_history_manager(request):
-    """Get chat history manager from app state, with lazy initialization"""
-    manager = getattr(request.app.state, "chat_history_manager", None)
-    if manager is None:
-        # Lazy initialize if not yet available
-        try:
-            from src.chat_history_manager import ChatHistoryManager
-
-            manager = ChatHistoryManager()
-            request.app.state.chat_history_manager = manager
-            logger.info("✅ Lazy-initialized chat_history_manager")
-        except Exception as e:
-            logger.error(f"Failed to lazy-initialize chat_history_manager: {e}")
-    return manager
-
-
 def get_system_state(request):
     """Get system state from app state"""
     return getattr(request.app.state, "system_state", {})
@@ -106,11 +104,6 @@ def get_llm_service(request):
 
 
 # Simple utility functions to replace missing imports
-def generate_request_id():
-    """Generate a unique request ID"""
-    return str(uuid4())
-
-
 def handle_api_error(error, request_id="unknown"):
     """Simple error handler replacement"""
     logger.error(f"[{request_id}] API error: {str(error)}")
@@ -120,19 +113,6 @@ def handle_api_error(error, request_id="unknown"):
 def log_exception(error, context="chat"):
     """Simple exception logger replacement"""
     logger.error(f"[{context}] Exception: {str(error)}")
-
-
-def create_success_response(data, message="Success", request_id=None, status_code=200):
-    """Create success response"""
-    response = {"success": True, "data": data, "message": message}
-    if request_id:
-        response["request_id"] = request_id
-    return JSONResponse(status_code=status_code, content=response)
-
-
-def validate_message_content(content):
-    """Validate message content"""
-    return content and len(content.strip()) > 0
 
 
 def get_exceptions_lazy():
@@ -173,22 +153,6 @@ def get_exceptions_lazy():
 def log_request_context(request, endpoint, request_id):
     """Log request context for debugging"""
     logger.info(f"[{request_id}] {endpoint} - {request.method} {request.url.path}")
-
-
-def create_error_response(
-    error_code="INTERNAL_ERROR",
-    message="An error occurred",
-    request_id="unknown",
-    status_code=500,
-):
-    """Create standardized error response"""
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "success": False,
-            "error": {"code": error_code, "message": message, "request_id": request_id},
-        },
-    )
 
 
 # ====================================================================
@@ -265,80 +229,6 @@ MAX_MESSAGE_LENGTH = 50000
 MAX_HISTORY_SIZE = 1000
 DEFAULT_SESSION_TITLE = "New Chat Session"
 STREAMING_CHUNK_SIZE = 1024
-
-# ====================================================================
-# Utility Functions
-# ====================================================================
-
-
-def validate_chat_session_id(session_id: str) -> bool:
-    """
-    Validate chat session ID format.
-
-    Accepts:
-    - Valid UUIDs
-    - UUIDs with suffixes (e.g., "uuid-imported-123")
-    - Legacy/test IDs (alphanumeric with underscores/hyphens)
-
-    Ensures backward compatibility with existing sessions while maintaining security.
-    """
-    if not session_id or len(session_id) > 255:
-        return False
-
-    # Security: reject path traversal and null bytes
-    if any(char in session_id for char in ['/', '\\', '..', '\0']):
-        return False
-
-    # Accept if it's a valid UUID
-    try:
-        uuid.UUID(session_id)
-        return True
-    except ValueError:
-        pass
-
-    # Accept if starts with UUID (with suffix)
-    parts = session_id.split("-")
-    if len(parts) >= 5:
-        try:
-            uuid_part = "-".join(parts[:5])
-            uuid.UUID(uuid_part)
-            return True
-        except ValueError:
-            pass
-
-    # Accept legacy/test session IDs (alphanumeric + underscore + hyphen)
-    # This allows "test_conv" while rejecting malicious inputs
-    if re.match(r'^[a-zA-Z0-9_-]+$', session_id):
-        return True
-
-    return False
-
-
-def generate_chat_session_id() -> str:
-    """Generate a new chat session ID"""
-    return str(uuid4())
-
-
-def generate_message_id() -> str:
-    """Generate a new message ID"""
-    return str(uuid4())
-
-
-async def log_chat_event(
-    event_type: str, session_id: str = None, details: Dict[str, Any] = None
-):
-    """Log chat-related events for monitoring and debugging"""
-    try:
-        event_data = {
-            "event_type": event_type,
-            "timestamp": datetime.utcnow().isoformat(),
-            "session_id": session_id,
-            "details": details or {},
-        }
-        logger.info(f"Chat Event: {event_type}", extra=event_data)
-    except Exception as e:
-        logger.error(f"Failed to log chat event: {e}")
-
 
 # ====================================================================
 # Core Chat Functions
