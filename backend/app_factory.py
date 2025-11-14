@@ -224,6 +224,21 @@ except ImportError as e:
     logging.warning(f"⚠️ Optional router not available: research_browser - {e}")
 
 try:
+    from backend.api.playwright import router as playwright_router
+
+    optional_routers.append(
+        (
+            playwright_router,
+            "/playwright",
+            ["playwright"],
+            "playwright",
+        )
+    )
+    logging.info("✅ Optional router loaded: playwright")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: playwright - {e}")
+
+try:
     from backend.api.web_research_settings import router as web_research_settings_router
 
     optional_routers.append(
