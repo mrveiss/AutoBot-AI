@@ -830,32 +830,12 @@ export default {
     // ========================================
 
     onMounted(async () => {
-      // Load VNC URL dynamically from backend configuration
-      try {
-        const dynamicVncUrl = await appConfig.getVncUrl('playwright', {
-          autoconnect: true,
-          resize: 'remote',
-          reconnect: true,
-          quality: '9',
-          compression: '9'
-        });
-        vncUrl.value = dynamicVncUrl;
-      } catch (error) {
-        console.warn('Failed to load dynamic VNC URL from config, attempting backend fallback:', error);
+      // Playwright runs headless (no VNC) - use API-based mode only
+      // Leave vncUrl empty so headless mode UI shows
+      // User can navigate via address bar, agent can use Playwright MCP tools
+      console.log('[Browser] Using headless API mode - no VNC visual display');
 
-        // Try to get configuration from backend as fallback
-        try {
-          const backendConfig = await appConfig.getBackendConfig();
-          const playwrightHost = backendConfig?.playwright?.host || NetworkConstants.BROWSER_VM_IP;
-          const playwrightVncPort = backendConfig?.playwright?.vnc_port || 6081;
-          vncUrl.value = `http://${playwrightHost}:${playwrightVncPort}/vnc.html?autoconnect=true&resize=remote&reconnect=true&quality=9&compression=9&password=playwright`;
-        } catch (backendError) {
-          console.warn('Backend config also failed, using hardcoded fallback');
-          vncUrl.value = `http://${NetworkConstants.BROWSER_VM_IP}:6081/vnc.html?autoconnect=true&resize=remote&reconnect=true&quality=9&compression=9&password=` + 'playwright';
-        }
-      }
-
-      // Initialize browser when component mounts
+      // Initialize Playwright connection
       initializeBrowser()
 
       // Set up resize observer for responsive behavior
