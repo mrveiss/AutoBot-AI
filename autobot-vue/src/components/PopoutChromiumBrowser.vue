@@ -186,8 +186,8 @@
           </div>
         </div>
 
-        <!-- Headless Browser Notice - VNC not available on Browser VM -->
-        <div v-if="!vncUrl || vncUrl.includes('6081')" class="w-full h-full flex items-center justify-center bg-gray-900 text-white">
+        <!-- Loading state while VNC URL is being fetched -->
+        <div v-if="!vncUrl" class="w-full h-full flex items-center justify-center bg-gray-900 text-white">
           <div class="text-center p-8">
             <i class="fas fa-robot text-6xl mb-4 text-blue-400"></i>
             <h3 class="text-xl font-semibold mb-2">Headless Browser Mode</h3>
@@ -208,10 +208,10 @@
           </div>
         </div>
 
-        <!-- VNC iframe for live browser display (only if VNC is available) -->
+        <!-- VNC iframe for live browser display with headed Playwright -->
         <!-- Using v-if instead of v-show to prevent iframe from loading at all -->
         <iframe
-          v-if="vncUrl && !vncUrl.includes('6081') && (browserStatus === 'connected' || browserStatus === 'ready')"
+          v-if="vncUrl && (browserStatus === 'connected' || browserStatus === 'ready')"
           ref="vncIframe"
           :src="vncUrl"
           class="w-full h-full border-none"
@@ -830,10 +830,17 @@ export default {
     // ========================================
 
     onMounted(async () => {
-      // Playwright runs headless (no VNC) - use API-based mode only
-      // Leave vncUrl empty so headless mode UI shows
-      // User can navigate via address bar, agent can use Playwright MCP tools
-      console.log('[Browser] Using headless API mode - no VNC visual display');
+      // Load VNC URL for real-time browser viewing on Browser VM
+      // Playwright now runs in headed mode with VNC on port 6080
+      try {
+        vncUrl.value = await appConfig.getVncUrl('playwright', {
+          autoconnect: true,
+          resize: 'scale'
+        })
+        console.log('[Browser] Loaded VNC URL for headed mode:', vncUrl.value)
+      } catch (error) {
+        console.error('[Browser] Failed to load VNC URL:', error)
+      }
 
       // Initialize Playwright connection
       initializeBrowser()
