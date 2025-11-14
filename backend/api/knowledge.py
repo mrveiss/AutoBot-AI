@@ -2458,6 +2458,18 @@ async def get_facts_by_category(
     kb = await get_or_create_knowledge_base(req.app)
     import json
 
+    # REUSABLE PATTERN: Validate KB exists before use
+    if kb is None:
+        logger.error("Knowledge base not available for get_facts_by_category")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "Knowledge base unavailable",
+                "message": "The knowledge base service failed to initialize. Please check server logs.",
+                "code": "KB_INIT_FAILED"
+            }
+        )
+
     # Check cache first (60 second TTL)
     cache_key = f"kb:cache:facts_by_category:{category or 'all'}:{limit}"
     cached_result = kb.redis_client.get(cache_key)
