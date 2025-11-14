@@ -10,17 +10,19 @@ This document contains development guidelines, project setup instructions, and a
 
 ### **Every Task Must:**
 
-1. **Create TodoWrite** to track progress (MANDATORY)
-2. **Search Memory MCP** for similar past work: `mcp__memory__search_nodes`
-3. **Break down into subtasks** - Execute every task as smaller, manageable subtasks (MANDATORY)
-4. **Use specialized agents** for complex tasks
-5. **Code review is mandatory** for ALL code changes (use `code-reviewer` agent)
-6. **Store in Memory MCP** - At session end, store conversation/decisions/findings (MANDATORY)
+1. **Link to GitHub Issue/Task** - ALL work must be tied to a GitHub issue or task (MANDATORY)
+2. **Create TodoWrite** to track progress (MANDATORY)
+3. **Search Memory MCP** for similar past work: `mcp__memory__search_nodes`
+4. **Break down into subtasks** - Execute every task as smaller, manageable subtasks (MANDATORY)
+5. **Use specialized agents** for complex tasks
+6. **Code review is mandatory** for ALL code changes (use `code-reviewer` agent)
+7. **Store in Memory MCP** - At session end, store conversation/decisions/findings (MANDATORY)
 
 ### **Workflow Violation Self-Check**
 
 **Before proceeding, verify:**
 
+- ❓ **Is this work tied to a GitHub issue/task?** → If NO: Create issue first or link to existing
 - ❓ **Did I create TodoWrite?** → If NO: Create it now
 - ❓ **Did I break down the task into subtasks?** → If NO: Break it down now
 - ❓ **Am I working alone on complex tasks?** → If YES: Delegate to agents
@@ -75,6 +77,236 @@ This document contains development guidelines, project setup instructions, and a
 5. **Never work around blockers** - always through them
 
 **THIS POLICY APPLIES TO ALL AGENTS, ALL CODE, ALL SITUATIONS - NO EXCEPTIONS**
+
+---
+
+## 📛 FILE NAMING STANDARDS (MANDATORY)
+
+**⚠️ MANDATORY RULE: NO TEMPORARY OR VERSIONED FILE NAMES**
+
+### **Forbidden File Naming Patterns:**
+
+**NEVER use these suffixes or patterns in filenames:**
+- `_fix`, `_fixed`, `_fix2`
+- `_v2`, `_v3`, `_version2`
+- `_optimized`, `_improved`, `_better`
+- `_new`, `_old`, `_legacy`
+- `_temp`, `_tmp`, `_backup`
+- `_copy`, `_draft`, `_test` (except in test directories)
+- `_updated`, `_revised`, `_refactored`
+- Any date-based suffixes: `_20250113`, `_jan2025`
+
+### **Why This Matters:**
+
+- **Version control exists for versions** - Use git, not filenames
+- **Creates confusion** - Which file is the "real" one?
+- **Indicates poor practices** - Suggests incomplete refactoring
+- **Violates "No Temporary Fixes" policy** - Implies temporary solution
+- **Breaks imports** - Other files may still reference old names
+
+### **✅ CORRECT Approach:**
+
+```bash
+# ✅ GOOD - Permanent, descriptive names
+config.py
+user_service.py
+authentication_handler.py
+network_constants.py
+
+# ❌ BAD - Temporary/versioned names
+config_v2.py
+user_service_fixed.py
+authentication_handler_optimized.py
+network_constants_new.py
+```
+
+### **🔧 When Refactoring:**
+
+1. **Rename the file properly** - Use meaningful, permanent name
+2. **Update all imports** - Fix all references in one commit
+3. **Delete old file** - Don't leave both versions
+4. **Commit atomically** - Rename + import updates in single commit
+
+### **Exception:**
+
+- Test files in `tests/` may use descriptive suffixes like `_unit_test.py`, `_integration_test.py`
+- This is acceptable as it indicates test type, not version
+
+**IF YOU FIND FILES WITH THESE PATTERNS → RENAME THEM IMMEDIATELY**
+
+**THIS POLICY APPLIES TO ALL FILES: Python, TypeScript, Vue, Config, Scripts - NO EXCEPTIONS**
+
+---
+
+## 🔄 CONSOLIDATION & REFACTORING STANDARDS (MANDATORY)
+
+**⚠️ MANDATORY RULE: PRESERVE ALL FEATURES, CHOOSE BEST IMPLEMENTATION**
+
+### **The Consolidation Principle:**
+
+When consolidating duplicate code, config systems, or competing implementations:
+
+**1. PRESERVE ALL FEATURES** ✅
+- **Never lose functionality** during consolidation
+- **Inventory all features** from all implementations being merged
+- **Create feature checklist** to verify nothing is lost
+- **Test all features** after consolidation
+
+**2. CHOOSE BEST IMPLEMENTATION** ✅
+- **Analyze all approaches** objectively
+- **Select superior patterns** based on:
+  - Code quality and maintainability
+  - Performance characteristics
+  - Type safety and error handling
+  - Consistency with project standards
+  - Test coverage
+- **Document why** you chose specific implementation
+
+**3. MIGRATE SYSTEMATICALLY** ✅
+- **Plan migration** with clear steps
+- **Update all references** atomically
+- **Remove old implementations** only after verification
+- **Commit atomically** - consolidation + all updates together
+
+### **❌ FORBIDDEN During Consolidation:**
+
+- **Dropping features** to make consolidation "easier"
+- **Keeping both implementations** indefinitely (choose one!)
+- **Choosing inferior approach** for convenience
+- **Partial migrations** that leave broken references
+- **Undocumented decisions** about which approach won
+
+### **✅ CORRECT Consolidation Process:**
+
+```bash
+# Example: Consolidating 3 config systems into 1
+
+# Step 1: Inventory features
+- List all features from config.py
+- List all features from unified_config.py
+- List all features from config_helper.py
+- Create combined feature matrix
+
+# Step 2: Choose best base
+- Analyze code quality of each
+- Select unified_config.py (best architecture)
+- Document: "Chosen for type safety + validation framework"
+
+# Step 3: Add missing features
+- Port feature X from config.py
+- Port feature Y from config_helper.py
+- Verify all features present in unified_config.py
+
+# Step 4: Migrate systematically
+- Update all imports to unified_config.py
+- Test each migration
+- Remove old files only when all references updated
+
+# Step 5: Verify
+- Run full test suite
+- Check all features work
+- Confirm no regressions
+```
+
+### **Feature Preservation Checklist:**
+
+Before consolidation:
+- ✓ Documented all features from all implementations
+- ✓ Analyzed which implementation is best
+- ✓ Created migration plan
+- ✓ Identified all code using old implementations
+
+During consolidation:
+- ✓ Ported all features to chosen implementation
+- ✓ Updated all imports/references
+- ✓ Tests pass for all features
+
+After consolidation:
+- ✓ No features lost
+- ✓ Old implementations removed
+- ✓ Documentation updated
+- ✓ Team aware of changes
+
+**THIS POLICY PREVENTS REGRESSION AND ENSURES QUALITY IMPROVEMENTS, NOT FEATURE LOSS**
+
+---
+
+## 🔗 GITHUB ISSUE TRACKING (MANDATORY)
+
+**⚠️ MANDATORY RULE: ALL WORK MUST BE TIED TO GITHUB ISSUE OR TASK**
+
+### **The Traceability Principle:**
+
+Every task, change, feature, or fix MUST be linked to a GitHub issue or task for:
+- **Traceability** - Know why every change was made
+- **Project Management** - Track progress and priorities
+- **Documentation** - Automatic history of decisions
+- **Collaboration** - Team visibility into work
+
+### **✅ CORRECT Workflow:**
+
+```bash
+# Step 1: Check for existing issue
+- Search GitHub issues for related work
+- If exists: Link to it
+- If not: Create new issue
+
+# Step 2: Reference in work
+- Mention issue number in commits: "feat: Add config consolidation (#123)"
+- Reference in PR description: "Closes #123"
+- Link in documentation updates
+
+# Step 3: Update issue
+- Mark as "In Progress" when starting
+- Add comments for decisions/blockers
+- Close when work is complete and merged
+```
+
+### **Issue Requirements:**
+
+**Every issue should have:**
+- ✅ **Clear title** - Descriptive, actionable
+- ✅ **Description** - What needs to be done and why
+- ✅ **Labels** - Type (bug, feature, refactor), priority
+- ✅ **Assignee** - Who's working on it
+- ✅ **Milestone** - Which release/sprint (if applicable)
+
+**Before starting work:**
+1. Verify issue exists and is assigned to you
+2. Understand the requirements completely
+3. Ask questions in issue comments if unclear
+4. Link issue number in TodoWrite for tracking
+
+### **Commit Message Format:**
+
+```bash
+# Use conventional commits with issue reference
+<type>(scope): <description> (#issue-number)
+
+# Examples:
+feat(config): Consolidate 5 config systems into unified_config (#156)
+fix(redis): Correct timeout handling in get_redis_client (#157)
+refactor(components): Migrate 21 components to BaseButton (#158)
+docs(api): Update configuration documentation (#159)
+```
+
+### **❌ FORBIDDEN:**
+
+- **Starting work without an issue** - Always create/link first
+- **Vague issue titles** - "Fix stuff" or "Update code"
+- **No issue reference in commits** - Breaks traceability
+- **Closing issues without verification** - Must be tested/merged
+- **Working on unassigned issues** - Coordinate to avoid conflicts
+
+### **Exception:**
+
+- **Emergency hotfixes** may be committed first, issue created immediately after
+- Issue MUST be created within same work session
+- Reference issue in follow-up commit
+
+**IF YOU START WORK WITHOUT AN ISSUE → CREATE ONE IMMEDIATELY**
+
+**THIS POLICY ENSURES COMPLETE PROJECT TRACEABILITY AND TEAM COORDINATION**
 
 ---
 
@@ -555,7 +787,10 @@ Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
 
 | Policy | Rule |
 |--------|------|
+| **GitHub Issue Tracking** | ✅ MANDATORY - ALL work must be tied to GitHub issue/task |
 | **Temporary Fixes** | ❌ NEVER - Always fix root causes (NO EXCEPTIONS) |
+| **File Naming** | ❌ FORBIDDEN - No _fix, _v2, _optimized, _new, _temp suffixes |
+| **Consolidation** | ✅ MANDATORY - Preserve ALL features, choose BEST implementation |
 | **Subtask Execution** | ✅ MANDATORY - Break down every task into subtasks |
 | **Memory Storage** | ✅ MANDATORY - Store conversations/decisions at session end |
 | **Process Control** | ⚠️ ALWAYS ask user approval before start/stop/restart |
@@ -570,12 +805,15 @@ Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
 ### **Workflow Violations - Self Check**
 
 **During work:**
+- Is this work tied to a GitHub issue/task? ✓
 - Did I create TodoWrite? ✓
 - Did I break down task into subtasks? ✓
 - Did I search Memory MCP? ✓
 - Am I using agents for complex tasks? ✓
 - Will code be reviewed? ✓
 - Am I fixing root cause (not workaround)? ✓
+- Did I use permanent file names (no _fix, _v2, _temp)? ✓
+- If consolidating: Did I preserve ALL features and choose BEST implementation? ✓
 
 **At session end:**
 - Did I store conversation in Memory MCP? ✓
