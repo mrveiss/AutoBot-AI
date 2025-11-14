@@ -186,9 +186,32 @@
           </div>
         </div>
 
-        <!-- VNC iframe for live browser display -->
+        <!-- Headless Browser Notice - VNC not available on Browser VM -->
+        <div v-if="!vncUrl || vncUrl.includes('6081')" class="w-full h-full flex items-center justify-center bg-gray-900 text-white">
+          <div class="text-center p-8">
+            <i class="fas fa-robot text-6xl mb-4 text-blue-400"></i>
+            <h3 class="text-xl font-semibold mb-2">Headless Browser Mode</h3>
+            <p class="text-gray-300 mb-4">
+              The browser is running on the Browser VM (172.16.168.25) via Playwright API
+            </p>
+            <p class="text-sm text-gray-400 mb-4">
+              Enter a URL in the address bar above to navigate. Results will be logged below.
+            </p>
+            <div class="bg-gray-800 rounded p-4 text-left max-w-md mx-auto">
+              <div class="text-xs text-gray-400 mb-2">Current Status:</div>
+              <div class="text-sm">
+                <div>Status: <span class="text-green-400">{{ browserStatus }}</span></div>
+                <div v-if="currentUrl">URL: <span class="text-blue-300">{{ currentUrl }}</span></div>
+                <div v-if="pageTitle">Title: <span class="text-gray-200">{{ pageTitle }}</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- VNC iframe for live browser display (only if VNC is available) -->
+        <!-- Using v-if instead of v-show to prevent iframe from loading at all -->
         <iframe
-          v-show="browserStatus === 'connected' || browserStatus === 'ready'"
+          v-if="vncUrl && !vncUrl.includes('6081') && (browserStatus === 'connected' || browserStatus === 'ready')"
           ref="vncIframe"
           :src="vncUrl"
           class="w-full h-full border-none"

@@ -187,7 +187,7 @@ const novncUrl = ref('')
 const loadNovncUrl = async () => {
   // AUTOMATIC VNC RESTART: Ensure VNC server is running before connecting
   try {
-    const backendUrl = appConfig.getBackendUrl()
+    const backendUrl = await appConfig.getServiceUrl('backend')
     const response = await fetch(`${backendUrl}/api/vnc/ensure-running`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }

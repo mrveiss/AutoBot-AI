@@ -86,12 +86,12 @@ export default class ServiceDiscovery {
 
     // CRITICAL FIX: For backend service, check if we should use proxy mode
     if (serviceName === 'backend') {
-      const backendHost = import.meta.env.VITE_BACKEND_HOST;
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
-      // If both are empty/undefined, use empty string to trigger proxy mode
-      if (!backendHost && !apiBaseUrl) {
-        this.log('Backend service using proxy mode (empty URL)');
+      // If VITE_API_BASE_URL is empty, use proxy mode (Vite dev server will proxy /api requests)
+      // VITE_BACKEND_HOST is used BY the Vite proxy, not by the frontend code directly
+      if (!apiBaseUrl) {
+        this.log('Backend service using proxy mode (empty URL) - requests will go through Vite proxy');
         return '';
       }
     }
