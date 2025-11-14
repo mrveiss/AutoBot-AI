@@ -6,6 +6,7 @@ Provides native API access to containerized Playwright functionality
 import logging
 from typing import Optional
 
+import aiohttp
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
@@ -43,6 +44,20 @@ class ScreenshotRequest(BaseModel):
     url: str
     full_page: bool = True
     wait_timeout: int = 5000
+
+
+class NavigateRequest(BaseModel):
+    url: str
+    wait_until: str = "networkidle"
+    timeout: int = 30000
+
+
+class ReloadRequest(BaseModel):
+    wait_until: str = "networkidle"
+
+
+# Browser VM connection
+BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
 
 
 @with_error_handling(
@@ -304,6 +319,86 @@ async def quick_automation_test(background_tasks: BackgroundTasks):
             "frontend_interaction_test",
         ],
     }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="navigate",
+    error_code_prefix="PLAYWRIGHT",
+)
+@router.post("/navigate")
+async def navigate_to_url(request: NavigateRequest):
+    """
+    Navigate to a URL using Playwright on Browser VM
+
+    Forwards navigation request to Browser VM (172.16.168.25:3000)
+    """
+    try:
+        logger.info(f"Navigate request: {request.url}")
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{BROWSER_VM_URL}/navigate",
+                json={
+                    "url": request.url,
+                    "wait_until": request.wait_until,
+                    "timeout": request.timeout
+                },
+                timeout=aiohttp.ClientTimeout(total=request.timeout / 1000 + 5)
+            ) as response:
+                result = await response.json()
+
+                if response.status == 200:
+                    logger.info(f"Navigation successful: {result.get('url')}")
+                    return result
+                else:
+                    logger.error(f"Navigation failed: {result}")
+                    raise HTTPException(status_code=response.status, detail=result.get("error", "Navigation failed"))
+
+    except aiohttp.ClientError as e:
+        logger.error(f"Browser VM connection error: {e}")
+        raise HTTPException(status_code=503, detail=f"Browser VM unavailable: {str(e)}")
+    except Exception as e:
+        logger.error(f"Navigation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Navigation failed: {str(e)}")
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reload",
+    error_code_prefix="PLAYWRIGHT",
+)
+@router.post("/reload")
+async def reload_page(request: ReloadRequest):
+    """
+    Reload the current page using Playwright on Browser VM
+
+    Forwards reload request to Browser VM (172.16.168.25:3000)
+    """
+    try:
+        logger.info("Reload request")
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{BROWSER_VM_URL}/reload",
+                json={"wait_until": request.wait_until},
+                timeout=aiohttp.ClientTimeout(total=35)
+            ) as response:
+                result = await response.json()
+
+                if response.status == 200:
+                    logger.info("Reload successful")
+                    return result
+                else:
+                    logger.error(f"Reload failed: {result}")
+                    raise HTTPException(status_code=response.status, detail=result.get("error", "Reload failed"))
+
+    except aiohttp.ClientError as e:
+        logger.error(f"Browser VM connection error: {e}")
+        raise HTTPException(status_code=503, detail=f"Browser VM unavailable: {str(e)}")
+    except Exception as e:
+        logger.error(f"Reload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Reload failed: {str(e)}")
 
 
 @with_error_handling(
