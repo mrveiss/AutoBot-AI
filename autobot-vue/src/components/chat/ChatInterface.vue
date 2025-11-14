@@ -185,34 +185,48 @@ const novncUrl = ref('')
 
 // Async function to load NoVNC URL
 const loadNovncUrl = async () => {
-  if (!store.currentSessionId) {
-    // MIGRATED: Use AppConfig for VNC URL fallback
-    try {
-      novncUrl.value = await appConfig.getVncUrl('playwright')
-    } catch (error: any) {
-      console.warn('[ChatInterface] Failed to get VNC URL from AppConfig:', error.message)
-      // FIXED: Use NetworkConstants for fallback IP
-      novncUrl.value = import.meta.env.VITE_PLAYWRIGHT_VNC_URL || `http://${NetworkConstants.BROWSER_VM_IP}:${NetworkConstants.VNC_PORT}/vnc.html`
+  // AUTOMATIC VNC RESTART: Ensure VNC server is running before connecting
+  try {
+    const backendUrl = appConfig.getBackendUrl()
+    const response = await fetch(`${backendUrl}/api/vnc/ensure-running`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+
+    if (response.ok) {
+      const result = await response.json()
+      console.log('VNC status:', result.status, '-', result.message)
+    } else {
+      console.warn('VNC ensure-running check failed:', response.status)
     }
+  } catch (error) {
+    console.warn('Failed to check VNC status:', error)
+    // Continue anyway - VNC might be running
+  }
+
+  // CRITICAL FIX: Use frontend proxy route for Desktop VNC (not Playwright VNC)
+  // Frontend (172.16.168.21:5173) proxies /tools/novnc to Desktop VNC (172.16.168.20:6080)
+  // Note: Playwright has its own noVNC on 172.16.168.25 (separate from desktop)
+  const baseUrl = '/tools/novnc/vnc.html'
+
+  if (!store.currentSessionId) {
+    novncUrl.value = baseUrl + '?autoconnect=true&resize=scale'
     return
   }
 
   // Get session without side effects to prevent reactive loops
   const session = store.sessions.find(s => s.id === store.currentSessionId)
-  // FIXED: Use NetworkConstants for fallback IP
-  const baseUrl = import.meta.env.VITE_DESKTOP_VNC_URL || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.VNC_DESKTOP_PORT}/vnc.html`
 
   if (!session?.desktopSession) {
     // Return base URL without creating session to prevent reactive side effects
-    novncUrl.value = baseUrl + '?autoconnect=true&password=autobot&resize=remote'
+    novncUrl.value = baseUrl + '?autoconnect=true&resize=scale'
     return
   }
 
   // Use existing desktop session data
   const params = new URLSearchParams({
     autoconnect: 'true',
-    password: import.meta.env.VITE_DESKTOP_VNC_PASSWORD || 'autobot',
-    resize: 'remote',
+    resize: 'scale',
     session: session.desktopSession.id || store.currentSessionId
   })
 

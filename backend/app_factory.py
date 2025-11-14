@@ -42,6 +42,7 @@ from backend.api.redis import router as redis_router
 from backend.api.settings import router as settings_router
 from backend.api.system import router as system_router
 from backend.api.voice import router as voice_router
+from backend.api.vnc_manager import router as vnc_router
 from backend.dependencies import get_config, get_knowledge_base
 from backend.knowledge_factory import get_or_create_knowledge_base
 from src.chat_history_manager import ChatHistoryManager
@@ -1031,6 +1032,7 @@ class AppFactory:
             (llm_router, "/llm", ["llm"], "llm"),
             (redis_router, "/redis", ["redis"], "redis"),
             (voice_router, "/voice", ["voice"], "voice"),
+            (vnc_router, "/vnc", ["vnc"], "vnc"),
             (agent_router, "/agent", ["agent"], "agent"),
             (agent_config_router, "/agent_config", ["agent_config"], "agent_config"),
             (
