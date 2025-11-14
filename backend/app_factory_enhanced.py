@@ -7,7 +7,6 @@ and multi-agent coordination.
 """
 
 import asyncio
-import logging
 import os
 import time
 import traceback
@@ -69,10 +68,10 @@ from src.constants.network_constants import NetworkConstants
 # Redis connections now managed centrally via src.utils.redis_client::get_redis_client()
 from src.security_layer import SecurityLayer
 from src.utils.background_llm_sync import background_llm_sync
+from src.utils.logging_manager import get_logger
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Get centralized logger
+logger = get_logger(__name__, "backend")
 
 # Enhanced initialization tracking including AI Stack
 background_init_status = {

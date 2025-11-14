@@ -4,7 +4,6 @@ Provides backward compatibility for existing code while transitioning to async R
 """
 
 import asyncio
-import logging
 import warnings
 from typing import Any, Optional, Union
 
@@ -12,10 +11,11 @@ import redis
 import redis.asyncio as aioredis
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.logging_manager import get_logger
 
 from .async_redis_manager import get_redis_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "backend")
 
 
 class RedisCompatibilityWrapper:
@@ -396,6 +396,5 @@ async def migrate_sync_to_async_example():
 
 
 if __name__ == "__main__":
-    # Run migration example
-    logging.basicConfig(level=logging.INFO)
+    # Run migration example (logging configured via centralized logging_manager)
     asyncio.run(migrate_sync_to_async_example())

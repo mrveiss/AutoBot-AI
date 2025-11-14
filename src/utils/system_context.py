@@ -4,13 +4,15 @@ System Context Detection for AutoBot
 Collects OS, machine, and architecture information for knowledge base tagging
 """
 
-import logging
 import platform
 import socket
 from pathlib import Path
 from typing import Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+from src.utils.logging_manager import get_logger
+
+# Get centralized logger
+logger = get_logger(__name__, "backend")
 
 
 def get_system_context(machine_id: Optional[str] = None) -> Dict[str, any]:
@@ -233,6 +235,5 @@ def test_system_context():
 
 
 if __name__ == "__main__":
-    # Enable debug logging for testing
-    logging.basicConfig(level=logging.DEBUG)
+    # Logging configured via centralized logging_manager
     test_system_context()

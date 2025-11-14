@@ -5,7 +5,6 @@ Tracks development phases, capabilities, and completion criteria for AutoBot
 """
 
 import json
-import logging
 import os
 import sqlite3
 import time
@@ -16,10 +15,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.logging_manager import get_logger
 
 from .utils.service_registry import get_service_url
 
-logger = logging.getLogger(__name__)
+# Get centralized logger
+logger = get_logger(__name__, "backend")
 
 # Cache for project status with 60-second TTL
 _project_status_cache = {"data": None, "timestamp": 0, "ttl": 60}
@@ -897,9 +898,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Setup logging
-    logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
-
+    # Logging configured via centralized logging_manager
     manager = ProjectStateManager()
 
     if args.validate:

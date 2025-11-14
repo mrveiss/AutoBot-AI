@@ -11,23 +11,15 @@ the best features from all previous implementations:
 - Production-ready configuration
 """
 
-import logging
 import os
 import sys
 
 from backend.app_factory import create_app
+from src.utils.logging_manager import get_logger
 
-# Configure logging for main entry point
-# Get log level from environment variable (defaults to INFO)
-LOG_LEVEL = os.getenv("AUTOBOT_LOG_LEVEL", "INFO").upper()
-LOG_LEVEL_VALUE = getattr(logging, LOG_LEVEL, logging.INFO)
-
-logging.basicConfig(
-    level=LOG_LEVEL_VALUE,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
-logger.info(f"📊 Log level set to: {LOG_LEVEL}")
+# Get centralized logger (respects AUTOBOT_LOG_LEVEL environment variable)
+logger = get_logger(__name__, "backend")
+logger.info(f"📊 Log level configured via centralized logging manager")
 
 # Create the consolidated FastAPI application instance
 logger.info("🚀 Initializing AutoBot Backend with consolidated factory...")
