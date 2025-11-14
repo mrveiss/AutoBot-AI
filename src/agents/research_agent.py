@@ -5,7 +5,6 @@ Provides web research capabilities for multi-agent workflows
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -15,10 +14,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.logging_manager import get_logger
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Get centralized logger
+logger = get_logger(__name__, "backend")
 
 
 class ResearchRequest(BaseModel):
