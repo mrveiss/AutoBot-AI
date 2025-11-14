@@ -19,6 +19,18 @@ from pydantic import BaseModel, Field
 
 from backend.dependencies import get_config, get_knowledge_base
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
+
+# Import reusable chat utilities - Phase 1 Utility Extraction
+from backend.utils.chat_utils import (
+    create_error_response,
+    create_success_response,
+    generate_chat_session_id,
+    generate_request_id,
+    get_chat_history_manager,
+    log_chat_error,
+    log_chat_event,
+    validate_chat_session_id,
+)
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -77,89 +89,6 @@ class ChatPreferences(BaseModel):
     )
     fact_checking: bool = Field(
         True, description="Enable fact checking against knowledge base"
-    )
-
-
-# ====================================================================
-# Utility Functions
-# ====================================================================
-
-
-def generate_request_id() -> str:
-    """Generate a unique request ID."""
-    return str(uuid4())
-
-
-def generate_chat_session_id() -> str:
-    """Generate a new chat session ID."""
-    return str(uuid4())
-
-
-def validate_chat_session_id(session_id: str) -> bool:
-    """Validate chat session ID format."""
-    if not session_id:
-        return False
-    try:
-        uuid.UUID(session_id)
-        return True
-    except ValueError:
-        return False
-
-
-async def log_chat_event(
-    event_type: str, session_id: str = None, details: Dict[str, Any] = None
-):
-    """Log chat-related events for monitoring and debugging."""
-    try:
-        event_data = {
-            "event_type": event_type,
-            "timestamp": datetime.utcnow().isoformat(),
-            "session_id": session_id,
-            "details": details or {},
-        }
-        logger.info(f"Enhanced Chat Event: {event_type}", extra=event_data)
-    except Exception as e:
-        logger.error(f"Failed to log chat event: {e}")
-
-
-def get_chat_history_manager(request):
-    """Get chat history manager from app state."""
-    return getattr(request.app.state, "chat_history_manager", None)
-
-
-def create_success_response(
-    data: Any, message: str = "Success", request_id: str = None
-) -> Dict[str, Any]:
-    """Create standardized success response."""
-    response = {
-        "success": True,
-        "data": data,
-        "message": message,
-        "timestamp": datetime.utcnow().isoformat(),
-    }
-    if request_id:
-        response["request_id"] = request_id
-    return response
-
-
-def create_error_response(
-    error_code: str = "INTERNAL_ERROR",
-    message: str = "An error occurred",
-    request_id: str = "unknown",
-    status_code: int = 500,
-) -> JSONResponse:
-    """Create standardized error response."""
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "success": False,
-            "error": {
-                "code": error_code,
-                "message": message,
-                "request_id": request_id,
-                "timestamp": datetime.utcnow().isoformat(),
-            },
-        },
     )
 
 
