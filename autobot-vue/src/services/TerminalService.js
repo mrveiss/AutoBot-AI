@@ -388,6 +388,38 @@ class TerminalService {
   }
 
   /**
+   * Send stdin to interactive command (Issue #33)
+   * @param {string} sessionId - Session ID
+   * @param {string} content - Stdin content to send
+   * @param {boolean} isPassword - Whether this is password input (disables echo)
+   * @param {string} commandId - Optional command ID for tracking
+   */
+  sendStdin(sessionId, content, isPassword = false, commandId = null) {
+    const connection = this.connections.get(sessionId);
+    if (!connection || connection.readyState !== WebSocket.OPEN) {
+      console.error(`[STDIN] No active connection for session ${sessionId}`);
+      return false;
+    }
+
+    try {
+      const message = JSON.stringify({
+        type: 'terminal_stdin',
+        content: content,
+        is_password: isPassword,
+        command_id: commandId
+      });
+
+      connection.send(message);
+      console.log(`[STDIN] Sent ${content.length} bytes to PTY (password: ${isPassword}, command: ${commandId})`);
+      return true;
+    } catch (error) {
+      console.error('[STDIN] Failed to send stdin:', error);
+      this.triggerCallback(sessionId, 'onError', 'Failed to send stdin');
+      return false;
+    }
+  }
+
+  /**
    * Send a signal to the terminal process
    * @param {string} sessionId - Session ID
    * @param {string} signal - Signal name (e.g., 'SIGINT', 'SIGTERM')
@@ -583,6 +615,7 @@ export function useTerminalService() {
   return {
     // Service instance methods
     sendInput: terminalService.sendInput.bind(terminalService),
+    sendStdin: terminalService.sendStdin.bind(terminalService),  // Issue #33
     sendSignal: terminalService.sendSignal.bind(terminalService),
     resize: terminalService.resize.bind(terminalService),
     connect: terminalService.connect.bind(terminalService),

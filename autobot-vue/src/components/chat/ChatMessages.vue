@@ -230,6 +230,25 @@
                 <span class="detail-label">Reasons:</span>
                 <span class="detail-value">{{ message.metadata.reasons.join(', ') }}</span>
               </div>
+
+              <!-- Interactive Command Warning (Issue #33) -->
+              <div v-if="message.metadata.is_interactive" class="approval-detail-item interactive-warning">
+                <div class="interactive-header">
+                  <i class="fas fa-keyboard text-blue-600" aria-hidden="true"></i>
+                  <span class="detail-label font-semibold text-blue-700">Interactive Command</span>
+                </div>
+                <div class="interactive-info">
+                  <p class="text-sm text-blueGray-600 mb-2">
+                    This command requires user input (stdin). You'll be prompted after approval.
+                  </p>
+                  <div v-if="message.metadata.interactive_reasons && message.metadata.interactive_reasons.length > 0" class="interactive-reasons">
+                    <span class="text-xs font-medium text-blueGray-500">Input required for:</span>
+                    <ul class="text-xs text-blueGray-600 mt-1 ml-4 list-disc">
+                      <li v-for="(reason, idx) in message.metadata.interactive_reasons" :key="idx">{{ reason }}</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
             </div>
             <!-- Comment input (when adding comment) -->
             <div v-if="showCommentInput && activeCommentSessionId === message.metadata.terminal_session_id" class="comment-input-section">
@@ -1395,6 +1414,23 @@ onMounted(() => {
 
 .detail-value code {
   @apply bg-gray-200 px-2 py-1 rounded text-xs font-mono;
+}
+
+/* Interactive Command Warning Styles (Issue #33) */
+.interactive-warning {
+  @apply flex-col bg-blue-50 p-3 rounded-lg border border-blue-200 mt-2;
+}
+
+.interactive-header {
+  @apply flex items-center gap-2 mb-2;
+}
+
+.interactive-info {
+  @apply ml-6;
+}
+
+.interactive-reasons {
+  @apply mt-2 p-2 bg-white rounded border border-blue-100;
 }
 
 .approval-actions {
