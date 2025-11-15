@@ -11,7 +11,7 @@ enabling the agent to see what users are viewing in real-time.
 
 import asyncio
 import logging
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import aiohttp
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
@@ -28,6 +28,31 @@ VNC_ENDPOINTS = {
     "desktop": f"http://{NetworkConstants.MAIN_MACHINE_IP}:6080",
     "browser": f"http://{NetworkConstants.BROWSER_VM_IP}:6080",
 }
+
+
+async def record_observation(vnc_type: str, observation_type: str, data: Dict[str, Any]):
+    """
+    Record VNC observation to MCP bridge for agent access
+
+    This allows AutoBot's LLM agents to query VNC activity via MCP tools
+    """
+    try:
+        observation = {
+            "type": observation_type,
+            "data": data,
+        }
+
+        # Post to VNC MCP bridge (non-blocking)
+        backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:8001"
+        async with aiohttp.ClientSession() as session:
+            await session.post(
+                f"{backend_url}/api/vnc/observations/{vnc_type}",
+                json=observation,
+                timeout=aiohttp.ClientTimeout(total=1),
+            )
+    except Exception as e:
+        # Don't fail the proxy if observation recording fails
+        logger.debug(f"Failed to record observation for {vnc_type}: {e}")
 
 
 @with_error_handling(
@@ -142,6 +167,9 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     await websocket.accept()
     logger.info(f"VNC WebSocket proxy connected: {vnc_type} → {ws_url}")
 
+    # Record connection event for MCP
+    await record_observation(vnc_type, "connection", {"endpoint": ws_url, "status": "connected"})
+
     try:
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(ws_url) as vnc_ws:
@@ -200,6 +228,8 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
         await websocket.close(code=1011, reason=str(e))
     finally:
         logger.info(f"VNC WebSocket proxy closed: {vnc_type}")
+        # Record disconnection event for MCP
+        await record_observation(vnc_type, "disconnection", {"status": "closed"})
 
 
 @with_error_handling(
