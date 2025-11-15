@@ -92,6 +92,8 @@ def create_command_execution(
     description: str,
     risk: "CommandRisk",
     risk_reasons: list[str],
+    is_interactive: bool = False,
+    interactive_reasons: Optional[list[str]] = None,
 ) -> CommandExecution:
     """
     Create CommandExecution object from session and command details.
@@ -105,6 +107,8 @@ def create_command_execution(
         description: Command purpose/description
         risk: CommandRisk level
         risk_reasons: List of risk reasons
+        is_interactive: Whether command requires stdin input (Issue #33)
+        interactive_reasons: Why command is interactive (pattern matches)
 
     Returns:
         CommandExecution object ready to add to queue
@@ -112,6 +116,12 @@ def create_command_execution(
     # Use helper functions (DRY principle)
     terminal_session_id, chat_id = extract_terminal_and_chat_ids(session)
     risk_level = map_risk_to_level(risk)
+
+    # Build metadata with interactive command info (Issue #33)
+    metadata = {}
+    if is_interactive:
+        metadata["is_interactive"] = True
+        metadata["interactive_reasons"] = interactive_reasons or []
 
     return CommandExecution(
         terminal_session_id=terminal_session_id,
@@ -121,10 +131,94 @@ def create_command_execution(
         risk_level=risk_level,
         risk_reasons=risk_reasons,
         state=CommandState.PENDING_APPROVAL,
+        metadata=metadata,
     )
 
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# INTERACTIVE COMMAND DETECTION (Issue #33)
+# ============================================================================
+
+import re
+
+# Patterns for detecting commands that require stdin input
+INTERACTIVE_COMMAND_PATTERNS = [
+    r'^\s*sudo\s+',              # sudo commands (password)
+    r'^\s*ssh\s+',               # SSH connections (host verification, password)
+    r'\bmysql\s+.*-p\b',         # MySQL with password flag
+    r'\bmysql\s+--password\b',   # MySQL with --password flag
+    r'^\s*passwd\b',             # Password change commands
+    r'\b--interactive\b',        # Explicit interactive flag
+    r'^\s*python.*input\(',      # Python scripts with input()
+    r'^\s*read\s+',              # Bash read command
+    r'^\s*select\s+',            # Bash select menu
+    r'^\s*apt\s+install\b',      # APT with confirmations
+    r'^\s*yum\s+install\b',      # YUM with confirmations
+    r'^\s*docker\s+login\b',     # Docker login (username/password)
+    r'^\s*git\s+clone.*@',       # Git clone with SSH (password)
+    r'^\s*psql\s+',              # PostgreSQL client
+    r'^\s*ftp\s+',               # FTP client
+    r'^\s*telnet\s+',            # Telnet client
+]
+
+# Compile patterns for performance
+_INTERACTIVE_PATTERNS_COMPILED = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in INTERACTIVE_COMMAND_PATTERNS
+]
+
+
+def is_interactive_command(command: str) -> tuple[bool, list[str]]:
+    """
+    Detect if a command requires interactive stdin input.
+
+    REUSABLE PRINCIPLE: Single responsibility - only detects interactive commands.
+
+    Args:
+        command: Shell command to analyze
+
+    Returns:
+        Tuple of (is_interactive, matched_patterns)
+        - is_interactive: True if command requires stdin
+        - matched_patterns: List of pattern descriptions that matched
+
+    Examples:
+        >>> is_interactive_command("sudo apt update")
+        (True, ["sudo commands (password)"])
+
+        >>> is_interactive_command("ls -la")
+        (False, [])
+
+        >>> is_interactive_command("ssh user@host")
+        (True, ["SSH connections (host verification, password)"])
+    """
+    matched_patterns = []
+
+    for pattern, description in zip(_INTERACTIVE_PATTERNS_COMPILED, [
+        "sudo commands (password)",
+        "SSH connections (host verification, password)",
+        "MySQL with password flag",
+        "MySQL with --password flag",
+        "Password change commands",
+        "Explicit interactive flag",
+        "Python scripts with input()",
+        "Bash read command",
+        "Bash select menu",
+        "APT with confirmations",
+        "YUM with confirmations",
+        "Docker login (username/password)",
+        "Git clone with SSH (password)",
+        "PostgreSQL client",
+        "FTP client",
+        "Telnet client",
+    ]):
+        if pattern.search(command):
+            matched_patterns.append(description)
+
+    return (len(matched_patterns) > 0, matched_patterns)
 
 
 class AgentSessionState(Enum):
@@ -855,6 +949,14 @@ class AgentTerminalService:
         # Assess command risk
         risk, reasons = executor.assess_command_risk(command)
 
+        # Detect if command is interactive (Issue #33)
+        is_interactive, interactive_reasons = is_interactive_command(command)
+        if is_interactive:
+            logger.info(
+                f"Interactive command detected: {command} "
+                f"(requires stdin: {', '.join(interactive_reasons)})"
+            )
+
         # Check agent permissions
         allowed, permission_reason = self._check_agent_permission(
             session.agent_role, risk
@@ -901,6 +1003,8 @@ class AgentTerminalService:
                     description=description,
                     risk=risk,
                     risk_reasons=reasons,
+                    is_interactive=is_interactive,  # Issue #33
+                    interactive_reasons=interactive_reasons,  # Issue #33
                 )
 
                 # Add to command queue (persistent, survives restarts)
@@ -919,6 +1023,8 @@ class AgentTerminalService:
                     "reasons": reasons,
                     "timestamp": time.time(),
                     "command_id": cmd_execution.command_id,  # Link to queue
+                    "is_interactive": is_interactive,  # Issue #33
+                    "interactive_reasons": interactive_reasons,  # Issue #33
                 }
 
                 # CRITICAL: Persist session to Redis so pending approval survives page reload
@@ -950,6 +1056,8 @@ class AgentTerminalService:
                     "approval_required": True,
                     "command_id": cmd_execution.command_id,  # CRITICAL: Return command_id to frontend
                     "terminal_session_id": cmd_execution.terminal_session_id,  # For frontend linking
+                    "is_interactive": is_interactive,  # Issue #33 - Frontend can show stdin UI
+                    "interactive_reasons": interactive_reasons,  # Issue #33 - Display to user
                 }
 
         # Execute command (auto-approved safe commands)
