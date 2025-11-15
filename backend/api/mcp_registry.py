@@ -85,6 +85,18 @@ MCP_BRIDGES = [
         "/api/vnc/mcp/tools",
         ["vnc_status", "observe_activity", "browser_context"],
     ),
+    (
+        "sequential_thinking_mcp",
+        "Sequential Thinking - Dynamic Problem-Solving Framework",
+        "/api/sequential_thinking/mcp/tools",
+        ["sequential_thinking", "thought_tracking", "branching", "revision"],
+    ),
+    (
+        "structured_thinking_mcp",
+        "Structured Thinking - 5-Stage Cognitive Framework",
+        "/api/structured_thinking/mcp/tools",
+        ["process_thought", "generate_summary", "clear_history", "stage_tracking"],
+    ),
 ]
 
 
