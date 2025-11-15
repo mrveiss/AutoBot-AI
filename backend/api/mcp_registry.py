@@ -37,7 +37,7 @@ from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/mcp", tags=["mcp", "registry"])
+router = APIRouter(prefix="", tags=["mcp", "registry"])
 
 
 class MCPToolInfo(BaseModel):
@@ -96,6 +96,12 @@ MCP_BRIDGES = [
         "Structured Thinking - 5-Stage Cognitive Framework",
         "/api/structured_thinking/mcp/tools",
         ["process_thought", "generate_summary", "clear_history", "stage_tracking"],
+    ),
+    (
+        "filesystem_mcp",
+        "Filesystem Operations - Secure File & Directory Access",
+        "/api/filesystem/mcp/tools",
+        ["read_files", "write_files", "directory_management", "search", "metadata"],
     ),
 ]
 

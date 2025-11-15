@@ -48,6 +48,7 @@ from backend.api.vnc_mcp import router as vnc_mcp_router
 from backend.api.mcp_registry import router as mcp_registry_router
 from backend.api.sequential_thinking_mcp import router as sequential_thinking_mcp_router
 from backend.api.structured_thinking_mcp import router as structured_thinking_mcp_router
+from backend.api.filesystem_mcp import router as filesystem_mcp_router
 from backend.dependencies import get_config, get_knowledge_base
 from backend.knowledge_factory import get_or_create_knowledge_base
 from src.chat_history_manager import ChatHistoryManager
@@ -1058,6 +1059,7 @@ class AppFactory:
             (mcp_registry_router, "/mcp", ["mcp", "registry"], "mcp_registry"),
             (sequential_thinking_mcp_router, "/sequential_thinking", ["sequential_thinking_mcp", "mcp"], "sequential_thinking_mcp"),
             (structured_thinking_mcp_router, "/structured_thinking", ["structured_thinking_mcp", "mcp"], "structured_thinking_mcp"),
+            (filesystem_mcp_router, "/filesystem", ["filesystem_mcp", "mcp"], "filesystem_mcp"),
             (agent_router, "/agent", ["agent"], "agent"),
             (agent_config_router, "/agent_config", ["agent_config"], "agent_config"),
             (
