@@ -500,6 +500,8 @@ class ConsolidatedTerminalWebSocket:
 
             if message_type == "input":
                 await self._handle_input_message(message)
+            elif message_type == "terminal_stdin":  # Issue #33 - Interactive stdin
+                await self._handle_terminal_stdin(message)
             elif message_type == "workflow_control":
                 await self._handle_workflow_control(message)
             elif message_type == "ping":
@@ -682,6 +684,104 @@ class ConsolidatedTerminalWebSocket:
                 )
             except Exception as e:
                 logger.error(f"Failed to log command completion: {e}")
+
+    async def _handle_terminal_stdin(self, message: dict):
+        """
+        Handle stdin input for interactive commands (Issue #33)
+
+        This is separate from _handle_input_message() which builds command buffers.
+        This handler sends input DIRECTLY to the PTY for interactive prompts
+        (password prompts, SSH confirmations, interactive Python input(), etc.)
+
+        Security controls:
+        - Size limit: 4KB max per message
+        - Session validation
+        - No command logging (passwords must never be logged)
+        - Disabled echo for password-type inputs
+
+        Message format:
+        {
+            "type": "terminal_stdin",
+            "content": "user input text\\n",
+            "is_password": false,  # Optional: disable echo for password input
+            "command_id": "cmd-uuid"  # Optional: link to command approval
+        }
+        """
+        logger.info(
+            f"[STDIN] Session {self.session_id}, receiving stdin for interactive command"
+        )
+
+        # Extract stdin content
+        content = message.get("content", "")
+        is_password = message.get("is_password", False)
+        command_id = message.get("command_id")  # For linking to approved command
+
+        # Security: Size limit (prevent abuse)
+        MAX_STDIN_SIZE = 4096  # 4KB max per stdin message
+        if len(content) > MAX_STDIN_SIZE:
+            logger.warning(
+                f"[STDIN] Rejected oversized input: {len(content)} bytes (max: {MAX_STDIN_SIZE})"
+            )
+            await self.send_message({
+                "type": "error",
+                "content": f"Input too large (max {MAX_STDIN_SIZE} bytes)",
+                "timestamp": time.time(),
+            })
+            return
+
+        # Validate PTY exists
+        if not self.pty_process:
+            logger.error(f"[STDIN] No PTY process for session {self.session_id}")
+            await self.send_message({
+                "type": "error",
+                "content": "No terminal session available",
+                "timestamp": time.time(),
+            })
+            return
+
+        # Disable echo for password input (Issue #33 Phase 4)
+        if is_password:
+            logger.info(f"[STDIN] Disabling echo for password input (command_id: {command_id})")
+            self.pty_process.set_echo(False)
+
+        try:
+            # Send stdin directly to PTY
+            success = self.pty_process.write_input(content)
+
+            if success:
+                logger.info(
+                    f"[STDIN] Successfully sent {len(content)} bytes to PTY "
+                    f"(password: {is_password}, command_id: {command_id})"
+                )
+
+                # Re-enable echo after password (if it was disabled)
+                if is_password:
+                    # Wait a tiny bit for password to be processed
+                    await asyncio.sleep(0.1)
+                    self.pty_process.set_echo(True)
+                    logger.info(f"[STDIN] Re-enabled echo after password input")
+            else:
+                logger.error(f"[STDIN] Failed to write to PTY for session {self.session_id}")
+                await self.send_message({
+                    "type": "error",
+                    "content": "Failed to send input to terminal",
+                    "timestamp": time.time(),
+                })
+
+        except Exception as e:
+            logger.error(f"[STDIN] Error writing to PTY: {e}")
+            # Re-enable echo if it was disabled (ensure terminal doesn't stay in silent mode)
+            if is_password:
+                try:
+                    self.pty_process.set_echo(True)
+                except:
+                    pass
+
+            await self.send_message({
+                "type": "error",
+                "content": f"Error sending input: {str(e)}",
+                "timestamp": time.time(),
+            })
 
     async def _handle_workflow_control(self, message: dict):
         """Handle workflow automation control messages"""
