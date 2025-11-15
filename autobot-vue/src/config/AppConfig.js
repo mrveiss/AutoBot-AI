@@ -166,7 +166,12 @@ export class AppConfigService {
       throw new Error(`Unknown VNC type: ${type}`);
     }
 
-    const baseUrl = await this.serviceDiscovery.getServiceUrl(`vnc_${type}`);
+    // Use backend VNC proxy for agent observation
+    // This routes VNC traffic through backend (172.16.168.20:8001)
+    // allowing the agent to observe and log VNC connections
+    const backendUrl = await this.serviceDiscovery.getServiceUrl('backend');
+    const proxyPath = type === 'playwright' ? 'browser' : type; // Map 'playwright' → 'browser'
+
     const params = new URLSearchParams({
       autoconnect: options.autoconnect !== false ? 'true' : 'false',
       password: options.password || vncConfig.password,
@@ -177,8 +182,8 @@ export class AppConfigService {
       ...options.extraParams
     });
 
-    const url = `${baseUrl}/vnc.html?${params.toString()}`;
-    this.log(`Generated VNC URL for ${type}:`, url);
+    const url = `${backendUrl}/api/vnc-proxy/${proxyPath}/vnc.html?${params.toString()}`;
+    this.log(`Generated VNC URL for ${type} (via backend proxy):`, url);
     return url;
   }
 
