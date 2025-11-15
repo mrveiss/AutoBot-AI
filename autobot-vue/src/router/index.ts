@@ -234,6 +234,15 @@ const routes: RouteRecordRaw[] = [
           title: 'Chat Debug',
           parent: 'tools'
         }
+      },
+      {
+        path: 'mcp',
+        name: 'tools-mcp',
+        component: () => import('@/components/developer/MCPManager.vue'),
+        meta: {
+          title: 'MCP Registry',
+          parent: 'tools'
+        }
       }
     ]
   },

@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 from src.logging.terminal_logger import TerminalLogger
+from src.monitoring.prometheus_metrics import get_metrics_manager
 from src.chat_history_manager import ChatHistoryManager  # CRITICAL FIX: Chat integration
 from src.chat_workflow_manager import ChatWorkflowManager  # For LLM interpretation
 from src.secure_command_executor import (
@@ -198,6 +199,9 @@ class AgentTerminalService:
 
         # REUSABLE PRINCIPLE: Command queue - single source of truth for command state
         self.command_queue = command_queue or get_command_queue()
+
+        # Prometheus metrics instance
+        self.prometheus_metrics = get_metrics_manager()
 
         logger.info("AgentTerminalService initialized with security controls and command queue")
 
@@ -950,6 +954,9 @@ class AgentTerminalService:
 
         # Execute command (auto-approved safe commands)
         try:
+            # Track task execution start time for Prometheus
+            task_start_time = time.time()
+
             # Log command execution start
             if session.conversation_id:
                 await self.terminal_logger.log_command(
@@ -963,6 +970,15 @@ class AgentTerminalService:
             # CRITICAL: Execute in PTY (true collaboration mode - works on any host)
             # User and agent work as one in the same terminal
             result = await self._execute_in_pty(session, command)
+
+            # Record Prometheus task execution metric (success)
+            task_duration = time.time() - task_start_time
+            task_type = "command_execution"
+            agent_type = session.agent_role.value
+            status = "success" if result.get("status") == "success" else "error"
+            self.prometheus_metrics.record_task_execution(
+                task_type=task_type, agent_type=agent_type, status=status, duration=task_duration
+            )
 
             # Log command execution result
             if session.conversation_id:

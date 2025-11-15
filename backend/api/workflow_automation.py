@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from backend.api.terminal import ConsolidatedTerminalWebSocket
 from src.constants.network_constants import NetworkConstants
 from src.enhanced_orchestrator import EnhancedOrchestrator
+from src.monitoring.prometheus_metrics import get_metrics_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import existing orchestrator and workflow components
@@ -117,6 +118,7 @@ class ActiveWorkflow:
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     user_interventions: List[Dict[str, Any]] = None
+    prometheus_start_time: Optional[float] = None  # For Prometheus duration tracking
 
     def __post_init__(self):
         if self.created_at is None:
@@ -133,6 +135,9 @@ class WorkflowAutomationManager:
         self.terminal_sessions: Dict[str, ConsolidatedTerminalWebSocket] = {}
         self.orchestrator = Orchestrator()
         self.enhanced_orchestrator = EnhancedOrchestrator()
+
+        # Prometheus metrics instance
+        self.prometheus_metrics = get_metrics_manager()
 
         # Initialize LLM judges if available
         self.judges_enabled = JUDGES_AVAILABLE
@@ -251,6 +256,14 @@ class WorkflowAutomationManager:
 
         workflow = self.active_workflows[workflow_id]
         workflow.started_at = datetime.now()
+
+        # Track workflow start time for duration calculation
+        workflow.prometheus_start_time = time.time()
+
+        # Update active workflows count in Prometheus
+        workflow_type = "automated_workflow"
+        active_count = len([w for w in self.active_workflows.values() if w.started_at and not w.completed_at])
+        self.prometheus_metrics.update_active_workflows(workflow_type=workflow_type, count=active_count)
 
         # Send workflow start message to frontend
         await self._send_workflow_message(
@@ -411,9 +424,19 @@ class WorkflowAutomationManager:
             await self._cancel_workflow(workflow_id)
 
         elif action == "approve_step":
+            # Record Prometheus workflow approval metric
+            workflow_type = "automated_workflow"
+            self.prometheus_metrics.record_workflow_approval(
+                workflow_type=workflow_type, decision="approved"
+            )
             await self._approve_and_execute_step(workflow_id, control_request.step_id)
 
         elif action == "skip_step":
+            # Record Prometheus workflow approval metric (rejected/skipped)
+            workflow_type = "automated_workflow"
+            self.prometheus_metrics.record_workflow_approval(
+                workflow_type=workflow_type, decision="skipped"
+            )
             await self._skip_workflow_step(workflow_id, control_request.step_id)
 
         else:
@@ -445,6 +468,13 @@ class WorkflowAutomationManager:
             current_step.execution_result = result
             current_step.completed_at = datetime.now()
 
+            # Record Prometheus workflow step metric (success)
+            workflow_type = "automated_workflow"
+            step_type = "command_execution"
+            self.prometheus_metrics.record_workflow_step(
+                workflow_type=workflow_type, step_type=step_type, status="completed"
+            )
+
             # Move to next step
             workflow.current_step_index += 1
 
@@ -456,6 +486,13 @@ class WorkflowAutomationManager:
             logger.error(f"Step execution failed: {e}")
             current_step.status = WorkflowStepStatus.FAILED
             current_step.execution_result = {"error": str(e)}
+
+            # Record Prometheus workflow step metric (failed)
+            workflow_type = "automated_workflow"
+            step_type = "command_execution"
+            self.prometheus_metrics.record_workflow_step(
+                workflow_type=workflow_type, step_type=step_type, status="failed"
+            )
 
             # Pause workflow on error
             workflow.is_paused = True
@@ -530,6 +567,20 @@ class WorkflowAutomationManager:
         workflow = self.active_workflows[workflow_id]
         workflow.completed_at = datetime.now()
 
+        # Record Prometheus workflow execution metric (success)
+        if workflow.prometheus_start_time:
+            duration = time.time() - workflow.prometheus_start_time
+            workflow_type = "automated_workflow"
+            failed_steps = len([s for s in workflow.steps if s.status == WorkflowStepStatus.FAILED])
+            status = "failed" if failed_steps > 0 else "success"
+            self.prometheus_metrics.record_workflow_execution(
+                workflow_type=workflow_type, status=status, duration=duration
+            )
+
+            # Update active workflows count (decrement)
+            active_count = len([w for w in self.active_workflows.values() if w.started_at and not w.completed_at]) - 1
+            self.prometheus_metrics.update_active_workflows(workflow_type=workflow_type, count=max(0, active_count))
+
         # Send completion message
         await self._send_workflow_message(
             workflow.session_id,
@@ -563,6 +614,18 @@ class WorkflowAutomationManager:
         workflow = self.active_workflows[workflow_id]
         workflow.is_cancelled = True
         workflow.completed_at = datetime.now()
+
+        # Record Prometheus workflow execution metric (cancelled)
+        if workflow.prometheus_start_time:
+            duration = time.time() - workflow.prometheus_start_time
+            workflow_type = "automated_workflow"
+            self.prometheus_metrics.record_workflow_execution(
+                workflow_type=workflow_type, status="cancelled", duration=duration
+            )
+
+            # Update active workflows count (decrement)
+            active_count = len([w for w in self.active_workflows.values() if w.started_at and not w.completed_at]) - 1
+            self.prometheus_metrics.update_active_workflows(workflow_type=workflow_type, count=max(0, active_count))
 
         await self._send_workflow_message(
             workflow.session_id,
