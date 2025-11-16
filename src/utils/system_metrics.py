@@ -17,6 +17,7 @@ import psutil
 
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
+from src.utils.http_client import get_http_client
 from src.utils.redis_client import get_redis_client
 
 
@@ -160,42 +161,43 @@ class SystemMetricsCollector:
         # HTTP timeout for health checks
         timeout = aiohttp.ClientTimeout(total=5)
 
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            for service_name, url in services.items():
-                try:
-                    if service_name == "redis":
-                        # Special Redis health check
-                        redis_client = await self._get_redis_client()
-                        if redis_client:
-                            # Handle both sync and async Redis clients
-                            try:
-                                if hasattr(redis_client, "ping"):
-                                    ping_result = redis_client.ping()
-                                    if asyncio.iscoroutine(ping_result):
-                                        await ping_result
-                                    health_value = 1.0
-                                else:
-                                    health_value = 0.0
-                            except Exception as ping_error:
-                                self.logger.warning(f"Redis ping failed: {ping_error}")
+        # Use singleton HTTP client for connection pooling
+        http_client = get_http_client()
+        for service_name, url in services.items():
+            try:
+                if service_name == "redis":
+                    # Special Redis health check
+                    redis_client = await self._get_redis_client()
+                    if redis_client:
+                        # Handle both sync and async Redis clients
+                        try:
+                            if hasattr(redis_client, "ping"):
+                                ping_result = redis_client.ping()
+                                if asyncio.iscoroutine(ping_result):
+                                    await ping_result
+                                health_value = 1.0
+                            else:
                                 health_value = 0.0
-                        else:
+                        except Exception as ping_error:
+                            self.logger.warning(f"Redis ping failed: {ping_error}")
                             health_value = 0.0
                     else:
-                        # HTTP health check
-                        start_time = time.time()
-                        async with session.get(url) as response:
-                            response_time = time.time() - start_time
-                            health_value = 1.0 if response.status == 200 else 0.0
+                        health_value = 0.0
+                else:
+                    # HTTP health check
+                    start_time = time.time()
+                    async with await http_client.get(url, timeout=timeout) as response:
+                        response_time = time.time() - start_time
+                        health_value = 1.0 if response.status == 200 else 0.0
 
-                            # Also collect response time
-                            metrics[f"{service_name}_response_time"] = SystemMetric(
-                                timestamp=timestamp,
-                                name=f"{service_name}_response_time",
-                                value=response_time * 1000,  # Convert to ms
-                                unit="ms",
-                                category="performance",
-                            )
+                        # Also collect response time
+                        metrics[f"{service_name}_response_time"] = SystemMetric(
+                            timestamp=timestamp,
+                            name=f"{service_name}_response_time",
+                            value=response_time * 1000,  # Convert to ms
+                            unit="ms",
+                            category="performance",
+                        )
 
                     metrics[f"{service_name}_health"] = SystemMetric(
                         timestamp=timestamp,
