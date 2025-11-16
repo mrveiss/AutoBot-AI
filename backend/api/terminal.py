@@ -399,6 +399,11 @@ class ConsolidatedTerminalWebSocket:
             self.pty_output_task = asyncio.create_task(self._read_pty_output())
             logger.info(f"PTY output reader started for session {self.session_id}")
 
+            # NOTE: Keep PTY echo ON by default for automated/agent mode visibility
+            # Frontend handles local echo for manual mode to reduce lag
+            # This ensures agent commands are visible to user in automated mode
+            logger.info(f"PTY echo enabled for session {self.session_id} (agent commands visible)")
+
             # Send initial shell prompt/output with newline for proper formatting
             await self.send_message(
                 {
@@ -417,23 +422,27 @@ class ConsolidatedTerminalWebSocket:
         self.active = False
 
         # CRITICAL FIX: Flush any remaining buffered output to chat before cleanup
-        if (
-            self.chat_history_manager
-            and self.conversation_id
-            and self._output_buffer.strip()
-        ):
+        # Use lock to prevent race condition with concurrent buffer access
+        if self.chat_history_manager and self.conversation_id:
             try:
-                logger.info(
-                    f"[CHAT INTEGRATION] Flushing remaining output buffer on cleanup: {len(self._output_buffer)} chars"
-                )
-                await self.chat_history_manager.add_message(
-                    sender="terminal",
-                    text=self._output_buffer,
-                    message_type="terminal_output",
-                    session_id=self.conversation_id,
-                )
-                self._output_buffer = ""
-                logger.info(f"[CHAT INTEGRATION] Buffer flushed successfully")
+                async with self._output_lock:
+                    if self._output_buffer.strip():
+                        from src.utils.encoding_utils import strip_ansi_codes
+
+                        # Strip ANSI codes before saving to chat
+                        clean_content = strip_ansi_codes(self._output_buffer).strip()
+                        logger.info(
+                            f"[CHAT INTEGRATION] Flushing remaining output buffer on cleanup: {len(self._output_buffer)} chars (clean: {len(clean_content)} chars)"
+                        )
+                        if clean_content:
+                            await self.chat_history_manager.add_message(
+                                sender="terminal",
+                                text=clean_content,  # Save cleaned output
+                                message_type="terminal_output",
+                                session_id=self.conversation_id,
+                            )
+                        self._output_buffer = ""
+                        logger.info(f"[CHAT INTEGRATION] Buffer flushed successfully")
             except Exception as e:
                 logger.error(f"Failed to flush output buffer: {e}")
 
@@ -1048,13 +1057,14 @@ class ConsolidatedTerminalWebSocket:
                     # Only save if there's actual text content AND it's not a terminal prompt
                     if clean_content and not is_prompt:
                         try:
-                            buffer_to_save = self._output_buffer
+                            # CRITICAL FIX: Save CLEAN content without ANSI escape codes
+                            # This prevents escape codes from leaking into chat history
                             logger.info(
-                                f"[CHAT INTEGRATION] Saving output to chat: {len(buffer_to_save)} chars (clean: {len(clean_content)} chars)"
+                                f"[CHAT INTEGRATION] Saving output to chat: {len(self._output_buffer)} chars (clean: {len(clean_content)} chars)"
                             )
                             await self.chat_history_manager.add_message(
                                 sender="terminal",
-                                text=buffer_to_save,
+                                text=clean_content,  # Save cleaned output, not raw buffer
                                 message_type="terminal_output",
                                 session_id=self.conversation_id,
                             )
@@ -1146,9 +1156,11 @@ class ConsolidatedTerminalManager:
         self.session_configs = {}  # session_id -> config
         self.active_connections = {}  # session_id -> ConsolidatedTerminalWebSocket
         self.session_stats = {}  # session_id -> statistics
+        self._lock = asyncio.Lock()  # CRITICAL: Protect concurrent dictionary access
 
     def add_connection(self, session_id: str, terminal: ConsolidatedTerminalWebSocket):
         """Add a WebSocket connection for a session"""
+        # Note: Should be called within async context with lock acquired
         self.active_connections[session_id] = terminal
         self.session_stats[session_id] = {
             "connected_at": datetime.now(),
@@ -1159,6 +1171,7 @@ class ConsolidatedTerminalManager:
 
     def remove_connection(self, session_id: str):
         """Remove a WebSocket connection"""
+        # Note: Should be called within async context with lock acquired
         if session_id in self.active_connections:
             del self.active_connections[session_id]
         # Keep stats for audit purposes
@@ -1169,45 +1182,66 @@ class ConsolidatedTerminalManager:
 
     async def send_input(self, session_id: str, text: str) -> bool:
         """Send input to a session"""
-        if session_id in self.active_connections:
-            terminal = self.active_connections[session_id]
+        terminal = None
+        async with self._lock:
+            if session_id in self.active_connections:
+                terminal = self.active_connections[session_id]
+
+        if terminal:
             await terminal.send_to_terminal(text)
-            self.session_stats[session_id]["commands_executed"] += 1
+            # Re-acquire lock for stats update
+            async with self._lock:
+                if session_id in self.session_stats:
+                    self.session_stats[session_id]["commands_executed"] += 1
             return True
         return False
 
     async def send_signal(self, session_id: str, sig: int) -> bool:
         """Send signal to a session's PTY process"""
-        if session_id in self.active_connections:
-            terminal = self.active_connections[session_id]
-            if terminal.pty_process:
-                try:
-                    success = terminal.pty_process.send_signal(sig)
-                    if success:
-                        logger.info(
-                            f"Sent signal {sig} to terminal session {session_id}"
-                        )
-                    return success
-                except Exception as e:
-                    logger.error(f"Failed to send signal to session {session_id}: {e}")
-                    return False
+        async with self._lock:
+            terminal = self.active_connections.get(session_id)
+
+        if terminal and terminal.pty_process:
+            try:
+                success = terminal.pty_process.send_signal(sig)
+                if success:
+                    logger.info(
+                        f"Sent signal {sig} to terminal session {session_id}"
+                    )
+                return success
+            except Exception as e:
+                logger.error(f"Failed to send signal to session {session_id}: {e}")
+                return False
         return False
 
     async def close_connection(self, session_id: str):
         """Close a session connection"""
-        if session_id in self.active_connections:
-            terminal = self.active_connections[session_id]
+        # CRITICAL: Atomic check-and-get with lock
+        async with self._lock:
+            terminal = self.active_connections.get(session_id)
+
+        if terminal:
             await terminal.cleanup()
-            self.remove_connection(session_id)
+            # Remove connection with lock
+            async with self._lock:
+                self.remove_connection(session_id)
+
+    async def get_session_stats_safe(self, session_id: str) -> dict:
+        """Get statistics for a session (thread-safe)"""
+        async with self._lock:
+            return self.session_stats.get(session_id, {}).copy()
 
     def get_session_stats(self, session_id: str) -> dict:
         """Get statistics for a session"""
+        # Note: For sync access, returns reference (caller should use get_session_stats_safe for safety)
         return self.session_stats.get(session_id, {})
 
-    def get_command_history(self, session_id: str) -> list:
+    async def get_command_history(self, session_id: str) -> list:
         """Get command history for a session"""
-        if session_id in self.active_connections:
-            terminal = self.active_connections[session_id]
+        async with self._lock:
+            terminal = self.active_connections.get(session_id)
+
+        if terminal:
             return [
                 {
                     "command": entry["command"],
@@ -1234,22 +1268,28 @@ class ConsolidatedTerminalManager:
         Note: This method is currently unused - PTY sessions handle terminal output automatically.
         Kept for potential future use cases where manual output routing may be needed.
         """
+        # CRITICAL: Snapshot session configs under lock to prevent race conditions
+        terminals_to_send = []
+        async with self._lock:
+            for session_id, config in list(self.session_configs.items()):
+                if config.get("conversation_id") == conversation_id:
+                    if session_id in self.active_connections:
+                        terminals_to_send.append((session_id, self.active_connections[session_id]))
+
+        # Send outside lock to avoid blocking
         count = 0
-        for session_id, config in self.session_configs.items():
-            if config.get("conversation_id") == conversation_id:
-                if session_id in self.active_connections:
-                    terminal = self.active_connections[session_id]
-                    try:
-                        await terminal.send_output(content)
-                        count += 1
-                        logger.debug(f"Sent output to terminal {session_id}")
-                    except Exception as e:
-                        logger.error(
-                            f"Failed to send output to terminal {session_id}: {e}"
-                        )
+        for session_id, terminal in terminals_to_send:
+            try:
+                await terminal.send_output(content)
+                count += 1
+                logger.debug(f"Sent output to terminal {session_id}")
+            except Exception as e:
+                logger.error(
+                    f"Failed to send output to terminal {session_id}: {e}"
+                )
         return count
 
-    def get_terminal_stats(self, session_id: str = None) -> dict:
+    async def get_terminal_stats(self, session_id: str = None) -> dict:
         """Get terminal statistics for a specific session or all sessions
 
         Args:
@@ -1262,50 +1302,57 @@ class ConsolidatedTerminalManager:
             - Per-session statistics (if session_id provided)
             - Overall system metrics
         """
-        if session_id:
-            # Return stats for specific session
-            if session_id not in self.sessions:
-                return {"error": f"Session {session_id} not found"}
+        # CRITICAL: Access all dictionaries under lock to prevent race conditions
+        async with self._lock:
+            if session_id:
+                # Return stats for specific session
+                # Use simple_pty_manager instead of non-existent self.sessions
+                pty_session = simple_pty_manager.get_session(session_id)
+                if not pty_session and session_id not in self.active_connections:
+                    return {"error": f"Session {session_id} not found"}
 
-            session = self.sessions[session_id]
-            session_stats = self.session_stats.get(session_id, {})
+                session_stats = self.session_stats.get(session_id, {})
 
-            # Calculate uptime
-            uptime = 0
-            if "connected_at" in session_stats:
-                uptime = (datetime.now() - session_stats["connected_at"]).total_seconds()
+                # Calculate uptime
+                uptime = 0
+                if "connected_at" in session_stats:
+                    uptime = (datetime.now() - session_stats["connected_at"]).total_seconds()
 
-            return {
-                "session_id": session_id,
-                "config": self.session_configs.get(session_id, {}),
-                "is_connected": session_id in self.active_connections,
-                "pty_alive": session.is_alive() if hasattr(session, "is_alive") else False,
-                "uptime_seconds": uptime,
-                "statistics": session_stats,
-            }
-        else:
-            # Return overall system statistics
-            total_sessions = len(self.sessions)
-            active_connections = len(self.active_connections)
-            total_commands = sum(
-                stats.get("commands_executed", 0)
-                for stats in self.session_stats.values()
-            )
+                return {
+                    "session_id": session_id,
+                    "config": self.session_configs.get(session_id, {}),
+                    "is_connected": session_id in self.active_connections,
+                    "pty_alive": pty_session.is_alive() if pty_session else False,
+                    "uptime_seconds": uptime,
+                    "statistics": session_stats,
+                }
+            else:
+                # Return overall system statistics
+                # Use simple_pty_manager.sessions with its lock
+                with simple_pty_manager._lock:
+                    pty_sessions = dict(simple_pty_manager.sessions)
 
-            return {
-                "total_sessions": total_sessions,
-                "active_connections": active_connections,
-                "total_commands_executed": total_commands,
-                "sessions": {
-                    sid: {
-                        "is_connected": sid in self.active_connections,
-                        "commands_executed": self.session_stats.get(sid, {}).get(
-                            "commands_executed", 0
-                        ),
-                    }
-                    for sid in self.sessions.keys()
-                },
-            }
+                total_sessions = len(pty_sessions)
+                active_connections = len(self.active_connections)
+                total_commands = sum(
+                    stats.get("commands_executed", 0)
+                    for stats in self.session_stats.values()
+                )
+
+                return {
+                    "total_sessions": total_sessions,
+                    "active_connections": active_connections,
+                    "total_commands_executed": total_commands,
+                    "sessions": {
+                        sid: {
+                            "is_connected": sid in self.active_connections,
+                            "commands_executed": self.session_stats.get(sid, {}).get(
+                                "commands_executed", 0
+                            ),
+                        }
+                        for sid in pty_sessions.keys()
+                    },
+                }
 
 
 # Global session manager

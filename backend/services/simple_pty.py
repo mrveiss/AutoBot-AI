@@ -171,8 +171,8 @@ class SimplePTY:
                 if fd is None:
                     break
 
-                # Check for data with select
-                ready, _, _ = select.select([fd], [], [], 0.1)
+                # Check for data with select (0.01s = 10ms for responsive input)
+                ready, _, _ = select.select([fd], [], [], 0.01)
 
                 if ready:
                     try:
@@ -359,36 +359,51 @@ class SimplePTY:
 
 
 class SimplePTYManager:
-    """Simple PTY manager"""
+    """Simple PTY manager with thread-safe session management"""
 
     def __init__(self):
         self.sessions = {}
+        self._lock = threading.Lock()  # CRITICAL: Protect concurrent session access
 
     def create_session(self, session_id: str, initial_cwd: str = None) -> SimplePTY:
         """Create PTY session"""
-        if session_id in self.sessions:
-            self.close_session(session_id)
+        # CRITICAL: Atomic check-and-create with lock
+        with self._lock:
+            if session_id in self.sessions:
+                # Close existing session first
+                old_pty = self.sessions[session_id]
+                old_pty.cleanup()
+                del self.sessions[session_id]
 
-        pty = SimplePTY(session_id)
-        if pty.start(initial_cwd):
-            self.sessions[session_id] = pty
-            return pty
-        return None
+            pty = SimplePTY(session_id)
+            if pty.start(initial_cwd):
+                self.sessions[session_id] = pty
+                return pty
+            return None
 
     def get_session(self, session_id: str) -> Optional[SimplePTY]:
         """Get PTY session"""
-        return self.sessions.get(session_id)
+        with self._lock:
+            return self.sessions.get(session_id)
 
     def close_session(self, session_id: str):
         """Close PTY session"""
-        if session_id in self.sessions:
-            pty = self.sessions[session_id]
-            pty.cleanup()
-            del self.sessions[session_id]
+        # CRITICAL: Atomic check-and-delete with lock
+        with self._lock:
+            if session_id in self.sessions:
+                pty = self.sessions[session_id]
+                del self.sessions[session_id]
+            else:
+                return
+        # Cleanup outside lock to avoid holding lock during I/O
+        pty.cleanup()
 
     def close_all(self):
         """Close all sessions"""
-        for session_id in list(self.sessions.keys()):
+        # CRITICAL: Get list of sessions under lock, then close each
+        with self._lock:
+            session_ids = list(self.sessions.keys())
+        for session_id in session_ids:
             self.close_session(session_id)
 
 

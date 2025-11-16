@@ -20,6 +20,7 @@ Architecture:
 
 import asyncio
 import logging
+import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -311,6 +312,7 @@ class NPULoadBalancer:
         self._health_monitor_task: Optional[asyncio.Task] = None
         self._running = False
         self._selection_lock = asyncio.Lock()
+        self._workers_lock = threading.Lock()  # CRITICAL: Protect concurrent worker dictionary access
 
         logger.info(
             f"NPU Load Balancer initialized with {strategy} strategy, "
@@ -361,7 +363,9 @@ class NPULoadBalancer:
             priority=priority,
             enabled=enabled,
         )
-        self._workers[worker_id] = worker
+        # CRITICAL: Protect worker dictionary modifications with lock
+        with self._workers_lock:
+            self._workers[worker_id] = worker
         logger.info(
             f"Added worker {worker_id} at {endpoint} (priority={priority}, max_tasks={max_concurrent_tasks})"
         )
@@ -377,19 +381,23 @@ class NPULoadBalancer:
         Returns:
             True if removed, False if not found
         """
-        if worker_id in self._workers:
-            del self._workers[worker_id]
-            logger.info(f"Removed worker {worker_id}")
-            return True
+        # CRITICAL: Atomic check-and-delete with lock to prevent race conditions
+        with self._workers_lock:
+            if worker_id in self._workers:
+                del self._workers[worker_id]
+                logger.info(f"Removed worker {worker_id}")
+                return True
         return False
 
     def get_worker(self, worker_id: str) -> Optional[Worker]:
         """Get worker by ID"""
-        return self._workers.get(worker_id)
+        with self._workers_lock:
+            return self._workers.get(worker_id)
 
     def get_all_workers(self) -> List[Worker]:
         """Get all workers"""
-        return list(self._workers.values())
+        with self._workers_lock:
+            return list(self._workers.values())
 
     async def select_worker(self) -> Optional[Worker]:
         """
@@ -399,15 +407,17 @@ class NPULoadBalancer:
             Selected worker or None if no worker available
         """
         async with self._selection_lock:
-            # Check circuit breaker recovery for all workers
-            for worker in self._workers.values():
-                worker.check_circuit_breaker_recovery()
+            # CRITICAL: Snapshot workers under lock to prevent race conditions
+            with self._workers_lock:
+                workers = list(self._workers.values())
 
-            # Get all workers
-            workers = list(self._workers.values())
             if not workers:
                 logger.warning("No workers registered")
                 return None
+
+            # Check circuit breaker recovery for all workers
+            for worker in workers:
+                worker.check_circuit_breaker_recovery()
 
             # Use strategy to select worker
             selected = self._strategy.select_worker(workers)
@@ -512,7 +522,10 @@ class NPULoadBalancer:
         Returns:
             List of worker status dictionaries
         """
-        return [worker.to_dict() for worker in self._workers.values()]
+        # CRITICAL: Snapshot workers under lock to prevent race conditions
+        with self._workers_lock:
+            workers = list(self._workers.values())
+        return [worker.to_dict() for worker in workers]
 
     async def start_health_monitoring(self):
         """Start background health monitoring task"""
@@ -544,8 +557,12 @@ class NPULoadBalancer:
             try:
                 await asyncio.sleep(self._health_check_interval)
 
+                # CRITICAL: Snapshot workers under lock to prevent race conditions
+                with self._workers_lock:
+                    workers = list(self._workers.values())
+
                 # Check all workers
-                for worker in self._workers.values():
+                for worker in workers:
                     await self._check_worker_health(worker)
 
             except asyncio.CancelledError:
