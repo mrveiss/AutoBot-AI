@@ -42,8 +42,10 @@ from backend.api.redis import router as redis_router
 from backend.api.settings import router as settings_router
 from backend.api.system import router as system_router
 from backend.api.voice import router as voice_router
+from backend.api.wake_word import router as wake_word_router
 from backend.api.vnc_manager import router as vnc_router
 from backend.api.vnc_proxy import router as vnc_proxy_router
+from backend.api.knowledge_mcp import router as knowledge_mcp_router
 from backend.api.vnc_mcp import router as vnc_mcp_router
 from backend.api.mcp_registry import router as mcp_registry_router
 from backend.api.sequential_thinking_mcp import router as sequential_thinking_mcp_router
@@ -243,6 +245,21 @@ try:
     logging.info("✅ Optional router loaded: playwright")
 except ImportError as e:
     logging.warning(f"⚠️ Optional router not available: playwright - {e}")
+
+try:
+    from backend.api.vision import router as vision_router
+
+    optional_routers.append(
+        (
+            vision_router,
+            "/vision",
+            ["vision", "gui-automation"],
+            "vision",
+        )
+    )
+    logging.info("✅ Optional router loaded: vision")
+except ImportError as e:
+    logging.warning(f"⚠️ Optional router not available: vision - {e}")
 
 try:
     from backend.api.web_research_settings import router as web_research_settings_router
@@ -1053,8 +1070,10 @@ class AppFactory:
             (llm_router, "/llm", ["llm"], "llm"),
             (redis_router, "/redis", ["redis"], "redis"),
             (voice_router, "/voice", ["voice"], "voice"),
+            (wake_word_router, "/wake_word", ["wake_word", "voice"], "wake_word"),
             (vnc_router, "/vnc", ["vnc"], "vnc"),
             (vnc_proxy_router, "/vnc-proxy", ["vnc-proxy"], "vnc_proxy"),
+            (knowledge_mcp_router, "/knowledge", ["knowledge_mcp", "mcp"], "knowledge_mcp"),
             (vnc_mcp_router, "/vnc", ["vnc", "mcp"], "vnc_mcp"),
             (mcp_registry_router, "/mcp", ["mcp", "registry"], "mcp_registry"),
             (sequential_thinking_mcp_router, "/sequential_thinking", ["sequential_thinking_mcp", "mcp"], "sequential_thinking_mcp"),

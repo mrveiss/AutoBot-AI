@@ -88,6 +88,7 @@ from tenacity import (
 
 from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import config as config_manager
+from src.monitoring.prometheus_metrics import get_metrics_manager
 
 logger = logging.getLogger(__name__)
 
@@ -670,7 +671,8 @@ class RedisConnectionManager:
         """
         PHASE 2: Update database statistics
 
-        Tracks operations, errors, and timing for monitoring
+        Tracks operations, errors, and timing for monitoring.
+        Now includes Prometheus metrics integration for Issue #65 P1 optimization.
         """
         if database_name not in self._database_stats:
             self._database_stats[database_name] = RedisStats(database_name=database_name)
@@ -687,6 +689,18 @@ class RedisConnectionManager:
         # Update manager stats
         self._manager_stats.total_operations += 1
         self._manager_stats.uptime_seconds = (datetime.now() - self._start_time).total_seconds()
+
+        # Record to Prometheus metrics for real-time monitoring
+        try:
+            metrics = get_metrics_manager()
+            metrics.record_request(
+                database=database_name,
+                operation="general",
+                success=success
+            )
+        except Exception as e:
+            # Don't let metrics recording failure affect Redis operations
+            logger.debug(f"Failed to record Prometheus metrics: {e}")
 
     def _get_database_number(self, database_name: str) -> int:
         """Get database number for a given database name"""
@@ -755,6 +769,22 @@ class RedisConnectionManager:
                 f"Circuit breaker opened for database '{database_name}' after "
                 f"{self._failure_counts[database_name]} failures"
             )
+
+            # Record circuit breaker event to Prometheus
+            try:
+                prom_metrics = get_metrics_manager()
+                prom_metrics.record_circuit_breaker_event(
+                    database=database_name,
+                    event="opened",
+                    reason=str(error)[:100]  # Truncate for label safety
+                )
+                prom_metrics.update_circuit_breaker_state(
+                    database=database_name,
+                    state="open",
+                    failure_count=self._failure_counts[database_name]
+                )
+            except Exception as prom_err:
+                logger.debug(f"Failed to record Prometheus circuit breaker metrics: {prom_err}")
 
     def _record_success(self, database_name: str, response_time_ms: float):
         """Record a successful operation"""

@@ -34,7 +34,8 @@ from pydantic_settings import BaseSettings
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 # Import host configurations
-from src.config_helper import cfg
+# NOTE: Removed config_helper dependency (Issue #63 - Config Consolidation)
+# Convenience methods (get_host, get_port, etc.) are now built into this module
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -176,18 +177,11 @@ class UnifiedConfigManager:
 
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default configuration values"""
-        try:
-            # Use config helper for service IPs
-            ollama_host = cfg.get_host("ollama")
-            ollama_port = cfg.get_port("ollama")
-            redis_host = cfg.get_host("redis")
-            redis_port = cfg.get_port("redis")
-        except Exception:
-            # Fallback to NetworkConstants
-            ollama_host = NetworkConstants.AI_STACK_HOST
-            ollama_port = NetworkConstants.OLLAMA_PORT
-            redis_host = NetworkConstants.REDIS_HOST
-            redis_port = NetworkConstants.REDIS_PORT
+        # Use NetworkConstants directly for defaults (no circular dependency)
+        ollama_host = NetworkConstants.AI_STACK_HOST
+        ollama_port = NetworkConstants.OLLAMA_PORT
+        redis_host = NetworkConstants.REDIS_HOST
+        redis_port = NetworkConstants.REDIS_PORT
 
         return {
             "backend": {
@@ -683,18 +677,157 @@ class UnifiedConfigManager:
         """Get configuration section with fallback defaults"""
         return self.get_nested(section, {})
 
+    # CONVENIENCE METHODS (from config_helper for consolidation)
+
+    def get_host(self, service: str) -> str:
+        """
+        Get host address for a service.
+
+        Provides compatibility with config_helper.cfg.get_host()
+        for config consolidation (Issue #63).
+
+        Args:
+            service: Service name (e.g., 'backend', 'redis', 'frontend')
+
+        Returns:
+            Host address string
+        """
+        # Try infrastructure.hosts first
+        host = self.get_nested(f"infrastructure.hosts.{service}")
+        if host:
+            return host
+
+        # Fallback to NetworkConstants
+        service_map = {
+            "backend": NetworkConstants.BACKEND_HOST,
+            "redis": NetworkConstants.REDIS_HOST,
+            "frontend": NetworkConstants.FRONTEND_HOST,
+            "npu_worker": NetworkConstants.NPU_WORKER_HOST,
+            "ai_stack": NetworkConstants.AI_STACK_HOST,
+            "browser": NetworkConstants.BROWSER_HOST,
+        }
+        return service_map.get(service, "localhost")
+
+    def get_port(self, service: str) -> int:
+        """
+        Get port number for a service.
+
+        Provides compatibility with config_helper.cfg.get_port()
+        for config consolidation (Issue #63).
+
+        Args:
+            service: Service name (e.g., 'backend', 'redis', 'frontend')
+
+        Returns:
+            Port number
+        """
+        # Try infrastructure.ports first
+        port = self.get_nested(f"infrastructure.ports.{service}")
+        if port:
+            return int(port)
+
+        # Fallback to NetworkConstants
+        service_map = {
+            "backend": NetworkConstants.BACKEND_PORT,
+            "redis": NetworkConstants.REDIS_PORT,
+            "frontend": NetworkConstants.FRONTEND_PORT,
+            "npu_worker": NetworkConstants.NPU_WORKER_PORT,
+            "ai_stack": NetworkConstants.AI_STACK_PORT,
+            "browser": NetworkConstants.BROWSER_PORT,
+        }
+        return service_map.get(service, 8000)
+
+    def get_timeout(self, category: str, timeout_type: str = "default") -> float:
+        """
+        Get timeout value for a category.
+
+        Provides compatibility with config_helper.cfg.get_timeout()
+        for config consolidation (Issue #63).
+
+        Args:
+            category: Timeout category (e.g., 'llm', 'http', 'redis')
+            timeout_type: Type of timeout (default: 'default')
+
+        Returns:
+            Timeout in seconds
+        """
+        timeout = self.get_nested(f"timeouts.{category}.{timeout_type}")
+        if timeout is not None:
+            return float(timeout)
+
+        # Fallback defaults
+        defaults = {
+            "llm": {"default": 120.0, "streaming": 180.0},
+            "http": {"default": 30.0, "long": 60.0},
+            "redis": {"default": 5.0, "connection": 10.0},
+            "database": {"default": 30.0, "query": 60.0},
+        }
+        return defaults.get(category, {}).get(timeout_type, 30.0)
+
+    def get_service_url(self, service: str, endpoint: str = None) -> str:
+        """
+        Get full URL for a service with optional endpoint.
+
+        Provides compatibility with config_helper.cfg.get_service_url()
+        for config consolidation (Issue #63).
+
+        Args:
+            service: Service name (e.g., 'backend', 'redis', 'frontend')
+            endpoint: Optional endpoint path to append
+
+        Returns:
+            Full service URL string
+        """
+        host = self.get_host(service)
+        port = self.get_port(service)
+        url = f"http://{host}:{port}"
+        if endpoint:
+            url = f"{url}/{endpoint.lstrip('/')}"
+        return url
+
+    def get_path(self, category: str, name: str = None) -> str:
+        """
+        Get filesystem path from configuration.
+
+        Provides compatibility with config_helper.cfg.get_path()
+        for config consolidation (Issue #63).
+
+        Args:
+            category: Path category (e.g., 'logs', 'data', 'config')
+            name: Optional specific path name within category
+
+        Returns:
+            Filesystem path string
+        """
+        if name:
+            path = self.get_nested(f"paths.{category}.{name}")
+        else:
+            path = self.get_nested(f"paths.{category}")
+
+        if path:
+            return str(path)
+
+        # Fallback defaults
+        from pathlib import Path
+
+        project_root = Path(__file__).parent.parent
+        defaults = {
+            "logs": str(project_root / "logs"),
+            "data": str(project_root / "data"),
+            "config": str(project_root / "config"),
+            "reports": str(project_root / "reports"),
+        }
+        return defaults.get(category, str(project_root))
+
     # REDIS CONFIGURATION METHODS
 
     def get_redis_config(self) -> Dict[str, Any]:
         """Get Redis configuration with fallback defaults"""
         redis_config = self.get_nested("memory.redis", {})
 
-        try:
-            default_host = cfg.get_host("redis")
-            default_port = cfg.get_port("redis")
-        except Exception:
-            default_host = NetworkConstants.REDIS_HOST
-            default_port = NetworkConstants.REDIS_PORT
+        # Use self.get_host/get_port for consistency (Issue #63 consolidation)
+        default_host = self.get_host("redis")
+        default_port = self.get_port("redis")
 
         # FIX: Don't override password with None - let it come from redis_config
         defaults = {
@@ -722,13 +855,12 @@ class UnifiedConfigManager:
         if host:
             return host
 
-        # Finally fall back to configured host
-        try:
-            ollama_host = cfg.get_host("ollama")
-            ollama_port = cfg.get_port("ollama")
+        # Finally fall back to configured host (Issue #63 consolidation)
+        ollama_host = self.get_host("ollama")
+        ollama_port = self.get_port("ollama")
+        if ollama_host and ollama_port:
             return f"http://{ollama_host}:{ollama_port}"
-        except Exception:
-            return "http://127.0.0.1:11434"
+        return "http://127.0.0.1:11434"
 
     def get_redis_url(self) -> str:
         """Get the Redis service URL from configuration (backward compatibility)"""
@@ -1229,15 +1361,16 @@ async def set_config_value_async(config_type: str, key: str, value: Any) -> None
 
 
 # Export host and service constants for backward compatibility
+# Using NetworkConstants directly to avoid circular import (Issue #63)
 HTTP_PROTOCOL = "http"
-OLLAMA_HOST_IP = cfg.get_host("ollama")
-OLLAMA_PORT = cfg.get_port("ollama")
-REDIS_HOST_IP = cfg.get_host("redis")
-OLLAMA_URL = cfg.get_service_url("ollama")
+OLLAMA_HOST_IP = NetworkConstants.AI_STACK_HOST
+OLLAMA_PORT = NetworkConstants.OLLAMA_PORT
+REDIS_HOST_IP = NetworkConstants.REDIS_VM_IP
+OLLAMA_URL = f"http://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"
 
 # Playwright/Browser service constants
-PLAYWRIGHT_HOST_IP = cfg.get_host("browser_service")
-PLAYWRIGHT_VNC_PORT = cfg.get_port("vnc")
+PLAYWRIGHT_HOST_IP = NetworkConstants.BROWSER_VM_IP
+PLAYWRIGHT_VNC_PORT = NetworkConstants.VNC_PORT
 PLAYWRIGHT_VNC_URL = f"http://{PLAYWRIGHT_HOST_IP}:{PLAYWRIGHT_VNC_PORT}/vnc.html"
 
 
