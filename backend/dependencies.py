@@ -5,6 +5,8 @@ This module provides dependency injection functions for FastAPI endpoints,
 removing the need for components to directly import and use global_config_manager.
 """
 
+import threading
+
 from fastapi import Depends
 
 from src.constants.network_constants import NetworkConstants
@@ -130,16 +132,20 @@ class DependencyCache:
 
     def __init__(self):
         self._cache = {}
+        self._lock = threading.Lock()  # CRITICAL: Protect concurrent cache access
 
     def get_or_create(self, key: str, factory_fn):
         """Get cached instance or create new one using factory function."""
-        if key not in self._cache:
-            self._cache[key] = factory_fn()
-        return self._cache[key]
+        # CRITICAL: Atomic check-and-create with lock to prevent race conditions
+        with self._lock:
+            if key not in self._cache:
+                self._cache[key] = factory_fn()
+            return self._cache[key]
 
     def clear(self):
         """Clear the cache."""
-        self._cache.clear()
+        with self._lock:
+            self._cache.clear()
 
 
 # Global cache instance (could be request-scoped in the future)

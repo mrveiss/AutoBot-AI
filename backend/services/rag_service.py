@@ -51,6 +51,7 @@ class RAGService:
         self.optimizer: Optional[AdvancedRAGOptimizer] = None
         self._initialized = False
         self._cache: Dict[str, Tuple[List[SearchResult], float]] = {}
+        self._cache_lock = asyncio.Lock()  # CRITICAL: Protect concurrent cache access
 
         logger.info(
             f"RAGService initialized with {self.kb_adapter.implementation_type}"
@@ -118,7 +119,7 @@ class RAGService:
 
         # Check cache first
         cache_key = f"{query}:{max_results}:{enable_reranking}"
-        cached_result = self._get_from_cache(cache_key)
+        cached_result = await self._get_from_cache(cache_key)
         if cached_result:
             logger.debug(f"Cache hit for query: '{query[:50]}...'")
             return cached_result
@@ -143,7 +144,7 @@ class RAGService:
             )
 
             # Cache successful results
-            self._add_to_cache(cache_key, (results, metrics))
+            await self._add_to_cache(cache_key, (results, metrics))
 
             logger.info(
                 f"Advanced search completed: {len(results)} results in {metrics.total_time:.3f}s"
@@ -305,35 +306,40 @@ class RAGService:
             logger.error(f"Basic search fallback failed: {e}")
             return [], metrics
 
-    def _get_from_cache(
+    async def _get_from_cache(
         self, cache_key: str
     ) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
         """Get results from cache if not expired."""
-        if cache_key in self._cache:
-            results, timestamp = self._cache[cache_key]
-            if time.time() - timestamp < self.config.cache_ttl_seconds:
-                return results, RAGMetrics()  # Return cached results
-            else:
-                # Remove expired entry
-                del self._cache[cache_key]
+        # CRITICAL: Protect cache access with lock to prevent race conditions
+        async with self._cache_lock:
+            if cache_key in self._cache:
+                results, timestamp = self._cache[cache_key]
+                if time.time() - timestamp < self.config.cache_ttl_seconds:
+                    return results, RAGMetrics()  # Return cached results
+                else:
+                    # Remove expired entry
+                    del self._cache[cache_key]
         return None
 
-    def _add_to_cache(
+    async def _add_to_cache(
         self, cache_key: str, results: Tuple[List[SearchResult], RAGMetrics]
     ):
         """Add results to cache with timestamp."""
-        self._cache[cache_key] = (results, time.time())
+        # CRITICAL: Protect cache modifications with lock to prevent race conditions
+        async with self._cache_lock:
+            self._cache[cache_key] = (results, time.time())
 
-        # Simple cache size management (LRU-like)
-        if len(self._cache) > 100:
-            # Remove oldest entries
-            sorted_cache = sorted(self._cache.items(), key=lambda x: x[1][1])
-            for key, _ in sorted_cache[:20]:  # Remove oldest 20%
-                del self._cache[key]
+            # Simple cache size management (LRU-like)
+            if len(self._cache) > 100:
+                # Remove oldest entries
+                sorted_cache = sorted(self._cache.items(), key=lambda x: x[1][1])
+                for key, _ in sorted_cache[:20]:  # Remove oldest 20%
+                    del self._cache[key]
 
-    def clear_cache(self):
+    async def clear_cache(self):
         """Clear the result cache."""
-        self._cache.clear()
+        async with self._cache_lock:
+            self._cache.clear()
         logger.info("RAG service cache cleared")
 
     def get_stats(self) -> Dict[str, Any]:
