@@ -81,16 +81,36 @@ const DEFAULT_HOSTS: HostConfig[] = [
 // Available hosts configuration - will be loaded from backend
 export let AVAILABLE_HOSTS: HostConfig[] = [...DEFAULT_HOSTS]
 
+// Safe getter for hosts - ensures we always have valid hosts
+export function getAvailableHosts(): HostConfig[] {
+  // CRITICAL: Always ensure we have hosts available
+  if (!AVAILABLE_HOSTS || AVAILABLE_HOSTS.length === 0) {
+    console.warn('AVAILABLE_HOSTS was empty, resetting to defaults')
+    AVAILABLE_HOSTS = [...DEFAULT_HOSTS]
+  }
+  return AVAILABLE_HOSTS
+}
+
 // Load hosts configuration from backend
 async function loadHostsFromBackend(): Promise<void> {
   try {
     const config = await appConfig.getBackendConfig()
 
-    if (config?.hosts && Array.isArray(config.hosts)) {
-      // Backend provided host configuration
-      AVAILABLE_HOSTS = config.hosts
+    // Check both config.hosts and config.config.hosts for compatibility
+    const hosts = config?.hosts || config?.config?.hosts
+
+    if (hosts && Array.isArray(hosts) && hosts.length > 0) {
+      // Validate that each host has required fields
+      const validHosts = hosts.filter((h: any) => h.id && h.name && h.ip)
+      if (validHosts.length > 0) {
+        // Backend provided valid host configuration
+        AVAILABLE_HOSTS = validHosts
+        console.log('Loaded hosts from backend:', validHosts.length)
+      } else {
+        console.warn('Backend hosts array contained no valid hosts, using defaults')
+      }
     } else {
-      console.warn('Backend config does not contain hosts array, using defaults')
+      console.warn('Backend config does not contain valid hosts array, using defaults')
     }
   } catch (error) {
     console.warn('Failed to load hosts from backend, using defaults:', error)
@@ -104,7 +124,7 @@ export const useTerminalStore = defineStore('terminal', () => {
   // State
   const sessions = ref<Map<string, TerminalSession>>(new Map())
   const activeSessionId = ref<string | null>(null)
-  const selectedHost = ref<HostConfig>(AVAILABLE_HOSTS[0]) // Default to main host
+  const selectedHost = ref<HostConfig>(getAvailableHosts()[0]) // Default to main host
   const terminalTabs = ref<TerminalTab[]>([])
   const commandHistory = ref<Map<string, string[]>>(new Map()) // host.id -> commands[]
   const agentControlEnabled = ref<boolean>(false)
@@ -242,12 +262,17 @@ export const useTerminalStore = defineStore('terminal', () => {
 
   // Get host by ID
   const getHostById = (hostId: string): HostConfig | undefined => {
-    return AVAILABLE_HOSTS.find(host => host.id === hostId)
+    const hosts = getAvailableHosts()
+    const found = hosts.find(host => host.id === hostId)
+    if (!found) {
+      console.warn(`Host not found: ${hostId}, available hosts:`, hosts.map(h => h.id))
+    }
+    return found
   }
 
   // Get host by IP
   const getHostByIp = (ip: string): HostConfig | undefined => {
-    return AVAILABLE_HOSTS.find(host => host.ip === ip)
+    return getAvailableHosts().find(host => host.ip === ip)
   }
 
   // Agent control management

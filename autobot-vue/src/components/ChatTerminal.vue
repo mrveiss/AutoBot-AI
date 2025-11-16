@@ -273,27 +273,24 @@ const handleTerminalReady = (term: Terminal) => {
 }
 
 const handleTerminalData = (data: string) => {
-  console.log('[ChatTerminal] handleTerminalData:', {
-    data: data.replace(/\r/g, '\\r').replace(/\n/g, '\\n'),
-    isConnected: isConnected.value,
-    isAgentControlled: isAgentControlled.value,
-    controlState: controlState.value,
-    sessionId: sessionId.value,
-    backendSessionId: backendSessionId.value,
-    ptySessionId: ptySessionId.value
-  })
-
-  // Use PTY session ID for WebSocket operations
-  const wsSessionId = ptySessionId.value || backendSessionId.value
-  if (isConnected.value && !isAgentControlled.value && wsSessionId) {
-    terminalService.sendInput(wsSessionId, data)
-  } else {
+  // Only allow input in user control mode
+  if (!isConnected.value || isAgentControlled.value) {
     console.warn('[ChatTerminal] Input blocked:', {
       isConnected: isConnected.value,
-      isAgentControlled: isAgentControlled.value,
-      wsSessionId: wsSessionId
+      isAgentControlled: isAgentControlled.value
     })
+    return
   }
+
+  const wsSessionId = ptySessionId.value || backendSessionId.value
+  if (!wsSessionId) {
+    console.warn('[ChatTerminal] No WebSocket session ID')
+    return
+  }
+
+  // Send input directly to PTY - it handles echo
+  // This keeps it simple and works for both manual and automated modes
+  terminalService.sendInput(wsSessionId, data)
 }
 
 const handleTerminalResize = (cols: number, rows: number) => {
@@ -305,11 +302,13 @@ const handleTerminalResize = (cols: number, rows: number) => {
 }
 
 const connectTerminal = async () => {
+  console.log('[ChatTerminal] connectTerminal() called', { isConnected: isConnected.value })
   if (isConnected.value) return
 
   try {
     // Create session in store (defaults to 'agent' mode - user approves commands via dialog)
     const host = terminalStore.selectedHost
+    console.log('[ChatTerminal] Creating session in store:', { sessionId: sessionId.value, host })
     terminalStore.createSession(sessionId.value, host)
 
     // CRITICAL: Use Agent Terminal API to ensure approval workflow works
@@ -380,6 +379,11 @@ const connectTerminal = async () => {
       websocket: wsSessionId
     })
 
+    // DEBUG: Show WebSocket connection attempt in terminal
+    if (terminal.value) {
+      terminal.value.writeln(`\x1b[1;33mAttempting WebSocket connection to: ${wsSessionId}\x1b[0m`)
+    }
+
     // Connect WebSocket using PTY session ID
     await terminalService.connect(wsSessionId, {
       onOutput: (output: any) => {
@@ -395,10 +399,14 @@ const connectTerminal = async () => {
       },
       onStatusChange: (status: string) => {
         terminalStore.updateSessionStatus(sessionId.value, status as any)
+        // DEBUG: Show status changes in terminal
+        if (terminal.value) {
+          terminal.value.writeln(`\x1b[1;35mWebSocket Status: ${status}\x1b[0m`)
+        }
       },
       onError: (error: string) => {
         if (terminal.value) {
-          terminal.value.writeln(`\x1b[1;31mError: ${error}\x1b[0m`)
+          terminal.value.writeln(`\x1b[1;31mWebSocket Error: ${error}\x1b[0m`)
         }
       }
     })
@@ -446,18 +454,62 @@ const clearTerminal = () => {
   clearScrollback()
 }
 
-const toggleControl = () => {
-  if (isAgentControlled.value) {
-    terminalStore.requestUserTakeover(sessionId.value)
-    if (terminal.value) {
-      terminal.value.writeln('\x1b[1;32m>>> USER CONTROL ACTIVATED <<<\x1b[0m')
-      terminal.value.focus()
+const toggleControl = async () => {
+  if (!backendSessionId.value) {
+    console.error('[ChatTerminal] No backend session ID for control toggle')
+    return
+  }
+
+  try {
+    if (isAgentControlled.value) {
+      // User taking control from agent - call interrupt API
+      const interruptUrl = await appConfig.getApiUrl(`/api/agent-terminal/sessions/${backendSessionId.value}/interrupt`)
+      const response = await fetch(interruptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: 'chat_user',
+          reason: 'User manual takeover from chat terminal'
+        })
+      })
+
+      if (response.ok) {
+        terminalStore.requestUserTakeover(sessionId.value)
+        if (terminal.value) {
+          terminal.value.writeln('\x1b[1;32m>>> USER CONTROL ACTIVATED <<<\x1b[0m')
+          terminal.value.focus()
+        }
+      } else {
+        console.error('[ChatTerminal] Failed to interrupt agent session:', await response.text())
+        if (terminal.value) {
+          terminal.value.writeln('\x1b[1;31m>>> Failed to take control <<<\x1b[0m')
+        }
+      }
+    } else {
+      // Agent resuming control - call resume API
+      const resumeUrl = await appConfig.getApiUrl(`/api/agent-terminal/sessions/${backendSessionId.value}/resume`)
+      const response = await fetch(resumeUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      if (response.ok) {
+        terminalStore.requestAgentControl(sessionId.value)
+        if (terminal.value) {
+          terminal.value.writeln('\x1b[1;36m>>> AGENT CONTROL ACTIVATED <<<\x1b[0m')
+          terminal.value.blur()
+        }
+      } else {
+        console.error('[ChatTerminal] Failed to resume agent session:', await response.text())
+        if (terminal.value) {
+          terminal.value.writeln('\x1b[1;31m>>> Failed to activate agent control <<<\x1b[0m')
+        }
+      }
     }
-  } else {
-    terminalStore.requestAgentControl(sessionId.value)
+  } catch (error) {
+    console.error('[ChatTerminal] Error toggling control:', error)
     if (terminal.value) {
-      terminal.value.writeln('\x1b[1;36m>>> AGENT CONTROL ACTIVATED <<<\x1b[0m')
-      terminal.value.blur()
+      terminal.value.writeln('\x1b[1;31m>>> Control toggle failed <<<\x1b[0m')
     }
   }
 }

@@ -36,12 +36,25 @@ class TerminalService {
   async initializeWebSocketUrl() {
     try {
       const wsUrl = await appConfig.getWebSocketUrl();
-      // WebSocket URL format: ws://host:port/ws
-      // We need: ws://host:port/api/terminal/ws
-      this.baseUrl = `${wsUrl.replace('/ws', '')}/api/terminal/ws`;
+      console.log(`[TerminalService] Raw WebSocket URL from appConfig: ${wsUrl}`);
+
+      // CRITICAL FIX: Check if we got a relative URL (proxy mode)
+      // WebSockets CANNOT use relative URLs for cross-origin connections
+      if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
+        console.warn('[TerminalService] Got relative WebSocket URL, falling back to absolute URL');
+        // Use NetworkConstants for absolute URL - backend is always on main machine
+        this.baseUrl = `ws://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}/api/terminal/ws`;
+        console.log(`[TerminalService] Absolute fallback baseUrl: ${this.baseUrl}`);
+      } else {
+        // WebSocket URL format: ws://host:port/ws
+        // We need: ws://host:port/api/terminal/ws
+        this.baseUrl = `${wsUrl.replace('/ws', '')}/api/terminal/ws`;
+        console.log(`[TerminalService] Constructed baseUrl: ${this.baseUrl}`);
+      }
     } catch (error) {
-      console.warn('Using fallback WebSocket URL');
+      console.warn('[TerminalService] Using fallback WebSocket URL, error:', error);
       this.baseUrl = `ws://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}/api/terminal/ws`;
+      console.log(`[TerminalService] Fallback baseUrl: ${this.baseUrl}`);
     }
   }
 
@@ -181,53 +194,87 @@ class TerminalService {
     this.setConnectionState(sessionId, CONNECTION_STATES.CONNECTING);
     this.callbacks.set(sessionId, callbacks);
 
-    try {
-      const wsUrl = `${this.baseUrl}/${sessionId}`;
-      const ws = new WebSocket(wsUrl);
+    // CRITICAL FIX: Return a Promise that resolves when WebSocket actually connects
+    return new Promise((resolve, reject) => {
+      try {
+        const wsUrl = `${this.baseUrl}/${sessionId}`;
+        console.log(`[TerminalService] Connecting to WebSocket: ${wsUrl}`);
+        console.log(`[TerminalService] BaseURL: ${this.baseUrl}, SessionID: ${sessionId}`);
 
-      this.connections.set(sessionId, ws);
-
-      ws.onopen = () => {
-        // WebSocket opened for session
-        this.setConnectionState(sessionId, CONNECTION_STATES.CONNECTED);
-
-        // Send initial ready check with improved timing
-        setTimeout(() => {
-          if (this.getConnectionState(sessionId) === CONNECTION_STATES.CONNECTED) {
-            // Terminal auto-setting to READY after connection
-            this.setConnectionState(sessionId, CONNECTION_STATES.READY);
-          }
-        }, 300); // Optimized delay for backend readiness
-      };
-
-      ws.onmessage = (event) => {
-        this.handleMessage(sessionId, event.data);
-      };
-
-      ws.onclose = (event) => {
-        // WebSocket closed for session
-        this.cleanupSession(sessionId);
-
-        // Attempt reconnection if not intentional
-        if (event.code !== 1000 && this.reconnectAttempts.get(sessionId, 0) < this.maxReconnectAttempts) {
-          this.attemptReconnect(sessionId, callbacks);
-        } else {
-          this.setConnectionState(sessionId, CONNECTION_STATES.DISCONNECTED);
+        // Verify URL is valid
+        if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
+          const error = new Error(`Invalid WebSocket URL: ${wsUrl}`);
+          console.error('[TerminalService]', error);
+          reject(error);
+          return;
         }
-      };
 
-      ws.onerror = (error) => {
-        console.error(`Terminal session ${sessionId} error:`, error);
+        const ws = new WebSocket(wsUrl);
+
+        this.connections.set(sessionId, ws);
+
+        // Set a connection timeout
+        const connectionTimeout = setTimeout(() => {
+          if (ws.readyState !== WebSocket.OPEN) {
+            console.error(`WebSocket connection timeout for session ${sessionId}`);
+            ws.close();
+            this.setConnectionState(sessionId, CONNECTION_STATES.ERROR);
+            this.triggerCallback(sessionId, 'onError', 'Connection timeout');
+            reject(new Error('WebSocket connection timeout'));
+          }
+        }, 10000); // 10 second timeout
+
+        ws.onopen = () => {
+          // WebSocket opened for session
+          clearTimeout(connectionTimeout);
+          this.setConnectionState(sessionId, CONNECTION_STATES.CONNECTED);
+
+          // Send initial ready check with improved timing
+          setTimeout(() => {
+            if (this.getConnectionState(sessionId) === CONNECTION_STATES.CONNECTED) {
+              // Terminal auto-setting to READY after connection
+              this.setConnectionState(sessionId, CONNECTION_STATES.READY);
+            }
+          }, 300); // Optimized delay for backend readiness
+
+          resolve(); // Connection successful
+        };
+
+        ws.onmessage = (event) => {
+          this.handleMessage(sessionId, event.data);
+        };
+
+        ws.onclose = (event) => {
+          // WebSocket closed for session
+          clearTimeout(connectionTimeout);
+          this.cleanupSession(sessionId);
+
+          // Attempt reconnection if not intentional
+          if (event.code !== 1000 && this.reconnectAttempts.get(sessionId, 0) < this.maxReconnectAttempts) {
+            this.attemptReconnect(sessionId, callbacks);
+          } else {
+            this.setConnectionState(sessionId, CONNECTION_STATES.DISCONNECTED);
+          }
+
+          // Reject if not yet resolved
+          reject(new Error(`WebSocket closed with code ${event.code}`));
+        };
+
+        ws.onerror = (error) => {
+          clearTimeout(connectionTimeout);
+          console.error(`Terminal session ${sessionId} error:`, error);
+          this.setConnectionState(sessionId, CONNECTION_STATES.ERROR);
+          this.triggerCallback(sessionId, 'onError', 'WebSocket connection error');
+          reject(new Error('WebSocket connection error'));
+        };
+
+      } catch (error) {
+        console.error(`Failed to connect to terminal session ${sessionId}:`, error);
         this.setConnectionState(sessionId, CONNECTION_STATES.ERROR);
-        this.triggerCallback(sessionId, 'onError', 'WebSocket connection error');
-      };
-
-    } catch (error) {
-      console.error(`Failed to connect to terminal session ${sessionId}:`, error);
-      this.setConnectionState(sessionId, CONNECTION_STATES.ERROR);
-      this.triggerCallback(sessionId, 'onError', error.message);
-      throw error;
-    }
+        this.triggerCallback(sessionId, 'onError', error.message);
+        reject(error);
+      }
+    });
   }
 
   /**

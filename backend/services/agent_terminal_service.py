@@ -275,6 +275,9 @@ class AgentTerminalService:
         """
         self.redis_client = redis_client
         self.sessions: Dict[str, AgentTerminalSession] = {}
+        self._sessions_lock = asyncio.Lock()  # CRITICAL: Protect concurrent session access
+        self._approval_locks: Dict[str, asyncio.Lock] = {}  # Per-session approval locks
+        self._approval_locks_lock = asyncio.Lock()  # Lock for the locks dictionary
         self.security_policy = SecurityPolicy()
 
         # Terminal command logger
@@ -298,6 +301,29 @@ class AgentTerminalService:
         self.prometheus_metrics = get_metrics_manager()
 
         logger.info("AgentTerminalService initialized with security controls and command queue")
+
+    async def _get_approval_lock(self, session_id: str) -> asyncio.Lock:
+        """
+        Get or create a per-session lock for approval operations.
+
+        This prevents race conditions where concurrent approve/deny calls
+        for the same session could both see pending_approval and execute.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            asyncio.Lock for this session
+        """
+        async with self._approval_locks_lock:
+            if session_id not in self._approval_locks:
+                self._approval_locks[session_id] = asyncio.Lock()
+            return self._approval_locks[session_id]
+
+    async def _cleanup_approval_lock(self, session_id: str):
+        """Clean up approval lock when session is closed."""
+        async with self._approval_locks_lock:
+            self._approval_locks.pop(session_id, None)
 
     async def create_session(
         self,
@@ -389,7 +415,9 @@ class AgentTerminalService:
             pty_session_id=pty_session_id,
         )
 
-        self.sessions[session_id] = session
+        # CRITICAL: Protect session dictionary access with lock
+        async with self._sessions_lock:
+            self.sessions[session_id] = session
 
         logger.info(
             f"Created agent terminal session {session_id} "
@@ -563,13 +591,19 @@ class AgentTerminalService:
                 output_text = (result.get("stdout", "") + result.get("stderr", "")).strip()
                 logger.warning(f"[CHAT INTEGRATION] Output text length: {len(output_text)}")
                 if output_text:
-                    await self.chat_history_manager.add_message(
-                        sender="agent_terminal",
-                        text=output_text,
-                        message_type="terminal_output",
-                        session_id=conversation_id,
-                    )
-                    logger.warning(f"[CHAT INTEGRATION] Output message saved successfully")
+                    # CRITICAL FIX: Strip ANSI escape codes before saving to chat
+                    from src.utils.encoding_utils import strip_ansi_codes
+                    clean_output = strip_ansi_codes(output_text).strip()
+                    logger.warning(f"[CHAT INTEGRATION] Clean output length: {len(clean_output)}")
+
+                    if clean_output:
+                        await self.chat_history_manager.add_message(
+                            sender="agent_terminal",
+                            text=clean_output,  # Save cleaned output
+                            message_type="terminal_output",
+                            session_id=conversation_id,
+                        )
+                        logger.warning(f"[CHAT INTEGRATION] Output message saved successfully")
                 else:
                     logger.warning(f"[CHAT INTEGRATION] Output text is empty after stripping")
             else:
@@ -591,14 +625,15 @@ class AgentTerminalService:
         Returns:
             Session if found, None otherwise
         """
-        # Fast path: check in-memory sessions first
-        session = self.sessions.get(session_id)
-        if session:
-            logger.warning(
-                f"[GET_SESSION DEBUG] Returning in-memory session {session_id}: "
-                f"pending_approval={session.pending_approval}"
-            )
-            return session
+        # Fast path: check in-memory sessions first (protected by lock)
+        async with self._sessions_lock:
+            session = self.sessions.get(session_id)
+            if session:
+                logger.warning(
+                    f"[GET_SESSION DEBUG] Returning in-memory session {session_id}: "
+                    f"pending_approval={session.pending_approval}"
+                )
+                return session
 
         # Slow path: try loading from Redis if available
         if self.redis_client:
@@ -632,8 +667,9 @@ class AgentTerminalService:
                     session.last_activity = session_data["last_activity"]
                     session.pending_approval = session_data.get("pending_approval")  # CRITICAL: Restore pending approvals
 
-                    # Add back to memory cache
-                    self.sessions[session_id] = session
+                    # Add back to memory cache (protected by lock)
+                    async with self._sessions_lock:
+                        self.sessions[session_id] = session
 
                     logger.info(f"Loaded session {session_id} from Redis persistence")
                     return session
@@ -681,23 +717,28 @@ class AgentTerminalService:
         Returns:
             True if closed successfully
         """
-        if session_id in self.sessions:
-            session = self.sessions[session_id]
-            del self.sessions[session_id]
+        # CRITICAL: Atomic check-and-delete with lock to prevent race conditions
+        async with self._sessions_lock:
+            if session_id in self.sessions:
+                session = self.sessions[session_id]
+                del self.sessions[session_id]
+            else:
+                return False
 
-            logger.info(f"Closed agent terminal session {session_id}")
+        logger.info(f"Closed agent terminal session {session_id}")
 
-            # Remove from Redis
-            if self.redis_client:
-                try:
-                    key = f"agent_terminal:session:{session_id}"
-                    self.redis_client.delete(key)
-                except Exception as e:
-                    logger.error(f"Failed to remove session from Redis: {e}")
+        # Clean up per-session approval lock
+        await self._cleanup_approval_lock(session_id)
 
-            return True
+        # Remove from Redis (outside lock since Redis has its own concurrency control)
+        if self.redis_client:
+            try:
+                key = f"agent_terminal:session:{session_id}"
+                self.redis_client.delete(key)
+            except Exception as e:
+                logger.error(f"Failed to remove session from Redis: {e}")
 
-        return False
+        return True
 
     def _check_agent_permission(
         self,
@@ -1046,6 +1087,38 @@ class AgentTerminalService:
                         user_id=user_id,
                     )
 
+                    # CRITICAL FIX: Add approval request message to chat history
+                    # This enables:
+                    # 1. _restore_pending_approval to find it after backend restart
+                    # 2. Frontend to display the approval dialog
+                    # 3. update_message_metadata to update approval status
+                    try:
+                        await self.chat_history_manager.add_message(
+                            session_id=session.conversation_id,
+                            role="system",
+                            text=f"⚠️ Command requires approval: `{command}` [Risk: {risk.value}]",
+                            message_type="command_approval_request",
+                            metadata={
+                                "command": command,
+                                "risk_level": risk.value,
+                                "reasons": reasons,
+                                "description": description,
+                                "terminal_session_id": session.session_id,
+                                "command_id": cmd_execution.command_id,
+                                "requires_approval": True,
+                                "agent_role": session.agent_role.value,
+                            }
+                        )
+                        logger.info(
+                            f"✅ [CHAT MESSAGE] Added command_approval_request to chat history: "
+                            f"command={command}, session={session.session_id}"
+                        )
+                    except Exception as chat_msg_error:
+                        logger.error(
+                            f"Failed to add approval request to chat history: {chat_msg_error}",
+                            exc_info=True
+                        )
+
                 return {
                     "status": "pending_approval",
                     "command": command,
@@ -1181,6 +1254,23 @@ class AgentTerminalService:
         Returns:
             Result of approval decision
         """
+        # CRITICAL: Get per-session lock to prevent race conditions
+        # This ensures only one approval operation per session at a time
+        approval_lock = await self._get_approval_lock(session_id)
+        async with approval_lock:
+            return await self._approve_command_internal(
+                session_id, approved, user_id, comment, auto_approve_future
+            )
+
+    async def _approve_command_internal(
+        self,
+        session_id: str,
+        approved: bool,
+        user_id: Optional[str] = None,
+        comment: Optional[str] = None,
+        auto_approve_future: bool = False,
+    ) -> Dict[str, Any]:
+        """Internal implementation of approve_command (called with lock held)."""
         session = await self.get_session(session_id)
         if not session:
             logger.error(f"approve_command: Session {session_id} not found")
@@ -1424,6 +1514,32 @@ class AgentTerminalService:
                             exc_info=True
                         )
 
+                    # CRITICAL FIX: Add approval response message to chat history
+                    # This ensures _restore_pending_approval sees "approved" keyword and doesn't restore
+                    try:
+                        await self.chat_history_manager.add_message(
+                            session_id=session.conversation_id,
+                            role="system",
+                            text=f"✅ Command approved and executed: `{command}`" + (f" - {comment}" if comment else ""),
+                            message_type="command_approval_response",
+                            metadata={
+                                "command": command,
+                                "terminal_session_id": session_id,
+                                "approval_status": "approved",
+                                "approved_by": user_id,
+                                "approved_at": time.time(),
+                            }
+                        )
+                        logger.info(
+                            f"✅ [CHAT MESSAGE] Added command_approval_response to chat history: "
+                            f"command={command}, status=approved"
+                        )
+                    except Exception as chat_msg_error:
+                        logger.error(
+                            f"Failed to add approval response to chat history: {chat_msg_error}",
+                            exc_info=True
+                        )
+
                 # Broadcast approval status update to WebSocket clients
                 await self._broadcast_approval_status(
                     session,
@@ -1465,6 +1581,9 @@ class AgentTerminalService:
                 + (f" with reason: {comment}" if comment else "")
             )
 
+            # Track if denial message was saved (for avoiding duplicate messages)
+            denial_message_saved = False
+
             # Log denial
             if session.conversation_id:
                 await self.terminal_logger.log_command(
@@ -1477,6 +1596,7 @@ class AgentTerminalService:
 
                 # CRITICAL: Save denial with user's alternative suggestion to chat
                 # This allows the agent to see the feedback and propose a different approach
+                # Also ensures _restore_pending_approval sees "denied" keyword and doesn't restore
                 if comment:
                     try:
                         await self.chat_history_manager.add_message(
@@ -1484,7 +1604,16 @@ class AgentTerminalService:
                             text=f"❌ Command denied: `{command}`\n\n💡 **Alternative approach suggested:**\n{comment}",
                             message_type="command_denial",
                             session_id=session.conversation_id,
+                            metadata={
+                                "command": command,
+                                "terminal_session_id": session.session_id,
+                                "approval_status": "denied",
+                                "denied_by": user_id,
+                                "denied_at": time.time(),
+                                "alternative_suggestion": comment,
+                            }
                         )
+                        denial_message_saved = True
                         logger.info(
                             f"✅ [DENIAL FEEDBACK] Saved user's alternative suggestion to chat: {comment[:50]}..."
                         )
@@ -1538,6 +1667,34 @@ class AgentTerminalService:
                         f"Failed to update chat message metadata (non-fatal): {metadata_update_error}",
                         exc_info=True
                     )
+
+                # CRITICAL FIX: Add denial response message if not already saved above
+                # This ensures _restore_pending_approval sees "denied" keyword and doesn't restore
+                # Skip if already saved with user's alternative suggestion (has "denied" keyword)
+                if not denial_message_saved:
+                    try:
+                        await self.chat_history_manager.add_message(
+                            session_id=session.conversation_id,
+                            role="system",
+                            text=f"❌ Command denied: `{command}`",
+                            message_type="command_approval_response",
+                            metadata={
+                                "command": command,
+                                "terminal_session_id": session_id,
+                                "approval_status": "denied",
+                                "denied_by": user_id,
+                                "denied_at": time.time(),
+                            }
+                        )
+                        logger.info(
+                            f"✅ [CHAT MESSAGE] Added command_approval_response to chat history: "
+                            f"command={command}, status=denied"
+                        )
+                    except Exception as chat_msg_error:
+                        logger.error(
+                            f"Failed to add denial response to chat history: {chat_msg_error}",
+                            exc_info=True
+                        )
 
             # Broadcast denial status update to WebSocket clients
             await self._broadcast_approval_status(
