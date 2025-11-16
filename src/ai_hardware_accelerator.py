@@ -21,6 +21,7 @@ import torch.nn.functional as F
 from PIL import Image
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.http_client import get_http_client
 
 # Import centralized components
 from src.unified_config_manager import cfg
@@ -184,10 +185,12 @@ class AIHardwareAccelerator:
     async def _check_npu_availability(self):
         """Check NPU Worker availability."""
         try:
-            async with aiohttp.ClientSession(
+            # Use singleton HTTP client for connection pooling
+            http_client = get_http_client()
+            async with await http_client.get(
+                f"{self.npu_worker_url}/health",
                 timeout=aiohttp.ClientTimeout(total=5)
-            ) as session:
-                async with session.get(f"{self.npu_worker_url}/health") as response:
+            ) as response:
                     if response.status == 200:
                         health_data = await response.json()
                         npu_available = health_data.get("npu_available", False)
@@ -469,12 +472,13 @@ class AIHardwareAccelerator:
             "timeout_seconds": task.timeout_seconds,
         }
 
-        async with aiohttp.ClientSession(
+        # Use singleton HTTP client for connection pooling
+        http_client = get_http_client()
+        async with await http_client.post(
+            f"{self.npu_worker_url}/inference",
+            json=request_data,
             timeout=aiohttp.ClientTimeout(total=task.timeout_seconds)
-        ) as session:
-            async with session.post(
-                f"{self.npu_worker_url}/inference", json=request_data
-            ) as response:
+        ) as response:
                 if response.status == 200:
                     result_data = await response.json()
                     if result_data.get("status") == "completed":

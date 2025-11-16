@@ -10,6 +10,7 @@ from markdownify import (
 )
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.http_client import get_http_client
 
 
 class SystemIntegration:
@@ -379,9 +380,11 @@ class SystemIntegration:
             if not url.startswith("http://") and not url.startswith("https://"):
                 url = "https://" + url  # Default to HTTPS
 
-            timeout = aiohttp.ClientTimeout(total=10)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url) as response:
+            # Use singleton HTTP client for connection pooling
+            http_client = get_http_client()
+            async with await http_client.get(
+                url, timeout=aiohttp.ClientTimeout(total=10)
+            ) as response:
                     # Raise an exception for HTTP errors (4xx or 5xx)
                     response.raise_for_status()
 

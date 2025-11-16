@@ -39,6 +39,7 @@ from tenacity import (
 # Import unified configuration and dependencies
 from src.circuit_breaker import circuit_breaker_async
 from src.constants.network_constants import NetworkConstants
+from src.utils.http_client import get_http_client
 # REFACTORED: Removed unused import from deprecated redis_pool_manager
 # from src.redis_pool_manager import get_redis_async
 from src.retry_mechanism import retry_network_operation
@@ -551,11 +552,13 @@ class LLMInterface:
         try:
 
             async def make_request():
-                async with aiohttp.ClientSession(
+                # Use singleton HTTP client for connection pooling
+                http_client = get_http_client()
+                async with await http_client.get(
+                    f"{self.ollama_host}/api/tags",
                     timeout=aiohttp.ClientTimeout(total=5)
-                ) as session:
-                    async with session.get(f"{self.ollama_host}/api/tags") as response:
-                        return response.status == 200
+                ) as response:
+                    return response.status == 200
 
             return await retry_network_operation(make_request)
         except Exception as e:
