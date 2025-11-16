@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import aiohttp
 import numpy as np
 
+from src.utils.http_client import get_http_client
 from src.ai_hardware_accelerator import (
     HardwareDevice,
     ProcessingTask,
@@ -160,19 +161,21 @@ class NPUSemanticSearch:
     async def _test_npu_connectivity(self):
         """Test NPU Worker connectivity and capabilities."""
         try:
-            async with aiohttp.ClientSession(
+            # Use singleton HTTP client for connection pooling
+            http_client = get_http_client()
+            async with await http_client.get(
+                f"{self.npu_worker_url}/health",
                 timeout=aiohttp.ClientTimeout(total=5)
-            ) as session:
-                async with session.get(f"{self.npu_worker_url}/health") as response:
-                    if response.status == 200:
-                        health_data = await response.json()
-                        logger.info(
-                            f"✅ NPU Worker connected - NPU Available: {health_data.get('npu_available', False)}"
-                        )
-                    else:
-                        logger.warning(
-                            f"⚠️ NPU Worker health check failed: {response.status}"
-                        )
+            ) as response:
+                if response.status == 200:
+                    health_data = await response.json()
+                    logger.info(
+                        f"✅ NPU Worker connected - NPU Available: {health_data.get('npu_available', False)}"
+                    )
+                else:
+                    logger.warning(
+                        f"⚠️ NPU Worker health check failed: {response.status}"
+                    )
         except Exception as e:
             logger.warning(f"⚠️ NPU Worker connectivity test failed: {e}")
 
