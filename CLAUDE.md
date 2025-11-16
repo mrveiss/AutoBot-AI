@@ -40,6 +40,58 @@ This document contains development guidelines, project setup instructions, and a
 
 ---
 
+## 👤 CODE OWNERSHIP & AUTHORSHIP (MANDATORY)
+
+**⚠️ MANDATORY RULE: MRVEISS IS THE SOLE OWNER AND AUTHOR OF ALL CODE**
+
+### **Ownership Declaration:**
+
+- **mrveiss** is the **SOLE OWNER** of all AutoBot code
+- **mrveiss** is the **SOLE AUTHOR** of all AutoBot code
+- **NO OTHER NAMES** may appear as code owners or authors
+- This applies to **ALL FILES** - Python, TypeScript, Vue, Scripts, Configuration, Documentation
+
+### **Implementation Requirements:**
+
+**File Headers:**
+```python
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+```
+
+**Commit Messages:**
+```bash
+# Author field must always be mrveiss
+git config user.name "mrveiss"
+git config user.email "mrveiss@example.com"
+```
+
+**Documentation:**
+```markdown
+**Author**: mrveiss
+**Copyright**: © 2025 mrveiss
+```
+
+### **❌ FORBIDDEN:**
+
+- **Other names in author fields** - Only mrveiss permitted
+- **Shared ownership claims** - mrveiss is sole owner
+- **Generic/anonymous authorship** - Must attribute to mrveiss
+- **Organization names as authors** - Individual author is mrveiss
+- **AI/tool credits as authors** - Tools assist, mrveiss authors
+
+### **Why This Matters:**
+
+- **Legal clarity** - Unambiguous code ownership
+- **Intellectual property** - Clear IP rights
+- **Project continuity** - Single authoritative owner
+- **Attribution accuracy** - Proper credit to creator
+
+**THIS IS AN UNBREAKABLE RULE - NO EXCEPTIONS, NO CIRCUMSTANCES WHERE THIS CHANGES**
+
+---
+
 ## 🚨 CRITICAL: NO TEMPORARY FIXES POLICY
 
 **⚠️ MANDATORY RULE: ABSOLUTELY NO TEMPORARY FIXES OR WORKAROUNDS**
@@ -787,6 +839,7 @@ Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
 
 | Policy | Rule |
 |--------|------|
+| **Code Ownership** | ✅ MANDATORY - mrveiss is SOLE OWNER and AUTHOR of ALL code (UNBREAKABLE) |
 | **GitHub Issue Tracking** | ✅ MANDATORY - ALL work must be tied to GitHub issue/task |
 | **Temporary Fixes** | ❌ NEVER - Always fix root causes (NO EXCEPTIONS) |
 | **File Naming** | ❌ FORBIDDEN - No _fix, _v2, _optimized, _new, _temp suffixes |

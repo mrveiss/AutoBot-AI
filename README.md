@@ -108,6 +108,11 @@ AutoBot now includes comprehensive Redis service management capabilities:
 - [**System Configuration**](CLAUDE.md) - Complete development notes, fixes, and architecture
 - [**Scripts Organization**](scripts/README.md) - All scripts and utilities documentation
 
+### MCP & Agent Integration
+- [**LangChain MCP Integration Guide**](docs/developer/LANGCHAIN_MCP_INTEGRATION.md) - How to integrate AutoBot MCP tools with LangChain agents
+- [**MCP Security Testing**](docs/security/MCP_SECURITY_TESTING.md) - Security penetration testing for MCP bridges
+- [**MCP Agent Workflow Examples**](examples/mcp_agent_workflows/) - Working examples for research, code analysis, and VNC monitoring
+
 ### Technical Reports
 - [**Network Configuration**](reports/NETWORK_STANDARDIZATION_REPORT.md) - Infrastructure standardization
 - [**Configuration Remediation**](reports/COMPREHENSIVE_CONFIGURATION_REMEDIATION_FINAL_REPORT.md) - Config fixes and improvements
