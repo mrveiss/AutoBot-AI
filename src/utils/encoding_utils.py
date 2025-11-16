@@ -273,14 +273,38 @@ def is_terminal_prompt(text: str) -> bool:
 
     matches_pattern = any(re.search(pattern, stripped, re.MULTILINE) for pattern in prompt_patterns)
 
+    # CRITICAL FIX: Check if there's actual command output before the prompt
+    # If text has multiple lines with substantial content, it's not just a prompt
+    lines = stripped.split('\n')
+    non_prompt_lines = []
+    for line in lines:
+        line_stripped = line.strip()
+        # Skip empty lines and lines that are just prompts
+        if not line_stripped:
+            continue
+        # Check if this line is just a prompt
+        is_prompt_line = (
+            any(char in box_chars for char in line_stripped) or
+            any(line_stripped.rstrip().endswith(sym) for sym in prompt_symbols) or
+            any(re.match(pattern, line_stripped) for pattern in prompt_patterns)
+        )
+        # If it's a long line without prompt symbols, it's likely output
+        if not is_prompt_line and len(line_stripped) > 10:
+            non_prompt_lines.append(line_stripped)
+
+    # If we have substantial non-prompt lines, this is command output (not just a prompt)
+    has_command_output = len(non_prompt_lines) > 0 and sum(len(l) for l in non_prompt_lines) > 20
+
     # It's a prompt if:
-    # 1. It has box-drawing chars AND ends with prompt symbol, OR
-    # 2. It matches a known prompt pattern, OR
-    # 3. It's short and mostly symbols with a prompt ending
+    # 1. It has box-drawing chars AND ends with prompt symbol AND no real output, OR
+    # 2. It matches a known prompt pattern AND no real output, OR
+    # 3. It's short and mostly symbols with a prompt ending AND no real output
     is_prompt = (
-        (has_box_chars and ends_with_prompt) or
-        matches_pattern or
-        (is_short and is_mostly_symbols and ends_with_prompt)
+        not has_command_output and (
+            (has_box_chars and ends_with_prompt) or
+            matches_pattern or
+            (is_short and is_mostly_symbols and ends_with_prompt)
+        )
     )
 
     return is_prompt
