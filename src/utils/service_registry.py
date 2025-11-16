@@ -34,6 +34,7 @@ import yaml
 # Import unified configuration system - NO HARDCODED VALUES
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
+from src.utils.http_client import get_http_client
 
 
 class ServiceStatus(Enum):
@@ -407,16 +408,17 @@ class ServiceRegistry:
             start_time = time.time()
             timeout = aiohttp.ClientTimeout(total=service.timeout)
 
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(health_url) as response:
-                    health.response_time = time.time() - start_time
+            # Use singleton HTTP client for connection pooling
+            http_client = get_http_client()
+            async with await http_client.get(health_url, timeout=timeout) as response:
+                health.response_time = time.time() - start_time
 
-                    if response.status == 200:
-                        health.status = ServiceStatus.HEALTHY
-                        health.failure_count = 0
-                    else:
-                        health.status = ServiceStatus.UNHEALTHY
-                        health.failure_count += 1
+                if response.status == 200:
+                    health.status = ServiceStatus.HEALTHY
+                    health.failure_count = 0
+                else:
+                    health.status = ServiceStatus.UNHEALTHY
+                    health.failure_count += 1
 
         except Exception as e:
             self.logger.warning(f"Health check failed for {service_name}: {e}")

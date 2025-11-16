@@ -17,6 +17,7 @@ from typing import Dict, Optional, Tuple
 import aiohttp
 
 from src.constants.network_constants import NetworkConstants, ServiceURLs
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -292,21 +293,22 @@ class DistributedServiceDiscovery:
         try:
             timeout = aiohttp.ClientTimeout(total=0.2, connect=0.1)  # 200ms max
 
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                start_time = time.time()
+            # Use singleton HTTP client for connection pooling
+            http_client = get_http_client()
+            start_time = time.time()
 
-                # Try health endpoint first, then root
-                health_urls = [
-                    f"{endpoint.url}/health",
-                    f"{endpoint.url}/",
-                    endpoint.url,
-                ]
+            # Try health endpoint first, then root
+            health_urls = [
+                f"{endpoint.url}/health",
+                f"{endpoint.url}/",
+                endpoint.url,
+            ]
 
-                for url in health_urls:
-                    try:
-                        async with session.get(url) as response:
-                            if response.status < 500:  # Accept 2xx, 3xx, 4xx
-                                response_time = time.time() - start_time
+            for url in health_urls:
+                try:
+                    async with await http_client.get(url, timeout=timeout) as response:
+                        if response.status < 500:  # Accept 2xx, 3xx, 4xx
+                            response_time = time.time() - start_time
                                 endpoint.is_healthy = True
                                 endpoint.response_time = response_time
                                 endpoint.last_check = time.time()

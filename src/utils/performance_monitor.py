@@ -24,6 +24,7 @@ import psutil
 
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
+from src.utils.http_client import get_http_client
 
 # Import existing monitoring infrastructure
 from src.utils.system_metrics import SystemMetric, get_metrics_collector
@@ -394,13 +395,14 @@ class Phase9PerformanceMonitor:
             npu_host = cfg.get_host("npu_worker")
             npu_port = cfg.get_port("npu_worker")
 
-            timeout = aiohttp.ClientTimeout(total=5.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(
-                    f"http://{npu_host}:{npu_port}/stats"
-                ) as response:
-                    if response.status == 200:
-                        return await response.json()
+            # Use singleton HTTP client for connection pooling
+            http_client = get_http_client()
+            async with await http_client.get(
+                f"http://{npu_host}:{npu_port}/stats",
+                timeout=aiohttp.ClientTimeout(total=5.0)
+            ) as response:
+                if response.status == 200:
+                    return await response.json()
 
             return {}
         except Exception:
@@ -621,15 +623,16 @@ class Phase9PerformanceMonitor:
             backend_host = cfg.get_host("backend")
             start_time = time.time()
 
-            timeout = aiohttp.ClientTimeout(total=2.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(
-                    f"http://{backend_host}:8001/api/health"
-                ) as response:
-                    if response.status == 200:
-                        return round(
-                            (time.time() - start_time) * 1000, 1
-                        )  # Convert to ms
+            # Use singleton HTTP client for connection pooling
+            http_client = get_http_client()
+            async with await http_client.get(
+                f"http://{backend_host}:8001/api/health",
+                timeout=aiohttp.ClientTimeout(total=2.0)
+            ) as response:
+                if response.status == 200:
+                    return round(
+                        (time.time() - start_time) * 1000, 1
+                    )  # Convert to ms
 
             return 999.0  # High latency if failed
         except Exception:
@@ -720,17 +723,18 @@ class Phase9PerformanceMonitor:
             else:
                 # HTTP health check
                 if path:
-                    timeout = aiohttp.ClientTimeout(total=5.0)
-                    async with aiohttp.ClientSession(timeout=timeout) as session:
-                        async with session.get(
-                            f"http://{host}:{port}{path}"
-                        ) as response:
-                            if response.status == 200:
-                                status = "healthy"
-                            elif 200 <= response.status < 400:
-                                status = "degraded"
-                            else:
-                                status = "critical"
+                    # Use singleton HTTP client for connection pooling
+                    http_client = get_http_client()
+                    async with await http_client.get(
+                        f"http://{host}:{port}{path}",
+                        timeout=aiohttp.ClientTimeout(total=5.0)
+                    ) as response:
+                        if response.status == 200:
+                            status = "healthy"
+                        elif 200 <= response.status < 400:
+                            status = "degraded"
+                        else:
+                            status = "critical"
 
             response_time_ms = round((time.time() - start_time) * 1000, 1)
 
