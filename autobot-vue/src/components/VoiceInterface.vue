@@ -93,6 +93,69 @@
         </div>
       </BasePanel>
 
+      <!-- Wake Word Settings -->
+      <BasePanel variant="bordered" size="medium">
+        <template #header>
+          <h3>Wake Word Detection</h3>
+        </template>
+        <div class="setting-group">
+          <label>Enable Wake Words</label>
+          <input type="checkbox" v-model="wakeWordSettings.enabled" @change="toggleWakeWordDetection">
+        </div>
+        <div class="setting-group">
+          <label>Confidence Threshold</label>
+          <input
+            type="range"
+            min="0.5"
+            max="0.95"
+            step="0.05"
+            v-model="wakeWordSettings.confidence_threshold"
+            class="voice-slider"
+            @change="updateWakeWordConfig"
+          >
+          <span style="color: #374151; font-weight: 500;">{{ (wakeWordSettings.confidence_threshold * 100).toFixed(0) }}%</span>
+        </div>
+        <div class="setting-group wake-words-list">
+          <label>Active Wake Words</label>
+          <div class="wake-words-container">
+            <div
+              v-for="word in wakeWordSettings.wake_words"
+              :key="word"
+              class="wake-word-tag"
+            >
+              {{ word }}
+              <button
+                class="remove-wake-word"
+                @click="removeWakeWord(word)"
+                :disabled="wakeWordSettings.wake_words.length <= 1"
+              >×</button>
+            </div>
+          </div>
+        </div>
+        <div class="setting-group">
+          <label>Add Wake Word</label>
+          <div class="add-wake-word-input">
+            <input
+              type="text"
+              v-model="newWakeWord"
+              placeholder="e.g., hello assistant"
+              @keyup.enter="addWakeWord"
+            >
+            <button class="add-btn" @click="addWakeWord">Add</button>
+          </div>
+        </div>
+        <div class="wake-word-stats" v-if="wakeWordStats.total_detections > 0">
+          <div class="stat-item">
+            <span class="stat-label">Total Detections:</span>
+            <span class="stat-value">{{ wakeWordStats.total_detections }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Accuracy:</span>
+            <span class="stat-value">{{ wakeWordStats.accuracy.toFixed(1) }}%</span>
+          </div>
+        </div>
+      </BasePanel>
+
       <!-- Recent Voice Commands -->
       <BasePanel variant="bordered" size="medium">
         <template #header>
@@ -149,6 +212,24 @@ export default {
       pitch: 1.0,
       auto_listen: false
     });
+
+    // Wake word settings
+    const wakeWordSettings = ref({
+      enabled: true,
+      wake_words: ['hey autobot', 'ok autobot', 'autobot'],
+      confidence_threshold: 0.7,
+      cooldown_seconds: 2.0,
+      adaptive_threshold: true
+    });
+
+    const wakeWordStats = ref({
+      total_detections: 0,
+      true_positives: 0,
+      false_positives: 0,
+      accuracy: 0
+    });
+
+    const newWakeWord = ref('');
 
     let recognition = null;
     let speechSynthesis = null;
@@ -321,6 +402,99 @@ export default {
       }
     };
 
+    // Wake word management methods
+    const loadWakeWordSettings = async () => {
+      try {
+        const response = await apiClient.get('/api/wake_word/config');
+        if (response) {
+          wakeWordSettings.value = {
+            ...wakeWordSettings.value,
+            ...response
+          };
+        }
+      } catch (error) {
+        console.error('Failed to load wake word settings:', error);
+      }
+    };
+
+    const loadWakeWordStats = async () => {
+      try {
+        const response = await apiClient.get('/api/wake_word/stats');
+        if (response) {
+          wakeWordStats.value = {
+            total_detections: response.total_detections || 0,
+            true_positives: response.true_positives || 0,
+            false_positives: response.false_positives || 0,
+            accuracy: response.accuracy || 0
+          };
+        }
+      } catch (error) {
+        console.error('Failed to load wake word stats:', error);
+      }
+    };
+
+    const toggleWakeWordDetection = async () => {
+      try {
+        if (wakeWordSettings.value.enabled) {
+          await apiClient.post('/api/wake_word/enable');
+          statusMessage.value = 'Wake word detection enabled';
+        } else {
+          await apiClient.post('/api/wake_word/disable');
+          statusMessage.value = 'Wake word detection disabled';
+        }
+      } catch (error) {
+        console.error('Failed to toggle wake word detection:', error);
+        statusMessage.value = 'Failed to toggle wake word detection';
+      }
+    };
+
+    const updateWakeWordConfig = async () => {
+      try {
+        await apiClient.put('/api/wake_word/config', {
+          confidence_threshold: parseFloat(wakeWordSettings.value.confidence_threshold),
+          cooldown_seconds: wakeWordSettings.value.cooldown_seconds,
+          adaptive_threshold: wakeWordSettings.value.adaptive_threshold
+        });
+        statusMessage.value = 'Wake word config updated';
+      } catch (error) {
+        console.error('Failed to update wake word config:', error);
+        statusMessage.value = 'Failed to update config';
+      }
+    };
+
+    const addWakeWord = async () => {
+      if (!newWakeWord.value.trim()) return;
+
+      try {
+        const response = await apiClient.post('/api/wake_word/words', {
+          wake_word: newWakeWord.value.trim()
+        });
+        if (response.success) {
+          wakeWordSettings.value.wake_words = response.wake_words;
+          newWakeWord.value = '';
+          statusMessage.value = `Wake word "${response.wake_words[response.wake_words.length - 1]}" added`;
+        } else {
+          statusMessage.value = response.message || 'Wake word already exists';
+        }
+      } catch (error) {
+        console.error('Failed to add wake word:', error);
+        statusMessage.value = 'Failed to add wake word';
+      }
+    };
+
+    const removeWakeWord = async (word) => {
+      try {
+        const response = await apiClient.delete(`/api/wake_word/words/${encodeURIComponent(word)}`);
+        if (response.success) {
+          wakeWordSettings.value.wake_words = response.wake_words;
+          statusMessage.value = `Wake word "${word}" removed`;
+        }
+      } catch (error) {
+        console.error('Failed to remove wake word:', error);
+        statusMessage.value = error.message || 'Failed to remove wake word';
+      }
+    };
+
     onMounted(() => {
       initializeSpeechRecognition();
       initializeSpeechSynthesis();
@@ -344,6 +518,10 @@ export default {
           console.error('Error loading voice history:', e);
         }
       }
+
+      // Load wake word settings from backend
+      loadWakeWordSettings();
+      loadWakeWordStats();
     });
 
     onUnmounted(() => {
@@ -368,7 +546,15 @@ export default {
       voiceHistory,
       settings,
       toggleListening,
-      testTTS
+      testTTS,
+      // Wake word exports
+      wakeWordSettings,
+      wakeWordStats,
+      newWakeWord,
+      toggleWakeWordDetection,
+      updateWakeWordConfig,
+      addWakeWord,
+      removeWakeWord
     };
   }
 };
@@ -618,6 +804,117 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Wake word styles */
+.wake-words-list {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.wake-words-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.wake-word-tag {
+  background: linear-gradient(135deg, #10b981, #34d399);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.remove-wake-word {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.remove-wake-word:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.remove-wake-word:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.add-wake-word-input {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.add-wake-word-input input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  color: #374151;
+}
+
+.add-btn {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.add-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.wake-word-stats {
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(99, 102, 241, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(99, 102, 241, 0.1);
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.stat-item:last-child {
+  margin-bottom: 0;
+}
+
+.stat-label {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.stat-value {
+  color: #374151;
+  font-weight: 600;
+  font-size: 13px;
 }
 
 @media (max-width: 768px) {
