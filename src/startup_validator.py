@@ -32,6 +32,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.constants.network_constants import NetworkConstants
 from src.unified_config import config
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -271,11 +272,13 @@ class StartupValidator:
             ollama_url = config.get_service_url("ollama")
             health_url = f"{ollama_url}/api/tags"
 
-            timeout = aiohttp.ClientTimeout(total=5)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(health_url) as response:
-                    if response.status != 200:
-                        raise Exception(f"Ollama returned status {response.status}")
+            # Use singleton HTTP client for connection pooling
+            http_client = get_http_client()
+            async with await http_client.get(
+                health_url, timeout=aiohttp.ClientTimeout(total=5)
+            ) as response:
+                if response.status != 200:
+                    raise Exception(f"Ollama returned status {response.status}")
 
         except Exception as e:
             raise Exception(f"Ollama connectivity test failed: {e}")
