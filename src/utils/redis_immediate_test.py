@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional, Tuple
 import redis
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,14 @@ async def immediate_redis_test(host: str, port: int, db: int = 0):
     """
     Test Redis connection immediately - no timeout waits.
     Either succeeds instantly or fails instantly.
+
+    NOTE: This function uses direct redis.Redis() instantiation intentionally
+    for testing connectivity to arbitrary Redis endpoints. This is a diagnostic
+    tool, NOT for production client creation. For production clients, use
+    get_redis_client() from src.utils.redis_client.
+
+    The direct instantiation here bypasses the canonical pattern specifically
+    to test raw Redis connectivity without circuit breakers or pooling overhead.
     """
     connection_state = RedisConnectionState()
 
@@ -203,44 +212,45 @@ async def get_redis_with_immediate_test(
 
 
 async def test_redis_connection_immediate(
-    redis_host: str, redis_port: int, redis_db: int = 0
+    database: str = "main",
 ) -> Optional[redis.Redis]:
     """
-    Test Redis connection immediately and return client if successful.
+    Test Redis connection immediately and return canonical client if successful.
     Used by backend startup to quickly test Redis availability.
 
+    USES CANONICAL get_redis_client() PATTERN:
+    - Circuit breaker protection
+    - Health monitoring
+    - Connection pooling
+    - Centralized configuration
+
     Args:
-        redis_host: Redis host address
-        redis_port: Redis port number
-        redis_db: Redis database number
+        database: Named database ("main", "knowledge", "prompts", etc.)
 
     Returns:
-        Redis client if connection successful, None if failed
+        Redis client from canonical pattern if connection successful, None if failed
     """
     try:
-        async with immediate_redis_test(redis_host, redis_port, redis_db) as state:
+        # Get canonical client (uses centralized configuration)
+        client = get_redis_client(async_client=False, database=database)
+
+        if client is None:
+            logger.warning(f"⚠️ Redis canonical client unavailable for database: {database}")
+            return None
+
+        # Verify connectivity with immediate ping test
+        async with immediate_redis_test(
+            NetworkConstants.REDIS_VM_IP,
+            NetworkConstants.REDIS_PORT,
+            0  # Database number handled by canonical client
+        ) as state:
             if state.is_connected:
-                logger.info(
-                    f"✅ Redis connection test successful: {redis_host}:{redis_port}"
-                )
-                # Return a new client for the caller to use
-                return redis.Redis(
-                    host=redis_host,
-                    port=redis_port,
-                    db=redis_db,
-                    decode_responses=True,
-                    socket_keepalive=True,
-                    socket_keepalive_options={},
-                    retry_on_timeout=False,
-                    health_check_interval=0,
-                )
+                logger.info(f"✅ Redis connection test successful for database: {database}")
+                # Return the canonical client (not the test client)
+                return client
             else:
-                logger.warning(
-                    f"⚠️ Redis connection test failed: {redis_host}:{redis_port}"
-                )
+                logger.warning(f"⚠️ Redis connection test failed for database: {database}")
                 return None
     except Exception as e:
-        logger.error(
-            f"❌ Redis connection test error: {redis_host}:{redis_port} - {str(e)}"
-        )
+        logger.error(f"❌ Redis connection test error for database {database}: {str(e)}")
         return None
