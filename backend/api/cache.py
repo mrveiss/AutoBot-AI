@@ -7,14 +7,13 @@ import json
 import logging
 from typing import Any, Dict
 
-import redis
 from fastapi import APIRouter, HTTPException
 
 from src.config_helper import cfg
 from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import config as global_config_manager
-from src.utils.distributed_service_discovery import get_redis_connection_params_sync
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.redis_client import get_redis_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -36,62 +35,29 @@ REDIS_DATABASES = {
 }
 
 
-def get_redis_connection(db_number: int = 0):
+def get_redis_connection(database: str = "main"):
     """
-    Get Redis connection for specified database using service discovery
+    Get Redis connection for specified database using canonical client
 
-    ELIMINATES DNS RESOLUTION DELAYS BY:
-    - Using cached service discovery endpoints
-    - Direct IP addressing (NetworkConstants.REDIS_VM_IP) instead of DNS resolution
-    - Fast connection timeouts (0.5s vs 2s+)
+    USES CANONICAL get_redis_client() PATTERN:
+    - Circuit breaker protection
+    - Health monitoring
+    - Connection pooling
+    - Centralized configuration
+
+    Args:
+        database: Named database ("main", "knowledge", "prompts", etc.)
+                  See REDIS_DATABASES dict for available names.
     """
     try:
-        # Get Redis connection parameters from service discovery
-        # This uses cached IP addresses, no DNS resolution needed
-        params = get_redis_connection_params_sync()
-
-        # Override with config password and database if available
-        password = (
-            cfg.get("redis.password")
-            if cfg.get("redis.password")
-            else params.get("password")
-        )
-
-        return redis.Redis(
-            host=params["host"],  # Direct IP from service discovery
-            port=params["port"],
-            password=password,
-            db=db_number,
-            decode_responses=params.get("decode_responses", True),
-            socket_timeout=params.get("socket_timeout", 1.0),
-            socket_connect_timeout=params.get("socket_connect_timeout", 0.5),
-            retry_on_timeout=params.get("retry_on_timeout", False),
-            health_check_interval=params.get("health_check_interval", 0),
-        )
+        # Use canonical Redis client - MANDATORY per CLAUDE.md
+        client = get_redis_client(async_client=False, database=database)
+        if client is None:
+            raise ConnectionError(f"Failed to get Redis client for database '{database}'")
+        return client
     except Exception as e:
-        logger.error(f"Failed to connect to Redis database {db_number}: {str(e)}")
-        # Fallback to config-based connection if service discovery fails
-        try:
-            logger.warning(
-                f"Falling back to config-based Redis connection for database {db_number}"
-            )
-            return redis.Redis(
-                host=cfg.get("redis.host"),
-                port=cfg.get("redis.port"),
-                password=cfg.get("redis.password"),
-                db=db_number,
-                decode_responses=True,
-                socket_timeout=cfg.get("redis.connection.socket_timeout"),
-                socket_connect_timeout=cfg.get(
-                    "redis.connection.socket_connect_timeout"
-                ),
-                retry_on_timeout=cfg.get("redis.connection.retry_on_timeout"),
-            )
-        except Exception as fallback_error:
-            logger.error(
-                f"Config fallback also failed for Redis database {db_number}: {str(fallback_error)}"
-            )
-            raise
+        logger.error(f"Failed to connect to Redis database '{database}': {str(e)}")
+        raise
 
 
 @with_error_handling(
@@ -116,7 +82,7 @@ async def get_cache_stats():
         total_keys = 0
         for db_name, db_number in REDIS_DATABASES.items():
             try:
-                redis_conn = get_redis_connection(db_number)
+                redis_conn = get_redis_connection(db_name)
                 db_info = redis_conn.info()
                 key_count = redis_conn.dbsize()
 
@@ -166,7 +132,7 @@ async def clear_redis_cache(database: str):
             # Clear all Redis databases
             for db_name, db_number in REDIS_DATABASES.items():
                 try:
-                    redis_conn = get_redis_connection(db_number)
+                    redis_conn = get_redis_connection(db_name)
                     keys_before = redis_conn.dbsize()
                     redis_conn.flushdb()
 
@@ -202,7 +168,7 @@ async def clear_redis_cache(database: str):
                 )
 
             db_number = REDIS_DATABASES[database]
-            redis_conn = get_redis_connection(db_number)
+            redis_conn = get_redis_connection(database)
             keys_before = redis_conn.dbsize()
             redis_conn.flushdb()
 
@@ -298,7 +264,7 @@ async def save_cache_config(config_data: Dict[str, Any]):
 
         # Store in Redis config database for persistence
         try:
-            redis_conn = get_redis_connection(REDIS_DATABASES["config"])
+            redis_conn = get_redis_connection("config")
             redis_conn.set("cache_config", json.dumps(config_data))
             logger.info("Cache configuration saved to Redis")
         except Exception as e:
@@ -330,7 +296,7 @@ async def get_cache_config():
     try:
         # Try to load from Redis first
         try:
-            redis_conn = get_redis_connection(REDIS_DATABASES["config"])
+            redis_conn = get_redis_connection("config")
             config_data = redis_conn.get("cache_config")
             if config_data:
                 return {
