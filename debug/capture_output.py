@@ -15,6 +15,10 @@ import queue
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.utils.terminal_input_handler import safe_input
+from src.constants.network_constants import NetworkConstants
+
+# Build URLs from centralized configuration
+BASE_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
 
 class OutputCapture:
@@ -118,7 +122,7 @@ def capture_autobot_output():
         "2": ("Run AutoBot in test mode", "./run_agent.sh --test-mode"),
         "3": (
             "Check system health",
-            'curl -s "http://localhost:8001/api/system/health" | python3 -m json.tool',
+            f'curl -s "{BASE_URL}/api/system/health" | python3 -m json.tool',
         ),
         "4": ("Run workflow test", "python3 test_workflow_api.py"),
         "5": ("Custom command", None),
