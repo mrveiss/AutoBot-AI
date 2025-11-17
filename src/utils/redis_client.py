@@ -705,19 +705,33 @@ class RedisConnectionManager:
     def _get_database_number(self, database_name: str) -> int:
         """Get database number for a given database name"""
         # Use built-in database name mapping (consolidated from redis_database_manager)
+        # Complete mapping matching all usage across AutoBot codebase
         db_mapping = {
+            # Core databases
             "main": 0,
             "knowledge": 1,
             "prompts": 2,
             "agents": 3,
+            "conversations": 3,  # Alias for agents (conversation storage)
             "metrics": 4,
-            "analytics": 11,
+            "cache": 5,
             "sessions": 6,
+            "locks": 6,  # Alias for sessions (distributed locks)
             "workflows": 7,
+            "monitoring": 7,  # Alias for workflows (monitoring data)
             "vectors": 8,
+            "rate_limiting": 8,  # Alias for vectors (rate limit counters)
             "models": 9,
             "memory": 9,
+            "analytics": 9,  # Maps to models/memory database
+            "websockets": 10,
+            "config": 11,  # CRITICAL: Cache configuration storage
         }
+        if database_name not in db_mapping:
+            logger.warning(
+                f"Unknown database name '{database_name}', defaulting to DB 0. "
+                f"Available: {sorted(db_mapping.keys())}"
+            )
         return db_mapping.get(database_name, 0)
 
     def _check_circuit_breaker(self, database_name: str) -> bool:
