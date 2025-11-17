@@ -309,16 +309,16 @@ class DistributedServiceDiscovery:
                     async with await http_client.get(url, timeout=timeout) as response:
                         if response.status < 500:  # Accept 2xx, 3xx, 4xx
                             response_time = time.time() - start_time
-                                endpoint.is_healthy = True
-                                endpoint.response_time = response_time
-                                endpoint.last_check = time.time()
-                                return True
-                    except:
-                        continue
+                            endpoint.is_healthy = True
+                            endpoint.response_time = response_time
+                            endpoint.last_check = time.time()
+                            return True
+                except Exception:
+                    continue
 
-                endpoint.is_healthy = False
-                endpoint.last_check = time.time()
-                return False
+            endpoint.is_healthy = False
+            endpoint.last_check = time.time()
+            return False
 
         except Exception:
             endpoint.is_healthy = False
