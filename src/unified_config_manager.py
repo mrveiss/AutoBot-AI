@@ -613,8 +613,8 @@ class UnifiedConfigManager:
                         "ollama": {
                             "selected_model": self.get_selected_model(),
                             "models": [],
-                            "endpoint": f"http://127.0.0.1:11434/api/generate",
-                            "host": f"http://127.0.0.1:11434",
+                            "endpoint": f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}/api/generate",
+                            "host": f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}",
                         }
                     },
                 },
@@ -860,7 +860,7 @@ class UnifiedConfigManager:
         ollama_port = self.get_port("ollama")
         if ollama_host and ollama_port:
             return f"http://{ollama_host}:{ollama_port}"
-        return "http://127.0.0.1:11434"
+        return f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
 
     def get_redis_url(self) -> str:
         """Get the Redis service URL from configuration (backward compatibility)"""

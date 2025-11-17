@@ -250,7 +250,7 @@ class ConfigHelper:
             "urls": {
                 "api_base": ServiceURLs.BACKEND_LOCAL,
                 "frontend_base": ServiceURLs.FRONTEND_VM,  # FIXED: Frontend on VM1 (172.16.168.21)
-                "redis_url": "redis://localhost:6379",
+                "redis_url": ServiceURLs.REDIS_LOCAL,
                 "ollama_url": ServiceURLs.OLLAMA_LOCAL,
             },
             "database_connections": {
