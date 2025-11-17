@@ -199,24 +199,24 @@ class SystemMetricsCollector:
                             category="performance",
                         )
 
-                    metrics[f"{service_name}_health"] = SystemMetric(
-                        timestamp=timestamp,
-                        name=f"{service_name}_health",
-                        value=health_value,
-                        unit="status",
-                        category="services",
-                    )
+                        metrics[f"{service_name}_health"] = SystemMetric(
+                            timestamp=timestamp,
+                            name=f"{service_name}_health",
+                            value=health_value,
+                            unit="status",
+                            category="services",
+                        )
 
-                except Exception as e:
-                    self.logger.warning(f"Health check failed for {service_name}: {e}")
-                    metrics[f"{service_name}_health"] = SystemMetric(
-                        timestamp=timestamp,
-                        name=f"{service_name}_health",
-                        value=0.0,
-                        unit="status",
-                        category="services",
-                        metadata={"error": str(e)},
-                    )
+            except Exception as e:
+                self.logger.warning(f"Health check failed for {service_name}: {e}")
+                metrics[f"{service_name}_health"] = SystemMetric(
+                    timestamp=timestamp,
+                    name=f"{service_name}_health",
+                    value=0.0,
+                    unit="status",
+                    category="services",
+                    metadata={"error": str(e)},
+                )
 
         return metrics
 
