@@ -626,7 +626,7 @@ class Phase9PerformanceMonitor:
             # Use singleton HTTP client for connection pooling
             http_client = get_http_client()
             async with await http_client.get(
-                f"http://{backend_host}:8001/api/health",
+                f"http://{backend_host}:{NetworkConstants.BACKEND_PORT}/api/health",
                 timeout=aiohttp.ClientTimeout(total=2.0)
             ) as response:
                 if response.status == 200:
