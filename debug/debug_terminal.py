@@ -11,6 +11,14 @@ import websockets
 import sys
 from datetime import datetime
 
+# Import centralized network configuration
+sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+from src.constants.network_constants import NetworkConstants
+
+# Build URLs from centralized configuration
+BASE_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+WS_BASE_URL = f"ws://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+
 
 def test_terminal_api():
     """Test the terminal REST API endpoints"""
@@ -19,7 +27,7 @@ def test_terminal_api():
     # Test session creation
     try:
         response = requests.post(
-            "http://localhost:8001/api/terminal/sessions",
+            f"{BASE_URL}/api/terminal/sessions",
             json={
                 "shell": "/bin/bash",
                 "environment": {},
@@ -46,7 +54,7 @@ async def test_terminal_websocket(session_id):
     """Test the terminal WebSocket connection"""
     print(f"\n🔍 Testing Terminal WebSocket for session {session_id}...")
 
-    uri = f"ws://localhost:8001/api/terminal/ws/terminal/{session_id}"
+    uri = f"{WS_BASE_URL}/api/terminal/ws/terminal/{session_id}"
 
     try:
         async with websockets.connect(uri) as websocket:
@@ -87,7 +95,7 @@ def test_system_health():
     print("\n🔍 Testing System Health...")
 
     try:
-        response = requests.get("http://localhost:8001/api/system/health", timeout=5)
+        response = requests.get(f"{BASE_URL}/api/system/health", timeout=5)
         if response.status_code == 200:
             health_data = response.json()
             print(f"✅ System health: {health_data}")
@@ -103,7 +111,7 @@ def test_workflow_api():
 
     try:
         response = requests.get(
-            "http://localhost:8001/api/workflow/workflows", timeout=5
+            f"{BASE_URL}/api/workflow/workflows", timeout=5
         )
         if response.status_code == 200:
             workflow_data = response.json()
@@ -138,7 +146,7 @@ async def main():
         # Clean up session
         try:
             delete_response = requests.delete(
-                f"http://localhost:8001/api/terminal/sessions/{session_id}", timeout=5
+                f"{BASE_URL}/api/terminal/sessions/{session_id}", timeout=5
             )
             if delete_response.status_code == 200:
                 print(f"🧹 Session {session_id} cleaned up successfully")
