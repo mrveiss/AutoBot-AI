@@ -51,6 +51,10 @@ from backend.api.mcp_registry import router as mcp_registry_router
 from backend.api.sequential_thinking_mcp import router as sequential_thinking_mcp_router
 from backend.api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from backend.api.filesystem_mcp import router as filesystem_mcp_router
+from backend.api.browser_mcp import router as browser_mcp_router
+from backend.api.http_client_mcp import router as http_client_mcp_router
+from backend.api.database_mcp import router as database_mcp_router
+from backend.api.git_mcp import router as git_mcp_router
 from backend.dependencies import get_config, get_knowledge_base
 from backend.knowledge_factory import get_or_create_knowledge_base
 from src.chat_history_manager import ChatHistoryManager
@@ -1079,6 +1083,10 @@ class AppFactory:
             (sequential_thinking_mcp_router, "/sequential_thinking", ["sequential_thinking_mcp", "mcp"], "sequential_thinking_mcp"),
             (structured_thinking_mcp_router, "/structured_thinking", ["structured_thinking_mcp", "mcp"], "structured_thinking_mcp"),
             (filesystem_mcp_router, "/filesystem", ["filesystem_mcp", "mcp"], "filesystem_mcp"),
+            (browser_mcp_router, "/browser", ["browser_mcp", "mcp"], "browser_mcp"),
+            (http_client_mcp_router, "/http_client", ["http_client_mcp", "mcp"], "http_client_mcp"),
+            (database_mcp_router, "/database", ["database_mcp", "mcp"], "database_mcp"),
+            (git_mcp_router, "/git", ["git_mcp", "mcp"], "git_mcp"),
             (agent_router, "/agent", ["agent"], "agent"),
             (agent_config_router, "/agent_config", ["agent_config"], "agent_config"),
             (
