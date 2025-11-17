@@ -56,6 +56,7 @@ class NetworkConstants:
     AI_STACK_PORT: int = 8080
     NPU_WORKER_PORT: int = 8081  # Linux NPU worker (VM2)
     NPU_WORKER_WINDOWS_PORT: int = 8082  # Windows NPU worker (primary on main machine)
+    CHROME_DEBUGGER_PORT: int = 9222  # Chrome DevTools Protocol port
 
     # Development ports
     DEV_FRONTEND_PORT: int = 5173
@@ -101,6 +102,11 @@ class ServiceURLs:
     # VNC Desktop URLs
     VNC_DESKTOP: str = (
         f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.VNC_PORT}/vnc.html"
+    )
+
+    # Chrome DevTools Protocol URLs
+    CHROME_DEBUGGER_LOCAL: str = (
+        f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.CHROME_DEBUGGER_PORT}"
     )
     VNC_LOCAL: str = (
         f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}/vnc.html"
