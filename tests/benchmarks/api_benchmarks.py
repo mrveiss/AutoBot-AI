@@ -18,10 +18,14 @@ import pytest
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from src.constants.network_constants import NetworkConstants
 from tests.benchmarks.benchmark_base import (
     BenchmarkRunner,
     assert_performance,
 )
+
+# Build URLs from centralized configuration
+BASE_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
 
 class TestAPIEndpointBenchmarks:
@@ -56,7 +60,7 @@ class TestAPIEndpointBenchmarks:
 
         async def health_check():
             async with httpx.AsyncClient() as client:
-                response = await client.get("http://localhost:8001/api/health")
+                response = await client.get(f"{BASE_URL}/api/health")
                 return response.json()
 
         result = await runner.run_async_benchmark(
@@ -83,7 +87,7 @@ class TestAPIEndpointBenchmarks:
         async def send_chat():
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    "http://localhost:8001/api/chat/message",
+                    f"{BASE_URL}/api/chat/message",
                     json={"message": "Test message", "session_id": "bench_001"},
                 )
                 return response.json()
@@ -109,7 +113,7 @@ class TestAPIEndpointBenchmarks:
 
         async def list_tools():
             async with httpx.AsyncClient() as client:
-                response = await client.get("http://localhost:8001/api/mcp/tools")
+                response = await client.get(f"{BASE_URL}/api/mcp/tools")
                 return response.json()
 
         result = await runner.run_async_benchmark(
@@ -133,7 +137,7 @@ class TestAPIEndpointBenchmarks:
         async def search_knowledge():
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    "http://localhost:8001/api/knowledge/query",
+                    f"{BASE_URL}/api/knowledge/query",
                     json={"query": "test query", "top_k": 5},
                 )
                 return response.json()
@@ -158,7 +162,7 @@ class TestAPIEndpointBenchmarks:
 
         async def concurrent_health_checks():
             async with httpx.AsyncClient() as client:
-                tasks = [client.get("http://localhost:8001/api/health") for _ in range(5)]
+                tasks = [client.get(f"{BASE_URL}/api/health") for _ in range(5)]
                 responses = await asyncio.gather(*tasks)
                 return [r.json() for r in responses]
 
