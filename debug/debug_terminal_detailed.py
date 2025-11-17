@@ -12,6 +12,14 @@ import sys
 import time
 from datetime import datetime
 
+# Import centralized network configuration
+sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+from src.constants.network_constants import NetworkConstants
+
+# Build URLs from centralized configuration
+BASE_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+WS_BASE_URL = f"ws://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+
 
 async def test_session_lifecycle():
     """Test the complete terminal session lifecycle with detailed monitoring"""
@@ -21,7 +29,7 @@ async def test_session_lifecycle():
     chat_id = f"debug_{int(time.time())}"
     print(f"📝 Using chat_id: {chat_id}")
     
-    uri = f"ws://localhost:8001/api/terminal/ws/terminal/{chat_id}"
+    uri = f"{WS_BASE_URL}/api/terminal/ws/terminal/{chat_id}"
     
     try:
         async with websockets.connect(uri) as websocket:
@@ -50,7 +58,7 @@ async def test_session_lifecycle():
             # Step 2: Test active sessions API
             print("\n🔍 Step 2: Checking Active Sessions")
             try:
-                response = requests.get("http://localhost:8001/api/terminal/sessions", timeout=5)
+                response = requests.get(f"{BASE_URL}/api/terminal/sessions", timeout=5)
                 if response.status_code == 200:
                     sessions_data = response.json()
                     print(f"📊 Active sessions response: {json.dumps(sessions_data, indent=2)}")

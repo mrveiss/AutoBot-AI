@@ -12,6 +12,14 @@ import sys
 import uuid
 from datetime import datetime
 
+# Import centralized network configuration
+sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+from src.constants.network_constants import NetworkConstants
+
+# Build URLs from centralized configuration
+BASE_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+WS_BASE_URL = f"ws://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+
 
 def test_rest_api_approach():
     """Test the REST API terminal session approach"""
@@ -21,7 +29,7 @@ def test_rest_api_approach():
     # Create session via REST API
     try:
         response = requests.post(
-            "http://localhost:8001/api/terminal/sessions",
+            f"{BASE_URL}/api/terminal/sessions",
             json={
                 "shell": "/bin/bash", 
                 "environment": {},
@@ -51,7 +59,7 @@ async def test_chat_websocket_approach():
     chat_id = f"chat_{int(datetime.now().timestamp())}"
     print(f"📝 Using chat_id: {chat_id}")
     
-    uri = f"ws://localhost:8001/api/terminal/ws/terminal/{chat_id}"
+    uri = f"{WS_BASE_URL}/api/terminal/ws/terminal/{chat_id}"
     
     try:
         async with websockets.connect(uri) as websocket:
@@ -107,7 +115,7 @@ async def test_rest_websocket_mismatch(session_id):
     print(f"\n🔍 Testing REST Session ID on Chat WebSocket (Expected to Fail)...")
     print("=" * 40)
     
-    uri = f"ws://localhost:8001/api/terminal/ws/terminal/{session_id}"
+    uri = f"{WS_BASE_URL}/api/terminal/ws/terminal/{session_id}"
     
     try:
         async with websockets.connect(uri) as websocket:
@@ -151,7 +159,7 @@ def test_frontend_simulation():
     
     print("📋 How the frontend SHOULD work:")
     print("1. TerminalWindow generates or gets chat_id")
-    print("2. Connects to ws://localhost:8001/api/terminal/ws/terminal/{chat_id}")
+    print(f"2. Connects to {WS_BASE_URL}/api/terminal/ws/terminal/{{chat_id}}")
     print("3. WebSocket handler creates internal terminal session")
     print("4. Commands are sent via WebSocket input messages")
     print("5. Output streams back via WebSocket output messages")
@@ -181,7 +189,7 @@ async def main():
         
         # Cleanup REST session
         try:
-            requests.delete(f"http://localhost:8001/api/terminal/sessions/{session_id}", timeout=5)
+            requests.delete(f"{BASE_URL}/api/terminal/sessions/{session_id}", timeout=5)
             print(f"🧹 Cleaned up REST session: {session_id}")
         except Exception as e:
             print(f"⚠️ Cleanup error: {e}")
