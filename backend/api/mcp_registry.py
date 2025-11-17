@@ -251,6 +251,30 @@ MCP_BRIDGES = [
         "/api/filesystem/mcp/tools",
         ["read_files", "write_files", "directory_management", "search", "metadata"],
     ),
+    (
+        "browser_mcp",
+        "Browser Automation - Secure Web Interaction via Playwright",
+        "/api/browser/mcp/tools",
+        ["navigate", "click", "fill", "screenshot", "evaluate", "wait", "scraping"],
+    ),
+    (
+        "http_client_mcp",
+        "HTTP Client - Secure REST API Interactions",
+        "/api/http_client/mcp/tools",
+        ["get", "post", "put", "patch", "delete", "head", "rate_limiting"],
+    ),
+    (
+        "database_mcp",
+        "Database Operations - SQLite Query and Management",
+        "/api/database/mcp/tools",
+        ["query", "execute", "schema", "tables", "statistics", "sql_injection_prevention"],
+    ),
+    (
+        "git_mcp",
+        "Git Operations - Version Control Repository Management",
+        "/api/git/mcp/tools",
+        ["status", "log", "diff", "branch", "blame", "show", "repository_whitelist"],
+    ),
 ]
 
 
