@@ -15,7 +15,7 @@ import aiofiles
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 from src.config_helper import cfg
-from src.constants.network_constants import NetworkConstants
+from src.constants.network_constants import NetworkConstants, ServiceURLs
 from src.source_attribution import SourceType, track_source
 from src.utils.display_utils import get_playwright_config
 
@@ -64,7 +64,7 @@ class ResearchBrowserSession:
                 # Try to connect to CDP if available (for future use)
                 self.browser = await self.playwright.chromium.connect_over_cdp(
                     cfg.get_service_url("chrome", "/devtools")
-                    or "http://localhost:9222"
+                    or ServiceURLs.CHROME_DEBUGGER_LOCAL
                 )
                 logger.info(
                     f"Connected to existing browser via CDP for session "
