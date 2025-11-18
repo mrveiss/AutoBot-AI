@@ -390,12 +390,25 @@ class ServiceDiscovery:
             return ServiceStatus.UNHEALTHY
 
     async def _check_tcp_service(self, service: ServiceEndpoint) -> ServiceStatus:
-        """Check TCP-based service health (e.g., Redis)"""
+        """Check TCP-based service health (e.g., Redis)
+
+        NOTE: This method uses direct redis.Redis() instantiation intentionally
+        for health check diagnostics. This is a monitoring/diagnostic function,
+        NOT for production client creation. For production clients, use
+        get_redis_client() from src.utils.redis_client.
+
+        Direct instantiation is appropriate here because:
+        - Tests arbitrary endpoints (not just canonical Redis VM)
+        - Uses custom strict timeouts for fast failure detection
+        - Creates fresh connections (no pooling) to test raw connectivity
+        - Measures actual response times for health monitoring
+        """
         try:
             # For Redis specifically
             if service.name == "redis":
                 import redis.asyncio as redis
 
+                # Direct instantiation for health check (intentional exception to canonical pattern)
                 client = redis.Redis(
                     host=service.host,
                     port=service.port,

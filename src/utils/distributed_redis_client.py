@@ -1,6 +1,10 @@
 """
 Distributed Redis Client for AutoBot 6-VM Architecture
 Handles connection to remote Redis VM
+
+DEPRECATION NOTICE: This module is deprecated. Use get_redis_client() from
+src.utils.redis_client instead, which provides the same functionality with
+better connection pooling, health checks, and retry logic.
 """
 
 import asyncio
@@ -11,6 +15,7 @@ from typing import Optional
 import redis
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -53,24 +58,23 @@ class DistributedRedisClient:
         return self._client
 
     def _create_connection(self) -> Optional[redis.Redis]:
-        """Create Redis connection with distributed-specific configuration"""
+        """Create Redis connection using canonical get_redis_client()
+
+        Uses the canonical get_redis_client() pattern which provides:
+        - Connection pooling
+        - Health monitoring
+        - Retry logic
+        - Centralized configuration
+        """
         try:
             self._connection_attempts += 1
 
-            # Connection parameters optimized for remote Redis
-            client = redis.Redis(
-                host=self.redis_host,
-                port=self.redis_port,
-                password=self._get_redis_password(),
-                decode_responses=True,
-                socket_connect_timeout=2,  # Fast timeout for distributed setup
-                socket_timeout=2,
-                socket_keepalive=True,
-                socket_keepalive_options={},
-                health_check_interval=30,
-                retry_on_timeout=True,
-                max_connections=10,  # Conservative for remote connection
-            )
+            # Use canonical Redis client (already configured for distributed setup)
+            client = get_redis_client(async_client=False, database="main")
+
+            if client is None:
+                logger.warning("⚠️ Redis canonical client unavailable")
+                return None
 
             # Test connection
             client.ping()

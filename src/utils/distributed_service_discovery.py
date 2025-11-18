@@ -258,10 +258,23 @@ class DistributedServiceDiscovery:
             return False
 
     async def _check_redis_health(self, endpoint: ServiceEndpoint) -> bool:
-        """Quick Redis connection test"""
+        """Quick Redis connection test
+
+        NOTE: This method uses direct redis.Redis() instantiation intentionally
+        for health check diagnostics. This is a monitoring/diagnostic function,
+        NOT for production client creation. For production clients, use
+        get_redis_client() from src.utils.redis_client.
+
+        Direct instantiation is appropriate here because:
+        - Tests arbitrary endpoints with strict 100ms timeouts
+        - Creates fresh connections (no pooling) to test raw connectivity
+        - Measures actual response times for health monitoring
+        - No retries wanted (immediate failure detection)
+        """
         try:
             import redis.asyncio as redis
 
+            # Direct instantiation for health check (intentional exception to canonical pattern)
             # Immediate connection test (no retries)
             client = redis.Redis(
                 host=endpoint.host,
