@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Performance Dashboard Generator for AutoBot
 Creates HTML dashboards for system monitoring and performance tracking
@@ -10,11 +13,197 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
 
+from src.utils.html_dashboard_utils import (
+    get_light_theme_css,
+    create_dashboard_header,
+)
+
 
 def generate_dashboard_html(monitoring_data: Dict[str, Any]) -> str:
     """Generate comprehensive HTML dashboard"""
 
-    dashboard_html = f"""
+    # Generate dashboard components using utility functions
+    light_theme_css = get_light_theme_css()
+    header_html = create_dashboard_header(
+        title="🤖 AutoBot Monitoring Dashboard",
+        subtitle="Real-time system performance and health monitoring",
+        theme="light"
+    )
+
+    # Additional CSS for dashboard-specific elements
+    additional_css = """
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+        }
+
+        .card h3 {
+            color: #4a5568;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .metric:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            font-weight: 500;
+            color: #4a5568;
+        }
+
+        .metric-value {
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e2e8f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 0.5rem 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-normal {
+            background: linear-gradient(90deg, #48bb78, #38a169);
+        }
+
+        .progress-warning {
+            background: linear-gradient(90deg, #ed8936, #d69e2e);
+        }
+
+        .progress-critical {
+            background: linear-gradient(90deg, #f56565, #e53e3e);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin: 1rem 0;
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .service-card {
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .service-healthy {
+            border-color: #38a169;
+            background-color: #f0fff4;
+        }
+
+        .service-unhealthy {
+            border-color: #e53e3e;
+            background-color: #fef5f5;
+        }
+
+        .service-name {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+        }
+
+        .service-status {
+            font-size: 0.8rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            color: white;
+        }
+
+        .alerts-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .alert-item {
+            padding: 0.8rem;
+            margin: 0.5rem 0;
+            border-radius: 6px;
+            border-left: 4px solid;
+        }
+
+        .alert-warning {
+            background-color: #fef5e7;
+            border-color: #d69e2e;
+        }
+
+        .alert-critical {
+            background-color: #fef5f5;
+            border-color: #e53e3e;
+        }
+
+        .timestamp {
+            color: #718096;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: #718096;
+            background: white;
+            margin-top: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .refresh-info {
+            background: #edf2f7;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            text-align: center;
+            color: #4a5568;
+        }
+    """
+
+    dashboard_html = '''
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -23,235 +212,16 @@ def generate_dashboard_html(monitoring_data: Dict[str, Any]) -> str:
     <title>AutoBot Monitoring Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }}
-
-        body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f5f5f5;
-            color: #333;
-            line-height: 1.6;
-        }}
-
-        .header {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 2rem;
-            text-align: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }}
-
-        .header h1 {{
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-        }}
-
-        .header p {{
-            font-size: 1.1rem;
-            opacity: 0.9;
-        }}
-
-        .container {{
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem;
-        }}
-
-        .dashboard-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }}
-
-        .card {{
-            background: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
-        }}
-
-        .card:hover {{
-            transform: translateY(-2px);
-        }}
-
-        .card h3 {{
-            color: #4a5568;
-            margin-bottom: 1rem;
-            font-size: 1.3rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }}
-
-        .metric {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid #e2e8f0;
-        }}
-
-        .metric:last-child {{
-            border-bottom: none;
-        }}
-
-        .metric-label {{
-            font-weight: 500;
-            color: #4a5568;
-        }}
-
-        .metric-value {{
-            font-weight: bold;
-            color: #2d3748;
-        }}
-
-        .status-healthy {{
-            color: #38a169;
-        }}
-
-        .status-warning {{
-            color: #d69e2e;
-        }}
-
-        .status-critical {{
-            color: #e53e3e;
-        }}
-
-        .progress-bar {{
-            width: 100%;
-            height: 20px;
-            background-color: #e2e8f0;
-            border-radius: 10px;
-            overflow: hidden;
-            margin: 0.5rem 0;
-        }}
-
-        .progress-fill {{
-            height: 100%;
-            border-radius: 10px;
-            transition: width 0.3s ease;
-        }}
-
-        .progress-normal {{
-            background: linear-gradient(90deg, #48bb78, #38a169);
-        }}
-
-        .progress-warning {{
-            background: linear-gradient(90deg, #ed8936, #d69e2e);
-        }}
-
-        .progress-critical {{
-            background: linear-gradient(90deg, #f56565, #e53e3e);
-        }}
-
-        .chart-container {{
-            position: relative;
-            height: 300px;
-            margin: 1rem 0;
-        }}
-
-        .services-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-top: 1rem;
-        }}
-
-        .service-card {{
-            background: #f8fafc;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-        }}
-
-        .service-healthy {{
-            border-color: #38a169;
-            background-color: #f0fff4;
-        }}
-
-        .service-unhealthy {{
-            border-color: #e53e3e;
-            background-color: #fef5f5;
-        }}
-
-        .service-name {{
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-            text-transform: uppercase;
-            font-size: 0.9rem;
-        }}
-
-        .service-status {{
-            font-size: 0.8rem;
-            padding: 0.2rem 0.5rem;
-            border-radius: 12px;
-            color: white;
-        }}
-
-        .alerts-list {{
-            max-height: 300px;
-            overflow-y: auto;
-        }}
-
-        .alert-item {{
-            padding: 0.8rem;
-            margin: 0.5rem 0;
-            border-radius: 6px;
-            border-left: 4px solid;
-        }}
-
-        .alert-warning {{
-            background-color: #fef5e7;
-            border-color: #d69e2e;
-        }}
-
-        .alert-critical {{
-            background-color: #fef5f5;
-            border-color: #e53e3e;
-        }}
-
-        .timestamp {{
-            color: #718096;
-            font-size: 0.9rem;
-            margin-top: 1rem;
-            text-align: center;
-        }}
-
-        .footer {{
-            text-align: center;
-            padding: 2rem;
-            color: #718096;
-            background: white;
-            margin-top: 2rem;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }}
-
-        .refresh-info {{
-            background: #edf2f7;
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 2rem;
-            text-align: center;
-            color: #4a5568;
-        }}
+{light_theme_css}
+{additional_css}
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🤖 AutoBot Monitoring Dashboard</h1>
-        <p>Real-time system performance and health monitoring</p>
-    </div>
+{header_html}
 
     <div class="container">
         <div class="refresh-info">
-            📊 Dashboard generated at {monitoring_data.get('timestamp', 'Unknown')} |
+            📊 Dashboard generated at {timestamp} |
             🔄 Auto-refresh available via monitoring system
         </div>
 
@@ -259,25 +229,25 @@ def generate_dashboard_html(monitoring_data: Dict[str, Any]) -> str:
             <!-- System Overview Card -->
             <div class="card">
                 <h3>⚡ System Overview</h3>
-                {_generate_system_overview_html(monitoring_data)}
+                {system_overview_html}
             </div>
 
             <!-- Service Status Card -->
             <div class="card">
                 <h3>🔧 Service Status</h3>
-                {_generate_service_status_html(monitoring_data)}
+                {service_status_html}
             </div>
 
             <!-- Performance Metrics Card -->
             <div class="card">
                 <h3>📊 Performance Metrics</h3>
-                {_generate_performance_metrics_html(monitoring_data)}
+                {performance_metrics_html}
             </div>
 
             <!-- Health Checks Card -->
             <div class="card">
                 <h3>🏥 Health Checks</h3>
-                {_generate_health_checks_html(monitoring_data)}
+                {health_checks_html}
             </div>
         </div>
 
@@ -295,12 +265,12 @@ def generate_dashboard_html(monitoring_data: Dict[str, Any]) -> str:
         <div class="dashboard-grid">
             <div class="card">
                 <h3>🚨 Recent Alerts</h3>
-                {_generate_alerts_html(monitoring_data)}
+                {alerts_html}
             </div>
 
             <div class="card">
                 <h3>📋 System Information</h3>
-                {_generate_system_info_html(monitoring_data)}
+                {system_info_html}
             </div>
         </div>
 
@@ -312,10 +282,22 @@ def generate_dashboard_html(monitoring_data: Dict[str, Any]) -> str:
 
     <script>
         // Performance Chart
-        {_generate_chart_script(monitoring_data)}
+        {chart_script}
     </script>
 </body>
-</html>"""
+</html>'''.format(
+        light_theme_css=light_theme_css,
+        additional_css=additional_css,
+        header_html=header_html,
+        timestamp=monitoring_data.get('timestamp', 'Unknown'),
+        system_overview_html=_generate_system_overview_html(monitoring_data),
+        service_status_html=_generate_service_status_html(monitoring_data),
+        performance_metrics_html=_generate_performance_metrics_html(monitoring_data),
+        health_checks_html=_generate_health_checks_html(monitoring_data),
+        alerts_html=_generate_alerts_html(monitoring_data),
+        system_info_html=_generate_system_info_html(monitoring_data),
+        chart_script=_generate_chart_script(monitoring_data)
+    )
 
     return dashboard_html
 
