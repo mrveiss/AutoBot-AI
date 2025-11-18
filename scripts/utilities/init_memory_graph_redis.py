@@ -5,7 +5,7 @@ Redis Memory Graph Initialization Script
 This script initializes the Redis Stack infrastructure for AutoBot's Memory Graph system,
 including index creation, schema validation, data migration, and performance benchmarking.
 
-Database: Redis Stack DB 0 (172.16.168.23:6379) - RedisSearch limitation
+Database: Redis Stack DB 0 (RedisSearch limitation)
 Data Prefix: memory:graph:entity:* (logical separation from knowledge base)
 Specification: /home/kali/Desktop/AutoBot/docs/database/REDIS_MEMORY_GRAPH_SPECIFICATION.md
 
@@ -42,6 +42,8 @@ from redis.commands.search.field import NumericField, TagField, TextField, Vecto
 from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 from redis.commands.search.query import Query
 
+from src.constants.network_constants import NetworkConstants
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -57,18 +59,18 @@ logger = logging.getLogger(__name__)
 class MemoryGraphInitializer:
     """Initialize and configure Redis Memory Graph infrastructure"""
 
-    def __init__(self, redis_host: str = "172.16.168.23", redis_port: int = 6379):
+    def __init__(self, redis_host: str = None, redis_port: int = None):
         """Initialize Redis connection for Memory Graph
 
         NOTE: RedisSearch requires DB 0, so we use key prefixes for logical separation.
         Memory Graph keys: memory:graph:entity:*, memory:graph:relations:*
 
         Args:
-            redis_host: Redis host address
-            redis_port: Redis port
+            redis_host: Redis host address (defaults to NetworkConstants.REDIS_HOST)
+            redis_port: Redis port (defaults to NetworkConstants.REDIS_PORT)
         """
-        self.redis_host = redis_host
-        self.redis_port = redis_port
+        self.redis_host = redis_host or NetworkConstants.REDIS_HOST
+        self.redis_port = redis_port or NetworkConstants.REDIS_PORT
         self.redis_db = 0  # RedisSearch limitation - must use DB 0
 
         # Key prefixes for logical database separation
