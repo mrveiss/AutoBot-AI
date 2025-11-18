@@ -633,9 +633,8 @@ class UnifiedConfigManager:
 
         # If not explicitly configured, construct from infrastructure config
         if not ollama_endpoint:
-            from src.unified_config import config
-            ollama_host = config.get_host("ollama")
-            ollama_port = config.get_port("ollama")
+            ollama_host = self.get_host("ollama")
+            ollama_port = self.get_port("ollama")
             ollama_endpoint = f"http://{ollama_host}:{ollama_port}"
 
         # Return legacy-compatible format for existing code
