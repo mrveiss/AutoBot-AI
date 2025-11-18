@@ -504,7 +504,7 @@ class AutoBotSemanticChunker:
             try:
                 dim = self._embedding_model.get_sentence_embedding_dimension()
                 return np.zeros((len(sentences), dim))
-            except:
+            except Exception:
                 # Fallback dimension if model access fails
                 return np.zeros((len(sentences), 384))
 
