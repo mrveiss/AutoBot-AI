@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 import yaml
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.model_constants import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class ContextWindowManager:
                     "message_budget": {
                         "system_prompt": 500,
                         "recent_messages": 20,
-                        "max_history_tokens": 3000,
+                        "max_history_tokens": ModelConfig.MAX_HISTORY_TOKENS,
                     },
                 },
                 "qwen2.5-coder-7b-instruct": {
@@ -71,7 +72,7 @@ class ContextWindowManager:
                     "message_budget": {
                         "system_prompt": 500,
                         "recent_messages": 20,
-                        "max_history_tokens": 3000,
+                        "max_history_tokens": ModelConfig.MAX_HISTORY_TOKENS,
                     },
                 },
             },

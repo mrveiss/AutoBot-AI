@@ -69,6 +69,7 @@ class ModelConfig:
     # Context limits
     DEFAULT_CONTEXT_LENGTH: int = 8192
     MAX_CONTEXT_LENGTH: int = 32768
+    MAX_HISTORY_TOKENS: int = 3000  # Maximum tokens for conversation history
 
     # Generation parameters
     DEFAULT_TEMPERATURE: float = 0.7

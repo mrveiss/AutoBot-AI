@@ -76,7 +76,7 @@ class PerformanceBenchmark:
             }),
             ("LLM Request", "POST", f"http://{VMS['main']}:8001/api/llm/request", {
                 "prompt": "What is AutoBot?",
-                "model": "llama3.1:8b"
+                "model": os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.1:8b")
             })
         ]
         
