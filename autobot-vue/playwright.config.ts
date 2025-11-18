@@ -1,8 +1,19 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
+ * AutoBot E2E Test Configuration
+ *
+ * Environment Variables:
+ * - VITE_BASE_URL: Frontend URL (default: http://localhost:5173)
+ * - VITE_API_BASE_URL: Backend API URL (default: http://localhost:8001)
+ *
  * @see https://playwright.dev/docs/test-configuration
  */
+
+// Test environment configuration with fallbacks
+const FRONTEND_URL = process.env.VITE_BASE_URL || 'http://localhost:5173';
+const BACKEND_URL = process.env.VITE_API_BASE_URL || 'http://localhost:8001';
+
 export default defineConfig({
   testDir: './tests/e2e',
   /* Run tests in files in parallel */
@@ -18,7 +29,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: FRONTEND_URL,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -71,7 +82,7 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     command: 'npm run dev',
-    url: 'http://127.0.0.1:5173',
+    url: FRONTEND_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
   },
