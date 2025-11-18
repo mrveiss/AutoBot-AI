@@ -20,6 +20,8 @@ Usage:
 
 # Re-export everything from the compatibility shim
 from src.unified_config_shim import (
+    API_BASE_URL,
+    OLLAMA_URL,
     UnifiedConfigAdapter,
     config,
     get_host,
@@ -43,4 +45,6 @@ __all__ = [
     "get_timeout",
     "get_timeout_for_env",
     "get_timeout_group",
+    "API_BASE_URL",
+    "OLLAMA_URL",
 ]
