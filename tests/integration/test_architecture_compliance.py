@@ -19,67 +19,69 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.unified_config_manager import unified_config_manager
+from src.constants.network_constants import NetworkConstants
+from src.utils.redis_client import get_redis_client
 
 
 class TestServiceDistribution:
     """Test that services are running on correct VMs"""
 
     def test_redis_on_vm3_only(self):
-        """Ensure Redis runs only on VM3 (172.16.168.23)"""
+        """Ensure Redis runs only on VM3 (Redis VM)"""
         redis_config = unified_config_manager.get_redis_config()
         redis_host = redis_config.get("host")
 
-        assert redis_host == "172.16.168.23", (
-            f"Redis must run on VM3 (172.16.168.23), currently configured for: {redis_host}"
+        assert redis_host == NetworkConstants.REDIS_VM_IP, (
+            f"Redis must run on VM3 ({NetworkConstants.REDIS_VM_IP}), currently configured for: {redis_host}"
         )
 
     def test_backend_on_main_machine(self):
-        """Ensure backend runs on main machine (172.16.168.20)"""
+        """Ensure backend runs on main machine"""
         backend_config = unified_config_manager.get_backend_config()
         backend_host = backend_config.get("host")
 
-        assert backend_host in ["172.16.168.20", "0.0.0.0"], (
-            f"Backend must run on main machine, currently configured for: {backend_host}"
+        assert backend_host in [NetworkConstants.MAIN_MACHINE_IP, "0.0.0.0"], (
+            f"Backend must run on main machine ({NetworkConstants.MAIN_MACHINE_IP}), currently configured for: {backend_host}"
         )
 
     def test_frontend_on_vm1(self):
-        """Ensure frontend runs on VM1 (172.16.168.21)"""
+        """Ensure frontend runs on VM1 (Frontend VM)"""
         services_config = unified_config_manager.get_distributed_services_config()
         frontend_config = services_config.get("frontend", {})
         frontend_host = frontend_config.get("host")
 
-        assert frontend_host == "172.16.168.21", (
-            f"Frontend must run on VM1 (172.16.168.21), currently configured for: {frontend_host}"
+        assert frontend_host == NetworkConstants.FRONTEND_VM_IP, (
+            f"Frontend must run on VM1 ({NetworkConstants.FRONTEND_VM_IP}), currently configured for: {frontend_host}"
         )
 
     def test_npu_worker_on_vm2(self):
-        """Ensure NPU worker runs on VM2 (172.16.168.22)"""
+        """Ensure NPU worker runs on VM2 (NPU Worker VM)"""
         services_config = unified_config_manager.get_distributed_services_config()
         npu_config = services_config.get("npu_worker", {})
         npu_host = npu_config.get("host")
 
-        assert npu_host == "172.16.168.22", (
-            f"NPU worker must run on VM2 (172.16.168.22), currently configured for: {npu_host}"
+        assert npu_host == NetworkConstants.NPU_WORKER_VM_IP, (
+            f"NPU worker must run on VM2 (NPU Worker VM), currently configured for: {npu_host}"
         )
 
     def test_ai_stack_on_vm4(self):
-        """Ensure AI stack runs on VM4 (172.16.168.24)"""
+        """Ensure AI stack runs on VM4 (AI Stack VM)"""
         services_config = unified_config_manager.get_distributed_services_config()
         ai_config = services_config.get("ai_stack", {})
         ai_host = ai_config.get("host")
 
-        assert ai_host == "172.16.168.24", (
-            f"AI stack must run on VM4 (172.16.168.24), currently configured for: {ai_host}"
+        assert ai_host == NetworkConstants.AI_STACK_VM_IP, (
+            f"AI stack must run on VM4 (AI Stack VM), currently configured for: {ai_host}"
         )
 
     def test_browser_service_on_vm5(self):
-        """Ensure browser service runs on VM5 (172.16.168.25)"""
+        """Ensure browser service runs on VM5 (Browser VM)"""
         services_config = unified_config_manager.get_distributed_services_config()
         browser_config = services_config.get("browser_service", {})
         browser_host = browser_config.get("host")
 
-        assert browser_host == "172.16.168.25", (
-            f"Browser service must run on VM5 (172.16.168.25), currently configured for: {browser_host}"
+        assert browser_host == NetworkConstants.BROWSER_VM_IP, (
+            f"Browser service must run on VM5 (Browser VM), currently configured for: {browser_host}"
         )
 
 
@@ -104,8 +106,8 @@ class TestNetworkConfiguration:
         backend_host = backend_config.get("host")
 
         # Backend should bind to 0.0.0.0 to be accessible from VMs
-        assert backend_host in ["0.0.0.0", "172.16.168.20"], (
-            f"Backend must bind to 0.0.0.0 or 172.16.168.20, currently: {backend_host}"
+        assert backend_host in ["0.0.0.0", NetworkConstants.MAIN_MACHINE_IP], (
+            f"Backend must bind to 0.0.0.0 or {NetworkConstants.MAIN_MACHINE_IP}, currently: {backend_host}"
         )
 
     def test_redis_uses_standard_port(self):
@@ -126,7 +128,7 @@ class TestConfigurationSource:
         from src.utils.redis_helper import REDIS_HOST, REDIS_PORT
 
         # These should come from configuration, not be hardcoded
-        assert REDIS_HOST != "172.16.168.23" or (
+        assert REDIS_HOST != NetworkConstants.REDIS_VM_IP or (
             hasattr(redis_helper, 'redis_config') and redis_helper.redis_config is not None
         ), "redis_helper should use configuration, not hardcoded IP"
 
@@ -147,17 +149,9 @@ class TestRedisConnection:
     @pytest.mark.integration
     def test_redis_connectivity(self):
         """Test that Redis is accessible at configured host"""
-        redis_config = unified_config_manager.get_redis_config()
-        redis_host = redis_config.get("host")
-        redis_port = redis_config.get("port")
-
         try:
-            client = redis.Redis(
-                host=redis_host,
-                port=redis_port,
-                socket_timeout=5.0,
-                socket_connect_timeout=5.0
-            )
+            # Use canonical get_redis_client() pattern for consistency
+            client = get_redis_client(async_client=False, database="main")
             client.ping()
             assert True, "Redis connection successful"
         except (redis.ConnectionError, socket.timeout) as e:
@@ -216,14 +210,14 @@ class TestSingleFrontendServer:
         frontend_host = frontend_config.get("host")
 
         # Frontend must ONLY be on VM1
-        assert frontend_host == "172.16.168.21", (
-            f"Frontend must run ONLY on VM1 (172.16.168.21), found: {frontend_host}"
+        assert frontend_host == NetworkConstants.FRONTEND_VM_IP, (
+            f"Frontend must run ONLY on VM1 ({NetworkConstants.FRONTEND_VM_IP}), found: {frontend_host}"
         )
 
         # Backend should NOT be configured to run frontend
         backend_config = unified_config_manager.get_backend_config()
         backend_host = backend_config.get("host")
-        assert backend_host != "172.16.168.21", (
+        assert backend_host != NetworkConstants.FRONTEND_VM_IP, (
             "Backend must not run on frontend VM"
         )
 
