@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from src.config_helper import cfg
+from src.unified_config import config
 from src.constants.network_constants import NetworkConstants
 from src.research_browser_manager import research_browser_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -48,7 +48,7 @@ async def health_check():
 
     # Get browser service URL from config
     try:
-        browser_service_url = cfg.get_service_url("browser_service")
+        browser_service_url = config.get_service_url("browser_service")
     except Exception:
         browser_service_url = (
             f"http://localhost:{NetworkConstants.BROWSER_SERVICE_PORT}"
