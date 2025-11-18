@@ -138,7 +138,7 @@ def get_vnc_display_port():
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(0.1)
-        vnc_host = os.getenv("AUTOBOT_VNC_HOST", "127.0.0.1")
+        vnc_host = os.getenv("AUTOBOT_VNC_HOST", NetworkConstants.LOCALHOST_IP)
         result = sock.connect_ex((vnc_host, 5900))
         sock.close()
 
@@ -161,7 +161,7 @@ def get_vnc_direct_url():
         str: VNC connection URL
     """
     port = get_vnc_display_port()
-    host = os.getenv("AUTOBOT_VNC_HOST", "127.0.0.1")
+    host = os.getenv("AUTOBOT_VNC_HOST", NetworkConstants.LOCALHOST_IP)
     return f"vnc://{host}:{port}"
 
 
@@ -832,7 +832,9 @@ class ConfigManager:
         backend_config = self.get("backend", {})
 
         defaults = {
-            "server_host": os.getenv("AUTOBOT_BACKEND_HOST", "0.0.0.0"),
+            "server_host": os.getenv(
+                "AUTOBOT_BACKEND_HOST", NetworkConstants.BIND_ALL_INTERFACES
+            ),
             "server_port": int(
                 os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))
             ),
@@ -852,7 +854,9 @@ class ConfigManager:
             return cors_origins_env.split(",")
 
         # Dynamic default CORS origins based on frontend configuration
-        frontend_host = os.getenv("AUTOBOT_FRONTEND_HOST", "127.0.0.1")
+        frontend_host = os.getenv(
+            "AUTOBOT_FRONTEND_HOST", NetworkConstants.LOCALHOST_IP
+        )
         frontend_port = os.getenv(
             "AUTOBOT_FRONTEND_PORT", str(NetworkConstants.FRONTEND_PORT)
         )
@@ -860,7 +864,7 @@ class ConfigManager:
         return [
             f"http://{frontend_host}:{frontend_port}",
             f"http://localhost:{frontend_port}",
-            f"http://127.0.0.1:{frontend_port}",
+            f"http://{NetworkConstants.LOCALHOST_IP}:{frontend_port}",
         ]
 
     def update_llm_model(self, model_name: str) -> None:
@@ -979,7 +983,7 @@ class ConfigManager:
             return host
 
         # Finally fall back to configured host
-        host = os.getenv("AUTOBOT_OLLAMA_HOST", "127.0.0.1")
+        host = os.getenv("AUTOBOT_OLLAMA_HOST", NetworkConstants.LOCALHOST_IP)
         port = os.getenv("AUTOBOT_OLLAMA_PORT", str(NetworkConstants.OLLAMA_PORT))
         return f"http://{host}:{port}"
 

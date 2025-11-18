@@ -326,7 +326,7 @@ class ConsolidatedConfigManager:
         port = self.get_port(service_name)
 
         # CRITICAL FIX: Always use localhost for Ollama service
-        if service_name.lower() == "ollama" and "172.16.168.20" in host:
+        if service_name.lower() == "ollama" and NetworkConstants.BACKEND_HOST in host:
             host = "localhost"
             # Also ensure we use the correct port for localhost
             port = 11434

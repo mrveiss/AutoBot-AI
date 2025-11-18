@@ -214,7 +214,7 @@ class UnifiedConfigManager:
                         },
                     },
                 },
-                "server_host": "0.0.0.0",
+                "server_host": NetworkConstants.BIND_ALL_INTERFACES,
                 "server_port": int(
                     os.getenv(
                         "AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT)
@@ -658,7 +658,7 @@ class UnifiedConfigManager:
         backend_config = self.get_nested("backend", {})
 
         defaults = {
-            "server_host": "0.0.0.0",
+            "server_host": NetworkConstants.BIND_ALL_INTERFACES,
             "server_port": int(
                 os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))
             ),
@@ -868,7 +868,7 @@ class UnifiedConfigManager:
         if env_url:
             return env_url
 
-        host = self.get_nested("memory.redis.host", "127.0.0.1")
+        host = self.get_nested("memory.redis.host", NetworkConstants.LOCALHOST_IP)
         port = self.get_nested("memory.redis.port", 6379)
         return f"redis://{host}:{port}"
 

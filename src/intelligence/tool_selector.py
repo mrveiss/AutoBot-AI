@@ -261,13 +261,16 @@ class OSAwareToolSelector:
         # Get default network from environment or use fallback
         import os
 
-        default_network = os.getenv("AUTOBOT_DEFAULT_SCAN_NETWORK", "192.168.1.0/24")
+        default_network = os.getenv(
+            "AUTOBOT_DEFAULT_SCAN_NETWORK", NetworkConstants.DEFAULT_SCAN_NETWORK
+        )
 
         # Replace common placeholders
         replacements = {
             "{network}": parameters.get("network", default_network),
             "{target}": parameters.get(
-                "target_ip", parameters.get("target_host", "127.0.0.1")
+                "target_ip",
+                parameters.get("target_host", NetworkConstants.LOCALHOST_IP),
             ),
             "{port}": parameters.get("port", "80"),
             "{pid}": parameters.get("pid", "1"),

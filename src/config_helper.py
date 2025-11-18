@@ -249,7 +249,7 @@ class ConfigHelper:
             },
             "urls": {
                 "api_base": ServiceURLs.BACKEND_LOCAL,
-                "frontend_base": ServiceURLs.FRONTEND_VM,  # FIXED: Frontend on VM1 (172.16.168.21)
+                "frontend_base": ServiceURLs.FRONTEND_VM,  # Frontend VM URL from ServiceURLs
                 "redis_url": ServiceURLs.REDIS_LOCAL,
                 "ollama_url": ServiceURLs.OLLAMA_LOCAL,
             },
@@ -389,7 +389,11 @@ class ConfigHelper:
 
     def get_host(self, service: str) -> str:
         """Get host IP for a service"""
-        return self.get(f"infrastructure.hosts.{service}", "127.0.0.1")
+        from src.constants.network_constants import NetworkConstants
+
+        return self.get(
+            f"infrastructure.hosts.{service}", NetworkConstants.LOCALHOST_IP
+        )
 
     def get_port(self, service: str) -> int:
         """Get port for a service"""
