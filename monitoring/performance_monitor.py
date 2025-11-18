@@ -16,22 +16,25 @@ from typing import Dict, List, Optional, Any
 import os
 import subprocess
 import psutil
-import redis
 import aiohttp
 import aiofiles
 from pathlib import Path
 from src.constants.network_constants import NetworkConstants, ServiceURLs
+from src.unified_config import config
+from src.utils.redis_client import get_redis_client
 
 # Performance monitoring configuration
 MONITORING_INTERVAL = 30  # seconds
-ALERT_THRESHOLDS = {
+
+# Load alert thresholds from config with defaults
+ALERT_THRESHOLDS = config.get("monitoring.alert_thresholds", {
     'cpu_percent': 80.0,
     'memory_percent': 85.0,
     'disk_percent': 90.0,
     'api_response_time': 5.0,  # seconds
     'db_query_time': 1.0,      # seconds
     'websocket_latency': 500   # milliseconds
-}
+})
 
 # Distributed VM configuration
 VMS = {
@@ -227,8 +230,8 @@ class PerformanceMonitor:
         
         try:
             if service_name == 'redis':
-                # Special handling for Redis
-                redis_test = redis.Redis(host=VMS['redis'], port=6379, socket_timeout=5.0)
+                # Special handling for Redis - use canonical pattern
+                redis_test = get_redis_client(async_client=False, database="main")
                 redis_test.ping()
                 response_time = time.time() - start_time
                 return ServiceMetrics(
@@ -273,16 +276,16 @@ class PerformanceMonitor:
             # Test Redis performance across different databases
             redis_dbs = [0, 1, 2, 4, 7, 8]  # Main, Knowledge, Prompts, Metrics, Workflows, Vectors
             
+            # Map database numbers to names for canonical Redis client
+            db_map = {0: "main", 1: "knowledge", 2: "prompts", 4: "metrics", 7: "workflows", 8: "vectors"}
+
             for db_num in redis_dbs:
                 start_time = time.time()
                 try:
-                    test_client = redis.Redis(
-                        host=VMS['redis'], 
-                        port=6379, 
-                        db=db_num,
-                        socket_timeout=3.0
-                    )
-                    
+                    # Use canonical Redis client pattern
+                    db_name = db_map.get(db_num, "main")
+                    test_client = get_redis_client(async_client=False, database=db_name)
+
                     # Test connection and basic operations
                     test_client.ping()
                     connection_time = time.time() - start_time

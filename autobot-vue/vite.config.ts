@@ -10,10 +10,24 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 // - Browser (Playwright): 172.16.168.25:3000
 // - Terminal VNC: 172.16.168.20:6080
 // - Desktop VNC: 172.16.168.20:6080
+//
+// Configuration via environment variables (recommended for production):
+// - VITE_BACKEND_HOST, VITE_BACKEND_PORT
+// - VITE_PLAYWRIGHT_HOST, VITE_PLAYWRIGHT_VNC_PORT
+// - VITE_VNC_HOST, VITE_VNC_PORT
 const DEFAULT_CONFIG = {
-  backend: { host: '172.16.168.20', port: '8001' },
-  browser: { host: '172.16.168.25', port: '3000' },  // Browser automation service
-  vnc: { host: '172.16.168.20', port: '6080' }       // Desktop/Terminal VNC
+  backend: {
+    host: process.env.VITE_BACKEND_HOST || '172.16.168.20',
+    port: process.env.VITE_BACKEND_PORT || '8001'
+  },
+  browser: {
+    host: process.env.VITE_PLAYWRIGHT_HOST || '172.16.168.25',
+    port: process.env.VITE_PLAYWRIGHT_VNC_PORT || '3000'
+  },
+  vnc: {
+    host: process.env.VITE_VNC_HOST || '172.16.168.20',
+    port: process.env.VITE_VNC_PORT || '6080'
+  }
 }
 
 // https://vite.dev/config/
@@ -65,7 +79,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: `http://${process.env.VITE_BACKEND_HOST || DEFAULT_CONFIG.backend.host}:${process.env.VITE_BACKEND_PORT || DEFAULT_CONFIG.backend.port}`,
+        target: `http://${DEFAULT_CONFIG.backend.host}:${DEFAULT_CONFIG.backend.port}`,
         changeOrigin: true,
         secure: false,
         timeout: 30000,
@@ -92,7 +106,7 @@ export default defineConfig({
         }
       },
       '/ws': {
-        target: `http://${process.env.VITE_BACKEND_HOST || DEFAULT_CONFIG.backend.host}:${process.env.VITE_BACKEND_PORT || DEFAULT_CONFIG.backend.port}`,
+        target: `http://${DEFAULT_CONFIG.backend.host}:${DEFAULT_CONFIG.backend.port}`,
         ws: true,
         changeOrigin: true,
         timeout: 30000,
@@ -109,13 +123,13 @@ export default defineConfig({
         }
       },
       '/vnc-proxy': {
-        target: process.env.VITE_PLAYWRIGHT_VNC_URL || `${process.env.VITE_HTTP_PROTOCOL || 'http'}://${process.env.VITE_PLAYWRIGHT_HOST || DEFAULT_CONFIG.browser.host}:${process.env.VITE_PLAYWRIGHT_VNC_PORT || DEFAULT_CONFIG.browser.port}`,
+        target: process.env.VITE_PLAYWRIGHT_VNC_URL || `${process.env.VITE_HTTP_PROTOCOL || 'http'}://${DEFAULT_CONFIG.browser.host}:${DEFAULT_CONFIG.browser.port}`,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/vnc-proxy/, '')
       },
       // Desktop VNC (noVNC) access - WSL Desktop
       '/tools/novnc': {
-        target: `http://${process.env.VITE_VNC_HOST || DEFAULT_CONFIG.vnc.host}:${process.env.VITE_VNC_PORT || DEFAULT_CONFIG.vnc.port}`,
+        target: `http://${DEFAULT_CONFIG.vnc.host}:${DEFAULT_CONFIG.vnc.port}`,
         changeOrigin: true,
         ws: true,  // Enable WebSocket support for noVNC
         rewrite: (path) => path.replace(/^\/tools\/novnc/, ''),
