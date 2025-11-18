@@ -20,8 +20,11 @@ import aiohttp
 import aiofiles
 from pathlib import Path
 from src.constants.network_constants import NetworkConstants, ServiceURLs
-from src.unified_config import config
+from src.unified_config_manager import UnifiedConfigManager
 from src.utils.redis_client import get_redis_client
+
+# Create singleton config instance
+config = UnifiedConfigManager()
 
 # Performance monitoring configuration
 MONITORING_INTERVAL = 30  # seconds
