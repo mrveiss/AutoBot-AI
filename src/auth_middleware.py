@@ -19,10 +19,13 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.constants.network_constants import NetworkConstants
 from src.security_layer import SecurityLayer
-from src.unified_config import config
+from src.unified_config_manager import UnifiedConfigManager
 from src.utils.catalog_http_exceptions import raise_auth_error
 
 logger = logging.getLogger(__name__)
+
+# Create singleton config instance
+config = UnifiedConfigManager()
 
 
 class AuthenticationMiddleware:
