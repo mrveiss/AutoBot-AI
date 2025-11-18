@@ -98,7 +98,7 @@ const checkHealth = async () => {
   loading.value = true
   error.value = null
   try {
-    const response = await fetch('http://172.16.168.20:8001/api/health')
+    const response = await fetch(`${BACKEND_URL}/api/health`)
     healthData.value = await response.json()
   } catch (err) {
     error.value = err instanceof Error ? err : new Error(String(err))
@@ -116,7 +116,7 @@ const health = useAsyncOperation({
 })
 
 const checkHealth = () => health.execute(async () => {
-  const response = await fetch('http://172.16.168.20:8001/api/health')
+  const response = await fetch(`${BACKEND_URL}/api/health`)
   return response.json()
 })</code></pre>
               </div>
@@ -185,7 +185,7 @@ const saveSettings = async () => {
   error.value = null
   notification.value = null
   try {
-    await fetch('http://172.16.168.20:8001/api/settings', {
+    await fetch(`${BACKEND_URL}/api/settings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ value: settingValue.value })
@@ -209,7 +209,7 @@ const saveSettings = async () => {
 })
 
 const saveSettings = () => saveOp.execute(async () => {
-  await fetch('http://172.16.168.20:8001/api/settings', {
+  await fetch(`${BACKEND_URL}/api/settings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ value: settingValue.value })
@@ -294,7 +294,7 @@ const validateConfig = async () => {
   loading.value = true
   error.value = null
   try {
-    const response = await fetch('http://172.16.168.20:8001/api/validate')
+    const response = await fetch(`${BACKEND_URL}/api/validate`)
     if (!response.ok) throw new Error('Validation failed')
     const result = await response.json()
     return result
@@ -324,7 +324,7 @@ const validateOp = useAsyncOperation({
 })
 
 const validateConfig = () => validateOp.execute(async () => {
-  const response = await fetch('http://172.16.168.20:8001/api/validate')
+  const response = await fetch(`${BACKEND_URL}/api/validate`)
   if (!response.ok) throw new Error('Validation failed')
   return response.json()
 })</code></pre>
@@ -406,7 +406,7 @@ const loadUsers = async () => {
   usersLoading.value = true
   usersError.value = null
   try {
-    const response = await fetch('http://172.16.168.20:8001/api/users')
+    const response = await fetch(`${BACKEND_URL}/api/users`)
     usersData.value = await response.json()
   } catch (err) {
     usersError.value = err instanceof Error ? err : new Error(String(err))
@@ -419,7 +419,7 @@ const loadSystemInfo = async () => {
   systemInfoLoading.value = true
   systemInfoError.value = null
   try {
-    const response = await fetch('http://172.16.168.20:8001/api/system/info')
+    const response = await fetch(`${BACKEND_URL}/api/system/info`)
     systemInfoData.value = await response.json()
   } catch (err) {
     systemInfoError.value = err instanceof Error ? err : new Error(String(err))
@@ -445,12 +445,12 @@ const ops = createAsyncOperations({
 })
 
 const loadUsers = () => ops.users.execute(async () => {
-  const response = await fetch('http://172.16.168.20:8001/api/users')
+  const response = await fetch(`${BACKEND_URL}/api/users`)
   return response.json()
 })
 
 const loadSystemInfo = () => ops.systemInfo.execute(async () => {
-  const response = await fetch('http://172.16.168.20:8001/api/system/info')
+  const response = await fetch(`${BACKEND_URL}/api/system/info`)
   return response.json()
 })
 
@@ -536,7 +536,7 @@ const loadAnalytics = async () => {
   loading.value = true
   error.value = null
   try {
-    const response = await fetch('http://172.16.168.20:8001/api/analytics')
+    const response = await fetch(`${BACKEND_URL}/api/analytics`)
     const rawData = await response.json()
 
     // Transform data
@@ -568,7 +568,7 @@ const analytics = useAsyncOperation&lt;AnalyticsData&gt;({
 })
 
 const loadAnalytics = () => analytics.execute(async () => {
-  const response = await fetch('http://172.16.168.20:8001/api/analytics')
+  const response = await fetch(`${BACKEND_URL}/api/analytics`)
   const rawData = await response.json()
 
   // Transform data inline
@@ -640,6 +640,10 @@ const loadAnalytics = () => analytics.execute(async () => {
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useAsyncOperation, createAsyncOperations } from '@/composables/useAsyncOperation'
+import { NetworkConstants } from '@/constants/network.ts'
+
+// Backend URL from NetworkConstants (no hardcoded IPs)
+const BACKEND_URL = NetworkConstants.getBackendUrl()
 
 // =============================================================================
 // Example 1: Simple Async Operation
@@ -650,7 +654,7 @@ const health = useAsyncOperation({
 })
 
 const checkHealth = () => health.execute(async () => {
-  const response = await fetch('http://172.16.168.20:8001/api/health')
+  const response = await fetch(`${BACKEND_URL}/api/health`)
   return response.json()
 })
 
@@ -674,7 +678,7 @@ const saveOp = useAsyncOperation({
 })
 
 const saveSettings = () => saveOp.execute(async () => {
-  await fetch('http://172.16.168.20:8001/api/settings', {
+  await fetch(`${BACKEND_URL}/api/settings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ value: settingValue.value })
@@ -699,7 +703,7 @@ const validateOp = useAsyncOperation({
 })
 
 const validateConfig = () => validateOp.execute(async () => {
-  const response = await fetch('http://172.16.168.20:8001/api/validate')
+  const response = await fetch(`${BACKEND_URL}/api/validate`)
   if (!response.ok) throw new Error('Validation failed')
   return response.json()
 })
@@ -714,12 +718,12 @@ const ops = createAsyncOperations({
 })
 
 const loadUsers = () => ops.users.execute(async () => {
-  const response = await fetch('http://172.16.168.20:8001/api/users')
+  const response = await fetch(`${BACKEND_URL}/api/users`)
   return response.json()
 })
 
 const loadSystemInfo = () => ops.systemInfo.execute(async () => {
-  const response = await fetch('http://172.16.168.20:8001/api/system/info')
+  const response = await fetch(`${BACKEND_URL}/api/system/info`)
   return response.json()
 })
 
@@ -746,7 +750,7 @@ const analytics = useAsyncOperation<AnalyticsData>({
 })
 
 const loadAnalytics = () => analytics.execute(async () => {
-  const response = await fetch('http://172.16.168.20:8001/api/analytics')
+  const response = await fetch(`${BACKEND_URL}/api/analytics`)
   const rawData = await response.json()
 
   // Transform data inline - composable handles state management

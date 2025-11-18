@@ -192,7 +192,7 @@
             <i class="fas fa-robot text-6xl mb-4 text-blue-400"></i>
             <h3 class="text-xl font-semibold mb-2">Headless Browser Mode</h3>
             <p class="text-gray-300 mb-4">
-              The browser is running on the Browser VM (172.16.168.25) via Playwright API
+              The browser is running on the Browser VM via Playwright API
             </p>
             <p class="text-sm text-gray-400 mb-4">
               Enter a URL in the address bar above to navigate. Results will be logged below.

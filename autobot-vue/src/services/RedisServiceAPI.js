@@ -1,7 +1,8 @@
 /**
  * Redis Service Management API Client
  *
- * Provides methods for controlling Redis service on VM3 (172.16.168.23)
+ * Provides methods for controlling Redis service on Redis VM
+ * (Network configuration from NetworkConstants)
  * Follows AutoBot API service patterns with error handling
  */
 
