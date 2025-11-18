@@ -586,9 +586,12 @@ Please provide thorough security assessment focusing on safety, security, and co
         operation_type = operation_data.get("type", "").lower()
 
         # Check for suspicious hosts
-        if any(
-            suspicious in host for suspicious in ["localhost", "127.0.0.1", "0.0.0.0"]
-        ):
+        suspicious_hosts = [
+            NetworkConstants.LOCALHOST_NAME,
+            NetworkConstants.LOCALHOST_IP,
+            NetworkConstants.BIND_ALL_INTERFACES,
+        ]
+        if any(suspicious in host for suspicious in suspicious_hosts):
             risks.append("Local network access - potential tunnel or backdoor")
 
         # Check for sensitive ports

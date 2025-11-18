@@ -612,21 +612,23 @@ NEVER teach commands - ALWAYS execute them."""
 
         # Get selected model from config
         try:
+            default_model = global_config_manager.get_default_llm_model()
             selected_model = global_config_manager.get_nested(
-                "backend.llm.ollama.selected_model", "mistral:7b-instruct"
+                "backend.llm.ollama.selected_model", default_model
             )
 
             if not selected_model or not isinstance(selected_model, str):
                 logger.error(
                     f"Invalid model selection: {selected_model}, using default"
                 )
-                selected_model = "mistral:7b-instruct"
+                selected_model = default_model
 
             logger.info(f"Using LLM model from config: {selected_model}")
 
         except Exception as config_error:
             logger.error(f"Failed to load model from config: {config_error}")
-            selected_model = "mistral:7b-instruct"
+            import os
+            selected_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "mistral:7b")
 
         logger.info(f"[ChatWorkflowManager] Making Ollama request to: {ollama_endpoint}")
         logger.info(f"[ChatWorkflowManager] Using model: {selected_model}")

@@ -82,7 +82,11 @@ class SecurityScannerAgent:
         # 2. Private IP ranges (RFC1918)
         # 3. Explicitly authorized domains (would need config)
 
-        allowed_targets = ["localhost", "127.0.0.1", "::1"]
+        allowed_targets = [
+            NetworkConstants.LOCALHOST_NAME,
+            NetworkConstants.LOCALHOST_IP,
+            NetworkConstants.LOCALHOST_IPV6,
+        ]
 
         # Check if target is in allowed list
         if target in allowed_targets:

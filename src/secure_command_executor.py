@@ -332,7 +332,7 @@ class SecureCommandExecutor:
             "--cpus",
             "1.0",  # CPU limit
             "--user",
-            "1000:1000",  # Non-root user
+            NetworkConstants.DEFAULT_USER_GROUP,  # Non-root user
             "-v",
             f"{os.getcwd()}:/workspace:ro",  # Mount current dir read-only
             "-w",

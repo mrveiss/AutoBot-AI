@@ -62,13 +62,13 @@ class SSHManager:
     """
     Central SSH management service for AutoBot's distributed infrastructure
 
-    Manages SSH connections to all 6 AutoBot hosts:
-    - Main (172.16.168.20): Backend API + Desktop/Terminal VNC
-    - Frontend (172.16.168.21): Web interface
-    - NPU Worker (172.16.168.22): Hardware AI acceleration
-    - Redis (172.16.168.23): Data layer
-    - AI Stack (172.16.168.24): AI processing
-    - Browser (172.16.168.25): Web automation
+    Manages SSH connections to all 6 AutoBot hosts (see NetworkConstants for IPs):
+    - Main: Backend API + Desktop/Terminal VNC
+    - Frontend: Web interface
+    - NPU Worker: Hardware AI acceleration
+    - Redis: Data layer
+    - AI Stack: AI processing
+    - Browser: Web automation
     """
 
     # Default host configurations

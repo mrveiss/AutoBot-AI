@@ -427,7 +427,7 @@ class ConsolidatedOrchestrator:
                     )
                     # Try fallback model
                     try:
-                        fallback_model = "llama3.2:1b-instruct-q4_K_M"
+                        fallback_model = config_manager.get_default_llm_model()
                         test_response = await self.llm_interface.generate_response(
                             "Test connection", model=fallback_model, max_tokens=10
                         )
@@ -529,7 +529,7 @@ class ConsolidatedOrchestrator:
                 and classification_result.complexity == TaskComplexity.SIMPLE
             ):
                 # Use faster model for simple tasks
-                target_llm_model = "llama3.2:1b-instruct-q4_K_M"
+                target_llm_model = config_manager.get_default_llm_model()
                 logger.info(f"Using fast model for simple task: {target_llm_model}")
             else:
                 logger.info(

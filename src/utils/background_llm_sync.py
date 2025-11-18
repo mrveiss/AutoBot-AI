@@ -18,6 +18,7 @@ Key Features:
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -71,7 +72,10 @@ class BackgroundLLMSync:
                 "ollama",
                 f"http://{NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.OLLAMA_PORT}",
             ),
-            ("openai", "https://api.openai.com/v1"),
+            (
+                "openai",
+                os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1"),
+            ),
             (
                 "local_llm",
                 f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.AI_STACK_PORT}",

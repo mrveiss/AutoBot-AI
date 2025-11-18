@@ -36,7 +36,7 @@ class NetworkDiscoveryAgent:
         import os
 
         self.default_network = os.getenv(
-            "AUTOBOT_DEFAULT_SCAN_NETWORK", "192.168.1.0/24"
+            "AUTOBOT_DEFAULT_SCAN_NETWORK", NetworkConstants.DEFAULT_SCAN_NETWORK
         )
 
     async def execute(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:

@@ -18,6 +18,7 @@ import os
 import sys
 
 from backend.app_factory import create_app
+from src.constants.network_constants import NetworkConstants
 from src.utils.logging_manager import get_logger
 
 # Get centralized logger (respects AUTOBOT_LOG_LEVEL environment variable)
@@ -36,8 +37,8 @@ if __name__ == "__main__":
 
     # Get configuration from environment with intelligent defaults
     host = os.getenv(
-        "AUTOBOT_BACKEND_HOST", "0.0.0.0"
-    )  # Use 0.0.0.0 for network access
+        "AUTOBOT_BACKEND_HOST", NetworkConstants.BIND_ALL_INTERFACES
+    )  # Bind to all interfaces for network access
     port = int(os.getenv("AUTOBOT_BACKEND_PORT", "8001"))
 
     # Determine if we're in development mode

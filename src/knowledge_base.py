@@ -305,7 +305,9 @@ class KnowledgeBase:
         """Configure LlamaIndex with Ollama models"""
         try:
             # Manually construct Ollama URL due to config interpolation issue
-            ollama_host = config.get("infrastructure.hosts.ollama", "127.0.0.1")
+            ollama_host = config.get(
+                "infrastructure.hosts.ollama", NetworkConstants.MAIN_MACHINE_IP
+            )
             ollama_port = config.get(
                 "infrastructure.ports.ollama", str(NetworkConstants.OLLAMA_PORT)
             )
@@ -313,7 +315,7 @@ class KnowledgeBase:
             llm_timeout = config.get_timeout("llm", "default", kb_timeouts.llm_default)
 
             Settings.llm = LlamaIndexOllamaLLM(
-                model="llama3.2:3b",
+                model=config.get_default_llm_model(),
                 request_timeout=llm_timeout,
                 base_url=ollama_url,
             )

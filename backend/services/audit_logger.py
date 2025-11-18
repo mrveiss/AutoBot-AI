@@ -920,7 +920,7 @@ async def audit_log(operation: str, result: AuditResult = "success", **kwargs) -
     Quick audit logging function
 
     Usage:
-        await audit_log("auth.login", result="success", user_id="admin", ip_address="172.16.168.21")
+        await audit_log("auth.login", result="success", user_id="admin", ip_address="<client_ip>")
     """
     logger_instance = await get_audit_logger()
     return await logger_instance.log(operation, result, **kwargs)

@@ -22,6 +22,7 @@ from src.unified_config_manager import UnifiedConfigManager
 # Create singleton config instance
 config = UnifiedConfigManager()
 from src.constants.network_constants import NetworkConstants, ServiceURLs
+from src.constants.security_constants import SecurityConstants
 from src.source_attribution import SourceType, track_source
 from src.utils.display_utils import get_playwright_config
 
@@ -86,7 +87,7 @@ class ResearchBrowserSession:
 
             self.context = await self.browser.new_context(
                 viewport=viewport,
-                user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                user_agent=SecurityConstants.DEFAULT_USER_AGENT,
             )
 
             self.page = await self.context.new_page()

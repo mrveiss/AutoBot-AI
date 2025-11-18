@@ -44,6 +44,7 @@ class NetworkConstants:
 
     # Local/Localhost addresses
     LOCALHOST_IP: str = "127.0.0.1"
+    LOCALHOST_IPV6: str = "::1"  # IPv6 loopback address
     LOCALHOST_NAME: str = "localhost"
     BIND_ALL_INTERFACES: str = "0.0.0.0"  # Bind server to all network interfaces
 
@@ -54,6 +55,7 @@ class NetworkConstants:
 
     # Special purpose IPs
     DUMMY_ROUTE_IP: str = "10.255.255.255"  # Dummy IP for local IP detection via socket routing
+    TEST_HOST_IP: str = "172.16.168.99"  # Test host IP for unit tests (not a real VM)
 
     # Standard ports
     BACKEND_PORT: int = 8001
@@ -70,6 +72,14 @@ class NetworkConstants:
     # Development ports
     DEV_FRONTEND_PORT: int = 5173
     DEV_BACKEND_PORT: int = 8001
+
+    # External service URLs
+    GOOGLE_SEARCH_BASE_URL: str = "https://www.google.com/search"
+
+    # Docker user/group IDs (for non-root container execution)
+    DEFAULT_UID: str = "1000"
+    DEFAULT_GID: str = "1000"
+    DEFAULT_USER_GROUP: str = "1000:1000"
 
 
 @dataclass(frozen=True)
