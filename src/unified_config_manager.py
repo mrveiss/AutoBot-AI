@@ -1535,6 +1535,11 @@ OLLAMA_PORT = NetworkConstants.OLLAMA_PORT
 REDIS_HOST_IP = NetworkConstants.REDIS_VM_IP
 OLLAMA_URL = f"http://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"
 
+# Backend/API service constants
+BACKEND_HOST_IP = NetworkConstants.MAIN_MACHINE_IP
+BACKEND_PORT = NetworkConstants.BACKEND_PORT
+API_BASE_URL = f"http://{BACKEND_HOST_IP}:{BACKEND_PORT}"
+
 # Playwright/Browser service constants
 PLAYWRIGHT_HOST_IP = NetworkConstants.BROWSER_VM_IP
 PLAYWRIGHT_VNC_PORT = NetworkConstants.VNC_PORT
