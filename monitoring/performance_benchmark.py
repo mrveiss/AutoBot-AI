@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from performance_monitor import VMS, SERVICE_ENDPOINTS
+from src.constants.network_constants import NetworkConstants
 
 @dataclass
 class BenchmarkResult:
@@ -67,14 +68,14 @@ class PerformanceBenchmark:
         
         # Define API endpoints to benchmark
         api_endpoints = [
-            ("Backend Health", "GET", f"http://{VMS['main']}:8001/api/health", {}),
-            ("System Status", "GET", f"http://{VMS['main']}:8001/api/system/status", {}),
-            ("Chat History", "GET", f"http://{VMS['main']}:8001/api/chats", {}),
-            ("Knowledge Search", "POST", f"http://{VMS['main']}:8001/api/knowledge_base/search", {
+            ("Backend Health", "GET", f"http://{VMS['main']}:{NetworkConstants.BACKEND_PORT}/api/health", {}),
+            ("System Status", "GET", f"http://{VMS['main']}:{NetworkConstants.BACKEND_PORT}/api/system/status", {}),
+            ("Chat History", "GET", f"http://{VMS['main']}:{NetworkConstants.BACKEND_PORT}/api/chats", {}),
+            ("Knowledge Search", "POST", f"http://{VMS['main']}:{NetworkConstants.BACKEND_PORT}/api/knowledge_base/search", {
                 "query": "AutoBot system information",
                 "limit": 5
             }),
-            ("LLM Request", "POST", f"http://{VMS['main']}:8001/api/llm/request", {
+            ("LLM Request", "POST", f"http://{VMS['main']}:{NetworkConstants.BACKEND_PORT}/api/llm/request", {
                 "prompt": "What is AutoBot?",
                 "model": os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.1:8b")
             })
@@ -563,9 +564,9 @@ class PerformanceBenchmark:
             
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 start_time = time.time()
-                
+
                 # Download a test payload from the backend
-                async with session.get(f"http://{VMS['main']}:8001/api/health") as response:
+                async with session.get(f"http://{VMS['main']}:{NetworkConstants.BACKEND_PORT}/api/health") as response:
                     data = await response.read()
                     
                 duration = time.time() - start_time

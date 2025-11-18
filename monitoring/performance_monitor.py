@@ -51,13 +51,13 @@ VMS = {
 
 # Service endpoints for monitoring
 SERVICE_ENDPOINTS = {
-    'backend': f'http://{NetworkConstants.MAIN_MACHINE_IP}:8001/api/health',
-    'frontend': f'http://{NetworkConstants.FRONTEND_VM_IP}:5173/',
-    'npu-worker': f'http://{NetworkConstants.NPU_WORKER_VM_IP}:8081/health',
-    'ai-stack': f'http://{NetworkConstants.AI_STACK_VM_IP}:8080/health',
-    'browser': f'http://{NetworkConstants.BROWSER_VM_IP}:3000/health',
-    'ollama': f'http://{NetworkConstants.MAIN_MACHINE_IP}:11434/api/version',
-    'redis': f'{NetworkConstants.REDIS_VM_IP}:6379'
+    'backend': f'http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/api/health',
+    'frontend': f'http://{NetworkConstants.FRONTEND_VM_IP}:{NetworkConstants.FRONTEND_PORT}/',
+    'npu-worker': f'http://{NetworkConstants.NPU_WORKER_VM_IP}:{NetworkConstants.NPU_WORKER_PORT}/health',
+    'ai-stack': f'http://{NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT}/health',
+    'browser': f'http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}/health',
+    'ollama': f'http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.OLLAMA_PORT}/api/version',
+    'redis': f'{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}'
 }
 
 @dataclass
