@@ -28,9 +28,12 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
 from src.constants.network_constants import NetworkConstants
-from src.unified_config import config
+from src.unified_config_manager import UnifiedConfigManager
 
 logger = logging.getLogger(__name__)
+
+# Create singleton config instance
+config = UnifiedConfigManager()
 
 
 class KnowledgeBaseInitializer:
