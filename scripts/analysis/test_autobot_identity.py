@@ -16,7 +16,7 @@ async def test_autobot_identity():
     """Test that AutoBot identity is properly indexed"""
     try:
         from src.knowledge_base import KnowledgeBase
-        from src.config import config as global_config
+        from src.unified_config import config as global_config
         
         # Initialize knowledge base
         kb = KnowledgeBase(config_manager=global_config)

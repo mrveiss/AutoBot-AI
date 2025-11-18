@@ -18,7 +18,7 @@ def test_config_imports():
     print("🔧 Testing configuration imports...")
 
     try:
-        from src.config import (
+        from src.unified_config import (
             API_BASE_URL,
             API_TIMEOUT,
             OLLAMA_URL,
@@ -39,7 +39,7 @@ def test_config_values():
     print("🔧 Testing configuration values...")
 
     try:
-        from src.config import (
+        from src.unified_config import (
             API_BASE_URL,
             API_TIMEOUT,
             OLLAMA_URL,
@@ -84,7 +84,7 @@ def test_config_manager():
     print("🔧 Testing configuration manager...")
 
     try:
-        from src.config import config, global_config_manager
+        from src.unified_config import config, global_config_manager
 
         # Test basic operations
         backend_config = config.get("backend", {})
@@ -120,11 +120,11 @@ def test_environment_overrides():
         os.environ["AUTOBOT_API_BASE_URL"] = test_value
 
         # Reload configuration to pick up changes
-        from src.config import config
+        from src.unified_config import config
 
         config.reload()
 
-        from src.config import API_BASE_URL
+        from src.unified_config import API_BASE_URL
 
         # Check if override worked
         if API_BASE_URL == test_value:
@@ -151,7 +151,7 @@ def test_config_validation():
     print("🔧 Testing configuration validation...")
 
     try:
-        from src.config import config
+        from src.unified_config import config
 
         validation_result = config.validate_config()
 
@@ -185,7 +185,7 @@ def test_config_performance():
     print("🔧 Testing configuration performance...")
 
     try:
-        from src.config import config
+        from src.unified_config import config
 
         # Test repeated access speed
         start_time = time.time()

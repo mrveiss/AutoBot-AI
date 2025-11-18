@@ -50,7 +50,7 @@ class AutomatedTestingSuite:
             "api_tests": [],
         }
         # Import configuration from centralized source
-        from src.config import API_BASE_URL
+        from src.unified_config import API_BASE_URL
 
         self.backend_url = API_BASE_URL
 
@@ -269,7 +269,7 @@ class AutomatedTestingSuite:
         start_time = time.time()
 
         try:
-            from src.config import global_config_manager
+            from src.unified_config import global_config_manager
 
             # Test basic config access
             backend_config = global_config_manager.get("backend", {})
@@ -411,7 +411,7 @@ class AutomatedTestingSuite:
         start_time = time.time()
 
         try:
-            from src.config import global_config_manager
+            from src.unified_config import global_config_manager
 
             # Measure config access time
             for _ in range(100):
