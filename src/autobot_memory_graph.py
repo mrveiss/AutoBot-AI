@@ -12,11 +12,12 @@ Key Features:
 - Backward compatible with existing chat history system
 
 Architecture:
-- Storage: Redis Stack DB 9 on VM3 (172.16.168.23:6379)
+- Storage: Redis Stack DB 9 (memory database) on VM3
 - Entity Storage: RedisJSON documents
 - Relations: Custom bidirectional indexing
 - Search: RediSearch + Ollama embeddings (nomic-embed-text, 768 dims)
 - Integration: Reuses existing Knowledge Base V2 patterns
+- Network: Host/port configured via NetworkConstants.REDIS_HOST:REDIS_PORT
 
 Performance Targets:
 - Entity operations: <50ms

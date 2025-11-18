@@ -42,9 +42,12 @@ class NetworkConstants:
     # Local/Localhost addresses
     LOCALHOST_IP: str = "127.0.0.1"
     LOCALHOST_NAME: str = "localhost"
+    BIND_ALL_INTERFACES: str = "0.0.0.0"  # Bind server to all network interfaces
 
     # Network prefixes for IP validation
     VM_IP_PREFIX: str = "172.16.168."  # AutoBot VM network prefix
+    DEFAULT_SCAN_NETWORK: str = "192.168.1.0/24"  # Default network range for scanning tools
+    PUBLIC_DNS_IP: str = "8.8.8.8"  # Google Public DNS for connectivity testing
 
     # Standard ports
     BACKEND_PORT: int = 8001
