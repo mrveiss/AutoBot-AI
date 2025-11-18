@@ -23,6 +23,7 @@ import aiohttp
 import yaml
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.security_constants import SecurityConstants
 
 logger = logging.getLogger(__name__)
 
@@ -121,17 +122,8 @@ class DomainSecurityConfig:
                     "block_private_ips": True,
                     "block_local_ips": True,
                     "block_cloud_metadata": True,
-                    "allowed_ports": [80, 443, 8080, 8443],
-                    "blocked_ip_ranges": [
-                        "0.0.0.0/8",  # Current network
-                        "10.0.0.0/8",  # Private
-                        "127.0.0.0/8",  # Loopback
-                        "169.254.0.0/16",  # Link-local
-                        "172.16.0.0/12",  # Private
-                        "192.168.0.0/16",  # Private
-                        "224.0.0.0/4",  # Multicast
-                        "240.0.0.0/4",  # Reserved
-                    ],
+                    "allowed_ports": SecurityConstants.ALLOWED_WEB_PORTS,
+                    "blocked_ip_ranges": SecurityConstants.BLOCKED_IP_RANGES,
                 },
             }
         }
@@ -393,11 +385,7 @@ class DomainSecurityManager:
 
             # Check cloud metadata endpoints
             if network_config.get("block_cloud_metadata", True):
-                metadata_ips = [
-                    "169.254.169.254",
-                    "100.100.100.200",
-                ]  # AWS, Alibaba Cloud
-                if str(ip_addr) in metadata_ips:
+                if str(ip_addr) in SecurityConstants.CLOUD_METADATA_IPS:
                     return {
                         "allowed": False,
                         "reason": f"Cloud metadata access blocked: {ip_addr}",

@@ -52,6 +52,9 @@ class NetworkConstants:
     DEFAULT_SCAN_NETWORK: str = "192.168.1.0/24"  # Default network range for scanning tools
     PUBLIC_DNS_IP: str = "8.8.8.8"  # Google Public DNS for connectivity testing
 
+    # Special purpose IPs
+    DUMMY_ROUTE_IP: str = "10.255.255.255"  # Dummy IP for local IP detection via socket routing
+
     # Standard ports
     BACKEND_PORT: int = 8001
     FRONTEND_PORT: int = 5173

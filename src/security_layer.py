@@ -274,7 +274,9 @@ if __name__ == "__main__":
     )
 
     # Test audit logging
-    security_enabled.audit_log("login", "testuser", "success", {"ip": "127.0.0.1"})
+    security_enabled.audit_log(
+        "login", "testuser", "success", {"ip": NetworkConstants.LOCALHOST_IP}
+    )
     security_enabled.audit_log(
         "execute_command", "testuser", "denied", {"command": "rm -rf /"}
     )

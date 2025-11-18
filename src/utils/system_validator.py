@@ -1025,7 +1025,7 @@ class SystemValidator:
             import socket
 
             try:
-                socket.create_connection(("8.8.8.8", 53), timeout=3)
+                socket.create_connection((NetworkConstants.PUBLIC_DNS_IP, 53), timeout=3)
                 self._add_result(
                     component,
                     "Network Connectivity",

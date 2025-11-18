@@ -205,10 +205,13 @@ async def get_redis_with_immediate_test(
     """
 
     # Define fallback configurations
+    # Redis runs on VM3, use direct connection
     fallback_configs = [
-        {"host": "127.0.0.1", "port": NetworkConstants.REDIS_PORT, "db": config.get("db", 0)},
-        {"host": "localhost", "port": NetworkConstants.REDIS_PORT, "db": config.get("db", 0)},
-        {"host": NetworkConstants.REDIS_VM_IP, "port": NetworkConstants.REDIS_PORT, "db": config.get("db", 0)},  # Redis VM
+        {
+            "host": NetworkConstants.REDIS_VM_IP,
+            "port": NetworkConstants.REDIS_PORT,
+            "db": config.get("db", 0),
+        },
     ]
 
     return await create_redis_with_fallback(config, fallback_configs)
