@@ -15,7 +15,7 @@ from typing import Dict, Any
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.unified_config import UnifiedConfig
+from src.unified_config_manager import UnifiedConfigManagerManager
 
 
 def print_section(title: str):
@@ -25,7 +25,7 @@ def print_section(title: str):
     print(f"{'=' * 70}\n")
 
 
-def validate_configuration(config: UnifiedConfig) -> bool:
+def validate_configuration(config: UnifiedConfigManager) -> bool:
     """Validate timeout configuration."""
     print_section("TIMEOUT CONFIGURATION VALIDATION")
 
@@ -49,7 +49,7 @@ def validate_configuration(config: UnifiedConfig) -> bool:
     return validation_result['valid']
 
 
-def test_environment_aware_access(config: UnifiedConfig):
+def test_environment_aware_access(config: UnifiedConfigManager):
     """Test environment-aware timeout access."""
     print_section("ENVIRONMENT-AWARE TIMEOUT ACCESS")
 
@@ -88,7 +88,7 @@ def test_environment_aware_access(config: UnifiedConfig):
     return all_passed
 
 
-def test_timeout_groups(config: UnifiedConfig):
+def test_timeout_groups(config: UnifiedConfigManager):
     """Test batch timeout retrieval."""
     print_section("TIMEOUT GROUP RETRIEVAL")
 
@@ -109,7 +109,7 @@ def test_timeout_groups(config: UnifiedConfig):
     print("\n✅ Timeout group retrieval working correctly")
 
 
-def test_backward_compatibility(config: UnifiedConfig):
+def test_backward_compatibility(config: UnifiedConfigManager):
     """Test backward compatibility with expected values."""
     print_section("BACKWARD COMPATIBILITY CHECK")
 
@@ -149,7 +149,7 @@ def test_backward_compatibility(config: UnifiedConfig):
     return all_passed
 
 
-def display_summary(config: UnifiedConfig):
+def display_summary(config: UnifiedConfigManager):
     """Display configuration summary."""
     print_section("TIMEOUT CONFIGURATION SUMMARY")
 
@@ -189,8 +189,8 @@ def main():
 
     try:
         # Load configuration
-        config = UnifiedConfig()
-        print("\n✅ UnifiedConfig loaded successfully")
+        config = UnifiedConfigManager()
+        print("\n✅ UnifiedConfigManager loaded successfully")
 
         # Run validation tests
         config_valid = validate_configuration(config)
