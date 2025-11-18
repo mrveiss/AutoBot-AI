@@ -23,9 +23,12 @@ from datetime import datetime
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from src.config import config as config_manager
+from src.unified_config import UnifiedConfig
 from src.knowledge_base import KnowledgeBase
 from src.utils.redis_client import get_redis_client
+
+# Initialize unified config
+config = UnifiedConfig()
 # from src.utils.semantic_chunker import SemanticChunker  # Skip if not available
 
 logging.basicConfig(level=logging.INFO)
