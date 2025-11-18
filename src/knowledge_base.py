@@ -42,7 +42,7 @@ from pypdf import PdfReader
 
 from src.circuit_breaker import circuit_breaker_async
 from src.constants.network_constants import NetworkConstants
-from src.unified_config import config
+from src.unified_config_manager import UnifiedConfigManager
 from src.utils.error_boundaries import (
     ErrorCategory,
     ErrorContext,
@@ -51,6 +51,9 @@ from src.utils.error_boundaries import (
 )
 from src.utils.knowledge_base_timeouts import kb_timeouts
 from src.utils.redis_client import redis_db_manager
+
+# Create singleton config instance
+config = UnifiedConfigManager()
 
 logger = logging.getLogger(__name__)
 
