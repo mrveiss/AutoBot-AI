@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 # Import unified configuration system - NO HARDCODED VALUES
-from src.config_helper import cfg
+from src.unified_config import config
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -36,9 +36,9 @@ async def health_check():
     try:
         # Check if we can access configuration
         # Get infrastructure hosts as a proxy for machine count
-        backend_host = cfg.get_host("backend")
-        frontend_host = cfg.get_host("frontend")
-        redis_host = cfg.get_host("redis")
+        backend_host = config.get_host("backend")
+        frontend_host = config.get_host("frontend")
+        redis_host = config.get_host("redis")
 
         machines = [backend_host, frontend_host, redis_host]
         unique_machines = len(set(machines))  # Count unique hosts
@@ -142,8 +142,8 @@ class InfrastructureMonitor:
             start_time = time.time()
             # Use timeout from config if not provided
             if timeout is None:
-                timeout = cfg.get_timeout("http", "quick")
-            connect_timeout = cfg.get_timeout("http", "connect")
+                timeout = config.get_timeout("http", "quick")
+            connect_timeout = config.get_timeout("http", "connect")
             timeout_obj = aiohttp.ClientTimeout(total=timeout, connect=connect_timeout)
 
             async with aiohttp.ClientSession(timeout=timeout_obj) as session:
@@ -182,7 +182,7 @@ class InfrastructureMonitor:
         """Check if a port is open"""
         # Use timeout from config if not provided
         if timeout is None:
-            timeout = cfg.get_timeout("tcp", "port_check")
+            timeout = config.get_timeout("tcp", "port_check")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
         try:
@@ -197,8 +197,8 @@ class InfrastructureMonitor:
         """Get comprehensive machine resource statistics"""
         try:
             # For local machine, use system commands for accurate info - NO HARDCODED IPs
-            backend_host = cfg.get_host("backend")
-            local_hosts = cfg.get(
+            backend_host = config.get_host("backend")
+            local_hosts = config.get(
                 "infrastructure.local_hosts", ["localhost", "127.0.0.1"]
             ) + [socket.gethostname()]
             if host in local_hosts or host == backend_host:
@@ -370,7 +370,7 @@ class InfrastructureMonitor:
         base_disk = (host_hash % 60) + 20  # 20-80% Disk
 
         # Machine-specific adjustments based on role - use config for host mapping
-        npu_worker_host = cfg.get_host("npu_worker")
+        npu_worker_host = config.get_host("npu_worker")
         if host == npu_worker_host:  # NPU Worker - higher CPU, moderate memory
             cpu_load_1m = round(2.1 + (host_hash % 100) / 100, 1)
             memory_used = round(6.2 + (host_hash % 40) / 10, 1)
@@ -494,8 +494,8 @@ class InfrastructureMonitor:
         services = MachineServices()
 
         # Check core services
-        backend_host = cfg.get_host("backend")
-        backend_port = cfg.get_port("backend")
+        backend_host = config.get_host("backend")
+        backend_port = config.get_port("backend")
 
         # Backend API
         backend_service = await self.check_service_health(
@@ -504,7 +504,7 @@ class InfrastructureMonitor:
         services.core.append(backend_service)
 
         # Frontend
-        frontend_port = cfg.get_port("frontend")
+        frontend_port = config.get_port("frontend")
         if self.check_port(backend_host, frontend_port):
             services.core.append(
                 ServiceInfo(name="Frontend", status="online", response_time="12ms")
@@ -525,7 +525,7 @@ class InfrastructureMonitor:
         services.core.append(ws_service)
 
         # Database services - using already imported cfg
-        redis_host = cfg.get_host("redis")
+        redis_host = config.get_host("redis")
         if self.redis_client:
             try:
                 self.redis_client.ping()
@@ -567,8 +567,8 @@ class InfrastructureMonitor:
         services.application.append(llm_service)
 
         # Ollama
-        ollama_host = cfg.get_host("ollama")
-        ollama_port = cfg.get_port("ollama")
+        ollama_host = config.get_host("ollama")
+        ollama_port = config.get_port("ollama")
         if self.check_port(ollama_host, ollama_port):
             services.application.append(
                 ServiceInfo(name="Ollama", status="online", response_time="180ms")
@@ -635,10 +635,10 @@ class InfrastructureMonitor:
     async def monitor_vm1(self) -> MachineInfo:
         """Monitor VM1 (Frontend development) - NO HARDCODED IPs"""
         services = MachineServices()
-        vm1_host = cfg.get_host("frontend")
+        vm1_host = config.get_host("frontend")
 
         # Check Vite dev server
-        frontend_port = cfg.get_port("frontend")
+        frontend_port = config.get_port("frontend")
         if self.check_port(vm1_host, frontend_port):
             services.core.append(
                 ServiceInfo(
@@ -655,7 +655,7 @@ class InfrastructureMonitor:
             )
 
         # Check Nginx
-        nginx_port = cfg.get("infrastructure.ports.nginx", 80)
+        nginx_port = config.get("infrastructure.ports.nginx", 80)
         if self.check_port(vm1_host, nginx_port):
             services.core.append(
                 ServiceInfo(name="Nginx", status="online", response_time="5ms")
@@ -698,7 +698,7 @@ class InfrastructureMonitor:
 
         # Core local services - NO HARDCODED VALUES
         # VNC Server check
-        vnc_port = cfg.get_port("vnc")
+        vnc_port = config.get_port("vnc")
         if self.check_port("127.0.0.1", vnc_port):  # noVNC port
             services.core.append(
                 ServiceInfo(
@@ -718,7 +718,7 @@ class InfrastructureMonitor:
             )
 
         # Local Redis
-        redis_port = cfg.get_port("redis")
+        redis_port = config.get_port("redis")
         if self.check_port("127.0.0.1", redis_port):
             services.database.append(
                 ServiceInfo(name="Redis Local", status="online", response_time="3ms")
@@ -760,7 +760,7 @@ class InfrastructureMonitor:
             services.support.append(ServiceInfo(name="Git", status="offline"))
 
         # VS Code Server check (if running)
-        vscode_port = cfg.get(
+        vscode_port = config.get(
             "infrastructure.ports.vscode", NetworkConstants.AI_STACK_PORT
         )  # VS Code server port
         if self.check_port("127.0.0.1", vscode_port):
@@ -801,10 +801,10 @@ class InfrastructureMonitor:
     async def monitor_vm2(self) -> MachineInfo:
         """Monitor VM2 - NPU Worker - NO HARDCODED IPs"""
         services = MachineServices()
-        vm2_host = cfg.get_host("npu_worker")
+        vm2_host = config.get_host("npu_worker")
 
         # Core services - NO HARDCODED PORTS
-        npu_port = cfg.get_port("npu_worker")
+        npu_port = config.get_port("npu_worker")
         npu_api_service = await self.check_service_health(
             f"http://{vm2_host}:{npu_port}/health", "NPU Worker API"
         )
@@ -865,10 +865,10 @@ class InfrastructureMonitor:
     async def monitor_vm3(self) -> MachineInfo:
         """Monitor VM3 - Redis Database - NO HARDCODED IPs"""
         services = MachineServices()
-        vm3_host = cfg.get_host("redis")
+        vm3_host = config.get_host("redis")
 
         # Core Redis services - NO HARDCODED PORTS
-        redis_port = cfg.get_port("redis")
+        redis_port = config.get_port("redis")
         if self.check_port(vm3_host, redis_port):
             services.core.extend(
                 [
@@ -929,10 +929,10 @@ class InfrastructureMonitor:
     async def monitor_vm4(self) -> MachineInfo:
         """Monitor VM4 - AI Stack - NO HARDCODED IPs"""
         services = MachineServices()
-        vm4_host = cfg.get_host("ai_stack")
+        vm4_host = config.get_host("ai_stack")
 
         # Core services - NO HARDCODED PORTS
-        ai_port = cfg.get_port("ai_stack")
+        ai_port = config.get_port("ai_stack")
         ai_api_service = await self.check_service_health(
             f"http://{vm4_host}:{ai_port}/health", "AI Stack API"
         )
@@ -994,10 +994,10 @@ class InfrastructureMonitor:
     async def monitor_vm5(self) -> MachineInfo:
         """Monitor VM5 - Browser Service - NO HARDCODED IPs"""
         services = MachineServices()
-        vm5_host = cfg.get_host("browser_service")
+        vm5_host = config.get_host("browser_service")
 
         # Core services - NO HARDCODED PORTS
-        browser_port = cfg.get_port("browser_service")
+        browser_port = config.get_port("browser_service")
         browser_api_service = await self.check_service_health(
             f"http://{vm5_host}:{browser_port}/health", "Browser API"
         )
