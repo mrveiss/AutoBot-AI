@@ -17,6 +17,7 @@
           <p>{{ mainCat.description }}</p>
           <div class="category-stats">
             <span class="fact-count">{{ mainCat.count }} facts</span>
+            <!-- Populate button for system categories -->
             <BaseButton
               v-if="mainCat.id !== 'user-knowledge'"
               variant="primary"
@@ -29,6 +30,17 @@
               <i v-if="!populationStates[mainCat.id]?.isPopulating" class="fas fa-sync"></i>
               <span v-if="!populationStates[mainCat.id]?.isPopulating">Populate</span>
               <span v-else>{{ populationStates[mainCat.id]?.progress || 0 }}%</span>
+            </BaseButton>
+            <!-- Import button for user knowledge -->
+            <BaseButton
+              v-if="mainCat.id === 'user-knowledge'"
+              variant="primary"
+              size="sm"
+              @click.stop="router.push('/knowledge/upload')"
+              class="populate-btn"
+            >
+              <i class="fas fa-file-import"></i>
+              <span>Import</span>
             </BaseButton>
           </div>
         </div>
@@ -248,6 +260,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
@@ -285,6 +298,9 @@ const {
   cleanup: cleanupVectorization
 } = useKnowledgeVectorization()
 
+// Router for navigation
+const router = useRouter()
+
 // Props
 interface Props {
   mode?: 'user' | 'autobot' | 'autobot-documentation' | 'system-knowledge' | 'user-knowledge'
@@ -320,6 +336,7 @@ const populationStates = ref<Record<string, { isPopulating: boolean; progress: n
   'autobot-documentation': { isPopulating: false, progress: 0 },
   'system-knowledge': { isPopulating: false, progress: 0 }
 })
+
 
 // Use composables for async operations
 const {
@@ -878,7 +895,7 @@ const handlePopulate = async (categoryId: string) => {
     populationStates.value[categoryId] = { isPopulating: false, progress: 0 }
 
     // Reload the knowledge tree to show new items
-    await loadKnowledgeTree()
+    await loadKnowledgeTree(loadKnowledgeTreeFn)
 
     console.log(`${categoryId} population completed:`, result)
   } catch (error) {
