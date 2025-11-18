@@ -298,18 +298,20 @@ class WindowsNPUWorker:
         logger.info(f"Windows NPU Worker initialized - NPU Available: {self.npu_available}")
 
     async def initialize_redis(self):
-        """Initialize Redis connection"""
+        """
+        Initialize Redis connection using canonical get_redis_client() pattern
+
+        Uses connection pooling, retry logic, and all config parameters from npu_worker.yaml
+        """
         try:
-            import redis.asyncio as redis
-            self.redis_client = redis.Redis(
-                host=self.redis_host,
-                port=self.redis_port,
-                decode_responses=True
-            )
-            await self.redis_client.ping()
-            logger.info("Connected to Redis")
+            from utils.redis_client import get_redis_client
+            self.redis_client = await get_redis_client(config)
+            if self.redis_client:
+                logger.info("Connected to Redis with connection pooling")
+            else:
+                logger.info("Operating in standalone mode without Redis")
         except Exception as e:
-            logger.warning(f"Redis connection failed: {e}")
+            logger.warning(f"Redis initialization failed: {e}")
             self.redis_client = None
 
     async def initialize_npu(self):
@@ -705,7 +707,11 @@ class WindowsNPUWorker:
         logger.info("Cleaning up NPU worker")
         self.embedding_cache.clear()
         if self.redis_client:
-            await self.redis_client.close()
+            try:
+                from utils.redis_client import close_redis_client
+                await close_redis_client()
+            except Exception as e:
+                logger.warning(f"Error during Redis cleanup: {e}")
 
 
 def main():
