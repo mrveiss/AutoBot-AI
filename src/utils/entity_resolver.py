@@ -555,7 +555,7 @@ class EntityResolver:
                     total_processing_time += history.get("processing_time", 0)
                     total_entities_processed += history.get("total_original", 0)
                     total_entities_resolved += history.get("total_canonical", 0)
-                except:
+                except Exception:
                     continue
 
             avg_processing_time = (

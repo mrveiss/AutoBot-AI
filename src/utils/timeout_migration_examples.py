@@ -604,7 +604,7 @@ def migrate_timeout_operation(
                             items = len(list(path.rglob("*")))
                         else:
                             items = 1
-                    except:
+                    except Exception:
                         items = 1
                 else:
                     items = 1

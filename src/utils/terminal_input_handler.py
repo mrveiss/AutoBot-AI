@@ -38,7 +38,7 @@ def _get_config_default(key: str, fallback: str) -> str:
                     key, fallback
                 )
             )
-        except:
+        except Exception:
             return fallback
     return fallback
 

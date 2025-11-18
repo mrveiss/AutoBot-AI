@@ -374,7 +374,7 @@ class ServiceDiscovery:
                             status_field = data.get("status", "healthy").lower()
                             if status_field in ["degraded", "warning"]:
                                 return ServiceStatus.DEGRADED
-                    except:
+                    except Exception:
                         pass  # Ignore JSON parsing errors for simple endpoints
 
                     return ServiceStatus.HEALTHY
