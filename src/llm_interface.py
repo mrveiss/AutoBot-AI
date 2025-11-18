@@ -43,7 +43,7 @@ from src.utils.http_client import get_http_client
 # REFACTORED: Removed unused import from deprecated redis_pool_manager
 # from src.redis_pool_manager import get_redis_async
 from src.retry_mechanism import retry_network_operation
-from src.unified_config import config
+from src.unified_config_manager import UnifiedConfigManager
 from src.utils.error_boundaries import (
     ErrorCategory,
     ErrorContext,
@@ -52,6 +52,9 @@ from src.utils.error_boundaries import (
 )
 
 from .utils.async_stream_processor import StreamCompletionSignal, StreamProcessor
+
+# Create singleton config instance
+config = UnifiedConfigManager()
 
 # Optional imports with proper error handling
 try:
