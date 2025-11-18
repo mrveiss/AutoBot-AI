@@ -7,6 +7,7 @@ import asyncio
 import json
 from pathlib import Path
 
+from src.constants.network_constants import NetworkConstants
 from src.env_analyzer import EnvironmentAnalyzer
 
 
@@ -175,9 +176,9 @@ async def demonstrate_specific_fixes():
         },
         {
             "title": "API Base URL",
-            "before": 'base_url = "http://localhost:8001"',
+            "before": f'base_url = "http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"',
             "after": 'base_url = config.get("api.base_url")',
-            "env_var": "AUTOBOT_API_BASE_URL=http://localhost:8001"
+            "env_var": f"AUTOBOT_API_BASE_URL=http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
         },
         {
             "title": "File Paths",
