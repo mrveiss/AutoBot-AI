@@ -1019,7 +1019,7 @@ class AppFactory:
         # Configure CORS with specific origins for security
         # Generate from centralized configuration instead of hardcoded list
         if allow_origins is None:
-            from src.unified_config import config
+            config = UnifiedConfigManager()
             allow_origins = config.get_cors_origins()
 
         app.add_middleware(
