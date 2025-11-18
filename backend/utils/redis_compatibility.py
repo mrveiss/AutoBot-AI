@@ -7,9 +7,6 @@ import asyncio
 import warnings
 from typing import Any, Optional, Union
 
-import redis
-import redis.asyncio as aioredis
-
 from src.constants.network_constants import NetworkConstants
 from src.utils.logging_manager import get_logger
 
