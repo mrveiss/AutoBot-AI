@@ -21,7 +21,7 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.config_helper import cfg
+from src.unified_config import config
 from src.constants import PATH
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -37,7 +37,7 @@ def get_service_address(service_name: str, port: int, protocol: str = "http") ->
     """Get standardized service address from config helper"""
     # Get host from configuration system
     try:
-        host = cfg.get_host(service_name)
+        host = config.get_host(service_name)
     except Exception:
         # Fallback to localhost if config lookup fails
         host = "localhost"
