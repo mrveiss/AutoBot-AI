@@ -17,7 +17,8 @@ from typing import List, Dict, Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import redis
+# Import canonical Redis client utility
+from src.utils.redis_client import get_redis_client
 from src.knowledge_base import KnowledgeBase
 from src.utils.redis_database_manager import RedisDatabaseManager, RedisDatabase
 
@@ -56,15 +57,8 @@ class CodeVectorKnowledgeCreator:
     async def get_code_analytics_vectors(self) -> List[Dict[str, Any]]:
         """Get all code analytics vectors from DB 8"""
         try:
-            # Connect to analytics database (DB 8)
-            analytics_redis = redis.Redis(
-                host="172.16.168.23",
-                port=6379,
-                db=8,
-                decode_responses=False,
-                socket_timeout=30,
-                socket_connect_timeout=10
-            )
+            # Connect to analytics database using canonical pattern
+            analytics_redis = get_redis_client(database="analytics", async_client=False)
 
             logger.info("🔍 Scanning code analytics vectors...")
 
@@ -207,14 +201,8 @@ Database: {vector['metadata'].get('database', 'analytics_db8')}
                 # Fallback: store directly in Redis with proper format
                 doc_id = f"code_analytics_{metadata.get('original_vector_id', 'unknown')}"
 
-                # Store in knowledge database (DB 1)
-                kb_redis = redis.Redis(
-                    host="172.16.168.23",
-                    port=6379,
-                    db=1,
-                    decode_responses=False,
-                    socket_timeout=10
-                )
+                # Store in knowledge database using canonical pattern
+                kb_redis = get_redis_client(database="knowledge", async_client=False)
 
                 # Create document entry
                 doc_data = {
@@ -242,14 +230,8 @@ Database: {vector['metadata'].get('database', 'analytics_db8')}
         try:
             logger.info("🔨 Creating search index for code analytics...")
 
-            # Connect to knowledge database
-            kb_redis = redis.Redis(
-                host="172.16.168.23",
-                port=6379,
-                db=1,
-                decode_responses=False,
-                socket_timeout=10
-            )
+            # Connect to knowledge database using canonical pattern
+            kb_redis = get_redis_client(database="knowledge", async_client=False)
 
             # Create search index for code analytics documents
             try:
