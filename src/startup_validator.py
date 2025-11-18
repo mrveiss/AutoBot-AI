@@ -31,10 +31,13 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.constants.network_constants import NetworkConstants
-from src.unified_config import config
+from src.unified_config_manager import UnifiedConfigManager
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
+
+# Create singleton config instance
+config = UnifiedConfigManager()
 
 
 @dataclass
