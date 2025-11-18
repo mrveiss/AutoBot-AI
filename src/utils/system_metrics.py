@@ -15,7 +15,10 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import psutil
 
-from src.unified_config import config
+from src.unified_config_manager import UnifiedConfigManager
+
+# Create singleton config instance
+config = UnifiedConfigManager()
 from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 from src.utils.redis_client import get_redis_client

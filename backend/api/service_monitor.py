@@ -18,7 +18,10 @@ from pydantic import BaseModel
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import unified configuration system - NO HARDCODED VALUES
-from src.unified_config import config
+from src.unified_config_manager import UnifiedConfigManager
+
+# Create singleton config instance
+config = UnifiedConfigManager()
 from src.constants.network_constants import NetworkConstants, ServiceURLs
 from src.constants.path_constants import PATH
 
