@@ -2,34 +2,23 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Compatibility Shim for Unified Config Migration
+Compatibility Shim for Unified Config
 
 This module provides backward compatibility for code that imports from
-src.unified_config while the codebase transitions to src.unified_config_manager.
+src.unified_config by redirecting to src.unified_config_manager.
 
 Usage:
-    # Old code continues to work:
     from src.unified_config import config, get_timeout
+    # Automatically redirects to src.unified_config_manager
 
-    # Automatically redirects to:
-    # from src.unified_config_manager import ...
-
-This shim will be removed after all imports are migrated (Issue #63).
+This shim is now a stable part of the architecture after completing
+the config consolidation (Issue #63).
 """
 
-import warnings
 from typing import Any, Dict, Optional
 
 # Import from the canonical config manager
 from src.unified_config_manager import UnifiedConfigManager
-
-# Issue deprecation warning
-warnings.warn(
-    "src.unified_config is deprecated. Use src.unified_config_manager instead. "
-    "See Issue #63 for migration details.",
-    DeprecationWarning,
-    stacklevel=2,
-)
 
 
 # Create adapter class that provides unified_config API
