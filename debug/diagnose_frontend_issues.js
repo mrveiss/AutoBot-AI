@@ -7,6 +7,10 @@
 
 const { chromium } = require('playwright');
 
+// Service URLs (match NetworkConstants)
+const FRONTEND_URL = 'http://localhost:5173';  // NetworkConstants.FRONTEND_PORT
+const BACKEND_URL = 'http://localhost:8001';   // NetworkConstants.BACKEND_PORT
+
 async function diagnoseFrontendIssues() {
     console.log('🔍 Starting Frontend Diagnostics...\n');
     
@@ -30,7 +34,7 @@ async function diagnoseFrontendIssues() {
     try {
         // Test 1: Basic page load
         console.log('📱 TEST 1: Basic Page Load');
-        await page.goto('http://localhost:5173', { waitUntil: 'networkidle' });
+        await page.goto(FRONTEND_URL, { waitUntil: 'networkidle' });
         
         // Wait for Vue app to mount
         await page.waitForSelector('#app', { timeout: 10000 });
@@ -131,9 +135,9 @@ async function diagnoseFrontendIssues() {
         console.log('📱 TEST 5: Backend Connectivity');
         
         // Check network requests
-        const response = await page.evaluate(async () => {
+        const response = await page.evaluate(async (backendUrl) => {
             try {
-                const res = await fetch('http://localhost:8001/api/system/health');
+                const res = await fetch(`${backendUrl}/api/system/health`);
                 return {
                     status: res.status,
                     ok: res.ok,
@@ -144,8 +148,8 @@ async function diagnoseFrontendIssues() {
                     error: error.message
                 };
             }
-        });
-        
+        }, BACKEND_URL);
+
         if (response.ok) {
             console.log('✅ Backend connectivity working');
         } else {
