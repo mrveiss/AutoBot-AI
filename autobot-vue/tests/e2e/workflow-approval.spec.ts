@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { TEST_CONFIG } from './config';
 
 test.describe('WorkflowApproval Component Tests', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to the AutoBot application
-    await page.goto('http://localhost:5173');
+    await page.goto(TEST_CONFIG.FRONTEND_URL);
     await page.waitForLoadState('networkidle');
     
     // Wait for the application to load
@@ -45,7 +46,7 @@ test.describe('WorkflowApproval Component Tests', () => {
 
   test('should be able to fetch workflows without 404 error', async ({ page }) => {
     // Test the API endpoint directly
-    const response = await page.request.get('http://localhost:8001/api/workflow/workflows');
+    const response = await page.request.get(TEST_CONFIG.getApiUrl('/api/workflow/workflows'));
     
     // Should not return 404
     expect(response.status()).not.toBe(404);
@@ -59,7 +60,7 @@ test.describe('WorkflowApproval Component Tests', () => {
 
   test('should display workflow information when workflows are available', async ({ page }) => {
     // Check if there are any active workflows
-    const response = await page.request.get('http://localhost:8001/api/workflow/workflows');
+    const response = await page.request.get(TEST_CONFIG.getApiUrl('/api/workflow/workflows'));
     const workflowData = await response.json();
     
     if (workflowData.workflows && workflowData.workflows.length > 0) {
