@@ -279,7 +279,7 @@ class ModelOptimizer:
                     return ModelPerformanceLevel.STANDARD
                 else:
                     return ModelPerformanceLevel.ADVANCED
-        except:
+        except Exception:
             pass
 
         # Default classification

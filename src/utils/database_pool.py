@@ -140,7 +140,7 @@ class SQLiteConnectionPool:
                     # Pool is full, close connection
                     try:
                         conn.close()
-                    except:
+                    except Exception:
                         pass
 
     def close_all(self):

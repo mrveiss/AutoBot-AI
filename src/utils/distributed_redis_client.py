@@ -104,7 +104,7 @@ class DistributedRedisClient:
         try:
             self._client.ping()
             return True
-        except:
+        except Exception:
             return False
 
     async def get_client_async(self) -> Optional[redis.Redis]:
