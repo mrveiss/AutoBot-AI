@@ -17,7 +17,7 @@ from backend.services.playwright_service import (
     send_test_message_embedded,
     test_frontend_embedded,
 )
-from src.config_helper import cfg
+from src.unified_config import config
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -33,11 +33,11 @@ class SearchRequest(BaseModel):
 
 class TestMessageRequest(BaseModel):
     message: str = "what network scanning tools do we have available?"
-    frontend_url: str = cfg.get_service_url("frontend")
+    frontend_url: str = config.get_service_url("frontend")
 
 
 class FrontendTestRequest(BaseModel):
-    frontend_url: str = cfg.get_service_url("frontend")
+    frontend_url: str = config.get_service_url("frontend")
 
 
 class ScreenshotRequest(BaseModel):
