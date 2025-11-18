@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { TEST_CONFIG } from './config';
 
 test.describe('System Integration and Stability Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:5173');
+    await page.goto(TEST_CONFIG.FRONTEND_URL);
     await page.waitForLoadState('networkidle');
     await page.waitForSelector('#app', { timeout: 10000 });
   });
@@ -53,7 +54,7 @@ test.describe('System Integration and Stability Tests', () => {
     ];
 
     for (const endpoint of endpoints) {
-      const response = await page.request.get(`http://localhost:8001${endpoint}`);
+      const response = await page.request.get(TEST_CONFIG.getApiUrl(endpoint));
       // Should not be completely unreachable
       expect(response.status()).not.toBe(0);
       expect(response.status()).not.toBe(502); // Bad gateway
@@ -148,7 +149,7 @@ test.describe('System Integration and Stability Tests', () => {
     if (wsConnections.length > 0) {
       // Connections should be to valid endpoints
       wsConnections.forEach(url => {
-        expect(url).toContain('localhost:8001');
+        expect(url).toContain(TEST_CONFIG.getBackendHost());
         expect(url).toContain('/ws');
       });
 
@@ -214,9 +215,9 @@ test.describe('System Integration and Stability Tests', () => {
 
     // Should maintain consistent application state
     await expect(page.locator('#app')).toBeVisible();
-    
+
     // URL should be for the same application
-    expect(page.url()).toContain('localhost:5173');
+    expect(page.url()).toContain(TEST_CONFIG.getFrontendHost());
     
     // Application should still be responsive
     await expect(page.locator('text=AutoBot').first()).toBeVisible();
@@ -228,11 +229,11 @@ test.describe('System Integration and Stability Tests', () => {
     
     // Simulate multiple operations happening at once
     promises.push(
-      page.request.get('http://localhost:8001/api/system/health')
+      page.request.get(TEST_CONFIG.getApiUrl('/api/system/health'))
     );
-    
+
     promises.push(
-      page.request.get('http://localhost:8001/api/workflow/workflows')
+      page.request.get(TEST_CONFIG.getApiUrl('/api/workflow/workflows'))
     );
     
     if (await page.locator('text=Dashboard').count() > 0) {

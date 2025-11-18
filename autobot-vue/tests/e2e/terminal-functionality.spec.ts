@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { TEST_CONFIG } from './config';
 
 test.describe('Terminal Functionality Tests', () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to the AutoBot application  
-    await page.goto('http://localhost:5173');
+    // Navigate to the AutoBot application
+    await page.goto(TEST_CONFIG.FRONTEND_URL);
     await page.waitForLoadState('networkidle');
     
     // Wait for the application to load
@@ -43,7 +44,7 @@ test.describe('Terminal Functionality Tests', () => {
 
   test('should be able to create terminal session via API', async ({ page }) => {
     // Test the REST API session creation
-    const response = await page.request.post('http://localhost:8001/api/terminal/sessions', {
+    const response = await page.request.post(TEST_CONFIG.getApiUrl('/api/terminal/sessions'), {
       data: {
         shell: '/bin/bash',
         environment: {},
@@ -59,20 +60,20 @@ test.describe('Terminal Functionality Tests', () => {
     
     // Clean up - delete the session
     if (sessionData.session_id) {
-      await page.request.delete(`http://localhost:8001/api/terminal/sessions/${sessionData.session_id}`);
+      await page.request.delete(TEST_CONFIG.getApiUrl(`/api/terminal/sessions/${sessionData.session_id}`));
     }
   });
 
   test('should have working WebSocket endpoints available', async ({ page }) => {
     // Test that the WebSocket endpoints return proper responses
     // We can't easily test WebSocket from Playwright, but we can test the HTTP endpoints
-    
+
     // Test original complex terminal endpoint exists
-    const complexTerminalExists = await page.request.get('http://localhost:8001/api/terminal/sessions');
+    const complexTerminalExists = await page.request.get(TEST_CONFIG.getApiUrl('/api/terminal/sessions'));
     expect(complexTerminalExists.status()).not.toBe(404);
-    
+
     // Test new simple terminal endpoint exists (after backend restart)
-    const simpleTerminalExists = await page.request.get('http://localhost:8001/api/terminal/simple/sessions');
+    const simpleTerminalExists = await page.request.get(TEST_CONFIG.getApiUrl('/api/terminal/simple/sessions'));
     // This might be 404 if backend hasn't been restarted yet - that's expected
     // We just want to ensure the endpoint structure is ready
   });
