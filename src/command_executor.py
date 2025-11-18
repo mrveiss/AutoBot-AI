@@ -1,88 +1,52 @@
-import asyncio
-import logging
-from typing import Any, Dict
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+DEPRECATED: This module redirects to secure_command_executor.py
 
-from src.constants.network_constants import NetworkConstants
-from src.secure_command_executor import (
-    CommandRisk,
-    SecureCommandExecutor,
-    SecurityPolicy,
+All command execution functionality has been migrated to SecureCommandExecutor
+with enhanced security controls, validation, and auditing.
+
+This file exists only for backward compatibility.
+
+Migration Status: Security Enhancement (2025-11-18)
+Expected Removal: After verification period (2025-12-01)
+Production Usage: None (zero imports found)
+
+Usage:
+    # Old import (deprecated but still works):
+    from src.command_executor import CommandExecutor
+
+    # New recommended import:
+    from src.secure_command_executor import SecureCommandExecutor
+
+Security Notes:
+- SecureCommandExecutor provides comprehensive security validation
+- Commands are risk-assessed and may be blocked for safety
+- Docker sandboxing available for high-risk commands
+- Full audit logging of all command execution
+"""
+
+import warnings
+
+# Emit deprecation warning
+warnings.warn(
+    "src.command_executor is deprecated. "
+    "Use src.secure_command_executor.SecureCommandExecutor instead. "
+    "This compatibility shim will be removed in future version.",
+    DeprecationWarning,
+    stacklevel=2
 )
-from src.utils.command_utils import execute_shell_command
 
-logger = logging.getLogger(__name__)
+# Re-export SecureCommandExecutor as CommandExecutor for backward compatibility
+from src.secure_command_executor import (
+    SecureCommandExecutor as CommandExecutor,
+    SecurityPolicy,
+    CommandRisk,
+)
 
-# SECURITY WARNING: This class has been converted to use secure command execution
-# All command execution now goes through security validation and auditing
-
-
-class CommandExecutor:
-    """DEPRECATED: Use SecureCommandExecutor directly for better security control
-
-    This wrapper maintains backward compatibility while enforcing security.
-    """
-
-    def __init__(self):
-        logger.warning(
-            "CommandExecutor is deprecated. Use SecureCommandExecutor directly for better security control."
-        )
-        # Initialize with high security by default
-        self._secure_executor = SecureCommandExecutor(
-            policy=SecurityPolicy(),
-            use_docker_sandbox=True,  # Enable sandboxing by default
-        )
-
-    async def run_shell_command(self, command: str) -> Dict[str, Any]:
-        """
-        Executes a shell command asynchronously with security validation.
-
-        BREAKING CHANGE: Commands are now validated and may be blocked for security.
-        High-risk commands will be rejected unless explicit approval is configured.
-
-        Args:
-            command: The shell command to execute.
-
-        Returns:
-            A dictionary containing stdout, stderr, return code, status, and security info.
-        """
-        logger.info(
-            f"SECURITY: Executing command through secure wrapper: {command[:50]}..."
-        )
-
-        # Use secure execution
-        result = await self._secure_executor.run_shell_command(command)
-
-        # Log security events
-        security_info = result.get("security", {})
-        if security_info.get("blocked"):
-            logger.warning(
-                f"SECURITY: Command blocked - {command} - Reason: {security_info.get('reasons')}"
-            )
-        elif security_info.get("sandboxed"):
-            logger.info(f"SECURITY: Command executed in sandbox - {command}")
-
-        return result
-
-
-# Example Usage (for testing)
-if __name__ == "__main__":
-
-    async def main():
-        executor = CommandExecutor()
-
-        # Test a successful command
-        print("--- Testing successful command ---")
-        result = await executor.run_shell_command("echo 'Hello, world!'")
-        print(result)
-
-        # Test a command with error
-        print("\n--- Testing command with error ---")
-        result = await executor.run_shell_command("ls non_existent_directory")
-        print(result)
-
-        # Test a command not found
-        print("\n--- Testing command not found ---")
-        result = await executor.run_shell_command("non_existent_command arg1 arg2")
-        print(result)
-
-    asyncio.run(main())
+__all__ = [
+    "CommandExecutor",
+    "SecurityPolicy",
+    "CommandRisk",
+]
