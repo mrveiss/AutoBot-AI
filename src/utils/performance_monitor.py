@@ -22,7 +22,7 @@ import aiofiles
 import aiohttp
 import psutil
 
-from src.config_helper import cfg
+from src.unified_config import config
 from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 
@@ -392,8 +392,8 @@ class Phase9PerformanceMonitor:
     async def _get_npu_worker_stats(self) -> Dict[str, Any]:
         """Get statistics from NPU worker service"""
         try:
-            npu_host = cfg.get_host("npu_worker")
-            npu_port = cfg.get_port("npu_worker")
+            npu_host = config.get_host("npu_worker")
+            npu_port = config.get_port("npu_worker")
 
             # Use singleton HTTP client for connection pooling
             http_client = get_http_client()
@@ -620,7 +620,7 @@ class Phase9PerformanceMonitor:
     async def _measure_network_latency(self) -> float:
         """Measure network latency to backend service"""
         try:
-            backend_host = cfg.get_host("backend")
+            backend_host = config.get_host("backend")
             start_time = time.time()
 
             # Use singleton HTTP client for connection pooling
@@ -648,38 +648,38 @@ class Phase9PerformanceMonitor:
         service_configs = [
             {
                 "name": "Backend API",
-                "host": cfg.get_host("backend"),
-                "port": cfg.get_port("backend"),
+                "host": config.get_host("backend"),
+                "port": config.get_port("backend"),
                 "path": "/api/health",
             },
             {
                 "name": "Frontend",
-                "host": cfg.get_host("frontend"),
-                "port": cfg.get_port("frontend"),
+                "host": config.get_host("frontend"),
+                "port": config.get_port("frontend"),
                 "path": "/",
             },
             {
                 "name": "Redis",
-                "host": cfg.get_host("redis"),
-                "port": cfg.get_port("redis"),
+                "host": config.get_host("redis"),
+                "port": config.get_port("redis"),
                 "path": None,
             },
             {
                 "name": "AI Stack",
-                "host": cfg.get_host("ai_stack"),
-                "port": cfg.get_port("ai_stack"),
+                "host": config.get_host("ai_stack"),
+                "port": config.get_port("ai_stack"),
                 "path": "/health",
             },
             {
                 "name": "NPU Worker",
-                "host": cfg.get_host("npu_worker"),
-                "port": cfg.get_port("npu_worker"),
+                "host": config.get_host("npu_worker"),
+                "port": config.get_port("npu_worker"),
                 "path": "/health",
             },
             {
                 "name": "Browser Service",
-                "host": cfg.get_host("browser_service"),
-                "port": cfg.get_port("browser_service"),
+                "host": config.get_host("browser_service"),
+                "port": config.get_port("browser_service"),
                 "path": "/health",
             },
         ]

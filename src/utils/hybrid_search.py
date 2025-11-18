@@ -10,7 +10,7 @@ import re
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.config_helper import cfg
+from src.unified_config import config
 from src.constants.network_constants import NetworkConstants
 
 
@@ -25,18 +25,18 @@ class HybridSearchEngine:
         self.knowledge_base = knowledge_base
 
         # Configuration from config files
-        self.semantic_weight = cfg.get("search.hybrid.semantic_weight", 0.7)
-        self.keyword_weight = cfg.get("search.hybrid.keyword_weight", 0.3)
-        self.min_keyword_score = cfg.get("search.hybrid.min_keyword_score", 0.1)
-        self.keyword_boost_factor = cfg.get("search.hybrid.keyword_boost_factor", 1.5)
+        self.semantic_weight = config.get("search.hybrid.semantic_weight", 0.7)
+        self.keyword_weight = config.get("search.hybrid.keyword_weight", 0.3)
+        self.min_keyword_score = config.get("search.hybrid.min_keyword_score", 0.1)
+        self.keyword_boost_factor = config.get("search.hybrid.keyword_boost_factor", 1.5)
 
         # Search parameters
-        self.semantic_top_k = cfg.get("search.hybrid.semantic_top_k", 15)
-        self.final_top_k = cfg.get("search.hybrid.final_top_k", 10)
+        self.semantic_top_k = config.get("search.hybrid.semantic_top_k", 15)
+        self.final_top_k = config.get("search.hybrid.final_top_k", 10)
 
         # Keyword extraction settings
         self.stop_words = set(
-            cfg.get(
+            config.get(
                 "search.hybrid.stop_words",
                 [
                     "the",
@@ -82,7 +82,7 @@ class HybridSearchEngine:
             )
         )
 
-        self.min_keyword_length = cfg.get("search.hybrid.min_keyword_length", 3)
+        self.min_keyword_length = config.get("search.hybrid.min_keyword_length", 3)
 
     def extract_keywords(self, text: str) -> List[str]:
         """Extract meaningful keywords from text."""

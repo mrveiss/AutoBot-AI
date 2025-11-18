@@ -18,7 +18,7 @@ import aiohttp
 import psutil
 import yaml
 
-from src.config_helper import cfg
+from src.unified_config import config
 from src.constants.network_constants import NetworkConstants
 from src.utils.redis_client import get_redis_client
 
@@ -128,15 +128,15 @@ class ModelOptimizer:
         self._models_cache = {}
         self._performance_history = {}
         self._ollama_base_url = (
-            f"http://{cfg.get_host('ollama')}:{cfg.get_port('ollama')}"
+            f"http://{config.get_host('ollama')}:{config.get_port('ollama')}"
         )
 
         # Configuration
-        self._performance_threshold = cfg.get(
+        self._performance_threshold = config.get(
             "llm.optimization.performance_threshold", 0.8
         )
-        self._cache_ttl = cfg.get("llm.optimization.cache_ttl", 3600)  # 1 hour
-        self._min_samples = cfg.get("llm.optimization.min_samples", 5)
+        self._cache_ttl = config.get("llm.optimization.cache_ttl", 3600)  # 1 hour
+        self._min_samples = config.get("llm.optimization.min_samples", 5)
 
         # Model classification rules - loaded from config (zero hardcode policy)
         self.model_classifications = self._load_model_classifications()
@@ -191,7 +191,7 @@ class ModelOptimizer:
         if self._redis_client is None:
             try:
                 self._redis_client = get_redis_client(
-                    async_client=True, db=cfg.get("redis.databases.llm_cache.db", 5)
+                    async_client=True, db=config.get("redis.databases.llm_cache.db", 5)
                 )
                 if asyncio.iscoroutine(self._redis_client):
                     self._redis_client = await self._redis_client

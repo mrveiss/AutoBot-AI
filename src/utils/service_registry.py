@@ -32,7 +32,7 @@ import aiohttp
 import yaml
 
 # Import unified configuration system - NO HARDCODED VALUES
-from src.config_helper import cfg
+from src.unified_config import config
 from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 
@@ -100,7 +100,7 @@ class ServiceRegistry:
         """Get service configurations from unified config"""
         return {
             "redis": {
-                "port": cfg.get_port("redis"),
+                "port": config.get_port("redis"),
                 "health_endpoint": "/",
                 "schemes": {
                     "local": "redis",
@@ -109,32 +109,32 @@ class ServiceRegistry:
                 },
             },
             "ai-stack": {
-                "port": cfg.get_port("ai_stack"),
+                "port": config.get_port("ai_stack"),
                 "health_endpoint": "/health",
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
             "npu-worker": {
-                "port": cfg.get_port("npu_worker"),
+                "port": config.get_port("npu_worker"),
                 "health_endpoint": "/health",
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
             "backend": {
-                "port": cfg.get_port("backend"),
+                "port": config.get_port("backend"),
                 "health_endpoint": "/api/health",  # Fixed endpoint
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
             "frontend": {
-                "port": cfg.get_port("frontend"),
+                "port": config.get_port("frontend"),
                 "health_endpoint": "/",
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
             "playwright-vnc": {
-                "port": cfg.get_port("browser_service"),
+                "port": config.get_port("browser_service"),
                 "health_endpoint": "/health",
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
             "ollama": {
-                "port": cfg.get_port("ollama"),
+                "port": config.get_port("ollama"),
                 "health_endpoint": "/api/tags",
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
@@ -147,15 +147,15 @@ class ServiceRegistry:
         return {
             DeploymentMode.LOCAL: {
                 # DEFAULT HYBRID: Backend/frontend on localhost, Docker services on localhost ports
-                "default": cfg.get("infrastructure.defaults.localhost"),
-                "redis": cfg.get_host("redis"),
-                "backend": cfg.get_host("backend"),
-                "frontend": cfg.get_host("frontend"),
-                "ai-stack": cfg.get_host("ai_stack"),
-                "npu-worker": cfg.get_host("npu_worker"),
-                "playwright-vnc": cfg.get_host("browser_service"),
-                "ollama": cfg.get_host("ollama"),  # Use configured host for Ollama
-                "lmstudio": cfg.get_host(
+                "default": config.get("infrastructure.defaults.localhost"),
+                "redis": config.get_host("redis"),
+                "backend": config.get_host("backend"),
+                "frontend": config.get_host("frontend"),
+                "ai-stack": config.get_host("ai_stack"),
+                "npu-worker": config.get_host("npu_worker"),
+                "playwright-vnc": config.get_host("browser_service"),
+                "ollama": config.get_host("ollama"),  # Use configured host for Ollama
+                "lmstudio": config.get_host(
                     "lmstudio"
                 ),  # Use configured host for LM Studio
             },
@@ -179,7 +179,7 @@ class ServiceRegistry:
         self.services: Dict[str, ServiceConfig] = {}
         self.health_status: Dict[str, ServiceHealth] = {}
         self.deployment_mode = self._detect_deployment_mode()
-        self.domain = cfg.get("deployment.domain", "autobot.local")
+        self.domain = config.get("deployment.domain", "autobot.local")
 
         # Load configuration from unified config
         self._load_default_services()
@@ -194,7 +194,7 @@ class ServiceRegistry:
     def _detect_deployment_mode(self) -> DeploymentMode:
         """Detect current deployment mode"""
         # Check for explicit mode setting
-        mode = cfg.get("deployment.mode", "").lower()
+        mode = config.get("deployment.mode", "").lower()
         if mode:
             try:
                 return DeploymentMode(mode)
@@ -205,15 +205,15 @@ class ServiceRegistry:
         # DEFAULT BEHAVIOR: Local + Docker hybrid (backend on host, services in containers)
         if os.path.exists("/.dockerenv"):
             # Running inside container
-            if cfg.get("deployment.kubernetes.service_host", False):
+            if config.get("deployment.kubernetes.service_host", False):
                 return DeploymentMode.KUBERNETES
-            elif cfg.get("deployment.distributed", False):
+            elif config.get("deployment.distributed", False):
                 return DeploymentMode.DISTRIBUTED
             else:
                 return DeploymentMode.DOCKER_LOCAL
         else:
             # Running on host - DEFAULT: Local with Docker services
-            if cfg.get("deployment.mode") == "distributed":
+            if config.get("deployment.mode") == "distributed":
                 return DeploymentMode.DISTRIBUTED
             else:
                 # Default hybrid mode: backend/frontend on localhost, services in Docker
@@ -232,12 +232,12 @@ class ServiceRegistry:
                 scheme=config["schemes"].get(
                     self.deployment_mode.value.split("_")[0], "http"
                 ),
-                timeout=cfg.get_timeout("service_registry", "default"),
-                retries=cfg.get("service_registry.retries", 3),
-                circuit_breaker_threshold=cfg.get(
+                timeout=config.get_timeout("service_registry", "default"),
+                retries=config.get("service_registry.retries", 3),
+                circuit_breaker_threshold=config.get(
                     "circuit_breaker.service_registry.failure_threshold", 5
                 ),
-                circuit_breaker_timeout=cfg.get_timeout("circuit_breaker", "recovery"),
+                circuit_breaker_timeout=config.get_timeout("circuit_breaker", "recovery"),
             )
 
             self.services[service_name] = service_config
@@ -257,7 +257,7 @@ class ServiceRegistry:
 
         # PRIORITY 2: Check for explicit host configuration
         service_key = service_name.replace("-", "_")
-        explicit_host = cfg.get(f"services.{service_key}.host")
+        explicit_host = config.get(f"services.{service_key}.host")
         if explicit_host:
             return explicit_host
 
@@ -266,7 +266,7 @@ class ServiceRegistry:
             pattern = patterns[service_name]
         else:
             pattern = patterns.get(
-                "default", cfg.get("infrastructure.defaults.localhost")
+                "default", config.get("infrastructure.defaults.localhost")
             )
 
         # Replace placeholders
@@ -297,17 +297,17 @@ class ServiceRegistry:
                     self.services[service_name] = ServiceConfig(
                         name=service_name,
                         host=service_data.get(
-                            "host", cfg.get("infrastructure.defaults.localhost")
+                            "host", config.get("infrastructure.defaults.localhost")
                         ),
                         port=service_data.get(
-                            "port", cfg.get("infrastructure.ports.default", 80)
+                            "port", config.get("infrastructure.ports.default", 80)
                         ),
                         scheme=service_data.get(
-                            "scheme", cfg.get("deployment.default_scheme", "http")
+                            "scheme", config.get("deployment.default_scheme", "http")
                         ),
                         health_endpoint=service_data.get(
                             "health_endpoint",
-                            cfg.get("deployment.default_health_endpoint", "/health"),
+                            config.get("deployment.default_health_endpoint", "/health"),
                         ),
                     )
 
@@ -333,11 +333,11 @@ class ServiceRegistry:
                 # Keep the LOCAL mode host pattern, don't override with explicit config
                 pass
             else:
-                service.host = cfg.get(f"services.{service_key}.host", service.host)
-            service.port = cfg.get(f"services.{service_key}.port", service.port)
-            service.scheme = cfg.get(f"services.{service_key}.scheme", service.scheme)
-            service.path = cfg.get(f"services.{service_key}.path", service.path)
-            service.health_endpoint = cfg.get(
+                service.host = config.get(f"services.{service_key}.host", service.host)
+            service.port = config.get(f"services.{service_key}.port", service.port)
+            service.scheme = config.get(f"services.{service_key}.scheme", service.scheme)
+            service.path = config.get(f"services.{service_key}.path", service.path)
+            service.health_endpoint = config.get(
                 f"services.{service_key}.health_endpoint", service.health_endpoint
             )
 

@@ -22,7 +22,7 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from src.config_helper import cfg
+from src.unified_config import config
 from src.constants.network_constants import NetworkConstants
 from src.utils.redis_client import get_redis_client
 
@@ -33,10 +33,10 @@ class KnowledgeCache:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self._redis_client = None
-        self._cache_db = cfg.get("redis.databases.cache.db", 2)  # Use cache database
-        self._cache_ttl = cfg.get("knowledge_base.cache.ttl", 300)  # 5 minutes default
-        self._cache_prefix = cfg.get("knowledge_base.cache.prefix", "kb_cache:")
-        self._max_cache_size = cfg.get("knowledge_base.cache.max_size", 1000)
+        self._cache_db = config.get("redis.databases.cache.db", 2)  # Use cache database
+        self._cache_ttl = config.get("knowledge_base.cache.ttl", 300)  # 5 minutes default
+        self._cache_prefix = config.get("knowledge_base.cache.prefix", "kb_cache:")
+        self._max_cache_size = config.get("knowledge_base.cache.max_size", 1000)
 
     async def _get_redis_client(self):
         """Get or initialize the Redis client for caching."""
