@@ -17,6 +17,7 @@ import requests
 
 # Import centralized Redis client
 sys.path.append(str(Path(__file__).parent.parent.parent))
+from src.constants.network_constants import NetworkConstants, ServiceURLs
 from src.utils.redis_client import get_redis_client
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -30,10 +31,10 @@ class AutoBotFunctionalityTest:
         self.services = {
             "frontend": ServiceURLs.FRONTEND_LOCAL,
             "backend": ServiceURLs.BACKEND_LOCAL,
-            "npu_worker": "http://localhost:8081",
-            "ai_stack": "http://localhost:8080",
-            "redis": "localhost:6379",
-            "redis_insight": "http://localhost:8002",
+            "npu_worker": ServiceURLs.NPU_WORKER_SERVICE,
+            "ai_stack": ServiceURLs.AI_STACK_SERVICE,
+            "redis": f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.REDIS_PORT}",
+            "redis_insight": f"http://{NetworkConstants.LOCALHOST_NAME}:8002",  # RedisInsight port
         }
         self.results = {}
 
