@@ -6,6 +6,9 @@
 
 const { chromium } = require('playwright');
 
+// Frontend URL (matches NetworkConstants.FRONTEND_PORT)
+const FRONTEND_URL = 'http://localhost:5173';
+
 async function debugRendering() {
     console.log('🔍 Debugging Frontend Rendering Issues\n');
     
@@ -35,7 +38,7 @@ async function debugRendering() {
     
     try {
         console.log('📱 Loading page...');
-        await page.goto('http://localhost:5173', { 
+        await page.goto(FRONTEND_URL, { 
             waitUntil: 'domcontentloaded',
             timeout: 15000 
         });
