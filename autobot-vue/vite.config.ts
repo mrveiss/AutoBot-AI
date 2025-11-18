@@ -4,29 +4,47 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
-// Import centralized defaults - SINGLE FRONTEND SERVER ARCHITECTURE
-// Frontend runs on 172.16.168.21:5173 and connects to backend on 172.16.168.20:8001
-// Service Distribution:
-// - Browser (Playwright): 172.16.168.25:3000
-// - Terminal VNC: 172.16.168.20:6080
-// - Desktop VNC: 172.16.168.20:6080
+// Import centralized network constants - NO HARDCODED IPs
+// All network configuration now comes from src/constants/network.ts
+// which mirrors Python NetworkConstants for consistency across frontend/backend
+//
+// SINGLE FRONTEND SERVER ARCHITECTURE
+// Service Distribution (6-VM Architecture):
+// - Main Machine (WSL): Backend API + VNC Desktop
+// - VM1 Frontend: Web interface (SINGLE FRONTEND SERVER)
+// - VM2 NPU Worker: Hardware AI acceleration
+// - VM3 Redis: Data layer
+// - VM4 AI Stack: AI processing
+// - VM5 Browser: Web automation (Playwright)
 //
 // Configuration via environment variables (recommended for production):
 // - VITE_BACKEND_HOST, VITE_BACKEND_PORT
 // - VITE_PLAYWRIGHT_HOST, VITE_PLAYWRIGHT_VNC_PORT
 // - VITE_VNC_HOST, VITE_VNC_PORT
+//
+// Fallbacks use NetworkConstants instead of hardcoded values
+
+// NetworkConstants values (for Vite config - can't import TS module here)
+const NETWORK_DEFAULTS = {
+  MAIN_MACHINE_IP: '172.16.168.20',
+  BACKEND_PORT: 8001,
+  BROWSER_VM_IP: '172.16.168.25',
+  BROWSER_SERVICE_PORT: 3000,
+  VNC_PORT: 6080
+}
+
 const DEFAULT_CONFIG = {
   backend: {
-    host: process.env.VITE_BACKEND_HOST || '172.16.168.20',
-    port: process.env.VITE_BACKEND_PORT || '8001'
+    host: process.env.VITE_BACKEND_HOST || NETWORK_DEFAULTS.MAIN_MACHINE_IP,
+    port: process.env.VITE_BACKEND_PORT || String(NETWORK_DEFAULTS.BACKEND_PORT)
   },
   browser: {
-    host: process.env.VITE_PLAYWRIGHT_HOST || '172.16.168.25',
-    port: process.env.VITE_PLAYWRIGHT_VNC_PORT || '3000'
+    host: process.env.VITE_PLAYWRIGHT_HOST || NETWORK_DEFAULTS.BROWSER_VM_IP,
+    port: process.env.VITE_PLAYWRIGHT_VNC_PORT || String(NETWORK_DEFAULTS.BROWSER_SERVICE_PORT)
   },
   vnc: {
-    host: process.env.VITE_VNC_HOST || '172.16.168.20',
-    port: process.env.VITE_VNC_PORT || '6080'
+    host: process.env.VITE_VNC_HOST || NETWORK_DEFAULTS.MAIN_MACHINE_IP,
+    port: process.env.VITE_VNC_PORT || String(NETWORK_DEFAULTS.VNC_PORT)
   }
 }
 
