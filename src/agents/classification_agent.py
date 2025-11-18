@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Intelligent Classification Agent
 Uses LLM reasoning to understand user intent and classify workflow complexity

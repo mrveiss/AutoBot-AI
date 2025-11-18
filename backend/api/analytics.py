@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Enhanced Backend Analytics API Controller for AutoBot
 Provides comprehensive analytics endpoints for the monitoring dashboard

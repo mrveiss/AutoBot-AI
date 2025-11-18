@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Secure LLM Command Parser with Prompt Injection Protection
 Safely extracts and validates commands from LLM responses

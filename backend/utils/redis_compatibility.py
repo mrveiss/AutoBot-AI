@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Redis Compatibility Layer for AutoBot
 Provides backward compatibility for existing code while transitioning to async Redis manager

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 AutoBot Comprehensive Performance Monitoring API
 Real-time monitoring dashboard for GPU/NPU utilization, multi-modal AI performance,

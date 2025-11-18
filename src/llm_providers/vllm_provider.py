@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 vLLM Provider for AutoBot
 High-performance inference for HuggingFace models using vLLM

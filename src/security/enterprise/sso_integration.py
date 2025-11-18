@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 SSO Integration Framework for Enterprise AutoBot
 Provides Single Sign-On integration with SAML, OAuth2, OpenID Connect, and LDAP

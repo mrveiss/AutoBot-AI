@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Multi-Modal Input Processor for AutoBot - Compatibility Layer
 This module provides backward compatibility while redirecting to the unified processor

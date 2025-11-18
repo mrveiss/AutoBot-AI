@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Network Discovery Agent for AutoBot
 Provides network mapping and asset discovery capabilities

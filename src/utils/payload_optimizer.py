@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Request Payload Optimization for Claude API
 Prevents 413 errors and reduces API usage by analyzing and optimizing

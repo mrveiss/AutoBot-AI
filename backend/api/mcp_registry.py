@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 MCP Registry API - Centralized management for all AutoBot MCP tools
 Provides unified access to all MCP bridges for frontend management

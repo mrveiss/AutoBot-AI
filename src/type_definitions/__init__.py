@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Centralized Type Definitions
 Consolidates commonly used typing imports to reduce duplication across the codebase

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Real Codebase Analytics API for AutoBot (With Redis Fallback)
 Provides comprehensive code analysis with both Redis and in-memory storage

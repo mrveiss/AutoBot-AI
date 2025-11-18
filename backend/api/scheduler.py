@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Workflow Scheduler API endpoints
 Provides workflow scheduling and queue management capabilities

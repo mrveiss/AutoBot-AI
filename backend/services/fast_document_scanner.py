@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Fast Document Scanner - Optimized Change Detection
 Uses file metadata instead of content reading for 100x speed improvement

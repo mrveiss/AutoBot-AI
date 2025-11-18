@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Consolidated Health Service
 Aggregates health status from all system components into a single comprehensive endpoint

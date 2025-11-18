@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Analytics Middleware for AutoBot
 Automatically tracks API calls for pattern analysis and performance monitoring

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Sequential Thinking MCP Bridge
 Exposes sequential thinking capabilities as MCP tools for LLM agents

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Centralized configuration service for backend API.
 Eliminates duplication across settings.py, llm.py, and redis.py

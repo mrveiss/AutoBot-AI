@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 System Command Agent for AutoBot
 Handles tool installation, command execution, and system operations with full

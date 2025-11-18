@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Workflow API endpoints for multi-agent orchestration
 Handles workflow approvals, progress tracking, and coordination

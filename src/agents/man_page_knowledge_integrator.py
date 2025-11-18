@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Man Page Knowledge Integrator for AutoBot
 Scrapes, parses, and integrates Linux man pages into machine-aware knowledge system

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Fresh Knowledge Base Stats Endpoint - Bypasses All Caching
 This creates a completely new knowledge base instance for testing the fixes

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Phase Management API for AutoBot
 Provides endpoints for phase progression, validation, and system state management

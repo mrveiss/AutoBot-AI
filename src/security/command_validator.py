@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Secure command validation to prevent prompt injection attacks.
 This module replaces LLM-based command extraction with a safelist approach.

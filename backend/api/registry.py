@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Unified API Endpoint Registry
 Single source of truth for all API endpoints and routing configuration

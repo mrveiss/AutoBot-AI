@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Knowledge Base MCP Bridge
 Exposes knowledge base operations as MCP tools for LLM access

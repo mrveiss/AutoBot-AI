@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Workflow Performance Metrics and Monitoring System
 Provides comprehensive tracking and analysis of workflow execution performance

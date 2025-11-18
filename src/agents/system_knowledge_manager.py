@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 System Knowledge Manager for AutoBot
 Manages immutable system knowledge templates and their runtime copies

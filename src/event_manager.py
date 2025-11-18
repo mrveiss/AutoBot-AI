@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 # src/event_manager.py
 import asyncio  # Added back asyncio import
 import logging

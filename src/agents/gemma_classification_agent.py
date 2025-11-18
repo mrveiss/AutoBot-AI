@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Gemma-powered Lightweight Classification Agent
 Uses Google's Gemma 2B/3 models for ultra-fast classification tasks

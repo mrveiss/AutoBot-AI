@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 System Metrics Collection and Monitoring
 Provides real-time metrics for AutoBot system components.

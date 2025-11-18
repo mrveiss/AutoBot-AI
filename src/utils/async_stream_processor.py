@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Async Stream Processor - Replaces timeout-based streaming with completion detection
 Handles LLM streaming responses using natural completion signals instead of timeouts

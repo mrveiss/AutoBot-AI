@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 State Tracking API for AutoBot
 Provides endpoints for comprehensive project state tracking and reporting

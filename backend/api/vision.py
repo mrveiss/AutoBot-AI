@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Computer Vision API Endpoints
 Provides REST API access to screen analysis, element detection, and visual automation

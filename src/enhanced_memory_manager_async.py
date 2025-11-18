@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Async Enhanced Memory Manager for AutoBot Phase 7
 Comprehensive task logging and execution history with aiosqlite and

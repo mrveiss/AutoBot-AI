@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Markdown Reference System for AutoBot Phase 7
 Integrates markdown documents with SQLite database for enhanced knowledge management

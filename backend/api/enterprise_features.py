@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Enterprise Features API - Phase 4 Implementation
 Provides API endpoints for managing enterprise-grade features.

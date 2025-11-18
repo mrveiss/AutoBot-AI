@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Ollama Model Performance Optimizer
 Intelligently manages and optimizes LLM model usage based on task complexity,

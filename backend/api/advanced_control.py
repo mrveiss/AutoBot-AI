@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Advanced Control API for AutoBot Phase 8
 Provides monitoring, desktop streaming, and takeover management endpoints

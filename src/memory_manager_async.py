@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 # src/memory_manager_async.py
 """
 Async-enabled Long-Term Memory Manager for AutoBot Agent

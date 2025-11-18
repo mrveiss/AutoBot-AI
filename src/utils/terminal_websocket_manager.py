@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Terminal WebSocket State Manager
 Provides thread-safe and race-condition-free terminal WebSocket management

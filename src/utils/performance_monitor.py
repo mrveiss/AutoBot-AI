@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 AutoBot Phase 9 Comprehensive Performance Monitoring System
 Advanced GPU/NPU utilization tracking, multi-modal AI performance monitoring,

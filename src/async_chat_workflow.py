@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Async Chat Workflow using modern dependency injection and async patterns
 Replaces SimpleChatWorkflow with proper async architecture

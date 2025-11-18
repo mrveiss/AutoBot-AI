@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """Librarian Assistant Agent for Web Research.
 
 This agent performs web research using Playwright to find relevant information,

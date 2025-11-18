@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Enhanced Agent Orchestrator with Auto-Documentation
 Advanced multi-agent coordination with self-documenting workflows and knowledge management

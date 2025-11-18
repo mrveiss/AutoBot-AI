@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Unified Log Viewer API
 Provides endpoints to read and stream AutoBot logs from both files and Docker containers

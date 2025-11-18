@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Redis Service Manager
 Manages Redis Stack service lifecycle and health on the Redis VM (172.16.168.23)

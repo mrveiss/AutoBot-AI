@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Graceful Degradation Strategies for Claude API
 Implements comprehensive fallback mechanisms to maintain AutoBot functionality during API issues

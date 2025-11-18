@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Service HTTP Client with Automatic Request Signing
 Provides authenticated HTTP client for service-to-service communication

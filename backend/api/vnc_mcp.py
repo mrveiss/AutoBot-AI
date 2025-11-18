@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 VNC MCP Bridge
 Exposes VNC observation capabilities as MCP tools for AutoBot's LLM agents

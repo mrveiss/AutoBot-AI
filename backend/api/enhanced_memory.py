@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Enhanced Memory API for AutoBot Phase 7
 Provides endpoints for task execution tracking, markdown management, and memory analytics

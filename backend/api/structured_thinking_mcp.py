@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Structured Thinking MCP Bridge
 Exposes structured thinking capabilities with defined cognitive stages

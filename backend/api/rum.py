@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 RUM (Real User Monitoring) API endpoints for logging frontend events.
 Provides comprehensive logging of user interactions, errors, and performance metrics.

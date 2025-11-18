@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Test endpoint for Knowledge Base functionality
 This bypasses cached instances and creates fresh knowledge base for testing

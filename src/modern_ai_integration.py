@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Modern AI Model Integration for AutoBot
 Integration with state-of-the-art AI models including GPT-4V, Claude-3, Gemini for enhanced capabilities

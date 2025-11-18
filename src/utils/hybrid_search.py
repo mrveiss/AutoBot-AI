@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Hybrid Search Implementation
 Combines semantic search with keyword-based search for improved relevance and coverage.

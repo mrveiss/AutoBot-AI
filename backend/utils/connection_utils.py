@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Shared utilities for testing connections to various services.
 Eliminates duplication across system.py, llm.py, and redis.py

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Context-Aware Decision Making System for AutoBot
 Intelligent decision making that considers multi-modal context, history, and environmental factors

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Workflow Templates API endpoints
 Provides access to pre-configured workflow templates with intelligent caching

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Human-in-the-Loop Takeover Manager for AutoBot Phase 8
 Provides interrupt/takeover capabilities for autonomous operations

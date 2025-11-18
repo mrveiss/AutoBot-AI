@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Secure Command Executor with Sandboxing and Permission Controls
 Implements security measures to prevent arbitrary command execution

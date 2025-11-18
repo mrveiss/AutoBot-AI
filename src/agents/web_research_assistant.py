@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Web Research Assistant for AutoBot
 Handles web research queries and integrates findings into knowledge base

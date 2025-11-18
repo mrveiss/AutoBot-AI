@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Compliance Manager for Enterprise Security
 Handles SOC2, GDPR, ISO27001 audit logging and reporting requirements

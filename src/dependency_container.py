@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Dependency Injection Container for AutoBot
 Manages all async services with proper lifecycle and dependency resolution

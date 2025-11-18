@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Async Cancellation Token System - Replaces asyncio.wait_for() timeouts
 Provides proper cancellation patterns without arbitrary time limits

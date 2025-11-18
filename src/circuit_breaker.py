@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Circuit Breaker pattern implementation for AutoBot
 Prevents cascading failures by automatically stopping calls to failing services

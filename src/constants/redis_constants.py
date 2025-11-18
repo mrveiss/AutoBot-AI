@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Centralized Redis Key Constants for AutoBot
 Single source of truth for all Redis key patterns

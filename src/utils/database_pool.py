@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Database Connection Pool Manager
 Provides connection pooling for SQLite and other databases to improve performance

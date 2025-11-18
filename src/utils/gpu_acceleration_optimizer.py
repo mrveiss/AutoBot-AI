@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 GPU Acceleration Optimization Utility
 Optimizes GPU utilization for multi-modal AI workloads and provides acceleration insights.

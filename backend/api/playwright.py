@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Playwright API endpoints - Embedded Docker Integration
 Provides native API access to containerized Playwright functionality

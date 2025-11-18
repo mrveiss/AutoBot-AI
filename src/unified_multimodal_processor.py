@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Unified Multi-Modal AI Processor for AutoBot
 Consolidates vision, voice, and context processing with consistent interfaces

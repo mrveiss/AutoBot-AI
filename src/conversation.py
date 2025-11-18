@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Conversation Class with Knowledge Base Integration and Source Tracking
 Provides comprehensive conversation state management and grounded responses

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Multi-Modal Performance Monitor
 GPU memory management, batch processing optimization, and performance monitoring for RTX 4070

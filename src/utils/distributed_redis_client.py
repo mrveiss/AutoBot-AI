@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Distributed Redis Client for AutoBot 6-VM Architecture
 Handles connection to remote Redis VM

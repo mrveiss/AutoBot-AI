@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 LLM Stream Processor - Natural Completion Detection for Streaming
 Eliminates complex timeout logic and uses natural stream completion detection

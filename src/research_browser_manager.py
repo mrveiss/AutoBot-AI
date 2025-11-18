@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Research Browser Manager
 Handles Playwright browser automation for research tasks with user interaction support

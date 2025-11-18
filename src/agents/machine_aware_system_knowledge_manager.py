@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Machine-Aware System Knowledge Manager for AutoBot
 Extends SystemKnowledgeManager with machine-specific adaptation

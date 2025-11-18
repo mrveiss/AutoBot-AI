@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 VNC Manager API - Automatic VNC server lifecycle management
 Ensures VNC server is always available when noVNC tab is accessed

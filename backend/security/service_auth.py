@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Service-to-Service Authentication Module for AutoBot
 Implements API Key + HMAC-SHA256 authentication for distributed VM infrastructure
