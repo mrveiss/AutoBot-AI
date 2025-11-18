@@ -16,9 +16,10 @@
  * Usage:
  * ```typescript
  * import { useConnectionTester } from '@/composables/useConnectionTester'
+ * import { NetworkConstants } from '@/constants/network'
  *
  * const backendTest = useConnectionTester({
- *   endpoint: 'http://172.16.168.20:8001/api/health',
+ *   endpoint: `${NetworkConstants.getBackendUrl()}/api/health`,
  *   timeout: 5000,
  *   onSuccess: (responseTime) => console.log(`Connected in ${responseTime}ms`),
  *   onError: (error) => console.error('Connection failed:', error)
@@ -186,8 +187,10 @@ export interface UseConnectionTesterReturn {
  *
  * @example
  * ```typescript
+ * import { NetworkConstants } from '@/constants/network'
+ *
  * const backendTest = useConnectionTester({
- *   endpoint: 'http://172.16.168.20:8001/api/health',
+ *   endpoint: `${NetworkConstants.getBackendUrl()}/api/health`,
  *   timeout: 5000,
  *   onSuccess: (time) => console.log(`Connected in ${time}ms`)
  * })
@@ -458,10 +461,12 @@ export function useConnectionTester(
  *
  * @example
  * ```typescript
+ * import { NetworkConstants } from '@/constants/network'
+ *
  * const { testers, testAll, resetAll } = useConnectionTesters({
- *   backend: { endpoint: 'http://172.16.168.20:8001/api/health' },
- *   redis: { endpoint: 'http://172.16.168.23:6379/ping' },
- *   llm: { endpoint: 'http://172.16.168.24:11434/api/tags' }
+ *   backend: { endpoint: `${NetworkConstants.getBackendUrl()}/api/health` },
+ *   redis: { endpoint: `http://${NetworkConstants.REDIS_VM_IP}:${NetworkConstants.REDIS_PORT}/ping` },
+ *   llm: { endpoint: `http://${NetworkConstants.AI_STACK_VM_IP}:${NetworkConstants.OLLAMA_PORT}/api/tags` }
  * })
  *
  * await testAll() // Test all connections in parallel
