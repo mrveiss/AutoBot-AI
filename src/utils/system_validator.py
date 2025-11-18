@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import aiohttp
 import psutil
 
-from src.config_helper import cfg
+from src.unified_config import config
 from src.constants.network_constants import NetworkConstants
 
 
@@ -66,26 +66,26 @@ class SystemValidator:
         self.results: List[ValidationResult] = []
 
         # Validation configuration
-        self.timeout_seconds = cfg.get("validation.timeout_seconds", 30)
+        self.timeout_seconds = config.get("validation.timeout_seconds", 30)
         self.critical_thresholds = {
-            "response_time_ms": cfg.get("validation.thresholds.response_time_ms", 5000),
-            "cache_hit_rate": cfg.get("validation.thresholds.cache_hit_rate", 50.0),
-            "memory_usage_percent": cfg.get(
+            "response_time_ms": config.get("validation.thresholds.response_time_ms", 5000),
+            "cache_hit_rate": config.get("validation.thresholds.cache_hit_rate", 50.0),
+            "memory_usage_percent": config.get(
                 "validation.thresholds.memory_usage_percent", 90.0
             ),
-            "cpu_usage_percent": cfg.get(
+            "cpu_usage_percent": config.get(
                 "validation.thresholds.cpu_usage_percent", 95.0
             ),
-            "error_rate_percent": cfg.get(
+            "error_rate_percent": config.get(
                 "validation.thresholds.error_rate_percent", 5.0
             ),
         }
 
         # Service endpoints
         self.base_urls = {
-            "backend": f"http://{cfg.get_host('backend')}:{cfg.get_port('backend')}",
-            "frontend": f"http://{cfg.get_host('frontend')}:{cfg.get_port('frontend')}",
-            "ollama": f"http://{cfg.get_host('ollama')}:{cfg.get_port('ollama')}",
+            "backend": f"http://{config.get_host('backend')}:{config.get_port('backend')}",
+            "frontend": f"http://{config.get_host('frontend')}:{config.get_port('frontend')}",
+            "ollama": f"http://{config.get_host('ollama')}:{config.get_port('ollama')}",
             "redis": None,  # Special handling for Redis
         }
 
@@ -1038,9 +1038,9 @@ class SystemValidator:
 
             # Test 5: Service ports availability
             critical_ports = [
-                (cfg.get_host("backend"), cfg.get_port("backend"), "Backend"),
-                (cfg.get_host("redis"), cfg.get_port("redis"), "Redis"),
-                (cfg.get_host("ollama"), cfg.get_port("ollama"), "Ollama"),
+                (config.get_host("backend"), config.get_port("backend"), "Backend"),
+                (config.get_host("redis"), config.get_port("redis"), "Redis"),
+                (config.get_host("ollama"), config.get_port("ollama"), "Ollama"),
             ]
 
             for host, port, service_name in critical_ports:

@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import psutil
 
-from src.config_helper import cfg
+from src.unified_config import config
 from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 from src.utils.redis_client import get_redis_client
@@ -41,8 +41,8 @@ class SystemMetricsCollector:
         # REFACTORED: Centralized Redis client management
         # Don't cache clients - always use get_redis_client() for proper connection pooling
         self._metrics_buffer = deque(maxlen=1000)  # Buffer for recent metrics
-        self._collection_interval = cfg.get("monitoring.metrics.collection_interval", 5)
-        self._retention_hours = cfg.get("monitoring.metrics.retention_hours", 24)
+        self._collection_interval = config.get("monitoring.metrics.collection_interval", 5)
+        self._retention_hours = config.get("monitoring.metrics.retention_hours", 24)
         self._is_collecting = False
         self._auth_error_logged = False  # Track if auth error was already logged
 
@@ -153,9 +153,9 @@ class SystemMetricsCollector:
 
         # Service endpoints to check
         services = {
-            "backend": f"http://{cfg.get_host('backend')}:{cfg.get_port('backend')}/api/health",
+            "backend": f"http://{config.get_host('backend')}:{config.get_port('backend')}/api/health",
             "redis": None,  # Special handling for Redis
-            "ollama": f"http://{cfg.get_host('ollama')}:{cfg.get_port('ollama')}/api/tags",
+            "ollama": f"http://{config.get_host('ollama')}:{config.get_port('ollama')}/api/tags",
         }
 
         # HTTP timeout for health checks
