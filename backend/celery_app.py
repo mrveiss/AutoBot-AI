@@ -9,7 +9,10 @@ import os
 
 from celery import Celery
 
-from src.unified_config import config
+from src.unified_config_manager import UnifiedConfigManager
+
+# Create singleton config instance
+config = UnifiedConfigManager()
 
 # Build Redis URLs from centralized configuration
 # Environment variables take precedence, then config-based construction
