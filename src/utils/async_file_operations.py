@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Async File Operations - Eliminates Synchronous File I/O Blocking
 

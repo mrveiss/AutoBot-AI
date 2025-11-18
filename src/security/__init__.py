@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Security module for AutoBot.
 Provides secure command validation and other security utilities.

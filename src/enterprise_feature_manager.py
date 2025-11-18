@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Enterprise Feature Manager - Phase 4 Implementation
 Enables and manages enterprise-grade features for AutoBot system.

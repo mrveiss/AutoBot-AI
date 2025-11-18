@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 # backend/api/secrets.py
 """
 Secrets Management API

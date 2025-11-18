@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 AutoBot Advanced RAG Optimization System
 Implements sophisticated retrieval strategies for enhanced knowledge access

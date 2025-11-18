@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Enhanced Security Layer with Command Execution Controls
 Integrates secure command execution with role-based permissions

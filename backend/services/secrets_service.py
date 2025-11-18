@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Secrets Management Service
 Handles secure storage, retrieval, and management of secrets with dual-scope support

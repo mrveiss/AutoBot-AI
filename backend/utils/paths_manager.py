@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Centralized path management for backend API.
 Ensures all log/data writes use consistent, configurable paths.

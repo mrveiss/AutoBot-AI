@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 LLM Model Optimization API Endpoints
 Provides intelligent model selection, performance tracking, and optimization suggestions.

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 WebSocket Heartbeat System - Replaces timeout-based WebSocket handling
 Uses heartbeat and event-driven patterns instead of arbitrary timeouts

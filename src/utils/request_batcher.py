@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Intelligent Request Batching System for Claude API Optimization
 Implements sophisticated batching algorithms to reduce API calls and improve efficiency

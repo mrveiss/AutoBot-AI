@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Advanced Monitoring Alerts and Notifications System
 Monitors system metrics and sends alerts when thresholds are exceeded

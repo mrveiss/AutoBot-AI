@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Hot Reload API Endpoints
 Provides REST endpoints for hot reloading chat workflow modules during development

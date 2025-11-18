@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Redis Service Management API
 Provides endpoints for managing Redis service lifecycle on Redis VM

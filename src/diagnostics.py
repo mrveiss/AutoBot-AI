@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Diagnostic System for AutoBot with Performance Optimization
 Provides system health monitoring, error reporting, and recovery suggestions

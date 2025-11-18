@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Agent Client for Hybrid Local/Remote Deployment
 Routes requests to local agents or remote containers based on configuration

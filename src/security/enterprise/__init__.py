@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Enterprise Security Module for AutoBot
 Provides advanced security controls for enterprise deployment

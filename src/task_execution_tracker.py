@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Task Execution History Tracker for AutoBot Phase 7
 Integrates with orchestrator and agents to provide comprehensive execution tracking

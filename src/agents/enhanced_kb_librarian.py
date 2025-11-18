@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Enhanced KB Librarian Agent for AutoBot
 Manages tool knowledge, coordinates with other agents, and handles dynamic tool

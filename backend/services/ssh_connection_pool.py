@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 SSH Connection Pool Implementation
 Manages SSH connections to multiple hosts with connection pooling and health monitoring

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Validation Dashboard API for AutoBot
 Provides endpoints for real-time validation dashboard and reports

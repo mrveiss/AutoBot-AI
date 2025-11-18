@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Enhanced Authentication Middleware for AutoBot
 Provides JWT-based authentication, session management, and role-based access control

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Hardware Acceleration Manager for AutoBot Multi-Agent Architecture.
 

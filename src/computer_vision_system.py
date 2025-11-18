@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Computer Vision System for AutoBot
 Advanced screen understanding and visual automation capabilities

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Filesystem MCP Bridge
 Exposes secure filesystem operations as MCP tools for LLM agents

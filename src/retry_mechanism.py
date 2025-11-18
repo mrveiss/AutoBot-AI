@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Retry mechanism with exponential backoff for AutoBot
 Handles transient failures in network requests, database operations, and external service calls

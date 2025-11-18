@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Claude API Usage Monitoring and Tracking System
 Provides comprehensive monitoring of Claude API usage patterns to predict

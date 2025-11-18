@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Workflow Classification System
 Manages classification rules and keywords in Redis for dynamic updates

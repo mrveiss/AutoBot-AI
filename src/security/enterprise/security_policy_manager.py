@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Security Policy Manager for Enterprise AutoBot
 Provides centralized security policy management, enforcement, and compliance monitoring

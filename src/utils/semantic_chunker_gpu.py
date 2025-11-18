@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 AutoBot Semantic Chunking Module - GPU Optimized for RTX 4070
 GPU Performance Enhancement: 3x speed improvement target

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Prompt Injection Detection System for AutoBot
 Detects and blocks LLM prompt injection attempts across multi-modal inputs

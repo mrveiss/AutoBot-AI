@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Desktop Streaming Manager for AutoBot Phase 8
 Provides NoVNC integration and WebSocket-based desktop streaming capabilities

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Wake Word Detection Service for AutoBot
 Optimized for low CPU usage with configurable wake words and false positive reduction

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Advanced Workflow Orchestrator - Next Generation AI-Driven Automation
 Intelligent workflow generation, optimization, and adaptive execution

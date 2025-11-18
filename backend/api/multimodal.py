@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Multi-Modal AI Processing API Endpoints
 Provides REST API access to GPU-accelerated multi-modal AI capabilities

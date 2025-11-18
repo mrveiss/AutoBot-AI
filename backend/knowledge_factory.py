@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """Knowledge Base Factory - Breaks circular import between api/knowledge.py and app_factory.py"""
 
 import logging

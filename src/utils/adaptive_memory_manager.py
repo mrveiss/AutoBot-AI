@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Adaptive Memory Manager - Intelligent Memory Management with LRU Caching
 Addresses unbounded growth in chat history, source attribution, and conversation data

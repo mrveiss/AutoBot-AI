@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Advanced Threat Detection Engine for Enterprise Security
 Provides behavioral anomaly detection, ML-based threat detection, and enhanced security monitoring

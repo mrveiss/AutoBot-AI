@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Security Scanner Agent for AutoBot
 Provides defensive security scanning and analysis capabilities

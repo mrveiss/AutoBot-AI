@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Async Database Connection Pool Manager
 Provides async connection pooling for SQLite and other databases using aiosqlite

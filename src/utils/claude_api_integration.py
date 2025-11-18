@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Claude API Integration with Intelligent Request Batching
 Integrates the batching system with AutoBot's existing Claude API infrastructure

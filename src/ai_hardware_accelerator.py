@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 AutoBot AI Hardware Accelerator
 Intelligent routing and optimization for NPU/GPU/CPU semantic processing

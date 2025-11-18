@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 LLM Self-Awareness Module
 Provides context injection for LLM agents to be aware of current system state, capabilities, and phase

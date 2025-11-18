@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 VNC WebSocket Proxy - Route VNC traffic through backend for agent observation
 

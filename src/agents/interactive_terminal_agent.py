@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Interactive Terminal Agent for AutoBot
 Handles full terminal emulation with PTY support, sudo handling, and user takeover

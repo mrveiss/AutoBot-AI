@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 SSH Manager Service
 Manages SSH connections and remote command execution across AutoBot's distributed infrastructure

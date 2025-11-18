@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Conversation Rate Limiting Middleware for Claude API
 Prevents conversation crashes by monitoring and controlling request patterns

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Enhanced Search API with NPU Acceleration
 Provides NPU-accelerated semantic search endpoints for AutoBot

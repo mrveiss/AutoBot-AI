@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Cache management API endpoints for clearing various cache types.
 Provides comprehensive cache clearing functionality for frontend, backend, and Redis caches.

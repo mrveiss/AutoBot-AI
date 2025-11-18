@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Service Discovery System for AutoBot Distributed Architecture
 Provides dynamic service resolution and health monitoring across 6 VMs

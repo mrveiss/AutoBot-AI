@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Redis Immediate Connection Test - No Timeouts
 Replaces timeout-based Redis connection with immediate success/failure patterns

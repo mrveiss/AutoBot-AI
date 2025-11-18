@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Base Agent Interface for Hybrid Local/Remote Deployment
 Provides unified interface for agents running locally or in containers

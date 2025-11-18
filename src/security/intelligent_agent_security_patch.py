@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Security Patch for Intelligent Agent - CVE-AUTOBOT-2025-002
 Integrates prompt injection detection and secure command parsing into intelligent agent

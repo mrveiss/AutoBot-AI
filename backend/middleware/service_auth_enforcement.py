@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Service Authentication Enforcement Middleware
 Enforces service-to-service authentication on internal endpoints

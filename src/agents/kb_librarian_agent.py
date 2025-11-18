@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """Knowledge Base Librarian Agent.
 
 This agent automatically searches the knowledge base whenever a question is asked,

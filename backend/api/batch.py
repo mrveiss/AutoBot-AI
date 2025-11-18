@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Batch API endpoints for optimized initial loading
 Reduces multiple round trips by combining requests

@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Advanced Web Research Assistant - Tier 2 Implementation
 Includes browser automation, anti-detection, and CAPTCHA handling

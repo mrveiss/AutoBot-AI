@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Adaptive Timeout Handlers for AutoBot
 Intelligent timeout management with adaptive behavior and fallback strategies

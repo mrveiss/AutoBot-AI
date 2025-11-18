@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Advanced Redis-based Caching Manager
 Implements intelligent caching strategies for different data types

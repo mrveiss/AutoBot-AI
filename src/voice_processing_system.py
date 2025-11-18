@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Voice Processing System for AutoBot
 Advanced voice command recognition, natural language processing, and speech synthesis

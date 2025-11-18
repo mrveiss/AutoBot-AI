@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 NPU-Enhanced Semantic Search for AutoBot
 Integrates Intel NPU acceleration with ChromaDB and Redis vector store

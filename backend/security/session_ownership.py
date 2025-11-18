@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Session Ownership Validation for AutoBot Chat System
 Implements access control for conversation data across distributed VMs

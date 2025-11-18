@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Resource Factory - Centralized management of expensive shared resources
 Provides singleton-like behavior with app.state integration for optimal performance

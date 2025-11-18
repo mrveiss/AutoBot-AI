@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 System Context Detection for AutoBot
 Collects OS, machine, and architecture information for knowledge base tagging

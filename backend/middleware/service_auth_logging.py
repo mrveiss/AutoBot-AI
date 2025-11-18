@@ -1,3 +1,6 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Service Authentication Logging Middleware for AutoBot
 Day 2 Deployment: Logs authentication attempts WITHOUT blocking requests
