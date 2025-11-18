@@ -22,6 +22,12 @@ from plotly.subplots import make_subplots
 from src.constants.network_constants import NetworkConstants
 
 from performance_monitor import PerformanceMonitor, VMS, SERVICE_ENDPOINTS
+from src.utils.html_dashboard_utils import (
+    get_dark_theme_css,
+    create_dashboard_header,
+    create_metric_card,
+    create_chart_container,
+)
 
 class PerformanceDashboard:
     """Real-time performance dashboard for AutoBot distributed system."""
@@ -59,6 +65,23 @@ class PerformanceDashboard:
         template_path = Path(__file__).parent / 'templates' / 'dashboard.html'
         template_path.parent.mkdir(exist_ok=True)
         
+        # Generate dashboard components using utility functions
+        header_html = create_dashboard_header(
+            title="🤖 AutoBot Performance Dashboard",
+            status="healthy",
+            theme="dark"
+        )
+
+        dark_theme_css = get_dark_theme_css()
+
+        # Generate metric cards
+        metric_cards = "\n".join([
+            create_metric_card("CPU Usage", "--%", "22-core Intel Ultra 9 185H", "cpu-usage"),
+            create_metric_card("Memory Usage", "--%", '<span id="memory-available">--GB</span> available', "memory-usage"),
+            create_metric_card("GPU Utilization", "--%", "NVIDIA RTX 4070", "gpu-usage"),
+            create_metric_card("Active Services", "--/--", "Distributed across 6 VMs", "active-services"),
+        ])
+
         html_content = '''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -67,163 +90,88 @@ class PerformanceDashboard:
     <title>AutoBot Performance Dashboard</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0d1117;
-            color: #c9d1d9;
-            line-height: 1.6;
-        }
-        .header {
-            background: #161b22;
-            border-bottom: 1px solid #30363d;
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .title { color: #58a6ff; font-size: 1.5rem; font-weight: 600; }
-        .status-indicator {
-            padding: 0.25rem 0.75rem;
-            border-radius: 1rem;
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-        .status-healthy { background: #238636; color: #fff; }
-        .status-warning { background: #d29922; color: #fff; }
-        .status-error { background: #da3633; color: #fff; }
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        .metric-card {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 0.5rem;
-            padding: 1.5rem;
-            transition: border-color 0.2s;
-        }
-        .metric-card:hover { border-color: #58a6ff; }
-        .metric-title {
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: #8b949e;
-            text-transform: uppercase;
-            margin-bottom: 0.5rem;
-            letter-spacing: 0.05em;
-        }
-        .metric-value {
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 0.25rem;
-        }
-        .metric-change {
-            font-size: 0.875rem;
-            opacity: 0.8;
-        }
-        .chart-container {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 0.5rem;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .services-grid {
+{dark_theme_css}
+        .services-grid {{
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
             gap: 1rem;
             margin-bottom: 2rem;
-        }
-        .service-card {
+        }}
+        .service-card {{
             background: #161b22;
             border: 1px solid #30363d;
             border-radius: 0.5rem;
             padding: 1rem;
-        }
-        .service-name {
+        }}
+        .service-name {{
             font-weight: 600;
             margin-bottom: 0.5rem;
-        }
-        .service-status {
+        }}
+        .service-status {{
             display: flex;
             align-items: center;
             gap: 0.5rem;
             margin-bottom: 0.5rem;
-        }
-        .status-dot {
+        }}
+        .status-dot {{
             width: 8px;
             height: 8px;
             border-radius: 50%;
-        }
-        .status-up { background: #238636; }
-        .status-down { background: #da3633; }
-        .alerts-section {
+        }}
+        .status-up {{ background: #238636; }}
+        .status-down {{ background: #da3633; }}
+        .alerts-section {{
             background: #161b22;
             border: 1px solid #30363d;
             border-radius: 0.5rem;
             padding: 1.5rem;
-        }
-        .alert-item {
+        }}
+        .alert-item {{
             padding: 0.75rem;
             margin-bottom: 0.5rem;
             border-radius: 0.375rem;
             background: #3d1a00;
             border-left: 3px solid #d29922;
-        }
-        .alert-item.critical {
+        }}
+        .alert-item.critical {{
             background: #4c1519;
             border-left-color: #da3633;
-        }
-        .loading {
-            text-align: center;
-            padding: 2rem;
-            color: #8b949e;
-        }
-        .vm-grid {
+        }}
+        .vm-grid {{
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1rem;
             margin-bottom: 2rem;
-        }
-        .vm-card {
+        }}
+        .vm-card {{
             background: #161b22;
             border: 1px solid #30363d;
             border-radius: 0.5rem;
             padding: 1rem;
-        }
-        .vm-name {
+        }}
+        .vm-name {{
             font-weight: 600;
             margin-bottom: 0.5rem;
             color: #58a6ff;
-        }
-        .vm-ip {
+        }}
+        .vm-ip {{
             font-family: monospace;
             font-size: 0.875rem;
             color: #8b949e;
             margin-bottom: 0.5rem;
-        }
-        .vm-metrics {
+        }}
+        .vm-metrics {{
             font-size: 0.875rem;
-        }
-        .vm-metric {
+        }}
+        .vm-metric {{
             display: flex;
             justify-content: space-between;
             margin-bottom: 0.25rem;
-        }
+        }}
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="title">🤖 AutoBot Performance Dashboard</div>
-        <div id="system-status" class="status-indicator status-healthy">System Healthy</div>
-    </div>
+{header_html}
 
     <div class="container">
         <div id="loading" class="loading">
@@ -233,26 +181,7 @@ class PerformanceDashboard:
         <div id="dashboard-content" style="display: none;">
             <!-- System Overview Cards -->
             <div class="metrics-grid">
-                <div class="metric-card">
-                    <div class="metric-title">CPU Usage</div>
-                    <div id="cpu-usage" class="metric-value">--%</div>
-                    <div class="metric-change">22-core Intel Ultra 9 185H</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-title">Memory Usage</div>
-                    <div id="memory-usage" class="metric-value">--%</div>
-                    <div class="metric-change"><span id="memory-available">--GB</span> available</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-title">GPU Utilization</div>
-                    <div id="gpu-usage" class="metric-value">--%</div>
-                    <div class="metric-change">NVIDIA RTX 4070</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-title">Active Services</div>
-                    <div id="active-services" class="metric-value">--/--</div>
-                    <div class="metric-change">Distributed across 6 VMs</div>
-                </div>
+{metric_cards}
             </div>
 
             <!-- VM Status Grid -->
@@ -560,8 +489,12 @@ class PerformanceDashboard:
         });
     </script>
 </body>
-</html>'''
-        
+</html>'''.format(
+            dark_theme_css=dark_theme_css,
+            header_html=header_html,
+            metric_cards=metric_cards
+        )
+
         with open(template_path, 'w') as f:
             f.write(html_content)
     
