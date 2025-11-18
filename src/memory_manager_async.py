@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import aiosqlite
 
-from src.config_helper import cfg
+from src.unified_config import config
 from src.constants.network_constants import NetworkConstants
 
 # Import the centralized ConfigManager
@@ -53,7 +53,7 @@ class AsyncLongTermMemoryManager:
         # Memory database path from centralized config
         memory_config = self.config.get("memory", {})
         data_config = self.config.get("data", {})
-        default_db_path = cfg.get_path("data", "long_term_db") or "data/agent_memory.db"
+        default_db_path = config.get_path("data", "long_term_db") or "data/agent_memory.db"
         self.db_path = PathUtils.resolve_path(
             memory_config.get("long_term_db_path")
             or data_config.get("long_term_db_path", default_db_path)
