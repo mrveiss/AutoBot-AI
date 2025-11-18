@@ -37,9 +37,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
-from src.utils.redis_client import get_redis_client as get_redis_manager
 import redis.asyncio as async_redis
+
 from src.constants.network_constants import NetworkConstants
+from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -224,8 +225,8 @@ class AuditLogger:
     async def _get_audit_db(self) -> Optional[async_redis.Redis]:
         """Get Redis audit database (DB 10)"""
         try:
-            redis_manager = await get_redis_manager()
-            return await redis_manager.audit()
+            # Use canonical Redis client pattern with 'audit' database
+            return await get_redis_client(async_client=True, database="audit")
         except Exception as e:
             logger.error(f"Failed to get audit database: {e}")
             self._redis_failures += 1

@@ -726,6 +726,7 @@ class RedisConnectionManager:
             "analytics": 9,  # Maps to models/memory database
             "websockets": 10,
             "config": 11,  # CRITICAL: Cache configuration storage
+            "audit": 12,  # Security audit logging (OWASP/NIST compliant)
         }
         if database_name not in db_mapping:
             logger.warning(

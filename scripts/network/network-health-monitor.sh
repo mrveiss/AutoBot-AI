@@ -4,6 +4,11 @@
 
 set -e
 
+# Source network configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/network-config.sh"
+
+echo ""
 echo "🔍 AutoBot Network Health Monitor"
 echo "=================================="
 echo "Timestamp: $(date)"
@@ -55,37 +60,37 @@ test_port() {
 echo "🌐 Core Services Status:"
 echo "------------------------"
 
-# Test HTTP endpoints
-test_service "Backend API" "http://localhost:8001/api/health" "200"
-test_service "Frontend" "http://localhost:5173" "200" 
-test_service "VNC Web Interface" "http://localhost:6080/vnc.html" "200"
-test_service "AI Stack" "http://localhost:8080/health" "200"
-test_service "NPU Worker" "http://localhost:8081/health" "200"
-test_service "Browser Service" "http://localhost:3000/health" "200"
+# Test HTTP endpoints using environment variables
+test_service "Backend API" "${BACKEND_URL}/api/health" "200"
+test_service "Frontend" "${FRONTEND_URL}" "200"
+test_service "VNC Web Interface" "${VNC_WEB_URL}/vnc.html" "200"
+test_service "AI Stack" "${AI_STACK_URL}/health" "200"
+test_service "NPU Worker" "${NPU_WORKER_URL}/health" "200"
+test_service "Browser Service" "${BROWSER_URL}/health" "200"
 
 echo ""
 echo "🔗 Port Connectivity Status:"
 echo "-----------------------------"
 
-# Test port connectivity
-test_port "Redis" "localhost" "6379"
-test_port "VNC Server" "localhost" "5902" 
-test_port "Backend API" "localhost" "8001"
+# Test port connectivity using environment variables
+test_port "Redis" "${REDIS_HOST}" "${REDIS_PORT}"
+test_port "VNC Server" "${VNC_SERVER_HOST}" "${VNC_SERVER_PORT}"
+test_port "Backend API" "${BACKEND_HOST}" "${BACKEND_PORT}"
 
 echo ""
 echo "📊 Network Performance Metrics:"
 echo "--------------------------------"
 
-# Network latency tests
+# Network latency tests using environment variables
 echo -n "⏱️  Backend API Latency: "
-if latency=$(curl -w "%{time_total}" -s -o /dev/null http://localhost:8001/api/health 2>/dev/null); then
+if latency=$(curl -w "%{time_total}" -s -o /dev/null "${BACKEND_URL}/api/health" 2>/dev/null); then
     echo "${latency}s"
 else
     echo "Failed to measure"
 fi
 
 echo -n "⏱️  Frontend Latency: "
-if latency=$(curl -w "%{time_total}" -s -o /dev/null http://localhost:5173 2>/dev/null); then
+if latency=$(curl -w "%{time_total}" -s -o /dev/null "${FRONTEND_URL}" 2>/dev/null); then
     echo "${latency}s"
 else
     echo "Failed to measure"
