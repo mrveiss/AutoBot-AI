@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.unified_config_manager import unified_config_manager
+from src.constants.network_constants import NetworkConstants
 
 def test_refactor_single_file():
     """Test refactoring on config_consolidated.py"""
@@ -27,9 +28,9 @@ def test_refactor_single_file():
         if '172.16.168' in line:
             print(f"  Line {i}: {line.strip()}")
 
-    # Get configuration values
+    # Get configuration values (use NetworkConstants as fallback)
     redis_config = unified_config_manager.get_redis_config()
-    redis_host = redis_config.get("host", "172.16.168.23")
+    redis_host = redis_config.get("host", NetworkConstants.REDIS_VM_IP)
 
     # Test replacement patterns (dynamically from config)
     replacements = {
