@@ -3,7 +3,7 @@
 # Author: mrveiss
 """
 Redis Service Manager
-Manages Redis Stack service lifecycle and health on the Redis VM (172.16.168.23)
+Manages Redis Stack service lifecycle and health on the Redis VM (see NetworkConstants.REDIS_VM_IP)
 
 Features:
 - Service control operations (start/stop/restart)
@@ -21,6 +21,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from backend.services.ssh_manager import RemoteCommandResult, SSHManager
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -515,7 +516,7 @@ class RedisServiceManager:
                 ping_start = datetime.now()
                 ping_result = await self.ssh_manager.execute_command(
                     host=self.redis_host,
-                    command="redis-cli -h 127.0.0.1 -p 6379 PING",
+                    command=f"redis-cli -h {NetworkConstants.LOCALHOST_IP} -p {NetworkConstants.REDIS_PORT} PING",
                     timeout=5,
                     validate=False,
                 )

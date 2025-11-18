@@ -12,6 +12,7 @@ import asyncio
 import ipaddress
 import json
 import logging
+import os
 import re
 import socket
 import time
@@ -111,7 +112,10 @@ class DomainSecurityConfig:
                 "threat_feeds": [
                     {
                         "name": "urlhaus",
-                        "url": "https://urlhaus.abuse.ch/downloads/text/",
+                        "url": os.getenv(
+                            "AUTOBOT_URLHAUS_FEED_URL",
+                            "https://urlhaus.abuse.ch/downloads/text/",
+                        ),
                         "format": "text",
                         "enabled": True,
                         "update_interval": 3600,

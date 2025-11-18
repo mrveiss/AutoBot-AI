@@ -337,7 +337,7 @@ async def navigate_to_url(request: NavigateRequest):
     """
     Navigate to a URL using Playwright on Browser VM
 
-    Forwards navigation request to Browser VM (172.16.168.25:3000)
+    Forwards navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
     """
     try:
         logger.info(f"Navigate request: {request.url}")
@@ -379,7 +379,7 @@ async def reload_page(request: ReloadRequest):
     """
     Reload the current page using Playwright on Browser VM
 
-    Forwards reload request to Browser VM (172.16.168.25:3000)
+    Forwards reload request to Browser VM (NetworkConstants.BROWSER_VM_IP)
     """
     try:
         logger.info("Reload request")

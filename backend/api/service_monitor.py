@@ -822,7 +822,7 @@ async def get_all_services():
             },
             "frontend": {
                 "status": "checking",
-                "url": ServiceURLs.FRONTEND_VM,  # FIXED: Frontend runs on VM1 (172.16.168.21), not main machine
+                "url": ServiceURLs.FRONTEND_VM,
                 "health": "⏳",
             },
         }

@@ -11,6 +11,7 @@ import logging
 from typing import Dict
 from fastapi import APIRouter, HTTPException
 
+from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -62,12 +63,14 @@ def start_vnc_server() -> Dict[str, str]:
             }
 
         # Start websockify for noVNC access
+        websockify_bind = f"{NetworkConstants.BIND_ALL_INTERFACES}:{NetworkConstants.VNC_PORT}"
+        vnc_target = f"{NetworkConstants.LOCALHOST_NAME}:5901"
         subprocess.Popen(
             [
                 "/usr/bin/websockify",
                 "--web", "/usr/share/novnc",
-                "0.0.0.0:6080",
-                "localhost:5901",
+                websockify_bind,
+                vnc_target,
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

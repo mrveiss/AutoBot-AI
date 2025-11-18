@@ -11,6 +11,7 @@ from typing import List, Optional
 from urllib.parse import urlparse
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.security_constants import SecurityConstants
 
 
 class URLValidator:
@@ -18,19 +19,18 @@ class URLValidator:
 
     ALLOWED_SCHEMES = ["http", "https"]
     FORBIDDEN_HOSTS = [
-        "localhost",
-        "127.0.0.1",
-        "0.0.0.0",
-        "::1",
-        "169.254.169.254",  # AWS metadata endpoint
+        NetworkConstants.LOCALHOST_NAME,
+        NetworkConstants.LOCALHOST_IP,
+        NetworkConstants.BIND_ALL_INTERFACES,
+        NetworkConstants.LOCALHOST_IPV6,
+        SecurityConstants.CLOUD_METADATA_IPS[0],  # AWS metadata endpoint
         "metadata.google.internal",  # GCP metadata endpoint
     ]
 
-    # Private IP ranges
+    # Private IP ranges - converted from SecurityConstants.BLOCKED_IP_RANGES
     PRIVATE_IP_RANGES = [
-        ipaddress.ip_network("10.0.0.0/8"),
-        ipaddress.ip_network("172.16.0.0/12"),
-        ipaddress.ip_network("192.168.0.0/16"),
+        ipaddress.ip_network(cidr) for cidr in SecurityConstants.BLOCKED_IP_RANGES
+    ] + [
         ipaddress.ip_network("fc00::/7"),  # IPv6 unique local
         ipaddress.ip_network("fe80::/10"),  # IPv6 link local
     ]

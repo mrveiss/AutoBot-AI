@@ -22,6 +22,7 @@ from backend.models.infrastructure import (
     InfraRole,
 )
 from backend.services.infrastructure_db import InfrastructureDB
+from src.constants.network_constants import NetworkConstants
 
 
 def test_database_initialization():
@@ -90,7 +91,7 @@ def test_host_creation(db: InfrastructureDB):
     # Create test host
     host_data = {
         "hostname": "test-frontend-01",
-        "ip_address": "172.16.168.99",
+        "ip_address": NetworkConstants.TEST_HOST_IP,
         "role_id": frontend_role.id,
         "status": "new",
         "ssh_port": 22,
@@ -100,7 +101,7 @@ def test_host_creation(db: InfrastructureDB):
     host = db.create_host(host_data)
     assert host.id is not None
     assert host.hostname == "test-frontend-01"
-    assert host.ip_address == "172.16.168.99"
+    assert host.ip_address == NetworkConstants.TEST_HOST_IP
     print(f"✅ Created host: {host.hostname} ({host.ip_address})")
 
     # Retrieve by ID
@@ -110,7 +111,7 @@ def test_host_creation(db: InfrastructureDB):
     print(f"✅ Retrieved host by ID: {retrieved.hostname}")
 
     # Retrieve by IP
-    retrieved_by_ip = db.get_host_by_ip("172.16.168.99")
+    retrieved_by_ip = db.get_host_by_ip(NetworkConstants.TEST_HOST_IP)
     assert retrieved_by_ip is not None
     assert retrieved_by_ip.id == host.id
     print(f"✅ Retrieved host by IP: {retrieved_by_ip.ip_address}")

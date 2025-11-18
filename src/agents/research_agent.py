@@ -86,7 +86,7 @@ class ResearchAgent:
                     "url": "https://github.com/robertdavidgraham/masscan",
                     "content": "Masscan is a TCP port scanner that can scan the entire Internet in under 6 minutes. It's designed to be fast and efficient for large-scale scanning.",
                     "installation": "sudo apt-get install masscan",
-                    "usage": "masscan -p1-65535 192.168.1.0/24 --rate=1000",
+                    "usage": "masscan -p1-65535 <target_network> --rate=1000",
                 },
                 "zmap": {
                     "title": "ZMap - Fast Internet-wide Network Scanner",
@@ -303,7 +303,9 @@ class ResearchAgent:
             f"Results include {', '.join(set(r.source_type for r in results))} sources."
         )
 
-    async def start_server(self, host: str = "0.0.0.0", port: int = 8005):
+    async def start_server(
+        self, host: str = NetworkConstants.BIND_ALL_INTERFACES, port: int = 8005
+    ):
         """Start the research agent server."""
         import uvicorn
 

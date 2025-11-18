@@ -126,13 +126,13 @@ class LLMSettings(BaseSettings):
     """LLM configuration using pydantic-settings for async config management"""
 
     # Ollama settings
-    ollama_host: str = Field(default="127.0.0.1", env="OLLAMA_HOST")
+    ollama_host: str = Field(default=NetworkConstants.MAIN_MACHINE_IP, env="OLLAMA_HOST")
     ollama_port: int = Field(default=NetworkConstants.OLLAMA_PORT, env="OLLAMA_PORT")
     # Removed timeout - using circuit breaker pattern instead
 
     # Model settings
     default_model: str = Field(
-        default="llama3.2:1b-instruct-q4_K_M", env="DEFAULT_LLM_MODEL"
+        default="mistral:7b", env="DEFAULT_LLM_MODEL"
     )
     temperature: float = Field(default=0.7, env="LLM_TEMPERATURE")
     top_k: int = Field(default=40, env="LLM_TOP_K")

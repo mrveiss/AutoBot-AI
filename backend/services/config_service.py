@@ -119,7 +119,7 @@ class ConfigService:
                         f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}",
                     ),
                     "server_host": unified_config_manager.get_nested(
-                        "backend.server_host", "0.0.0.0"
+                        "backend.server_host", NetworkConstants.BIND_ALL_INTERFACES
                     ),
                     "server_port": unified_config_manager.get_nested(
                         "backend.server_port", BACKEND_PORT

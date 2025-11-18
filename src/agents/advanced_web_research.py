@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from src.constants.network_constants import NetworkConstants
+from src.constants.security_constants import SecurityConstants
 
 try:
     from playwright.async_api import Browser, BrowserContext, Page, async_playwright
@@ -148,20 +149,7 @@ class CaptchaSolver:
 class BrowserFingerprint:
     """Manages browser fingerprinting and randomization"""
 
-    USER_AGENTS = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        " (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        " (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-        " (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
-        " (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0)"
-        " Gecko/20100101 Firefox/121.0",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0)"
-        " Gecko/20100101 Firefox/121.0",
-    ]
+    USER_AGENTS = SecurityConstants.USER_AGENT_POOL
 
     VIEWPORTS = [
         {"width": 1920, "height": 1080},  # Full HD - prioritized

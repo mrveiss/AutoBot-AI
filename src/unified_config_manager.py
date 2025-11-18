@@ -581,7 +581,7 @@ class UnifiedConfigManager:
             return env_model
 
         # Final fallback
-        fallback_model = "gemma3:270m"
+        fallback_model = "mistral:7b"
         logger.warning(
             f"UNIFIED CONFIG: No model configured, using fallback: {fallback_model}"
         )

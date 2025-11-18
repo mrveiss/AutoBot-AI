@@ -4,7 +4,7 @@
 """
 Browser Automation MCP Bridge
 Exposes browser automation operations as MCP tools for LLM agents
-Integrates with AutoBot's Browser VM (172.16.168.25:3000) using Playwright
+Integrates with AutoBot's Browser VM (uses NetworkConstants.BROWSER_VM_IP) using Playwright
 
 Provides comprehensive browser automation capabilities:
 - Navigation (navigate, go_back, go_forward)
@@ -415,7 +415,7 @@ async def send_to_browser_vm(action: str, params: Dict[str, Any]) -> Dict[str, A
     Send automation command to Browser VM
 
     This is the core communication layer with the Playwright server
-    running on the Browser VM (172.16.168.25:3000)
+    running on the Browser VM (NetworkConstants.BROWSER_VM_IP)
     """
     try:
         async with aiohttp.ClientSession() as session:

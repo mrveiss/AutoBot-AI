@@ -202,10 +202,11 @@ class InfrastructureMonitor:
     async def get_machine_stats(self, host: str = "localhost") -> MachineStats:
         """Get comprehensive machine resource statistics"""
         try:
-            # For local machine, use system commands for accurate info - NO HARDCODED IPs
+            # For local machine, use system commands for accurate info
             backend_host = config.get_host("backend")
             local_hosts = config.get(
-                "infrastructure.local_hosts", ["localhost", "127.0.0.1"]
+                "infrastructure.local_hosts",
+                [NetworkConstants.LOCALHOST_NAME, NetworkConstants.LOCALHOST_IP],
             ) + [socket.gethostname()]
             if host in local_hosts or host == backend_host:
                 return await self.get_local_stats()
@@ -702,10 +703,10 @@ class InfrastructureMonitor:
         """Monitor local host services"""
         services = MachineServices()
 
-        # Core local services - NO HARDCODED VALUES
+        # Core local services
         # VNC Server check
         vnc_port = config.get_port("vnc")
-        if self.check_port("127.0.0.1", vnc_port):  # noVNC port
+        if self.check_port(NetworkConstants.LOCALHOST_IP, vnc_port):  # noVNC port
             services.core.append(
                 ServiceInfo(
                     name="VNC Server (kex)", status="online", response_time="2ms"
@@ -725,7 +726,7 @@ class InfrastructureMonitor:
 
         # Local Redis
         redis_port = config.get_port("redis")
-        if self.check_port("127.0.0.1", redis_port):
+        if self.check_port(NetworkConstants.LOCALHOST_IP, redis_port):
             services.database.append(
                 ServiceInfo(name="Redis Local", status="online", response_time="3ms")
             )
@@ -769,7 +770,7 @@ class InfrastructureMonitor:
         vscode_port = config.get(
             "infrastructure.ports.vscode", NetworkConstants.AI_STACK_PORT
         )  # VS Code server port
-        if self.check_port("127.0.0.1", vscode_port):
+        if self.check_port(NetworkConstants.LOCALHOST_IP, vscode_port):
             services.support.append(
                 ServiceInfo(
                     name="VS Code Server", status="online", response_time="15ms"
@@ -796,7 +797,7 @@ class InfrastructureMonitor:
         return MachineInfo(
             id="localhost",
             name="Local Services",
-            ip="127.0.0.1",
+            ip=NetworkConstants.LOCALHOST_IP,
             status=status,
             icon="fas fa-laptop",
             services=services,

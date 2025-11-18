@@ -500,11 +500,11 @@ class AIHardwareAccelerator:
         if task_type == "embedding_generation":
             return "nomic-embed-text"
         elif task_type == "chat_inference":
-            return "llama3.2:1b-instruct-q4_K_M"
+            return cfg.get_default_llm_model()
         elif task_type == "text_classification":
             return "text-classification-model"
         else:
-            return "llama3.2:1b-instruct-q4_K_M"  # Default
+            return cfg.get_default_llm_model()  # Default
 
     async def _process_on_gpu(self, task: ProcessingTask) -> Dict[str, Any]:
         """Process task on GPU using existing AutoBot GPU infrastructure."""

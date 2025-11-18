@@ -67,7 +67,7 @@ class Worker:
 
     Attributes:
         worker_id: Unique identifier for the worker
-        endpoint: Full URL endpoint for the worker (e.g., http://172.16.168.22:8081)
+        endpoint: Full URL endpoint for the worker (see ServiceURLs.NPU_WORKER_SERVICE)
         status: Current operational status
         max_concurrent_tasks: Maximum number of concurrent tasks this worker can handle
         priority: Worker priority for weighted distribution (higher = more preferred)
@@ -351,7 +351,7 @@ class NPULoadBalancer:
 
         Args:
             worker_id: Unique identifier for the worker
-            endpoint: Full URL endpoint (e.g., http://172.16.168.22:8081)
+            endpoint: Full URL endpoint (see ServiceURLs.NPU_WORKER_SERVICE)
             max_concurrent_tasks: Maximum concurrent tasks for this worker
             priority: Worker priority (higher = more preferred)
             enabled: Whether worker is enabled

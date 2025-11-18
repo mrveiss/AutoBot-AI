@@ -5,8 +5,8 @@
 VNC WebSocket Proxy - Route VNC traffic through backend for agent observation
 
 Provides WebSocket proxying for both VNC connections:
-- /api/vnc-proxy/desktop → Main machine VNC (172.16.168.20:6080)
-- /api/vnc-proxy/browser → Browser VM VNC (172.16.168.25:6080)
+- /api/vnc-proxy/desktop → Main machine VNC (uses NetworkConstants.MAIN_MACHINE_IP)
+- /api/vnc-proxy/browser → Browser VM VNC (uses NetworkConstants.BROWSER_VM_IP)
 
 This allows the backend (where agent runs) to observe and log VNC traffic,
 enabling the agent to see what users are viewing in real-time.

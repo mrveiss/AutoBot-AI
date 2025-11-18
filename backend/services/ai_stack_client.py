@@ -5,7 +5,7 @@
 AI Stack Client - Communication layer for AI Stack VM agents integration.
 
 This module provides a centralized interface for communicating with the AI Stack VM
-at 172.16.168.24:8080, enabling seamless integration of advanced AI agents.
+(see NetworkConstants.AI_STACK_VM_IP), enabling seamless integration of advanced AI agents.
 """
 
 import asyncio

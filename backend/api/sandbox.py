@@ -452,7 +452,7 @@ async def get_sandbox_examples():
                 "network_enabled": {
                     "description": "Execute with network access (medium/low security only)",
                     "request": {
-                        "command": "ping -c 3 8.8.8.8",
+                        "command": f"ping -c 3 {NetworkConstants.PUBLIC_DNS_IP}",
                         "security_level": "medium",
                         "enable_network": True,
                     },

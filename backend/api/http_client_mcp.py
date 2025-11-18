@@ -36,6 +36,7 @@ import aiohttp
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
+from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -48,15 +49,15 @@ router = APIRouter(tags=["http_client_mcp", "mcp"])
 # Note: Subdomains must be explicitly listed for security
 ALLOWED_DOMAINS = [
     # Local development
-    "localhost",
-    "127.0.0.1",
+    NetworkConstants.LOCALHOST_NAME,
+    NetworkConstants.LOCALHOST_IP,
     # AutoBot infrastructure
-    "172.16.168.20",  # Main machine
-    "172.16.168.21",  # Frontend VM
-    "172.16.168.22",  # NPU Worker VM
-    "172.16.168.23",  # Redis VM
-    "172.16.168.24",  # AI Stack VM
-    "172.16.168.25",  # Browser VM
+    NetworkConstants.MAIN_MACHINE_IP,  # Main machine
+    NetworkConstants.FRONTEND_VM_IP,  # Frontend VM
+    NetworkConstants.NPU_WORKER_VM_IP,  # NPU Worker VM
+    NetworkConstants.REDIS_VM_IP,  # Redis VM
+    NetworkConstants.AI_STACK_VM_IP,  # AI Stack VM
+    NetworkConstants.BROWSER_VM_IP,  # Browser VM
     # Common APIs (extend as needed)
     "api.github.com",
     "raw.githubusercontent.com",

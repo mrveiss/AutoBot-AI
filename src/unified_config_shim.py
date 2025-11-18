@@ -17,6 +17,8 @@ the config consolidation (Issue #63).
 
 from typing import Any, Dict, Optional
 
+from src.constants.network_constants import NetworkConstants
+
 # Import from the canonical config manager
 from src.unified_config_manager import UnifiedConfigManager
 
@@ -40,7 +42,9 @@ class UnifiedConfigAdapter:
         """Delegate to set_nested"""
         return self._manager.set_nested(path, value)
 
-    def get_host(self, service: str, default: str = "127.0.0.1") -> str:
+    def get_host(
+        self, service: str, default: str = NetworkConstants.MAIN_MACHINE_IP
+    ) -> str:
         """Delegate to get_host"""
         return self._manager.get_host(service)
 
@@ -117,7 +121,7 @@ config = UnifiedConfigAdapter()
 
 
 # Convenience functions for backward compatibility
-def get_host(service: str, default: str = "127.0.0.1") -> str:
+def get_host(service: str, default: str = NetworkConstants.MAIN_MACHINE_IP) -> str:
     return config.get_host(service, default)
 
 
