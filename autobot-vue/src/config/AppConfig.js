@@ -6,6 +6,7 @@
  */
 
 import ServiceDiscovery from './ServiceDiscovery.js';
+import { NetworkConstants } from '../constants/network.ts';
 
 export class AppConfigService {
   constructor() {
@@ -73,48 +74,48 @@ export class AppConfigService {
         }
       },
 
-      // Infrastructure Configuration
+      // Infrastructure Configuration - Uses NetworkConstants for VM IPs
       infrastructure: {
         machines: {
           vm0: {
             id: 'vm0',
             name: 'VM0 - Backend',
-            ip: import.meta.env.VITE_VM0_IP || '172.16.168.20',
+            ip: import.meta.env.VITE_VM0_IP || NetworkConstants.MAIN_MACHINE_IP,
             role: 'backend',
             icon: 'fas fa-server'
           },
           vm1: {
             id: 'vm1',
             name: 'VM1 - Frontend',
-            ip: import.meta.env.VITE_VM1_IP || '172.16.168.21',
+            ip: import.meta.env.VITE_VM1_IP || NetworkConstants.FRONTEND_VM_IP,
             role: 'frontend',
             icon: 'fas fa-desktop'
           },
           vm2: {
             id: 'vm2',
             name: 'VM2 - NPU Worker',
-            ip: import.meta.env.VITE_VM2_IP || '172.16.168.22',
+            ip: import.meta.env.VITE_VM2_IP || NetworkConstants.NPU_WORKER_VM_IP,
             role: 'worker',
             icon: 'fas fa-microchip'
           },
           vm3: {
             id: 'vm3',
             name: 'VM3 - Redis Database',
-            ip: import.meta.env.VITE_VM3_IP || '172.16.168.23',
+            ip: import.meta.env.VITE_VM3_IP || NetworkConstants.REDIS_VM_IP,
             role: 'database',
             icon: 'fas fa-database'
           },
           vm4: {
             id: 'vm4',
             name: 'VM4 - AI Stack',
-            ip: import.meta.env.VITE_VM4_IP || '172.16.168.24',
+            ip: import.meta.env.VITE_VM4_IP || NetworkConstants.AI_STACK_VM_IP,
             role: 'ai',
             icon: 'fas fa-brain'
           },
           vm5: {
             id: 'vm5',
             name: 'VM5 - Browser Service',
-            ip: import.meta.env.VITE_VM5_IP || '172.16.168.25',
+            ip: import.meta.env.VITE_VM5_IP || NetworkConstants.BROWSER_VM_IP,
             role: 'browser',
             icon: 'fas fa-globe'
           }
@@ -167,7 +168,7 @@ export class AppConfigService {
     }
 
     // Use backend VNC proxy for agent observation
-    // This routes VNC traffic through backend (172.16.168.20:8001)
+    // This routes VNC traffic through backend (NetworkConstants.MAIN_MACHINE_IP:8001)
     // allowing the agent to observe and log VNC connections
     const backendUrl = await this.serviceDiscovery.getServiceUrl('backend');
     const proxyPath = type === 'playwright' ? 'browser' : type; // Map 'playwright' → 'browser'

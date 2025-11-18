@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Real-Time Validation Dashboard Generator
 Creates comprehensive validation reports and dashboards for system monitoring
@@ -21,6 +24,10 @@ sys.path.append(str(Path(__file__).parent.parent))
 from scripts.phase_validation_system import PhaseValidator
 from src.enhanced_project_state_tracker import get_state_tracker
 from src.phase_progression_manager import get_progression_manager
+from src.utils.html_dashboard_utils import (
+    get_light_theme_css,
+    create_dashboard_header,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -502,92 +509,74 @@ class ValidationDashboardGenerator:
         alerts = report_data["alerts"]
         recommendations = report_data["recommendations"]
 
-        html = f"""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AutoBot Validation Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        # Generate dashboard components using utility functions
+        light_theme_css = get_light_theme_css()
+        header_html = create_dashboard_header(
+            title="🤖 AutoBot Validation Dashboard",
+            subtitle=f"Real-time system validation and progress monitoring<br>Generated: {report_data['generated_at'][:19].replace('T', ' ')}",
+            theme="light"
+        )
+
+        # Additional CSS for dashboard-specific elements
+        additional_css = """
+        body {
             margin: 0;
             padding: 20px;
-            background-color: #f5f5f5;
-            color: #333;
-        }}
-        .dashboard {{
+        }
+        .dashboard {
             max-width: 1400px;
             margin: 0 auto;
-        }}
-        .header {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }}
-        .header h1 {{
-            margin: 0;
-            font-size: 2.5em;
-        }}
-        .header .subtitle {{
-            opacity: 0.8;
-            margin-top: 10px;
-        }}
-        .stats-grid {{
+        }
+        .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
-        }}
-        .stat-card {{
+        }
+        .stat-card {
             background: white;
             padding: 25px;
             border-radius: 10px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             text-align: center;
-        }}
-        .stat-value {{
+        }
+        .stat-value {
             font-size: 3em;
             font-weight: bold;
             margin: 10px 0;
-        }}
-        .stat-label {{
+        }
+        .stat-label {
             color: #666;
             font-size: 0.9em;
-        }}
-        .health-excellent {{ color: #4CAF50; }}
-        .health-good {{ color: #8BC34A; }}
-        .health-fair {{ color: #FF9800; }}
-        .health-needs_attention {{ color: #F44336; }}
-        .main-content {{
+        }
+        .health-excellent { color: #4CAF50; }
+        .health-good { color: #8BC34A; }
+        .health-fair { color: #FF9800; }
+        .health-needs_attention { color: #F44336; }
+        .main-content {
             display: grid;
             grid-template-columns: 2fr 1fr;
             gap: 30px;
             margin-bottom: 30px;
-        }}
-        .phases-section {{
+        }
+        .phases-section {
             background: white;
             padding: 30px;
             border-radius: 10px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }}
-        .sidebar {{
+        }
+        .sidebar {
             display: flex;
             flex-direction: column;
             gap: 20px;
-        }}
-        .sidebar-section {{
+        }
+        .sidebar-section {
             background: white;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }}
-        .phase-item {{
+        }
+        .phase-item {
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -596,65 +585,65 @@ class ValidationDashboardGenerator:
             border-left: 4px solid;
             background: #f8f9fa;
             border-radius: 5px;
-        }}
-        .phase-progress {{
+        }
+        .phase-progress {
             width: 100px;
             height: 8px;
             background: #e0e0e0;
             border-radius: 4px;
             overflow: hidden;
-        }}
-        .phase-progress-bar {{
+        }
+        .phase-progress-bar {
             height: 100%;
             transition: width 0.3s ease;
-        }}
-        .alert {{
+        }
+        .alert {
             padding: 15px;
             margin: 10px 0;
             border-radius: 5px;
             border-left: 4px solid;
-        }}
-        .alert-critical {{
+        }
+        .alert-critical {
             background: #ffebee;
             border-color: #f44336;
             color: #c62828;
-        }}
-        .alert-warning {{
+        }
+        .alert-warning {
             background: #fff3e0;
             border-color: #ff9800;
             color: #e65100;
-        }}
-        .alert-info {{
+        }
+        .alert-info {
             background: #e3f2fd;
             border-color: #2196f3;
             color: #1565c0;
-        }}
-        .recommendation {{
+        }
+        .recommendation {
             padding: 15px;
             margin: 10px 0;
             background: #f8f9fa;
             border-radius: 5px;
             border-left: 4px solid #007bff;
-        }}
-        .recommendation-title {{
+        }
+        .recommendation-title {
             font-weight: bold;
             margin-bottom: 5px;
-        }}
-        .recommendation-urgency {{
+        }
+        .recommendation-urgency {
             display: inline-block;
             padding: 2px 8px;
             border-radius: 3px;
             font-size: 0.8em;
             font-weight: bold;
-        }}
-        .urgency-high {{ background: #ffcdd2; color: #c62828; }}
-        .urgency-medium {{ background: #ffe0b2; color: #e65100; }}
-        .urgency-low {{ background: #c8e6c9; color: #2e7d32; }}
-        .chart-container {{
+        }
+        .urgency-high { background: #ffcdd2; color: #c62828; }
+        .urgency-medium { background: #ffe0b2; color: #e65100; }
+        .urgency-low { background: #c8e6c9; color: #2e7d32; }
+        .chart-container {
             margin: 20px 0;
             height: 300px;
-        }}
-        .refresh-info {{
+        }
+        .refresh-info {
             position: fixed;
             top: 20px;
             right: 20px;
@@ -663,46 +652,53 @@ class ValidationDashboardGenerator:
             padding: 10px 15px;
             border-radius: 5px;
             font-size: 0.9em;
-        }}
-        @media (max-width: 768px) {{
-            .main-content {{
+        }
+        @media (max-width: 768px) {
+            .main-content {
                 grid-template-columns: 1fr;
-            }}
-            .stats-grid {{
+            }
+            .stats-grid {
                 grid-template-columns: 1fr;
-            }}
-        }}
+            }
+        }
+    """
+
+        html = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoBot Validation Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+{light_theme_css}
+{additional_css}
     </style>
 </head>
 <body>
     <div class="dashboard">
         <div class="refresh-info">
-            Auto-refresh: {self.refresh_interval}s | Last updated: {datetime.now().strftime('%H:%M:%S')}
+            Auto-refresh: {refresh_interval}s | Last updated: {current_time}
         </div>
 
-        <div class="header">
-            <h1>🤖 AutoBot Validation Dashboard</h1>
-            <div class="subtitle">
-                Real-time system validation and progress monitoring
-                <br>Generated: {report_data['generated_at'][:19].replace('T', ' ')}
-            </div>
-        </div>
+{header_html}
 
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-value health-{system_overview['system_health']}">{system_overview['overall_maturity']:.1f}%</div>
+                <div class="stat-value health-{system_health}">{overall_maturity:.1f}%</div>
                 <div class="stat-label">System Maturity</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{system_overview['completed_phases']}/{system_overview['total_phases']}</div>
+                <div class="stat-value">{completed_phases}/{total_phases}</div>
                 <div class="stat-label">Phases Completed</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{system_overview['active_capabilities']}</div>
+                <div class="stat-value">{active_capabilities}</div>
                 <div class="stat-label">Active Capabilities</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value health-{system_overview['system_health']}">{system_overview['system_health'].replace('_', ' ').title()}</div>
+                <div class="stat-value health-{system_health}">{system_health_display}</div>
                 <div class="stat-label">System Health</div>
             </div>
         </div>
@@ -711,7 +707,7 @@ class ValidationDashboardGenerator:
             <div class="phases-section">
                 <h2>📊 Phase Completion Status</h2>
                 <div class="phases-list">
-                    {self._generate_phase_html(phase_details)}
+                    {phase_html}
                 </div>
 
                 <h3>📈 Maturity Trend</h3>
@@ -723,12 +719,12 @@ class ValidationDashboardGenerator:
             <div class="sidebar">
                 <div class="sidebar-section">
                     <h3>🚨 System Alerts</h3>
-                    {self._generate_alerts_html(alerts)}
+                    {alerts_html}
                 </div>
 
                 <div class="sidebar-section">
                     <h3>💡 Recommendations</h3>
-                    {self._generate_recommendations_html(recommendations)}
+                    {recommendations_html}
                 </div>
             </div>
         </div>
@@ -740,10 +736,10 @@ class ValidationDashboardGenerator:
         new Chart(ctx, {{
             type: 'line',
             data: {{
-                labels: {json.dumps([p['timestamp'][-8:-3] for p in report_data['trends']['maturity_trend']])},
+                labels: {maturity_labels},
                 datasets: [{{
                     label: 'System Maturity %',
-                    data: {json.dumps([p['value'] for p in report_data['trends']['maturity_trend']])},
+                    data: {maturity_data},
                     borderColor: '#667eea',
                     backgroundColor: 'rgba(102, 126, 234, 0.1)',
                     tension: 0.1
@@ -764,11 +760,29 @@ class ValidationDashboardGenerator:
         // Auto-refresh functionality
         setTimeout(() => {{
             window.location.reload();
-        }}, {self.refresh_interval * 1000});
+        }}, {refresh_timeout});
     </script>
 </body>
 </html>
-        """
+'''.format(
+            light_theme_css=light_theme_css,
+            additional_css=additional_css,
+            header_html=header_html,
+            refresh_interval=self.refresh_interval,
+            current_time=datetime.now().strftime('%H:%M:%S'),
+            system_health=system_overview['system_health'],
+            overall_maturity=system_overview['overall_maturity'],
+            completed_phases=system_overview['completed_phases'],
+            total_phases=system_overview['total_phases'],
+            active_capabilities=system_overview['active_capabilities'],
+            system_health_display=system_overview['system_health'].replace('_', ' ').title(),
+            phase_html=self._generate_phase_html(phase_details),
+            alerts_html=self._generate_alerts_html(alerts),
+            recommendations_html=self._generate_recommendations_html(recommendations),
+            maturity_labels=json.dumps([p['timestamp'][-8:-3] for p in report_data['trends']['maturity_trend']]),
+            maturity_data=json.dumps([p['value'] for p in report_data['trends']['maturity_trend']]),
+            refresh_timeout=self.refresh_interval * 1000
+        )
 
         return html
 
