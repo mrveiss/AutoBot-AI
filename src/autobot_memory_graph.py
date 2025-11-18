@@ -37,7 +37,7 @@ import numpy as np
 from cachetools import LRUCache
 
 from src.constants.network_constants import NetworkConstants
-from src.unified_config import config
+from src.unified_config_manager import UnifiedConfigManager
 from src.utils.error_boundaries import (
     ErrorCategory,
     ErrorContext,
@@ -46,6 +46,9 @@ from src.utils.error_boundaries import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Create singleton config instance
+config = UnifiedConfigManager()
 
 
 class AutoBotMemoryGraph:
