@@ -13,6 +13,8 @@ from typing import Any, Dict
 import aiohttp
 import requests
 
+from src.constants.network_constants import NetworkConstants, ServiceURLs
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ class BackendDiagnostic:
             logger.info("🔌 Testing socket connection...")
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(3)
-            result = s.connect_ex(("localhost", 8001))
+            result = s.connect_ex((NetworkConstants.LOCALHOST_NAME, NetworkConstants.BACKEND_PORT))
             s.close()
 
             if result == 0:
@@ -50,15 +52,14 @@ class BackendDiagnostic:
         try:
             logger.info("🌐 Testing TCP connection with telnet-like approach...")
             import socket
-            from src.constants import NetworkConstants, ServiceURLs
 
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(5)
-            s.connect(("localhost", 8001))
+            s.connect((NetworkConstants.LOCALHOST_NAME, NetworkConstants.BACKEND_PORT))
 
             # Try to send a minimal HTTP request
             request = (
-                b"HEAD / HTTP/1.1\r\nHost: localhost:8001\r\nConnection: close\r\n\r\n"
+                f"HEAD / HTTP/1.1\r\nHost: {NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}\r\nConnection: close\r\n\r\n".encode()
             )
             s.send(request)
 
