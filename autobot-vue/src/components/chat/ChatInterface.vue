@@ -205,8 +205,8 @@ const loadNovncUrl = async () => {
   }
 
   // CRITICAL FIX: Use frontend proxy route for Desktop VNC (not Playwright VNC)
-  // Frontend (172.16.168.21:5173) proxies /tools/novnc to Desktop VNC (172.16.168.20:6080)
-  // Note: Playwright has its own noVNC on 172.16.168.25 (separate from desktop)
+  // Frontend VM proxies /tools/novnc to Desktop VNC on Main Machine
+  // Note: Browser VM has its own noVNC (separate from desktop)
   const baseUrl = '/tools/novnc/vnc.html'
 
   if (!store.currentSessionId) {

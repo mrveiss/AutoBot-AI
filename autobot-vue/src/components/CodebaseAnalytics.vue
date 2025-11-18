@@ -321,6 +321,7 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import appConfig from '@/config/AppConfig.js'
+import { NetworkConstants } from '@/constants/network.ts'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 
@@ -739,8 +740,8 @@ const testDataState = () => {
 const testNpuConnection = async () => {
 
   try {
-    // FIXED: Use direct NPU worker URL from environment
-    const npuWorkerUrl = `http://${import.meta.env.VITE_NPU_WORKER_HOST || '172.16.168.22'}:${import.meta.env.VITE_NPU_WORKER_PORT || '8081'}`
+    // FIXED: Use direct NPU worker URL from environment/NetworkConstants
+    const npuWorkerUrl = `http://${import.meta.env.VITE_NPU_WORKER_HOST || NetworkConstants.NPU_WORKER_VM_IP}:${import.meta.env.VITE_NPU_WORKER_PORT || NetworkConstants.NPU_WORKER_PORT}`
     const npuEndpoint = `${npuWorkerUrl}/health`
 
 

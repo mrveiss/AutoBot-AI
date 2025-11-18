@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Enhance Workflow UI with additional features
 Adds workflow notifications and better user experience
@@ -60,6 +63,12 @@ def create_workflow_notification_component():
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { apiService } from '../services/api.js'
+import {
+  getNotificationIcon,
+  formatTimestamp,
+  createNotification,
+  getNotificationTimeout
+} from '../utils/workflowComponents'
 
 // Props
 const props = defineProps({
@@ -70,35 +79,25 @@ const props = defineProps({
 const notifications = ref([])
 const eventSource = ref(null)
 
-// Methods
-const getNotificationIcon = (type) => {
-  const icons = {
-    'info': 'fas fa-info-circle',
-    'success': 'fas fa-check-circle',
-    'warning': 'fas fa-exclamation-triangle',
-    'error': 'fas fa-times-circle',
-    'approval': 'fas fa-user-check',
-    'progress': 'fas fa-sync fa-spin'
-  }
-  return icons[type] || 'fas fa-bell'
-}
-
-const formatTime = (timestamp) => {
-  return new Date(timestamp).toLocaleTimeString()
-}
+// Methods (using utility functions)
+const formatTime = formatTimestamp
 
 const addNotification = (notification) => {
-  notifications.value.unshift({
-    id: Date.now() + Math.random(),
-    timestamp: Date.now(),
-    ...notification
-  })
+  const fullNotification = createNotification(
+    notification.type,
+    notification.title,
+    notification.message,
+    notification
+  )
 
-  // Auto-remove info notifications after 10 seconds
-  if (notification.type === 'info') {
+  notifications.value.unshift(fullNotification)
+
+  // Auto-dismiss based on notification type
+  const timeout = getNotificationTimeout(notification.type)
+  if (timeout > 0) {
     setTimeout(() => {
-      dismissNotification(notification.id)
-    }, 10000)
+      dismissNotification(fullNotification.id)
+    }, timeout)
   }
 }
 
@@ -437,6 +436,11 @@ def create_workflow_progress_widget():
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { apiService } from '../services/api.js'
+import {
+  calculateProgress,
+  formatProgressText,
+  getClassificationClass
+} from '../utils/workflowComponents'
 
 // Props
 const props = defineProps({
@@ -452,10 +456,13 @@ const workflowSteps = ref([])
 const expanded = ref(false)
 const refreshInterval = ref(null)
 
-// Computed properties
+// Computed properties (using utility functions)
 const progressPercentage = computed(() => {
   if (!activeWorkflow.value) return 0
-  return (activeWorkflow.value.current_step / activeWorkflow.value.total_steps) * 100
+  return calculateProgress(
+    activeWorkflow.value.current_step,
+    activeWorkflow.value.total_steps
+  )
 })
 
 const currentStep = computed(() => {
