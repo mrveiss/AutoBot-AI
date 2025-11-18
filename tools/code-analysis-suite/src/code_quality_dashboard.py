@@ -20,8 +20,11 @@ from src.api_consistency_analyzer import APIConsistencyAnalyzer
 from src.testing_coverage_analyzer import TestingCoverageAnalyzer
 from src.architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
 from src.utils.redis_client import get_redis_client
-from src.config import config
+from src.unified_config import UnifiedConfig
 
+
+# Initialize unified config
+config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
 

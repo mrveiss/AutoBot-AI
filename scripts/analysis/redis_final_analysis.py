@@ -10,6 +10,7 @@ import sys
 from typing import Dict, Any, List, Tuple
 
 sys.path.insert(0, '/home/kali/Desktop/AutoBot')
+from src.constants.network_constants import NetworkConstants, ServiceURLs
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ class AutoBotVectorStoreAnalysis:
         
         try:
             import redis
-            client = redis.Redis(host='localhost', port=6379, db=2, decode_responses=True)
+            client = redis.Redis(host=NetworkConstants.LOCALHOST_NAME, port=NetworkConstants.REDIS_PORT, db=2, decode_responses=True)
             
             # Get comprehensive index info
             index_info_raw = client.execute_command('FT.INFO', 'llama_index')
@@ -168,7 +169,7 @@ class AutoBotVectorStoreAnalysis:
             
             vector_store = RedisVectorStore(
                 schema=schema,
-                redis_url="redis://localhost:6379",
+                redis_url=ServiceURLs.REDIS_LOCAL,
                 redis_kwargs={"db": 2}
             )
             fixes_attempted.append("Connected to existing Redis vector store")
@@ -222,7 +223,7 @@ class AutoBotVectorStoreAnalysis:
             vector_store = RedisVectorStore(
                 embeddings=embeddings,
                 index_name="autobot_langchain_db0",
-                redis_url="redis://localhost:6379/0"  # Use DB 0
+                redis_url=f"{ServiceURLs.REDIS_LOCAL}/0"  # Use DB 0
             )
             fixes_attempted.append("Created LangChain vector store on Redis DB 0")
             
@@ -482,7 +483,7 @@ class AutoBotVectorStoreAnalysis:
             
             vector_store = RedisVectorStore(
                 schema=schema,
-                redis_url="redis://localhost:6379",
+                redis_url=ServiceURLs.REDIS_LOCAL,
                 redis_kwargs={"db": 2}
             )
             fixes_attempted.append("Connected to existing vector store without overwriting")
@@ -567,7 +568,7 @@ class AutoBotVectorStoreAnalysis:
             vector_store = RedisVectorStore(
                 embeddings=embeddings,
                 index_name="autobot_langchain_test",
-                redis_url="redis://localhost:6379/0"  # Use DB 0
+                redis_url=f"{ServiceURLs.REDIS_LOCAL}/0"  # Use DB 0
             )
             fixes_attempted.append("Created vector store on Redis DB 0")
             

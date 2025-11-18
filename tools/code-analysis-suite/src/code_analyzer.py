@@ -18,9 +18,12 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from src.utils.redis_client import get_redis_client
-from src.config import config
+from src.unified_config import UnifiedConfig
 from src.multimodal_processor import MultiModalProcessor, ModalInput, ModalityType, ProcessingIntent
 
+
+# Initialize unified config
+config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
 

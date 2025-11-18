@@ -14,8 +14,11 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Any, Union
 
 from src.utils.redis_client import get_redis_client
-from src.config import config
+from src.unified_config import UnifiedConfig
 
+
+# Initialize unified config
+config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
 
