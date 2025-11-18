@@ -21,6 +21,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 from src.ai_hardware_accelerator import get_ai_accelerator, HardwareDevice, ProcessingTask, TaskComplexity
 from src.npu_semantic_search import get_npu_search_engine
 from src.utils.logging_manager import get_llm_logger
+from src.constants.network_constants import NetworkConstants
 
 logger = get_llm_logger("npu_performance_measurement")
 
@@ -29,8 +30,8 @@ class NPUPerformanceMeasurement:
     """Comprehensive NPU performance measurement and analysis."""
 
     def __init__(self):
-        self.npu_worker_url = "http://172.16.168.22:8081"
-        self.backend_url = "http://127.0.0.1:8001"
+        self.npu_worker_url = f"http://{NetworkConstants.NPU_WORKER_LINUX_VM_IP}:{NetworkConstants.NPU_WORKER_PORT}"
+        self.backend_url = f"http://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.BACKEND_PORT}"
         self.results = {}
         self.test_queries = [
             "linux file management commands",
