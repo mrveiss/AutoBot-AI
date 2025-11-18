@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 
-from src.constants.network_constants import ServiceURLs
+from src.constants.network_constants import NetworkConstants, ServiceURLs
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class PlaywrightService:
     def __init__(
         self,
         container_host: str = "localhost",
-        container_port: int = 3000,
+        container_port: int = NetworkConstants.BROWSER_SERVICE_PORT,
         timeout: int = 30,
     ):
         self.base_url = f"http://{container_host}:{container_port}"

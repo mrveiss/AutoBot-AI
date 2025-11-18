@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-BACKEND_URL="http://localhost:8001"
+BACKEND_URL="${AUTOBOT_BACKEND_URL:-http://localhost:8001}"
 MAX_WAIT_TIME=30
 EXPECTED_BRIDGES=5
 EXPECTED_MIN_TOOLS=20
