@@ -547,7 +547,8 @@ class ChatWorkflowManager:
             )
 
             if not ollama_endpoint:
-                from src.unified_config import config
+                from src.unified_config_manager import UnifiedConfigManager
+                config = UnifiedConfigManager()
                 ollama_host = config.get_host("ollama")
                 ollama_port = config.get_port("ollama")
                 ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
@@ -559,7 +560,8 @@ class ChatWorkflowManager:
                 logger.error(
                     f"Invalid endpoint URL: {ollama_endpoint}, using config-based default"
                 )
-                from src.unified_config import config
+                from src.unified_config_manager import UnifiedConfigManager
+                config = UnifiedConfigManager()
                 ollama_host = config.get_host("ollama")
                 ollama_port = config.get_port("ollama")
                 ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
@@ -568,7 +570,8 @@ class ChatWorkflowManager:
             logger.error(
                 f"Failed to load Ollama endpoint from config: {config_error}"
             )
-            from src.unified_config import config
+            from src.unified_config_manager import UnifiedConfigManager
+            config = UnifiedConfigManager()
             ollama_host = config.get_host("ollama")
             ollama_port = config.get_port("ollama")
             ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
