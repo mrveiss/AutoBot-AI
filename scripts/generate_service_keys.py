@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Generate service API keys for AutoBot distributed infrastructure
 Stores keys in Redis and creates backup configuration file

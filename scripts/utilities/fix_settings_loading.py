@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Settings Loading Fix Utility
 Helps diagnose and resolve settings loading issues in AutoBot
@@ -190,7 +193,16 @@ class SettingsLoadingFixer:
 // AutoBot Settings Fix Script
 // Run this in your browser console (F12 -> Console)
 
-console.log('🔧 AutoBot Settings Fix Script');
+// Import debugging utilities
+import {
+  log,
+  getStorageJson,
+  setStorageJson,
+  validateStorageJson,
+  runDiagnostics
+} from '../utils/debugUtils';
+
+log('info', '🔧 AutoBot Settings Fix Script loaded');
 
 // Function to reset settings to defaults
 function resetSettings() {
@@ -220,45 +232,41 @@ function resetSettings() {
         }
     };
 
-    localStorage.setItem('chat_settings', JSON.stringify(defaultSettings));
-    console.log('✅ Settings reset to defaults');
+    setStorageJson('chat_settings', defaultSettings);
+    log('info', '✅ Settings reset to defaults');
     return defaultSettings;
 }
 
 // Function to check current settings
 function checkSettings() {
-    const settings = localStorage.getItem('chat_settings');
-    if (settings) {
-        try {
-            const parsed = JSON.parse(settings);
-            console.log('📋 Current settings:', parsed);
-            return parsed;
-        } catch (e) {
-            console.error('❌ Invalid settings in localStorage:', e);
-            return null;
-        }
-    } else {
-        console.log('⚠️ No settings found in localStorage');
+    const result = validateStorageJson('chat_settings');
+
+    if (!result.isValid) {
+        log('error', '❌ Invalid settings in localStorage', result.error);
         return null;
     }
+
+    log('info', '📋 Current settings valid');
+    console.log(result.value);
+    return result.value;
 }
 
 // Function to fix common issues
 function fixCommonIssues() {
-    const settings = checkSettings();
+    const settings = getStorageJson('chat_settings', null);
 
     if (!settings) {
-        console.log('🔄 No valid settings found, resetting...');
+        log('warn', '🔄 No valid settings found, resetting...');
         resetSettings();
     } else {
         // Ensure backend endpoint is correct
         if (settings.backend && settings.backend.api_endpoint !== ServiceURLs.BACKEND_LOCAL) {
-            console.log('🔧 Fixing backend endpoint...');
+            log('info', '🔧 Fixing backend endpoint...');
             settings.backend.api_endpoint = ServiceURLs.BACKEND_LOCAL;
-            localStorage.setItem('chat_settings', JSON.stringify(settings));
+            setStorageJson('chat_settings', settings);
         }
 
-        console.log('✅ Settings validated and fixed');
+        log('info', '✅ Settings validated and fixed');
     }
 
     // Reload the page to apply changes
@@ -268,19 +276,21 @@ function fixCommonIssues() {
 }
 
 // Run diagnostics
-console.log('🔍 Running diagnostics...');
-checkSettings();
+log('info', '🔍 Running diagnostics...');
+runDiagnostics();
 
 // Provide options
 console.log('\\n📋 Available commands:');
 console.log('  resetSettings()     - Reset all settings to defaults');
 console.log('  checkSettings()     - View current settings');
 console.log('  fixCommonIssues()  - Fix common configuration issues');
+console.log('  runDiagnostics()   - Run full system diagnostics');
 console.log('\\nRun any command to proceed.');
 
 // Auto-fix if settings are missing
-if (!localStorage.getItem('chat_settings')) {
-    console.log('\\n⚠️ No settings found, auto-fixing...');
+const validation = validateStorageJson('chat_settings');
+if (!validation.isValid) {
+    log('warn', '⚠️ No valid settings found, auto-fixing...');
     fixCommonIssues();
 }
 """

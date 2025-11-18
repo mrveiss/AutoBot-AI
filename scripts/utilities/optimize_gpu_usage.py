@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Optimize GPU usage for AutoBot multi-agent system.
 Configure RTX 4070 Laptop GPU for optimal performance.

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Native NPU Worker Design for AutoBot
 Hybrid architecture: WSL2 main system + Windows NPU worker for optimal performance

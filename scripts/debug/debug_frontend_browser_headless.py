@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Frontend debugging script to run on Browser VM (headless)
 Analyzes the blank page issue on http://172.16.168.21:5173

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Index ALL Available Man Pages on AutoBot Machines
 Indexes every command with a man page for comprehensive CLI tool awareness

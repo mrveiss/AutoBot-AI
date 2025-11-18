@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Orchestrator Enhancement - Multi-Agent Workflow Engine
 Implements the missing workflow coordination logic

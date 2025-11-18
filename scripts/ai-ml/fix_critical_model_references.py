@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Quick Fix Script for Critical Model References
 Fixes immediate issues with missing model references in AutoBot codebase

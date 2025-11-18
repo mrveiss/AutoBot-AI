@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Export service keys from Redis to .env files for Ansible deployment
 Reads keys from Redis and creates individual .env files for each service

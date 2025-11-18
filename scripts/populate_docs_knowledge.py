@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Populate knowledge base with AutoBot documentation from docs/ folder.
 This script indexes all the documentation in the docs folder to make it
