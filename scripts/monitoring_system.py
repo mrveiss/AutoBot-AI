@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 
 import psutil
 
-from src.config import API_BASE_URL
+from src.unified_config import API_BASE_URL
 
 try:
     import aiohttp

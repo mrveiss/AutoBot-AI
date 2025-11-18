@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.utils.redis_client import get_redis_client
-from src.config import global_config_manager
+from src.unified_config import global_config_manager
 
 
 async def reset_knowledge_base_index():
