@@ -328,15 +328,18 @@ class SystemMonitor:
                     service_metrics["error_count"] = 1
                     logger.debug(f"Service {service_name} health check failed: {e}")
 
-            # For Redis, try connection
+            # For Redis, try connection using canonical client
             elif service_name == "redis":
                 try:
-                    r = redis.Redis(
-                        host="localhost", port=service["port"], decode_responses=True
-                    )
-                    r.ping()
-                    service_metrics["status"] = "healthy"
-                    service_metrics["success_count"] = 1
+                    # Use canonical get_redis_client() for production Redis VM
+                    r = get_redis_client(async_client=False, database="main")
+                    if r:
+                        r.ping()
+                        service_metrics["status"] = "healthy"
+                        service_metrics["success_count"] = 1
+                    else:
+                        service_metrics["status"] = "unhealthy"
+                        service_metrics["error_count"] = 1
                 except Exception:
                     service_metrics["status"] = "unhealthy"
                     service_metrics["error_count"] = 1
@@ -517,11 +520,15 @@ class SystemMonitor:
                             result["error_message"] = f"HTTP {response.status}"
 
             elif check["service"] == "redis" and check["endpoint"] == "ping":
-                # Redis health check
-                r = redis.Redis(host="localhost", port=6379, decode_responses=True)
-                r.ping()
-                result["response_time_ms"] = (time.time() - start_time) * 1000
-                result["status"] = "healthy"
+                # Redis health check - use canonical client for central Redis VM
+                r = get_redis_client(async_client=False, database="main")
+                if r:
+                    r.ping()
+                    result["response_time_ms"] = (time.time() - start_time) * 1000
+                    result["status"] = "healthy"
+                else:
+                    result["status"] = "unhealthy"
+                    result["error_message"] = "Failed to get Redis client"
 
         except asyncio.TimeoutError:
             result["status"] = "timeout"
