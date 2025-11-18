@@ -6,12 +6,15 @@
 // Use Node.js 18+ native fetch
 const fetch = globalThis.fetch;
 
+// Backend API configuration (matches NetworkConstants.BACKEND_PORT = 8001)
+const BACKEND_URL = 'http://localhost:8001';
+
 async function testWorkflowEndpoint() {
   console.log('🔍 Testing workflow endpoint from frontend perspective...');
 
   try {
     // Test the exact request the frontend makes
-    const response = await fetch('http://localhost:8001/api/workflow/execute', {
+    const response = await fetch(`${BACKEND_URL}/api/workflow/execute`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -54,7 +57,7 @@ async function testSimpleMessage() {
   console.log('\n🔍 Testing simple message (should use direct execution)...');
 
   try {
-    const response = await fetch('http://localhost:8001/api/workflow/execute', {
+    const response = await fetch(`${BACKEND_URL}/api/workflow/execute`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -86,7 +89,7 @@ async function testChatEndpoint() {
   console.log('\n🔍 Testing traditional chat endpoint...');
 
   try {
-    const response = await fetch('http://localhost:8001/api/chat', {
+    const response = await fetch(`${BACKEND_URL}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
