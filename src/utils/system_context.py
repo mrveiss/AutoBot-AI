@@ -12,6 +12,7 @@ import socket
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from src.constants.network_constants import NetworkConstants
 from src.utils.logging_manager import get_logger
 
 # Get centralized logger
@@ -93,8 +94,8 @@ def get_local_ip() -> str:
             # Try getting IP from network interfaces
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             try:
-                # Connect to local network address (doesn't actually send data)
-                s.connect(("10.255.255.255", 1))
+                # Connect to dummy address to let OS choose route (doesn't actually send data)
+                s.connect((NetworkConstants.DUMMY_ROUTE_IP, 1))
                 ip = s.getsockname()[0]
             finally:
                 s.close()

@@ -442,7 +442,8 @@ def configure_testing_defaults():
             _get_config_default("default_port", str(NetworkConstants.AI_STACK_PORT)),
         ),
         "host": os.getenv(
-            "AUTOBOT_AI_STACK_HOST", _get_config_default("default_host", "127.0.0.1")
+            "AUTOBOT_AI_STACK_HOST",
+            _get_config_default("default_host", NetworkConstants.AI_STACK_VM_IP),
         ),
         "url": get_service_url("ai-stack"),
         "email": os.getenv(
