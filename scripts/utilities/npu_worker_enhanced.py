@@ -21,6 +21,7 @@ import uvicorn
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+from src.constants.network_constants import NetworkConstants
 from src.utils.redis_client import get_redis_client
 
 # Configure logging
@@ -895,8 +896,8 @@ def main():
     parser = argparse.ArgumentParser(description="AutoBot Enhanced NPU Worker")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
     parser.add_argument("--port", default=8081, type=int, help="Port to bind to")
-    parser.add_argument("--redis-host", default="172.16.168.23", help="Redis host")
-    parser.add_argument("--redis-port", default=6379, type=int, help="Redis port")
+    parser.add_argument("--redis-host", default=NetworkConstants.REDIS_HOST, help="Redis host")
+    parser.add_argument("--redis-port", default=NetworkConstants.REDIS_PORT, type=int, help="Redis port")
     args = parser.parse_args()
 
     # Create enhanced NPU worker
