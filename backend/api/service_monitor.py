@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import unified configuration system - NO HARDCODED VALUES
-from src.config_helper import cfg
+from src.unified_config import config
 from src.constants.network_constants import NetworkConstants, ServiceURLs
 from src.constants.path_constants import PATH
 
@@ -79,11 +79,11 @@ class ServiceMonitor:
             start_time = time.time()
 
             timeout = aiohttp.ClientTimeout(
-                total=cfg.get_timeout("http", "standard"),
-                connect=cfg.get_timeout("tcp", "connect"),
+                total=config.get_timeout("http", "standard"),
+                connect=config.get_timeout("tcp", "connect"),
             )
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                backend_url = cfg.get_service_url("backend", "/api/health")
+                backend_url = config.get_service_url("backend", "/api/health")
                 async with session.get(backend_url) as response:
                     response_time = int((time.time() - start_time) * 1000)
 
@@ -198,11 +198,11 @@ class ServiceMonitor:
             try:
                 start_time = time.time()
                 timeout = aiohttp.ClientTimeout(
-                    total=cfg.get_timeout("http", "long"),
-                    connect=cfg.get_timeout("tcp", "connect"),
+                    total=config.get_timeout("http", "long"),
+                    connect=config.get_timeout("tcp", "connect"),
                 )
                 async with aiohttp.ClientSession(timeout=timeout) as session:
-                    llm_url = cfg.get_service_url(
+                    llm_url = config.get_service_url(
                         "backend", "/api/llm/status/comprehensive"
                     )
                     async with session.get(llm_url) as response:
@@ -268,11 +268,11 @@ class ServiceMonitor:
             start_time = time.time()
 
             # Use configuration system for knowledge base URL
-            kb_url = cfg.get_service_url("backend", "/api/knowledge_base/stats/basic")
+            kb_url = config.get_service_url("backend", "/api/knowledge_base/stats/basic")
 
             timeout = aiohttp.ClientTimeout(
-                total=cfg.get_timeout("knowledge_base", "search"),
-                connect=cfg.get_timeout("tcp", "connect"),
+                total=config.get_timeout("knowledge_base", "search"),
+                connect=config.get_timeout("tcp", "connect"),
             )
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(kb_url) as response:
@@ -506,7 +506,7 @@ class ServiceMonitor:
         """Check status of all VMs in the infrastructure"""
         try:
             # Get VM definitions from config
-            vm_hosts = cfg.get("infrastructure.hosts", {})
+            vm_hosts = config.get("infrastructure.hosts", {})
 
             # Filter out localhost/main machine entries
             remote_vms = {
@@ -928,7 +928,7 @@ async def get_vm_status():
 async def get_single_vm_status(vm_name: str):
     """Get status of a specific VM"""
     # Get VM definitions from config
-    vm_hosts = cfg.get("infrastructure.hosts", {})
+    vm_hosts = config.get("infrastructure.hosts", {})
 
     if vm_name not in vm_hosts:
         raise HTTPException(
@@ -965,7 +965,7 @@ async def get_single_vm_status(vm_name: str):
 async def debug_vm_config():
     """Debug endpoint to check VM configuration"""
     try:
-        vm_hosts = cfg.get("infrastructure.hosts", {})
+        vm_hosts = config.get("infrastructure.hosts", {})
         return {
             "config_available": True,
             "vm_hosts": vm_hosts,
