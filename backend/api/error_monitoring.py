@@ -14,7 +14,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel
 
-from src.unified_config import config
+from src.unified_config_manager import UnifiedConfigManager
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import (
     ErrorCategory,
@@ -23,6 +23,9 @@ from src.utils.error_boundaries import (
     with_error_handling,
 )
 from src.utils.error_metrics import get_metrics_collector
+
+# Create singleton config instance
+config = UnifiedConfigManager()
 
 # Add project root to path for imports
 # Add project root to path for imports
