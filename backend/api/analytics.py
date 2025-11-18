@@ -21,7 +21,7 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.unified_config import config
+from src.unified_config_manager import UnifiedConfigManager
 from src.constants import PATH
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -30,6 +30,9 @@ from src.utils.system_metrics import get_metrics_collector
 
 # Import existing monitoring infrastructure
 from .monitoring import hardware_monitor
+
+# Create singleton config instance
+config = UnifiedConfigManager()
 
 
 # Simple service address function using configuration
