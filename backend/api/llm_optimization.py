@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.config_helper import cfg
+from src.unified_config import config
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.model_optimizer import TaskComplexity, TaskRequest, get_model_optimizer
@@ -518,12 +518,12 @@ async def get_system_resources():
 async def get_optimization_config():
     """Get current optimization configuration"""
     try:
-        config = {
-            "performance_threshold": cfg.get(
+        optimization_config = {
+            "performance_threshold": config.get(
                 "llm.optimization.performance_threshold", 0.8
             ),
-            "cache_ttl": cfg.get("llm.optimization.cache_ttl", 3600),
-            "min_samples": cfg.get("llm.optimization.min_samples", 5),
+            "cache_ttl": config.get("llm.optimization.cache_ttl", 3600),
+            "min_samples": config.get("llm.optimization.min_samples", 5),
             "model_classification": {
                 "lightweight_threshold": "< 2B parameters",
                 "standard_range": "2-8B parameters",
@@ -539,7 +539,7 @@ async def get_optimization_config():
             ],
         }
 
-        return config
+        return optimization_config
 
     except Exception as e:
         logger.error(f"Error getting optimization config: {e}")
