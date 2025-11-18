@@ -11,8 +11,11 @@ from backend.utils.connection_utils import ConnectionTester, ModelManager
 from src.constants.network_constants import NetworkConstants
 
 # Import unified configuration system - NO HARDCODED VALUES
-from src.unified_config import config
+from src.unified_config_manager import UnifiedConfigManager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+
+# Create singleton config instance
+config = UnifiedConfigManager()
 
 router = APIRouter()
 
