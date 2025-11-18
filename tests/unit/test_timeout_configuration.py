@@ -11,16 +11,16 @@ Validates:
 
 import os
 import pytest
-from src.unified_config import UnifiedConfig
+from src.unified_config_manager import UnifiedConfigManager
 from src.utils.knowledge_base_timeouts import KnowledgeBaseTimeouts
 
 
 class TestUnifiedConfigTimeouts:
-    """Test UnifiedConfig timeout methods"""
+    """Test UnifiedConfigManager timeout methods"""
 
     def setup_method(self):
         """Setup for each test"""
-        self.config = UnifiedConfig()
+        self.config = UnifiedConfigManager()
 
     def test_get_timeout_for_env_production(self):
         """Test environment-specific timeout retrieval for production"""
@@ -142,7 +142,7 @@ class TestKnowledgeBaseTimeouts:
     def test_redis_connection_timeouts(self):
         """Test Redis connection timeout properties"""
         kb_timeouts = KnowledgeBaseTimeouts()
-        config = UnifiedConfig()
+        config = UnifiedConfigManager()
 
         expected_socket_timeout = config.get('timeouts.redis.connection.socket_timeout')
         expected_socket_connect = config.get('timeouts.redis.connection.socket_connect')
@@ -153,7 +153,7 @@ class TestKnowledgeBaseTimeouts:
     def test_redis_operation_timeouts(self):
         """Test Redis operation timeout properties"""
         kb_timeouts = KnowledgeBaseTimeouts()
-        config = UnifiedConfig()
+        config = UnifiedConfigManager()
 
         # Production environment is default, so check for overrides
         expected_get = config.get_timeout_for_env('redis.operations', 'get', 'production')
@@ -171,7 +171,7 @@ class TestKnowledgeBaseTimeouts:
     def test_llamaindex_timeouts(self):
         """Test LlamaIndex timeout properties"""
         kb_timeouts = KnowledgeBaseTimeouts()
-        config = UnifiedConfig()
+        config = UnifiedConfigManager()
 
         # Read expected values from configuration
         expected_embedding = config.get('timeouts.llamaindex.embedding.generation')
@@ -189,7 +189,7 @@ class TestKnowledgeBaseTimeouts:
     def test_document_timeouts(self):
         """Test document operation timeout properties"""
         kb_timeouts = KnowledgeBaseTimeouts()
-        config = UnifiedConfig()
+        config = UnifiedConfigManager()
 
         expected_add = config.get('timeouts.documents.operations.add_document')
         expected_batch = config.get('timeouts.documents.operations.batch_upload')
@@ -202,7 +202,7 @@ class TestKnowledgeBaseTimeouts:
     def test_llm_timeouts(self):
         """Test LLM timeout properties"""
         kb_timeouts = KnowledgeBaseTimeouts()
-        config = UnifiedConfig()
+        config = UnifiedConfigManager()
 
         expected_default = config.get('timeouts.llm.default')
         expected_fast = config.get('timeouts.llm.fast')
@@ -214,7 +214,7 @@ class TestKnowledgeBaseTimeouts:
         """Test that accessor respects production environment"""
         os.environ['AUTOBOT_ENVIRONMENT'] = 'production'
         kb_timeouts = KnowledgeBaseTimeouts()
-        config = UnifiedConfig()
+        config = UnifiedConfigManager()
 
         # Production should have tighter timeouts (read from config)
         expected_redis_get = config.get_timeout_for_env('redis.operations', 'get', 'production')
@@ -227,7 +227,7 @@ class TestKnowledgeBaseTimeouts:
         """Test that accessor respects development environment"""
         os.environ['AUTOBOT_ENVIRONMENT'] = 'development'
         kb_timeouts = KnowledgeBaseTimeouts()
-        config = UnifiedConfig()
+        config = UnifiedConfigManager()
 
         # Development should have more lenient timeouts (read from config)
         expected_scan_iter = config.get_timeout_for_env('redis.operations', 'scan_iter', 'development')
