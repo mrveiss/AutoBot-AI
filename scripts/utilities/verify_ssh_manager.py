@@ -13,6 +13,8 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+from src.constants.network_constants import NetworkConstants
+
 
 async def verify_installation():
     """Verify SSH Manager installation"""
@@ -178,7 +180,7 @@ async def verify_installation():
     print()
     print("Next steps:")
     print("1. Ensure SSH key is copied to all target hosts:")
-    print("   for host in 172.16.168.{20..25}; do")
+    print(f"   for host in {NetworkConstants.MAIN_MACHINE_IP.rsplit('.', 1)[0]}.{{20..25}}; do")
     print("       ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@$host")
     print("   done")
     print()
@@ -192,7 +194,7 @@ async def verify_installation():
     print("   bash run_autobot.sh --dev")
     print()
     print("5. Test API endpoint:")
-    print("   curl http://172.16.168.20:8001/api/remote-terminal/")
+    print(f"   curl http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/api/remote-terminal/")
     print()
 
     return True
