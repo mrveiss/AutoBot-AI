@@ -8,32 +8,26 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import redis
 import logging
 
 logging.basicConfig(level=logging.INFO)
+
+# Import canonical Redis client utility
+from src.utils.redis_client import get_redis_client
 
 async def main():
     try:
         print("🚚 Migrating vectors from database 1 to database 0...")
 
-        # Connect to both databases
-        redis_db0 = redis.Redis(
-            host="172.16.168.23",
-            port=6379,
-            db=0,  # Target database (supports search indexes)
-            decode_responses=False,  # Keep binary data intact
-            socket_timeout=10,
-            socket_connect_timeout=10,
+        # Connect to both databases using canonical pattern
+        redis_db0 = get_redis_client(
+            database="main",  # Target database (supports search indexes)
+            async_client=False
         )
 
-        redis_db1 = redis.Redis(
-            host="172.16.168.23",
-            port=6379,
-            db=1,  # Source database (has the vectors)
-            decode_responses=False,  # Keep binary data intact
-            socket_timeout=10,
-            socket_connect_timeout=10,
+        redis_db1 = get_redis_client(
+            database="knowledge",  # Source database (has the vectors)
+            async_client=False
         )
 
         # Test connections

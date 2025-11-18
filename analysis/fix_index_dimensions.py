@@ -8,24 +8,19 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import redis
 import logging
 
 logging.basicConfig(level=logging.INFO)
+
+# Import canonical Redis client utility
+from src.utils.redis_client import get_redis_client
 
 async def main():
     try:
         print("🔧 Fixing Redis index dimensions to match existing vectors...")
 
-        # Connect to Redis
-        redis_client = redis.Redis(
-            host="172.16.168.23",
-            port=6379,
-            db=1,
-            decode_responses=True,
-            socket_timeout=5,
-            socket_connect_timeout=5,
-        )
+        # Connect to Redis using canonical pattern
+        redis_client = get_redis_client(database="knowledge", async_client=False)
 
         # Test connection
         print(f"✅ Connected to Redis: {redis_client.ping()}")
