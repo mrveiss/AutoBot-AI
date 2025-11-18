@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Optimize agent configuration files by removing redundant sections.
 Reduces token consumption while preserving critical policies.

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Integrate System Knowledge into Knowledge Base V2
 Populates man pages and AutoBot documentation into the searchable knowledge base

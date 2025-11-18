@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Comprehensive analysis of Redis vector store options for AutoBot.
 Tests both LangChain and LlamaIndex with proper configuration.

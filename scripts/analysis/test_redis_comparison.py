@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Test script to compare LangChain vs LlamaIndex Redis vector store integrations
 for the AutoBot project's existing Redis data.

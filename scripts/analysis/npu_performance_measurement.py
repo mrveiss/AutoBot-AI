@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 NPU Performance Measurement and Analysis for AutoBot
 Comprehensive testing and benchmarking of NPU semantic search acceleration

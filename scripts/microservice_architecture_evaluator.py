@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Microservice Architecture Evaluator for AutoBot
 Analyzes the current monolithic structure and provides recommendations for microservice decomposition

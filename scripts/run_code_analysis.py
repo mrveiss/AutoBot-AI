@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 Code Analysis Integration Script for AutoBot Analytics
 Runs various code analysis tools and outputs results in JSON format
