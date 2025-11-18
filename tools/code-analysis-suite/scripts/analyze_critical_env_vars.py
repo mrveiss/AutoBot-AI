@@ -8,6 +8,8 @@ import re
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
 
+from src.constants.network_constants import NetworkConstants
+
 
 class CriticalEnvAnalyzer:
     """Focused analyzer for critical hardcoded values"""
@@ -217,7 +219,7 @@ async def main():
         ('AUTOBOT_REDIS_PORT', '6379', 'Redis server port'),
         ('AUTOBOT_BACKEND_PORT', '8001', 'Backend API port'),
         ('AUTOBOT_FRONTEND_PORT', '5173', 'Frontend dev server port'),
-        ('AUTOBOT_API_BASE_URL', 'http://localhost:8001', 'Backend API base URL'),
+        ('AUTOBOT_API_BASE_URL', f'http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}', 'Backend API base URL'),
         ('AUTOBOT_LOG_FILE', 'logs/autobot.log', 'Main log file path'),
         ('AUTOBOT_TIMEOUT', '30', 'Default operation timeout (seconds)'),
     ]
