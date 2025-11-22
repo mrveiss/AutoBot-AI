@@ -87,7 +87,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to fetch stats: No response from server');
       }
 
-      const data = await parseApiResponse<KnowledgeStatsResponse>(response)
+      const data = await parseApiResponse(response)
       return data as KnowledgeStats
     } catch (error) {
       console.error('Error fetching stats:', error)
@@ -106,7 +106,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to fetch category: No response from server');
       }
 
-      const data = await parseApiResponse<CategoryResponse>(response)
+      const data = await parseApiResponse(response)
       return data
     } catch (error) {
       console.error('Error fetching category:', error)
@@ -125,7 +125,7 @@ export function useKnowledgeBase() {
         throw new Error('Search failed: No response from server');
       }
 
-      const data = await parseApiResponse<SearchResponse>(response)
+      const data = await parseApiResponse(response)
       return data
     } catch (error) {
       console.error('Error searching knowledge:', error)
@@ -148,7 +148,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to add fact: No response from server');
       }
 
-      const data = await parseApiResponse<AddFactResponse>(response)
+      const data = await parseApiResponse(response)
       return data
     } catch (error) {
       console.error('Error adding fact:', error)
@@ -175,7 +175,7 @@ export function useKnowledgeBase() {
         throw new Error(`Upload failed: ${response.status} ${response.statusText}`)
       }
 
-      const data = await parseApiResponse<UploadResponse>(response)
+      const data = await parseApiResponse(response)
       return data
     } catch (error) {
       console.error('Error uploading file:', error)
@@ -194,7 +194,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to fetch machine profiles: No response from server');
       }
 
-      const data = await parseApiResponse<MachineProfileResponse[]>(response)
+      const data = await parseApiResponse(response)
       return Array.isArray(data) ? data : []
     } catch (error) {
       console.error('Error fetching machine profiles:', error)
@@ -213,7 +213,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to fetch man pages summary: No response from server');
       }
 
-      const data = await parseApiResponse<ManPagesSummaryResponse>(response)
+      const data = await parseApiResponse(response)
       return data
     } catch (error) {
       console.error('Error fetching man pages summary:', error)
@@ -234,7 +234,7 @@ export function useKnowledgeBase() {
         throw new Error('Integration failed: No response from server');
       }
 
-      const data = await parseApiResponse<IntegrationResponse>(response)
+      const data = await parseApiResponse(response)
       return data
     } catch (error) {
       console.error('Error integrating man pages:', error)
@@ -253,7 +253,7 @@ export function useKnowledgeBase() {
         throw new Error('Failed to get vectorization status: No response from server');
       }
 
-      const data = await parseApiResponse<VectorizationStatusResponse>(response)
+      const data = await parseApiResponse(response)
       return data
     } catch (error) {
       console.error('Error getting vectorization status:', error)
@@ -293,7 +293,7 @@ export function useKnowledgeBase() {
       }
 
       // Parse successful response
-      const data = await parseApiResponse<VectorizationResponse>(response)
+      const data = await parseApiResponse(response)
 
       return data
     } catch (error) {
@@ -329,7 +329,7 @@ export function useKnowledgeBase() {
         throw new Error('Machine knowledge initialization failed: No response from server');
       }
 
-      const data = await parseApiResponse<MachineKnowledgeResponse>(response)
+      const data = await parseApiResponse(response)
       return data
     } catch (error) {
       console.error('[initializeMachineKnowledge] Error:', error)
@@ -358,7 +358,7 @@ export function useKnowledgeBase() {
         throw new Error('System knowledge refresh failed: No response from server');
       }
 
-      const data = await parseApiResponse<SystemKnowledgeResponse>(response)
+      const data = await parseApiResponse(response)
       return data
     } catch (error) {
       console.error('[refreshSystemKnowledge] Error:', error)
@@ -386,7 +386,7 @@ export function useKnowledgeBase() {
         throw new Error('Job status check failed: No response from server');
       }
 
-      const data = await parseApiResponse<any>(response)
+      const data = await parseApiResponse(response)
       return data
     } catch (error) {
       console.error('[pollJobStatus] Error:', error)
@@ -415,7 +415,7 @@ export function useKnowledgeBase() {
         throw new Error('Man pages population failed: No response from server');
       }
 
-      const data = await parseApiResponse<ManPagesPopulateResponse>(response)
+      const data = await parseApiResponse(response)
       return data
     } catch (error) {
       console.error('[populateManPages] Error:', error)
@@ -442,7 +442,7 @@ export function useKnowledgeBase() {
         throw new Error('AutoBot docs population failed: No response from server');
       }
 
-      const data = await parseApiResponse<AutoBotDocsResponse>(response)
+      const data = await parseApiResponse(response)
       return data
     } catch (error) {
       console.error('[populateAutoBotDocs] Error:', error)
@@ -471,7 +471,7 @@ export function useKnowledgeBase() {
         throw new Error('Machine profile fetch failed: No response from server');
       }
 
-      const data = await parseApiResponse<MachineProfileResponse>(response)
+      const data = await parseApiResponse(response)
       return data as MachineProfile
     } catch (error) {
       console.error('[fetchMachineProfile] Error:', error)
@@ -498,7 +498,7 @@ export function useKnowledgeBase() {
         throw new Error('Basic stats fetch failed: No response from server');
       }
 
-      const data = await parseApiResponse<BasicStatsResponse>(response)
+      const data = await parseApiResponse(response)
       return data as KnowledgeStats
     } catch (error) {
       console.error('[fetchBasicStats] Error:', error)
