@@ -6,7 +6,7 @@
  */
 
 import { vi } from 'vitest'
-from src.constants import NetworkConstants, ServiceURLs
+import { NetworkConstants, ServiceURLs } from '@/constants/network-constants.js'
 
 // Test environment configuration
 export const TEST_CONFIG = {
@@ -153,8 +153,8 @@ const getMockResponseData = (endpoint: string, method: string) => {
             message_retention_days: 30,
           },
           backend: {
-            host: 'localhost',
-            port: 8001,
+            host: NetworkConstants.LOCALHOST_NAME,
+            port: NetworkConstants.BACKEND_PORT,
             timeout: 30000,
           },
           ui: {

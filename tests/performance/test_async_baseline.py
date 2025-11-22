@@ -33,6 +33,10 @@ from typing import List, Dict, Any, Tuple
 from dataclasses import dataclass, asdict
 import logging
 
+# Import canonical Redis client pattern
+from src.utils.redis_client import get_redis_client
+from src.constants.network_constants import NetworkConstants, DatabaseConstants
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -232,13 +236,10 @@ class AsyncBaselineTest:
 
         start_time = time.perf_counter()
 
-        # Create async Redis connection
-        redis_client = await aioredis.from_url(
-            f"redis://{self.redis_host}:{self.redis_port}/4",  # Metrics DB
-            encoding="utf-8",
-            decode_responses=True,
-            socket_timeout=5.0,
-            socket_connect_timeout=5.0
+        # Create async Redis connection using canonical pattern
+        redis_client = await get_redis_client(
+            async_client=True,
+            database="metrics"  # METRICS_DB
         )
 
         try:
@@ -334,12 +335,10 @@ class AsyncBaselineTest:
 
         start_time = time.perf_counter()
 
-        # Create async Redis connection
-        redis_client = await aioredis.from_url(
-            f"redis://{self.redis_host}:{self.redis_port}/4",
-            encoding="utf-8",
-            decode_responses=True,
-            socket_timeout=5.0
+        # Create async Redis connection using canonical pattern
+        redis_client = await get_redis_client(
+            async_client=True,
+            database="metrics"  # METRICS_DB
         )
 
         try:
@@ -401,10 +400,10 @@ class AsyncBaselineTest:
             """Test single VM endpoint"""
             try:
                 if vm_name == "redis":
-                    # Special handling for Redis (not HTTP)
-                    redis_client = await aioredis.from_url(
-                        f"redis://{endpoint}",
-                        socket_timeout=5.0
+                    # Special handling for Redis (not HTTP) using canonical pattern
+                    redis_client = await get_redis_client(
+                        async_client=True,
+                        database="main"  # MAIN_DB (default DB 0)
                     )
                     try:
                         start = time.perf_counter()
