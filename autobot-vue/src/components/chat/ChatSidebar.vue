@@ -421,7 +421,8 @@ const deleteSession = async (sessionId: string) => {
 
   try {
     const response = await ApiClient.get(`/api/conversation-files/conversation/${sessionId}/list`)
-    deleteFileStats.value = response.data?.stats || null
+    const data = await response.json()
+    deleteFileStats.value = data?.stats || null
   } catch (error) {
     console.warn('Failed to fetch file stats, proceeding without file info:', error)
     deleteFileStats.value = null
@@ -474,17 +475,18 @@ const reloadSystem = async () => {
   try {
     // Call real system reload API
     const response = await ApiClient.post('/api/system/reload_config')
+    const data = await response.json()
 
-    if (response.data && response.data.success) {
+    if (data && data.success) {
       systemStatus.value = 'Ready'
 
       // Log reloaded components for debugging
-      if (response.data.reloaded_components) {
-        console.log('Reloaded components:', response.data.reloaded_components)
+      if (data.reloaded_components) {
+        console.log('Reloaded components:', data.reloaded_components)
       }
     } else {
       systemStatus.value = 'Error'
-      console.error('System reload failed:', response.data?.message || 'Unknown error')
+      console.error('System reload failed:', data?.message || 'Unknown error')
     }
   } catch (error) {
     systemStatus.value = 'Error'
