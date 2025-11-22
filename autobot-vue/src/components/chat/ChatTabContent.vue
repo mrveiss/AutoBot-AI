@@ -11,7 +11,7 @@
     <!-- Files Tab Content -->
     <div v-else-if="activeTab === 'files'" class="flex-1 flex flex-col min-h-0">
       <FileBrowser
-        :key="currentSessionId"
+        :key="currentSessionId || 'default'"
         :chat-context="true"
         class="flex-1"
       />
@@ -25,7 +25,7 @@
     <!-- Browser Tab Content -->
     <div v-else-if="activeTab === 'browser'" class="flex-1 flex flex-col min-h-0">
       <PopoutChromiumBrowser
-        :key="currentSessionId"
+        :key="currentSessionId || 'default'"
         :session-id="currentSessionId || 'chat-browser'"
         :chat-context="true"
         class="flex-1"
