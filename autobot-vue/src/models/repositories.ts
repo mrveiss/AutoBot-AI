@@ -4,11 +4,15 @@
  */
 
 import { NetworkConstants } from '@/constants/network-constants.js'
+import type { SearchResult } from '@/stores/useKnowledgeStore'
 
 const API_BASE = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}/api`
 
 // Re-export chatRepository from its dedicated file
 export { chatRepository } from './repositories/ChatRepository'
+
+// Re-export SearchResult from store for convenience
+export type { SearchResult }
 
 // Response Types
 export interface KnowledgeDocument {
@@ -21,7 +25,8 @@ export interface KnowledgeDocument {
   tags?: string[]
 }
 
-export interface SearchResult {
+// Raw backend search result (before transformation)
+export interface BackendSearchResult {
   content: string
   score: number
   metadata: {
@@ -59,6 +64,11 @@ export interface SearchParams {
   use_rag?: boolean
   category?: string
   type?: string
+  filters?: {
+    categories?: string[]
+    tags?: string[]
+    types?: string[]
+  }
 }
 
 export interface RagSearchParams {
@@ -277,6 +287,96 @@ export class KnowledgeRepository {
       entries: data.entries || [],
       total: data.total || data.entries?.length || 0
     }
+  }
+
+  /**
+   * Get detailed knowledge base statistics
+   * Returns comprehensive stats including documents by type and recent additions
+   */
+  async getDetailedKnowledgeStats(): Promise<any> {
+    const response = await fetch(`${this.baseUrl}/detailed_stats`)
+
+    if (!response.ok) {
+      throw new Error(`Failed to get detailed stats: ${response.statusText}`)
+    }
+
+    return response.json()
+  }
+
+  /**
+   * Export knowledge base
+   * Returns knowledge base data as a downloadable file
+   */
+  async exportKnowledge(): Promise<Blob> {
+    const response = await fetch(`${this.baseUrl}/export`)
+
+    if (!response.ok) {
+      throw new Error(`Export failed: ${response.statusText}`)
+    }
+
+    return response.blob()
+  }
+
+  /**
+   * Cleanup knowledge base
+   * Removes orphaned entries and optimizes storage
+   */
+  async cleanupKnowledge(): Promise<any> {
+    const response = await fetch(`${this.baseUrl}/cleanup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+
+    if (!response.ok) {
+      throw new Error(`Cleanup failed: ${response.statusText}`)
+    }
+
+    return response.json()
+  }
+
+  /**
+   * Reindex knowledge base
+   * Rebuilds search indexes for improved performance
+   */
+  async reindexKnowledgeBase(): Promise<any> {
+    const response = await fetch(`${this.baseUrl}/reindex`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+
+    if (!response.ok) {
+      throw new Error(`Reindex failed: ${response.statusText}`)
+    }
+
+    return response.json()
+  }
+
+  /**
+   * Get similar documents
+   * Finds documents similar to the specified document
+   */
+  async getSimilarDocuments(documentId: string, limit: number = 5): Promise<SearchResult[]> {
+    const response = await fetch(`${this.baseUrl}/documents/${documentId}/similar?limit=${limit}`)
+
+    if (!response.ok) {
+      throw new Error(`Failed to get similar documents: ${response.statusText}`)
+    }
+
+    const data = await response.json()
+
+    // Transform results to match expected format
+    return data.results?.map((result: any) => ({
+      document: {
+        id: result.metadata?.fact_id || result.id,
+        title: result.metadata?.title || 'Untitled',
+        content: result.content,
+        type: result.metadata?.type || 'text',
+        category: result.metadata?.category || 'general',
+        updatedAt: result.metadata?.stored_at
+      },
+      score: result.score || 0,
+      highlights: [result.content?.substring(0, 200) + '...' || '']
+    })) || []
   }
 }
 
