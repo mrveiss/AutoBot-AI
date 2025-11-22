@@ -10,7 +10,7 @@ This document contains development guidelines, project setup instructions, and a
 
 ### **Every Task Must:**
 
-1. **Link to GitHub Issue/Task** - ALL work must be tied to a GitHub issue or task (MANDATORY)
+1. **Link to GitHub Issue/Task** - ALL work must be tied to a GitHub issue in https://github.com/mrveiss/AutoBot-AI (MANDATORY)
 2. **Create TodoWrite** to track progress (MANDATORY)
 3. **Search Memory MCP** for similar past work: `mcp__memory__search_nodes`
 4. **Break down into subtasks** - Execute every task as smaller, manageable subtasks (MANDATORY)
@@ -22,7 +22,7 @@ This document contains development guidelines, project setup instructions, and a
 
 **Before proceeding, verify:**
 
-- ❓ **Is this work tied to a GitHub issue/task?** → If NO: Create issue first or link to existing
+- ❓ **Is this work tied to a GitHub issue in https://github.com/mrveiss/AutoBot-AI?** → If NO: Create issue first or link to existing
 - ❓ **Did I create TodoWrite?** → If NO: Create it now
 - ❓ **Did I break down the task into subtasks?** → If NO: Break it down now
 - ❓ **Am I working alone on complex tasks?** → If YES: Delegate to agents
@@ -287,6 +287,8 @@ After consolidation:
 
 **⚠️ MANDATORY RULE: ALL WORK MUST BE TIED TO GITHUB ISSUE OR TASK**
 
+**📍 Repository: https://github.com/mrveiss/AutoBot-AI**
+
 ### **The Traceability Principle:**
 
 Every task, change, feature, or fix MUST be linked to a GitHub issue or task for:
@@ -298,10 +300,10 @@ Every task, change, feature, or fix MUST be linked to a GitHub issue or task for
 ### **✅ CORRECT Workflow:**
 
 ```bash
-# Step 1: Check for existing issue
+# Step 1: Check for existing issue in https://github.com/mrveiss/AutoBot-AI
 - Search GitHub issues for related work
 - If exists: Link to it
-- If not: Create new issue
+- If not: Create new issue in the repository
 
 # Step 2: Reference in work
 - Mention issue number in commits: "feat: Add config consolidation (#123)"
@@ -356,7 +358,7 @@ docs(api): Update configuration documentation (#159)
 - Issue MUST be created within same work session
 - Reference issue in follow-up commit
 
-**IF YOU START WORK WITHOUT AN ISSUE → CREATE ONE IMMEDIATELY**
+**IF YOU START WORK WITHOUT AN ISSUE → CREATE ONE IMMEDIATELY IN https://github.com/mrveiss/AutoBot-AI**
 
 **THIS POLICY ENSURES COMPLETE PROJECT TRACEABILITY AND TEAM COORDINATION**
 
@@ -840,7 +842,7 @@ Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
 | Policy | Rule |
 |--------|------|
 | **Code Ownership** | ✅ MANDATORY - mrveiss is SOLE OWNER and AUTHOR of ALL code (UNBREAKABLE) |
-| **GitHub Issue Tracking** | ✅ MANDATORY - ALL work must be tied to GitHub issue/task |
+| **GitHub Issue Tracking** | ✅ MANDATORY - ALL work must be tied to GitHub issue/task in https://github.com/mrveiss/AutoBot-AI |
 | **Temporary Fixes** | ❌ NEVER - Always fix root causes (NO EXCEPTIONS) |
 | **File Naming** | ❌ FORBIDDEN - No _fix, _v2, _optimized, _new, _temp suffixes |
 | **Consolidation** | ✅ MANDATORY - Preserve ALL features, choose BEST implementation |
@@ -858,7 +860,7 @@ Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
 ### **Workflow Violations - Self Check**
 
 **During work:**
-- Is this work tied to a GitHub issue/task? ✓
+- Is this work tied to a GitHub issue in https://github.com/mrveiss/AutoBot-AI? ✓
 - Did I create TodoWrite? ✓
 - Did I break down task into subtasks? ✓
 - Did I search Memory MCP? ✓
