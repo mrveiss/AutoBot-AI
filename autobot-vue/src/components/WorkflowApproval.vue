@@ -240,7 +240,7 @@ const refreshInterval = ref<number | null>(null)
 const loadWorkflows = async () => {
   try {
     loading.value = true
-    const response = await apiService.get('/api/workflow/workflows')
+    const response = await apiService.get('/api/workflow/workflows') as { workflows?: any[] }
     workflows.value = response.workflows || []
   } catch (error) {
     console.error('Failed to load workflows:', error)
