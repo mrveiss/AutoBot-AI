@@ -100,12 +100,16 @@ class ConversationContextAnalyzer:
             ConversationContext with analyzed signals
         """
         if not conversation_history:
+            # Even with empty history, check current message for confusion signals
+            has_confusion_signals = self._has_confusion_signals(current_message)
+            engagement_level = self._assess_engagement([], current_message)
+
             return ConversationContext(
                 message_count=0,
                 has_recent_question=False,
                 has_active_task=False,
-                has_confusion_signals=False,
-                user_engagement_level="low",
+                has_confusion_signals=has_confusion_signals,
+                user_engagement_level=engagement_level,
                 last_assistant_message=None,
                 conversation_topic=None,
             )
@@ -190,10 +194,6 @@ class ConversationContextAnalyzer:
 
         Returns: "low", "medium", or "high"
         """
-        # Short conversation = low engagement
-        if len(conversation_history) < 3:
-            return "low"
-
         # Very short message = potentially low engagement
         if len(current_message.split()) <= 3:
             return "low"
@@ -208,6 +208,10 @@ class ConversationContextAnalyzer:
             for word in ["how", "what", "why", "create", "make", "build"]
         ):
             return "high"
+
+        # Short conversation but engaged message = medium
+        if len(conversation_history) < 3:
+            return "medium"
 
         # Default to medium
         return "medium"
