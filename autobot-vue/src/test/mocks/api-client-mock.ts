@@ -1,5 +1,6 @@
 import { vi, type Mock } from 'vitest'
 import { createMockApiResponse } from '../utils/test-utils'
+import { NetworkConstants } from '@/constants/network-constants.js'
 
 // Mock API client that matches the real ApiClient interface
 export class MockApiClient {
@@ -87,7 +88,7 @@ export class MockApiClient {
     this.mockGet('/api/settings', createMockApiResponse({
       settings: {
         chat: { auto_scroll: true, max_messages: 100 },
-        backend: { host: 'localhost', port: 8001 },
+        backend: { host: NetworkConstants.LOCALHOST_NAME, port: NetworkConstants.BACKEND_PORT },
       },
     }))
 
