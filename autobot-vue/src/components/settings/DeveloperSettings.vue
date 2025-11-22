@@ -8,7 +8,7 @@
           id="developer-enabled"
           type="checkbox"
           :checked="developerSettings.enabled"
-          @change="updateSetting('enabled', $event.target.checked)"
+          @change="handleCheckboxChange('enabled')"
         />
       </div>
 
@@ -19,7 +19,7 @@
             id="enhanced-errors"
             type="checkbox"
             :checked="developerSettings.enhanced_errors"
-            @change="updateSetting('enhanced_errors', $event.target.checked)"
+            @change="handleCheckboxChange('enhanced_errors')"
           />
         </div>
         <div class="setting-item">
@@ -28,7 +28,7 @@
             id="endpoint-suggestions"
             type="checkbox"
             :checked="developerSettings.endpoint_suggestions"
-            @change="updateSetting('endpoint_suggestions', $event.target.checked)"
+            @change="handleCheckboxChange('endpoint_suggestions')"
           />
         </div>
         <div class="setting-item">
@@ -37,7 +37,7 @@
             id="debug-logging"
             type="checkbox"
             :checked="developerSettings.debug_logging"
-            @change="updateSetting('debug_logging', $event.target.checked)"
+            @change="handleCheckboxChange('debug_logging')"
           />
         </div>
 
@@ -53,7 +53,7 @@
               id="rum-enabled"
               type="checkbox"
               :checked="rumSettings?.enabled || false"
-              @change="updateRUMSetting('enabled', $event.target.checked)"
+              @change="handleRUMCheckboxChange('enabled')"
             />
           </div>
 
@@ -67,7 +67,7 @@
                 id="error-tracking"
                 type="checkbox"
                 :checked="rumSettings.error_tracking || false"
-                @change="updateRUMSetting('error_tracking', $event.target.checked)"
+                @change="handleRUMCheckboxChange('error_tracking')"
               />
             </div>
             <div class="setting-item">
@@ -79,7 +79,7 @@
                 id="performance-monitoring"
                 type="checkbox"
                 :checked="rumSettings.performance_monitoring || false"
-                @change="updateRUMSetting('performance_monitoring', $event.target.checked)"
+                @change="handleRUMCheckboxChange('performance_monitoring')"
               />
             </div>
             <div class="setting-item">
@@ -91,7 +91,7 @@
                 id="interaction-tracking"
                 type="checkbox"
                 :checked="rumSettings.interaction_tracking || false"
-                @change="updateRUMSetting('interaction_tracking', $event.target.checked)"
+                @change="handleRUMCheckboxChange('interaction_tracking')"
               />
             </div>
             <div class="setting-item">
@@ -103,7 +103,7 @@
                 id="session-recording"
                 type="checkbox"
                 :checked="rumSettings.session_recording || false"
-                @change="updateRUMSetting('session_recording', $event.target.checked)"
+                @change="handleRUMCheckboxChange('session_recording')"
               />
             </div>
             <div class="setting-item">
@@ -115,7 +115,7 @@
                 min="0"
                 max="100"
                 step="1"
-                @input="updateRUMSetting('sample_rate', parseInt($event.target.value))"
+                @input="handleRUMIntegerInputChange('sample_rate')"
               />
             </div>
             <div class="setting-item">
@@ -127,7 +127,7 @@
                 min="100"
                 max="10000"
                 step="100"
-                @input="updateRUMSetting('max_events_per_session', parseInt($event.target.value))"
+                @input="handleRUMIntegerInputChange('max_events_per_session')"
               />
             </div>
           </div>
@@ -179,6 +179,38 @@ const updateSetting = (key: string, value: any) => {
 
 const updateRUMSetting = (key: string, value: any) => {
   emit('rum-setting-changed', key, value)
+}
+
+// Typed event handlers for developer settings
+const handleCheckboxChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateSetting(key, target.checked)
+}
+
+const handleInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateSetting(key, target.value)
+}
+
+const handleNumberInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateSetting(key, parseInt(target.value))
+}
+
+// Typed event handlers for RUM settings
+const handleRUMCheckboxChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateRUMSetting(key, target.checked)
+}
+
+const handleRUMNumberInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateRUMSetting(key, parseFloat(target.value))
+}
+
+const handleRUMIntegerInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateRUMSetting(key, parseInt(target.value))
 }
 </script>
 
