@@ -384,7 +384,7 @@
               id="openai-endpoint"
               type="text"
               :value="llmSettings.cloud?.providers?.openai?.endpoint || ''"
-              @input="updateLLMSetting('cloud.providers.openai.endpoint', $event.target.value)"
+              @input="handleLLMInputChange('cloud.providers.openai.endpoint')"
             />
           </div>
           <div class="setting-item">
@@ -769,9 +769,77 @@ interface EmbeddingStatus {
   message: string
 }
 
+// Issue #156 Fix: Proper TypeScript interfaces instead of 'any'
+interface HardwareSettings {
+  enable_gpu?: boolean
+  enable_npu?: boolean
+  memory_limit?: number
+}
+
+interface MemorySettings {
+  enabled?: boolean
+  type?: string
+  max_entries?: number
+  auto_cleanup?: boolean
+}
+
+interface AgentSettings {
+  max_concurrent?: number
+  timeout?: number
+  enable_memory?: boolean
+  log_level?: string
+}
+
+interface ProviderConfig {
+  endpoint?: string
+  selected_model?: string
+  models?: string[]
+  api_key?: string
+}
+
+interface LocalLLMSettings {
+  provider?: string
+  providers?: {
+    ollama?: ProviderConfig
+    lmstudio?: ProviderConfig
+  }
+}
+
+interface CloudLLMSettings {
+  provider?: string
+  providers?: {
+    openai?: ProviderConfig
+    anthropic?: ProviderConfig
+  }
+}
+
+interface LLMSettings {
+  provider_type?: string
+  local?: LocalLLMSettings
+  cloud?: CloudLLMSettings
+}
+
+interface BackendSettings {
+  api_endpoint?: string
+  server_host?: string
+  server_port?: number
+  chat_data_dir?: string
+  chat_history_file?: string
+  knowledge_base_db?: string
+  reliability_stats_file?: string
+  logs_directory?: string
+  chat_enabled?: boolean
+  knowledge_base_enabled?: boolean
+  auto_backup_chat?: boolean
+  hardware?: HardwareSettings
+  memory?: MemorySettings
+  agents?: AgentSettings
+  llm?: LLMSettings
+}
+
 interface Props {
-  backendSettings?: any
-  llmSettings?: any
+  backendSettings?: BackendSettings
+  llmSettings?: LLMSettings
   isSettingsLoaded: boolean
   activeBackendSubTab: string
   healthStatus: HealthStatus | null
@@ -800,19 +868,57 @@ const isTestingNPU = ref(false)
 const isRefreshingModels = ref(false)
 const isRefreshingLLMModels = ref(false)
 
+// Type definitions for hardware status
+interface GPUDetails {
+  utilization: number
+  memory: string
+  temperature: string
+  name: string
+}
+
+interface NPUDetails {
+  available: boolean
+  wsl_limitation: boolean
+}
+
+interface MemoryDetails {
+  total: string
+  available: string
+  used: string
+  percent: string
+}
+
+interface HardwareStatusItem<T> {
+  status: string
+  message: string
+  details: T | null
+}
+
+interface ConnectionStatus {
+  status: string
+  message: string
+  responseTime: number | null
+}
+
+interface HardwareStatus {
+  gpu: HardwareStatusItem<GPUDetails>
+  npu: HardwareStatusItem<NPUDetails>
+  memory: HardwareStatusItem<MemoryDetails>
+}
+
 // Validation state
 const validationErrors = reactive<Record<string, string>>({})
 const validationSuccess = reactive<Record<string, boolean>>({})
 
 // Connection status
-const connectionStatus = reactive({
+const connectionStatus = reactive<ConnectionStatus>({
   status: 'unknown', // 'connected', 'disconnected', 'testing', 'unknown'
   message: 'Connection status unknown',
   responseTime: null
 })
 
 // Hardware status
-const hardwareStatus = reactive({
+const hardwareStatus = reactive<HardwareStatus>({
   gpu: {
     status: 'unknown',
     message: 'GPU status not checked',
@@ -852,7 +958,7 @@ const updateSettingWithValidation = (key: string, value: any) => {
     validationSuccess[key] = true
     emit('setting-changed', key, value)
   } else {
-    validationErrors[key] = validation.error
+    validationErrors[key] = validation.error || 'Validation failed'
   }
 }
 
@@ -1087,18 +1193,18 @@ const updateAgentSetting = (key: string, value: any) => {
   emit('setting-changed', `agents.${key}`, value)
 }
 
-const getHealthIconClass = (status: string) => {
-  const iconMap = {
+const getHealthIconClass = (status: string | undefined) => {
+  const iconMap: Record<string, string> = {
     'healthy': 'fas fa-check-circle',
     'warning': 'fas fa-exclamation-triangle',
     'error': 'fas fa-times-circle'
   }
-  return iconMap[status] || 'fas fa-question-circle'
+  return iconMap[status || 'unknown'] || 'fas fa-question-circle'
 }
 
 // NEW: Enhanced connection testing methods
 const getConnectionIcon = (status: string) => {
-  const iconMap = {
+  const iconMap: Record<string, string> = {
     'connected': 'fas fa-check-circle',
     'disconnected': 'fas fa-times-circle',
     'testing': 'fas fa-spinner fa-spin',
@@ -1118,11 +1224,16 @@ const testConnection = async () => {
     const endpoint = props.backendSettings?.api_endpoint || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`
     const startTime = Date.now()
 
+    // Use AbortController for timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+
     const response = await fetch(`${endpoint}/health`, {
       method: 'GET',
-      timeout: 5000
+      signal: controller.signal
     })
 
+    clearTimeout(timeoutId)
     const responseTime = Date.now() - startTime
     connectionStatus.responseTime = responseTime
 
@@ -1134,8 +1245,9 @@ const testConnection = async () => {
       connectionStatus.message = `Connection failed (${response.status})`
     }
   } catch (error) {
+    const err = error as Error
     connectionStatus.status = 'disconnected'
-    connectionStatus.message = `Connection error: ${error.message}`
+    connectionStatus.message = `Connection error: ${err.message}`
     connectionStatus.responseTime = null
   } finally {
     isTestingConnection.value = false
@@ -1241,8 +1353,9 @@ const testGPU = async () => {
       hardwareStatus.gpu.message = 'Failed to query GPU status'
     }
   } catch (error) {
+    const err = error as Error
     hardwareStatus.gpu.status = 'error'
-    hardwareStatus.gpu.message = `GPU test failed: ${error.message}`
+    hardwareStatus.gpu.message = `GPU test failed: ${err.message}`
   } finally {
     isTestingGPU.value = false
   }
@@ -1272,8 +1385,9 @@ const testNPU = async () => {
       hardwareStatus.npu.message = 'NPU not accessible'
     }
   } catch (error) {
+    const err = error as Error
     hardwareStatus.npu.status = 'error'
-    hardwareStatus.npu.message = `NPU test failed: ${error.message}`
+    hardwareStatus.npu.message = `NPU test failed: ${err.message}`
   } finally {
     isTestingNPU.value = false
   }
@@ -1316,8 +1430,9 @@ const refreshMemoryStatus = async () => {
       hardwareStatus.memory.message = 'Failed to query memory status'
     }
   } catch (error) {
+    const err = error as Error
     hardwareStatus.memory.status = 'error'
-    hardwareStatus.memory.message = `Failed to get memory status: ${error.message}`
+    hardwareStatus.memory.message = `Failed to get memory status: ${err.message}`
   }
 }
 
