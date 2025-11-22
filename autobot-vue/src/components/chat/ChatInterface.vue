@@ -425,7 +425,7 @@ const onCommandCommented = async (commentData: any) => {
         `/api/agent-terminal/sessions/${pendingCommand.value.terminalSessionId}/approve`
       )
 
-      await fetch(approvalUrl, {
+      const response = await fetch(approvalUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -434,6 +434,8 @@ const onCommandCommented = async (commentData: any) => {
           comment: commentData.comment || commentData  // User's alternative suggestion
         })
       })
+
+      const result = await response.json()
 
       console.log('[ChatInterface] Command denied with user feedback/alternative approach')
     }

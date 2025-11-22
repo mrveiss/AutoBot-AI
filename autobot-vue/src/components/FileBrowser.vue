@@ -155,7 +155,8 @@ const sortedFiles = computed(() => {
 // Methods
 const { execute: refreshFiles, loading: isRefreshingFiles } = useAsyncHandler(
   async () => {
-    const data = await apiClient.get(`/api/files/list?path=${encodeURIComponent(currentPath.value)}`)
+    const response = await apiClient.get(`/api/files/list?path=${encodeURIComponent(currentPath.value)}`)
+    const data = await response.json()
     files.value = data.files || []
 
     if (viewMode.value === 'tree') {
@@ -173,7 +174,8 @@ const { execute: refreshFiles, loading: isRefreshingFiles } = useAsyncHandler(
 
 const { execute: loadDirectoryTree, loading: isLoadingTree } = useAsyncHandler(
   async () => {
-    const data = await apiClient.get('/api/files/tree')
+    const response = await apiClient.get('/api/files/tree')
+    const data = await response.json()
     directoryTree.value = data.tree || []
   },
   {
@@ -239,7 +241,8 @@ const handleFileSelected = async (fileList: FileList) => {
 
 const { execute: viewFile, loading: isViewingFile } = useAsyncHandler(
   async (file: any) => {
-    const data = await apiClient.get(`/api/files/preview?path=${encodeURIComponent(file.path)}`)
+    const response = await apiClient.get(`/api/files/preview?path=${encodeURIComponent(file.path)}`)
+    const data = await response.json()
     previewFile.value = {
       name: file.name,
       type: data.type,
