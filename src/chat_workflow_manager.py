@@ -40,6 +40,21 @@ from src.chat_intent_detector import (
     detect_user_intent,
     select_context_prompt,
 )
+
+# Import comprehensive intent classification system - Issue #159
+from backend.intent_classifier import (
+    ConversationIntent,
+    IntentClassification,
+    IntentClassifier,
+)
+from backend.conversation_context import (
+    ConversationContext,
+    ConversationContextAnalyzer,
+)
+from backend.conversation_safety import (
+    ConversationSafetyGuards,
+    SafetyCheckResult,
+)
 from src.constants.network_constants import NetworkConstants
 from src.prompt_manager import get_prompt
 from src.utils.error_boundaries import (
@@ -475,6 +490,35 @@ class ChatWorkflowManager:
             messages.append(msg)
         return messages
 
+    def _convert_conversation_history_format(
+        self, history: List[Dict[str, str]]
+    ) -> List[Dict[str, str]]:
+        """
+        Convert conversation history from storage format to classification format.
+
+        Storage format: [{"user": "msg", "assistant": "response"}, ...]
+        Classification format: [{"role": "user", "content": "msg"}, {"role": "assistant", "content": "response"}, ...]
+
+        Args:
+            history: Conversation history in storage format
+
+        Returns:
+            List of messages in role/content format for intent classification
+
+        Related Issue: #159 - Intent Classification System
+        """
+        converted = []
+        for exchange in history:
+            # Add user message
+            if "user" in exchange:
+                converted.append({"role": "user", "content": exchange["user"]})
+            # Add assistant message
+            if "assistant" in exchange:
+                converted.append(
+                    {"role": "assistant", "content": exchange["assistant"]}
+                )
+        return converted
+
     async def _initialize_chat_session(
         self, session_id: str, message: str
     ) -> tuple:
@@ -499,8 +543,52 @@ class ChatWorkflowManager:
             f"[ChatWorkflowManager] Session message_count: {session.message_count}"
         )
 
-        # Check for explicit exit intent before processing
-        user_wants_exit = detect_exit_intent(message)
+        # Comprehensive intent classification with safety guards (Issue #159)
+        # Convert conversation history to classification format
+        conversation_history_formatted = self._convert_conversation_history_format(
+            session.conversation_history
+        )
+
+        # Initialize classifiers
+        intent_classifier = IntentClassifier()
+        context_analyzer = ConversationContextAnalyzer()
+        safety_guards = ConversationSafetyGuards()
+
+        # Classify intent
+        classification: IntentClassification = intent_classifier.classify(
+            message, conversation_history_formatted
+        )
+
+        # Analyze conversation context
+        context: ConversationContext = context_analyzer.analyze(
+            conversation_history_formatted, message
+        )
+
+        # Apply safety guards
+        safety_check: SafetyCheckResult = safety_guards.check(classification, context)
+
+        # Determine if conversation should end
+        user_wants_exit = False
+        if classification.intent == ConversationIntent.END and safety_check.is_safe_to_end:
+            user_wants_exit = True
+            logger.info(
+                f"User wants to exit conversation - Intent: {classification.intent.value}, "
+                f"Confidence: {classification.confidence:.2f}, Reason: {classification.reasoning}"
+            )
+        elif classification.intent == ConversationIntent.END and not safety_check.is_safe_to_end:
+            # Safety guard overrides END intent
+            user_wants_exit = False
+            logger.info(
+                f"Exit intent detected but blocked by safety guards - {safety_check.reason}"
+            )
+            logger.info(f"Violated rules: {', '.join(safety_check.violated_rules)}")
+        else:
+            # Not an END intent
+            user_wants_exit = False
+            logger.debug(
+                f"Intent classified as: {classification.intent.value} "
+                f"(confidence: {classification.confidence:.2f})"
+            )
 
         # Get or create terminal session for this conversation
         terminal_session_id = None
