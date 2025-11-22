@@ -707,7 +707,7 @@ export default {
           search_engine: 'duckduckgo'
         })
 
-        return response
+        return await response.json()
       },
       {
         onSuccess: (data) => {
@@ -733,7 +733,7 @@ export default {
           frontend_url: window.location.origin
         })
 
-        return response
+        return await response.json()
       },
       {
         onSuccess: (data) => {
@@ -764,7 +764,7 @@ export default {
           frontend_url: window.location.origin
         })
 
-        return response
+        return await response.json()
       },
       {
         onSuccess: (data) => {

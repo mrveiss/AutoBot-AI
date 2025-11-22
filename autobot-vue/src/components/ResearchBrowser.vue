@@ -340,23 +340,25 @@ export default {
 
         // Two sequential API calls
         const statusResponse = await apiClient.get(`/api/research/session/${props.sessionId}/status`)
+        const statusData = await statusResponse.json()
         const browserResponse = await apiClient.get(`/api/research/browser/${props.sessionId}`)
+        const browserData = await browserResponse.json()
 
-        return { statusResponse, browserResponse }
+        return { statusData, browserData }
       },
       {
         onSuccess: (result) => {
           if (!result) return
 
-          const { statusResponse, browserResponse } = result
+          const { statusData, browserData } = result
 
           // Update all state from both responses
-          status.value = statusResponse.data.status
-          currentUrl.value = statusResponse.data.current_url
-          currentBrowserUrl.value = statusResponse.data.current_url
-          interactionRequired.value = statusResponse.data.interaction_required
-          interactionMessage.value = statusResponse.data.interaction_message
-          browserInfo.value = browserResponse.data
+          status.value = statusData.status
+          currentUrl.value = statusData.current_url
+          currentBrowserUrl.value = statusData.current_url
+          interactionRequired.value = statusData.interaction_required
+          interactionMessage.value = statusData.interaction_message
+          browserInfo.value = browserData
         }
       }
     )
@@ -364,15 +366,16 @@ export default {
     // 2. Migrate handleWaitForUser - Chains refreshStatus
     const { execute: handleWaitForUser, loading: isWaitingForUser } = useAsyncHandler(
       async () => {
-        return await apiClient.post('/api/research/session/action', {
+        const response = await apiClient.post('/api/research/session/action', {
           session_id: props.sessionId,
           action: 'wait',
           timeout_seconds: 300
         })
+        return await response.json()
       },
       {
-        onSuccess: async (response) => {
-          actionResult.value = response.data
+        onSuccess: async (data) => {
+          actionResult.value = data
           await refreshStatus()
         },
         onError: (error) => {
@@ -384,14 +387,15 @@ export default {
     // 3. Migrate handleSessionAction - Chains refreshStatus
     const { execute: performSessionAction, loading: isPerformingAction } = useAsyncHandler(
       async (action) => {
-        return await apiClient.post('/api/research/session/action', {
+        const response = await apiClient.post('/api/research/session/action', {
           session_id: props.sessionId,
           action: action
         })
+        return await response.json()
       },
       {
-        onSuccess: async (response) => {
-          actionResult.value = response.data
+        onSuccess: async (data) => {
+          actionResult.value = data
           await refreshStatus()
         },
         onError: (error) => {
@@ -410,15 +414,16 @@ export default {
       async () => {
         if (!navigationUrl.value) return null
 
-        return await apiClient.post(`/api/research/session/${props.sessionId}/navigate`, {
+        const response = await apiClient.post(`/api/research/session/${props.sessionId}/navigate`, {
           url: navigationUrl.value
         })
+        return await response.json()
       },
       {
-        onSuccess: async (response) => {
-          if (!response) return
+        onSuccess: async (data) => {
+          if (!data) return
 
-          actionResult.value = response.data
+          actionResult.value = data
           showNavigationInput.value = false
           navigationUrl.value = ''
           await refreshStatus()
@@ -462,17 +467,17 @@ export default {
             url: browserUrl.value,
             extract_content: false
           })
-          return response
+          return await response.json()
         }
 
         return null
       },
       {
-        onSuccess: (response) => {
+        onSuccess: (data) => {
           // Update the browser URL
           currentBrowserUrl.value = browserUrl.value
 
-          if (response && response.data && response.data.success && response.data.session_id) {
+          if (data && data.success && data.session_id) {
             // Successfully created research session for unified browser
           }
 
@@ -493,16 +498,17 @@ export default {
       async () => {
         if (!props.sessionId) return null
 
-        return await apiClient.post('/api/research/session/action', {
+        const response = await apiClient.post('/api/research/session/action', {
           session_id: props.sessionId,
           action: 'manual_intervention'
         })
+        return await response.json()
       },
       {
-        onSuccess: (response) => {
-          if (!response) return
+        onSuccess: (data) => {
+          if (!data) return
 
-          if (response.data && response.data.success) {
+          if (data.success) {
             agentPaused.value = true
 
             actionResult.value = {
@@ -519,15 +525,16 @@ export default {
       async () => {
         if (!props.sessionId) return null
 
-        return await apiClient.post('/api/research/session/action', {
+        const response = await apiClient.post('/api/research/session/action', {
           session_id: props.sessionId,
           action: 'wait',
           timeout_seconds: 300
         })
+        return await response.json()
       },
       {
-        onSuccess: async (response) => {
-          if (!response) return
+        onSuccess: async (data) => {
+          if (!data) return
 
           agentPaused.value = false
 

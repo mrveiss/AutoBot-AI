@@ -329,13 +329,13 @@ export default {
           confidence: confidence
         });
 
-        return response;
+        return await response.json();
       },
       {
-        onSuccess: async (response) => {
-          if (response.response) {
+        onSuccess: async (data) => {
+          if (data.response) {
             // Speak the response
-            await speakText(response.response);
+            await speakText(data.response);
             statusMessage.value = 'Response completed';
           }
 
@@ -406,10 +406,11 @@ export default {
     const loadWakeWordSettings = async () => {
       try {
         const response = await apiClient.get('/api/wake_word/config');
-        if (response) {
+        const data = await response.json();
+        if (data) {
           wakeWordSettings.value = {
             ...wakeWordSettings.value,
-            ...response
+            ...data
           };
         }
       } catch (error) {
@@ -420,12 +421,13 @@ export default {
     const loadWakeWordStats = async () => {
       try {
         const response = await apiClient.get('/api/wake_word/stats');
-        if (response) {
+        const data = await response.json();
+        if (data) {
           wakeWordStats.value = {
-            total_detections: response.total_detections || 0,
-            true_positives: response.true_positives || 0,
-            false_positives: response.false_positives || 0,
-            accuracy: response.accuracy || 0
+            total_detections: data.total_detections || 0,
+            true_positives: data.true_positives || 0,
+            false_positives: data.false_positives || 0,
+            accuracy: data.accuracy || 0
           };
         }
       } catch (error) {
@@ -469,12 +471,13 @@ export default {
         const response = await apiClient.post('/api/wake_word/words', {
           wake_word: newWakeWord.value.trim()
         });
-        if (response.success) {
-          wakeWordSettings.value.wake_words = response.wake_words;
+        const data = await response.json();
+        if (data.success) {
+          wakeWordSettings.value.wake_words = data.wake_words;
           newWakeWord.value = '';
-          statusMessage.value = `Wake word "${response.wake_words[response.wake_words.length - 1]}" added`;
+          statusMessage.value = `Wake word "${data.wake_words[data.wake_words.length - 1]}" added`;
         } else {
-          statusMessage.value = response.message || 'Wake word already exists';
+          statusMessage.value = data.message || 'Wake word already exists';
         }
       } catch (error) {
         console.error('Failed to add wake word:', error);
@@ -485,8 +488,9 @@ export default {
     const removeWakeWord = async (word) => {
       try {
         const response = await apiClient.delete(`/api/wake_word/words/${encodeURIComponent(word)}`);
-        if (response.success) {
-          wakeWordSettings.value.wake_words = response.wake_words;
+        const data = await response.json();
+        if (data.success) {
+          wakeWordSettings.value.wake_words = data.wake_words;
           statusMessage.value = `Wake word "${word}" removed`;
         }
       } catch (error) {
