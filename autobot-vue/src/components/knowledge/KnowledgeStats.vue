@@ -367,6 +367,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers/index'
 import type { KnowledgeCategory } from '@/stores/useKnowledgeStore'
+// @ts-ignore - Component lacks TypeScript declaration file
 import ManPageManager from '@/components/ManPageManager.vue'
 import DocumentChangeFeed from '@/components/knowledge/DocumentChangeFeed.vue'
 import apiClient from '@/utils/ApiClient'
@@ -499,7 +500,8 @@ const maxCategoryCount = computed(() => {
 
 const documentsByType = computed(() => {
   const types: Record<string, number> = {}
-  (store.documents || []).forEach(doc => {
+  const documents = store.documents || []
+  documents.forEach((doc: any) => {
     types[doc.type] = (types[doc.type] || 0) + 1
   })
   return types
@@ -508,8 +510,10 @@ const documentsByType = computed(() => {
 const popularTags = computed(() => {
   const tagCounts: Record<string, number> = {}
 
-  (store.documents || []).forEach(doc => {
-    (doc.tags || []).forEach(tag => {
+  const documents = store.documents || []
+  documents.forEach((doc: any) => {
+    const tags = doc.tags || []
+    tags.forEach((tag: string) => {
       tagCounts[tag] = (tagCounts[tag] || 0) + 1
     })
   })
@@ -555,12 +559,12 @@ const refreshStats = async () => {
 
 const generateRecentActivities = () => {
   // Generate activities from recent documents
-  const activities = store.documents
+  const activities: Activity[] = store.documents
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 10)
     .map(doc => ({
       id: doc.id,
-      type: new Date(doc.createdAt).getTime() === new Date(doc.updatedAt).getTime() ? 'created' : 'updated',
+      type: (new Date(doc.createdAt).getTime() === new Date(doc.updatedAt).getTime() ? 'created' : 'updated') as 'created' | 'updated',
       description: `${doc.title || 'Document'} was ${
         new Date(doc.createdAt).getTime() === new Date(doc.updatedAt).getTime() ? 'created' : 'updated'
       }`,
@@ -741,7 +745,7 @@ const refreshVectorStats = async () => {
       total_vectors: storeStats.total_vectors || 0,
       indexed_documents: storeStats.total_documents || 0,
       db_size: storeStats.db_size || 0,
-      status: storeStats.status || 'offline',
+      status: (storeStats.status as 'online' | 'offline' | 'unknown') || 'offline',
       rag_available: storeStats.rag_available || false,
       initialized: storeStats.initialized || false,
       llama_index_configured: storeStats.initialized || false,
@@ -749,7 +753,9 @@ const refreshVectorStats = async () => {
       redis_db: storeStats.redis_db ? parseInt(storeStats.redis_db) : 0,
       index_name: storeStats.index_name || 'unknown',
       last_updated: storeStats.last_updated || undefined,
-      categories: storeStats.categories || [],
+      categories: Array.isArray(storeStats.categories)
+        ? storeStats.categories.map((c: any) => c.name || c)
+        : [],
       embedding_model: 'nomic-embed-text',  // From detailed stats
       embedding_dimensions: 768  // From detailed stats
     }

@@ -251,25 +251,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { KnowledgeRepository, type RagSearchResponse } from '@/models/repositories'
+import type { KnowledgeDocument, SearchResult } from '@/stores/useKnowledgeStore'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
-
-// Define types
-interface KnowledgeDocument {
-  id: string
-  title: string
-  content: string
-  type: string
-  category: string
-  updatedAt: string
-  tags: string[]
-}
-
-interface SearchResult {
-  document: KnowledgeDocument
-  score: number
-  highlights: string[]
-}
 
 // Repository instance
 const knowledgeRepo = new KnowledgeRepository()

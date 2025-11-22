@@ -161,7 +161,7 @@
           <p>{{ error }}</p>
           <BaseButton
             variant="primary"
-            @click="loadKnowledgeTree"
+            @click="() => loadKnowledgeTree(loadKnowledgeTreeFn)"
             class="retry-btn"
           >
             <i class="fas fa-redo"></i> Retry
@@ -223,7 +223,7 @@
               <div>
                 <h4>{{ selectedFile.name }}</h4>
                 <p class="file-meta">
-                  {{ selectedFile.type }} • {{ formatFileSize(selectedFile.size) }}
+                  {{ selectedFile.type }} • {{ formatFileSize(selectedFile.size || 0) }}
                   <span v-if="selectedFile.date"> • {{ formatDate(selectedFile.date) }}</span>
                 </p>
               </div>
@@ -351,45 +351,66 @@ const {
   error: contentError
 } = useAsyncOperation()
 
-// Pagination for user knowledge entries
-const {
-  items: allLoadedEntries,
-  cursor: entriesCursor,
-  hasMore: hasMoreEntries,
-  isLoading: isLoadingMore,
-  loadMore,
-  reset: resetPagination
-} = usePagination({
-  fetchFn: async (cursor) => {
-    const params = new URLSearchParams({
-      limit: '100',
-      cursor: cursor || '0'
-    })
-    const response = await apiClient.get(`/api/knowledge_base/entries?${params}`)
-    const data = await parseApiResponse(response)
+// Cursor-based pagination for user knowledge entries
+const allLoadedEntries = ref<any[]>([])
+const entriesCursor = ref<string>('0')
+const hasMoreEntries = ref<boolean>(true)
+const isLoadingMore = ref<boolean>(false)
 
-    // Handle both cursor-based and offset-based formats
-    if (data.next_cursor !== undefined) {
-      return {
-        items: data.entries || [],
-        nextCursor: data.next_cursor || '0',
-        hasMore: data.has_more || false
-      }
-    } else if (data.offset !== undefined) {
-      const total = data.total || 0
-      const currentOffset = data.offset || 0
-      const entries = data.entries || []
-      const hasMore = (currentOffset + entries.length) < total
-      return {
-        items: entries,
-        nextCursor: hasMore ? String(currentOffset + entries.length) : '0',
-        hasMore
-      }
+// Fetch function for cursor-based pagination
+const fetchEntries = async (cursor: string) => {
+  const params = new URLSearchParams({
+    limit: '100',
+    cursor: cursor || '0'
+  })
+  const response = await apiClient.get(`/api/knowledge_base/entries?${params}`)
+  const data = await parseApiResponse(response)
+
+  // Handle both cursor-based and offset-based formats
+  if (data.next_cursor !== undefined) {
+    return {
+      items: data.entries || [],
+      nextCursor: data.next_cursor || '0',
+      hasMore: data.has_more || false
     }
-    return { items: data.entries || [], nextCursor: '0', hasMore: false }
-  },
-  initialCursor: '0'
-})
+  } else if (data.offset !== undefined) {
+    const total = data.total || 0
+    const currentOffset = data.offset || 0
+    const entries = data.entries || []
+    const hasMore = (currentOffset + entries.length) < total
+    return {
+      items: entries,
+      nextCursor: hasMore ? String(currentOffset + entries.length) : '0',
+      hasMore
+    }
+  }
+  return { items: data.entries || [], nextCursor: '0', hasMore: false }
+}
+
+// Load more entries function
+const loadMore = async () => {
+  if (isLoadingMore.value || !hasMoreEntries.value) return
+
+  isLoadingMore.value = true
+  try {
+    const result = await fetchEntries(entriesCursor.value)
+    allLoadedEntries.value = [...allLoadedEntries.value, ...result.items]
+    entriesCursor.value = result.nextCursor
+    hasMoreEntries.value = result.hasMore
+  } catch (error) {
+    console.error('Failed to load more entries:', error)
+  } finally {
+    isLoadingMore.value = false
+  }
+}
+
+// Reset pagination function
+const resetPagination = () => {
+  allLoadedEntries.value = []
+  entriesCursor.value = '0'
+  hasMoreEntries.value = true
+  isLoadingMore.value = false
+}
 
 // Computed
 const breadcrumbParts = computed(() => {

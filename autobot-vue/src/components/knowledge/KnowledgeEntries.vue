@@ -262,7 +262,7 @@
       size="large"
       scrollable
     >
-      <div v-if="dialogMode === 'view'" class="view-mode">
+      <div v-if="currentEntry && dialogMode === 'view'" class="view-mode">
         <div class="entry-metadata">
           <div class="meta-item">
             <label>Title:</label>
@@ -309,7 +309,7 @@
         </div>
       </div>
 
-      <div v-else class="edit-mode">
+      <div v-else-if="currentEntry" class="edit-mode">
         <div class="form-group">
           <label for="edit-title">Title</label>
           <input
@@ -398,7 +398,9 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import KnowledgeUpload from './KnowledgeUpload.vue'
+// @ts-ignore - Component lacks TypeScript declaration file
 import SystemKnowledgeManager from '@/components/SystemKnowledgeManager.vue'
+// @ts-ignore - Component lacks TypeScript declaration file
 import ManPageManager from '@/components/ManPageManager.vue'
 import FailedVectorizationsManager from '@/components/knowledge/FailedVectorizationsManager.vue'
 import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vue'
@@ -431,7 +433,7 @@ const itemsPerPage = 20
 const selectedEntries = ref<string[]>([])
 
 // Dialog state
-const { isOpen: showDialog, open: openDialog, close: closeDialogModal } = useModal('entry-dialog')
+const { isOpen: showDialog, open: openDialog, close: closeDialogModal } = useModal({ id: 'entry-dialog' })
 const dialogMode = ref<'view' | 'edit'>('view')
 const currentEntry = ref<KnowledgeDocument | null>(null)
 
