@@ -84,7 +84,7 @@
               <div class="group-details">
                 <div class="kept-fact">
                   <i class="fas fa-check-circle"></i>
-                  Keeping: {{ dup.kept_fact_id.substring(0, 8) }}...
+                  Keeping: {{ dup.kept_fact_id?.substring(0, 8) }}...
                   <span class="timestamp">({{ formatDate(dup.kept_created_at) }})</span>
                 </div>
               </div>
@@ -197,6 +197,12 @@ interface DuplicateGroup {
   hash: string
   count: number
   fact_ids: string[]
+  category?: string
+  title?: string
+  total_copies?: number
+  removed_count?: number
+  kept_fact_id?: string
+  kept_created_at?: string
 }
 
 interface DuplicateStats {
@@ -209,6 +215,9 @@ interface DuplicateStats {
 interface OrphanedFact {
   fact_id: string
   content?: string
+  title?: string
+  category?: string
+  file_path?: string
 }
 
 interface OrphanStats {

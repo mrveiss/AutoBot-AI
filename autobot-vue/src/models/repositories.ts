@@ -64,6 +64,7 @@ export interface SearchParams {
   use_rag?: boolean
   category?: string
   type?: string
+  enable_reranking?: boolean
   filters?: {
     categories?: string[]
     tags?: string[]
@@ -377,6 +378,20 @@ export class KnowledgeRepository {
       score: result.score || 0,
       highlights: [result.content?.substring(0, 200) + '...' || '']
     })) || []
+  }
+
+  /**
+   * Get document by ID
+   * Retrieves a specific knowledge document
+   */
+  async getDocument(documentId: string): Promise<KnowledgeDocument> {
+    const response = await fetch(`${this.baseUrl}/documents/${documentId}`)
+
+    if (!response.ok) {
+      throw new Error(`Failed to get document: ${response.statusText}`)
+    }
+
+    return response.json()
   }
 }
 
