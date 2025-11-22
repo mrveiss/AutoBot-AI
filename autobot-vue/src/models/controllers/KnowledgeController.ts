@@ -2,7 +2,7 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useAppStore } from '@/stores/useAppStore'
 import { knowledgeRepository } from '@/models/repositories'
 import type { KnowledgeDocument, SearchResult, SearchFilters } from '@/stores/useKnowledgeStore'
-import { generateCategoryId, generateDocumentId } from '@/utils/ChatIdGenerator.js'
+import { generateCategoryId, generateDocumentId } from '@/utils/ChatIdGenerator'
 
 export class KnowledgeController {
   // FIXED: Lazy initialization - stores only created when accessed, not at module load
