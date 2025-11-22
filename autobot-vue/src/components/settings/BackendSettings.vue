@@ -80,7 +80,7 @@
             id="api-endpoint"
             type="text"
             :value="backendSettings?.api_endpoint || ''"
-            @input="updateSettingWithValidation('api_endpoint', $event.target.value)"
+            @input="handleInputChange('api_endpoint')"
             :class="{ 'validation-error': validationErrors.api_endpoint }"
           />
           <div v-if="validationErrors.api_endpoint" class="validation-message error">
@@ -99,7 +99,7 @@
             id="server-host"
             type="text"
             :value="backendSettings?.server_host || ''"
-            @input="updateSettingWithValidation('server_host', $event.target.value)"
+            @input="handleInputChange('server_host')"
             :class="{ 'validation-error': validationErrors.server_host }"
           />
           <div v-if="validationErrors.server_host" class="validation-message error">
@@ -120,7 +120,7 @@
             :value="backendSettings?.server_port || 8001"
             min="1"
             max="65535"
-            @input="updateSettingWithValidation('server_port', parseInt($event.target.value))"
+            @input="handleNumberInputChange('server_port')"
             :class="{ 'validation-error': validationErrors.server_port }"
           />
           <div v-if="validationErrors.server_port" class="validation-message error">
@@ -139,7 +139,7 @@
             id="chat-data-dir"
             type="text"
             :value="backendSettings?.chat_data_dir || ''"
-            @input="updateSettingWithValidation('chat_data_dir', $event.target.value)"
+            @input="handleInputChange('chat_data_dir')"
           />
           <button @click="validatePath('chat_data_dir')" class="validate-path-btn">
             <i class="fas fa-folder-open"></i> Check Path
@@ -154,7 +154,7 @@
           type="text"
           :value="backendSettings?.chat_history_file || ''"
           placeholder="data/chat_history.json"
-          @input="updateSetting('chat_history_file', $event.target.value)"
+          @input="handleGeneralInputChange('chat_history_file')"
         />
       </div>
       <div class="setting-item">
@@ -164,7 +164,7 @@
           type="text"
           :value="backendSettings?.knowledge_base_db || ''"
           placeholder="data/knowledge_base.db"
-          @input="updateSetting('knowledge_base_db', $event.target.value)"
+          @input="handleGeneralInputChange('knowledge_base_db')"
         />
       </div>
       <div class="setting-item">
@@ -174,7 +174,7 @@
           type="text"
           :value="backendSettings?.reliability_stats_file || ''"
           placeholder="data/reliability_stats.json"
-          @input="updateSetting('reliability_stats_file', $event.target.value)"
+          @input="handleGeneralInputChange('reliability_stats_file')"
         />
       </div>
       <div class="setting-item">
@@ -184,7 +184,7 @@
           type="text"
           :value="backendSettings?.logs_directory || ''"
           placeholder="logs/"
-          @input="updateSetting('logs_directory', $event.target.value)"
+          @input="handleGeneralInputChange('logs_directory')"
         />
       </div>
       <div class="setting-item">
@@ -193,7 +193,7 @@
           id="chat-enabled"
           type="checkbox"
           :checked="backendSettings?.chat_enabled || false"
-          @change="updateSetting('chat_enabled', $event.target.checked)"
+          @change="handleGeneralCheckboxChange('chat_enabled')"
         />
       </div>
       <div class="setting-item">
@@ -202,7 +202,7 @@
           id="knowledge-base-enabled"
           type="checkbox"
           :checked="backendSettings?.knowledge_base_enabled || false"
-          @change="updateSetting('knowledge_base_enabled', $event.target.checked)"
+          @change="handleGeneralCheckboxChange('knowledge_base_enabled')"
         />
       </div>
       <div class="setting-item">
@@ -211,7 +211,7 @@
           id="auto-backup-chat"
           type="checkbox"
           :checked="backendSettings?.auto_backup_chat || false"
-          @change="updateSetting('auto_backup_chat', $event.target.checked)"
+          @change="handleGeneralCheckboxChange('auto_backup_chat')"
         />
       </div>
     </div>
@@ -249,7 +249,7 @@
         <select
           id="provider-type"
           :value="llmSettings?.provider_type || 'local'"
-          @change="updateLLMSetting('provider_type', $event.target.value)"
+          @change="handleLLMSelectChange('provider_type')"
         >
           <option value="local">Local LLM</option>
           <option value="cloud">Cloud LLM</option>
@@ -263,7 +263,7 @@
           <select
             id="local-provider"
             :value="llmSettings.local?.provider || 'ollama'"
-            @change="updateLLMSetting('local.provider', $event.target.value)"
+            @change="handleLLMSelectChange('local.provider')"
           >
             <option value="ollama">Ollama</option>
             <option value="lmstudio">LM Studio</option>
@@ -279,7 +279,7 @@
                 id="ollama-endpoint"
                 type="text"
                 :value="llmSettings.local?.providers?.ollama?.endpoint || ''"
-                @input="updateLLMSettingWithValidation('local.providers.ollama.endpoint', $event.target.value)"
+                @input="handleLLMInputChangeValidated('local.providers.ollama.endpoint')"
                 :class="{ 'validation-error': validationErrors.ollama_endpoint }"
               />
               <button @click="testOllamaConnection" class="test-endpoint-btn">
@@ -293,7 +293,7 @@
               <select
                 id="ollama-model"
                 :value="llmSettings.local?.providers?.ollama?.selected_model || ''"
-                @change="updateLLMSetting('local.providers.ollama.selected_model', $event.target.value)"
+                @change="handleLLMSelectChange('local.providers.ollama.selected_model')"
               >
                 <option
                   v-for="model in llmSettings.local?.providers?.ollama?.models || []"
@@ -319,7 +319,7 @@
                 id="lmstudio-endpoint"
                 type="text"
                 :value="llmSettings.local?.providers?.lmstudio?.endpoint || ''"
-                @input="updateLLMSettingWithValidation('local.providers.lmstudio.endpoint', $event.target.value)"
+                @input="handleLLMInputChangeValidated('local.providers.lmstudio.endpoint')"
                 :class="{ 'validation-error': validationErrors.lmstudio_endpoint }"
               />
               <button @click="testLMStudioConnection" class="test-endpoint-btn">
@@ -332,7 +332,7 @@
             <select
               id="lmstudio-model"
               :value="llmSettings.local?.providers?.lmstudio?.selected_model || ''"
-              @change="updateLLMSetting('local.providers.lmstudio.selected_model', $event.target.value)"
+              @change="handleLLMSelectChange('local.providers.lmstudio.selected_model')"
             >
               <option
                 v-for="model in llmSettings.local?.providers?.lmstudio?.models || []"
@@ -353,7 +353,7 @@
           <select
             id="cloud-provider"
             :value="llmSettings.cloud?.provider || 'openai'"
-            @change="updateLLMSetting('cloud.provider', $event.target.value)"
+            @change="handleLLMSelectChange('cloud.provider')"
           >
             <option value="openai">OpenAI</option>
             <option value="anthropic">Anthropic</option>
@@ -370,7 +370,7 @@
                 type="password"
                 :value="llmSettings.cloud?.providers?.openai?.api_key || ''"
                 placeholder="Enter API Key"
-                @input="updateLLMSettingWithValidation('cloud.providers.openai.api_key', $event.target.value)"
+                @input="handleLLMInputChangeValidated('cloud.providers.openai.api_key')"
                 :class="{ 'validation-error': validationErrors.openai_api_key }"
               />
               <button @click="testOpenAIConnection" class="test-endpoint-btn">
@@ -392,7 +392,7 @@
             <select
               id="openai-model"
               :value="llmSettings.cloud?.providers?.openai?.selected_model || ''"
-              @change="updateLLMSetting('cloud.providers.openai.selected_model', $event.target.value)"
+              @change="handleLLMSelectChange('cloud.providers.openai.selected_model')"
             >
               <option
                 v-for="model in llmSettings.cloud?.providers?.openai?.models || []"
@@ -415,7 +415,7 @@
                 type="password"
                 :value="llmSettings.cloud?.providers?.anthropic?.api_key || ''"
                 placeholder="Enter API Key"
-                @input="updateLLMSettingWithValidation('cloud.providers.anthropic.api_key', $event.target.value)"
+                @input="handleLLMInputChangeValidated('cloud.providers.anthropic.api_key')"
                 :class="{ 'validation-error': validationErrors.anthropic_api_key }"
               />
               <button @click="testAnthropicConnection" class="test-endpoint-btn">
@@ -428,7 +428,7 @@
             <select
               id="anthropic-model"
               :value="llmSettings.cloud?.providers?.anthropic?.selected_model || ''"
-              @change="updateLLMSetting('cloud.providers.anthropic.selected_model', $event.target.value)"
+              @change="handleLLMSelectChange('cloud.providers.anthropic.selected_model')"
             >
               <option
                 v-for="model in llmSettings.cloud?.providers?.anthropic?.models || []"
@@ -533,7 +533,7 @@
             id="enable-gpu"
             type="checkbox"
             :checked="backendSettings?.hardware?.enable_gpu || false"
-            @change="updateSetting('hardware.enable_gpu', $event.target.checked)"
+            @change="handleGeneralCheckboxChange('hardware.enable_gpu')"
           />
         </div>
         <div class="setting-item">
@@ -542,7 +542,7 @@
             id="enable-npu"
             type="checkbox"
             :checked="backendSettings?.hardware?.enable_npu || false"
-            @change="updateSetting('hardware.enable_npu', $event.target.checked)"
+            @change="handleGeneralCheckboxChange('hardware.enable_npu')"
           />
         </div>
         <div class="setting-item">
@@ -553,7 +553,7 @@
             :value="backendSettings?.hardware?.memory_limit || 8"
             min="1"
             max="64"
-            @input="updateSetting('hardware.memory_limit', parseInt($event.target.value))"
+            @input="handleGeneralNumberInputChange('hardware.memory_limit')"
           />
         </div>
       </div>
@@ -591,7 +591,7 @@
         <select
           id="embedding-provider"
           :value="embeddingSettings?.provider || 'ollama'"
-          @change="updateEmbeddingProvider($event.target.value)"
+          @change="handleEmbeddingProviderChange"
         >
           <option value="ollama">Ollama</option>
           <option value="openai">OpenAI</option>
@@ -608,7 +608,7 @@
               id="embedding-endpoint"
               type="text"
               :value="getCurrentEmbeddingEndpoint()"
-              @input="updateEmbeddingEndpoint($event.target.value)"
+              @input="handleEmbeddingEndpointChange"
               :class="{ 'validation-error': validationErrors.embedding_endpoint }"
             />
             <button @click="testEmbeddingEndpoint" class="test-endpoint-btn">
@@ -623,7 +623,7 @@
             <select
               id="embedding-model"
               :value="getCurrentEmbeddingModel()"
-              @change="updateEmbeddingModel($event.target.value)"
+              @change="handleEmbeddingModelChange"
             >
               <option
                 v-for="model in getAvailableEmbeddingModels()"
@@ -651,7 +651,7 @@
           id="enable-memory"
           type="checkbox"
           :checked="backendSettings?.memory?.enabled || false"
-          @change="updateMemorySetting('enabled', $event.target.checked)"
+          @change="handleMemoryCheckboxChange('enabled')"
         />
       </div>
 
@@ -660,7 +660,7 @@
         <select
           id="memory-type"
           :value="backendSettings?.memory?.type || 'redis'"
-          @change="updateMemorySetting('type', $event.target.value)"
+          @change="handleMemorySelectChange('type')"
         >
           <option value="redis">Redis</option>
           <option value="chroma">ChromaDB</option>
@@ -676,7 +676,7 @@
           :value="backendSettings?.memory?.max_entries || 1000"
           min="100"
           max="10000"
-          @input="updateMemorySetting('max_entries', parseInt($event.target.value))"
+          @input="handleMemoryInputChange('max_entries')"
         />
       </div>
 
@@ -686,7 +686,7 @@
           id="auto-cleanup"
           type="checkbox"
           :checked="backendSettings?.memory?.auto_cleanup || false"
-          @change="updateMemorySetting('auto_cleanup', $event.target.checked)"
+          @change="handleMemoryCheckboxChange('auto_cleanup')"
         />
       </div>
     </div>
@@ -703,7 +703,7 @@
           :value="backendSettings?.agents?.max_concurrent || 5"
           min="1"
           max="20"
-          @input="updateAgentSetting('max_concurrent', parseInt($event.target.value))"
+          @input="handleAgentInputChange('max_concurrent')"
         />
       </div>
 
@@ -715,7 +715,7 @@
           :value="backendSettings?.agents?.timeout || 300"
           min="30"
           max="3600"
-          @input="updateAgentSetting('timeout', parseInt($event.target.value))"
+          @input="handleAgentInputChange('timeout')"
         />
       </div>
 
@@ -725,7 +725,7 @@
           id="enable-agent-memory"
           type="checkbox"
           :checked="backendSettings?.agents?.enable_memory || false"
-          @change="updateAgentSetting('enable_memory', $event.target.checked)"
+          @change="handleAgentCheckboxChange('enable_memory')"
         />
       </div>
 
@@ -734,7 +734,7 @@
         <select
           id="agent-log-level"
           :value="backendSettings?.agents?.log_level || 'INFO'"
-          @change="updateAgentSetting('log_level', $event.target.value)"
+          @change="handleAgentSelectChange('log_level')"
         >
           <option value="DEBUG">Debug</option>
           <option value="INFO">Info</option>
@@ -801,8 +801,8 @@ const isRefreshingModels = ref(false)
 const isRefreshingLLMModels = ref(false)
 
 // Validation state
-const validationErrors = reactive({})
-const validationSuccess = reactive({})
+const validationErrors = reactive<Record<string, string>>({})
+const validationSuccess = reactive<Record<string, boolean>>({})
 
 // Connection status
 const connectionStatus = reactive({
@@ -854,6 +854,121 @@ const updateSettingWithValidation = (key: string, value: any) => {
   } else {
     validationErrors[key] = validation.error
   }
+}
+
+// Typed event handlers for input fields
+const handleInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateSettingWithValidation(key, target.value)
+}
+
+const handleNumberInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateSettingWithValidation(key, parseInt(target.value))
+}
+
+const handleCheckboxChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  emit('setting-changed', key, target.checked)
+}
+
+const handleLLMInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  emit('llm-setting-changed', key, target.value)
+}
+
+const handleLLMNumberInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  emit('llm-setting-changed', key, parseFloat(target.value))
+}
+
+const handleEmbeddingInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  emit('embedding-setting-changed', key, target.value)
+}
+
+// Additional typed event handlers for all input types
+const handleGeneralInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateSetting(key, target.value)
+}
+
+const handleGeneralNumberInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateSetting(key, parseInt(target.value))
+}
+
+const handleGeneralCheckboxChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateSetting(key, target.checked)
+}
+
+const handleGeneralSelectChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLSelectElement
+  updateSetting(key, target.value)
+}
+
+const handleLLMInputChangeValidated = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateLLMSettingWithValidation(key, target.value)
+}
+
+const handleLLMSelectChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLSelectElement
+  updateLLMSetting(key, target.value)
+}
+
+const handleLLMCheckboxChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateLLMSetting(key, target.checked)
+}
+
+// Embedding settings handlers
+const handleEmbeddingProviderChange = (event: Event) => {
+  const target = event.target as HTMLSelectElement
+  updateEmbeddingProvider(target.value)
+}
+
+const handleEmbeddingModelChange = (event: Event) => {
+  const target = event.target as HTMLSelectElement
+  updateEmbeddingModel(target.value)
+}
+
+const handleEmbeddingEndpointChange = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateEmbeddingEndpoint(target.value)
+}
+
+// Memory settings handlers
+const handleMemoryInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateMemorySetting(key, parseInt(target.value))
+}
+
+const handleMemoryCheckboxChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateMemorySetting(key, target.checked)
+}
+
+const handleMemorySelectChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLSelectElement
+  updateMemorySetting(key, target.value)
+}
+
+// Agent settings handlers
+const handleAgentInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateAgentSetting(key, parseInt(target.value))
+}
+
+const handleAgentCheckboxChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateAgentSetting(key, target.checked)
+}
+
+const handleAgentSelectChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLSelectElement
+  updateAgentSetting(key, target.value)
 }
 
 const validateSetting = (key: string, value: any) => {
