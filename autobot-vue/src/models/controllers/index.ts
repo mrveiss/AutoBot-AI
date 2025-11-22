@@ -19,6 +19,3 @@ export function useChatController() {
 export function useKnowledgeController() {
   return knowledgeController
 }
-
-// Type exports
-export type { ChatController, KnowledgeController }
