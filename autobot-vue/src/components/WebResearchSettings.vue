@@ -238,14 +238,12 @@
 
 <script lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { useApiClient } from '../utils/ApiClient'
+import apiClient from '@/utils/ApiClient'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 
 export default {
   name: 'WebResearchSettings',
   setup() {
-    const apiClient = useApiClient()
-
     // Reactive state
     const updateMessage = ref(null)
     const testResult = ref(null)
@@ -284,14 +282,16 @@ export default {
       async () => {
         // Load status
         const statusResponse = await apiClient.get('/web-research/status')
-        if (statusResponse.status === 'success') {
-          Object.assign(researchStatus, statusResponse)
+        const statusData = await statusResponse.json()
+        if (statusData.status === 'success') {
+          Object.assign(researchStatus, statusData)
         }
 
         // Load settings
         const settingsResponse = await apiClient.get('/web-research/settings')
-        if (settingsResponse.status === 'success') {
-          Object.assign(researchSettings, settingsResponse.settings)
+        const settingsData = await settingsResponse.json()
+        if (settingsData.status === 'success') {
+          Object.assign(researchSettings, settingsData.settings)
         }
       },
       {
@@ -304,12 +304,13 @@ export default {
     const { execute: toggleWebResearch, loading: isTogglingResearch } = useAsyncHandler(
       async () => {
         const endpoint = researchSettings.enabled ? '/web-research/enable' : '/web-research/disable'
-        return await apiClient.post(endpoint)
+        const response = await apiClient.post(endpoint)
+        return await response.json()
       },
       {
-        onSuccess: async (response) => {
-          if (response.status === 'success') {
-            showMessage(response.message, 'success')
+        onSuccess: async (data) => {
+          if (data.status === 'success') {
+            showMessage(data.message, 'success')
             await loadSettings() // Reload to get updated status
           }
         },
@@ -325,12 +326,13 @@ export default {
     // Update settings (with debounce for auto-save)
     const { execute: updateSettings, loading: isUpdatingSettings } = useAsyncHandler(
       async () => {
-        return await apiClient.put('/web-research/settings', researchSettings)
+        const response = await apiClient.put('/web-research/settings', researchSettings)
+        return await response.json()
       },
       {
         debounce: 1000, // Built-in debounce
-        onSuccess: async (response) => {
-          if (response.status === 'success') {
+        onSuccess: async (data) => {
+          if (data.status === 'success') {
             showMessage('Settings updated successfully', 'success')
             await loadSettings() // Reload to confirm changes
           }
@@ -346,10 +348,11 @@ export default {
         testResult.value = null
 
         const response = await apiClient.post('/web-research/test', { query: 'test web research functionality' })
-        testResult.value = response
+        const data = await response.json()
+        testResult.value = data
 
-        showMessage('Test completed', response.status === 'success' ? 'success' : 'error')
-        return response
+        showMessage('Test completed', data.status === 'success' ? 'success' : 'error')
+        return data
       },
       {
         onError: (error) => {
@@ -366,11 +369,12 @@ export default {
     // Clear cache
     const { execute: clearCache, loading: isClearingCache } = useAsyncHandler(
       async () => {
-        return await apiClient.post('/web-research/clear-cache')
+        const response = await apiClient.post('/web-research/clear-cache')
+        return await response.json()
       },
       {
-        onSuccess: async (response) => {
-          if (response.status === 'success') {
+        onSuccess: async (data) => {
+          if (data.status === 'success') {
             showMessage('Cache cleared successfully', 'success')
             await loadSettings() // Reload to show updated cache stats
           }
@@ -383,11 +387,12 @@ export default {
     // Reset circuit breakers
     const { execute: resetCircuitBreakers, loading: isResettingCircuitBreakers } = useAsyncHandler(
       async () => {
-        return await apiClient.post('/web-research/reset-circuit-breakers')
+        const response = await apiClient.post('/web-research/reset-circuit-breakers')
+        return await response.json()
       },
       {
-        onSuccess: async (response) => {
-          if (response.status === 'success') {
+        onSuccess: async (data) => {
+          if (data.status === 'success') {
             showMessage('Circuit breakers reset successfully', 'success')
             await loadSettings() // Reload to show updated status
           }
