@@ -198,6 +198,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  'update:visible': [value: boolean]
   confirm: [fileAction: string, fileOptions: any]
   cancel: []
 }>()
@@ -215,13 +216,14 @@ const hasFiles = computed(() => props.fileStats && props.fileStats.total_files >
 // NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
 
 const getFileActionSummary = (): string => {
+  const fileCount = props.fileStats?.total_files || 0
   switch (fileAction.value) {
     case 'delete':
-      return `Delete ${props.fileStats?.total_files} file${props.fileStats?.total_files > 1 ? 's' : ''} permanently`
+      return `Delete ${fileCount} file${fileCount > 1 ? 's' : ''} permanently`
     case 'transfer_kb':
-      return `Transfer ${props.fileStats?.total_files} file${props.fileStats?.total_files > 1 ? 's' : ''} to Knowledge Base`
+      return `Transfer ${fileCount} file${fileCount > 1 ? 's' : ''} to Knowledge Base`
     case 'transfer_shared':
-      return `Transfer ${props.fileStats?.total_files} file${props.fileStats?.total_files > 1 ? 's' : ''} to Shared Storage`
+      return `Transfer ${fileCount} file${fileCount > 1 ? 's' : ''} to Shared Storage`
     default:
       return 'No file action'
   }

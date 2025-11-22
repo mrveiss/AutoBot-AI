@@ -269,6 +269,7 @@ const uploadProgress = ref<Array<{
   total: number
   eta?: number
   error?: string
+  file?: File  // Store original File object for retry functionality
 }>>([])
 const messageQueueLength = ref(0)
 const isTypingStartTime = ref<number | null>(null)
@@ -657,7 +658,7 @@ const retryUpload = async (uploadId: string) => {
     // Use real upload function
     await uploadFile(upload, upload.file)
     // Re-add to attached files if successful
-    if (!attachedFiles.value.find(f => f.name === upload.file.name)) {
+    if (upload.file && !attachedFiles.value.find(f => f.name === upload.file!.name)) {
       attachedFiles.value.push(upload.file)
     }
   } catch (error) {

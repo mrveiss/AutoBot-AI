@@ -48,7 +48,7 @@
           <div
             v-for="(session, index) in store.sessions"
             :key="session.id"
-            :ref="el => setSessionRef(el, index)"
+            :ref="el => setSessionRef(el as HTMLElement | null, index)"
             class="p-2.5 rounded-lg transition-all duration-150 group relative"
             :class="[
               selectionMode ? 'cursor-default' : 'cursor-pointer',
@@ -187,8 +187,8 @@
           <label v-for="setting in displaySettingsConfig" :key="setting.key" class="flex items-center">
             <input
               type="checkbox"
-              :checked="getSetting(setting.key)"
-              @change="toggleSetting(setting.key, $event.target.checked)"
+              :checked="getSetting(setting.key as keyof DisplaySettings)"
+              @change="toggleSetting(setting.key as keyof DisplaySettings, ($event.target as HTMLInputElement)?.checked)"
               class="mr-2 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
             />
             <span class="text-xs text-blueGray-600">{{ setting.label }}</span>
@@ -268,7 +268,7 @@
 import { ref, computed, nextTick } from 'vue'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
-import { useDisplaySettings } from '@/composables/useDisplaySettings'
+import { useDisplaySettings, type DisplaySettings } from '@/composables/useDisplaySettings'
 import type { ChatSession } from '@/stores/useChatStore'
 import DeleteConversationDialog from './DeleteConversationDialog.vue'
 import type { FileStats } from '@/composables/useConversationFiles'

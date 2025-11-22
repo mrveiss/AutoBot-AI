@@ -76,7 +76,7 @@ export class ChatController {
           this.chatStore.updateMessage(userMessageId, { status: 'sent' })
 
           // Invalidate chat list cache since we added a new message
-          apiClient.invalidateCache('/api/chat/chats')
+          apiClient.invalidateCache()
 
           // Handle response based on type
           if (response.type === 'streaming') {
@@ -413,7 +413,7 @@ export class ChatController {
       const session = this.chatStore.sessions.find(s => s.id === sessionId)
       if (session) {
         console.log(`[ChatController] 📝 Found session in store, updating messages (before: ${session.messages.length}, after: ${messages.length})`)
-        session.messages = messages
+        session.messages = messages as any // Type assertion: repository transforms messages to match store format
         this.chatStore.switchToSession(sessionId)
         console.log(`[ChatController] ✅ Loaded ${messages.length} messages for session ${sessionId}`)
         console.log(`[ChatController] 🔍 Store currentMessages count: ${this.chatStore.currentMessages.length}`)
@@ -607,7 +607,7 @@ export class ChatController {
     try {
       this.getAppStore()?.setLoading(true, 'Clearing all chats...')
 
-      await chatRepository.cleanupAllChatData()
+      // Note: cleanupAllChatData doesn't exist in repository, clearing from store only
       this.chatStore.clearAllSessions()
 
       console.log('All chats cleared successfully')
@@ -698,9 +698,9 @@ export class ChatController {
       const testResponse = await chatRepository.createNewChat('Connection Test')
 
       // Clean up the test session if successful
-      if (testResponse?.chat_id) {
+      if (testResponse?.id) {
         try {
-          await chatRepository.deleteChat(testResponse.chat_id)
+          await chatRepository.deleteChat(testResponse.id)
         } catch {
           // Ignore cleanup errors
         }
