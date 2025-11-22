@@ -10,7 +10,7 @@ export interface ChatMessage {
   timestamp: Date
   status?: 'sending' | 'sent' | 'error'
   error?: string // Error message if status is 'error'
-  type?: 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | 'message' // For filtering
+  type?: 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | 'message' | 'command_approval_request' // For filtering
   attachments?: Array<{
     id: string
     name: string
@@ -316,10 +316,18 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function getDesktopUrl(sessionId: string): string {
-    const session = sessions.value.find(s => s.id === sessionId)
+    let session = sessions.value.find(s => s.id === sessionId)
     if (!session?.desktopSession) {
       // Create desktop session if it doesn't exist
       createDesktopSession(sessionId)
+      // Re-fetch session after creation
+      session = sessions.value.find(s => s.id === sessionId)
+    }
+
+    // Guard: If session still doesn't exist, return default URL
+    if (!session) {
+      const baseUrl = import.meta.env.VITE_DESKTOP_VNC_URL || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.VNC_DESKTOP_PORT}/vnc.html`
+      return baseUrl
     }
 
     // Generate per-chat desktop URL with session context
@@ -350,10 +358,15 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function updateDesktopContext(sessionId: string, context: Record<string, any>) {
-    const session = sessions.value.find(s => s.id === sessionId)
+    let session = sessions.value.find(s => s.id === sessionId)
     if (!session?.desktopSession) {
       createDesktopSession(sessionId)
+      // Re-fetch session after creation
+      session = sessions.value.find(s => s.id === sessionId)
     }
+
+    // Guard: Exit if session doesn't exist
+    if (!session) return
 
     if (session.desktopSession) {
       session.desktopSession.automationContext = {
@@ -451,6 +464,7 @@ export const useChatStore = defineStore('chat', () => {
     key: 'autobot-chat-store',
     storage: localStorage,
     // Only persist essential chat data, not sensitive information
+    // @ts-expect-error - paths is valid in pinia-plugin-persistedstate but not typed in Pinia core
     paths: ['sessions', 'currentSessionId', 'settings.autoSave', 'settings.persistHistory', 'sidebarCollapsed'],
     // Exclude sensitive settings like API keys, system prompts, etc.
     serializer: {
