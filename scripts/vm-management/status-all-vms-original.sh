@@ -4,6 +4,13 @@
 
 set -e
 
+# Source centralized network configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../network/network-config.sh" 2>/dev/null || {
+    # Fallback defaults if network-config.sh not available
+    export BACKEND_PORT="${BACKEND_PORT:-8001}"
+}
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -159,9 +166,9 @@ check_backend_status() {
     
     # Check health endpoint
     echo -n "  Health Check: "
-    if timeout 5 curl -s http://localhost:8001/api/health >/dev/null 2>&1; then
+    if timeout 5 curl -s http://localhost:${BACKEND_PORT}/api/health >/dev/null 2>&1; then
         echo -e "${GREEN}✅ Healthy${NC}"
-        echo "  URL: http://172.16.168.20:8001"
+        echo "  URL: http://172.16.168.20:${BACKEND_PORT}"
     else
         echo -e "${RED}❌ Unhealthy${NC}"
     fi

@@ -4,6 +4,14 @@
 
 set -e
 
+# Source centralized network configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/network-config.sh" 2>/dev/null || {
+    # Fallback defaults if network-config.sh not available
+    export BACKEND_PORT="${BACKEND_PORT:-8001}"
+    export FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+}
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -25,25 +33,25 @@ echo -e "${BLUE}📍 Windows Host IP: ${WIN_HOST_IP}${NC}"
 # Test backend connectivity from WSL
 echo -e "${YELLOW}🔍 Testing backend connectivity...${NC}"
 
-if curl -s http://localhost:8001/api/health >/dev/null 2>&1; then
-    echo -e "${GREEN}✅ Backend accessible via localhost:8001${NC}"
+if curl -s http://localhost:${BACKEND_PORT}/api/health >/dev/null 2>&1; then
+    echo -e "${GREEN}✅ Backend accessible via localhost:${BACKEND_PORT}${NC}"
 else
-    echo -e "${RED}❌ Backend not accessible via localhost:8001${NC}"
-    echo -e "${YELLOW}💡 Make sure backend is running with: python -m uvicorn backend.main:app --host 0.0.0.0 --port 8001${NC}"
+    echo -e "${RED}❌ Backend not accessible via localhost:${BACKEND_PORT}${NC}"
+    echo -e "${YELLOW}💡 Make sure backend is running with: python -m uvicorn backend.main:app --host 0.0.0.0 --port ${BACKEND_PORT}${NC}"
     exit 1
 fi
 
-if curl -s http://${WSL_IP}:8001/api/health >/dev/null 2>&1; then
-    echo -e "${GREEN}✅ Backend accessible via WSL IP: ${WSL_IP}:8001${NC}"
+if curl -s http://${WSL_IP}:${BACKEND_PORT}/api/health >/dev/null 2>&1; then
+    echo -e "${GREEN}✅ Backend accessible via WSL IP: ${WSL_IP}:${BACKEND_PORT}${NC}"
 else
-    echo -e "${RED}❌ Backend not accessible via WSL IP: ${WSL_IP}:8001${NC}"
+    echo -e "${RED}❌ Backend not accessible via WSL IP: ${WSL_IP}:${BACKEND_PORT}${NC}"
 fi
 
 # Check if Windows can access WSL backend (requires running from Windows)
 echo -e "${YELLOW}🔍 Checking WSL port forwarding...${NC}"
 
 # WSL2 should automatically forward ports, but let's verify
-netstat -tlnp | grep 8001 && echo -e "${GREEN}✅ Port 8001 is listening${NC}"
+netstat -tlnp | grep ${BACKEND_PORT} && echo -e "${GREEN}✅ Port ${BACKEND_PORT} is listening${NC}"
 
 # Update frontend configuration to use localhost
 ENV_FILE="/home/kali/Desktop/AutoBot/autobot-vue/.env"
@@ -84,13 +92,13 @@ fi
 # Instructions
 echo -e "${BLUE}📋 Next Steps:${NC}"
 echo "1. Restart Vite dev server: cd autobot-vue && npm run dev"
-echo "2. Access frontend from Windows browser at: http://localhost:5173"
-echo "3. Frontend will proxy API calls to WSL backend via localhost:8001"
+echo "2. Access frontend from Windows browser at: http://localhost:${FRONTEND_PORT}"
+echo "3. Frontend will proxy API calls to WSL backend via localhost:${BACKEND_PORT}"
 echo ""
 echo -e "${GREEN}✅ WSL networking configuration completed!${NC}"
 
 # Show current configuration
 echo -e "${BLUE}📋 Current Configuration:${NC}"
-echo "Frontend: http://localhost:5173 (Windows)"
-echo "Backend:  http://localhost:8001 (WSL, auto-forwarded to Windows)"  
-echo "Proxy:    Frontend -> Windows localhost:8001 -> WSL localhost:8001"
+echo "Frontend: http://localhost:${FRONTEND_PORT} (Windows)"
+echo "Backend:  http://localhost:${BACKEND_PORT} (WSL, auto-forwarded to Windows)"
+echo "Proxy:    Frontend -> Windows localhost:${BACKEND_PORT} -> WSL localhost:${BACKEND_PORT}"
