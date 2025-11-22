@@ -394,8 +394,8 @@ export function useChatInterface() {
   const loadChatMessages = async (chatId: string, silent: boolean = false): Promise<void> => {
     try {
       const data = await apiService.getChatMessages(chatId)
-      // Backend returns 'messages' field, not 'history'
-      const history = data.data?.messages || []
+      // Backend returns 'history' field with ChatMessage[]
+      const history = data.data?.history || []
 
       // Transform backend message format to frontend format
       const newMessages = history.map((message: any) => ({

@@ -474,8 +474,8 @@ onMounted(async () => {
 
     // Extract host and port for display (parse from generated URL)
     const backendConfig = await appConfig.getBackendConfig()
-    vncHost.value = backendConfig?.services?.vnc?.desktop?.host || backendConfig?.vnc?.host || NetworkConstants.MAIN_MACHINE_IP
-    vncPort.value = backendConfig?.services?.vnc?.desktop?.port || backendConfig?.vnc?.port || NetworkConstants.VNC_DESKTOP_PORT
+    vncHost.value = backendConfig?.services?.vnc?.desktop?.host || NetworkConstants.MAIN_MACHINE_IP
+    vncPort.value = backendConfig?.services?.vnc?.desktop?.port || NetworkConstants.VNC_DESKTOP_PORT
 
   } catch (error) {
     console.warn('Failed to load VNC configuration from appConfig:', error)

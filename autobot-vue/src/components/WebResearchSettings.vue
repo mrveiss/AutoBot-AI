@@ -241,14 +241,42 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 
+interface UpdateMessage {
+  text: string
+  type: string
+}
+
+interface TestResult {
+  status: string
+  error?: string
+  [key: string]: any
+}
+
+interface RateLimiter {
+  current_requests?: number
+  max_requests?: number
+}
+
+interface CacheStats {
+  cache_size?: number
+  rate_limiter?: RateLimiter
+}
+
+interface ResearchStatus {
+  enabled: boolean
+  preferred_method: string
+  cache_stats: CacheStats | null
+  circuit_breakers: any
+}
+
 export default {
   name: 'WebResearchSettings',
   setup() {
     // Reactive state
-    const updateMessage = ref(null)
-    const testResult = ref(null)
+    const updateMessage = ref<UpdateMessage | null>(null)
+    const testResult = ref<TestResult | null>(null)
 
-    const researchStatus = reactive({
+    const researchStatus = reactive<ResearchStatus>({
       enabled: false,
       preferred_method: 'basic',
       cache_stats: null,
@@ -270,7 +298,7 @@ export default {
     })
 
     // Show message utility
-    const showMessage = (text, type = 'info') => {
+    const showMessage = (text: string, type: string = 'info') => {
       updateMessage.value = { text, type }
       setTimeout(() => {
         updateMessage.value = null

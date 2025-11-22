@@ -642,9 +642,9 @@ const isLastMessage = (message: ChatMessage): boolean => {
 }
 
 const shouldShowMetadata = (message: ChatMessage): boolean => {
-  return displaySettings.value.showJson &&
+  return !!displaySettings.value.showJson &&
          message.sender === 'assistant' &&
-         message.metadata &&
+         !!message.metadata &&
          Object.keys(message.metadata).length > 0
 }
 
@@ -716,7 +716,15 @@ const viewAttachment = (attachment: any) => {
 
 const retryMessage = async (messageId: string) => {
   try {
-    await controller.retryMessage(messageId)
+    // Find the message in the store
+    const message = store.currentMessages.find(m => m.id === messageId)
+    if (!message || !message.content) {
+      console.error('Message not found or has no content:', messageId)
+      return
+    }
+
+    // Resend the message using the controller
+    await controller.sendMessage(message.content)
   } catch (error) {
     console.error('Failed to retry message:', error)
   }
