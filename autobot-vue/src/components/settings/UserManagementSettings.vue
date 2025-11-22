@@ -10,7 +10,7 @@
           <i class="fas fa-check-circle"></i>
           <div class="status-info">
             <span class="status-label">Authenticated</span>
-            <span class="user-info">{{ userStore.user?.username }} ({{ userStore.user?.role }})</span>
+            <span class="user-info">{{ userStore.currentUser?.username }} ({{ userStore.currentUser?.role }})</span>
           </div>
           <button @click="handleLogout" class="logout-btn">
             <i class="fas fa-sign-out-alt"></i>
@@ -102,7 +102,7 @@
             <input
               type="checkbox"
               v-model="preferences.enableNotifications"
-              @change="updatePreference('enableNotifications', $event.target.checked)"
+              @change="handlePreferenceCheckboxChange('enableNotifications')"
             />
             Enable notifications
           </label>
@@ -113,7 +113,7 @@
             <input
               type="checkbox"
               v-model="preferences.autoSaveSettings"
-              @change="updatePreference('autoSaveSettings', $event.target.checked)"
+              @change="handlePreferenceCheckboxChange('autoSaveSettings')"
             />
             Auto-save settings
           </label>
@@ -124,7 +124,7 @@
           <select
             id="theme"
             v-model="preferences.theme"
-            @change="updatePreference('theme', $event.target.value)"
+            @change="handlePreferenceSelectChange('theme')"
             class="form-control"
           >
             <option value="auto">Auto (System)</option>
@@ -138,7 +138,7 @@
           <select
             id="language"
             v-model="preferences.language"
-            @change="updatePreference('language', $event.target.value)"
+            @change="handlePreferenceSelectChange('language')"
             class="form-control"
           >
             <option value="en">English</option>
@@ -160,7 +160,7 @@
             id="sessionTimeout"
             type="number"
             v-model="securitySettings.sessionTimeout"
-            @change="updateSecuritySetting('sessionTimeout', $event.target.value)"
+            @change="handleSecurityNumberInputChange('sessionTimeout')"
             class="form-control"
             min="5"
             max="1440"
@@ -172,7 +172,7 @@
             <input
               type="checkbox"
               v-model="securitySettings.requireReauth"
-              @change="updateSecuritySetting('requireReauth', $event.target.checked)"
+              @change="handleSecurityCheckboxChange('requireReauth')"
             />
             Require re-authentication for sensitive operations
           </label>
@@ -346,6 +346,27 @@ const updateSecuritySetting = (key: string, value: any) => {
   emit('setting-changed', `user.security.${key}`, value)
 }
 
+// Typed event handlers
+const handlePreferenceCheckboxChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updatePreference(key, target.checked)
+}
+
+const handlePreferenceSelectChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLSelectElement
+  updatePreference(key, target.value)
+}
+
+const handleSecurityNumberInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateSecuritySetting(key, target.value)
+}
+
+const handleSecurityCheckboxChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateSecuritySetting(key, target.checked)
+}
+
 const changePassword = async () => {
   if (passwordForm.newPassword !== passwordForm.confirmPassword) {
     alert('New passwords do not match')
@@ -354,12 +375,24 @@ const changePassword = async () => {
 
   try {
     isChangingPassword.value = true
-    await userStore.changePassword(passwordForm.currentPassword, passwordForm.newPassword)
+
+    // TODO: Implement password change functionality
+    // This requires:
+    // 1. Creating a UserRepository with changePassword method
+    // 2. Adding the changePassword API endpoint
+    // 3. Implementing userStore.changePassword method
+    // For now, show a message that this feature is not yet implemented
+
+    alert('Password change functionality is not yet implemented. This requires backend API support.')
+
+    // When implemented, should look like:
+    // await userStore.changePassword(passwordForm.currentPassword, passwordForm.newPassword)
+
     showChangePasswordModal.value = false
     passwordForm.currentPassword = ''
     passwordForm.newPassword = ''
     passwordForm.confirmPassword = ''
-    emit('setting-changed', 'user.password', true)
+    // emit('setting-changed', 'user.password', true)
   } catch (error) {
     console.error('Failed to change password:', error)
     alert('Failed to change password')
@@ -369,14 +402,14 @@ const changePassword = async () => {
 }
 
 const loadUserData = () => {
-  if (userStore.user) {
-    profileForm.username = userStore.user.username
-    profileForm.email = userStore.user.email || ''
-    profileForm.role = userStore.user.role
+  if (userStore.currentUser) {
+    profileForm.username = userStore.currentUser.username
+    profileForm.email = userStore.currentUser.email || ''
+    profileForm.role = userStore.currentUser.role
   }
 
-  if (userStore.user?.preferences) {
-    Object.assign(preferences, userStore.user.preferences)
+  if (userStore.currentUser?.preferences) {
+    Object.assign(preferences, userStore.currentUser.preferences)
   }
 }
 
