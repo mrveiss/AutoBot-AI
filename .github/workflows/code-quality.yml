@@ -19,12 +19,22 @@ jobs:
 
     - name: Set up Python environment
       run: |
-        # Use pyenv Python if available
+        # Debug: Check if pyenv exists
+        echo "Checking for pyenv at: $HOME/.pyenv"
         if [ -d "$HOME/.pyenv" ]; then
+          echo "✅ pyenv found, adding to PATH"
           echo "$HOME/.pyenv/shims" >> $GITHUB_PATH
           eval "$(pyenv init -)"
+        else
+          echo "❌ pyenv not found at $HOME/.pyenv"
+          echo "Will use system Python"
         fi
+
+        # Show which python3 is being used
+        which python3
         python3 --version
+        python3 -m pip --version || echo "⚠️ pip not available"
+
         echo "PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')" >> $GITHUB_ENV
 
     - name: Cache pip dependencies
