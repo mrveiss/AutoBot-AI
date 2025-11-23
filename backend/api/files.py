@@ -75,10 +75,10 @@ ALLOWED_EXTENSIONS = {
     ".ppt",
     ".pptx",
     # Office document formats (OpenDocument/LibreOffice)
-    ".odt",   # OpenDocument Text (Writer)
-    ".ods",   # OpenDocument Spreadsheet (Calc)
-    ".odp",   # OpenDocument Presentation (Impress)
-    ".odg",   # OpenDocument Graphics (Draw)
+    ".odt",  # OpenDocument Text (Writer)
+    ".ods",  # OpenDocument Spreadsheet (Calc)
+    ".odp",  # OpenDocument Presentation (Impress)
+    ".odg",  # OpenDocument Graphics (Draw)
     # Image formats
     ".png",
     ".jpg",
@@ -359,13 +359,24 @@ def validate_file_content(content: bytes, filename: str) -> bool:
         extension = Path(filename).suffix.lower()
         binary_formats = {
             # Images
-            ".png", ".jpg", ".jpeg", ".gif", ".ico",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".ico",
             # Documents (PDF)
             ".pdf",
             # Microsoft Office (ZIP-based binary formats)
-            ".doc", ".docx", ".xlsx", ".ppt", ".pptx",
+            ".doc",
+            ".docx",
+            ".xlsx",
+            ".ppt",
+            ".pptx",
             # OpenDocument (ZIP-based binary formats)
-            ".odt", ".ods", ".odp", ".odg"
+            ".odt",
+            ".ods",
+            ".odp",
+            ".odg",
         }
         if extension not in binary_formats:
             return False
@@ -663,7 +674,8 @@ async def rename_file_or_directory(
 
     if target_path.exists():
         raise HTTPException(
-            status_code=409, detail=f"A file or directory named '{new_name}' already exists"
+            status_code=409,
+            detail=f"A file or directory named '{new_name}' already exists",
         )
 
     # Perform rename
@@ -757,7 +769,7 @@ async def preview_file(request: Request, path: str):
         "content": content,
         "mime_type": file_info.mime_type,
         "size": file_info.size,
-        "name": file_info.name
+        "name": file_info.name,
     }
 
 
@@ -827,9 +839,7 @@ async def delete_file(request: Request, path: str):
                     "ip": request.client.host if request.client else "unknown",
                 },
             )
-            return {
-                "message": f"Directory '{target_path.name}' deleted successfully"
-            }
+            return {"message": f"Directory '{target_path.name}' deleted successfully"}
         except OSError:
             # Directory not empty, use recursive delete with caution
             shutil.rmtree(target_path)

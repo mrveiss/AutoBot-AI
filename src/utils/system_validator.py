@@ -74,7 +74,9 @@ class SystemValidator:
         # Validation configuration
         self.timeout_seconds = config.get("validation.timeout_seconds", 30)
         self.critical_thresholds = {
-            "response_time_ms": config.get("validation.thresholds.response_time_ms", 5000),
+            "response_time_ms": config.get(
+                "validation.thresholds.response_time_ms", 5000
+            ),
             "cache_hit_rate": config.get("validation.thresholds.cache_hit_rate", 50.0),
             "memory_usage_percent": config.get(
                 "validation.thresholds.memory_usage_percent", 90.0
@@ -1025,7 +1027,9 @@ class SystemValidator:
             import socket
 
             try:
-                socket.create_connection((NetworkConstants.PUBLIC_DNS_IP, 53), timeout=3)
+                socket.create_connection(
+                    (NetworkConstants.PUBLIC_DNS_IP, 53), timeout=3
+                )
                 self._add_result(
                     component,
                     "Network Connectivity",

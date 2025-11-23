@@ -66,6 +66,7 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.auth_middleware import AuthenticationMiddleware
 from src.chat_workflow_manager import ChatWorkflowManager
 from src.constants.network_constants import NetworkConstants
+
 # REFACTORED: Removed deprecated RedisPoolManager import
 # from src.redis_pool_manager import RedisPoolManager
 # Redis connections now managed centrally via src.utils.redis_client::get_redis_client()
@@ -202,7 +203,7 @@ async def enhanced_background_init(app: FastAPI):
                     "Redis",
                     "Using centralized Redis client management (src.utils.redis_client)",
                     90,
-                    True
+                    True,
                 )
             except Exception as e:
                 logger.error(f"Redis status check failed: {e}")
@@ -307,7 +308,9 @@ async def enhanced_lifespan(app: FastAPI):
 
     # REFACTORED: Removed redis_pools cleanup - using centralized Redis client management
     # Redis connections are automatically managed by get_redis_client()
-    logger.info("✅ Redis connections managed by centralized client (src.utils.redis_client)")
+    logger.info(
+        "✅ Redis connections managed by centralized client (src.utils.redis_client)"
+    )
 
     logger.info("✅ Enhanced AutoBot Backend shutdown complete")
 

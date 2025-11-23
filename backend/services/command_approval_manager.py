@@ -135,7 +135,9 @@ class CommandApprovalManager:
         ),
     }
 
-    def __init__(self, custom_permissions: Optional[Dict[AgentRole, AgentPermissions]] = None):
+    def __init__(
+        self, custom_permissions: Optional[Dict[AgentRole, AgentPermissions]] = None
+    ):
         """
         Initialize command approval manager.
 
@@ -200,7 +202,9 @@ class CommandApprovalManager:
         }
 
         # In supervised mode, allow up to FORBIDDEN but require approval
-        effective_max_risk = CommandRisk.FORBIDDEN if supervised_mode else perms.max_risk
+        effective_max_risk = (
+            CommandRisk.FORBIDDEN if supervised_mode else perms.max_risk
+        )
 
         if risk_levels.get(command_risk, 999) > risk_levels.get(effective_max_risk, 0):
             if supervised_mode:

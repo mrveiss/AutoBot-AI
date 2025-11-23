@@ -37,6 +37,7 @@ router = APIRouter(tags=["structured_thinking_mcp", "mcp"])
 
 class ThinkingStage(str, Enum):
     """Five cognitive stages for structured thinking"""
+
     PROBLEM_DEFINITION = "Problem Definition"
     RESEARCH = "Research"
     ANALYSIS = "Analysis"
@@ -60,18 +61,32 @@ class ProcessThoughtRequest(BaseModel):
     """Request model for processing a thought in structured framework"""
 
     thought: str = Field(..., description="The content of the thought")
-    thought_number: int = Field(..., ge=1, description="Position in the thinking sequence")
-    total_thoughts: int = Field(..., ge=1, description="Expected total number of thoughts")
-    next_thought_needed: bool = Field(..., description="Whether more thoughts will follow")
+    thought_number: int = Field(
+        ..., ge=1, description="Position in the thinking sequence"
+    )
+    total_thoughts: int = Field(
+        ..., ge=1, description="Expected total number of thoughts"
+    )
+    next_thought_needed: bool = Field(
+        ..., description="Whether more thoughts will follow"
+    )
     stage: ThinkingStage = Field(..., description="Cognitive stage for this thought")
 
     # Optional metadata
-    tags: Optional[List[str]] = Field(None, description="Keywords or categories for this thought")
-    axioms_used: Optional[List[str]] = Field(None, description="Fundamental principles applied")
-    assumptions_challenged: Optional[List[str]] = Field(None, description="Assumptions being questioned")
+    tags: Optional[List[str]] = Field(
+        None, description="Keywords or categories for this thought"
+    )
+    axioms_used: Optional[List[str]] = Field(
+        None, description="Fundamental principles applied"
+    )
+    assumptions_challenged: Optional[List[str]] = Field(
+        None, description="Assumptions being questioned"
+    )
 
     # Session management
-    session_id: Optional[str] = Field("default", description="Thinking session identifier")
+    session_id: Optional[str] = Field(
+        "default", description="Thinking session identifier"
+    )
 
 
 class GenerateSummaryRequest(BaseModel):
@@ -108,21 +123,21 @@ async def get_structured_thinking_mcp_tools() -> List[MCPTool]:
                 "properties": {
                     "thought": {
                         "type": "string",
-                        "description": "The content of the thought to record"
+                        "description": "The content of the thought to record",
                     },
                     "thought_number": {
                         "type": "integer",
                         "description": "Position in the thinking sequence",
-                        "minimum": 1
+                        "minimum": 1,
                     },
                     "total_thoughts": {
                         "type": "integer",
                         "description": "Expected total number of thoughts",
-                        "minimum": 1
+                        "minimum": 1,
                     },
                     "next_thought_needed": {
                         "type": "boolean",
-                        "description": "Whether more thoughts will follow this one"
+                        "description": "Whether more thoughts will follow this one",
                     },
                     "stage": {
                         "type": "string",
@@ -131,33 +146,39 @@ async def get_structured_thinking_mcp_tools() -> List[MCPTool]:
                             "Research",
                             "Analysis",
                             "Synthesis",
-                            "Conclusion"
+                            "Conclusion",
                         ],
-                        "description": "Cognitive stage for this thought"
+                        "description": "Cognitive stage for this thought",
                     },
                     "tags": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Keywords or categories for this thought"
+                        "description": "Keywords or categories for this thought",
                     },
                     "axioms_used": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Fundamental principles or axioms applied"
+                        "description": "Fundamental principles or axioms applied",
                     },
                     "assumptions_challenged": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Assumptions being questioned or challenged"
+                        "description": "Assumptions being questioned or challenged",
                     },
                     "session_id": {
                         "type": "string",
                         "description": "Thinking session identifier",
-                        "default": "default"
-                    }
+                        "default": "default",
+                    },
                 },
-                "required": ["thought", "thought_number", "total_thoughts", "next_thought_needed", "stage"]
-            }
+                "required": [
+                    "thought",
+                    "thought_number",
+                    "total_thoughts",
+                    "next_thought_needed",
+                    "stage",
+                ],
+            },
         ),
         MCPTool(
             name="generate_summary",
@@ -172,10 +193,10 @@ async def get_structured_thinking_mcp_tools() -> List[MCPTool]:
                     "session_id": {
                         "type": "string",
                         "description": "Session to summarize",
-                        "default": "default"
+                        "default": "default",
                     }
-                }
-            }
+                },
+            },
         ),
         MCPTool(
             name="clear_history",
@@ -189,11 +210,11 @@ async def get_structured_thinking_mcp_tools() -> List[MCPTool]:
                     "session_id": {
                         "type": "string",
                         "description": "Session to clear",
-                        "default": "default"
+                        "default": "default",
                     }
-                }
-            }
-        )
+                },
+            },
+        ),
     ]
     return tools
 
@@ -227,7 +248,7 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Dict[str, Any]:
         "tags": request.tags or [],
         "axioms_used": request.axioms_used or [],
         "assumptions_challenged": request.assumptions_challenged or [],
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
     # Store thought
@@ -237,7 +258,9 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Dict[str, Any]:
     session_thoughts = structured_sessions[session_id]
     stage_counts = {}
     for stage in ThinkingStage:
-        stage_counts[stage.value] = sum(1 for t in session_thoughts if t["stage"] == stage.value)
+        stage_counts[stage.value] = sum(
+            1 for t in session_thoughts if t["stage"] == stage.value
+        )
 
     # Calculate progress
     progress_percentage = (request.thought_number / request.total_thoughts) * 100
@@ -256,7 +279,7 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Dict[str, Any]:
         "thinking_complete": thinking_complete,
         "stage_distribution": stage_counts,
         "session_thought_count": len(session_thoughts),
-        "message": f"Processed thought {request.thought_number}/{request.total_thoughts} in {request.stage.value} stage"
+        "message": f"Processed thought {request.thought_number}/{request.total_thoughts} in {request.stage.value} stage",
     }
 
     # Identify related thoughts (same tags)
@@ -264,11 +287,15 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Dict[str, Any]:
         related_thoughts = []
         for idx, t in enumerate(session_thoughts[:-1]):  # Exclude current thought
             if any(tag in t.get("tags", []) for tag in request.tags):
-                related_thoughts.append({
-                    "thought_number": t["thought_number"],
-                    "stage": t["stage"],
-                    "common_tags": [tag for tag in request.tags if tag in t.get("tags", [])]
-                })
+                related_thoughts.append(
+                    {
+                        "thought_number": t["thought_number"],
+                        "stage": t["stage"],
+                        "common_tags": [
+                            tag for tag in request.tags if tag in t.get("tags", [])
+                        ],
+                    }
+                )
 
         if related_thoughts:
             response["related_thoughts"] = related_thoughts
@@ -286,12 +313,16 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Dict[str, Any]:
 
         response["completion_summary"] = {
             "total_thoughts": len(session_thoughts),
-            "stages_used": [stage for stage, count in stage_counts.items() if count > 0],
+            "stages_used": [
+                stage for stage, count in stage_counts.items() if count > 0
+            ],
             "unique_tags": list(all_tags),
             "axioms_applied": list(all_axioms),
-            "assumptions_challenged": list(all_assumptions)
+            "assumptions_challenged": list(all_assumptions),
         }
-        logger.info(f"Structured thinking session '{session_id}' completed with {len(session_thoughts)} thoughts")
+        logger.info(
+            f"Structured thinking session '{session_id}' completed with {len(session_thoughts)} thoughts"
+        )
 
     return response
 
@@ -320,7 +351,7 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Dict[str, Any
             "success": True,
             "session_id": session_id,
             "message": "No thoughts recorded in this session",
-            "thought_count": 0
+            "thought_count": 0,
         }
 
     # Calculate stage distribution
@@ -331,7 +362,14 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Dict[str, Any
         stage_counts[stage.value] = len(thoughts_in_stage)
         if thoughts_in_stage:
             stage_thoughts[stage.value] = [
-                {"thought_number": t["thought_number"], "thought": t["thought"][:100] + "..." if len(t["thought"]) > 100 else t["thought"]}
+                {
+                    "thought_number": t["thought_number"],
+                    "thought": (
+                        t["thought"][:100] + "..."
+                        if len(t["thought"]) > 100
+                        else t["thought"]
+                    ),
+                }
                 for t in thoughts_in_stage
             ]
 
@@ -353,7 +391,7 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Dict[str, Any
             "total_thoughts": len(session_thoughts),
             "started_at": session_thoughts[0]["timestamp"],
             "last_thought_at": session_thoughts[-1]["timestamp"],
-            "complete": not session_thoughts[-1].get("next_thought_needed", True)
+            "complete": not session_thoughts[-1].get("next_thought_needed", True),
         },
         "stage_distribution": stage_counts,
         "stage_progression": stage_thoughts,
@@ -363,16 +401,16 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Dict[str, Any
             "axioms_applied": list(all_axioms),
             "axioms_count": len(all_axioms),
             "assumptions_challenged": list(all_assumptions),
-            "assumptions_count": len(all_assumptions)
+            "assumptions_count": len(all_assumptions),
         },
         "cognitive_flow": [
             {
                 "thought_number": t["thought_number"],
                 "stage": t["stage"],
-                "timestamp": t["timestamp"]
+                "timestamp": t["timestamp"],
             }
             for t in session_thoughts
-        ]
+        ],
     }
 
     return summary
@@ -398,7 +436,7 @@ async def clear_history_mcp(request: ClearHistoryRequest) -> Dict[str, Any]:
         "success": True,
         "session_id": session_id,
         "thoughts_cleared": thought_count,
-        "message": f"Cleared {thought_count} thoughts from session '{session_id}'"
+        "message": f"Cleared {thought_count} thoughts from session '{session_id}'",
     }
 
 
@@ -421,7 +459,7 @@ async def get_structured_session(session_id: str) -> Dict[str, Any]:
         stage_thoughts = [t for t in thoughts if t["stage"] == stage.value]
         stage_analysis[stage.value] = {
             "count": len(stage_thoughts),
-            "thoughts": stage_thoughts
+            "thoughts": stage_thoughts,
         }
 
     return {
@@ -431,7 +469,9 @@ async def get_structured_session(session_id: str) -> Dict[str, Any]:
         "stage_analysis": stage_analysis,
         "started_at": thoughts[0]["timestamp"] if thoughts else None,
         "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None,
-        "complete": not thoughts[-1].get("next_thought_needed", True) if thoughts else False
+        "complete": (
+            not thoughts[-1].get("next_thought_needed", True) if thoughts else False
+        ),
     }
 
 
@@ -448,18 +488,23 @@ async def list_structured_sessions() -> Dict[str, Any]:
         # Calculate stage distribution
         stage_counts = {}
         for stage in ThinkingStage:
-            stage_counts[stage.value] = sum(1 for t in thoughts if t["stage"] == stage.value)
+            stage_counts[stage.value] = sum(
+                1 for t in thoughts if t["stage"] == stage.value
+            )
 
-        sessions.append({
-            "session_id": session_id,
-            "thought_count": len(thoughts),
-            "stage_distribution": stage_counts,
-            "started_at": thoughts[0]["timestamp"] if thoughts else None,
-            "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None,
-            "complete": not thoughts[-1].get("next_thought_needed", True) if thoughts else False
-        })
+        sessions.append(
+            {
+                "session_id": session_id,
+                "thought_count": len(thoughts),
+                "stage_distribution": stage_counts,
+                "started_at": thoughts[0]["timestamp"] if thoughts else None,
+                "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None,
+                "complete": (
+                    not thoughts[-1].get("next_thought_needed", True)
+                    if thoughts
+                    else False
+                ),
+            }
+        )
 
-    return {
-        "session_count": len(sessions),
-        "sessions": sessions
-    }
+    return {"session_count": len(sessions), "sessions": sessions}

@@ -136,7 +136,9 @@ class InfrastructureMonitor:
 
             self.redis_client = get_redis_client(database="monitoring")
             if self.redis_client is None:
-                logger.warning("Redis client initialization returned None (Redis disabled?)")
+                logger.warning(
+                    "Redis client initialization returned None (Redis disabled?)"
+                )
         except Exception as e:
             logger.error(f"Could not initialize Redis client: {e}")
 

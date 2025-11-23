@@ -195,10 +195,7 @@ def get_light_theme_css() -> str:
 
 
 def create_metric_card(
-    title: str,
-    value: str,
-    change: Optional[str] = None,
-    card_id: Optional[str] = None
+    title: str, value: str, change: Optional[str] = None, card_id: Optional[str] = None
 ) -> str:
     """
     Generate a metric card HTML component.
@@ -216,8 +213,8 @@ def create_metric_card(
         >>> create_metric_card("CPU Usage", "45%", "22-core Intel Ultra 9")
         '<div class="metric-card">...</div>'
     """
-    value_id = f'id="{card_id}"' if card_id else ''
-    change_html = f'<div class="metric-change">{change}</div>' if change else ''
+    value_id = f'id="{card_id}"' if card_id else ""
+    change_html = f'<div class="metric-change">{change}</div>' if change else ""
 
     return f"""
                 <div class="metric-card">
@@ -228,9 +225,7 @@ def create_metric_card(
 
 
 def create_chart_container(
-    chart_id: str,
-    title: Optional[str] = None,
-    description: Optional[str] = None
+    chart_id: str, title: Optional[str] = None, description: Optional[str] = None
 ) -> str:
     """
     Generate a chart container HTML component.
@@ -247,8 +242,8 @@ def create_chart_container(
         >>> create_chart_container("cpu-chart", "CPU Usage Over Time")
         '<div class="chart-container">...</div>'
     """
-    title_html = f'<h3>{title}</h3>' if title else ''
-    desc_html = f'<p>{description}</p>' if description else ''
+    title_html = f"<h3>{title}</h3>" if title else ""
+    desc_html = f"<p>{description}</p>" if description else ""
 
     return f"""
             <div class="chart-container">
@@ -279,17 +274,11 @@ def get_plotly_dark_config() -> Dict[str, Any]:
         "plot_bgcolor": "#161b22",
         "font": {
             "color": "#c9d1d9",
-            "family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+            "family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         },
-        "xaxis": {
-            "gridcolor": "#30363d",
-            "linecolor": "#30363d"
-        },
-        "yaxis": {
-            "gridcolor": "#30363d",
-            "linecolor": "#30363d"
-        },
-        "margin": {"l": 40, "r": 40, "t": 40, "b": 40}
+        "xaxis": {"gridcolor": "#30363d", "linecolor": "#30363d"},
+        "yaxis": {"gridcolor": "#30363d", "linecolor": "#30363d"},
+        "margin": {"l": 40, "r": 40, "t": 40, "b": 40},
     }
 
 
@@ -314,17 +303,11 @@ def get_plotly_light_config() -> Dict[str, Any]:
         "plot_bgcolor": "white",
         "font": {
             "color": "#333",
-            "family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+            "family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         },
-        "xaxis": {
-            "gridcolor": "#e2e8f0",
-            "linecolor": "#cbd5e0"
-        },
-        "yaxis": {
-            "gridcolor": "#e2e8f0",
-            "linecolor": "#cbd5e0"
-        },
-        "margin": {"l": 40, "r": 40, "t": 40, "b": 40}
+        "xaxis": {"gridcolor": "#e2e8f0", "linecolor": "#cbd5e0"},
+        "yaxis": {"gridcolor": "#e2e8f0", "linecolor": "#cbd5e0"},
+        "margin": {"l": 40, "r": 40, "t": 40, "b": 40},
     }
 
 
@@ -332,7 +315,7 @@ def create_dashboard_header(
     title: str,
     subtitle: Optional[str] = None,
     status: Optional[str] = "healthy",
-    theme: str = "dark"
+    theme: str = "dark",
 ) -> str:
     """
     Generate dashboard header HTML.
@@ -360,7 +343,7 @@ def create_dashboard_header(
     </div>"""
     else:
         # Light theme: centered header with subtitle
-        subtitle_html = f'<p class="subtitle">{subtitle}</p>' if subtitle else ''
+        subtitle_html = f'<p class="subtitle">{subtitle}</p>' if subtitle else ""
         return f"""
     <div class="header">
         <h1>{title}</h1>
@@ -389,15 +372,14 @@ def create_metrics_grid(metrics: List[Dict[str, str]]) -> str:
         ... ]
         >>> create_metrics_grid(metrics)
     """
-    cards = "\n".join([
-        create_metric_card(
-            m["title"],
-            m["value"],
-            m.get("change"),
-            m.get("card_id")
-        )
-        for m in metrics
-    ])
+    cards = "\n".join(
+        [
+            create_metric_card(
+                m["title"], m["value"], m.get("change"), m.get("card_id")
+            )
+            for m in metrics
+        ]
+    )
 
     return f"""
             <div class="metrics-grid">

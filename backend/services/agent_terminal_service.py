@@ -25,7 +25,9 @@ from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 from src.logging.terminal_logger import TerminalLogger
 from src.monitoring.prometheus_metrics import get_metrics_manager
-from src.chat_history_manager import ChatHistoryManager  # CRITICAL FIX: Chat integration
+from src.chat_history_manager import (
+    ChatHistoryManager,
+)  # CRITICAL FIX: Chat integration
 from src.chat_workflow_manager import ChatWorkflowManager  # For LLM interpretation
 from src.secure_command_executor import (
     CommandRisk,
@@ -63,11 +65,11 @@ def map_risk_to_level(risk: CommandRisk) -> RiskLevel:
         Corresponding RiskLevel enum
     """
     risk_mapping = {
-        CommandRisk.SAFE: RiskLevel.LOW,           # Safe commands → Low risk
-        CommandRisk.MODERATE: RiskLevel.MEDIUM,    # Moderate commands → Medium risk
-        CommandRisk.HIGH: RiskLevel.HIGH,          # High risk commands → High risk
+        CommandRisk.SAFE: RiskLevel.LOW,  # Safe commands → Low risk
+        CommandRisk.MODERATE: RiskLevel.MEDIUM,  # Moderate commands → Medium risk
+        CommandRisk.HIGH: RiskLevel.HIGH,  # High risk commands → High risk
         CommandRisk.CRITICAL: RiskLevel.CRITICAL,  # Critical commands → Critical risk
-        CommandRisk.FORBIDDEN: RiskLevel.CRITICAL, # Forbidden commands → Critical risk (blocked)
+        CommandRisk.FORBIDDEN: RiskLevel.CRITICAL,  # Forbidden commands → Critical risk (blocked)
     }
     return risk_mapping.get(risk, RiskLevel.MEDIUM)
 
@@ -149,28 +151,27 @@ import re
 
 # Patterns for detecting commands that require stdin input
 INTERACTIVE_COMMAND_PATTERNS = [
-    r'^\s*sudo\s+',              # sudo commands (password)
-    r'^\s*ssh\s+',               # SSH connections (host verification, password)
-    r'\bmysql\s+.*-p\b',         # MySQL with password flag
-    r'\bmysql\s+--password\b',   # MySQL with --password flag
-    r'^\s*passwd\b',             # Password change commands
-    r'\b--interactive\b',        # Explicit interactive flag
-    r'^\s*python.*input\(',      # Python scripts with input()
-    r'^\s*read\s+',              # Bash read command
-    r'^\s*select\s+',            # Bash select menu
-    r'^\s*apt\s+install\b',      # APT with confirmations
-    r'^\s*yum\s+install\b',      # YUM with confirmations
-    r'^\s*docker\s+login\b',     # Docker login (username/password)
-    r'^\s*git\s+clone.*@',       # Git clone with SSH (password)
-    r'^\s*psql\s+',              # PostgreSQL client
-    r'^\s*ftp\s+',               # FTP client
-    r'^\s*telnet\s+',            # Telnet client
+    r"^\s*sudo\s+",  # sudo commands (password)
+    r"^\s*ssh\s+",  # SSH connections (host verification, password)
+    r"\bmysql\s+.*-p\b",  # MySQL with password flag
+    r"\bmysql\s+--password\b",  # MySQL with --password flag
+    r"^\s*passwd\b",  # Password change commands
+    r"\b--interactive\b",  # Explicit interactive flag
+    r"^\s*python.*input\(",  # Python scripts with input()
+    r"^\s*read\s+",  # Bash read command
+    r"^\s*select\s+",  # Bash select menu
+    r"^\s*apt\s+install\b",  # APT with confirmations
+    r"^\s*yum\s+install\b",  # YUM with confirmations
+    r"^\s*docker\s+login\b",  # Docker login (username/password)
+    r"^\s*git\s+clone.*@",  # Git clone with SSH (password)
+    r"^\s*psql\s+",  # PostgreSQL client
+    r"^\s*ftp\s+",  # FTP client
+    r"^\s*telnet\s+",  # Telnet client
 ]
 
 # Compile patterns for performance
 _INTERACTIVE_PATTERNS_COMPILED = [
-    re.compile(pattern, re.IGNORECASE)
-    for pattern in INTERACTIVE_COMMAND_PATTERNS
+    re.compile(pattern, re.IGNORECASE) for pattern in INTERACTIVE_COMMAND_PATTERNS
 ]
 
 
@@ -200,24 +201,27 @@ def is_interactive_command(command: str) -> tuple[bool, list[str]]:
     """
     matched_patterns = []
 
-    for pattern, description in zip(_INTERACTIVE_PATTERNS_COMPILED, [
-        "sudo commands (password)",
-        "SSH connections (host verification, password)",
-        "MySQL with password flag",
-        "MySQL with --password flag",
-        "Password change commands",
-        "Explicit interactive flag",
-        "Python scripts with input()",
-        "Bash read command",
-        "Bash select menu",
-        "APT with confirmations",
-        "YUM with confirmations",
-        "Docker login (username/password)",
-        "Git clone with SSH (password)",
-        "PostgreSQL client",
-        "FTP client",
-        "Telnet client",
-    ]):
+    for pattern, description in zip(
+        _INTERACTIVE_PATTERNS_COMPILED,
+        [
+            "sudo commands (password)",
+            "SSH connections (host verification, password)",
+            "MySQL with password flag",
+            "MySQL with --password flag",
+            "Password change commands",
+            "Explicit interactive flag",
+            "Python scripts with input()",
+            "Bash read command",
+            "Bash select menu",
+            "APT with confirmations",
+            "YUM with confirmations",
+            "Docker login (username/password)",
+            "Git clone with SSH (password)",
+            "PostgreSQL client",
+            "FTP client",
+            "Telnet client",
+        ],
+    ):
         if pattern.search(command):
             matched_patterns.append(description)
 
@@ -265,7 +269,9 @@ class AgentTerminalService:
     - Comprehensive audit logging
     """
 
-    def __init__(self, redis_client=None, chat_workflow_manager=None, command_queue=None):
+    def __init__(
+        self, redis_client=None, chat_workflow_manager=None, command_queue=None
+    ):
         """
         Initialize agent terminal service.
 
@@ -278,7 +284,9 @@ class AgentTerminalService:
         """
         self.redis_client = redis_client
         self.sessions: Dict[str, AgentTerminalSession] = {}
-        self._sessions_lock = asyncio.Lock()  # CRITICAL: Protect concurrent session access
+        self._sessions_lock = (
+            asyncio.Lock()
+        )  # CRITICAL: Protect concurrent session access
         self._approval_locks: Dict[str, asyncio.Lock] = {}  # Per-session approval locks
         self._approval_locks_lock = asyncio.Lock()  # Lock for the locks dictionary
         self.security_policy = SecurityPolicy()
@@ -303,7 +311,9 @@ class AgentTerminalService:
         # Prometheus metrics instance
         self.prometheus_metrics = get_metrics_manager()
 
-        logger.info("AgentTerminalService initialized with security controls and command queue")
+        logger.info(
+            "AgentTerminalService initialized with security controls and command queue"
+        )
 
     async def _get_approval_lock(self, session_id: str) -> asyncio.Lock:
         """
@@ -466,7 +476,9 @@ class AgentTerminalService:
 
             json_data = json.dumps(session_data)
             await self.redis_client.setex(key, 3600, json_data)  # 1 hour TTL
-            logger.debug(f"Persisted session {session.session_id} to Redis with key {key}")
+            logger.debug(
+                f"Persisted session {session.session_id} to Redis with key {key}"
+            )
 
             # DEBUG: Verify what was saved
             logger.warning(
@@ -492,12 +504,13 @@ class AgentTerminalService:
         try:
             # Get recent messages from chat history (last 50 messages)
             messages = await self.chat_history_manager.get_session_messages(
-                session_id=conversation_id,
-                limit=50
+                session_id=conversation_id, limit=50
             )
 
             if not messages:
-                logger.debug(f"No messages found for conversation {conversation_id}, skipping approval restoration")
+                logger.debug(
+                    f"No messages found for conversation {conversation_id}, skipping approval restoration"
+                )
                 return
 
             # Search for most recent command_approval_request
@@ -508,7 +521,9 @@ class AgentTerminalService:
                     break
 
             if not approval_request:
-                logger.debug(f"No pending approval requests found in conversation {conversation_id}")
+                logger.debug(
+                    f"No pending approval requests found in conversation {conversation_id}"
+                )
                 return
 
             # Check if this approval was already responded to
@@ -520,7 +535,10 @@ class AgentTerminalService:
                 if msg_time > request_timestamp:
                     # Check if this is an approval or denial response
                     content = msg.get("text", "").lower()
-                    if any(keyword in content for keyword in ["approved", "denied", "executed", "rejected"]):
+                    if any(
+                        keyword in content
+                        for keyword in ["approved", "denied", "executed", "rejected"]
+                    ):
                         logger.info(
                             f"Approval request already responded to in conversation {conversation_id}, "
                             f"skipping restoration"
@@ -558,10 +576,15 @@ class AgentTerminalService:
         except Exception as e:
             logger.error(f"Failed to restore pending approval from chat history: {e}")
             import traceback
+
             logger.error(f"Traceback: {traceback.format_exc()}")
 
     async def _save_command_to_chat(
-        self, conversation_id: str, command: str, result: dict, command_type: str = "agent"
+        self,
+        conversation_id: str,
+        command: str,
+        result: dict,
+        command_type: str = "agent",
     ):
         """
         Save command and output to chat history.
@@ -576,7 +599,9 @@ class AgentTerminalService:
             return
 
         try:
-            logger.warning(f"[CHAT INTEGRATION] Saving {command_type} command to chat: {command[:50]}")
+            logger.warning(
+                f"[CHAT INTEGRATION] Saving {command_type} command to chat: {command[:50]}"
+            )
 
             # Save command
             await self.chat_history_manager.add_message(
@@ -588,16 +613,27 @@ class AgentTerminalService:
 
             # Save output (if any)
             logger.warning(f"[CHAT INTEGRATION] Result keys: {result.keys()}")
-            logger.warning(f"[CHAT INTEGRATION] stdout: {result.get('stdout', 'MISSING')[:100]}")
-            logger.warning(f"[CHAT INTEGRATION] stderr: {result.get('stderr', 'MISSING')[:100]}")
+            logger.warning(
+                f"[CHAT INTEGRATION] stdout: {result.get('stdout', 'MISSING')[:100]}"
+            )
+            logger.warning(
+                f"[CHAT INTEGRATION] stderr: {result.get('stderr', 'MISSING')[:100]}"
+            )
             if result.get("stdout") or result.get("stderr"):
-                output_text = (result.get("stdout", "") + result.get("stderr", "")).strip()
-                logger.warning(f"[CHAT INTEGRATION] Output text length: {len(output_text)}")
+                output_text = (
+                    result.get("stdout", "") + result.get("stderr", "")
+                ).strip()
+                logger.warning(
+                    f"[CHAT INTEGRATION] Output text length: {len(output_text)}"
+                )
                 if output_text:
                     # CRITICAL FIX: Strip ANSI escape codes before saving to chat
                     from src.utils.encoding_utils import strip_ansi_codes
+
                     clean_output = strip_ansi_codes(output_text).strip()
-                    logger.warning(f"[CHAT INTEGRATION] Clean output length: {len(clean_output)}")
+                    logger.warning(
+                        f"[CHAT INTEGRATION] Clean output length: {len(clean_output)}"
+                    )
 
                     if clean_output:
                         await self.chat_history_manager.add_message(
@@ -606,16 +642,25 @@ class AgentTerminalService:
                             message_type="terminal_output",
                             session_id=conversation_id,
                         )
-                        logger.warning(f"[CHAT INTEGRATION] Output message saved successfully")
+                        logger.warning(
+                            f"[CHAT INTEGRATION] Output message saved successfully"
+                        )
                 else:
-                    logger.warning(f"[CHAT INTEGRATION] Output text is empty after stripping")
+                    logger.warning(
+                        f"[CHAT INTEGRATION] Output text is empty after stripping"
+                    )
             else:
                 logger.warning(f"[CHAT INTEGRATION] No stdout or stderr in result")
 
-            logger.warning(f"[CHAT INTEGRATION] {command_type.capitalize()} command saved to chat successfully")
+            logger.warning(
+                f"[CHAT INTEGRATION] {command_type.capitalize()} command saved to chat successfully"
+            )
         except Exception as e:
-            logger.error(f"[EXCEPTION] Failed to save {command_type} command to chat: {e}")
+            logger.error(
+                f"[EXCEPTION] Failed to save {command_type} command to chat: {e}"
+            )
             import traceback
+
             logger.error(f"[EXCEPTION] Traceback: {traceback.format_exc()}")
 
     async def get_session(self, session_id: str) -> Optional[AgentTerminalSession]:
@@ -668,7 +713,9 @@ class AgentTerminalService:
                     session.state = SessionState(session_data["state"])
                     session.created_at = session_data["created_at"]
                     session.last_activity = session_data["last_activity"]
-                    session.pending_approval = session_data.get("pending_approval")  # CRITICAL: Restore pending approvals
+                    session.pending_approval = session_data.get(
+                        "pending_approval"
+                    )  # CRITICAL: Restore pending approvals
 
                     # Add back to memory cache (protected by lock)
                     async with self._sessions_lock:
@@ -804,7 +851,9 @@ class AgentTerminalService:
         Returns:
             True if written successfully
         """
-        logger.info(f"[PTY_WRITE] Called for session {session.session_id}, pty_session_id={session.pty_session_id}, text_len={len(text)}")
+        logger.info(
+            f"[PTY_WRITE] Called for session {session.session_id}, pty_session_id={session.pty_session_id}, text_len={len(text)}"
+        )
 
         if not session.pty_session_id:
             logger.warning("No PTY session ID available for writing")
@@ -814,7 +863,9 @@ class AgentTerminalService:
             from backend.services.simple_pty import simple_pty_manager
 
             pty = simple_pty_manager.get_session(session.pty_session_id)
-            logger.info(f"[PTY_WRITE] Got PTY session: {pty is not None}, alive: {pty.is_alive() if pty else 'N/A'}")
+            logger.info(
+                f"[PTY_WRITE] Got PTY session: {pty is not None}, alive: {pty.is_alive() if pty else 'N/A'}"
+            )
 
             # If PTY is not alive, recreate it (handles stale sessions after restart)
             if not pty or not pty.is_alive():
@@ -824,30 +875,31 @@ class AgentTerminalService:
 
                 # Create new PTY with same session ID
                 new_pty = simple_pty_manager.create_session(
-                    session.pty_session_id,
-                    initial_cwd=str(PATH.PROJECT_ROOT)
+                    session.pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT)
                 )
 
                 if new_pty:
                     logger.info(f"Recreated PTY session {session.pty_session_id}")
                     pty = new_pty
                 else:
-                    logger.error(f"Failed to recreate PTY session {session.pty_session_id}")
+                    logger.error(
+                        f"Failed to recreate PTY session {session.pty_session_id}"
+                    )
                     return False
 
             # Write to PTY
             success = pty.write_input(text)
             if success:
-                logger.debug(
-                    f"Wrote to PTY {session.pty_session_id}: {text[:50]}..."
-                )
+                logger.debug(f"Wrote to PTY {session.pty_session_id}: {text[:50]}...")
             return success
 
         except Exception as e:
             logger.error(f"Error writing to PTY: {e}")
             return False
 
-    async def _execute_in_pty(self, session: AgentTerminalSession, command: str, timeout: float = 5.0) -> Dict[str, Any]:
+    async def _execute_in_pty(
+        self, session: AgentTerminalSession, command: str, timeout: float = 5.0
+    ) -> Dict[str, Any]:
         """
         Execute command directly in PTY shell (true collaboration mode).
         User and agent work as one in the same terminal.
@@ -872,7 +924,7 @@ class AgentTerminalService:
                 "status": "error",
                 "stdout": "",
                 "stderr": "Failed to write command to PTY",
-                "return_code": 1
+                "return_code": 1,
             }
 
         # CRITICAL: Do NOT collect from PTY output queue directly!
@@ -880,7 +932,9 @@ class AgentTerminalService:
         # Instead, wait for WebSocket to save output to chat, then read from there.
 
         # Wait for command to execute and WebSocket to save output
-        logger.info(f"[PTY_EXEC] Waiting {timeout}s for command to complete and output to be saved to chat...")
+        logger.info(
+            f"[PTY_EXEC] Waiting {timeout}s for command to complete and output to be saved to chat..."
+        )
         await asyncio.sleep(min(timeout, 3.0))  # Wait max 3 seconds
 
         # Read output from chat history (WebSocket saved it there)
@@ -889,8 +943,7 @@ class AgentTerminalService:
             if session.conversation_id:
                 # Get recent terminal messages from chat
                 messages = await self.chat_history_manager.get_session_messages(
-                    session_id=session.conversation_id,
-                    limit=5  # Get last 5 messages
+                    session_id=session.conversation_id, limit=5  # Get last 5 messages
                 )
 
                 # Find the most recent terminal output message
@@ -900,28 +953,33 @@ class AgentTerminalService:
 
                         # Strip ANSI escape codes to get clean output
                         from src.utils.encoding_utils import strip_ansi_codes
+
                         clean_output = strip_ansi_codes(terminal_text)
 
                         # Extract just the output (after the command line)
                         # Format is usually: "command\r\noutput\r\n"
-                        lines = clean_output.split('\n')
+                        lines = clean_output.split("\n")
                         if len(lines) > 1:
                             # Skip first line (command echo), get the output
-                            full_output = '\n'.join(lines[1:]).strip()
-                            logger.info(f"[PTY_EXEC] Extracted output from chat: {full_output[:100]}...")
+                            full_output = "\n".join(lines[1:]).strip()
+                            logger.info(
+                                f"[PTY_EXEC] Extracted output from chat: {full_output[:100]}..."
+                            )
                         break
 
         except Exception as e:
             logger.error(f"[PTY_EXEC] Failed to read output from chat: {e}")
             full_output = ""
 
-        logger.info(f"[PTY_EXEC] Command written to PTY. Output collected from chat for interpretation.")
+        logger.info(
+            f"[PTY_EXEC] Command written to PTY. Output collected from chat for interpretation."
+        )
 
         return {
             "status": "success",
             "stdout": full_output,
             "stderr": "",  # PTY combines stdout/stderr
-            "return_code": 0  # PTY doesn't provide return code directly
+            "return_code": 0,  # PTY doesn't provide return code directly
         }
 
     async def execute_command(
@@ -1020,7 +1078,9 @@ class AgentTerminalService:
         # Check if approval is needed
         # CRITICAL FIX: Force ALL commands through approval workflow
         # User wants to see and approve every command, regardless of risk level
-        needs_approval = True  # Always require approval (auto-approve rules still apply)
+        needs_approval = (
+            True  # Always require approval (auto-approve rules still apply)
+        )
 
         if needs_approval:
             # Check auto-approve rules (use conversation_id as user_id proxy)
@@ -1110,7 +1170,7 @@ class AgentTerminalService:
                                 "command_id": cmd_execution.command_id,
                                 "requires_approval": True,
                                 "agent_role": session.agent_role.value,
-                            }
+                            },
                         )
                         logger.info(
                             f"✅ [CHAT MESSAGE] Added command_approval_request to chat history: "
@@ -1119,7 +1179,7 @@ class AgentTerminalService:
                     except Exception as chat_msg_error:
                         logger.error(
                             f"Failed to add approval request to chat history: {chat_msg_error}",
-                            exc_info=True
+                            exc_info=True,
                         )
 
                 return {
@@ -1161,7 +1221,10 @@ class AgentTerminalService:
             agent_type = session.agent_role.value
             status = "success" if result.get("status") == "success" else "error"
             self.prometheus_metrics.record_task_execution(
-                task_type=task_type, agent_type=agent_type, status=status, duration=task_duration
+                task_type=task_type,
+                agent_type=agent_type,
+                status=status,
+                duration=task_duration,
             )
 
             # Log command execution result
@@ -1183,17 +1246,25 @@ class AgentTerminalService:
             # CRITICAL FIX: Call LLM to interpret command results
             if session.conversation_id:
                 try:
-                    logger.info(f"[INTERPRETATION] Starting LLM interpretation for command: {command}")
-                    interpretation = await self.chat_workflow_manager.interpret_terminal_command(
-                        command=command,
-                        stdout=result.get("stdout", ""),
-                        stderr=result.get("stderr", ""),
-                        return_code=result.get("return_code", 0),
-                        session_id=session.conversation_id,
+                    logger.info(
+                        f"[INTERPRETATION] Starting LLM interpretation for command: {command}"
                     )
-                    logger.info(f"[INTERPRETATION] LLM interpretation complete, length: {len(interpretation)}")
+                    interpretation = (
+                        await self.chat_workflow_manager.interpret_terminal_command(
+                            command=command,
+                            stdout=result.get("stdout", ""),
+                            stderr=result.get("stderr", ""),
+                            return_code=result.get("return_code", 0),
+                            session_id=session.conversation_id,
+                        )
+                    )
+                    logger.info(
+                        f"[INTERPRETATION] LLM interpretation complete, length: {len(interpretation)}"
+                    )
                 except Exception as e:
-                    logger.error(f"[INTERPRETATION] Failed to interpret command results: {e}")
+                    logger.error(
+                        f"[INTERPRETATION] Failed to interpret command results: {e}"
+                    )
 
             # NOTE: Output already appears naturally in PTY terminal (executed in shell)
             # No need to write it back - user and agent work as one in the same terminal
@@ -1308,7 +1379,9 @@ class AgentTerminalService:
 
         command = session.pending_approval.get("command")
         risk_level = session.pending_approval.get("risk")  # Save before clearing
-        command_id = session.pending_approval.get("command_id")  # Get command_id from pending approval
+        command_id = session.pending_approval.get(
+            "command_id"
+        )  # Get command_id from pending approval
 
         if approved:
             # REUSABLE PRINCIPLE: Update command state in queue
@@ -1321,6 +1394,7 @@ class AgentTerminalService:
                 logger.info(
                     f"✅ [QUEUE] Command {command_id} approved in queue by {user_id or 'web_user'}"
                 )
+
             # Execute approved command
             # User has already approved, so callback always returns True
             async def pre_approved_callback(approval_data):
@@ -1346,7 +1420,9 @@ class AgentTerminalService:
                 # REUSABLE PRINCIPLE: Mark execution start in queue
                 if command_id:
                     await self.command_queue.start_execution(command_id)
-                    logger.info(f"✅ [QUEUE] Command {command_id} marked as EXECUTING in queue")
+                    logger.info(
+                        f"✅ [QUEUE] Command {command_id} marked as EXECUTING in queue"
+                    )
 
                 # CRITICAL: Execute in PTY (true collaboration mode - works on any host)
                 # User and agent work as one in the same terminal
@@ -1356,7 +1432,9 @@ class AgentTerminalService:
                 # WebSocket handler saves output to chat asynchronously - poll until it appears
                 if session.conversation_id:
                     try:
-                        logger.info("[OUTPUT FETCH] Polling chat history for terminal output...")
+                        logger.info(
+                            "[OUTPUT FETCH] Polling chat history for terminal output..."
+                        )
 
                         # Poll chat history until output appears (max 10 seconds)
                         max_attempts = 50  # 50 attempts * 200ms = 10 seconds max
@@ -1365,9 +1443,11 @@ class AgentTerminalService:
 
                         while attempt < max_attempts and not terminal_output:
                             # Fetch recent messages from chat
-                            recent_messages = await self.chat_history_manager.get_session_messages(
-                                session_id=session.conversation_id,
-                                limit=10  # Get last 10 messages
+                            recent_messages = (
+                                await self.chat_history_manager.get_session_messages(
+                                    session_id=session.conversation_id,
+                                    limit=10,  # Get last 10 messages
+                                )
                             )
 
                             # Search for most recent terminal_output message
@@ -1382,13 +1462,17 @@ class AgentTerminalService:
                                     break
 
                             if not terminal_output:
-                                await asyncio.sleep(0.2)  # 200ms between polling attempts
+                                await asyncio.sleep(
+                                    0.2
+                                )  # 200ms between polling attempts
                                 attempt += 1
 
                         # Populate result with the output from chat
                         if terminal_output:
                             result["stdout"] = terminal_output
-                            logger.info(f"[OUTPUT FETCH] Populated result[stdout] with {len(terminal_output)} chars")
+                            logger.info(
+                                f"[OUTPUT FETCH] Populated result[stdout] with {len(terminal_output)} chars"
+                            )
                         else:
                             logger.warning(
                                 f"[OUTPUT FETCH] No terminal output found after {max_attempts * 200}ms "
@@ -1396,7 +1480,9 @@ class AgentTerminalService:
                             )
 
                     except Exception as e:
-                        logger.error(f"[OUTPUT FETCH] Failed to poll chat history for output: {e}")
+                        logger.error(
+                            f"[OUTPUT FETCH] Failed to poll chat history for output: {e}"
+                        )
 
                 # REUSABLE PRINCIPLE: Write output to queue (single source of truth)
                 if command_id:
@@ -1434,17 +1520,25 @@ class AgentTerminalService:
                 # CRITICAL FIX: Call LLM to interpret command results
                 if session.conversation_id:
                     try:
-                        logger.info(f"[INTERPRETATION] Starting LLM interpretation for approved command: {command}")
-                        interpretation = await self.chat_workflow_manager.interpret_terminal_command(
-                            command=command,
-                            stdout=result.get("stdout", ""),
-                            stderr=result.get("stderr", ""),
-                            return_code=result.get("return_code", 0),
-                            session_id=session.conversation_id,
+                        logger.info(
+                            f"[INTERPRETATION] Starting LLM interpretation for approved command: {command}"
                         )
-                        logger.info(f"[INTERPRETATION] LLM interpretation complete, length: {len(interpretation)}")
+                        interpretation = (
+                            await self.chat_workflow_manager.interpret_terminal_command(
+                                command=command,
+                                stdout=result.get("stdout", ""),
+                                stderr=result.get("stderr", ""),
+                                return_code=result.get("return_code", 0),
+                                session_id=session.conversation_id,
+                            )
+                        )
+                        logger.info(
+                            f"[INTERPRETATION] LLM interpretation complete, length: {len(interpretation)}"
+                        )
                     except Exception as e:
-                        logger.error(f"[INTERPRETATION] Failed to interpret approved command results: {e}")
+                        logger.error(
+                            f"[INTERPRETATION] Failed to interpret approved command results: {e}"
+                        )
 
                 # NOTE: Output already appears naturally in PTY terminal (executed in shell)
                 # No need to write it back - user and agent work as one in the same terminal
@@ -1488,18 +1582,20 @@ class AgentTerminalService:
                 # This prevents the approval UI from reverting to "pending" when frontend polls
                 if session.conversation_id:
                     try:
-                        updated = await self.chat_history_manager.update_message_metadata(
-                            session_id=session.conversation_id,
-                            metadata_filter={
-                                "terminal_session_id": session_id,
-                                "requires_approval": True
-                            },
-                            metadata_updates={
-                                "approval_status": "approved",
-                                "approval_comment": comment,
-                                "approved_by": user_id,
-                                "approved_at": time.time()
-                            }
+                        updated = (
+                            await self.chat_history_manager.update_message_metadata(
+                                session_id=session.conversation_id,
+                                metadata_filter={
+                                    "terminal_session_id": session_id,
+                                    "requires_approval": True,
+                                },
+                                metadata_updates={
+                                    "approval_status": "approved",
+                                    "approval_comment": comment,
+                                    "approved_by": user_id,
+                                    "approved_at": time.time(),
+                                },
+                            )
                         )
                         if updated:
                             logger.info(
@@ -1514,7 +1610,7 @@ class AgentTerminalService:
                     except Exception as metadata_update_error:
                         logger.error(
                             f"Failed to update chat message metadata (non-fatal): {metadata_update_error}",
-                            exc_info=True
+                            exc_info=True,
                         )
 
                     # CRITICAL FIX: Add approval response message to chat history
@@ -1523,7 +1619,8 @@ class AgentTerminalService:
                         await self.chat_history_manager.add_message(
                             session_id=session.conversation_id,
                             role="system",
-                            text=f"✅ Command approved and executed: `{command}`" + (f" - {comment}" if comment else ""),
+                            text=f"✅ Command approved and executed: `{command}`"
+                            + (f" - {comment}" if comment else ""),
                             message_type="command_approval_response",
                             metadata={
                                 "command": command,
@@ -1531,7 +1628,7 @@ class AgentTerminalService:
                                 "approval_status": "approved",
                                 "approved_by": user_id,
                                 "approved_at": time.time(),
-                            }
+                            },
                         )
                         logger.info(
                             f"✅ [CHAT MESSAGE] Added command_approval_response to chat history: "
@@ -1540,7 +1637,7 @@ class AgentTerminalService:
                     except Exception as chat_msg_error:
                         logger.error(
                             f"Failed to add approval response to chat history: {chat_msg_error}",
-                            exc_info=True
+                            exc_info=True,
                         )
 
                 # Broadcast approval status update to WebSocket clients
@@ -1614,7 +1711,7 @@ class AgentTerminalService:
                                 "denied_by": user_id,
                                 "denied_at": time.time(),
                                 "alternative_suggestion": comment,
-                            }
+                            },
                         )
                         denial_message_saved = True
                         logger.info(
@@ -1646,14 +1743,14 @@ class AgentTerminalService:
                         session_id=session.conversation_id,
                         metadata_filter={
                             "terminal_session_id": session_id,
-                            "requires_approval": True
+                            "requires_approval": True,
                         },
                         metadata_updates={
                             "approval_status": "denied",
                             "approval_comment": comment,
                             "denied_by": user_id,
-                            "denied_at": time.time()
-                        }
+                            "denied_at": time.time(),
+                        },
                     )
                     if updated:
                         logger.info(
@@ -1668,7 +1765,7 @@ class AgentTerminalService:
                 except Exception as metadata_update_error:
                     logger.error(
                         f"Failed to update chat message metadata (non-fatal): {metadata_update_error}",
-                        exc_info=True
+                        exc_info=True,
                     )
 
                 # CRITICAL FIX: Add denial response message if not already saved above
@@ -1687,7 +1784,7 @@ class AgentTerminalService:
                                 "approval_status": "denied",
                                 "denied_by": user_id,
                                 "denied_at": time.time(),
-                            }
+                            },
                         )
                         logger.info(
                             f"✅ [CHAT MESSAGE] Added command_approval_response to chat history: "
@@ -1696,7 +1793,7 @@ class AgentTerminalService:
                     except Exception as chat_msg_error:
                         logger.error(
                             f"Failed to add denial response to chat history: {chat_msg_error}",
-                            exc_info=True
+                            exc_info=True,
                         )
 
             # Broadcast denial status update to WebSocket clients
@@ -1808,6 +1905,7 @@ class AgentTerminalService:
         if session.pty_session_id:
             try:
                 from backend.services.simple_pty import simple_pty_manager
+
                 pty = simple_pty_manager.get_session(session.pty_session_id)
                 pty_alive = pty is not None and pty.is_alive()
             except Exception as e:

@@ -176,7 +176,9 @@ async def check_rate_limit() -> bool:
             request_counter["reset_time"] = now
 
         if request_counter["count"] >= MAX_REQUESTS_PER_MINUTE:
-            logger.warning(f"Rate limit exceeded: {request_counter['count']} requests/min")
+            logger.warning(
+                f"Rate limit exceeded: {request_counter['count']} requests/min"
+            )
             return False
 
         request_counter["count"] += 1
@@ -584,14 +586,10 @@ async def http_get_mcp(request: HTTPGetRequest) -> Dict[str, Any]:
         )
 
     if not is_domain_allowed(request.url):
-        raise HTTPException(
-            status_code=403, detail="Domain not in allowed whitelist"
-        )
+        raise HTTPException(status_code=403, detail="Domain not in allowed whitelist")
 
     if request.headers and not validate_headers(request.headers):
-        raise HTTPException(
-            status_code=400, detail="Request contains blocked headers"
-        )
+        raise HTTPException(status_code=400, detail="Request contains blocked headers")
 
     # Log the operation
     logger.info(f"HTTP GET request: {request.url}")
@@ -631,14 +629,10 @@ async def http_post_mcp(request: HTTPPostRequest) -> Dict[str, Any]:
         )
 
     if not is_domain_allowed(request.url):
-        raise HTTPException(
-            status_code=403, detail="Domain not in allowed whitelist"
-        )
+        raise HTTPException(status_code=403, detail="Domain not in allowed whitelist")
 
     if request.headers and not validate_headers(request.headers):
-        raise HTTPException(
-            status_code=400, detail="Request contains blocked headers"
-        )
+        raise HTTPException(status_code=400, detail="Request contains blocked headers")
 
     # Validate mutual exclusivity
     if request.json_body and request.form_data:
@@ -695,14 +689,10 @@ async def http_put_mcp(request: HTTPPutRequest) -> Dict[str, Any]:
         )
 
     if not is_domain_allowed(request.url):
-        raise HTTPException(
-            status_code=403, detail="Domain not in allowed whitelist"
-        )
+        raise HTTPException(status_code=403, detail="Domain not in allowed whitelist")
 
     if request.headers and not validate_headers(request.headers):
-        raise HTTPException(
-            status_code=400, detail="Request contains blocked headers"
-        )
+        raise HTTPException(status_code=400, detail="Request contains blocked headers")
 
     # Check body size
     if request.json_body:
@@ -751,14 +741,10 @@ async def http_patch_mcp(request: HTTPPatchRequest) -> Dict[str, Any]:
         )
 
     if not is_domain_allowed(request.url):
-        raise HTTPException(
-            status_code=403, detail="Domain not in allowed whitelist"
-        )
+        raise HTTPException(status_code=403, detail="Domain not in allowed whitelist")
 
     if request.headers and not validate_headers(request.headers):
-        raise HTTPException(
-            status_code=400, detail="Request contains blocked headers"
-        )
+        raise HTTPException(status_code=400, detail="Request contains blocked headers")
 
     # Check body size
     if request.json_body:
@@ -807,14 +793,10 @@ async def http_delete_mcp(request: HTTPDeleteRequest) -> Dict[str, Any]:
         )
 
     if not is_domain_allowed(request.url):
-        raise HTTPException(
-            status_code=403, detail="Domain not in allowed whitelist"
-        )
+        raise HTTPException(status_code=403, detail="Domain not in allowed whitelist")
 
     if request.headers and not validate_headers(request.headers):
-        raise HTTPException(
-            status_code=400, detail="Request contains blocked headers"
-        )
+        raise HTTPException(status_code=400, detail="Request contains blocked headers")
 
     # Log the operation with warning (destructive)
     logger.warning(f"HTTP DELETE request (destructive): {request.url}")
@@ -852,14 +834,10 @@ async def http_head_mcp(request: HTTPHeadRequest) -> Dict[str, Any]:
         )
 
     if not is_domain_allowed(request.url):
-        raise HTTPException(
-            status_code=403, detail="Domain not in allowed whitelist"
-        )
+        raise HTTPException(status_code=403, detail="Domain not in allowed whitelist")
 
     if request.headers and not validate_headers(request.headers):
-        raise HTTPException(
-            status_code=400, detail="Request contains blocked headers"
-        )
+        raise HTTPException(status_code=400, detail="Request contains blocked headers")
 
     # Log the operation
     logger.info(f"HTTP HEAD request: {request.url}")
@@ -891,7 +869,10 @@ async def get_http_client_mcp_status() -> Dict[str, Any]:
         current_rate = request_counter["count"]
         time_until_reset = max(
             0,
-            60 - (datetime.now(timezone.utc) - request_counter["reset_time"]).total_seconds(),
+            60
+            - (
+                datetime.now(timezone.utc) - request_counter["reset_time"]
+            ).total_seconds(),
         )
 
     return {

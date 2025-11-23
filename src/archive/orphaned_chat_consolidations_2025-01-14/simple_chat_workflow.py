@@ -164,10 +164,16 @@ class SimpleChatWorkflow:
             provider, model_name = "ollama", "unknown"
             if self.llm:
                 try:
-                    provider, model_name = self.llm._determine_provider_and_model("orchestrator")
+                    provider, model_name = self.llm._determine_provider_and_model(
+                        "orchestrator"
+                    )
                 except Exception as e:
                     logger.warning(f"Could not determine model: {e}")
-                    model_name = self.llm.settings.default_model if hasattr(self.llm, 'settings') else "unknown"
+                    model_name = (
+                        self.llm.settings.default_model
+                        if hasattr(self.llm, "settings")
+                        else "unknown"
+                    )
 
             sources = [{"source": "LLM", "type": provider, "model": model_name}]
             await self.send_workflow_message(

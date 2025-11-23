@@ -736,10 +736,7 @@ async def get_detailed_system_health():
 
     # Resource alerts
     system_resources = hardware_monitor.get_system_resources()
-    if (
-        "cpu" in system_resources
-        and system_resources["cpu"]["percent_overall"] > 90
-    ):
+    if "cpu" in system_resources and system_resources["cpu"]["percent_overall"] > 90:
         detailed_health["resource_alerts"].append(
             {
                 "type": "cpu_high",
@@ -865,9 +862,7 @@ async def get_usage_statistics():
 
     # Add time-based analysis
     stats["analysis_period"] = {
-        "start_time": analytics_state.get(
-            "session_start", datetime.now().isoformat()
-        ),
+        "start_time": analytics_state.get("session_start", datetime.now().isoformat()),
         "current_time": datetime.now().isoformat(),
         "data_points": len(analytics_state["api_call_patterns"]),
     }
@@ -1150,9 +1145,7 @@ async def get_communication_chains():
 async def get_realtime_metrics():
     """Get current real-time metrics snapshot"""
     # Get current system metrics
-    current_metrics = (
-        await analytics_controller.metrics_collector.collect_all_metrics()
-    )
+    current_metrics = await analytics_controller.metrics_collector.collect_all_metrics()
     system_resources = hardware_monitor.get_system_resources()
 
     realtime_data = {
@@ -1177,9 +1170,7 @@ async def get_realtime_metrics():
             ]
         ),
         "performance_snapshot": {
-            "cpu_percent": system_resources.get("cpu", {}).get(
-                "percent_overall", 0
-            ),
+            "cpu_percent": system_resources.get("cpu", {}).get("percent_overall", 0),
             "memory_percent": system_resources.get("memory", {}).get("percent", 0),
             "disk_percent": system_resources.get("disk", {}).get("percent", 0),
         },
@@ -1201,9 +1192,7 @@ async def track_analytics_event(event: RealTimeEvent):
     event_data["processed_at"] = datetime.now().isoformat()
 
     # Store in Redis for persistence
-    redis_conn = await analytics_controller.get_redis_connection(
-        RedisDatabase.METRICS
-    )
+    redis_conn = await analytics_controller.get_redis_connection(RedisDatabase.METRICS)
     if redis_conn:
         await redis_conn.lpush("analytics:events", json.dumps(event_data))
         await redis_conn.ltrim("analytics:events", 0, 9999)  # Keep last 10k events
@@ -1213,9 +1202,7 @@ async def track_analytics_event(event: RealTimeEvent):
         endpoint = event.data.get("endpoint", "unknown")
         response_time = event.data.get("response_time", 0)
         status_code = event.data.get("status_code", 200)
-        await analytics_controller.track_api_call(
-            endpoint, response_time, status_code
-        )
+        await analytics_controller.track_api_call(endpoint, response_time, status_code)
 
     elif event.event_type == "websocket_activity":
         activity_type = event.data.get("activity_type", "unknown")
@@ -1255,9 +1242,7 @@ async def get_historical_trends(
     trends = await analytics_controller.detect_trends()
 
     # Enhance with Redis historical data
-    redis_conn = await analytics_controller.get_redis_connection(
-        RedisDatabase.METRICS
-    )
+    redis_conn = await analytics_controller.get_redis_connection(RedisDatabase.METRICS)
     historical_data = {"trends": trends}
 
     if redis_conn:
@@ -1286,9 +1271,7 @@ async def get_historical_trends(
                 for call in historical_calls:
                     hour_key = call["timestamp"][:13]  # YYYY-MM-DDTHH
                     hourly_stats[hour_key]["calls"] += 1
-                    hourly_stats[hour_key]["avg_response_time"] += call[
-                        "response_time"
-                    ]
+                    hourly_stats[hour_key]["avg_response_time"] += call["response_time"]
                     if call["status_code"] >= 400:
                         hourly_stats[hour_key]["errors"] += 1
 
@@ -1500,13 +1483,9 @@ async def get_analytics_status():
         },
         "data_status": {
             "api_patterns_tracked": len(analytics_state["api_call_patterns"]),
-            "performance_history_points": len(
-                analytics_state["performance_history"]
-            ),
+            "performance_history_points": len(analytics_state["performance_history"]),
             "communication_chains": len(analytics_controller.communication_chains),
-            "cached_code_analysis": bool(
-                analytics_state.get("code_analysis_cache")
-            ),
+            "cached_code_analysis": bool(analytics_state.get("code_analysis_cache")),
         },
         "integration_status": {
             "redis_connectivity": {},
@@ -1527,9 +1506,7 @@ async def get_analytics_status():
                     db.name
                 ] = "connected"
             else:
-                status["integration_status"]["redis_connectivity"][
-                    db.name
-                ] = "failed"
+                status["integration_status"]["redis_connectivity"][db.name] = "failed"
         except Exception as e:
             status["integration_status"]["redis_connectivity"][
                 db.name
@@ -1555,17 +1532,14 @@ async def get_monitoring_status():
 
     status = {
         "active": (
-            collector._is_collecting
-            if hasattr(collector, "_is_collecting")
-            else True
+            collector._is_collecting if hasattr(collector, "_is_collecting") else True
         ),
         "timestamp": datetime.now().isoformat(),
         "components": {
             "gpu_monitoring": True,
             "npu_monitoring": True,
             "analytics_collection": True,
-            "websocket_streaming": len(analytics_state["websocket_connections"])
-            > 0,
+            "websocket_streaming": len(analytics_state["websocket_connections"]) > 0,
         },
         "version": "Phase9",
         "uptime_seconds": time.time() - psutil.boot_time(),
@@ -1624,12 +1598,8 @@ async def get_phase9_dashboard_data():
                 )
             ),
         },
-        "gpu_metrics": performance_data.get("hardware_performance", {}).get(
-            "gpu", {}
-        ),
-        "npu_metrics": performance_data.get("hardware_performance", {}).get(
-            "npu", {}
-        ),
+        "gpu_metrics": performance_data.get("hardware_performance", {}).get("gpu", {}),
+        "npu_metrics": performance_data.get("hardware_performance", {}).get("npu", {}),
         "system_metrics": {
             "cpu": performance_data.get("system_performance", {}),
             "memory": performance_data.get("system_performance", {}),
@@ -1664,9 +1634,7 @@ async def get_phase9_alerts():
     performance_data = await analytics_controller.collect_performance_metrics()
 
     # CPU alerts
-    cpu_percent = performance_data.get("system_performance", {}).get(
-        "cpu_percent", 0
-    )
+    cpu_percent = performance_data.get("system_performance", {}).get("cpu_percent", 0)
     if cpu_percent > 90:
         alerts.append(
             {
@@ -1766,14 +1734,10 @@ async def get_phase9_optimization_recommendations():
 
     # Get current performance data
     performance_data = await analytics_controller.collect_performance_metrics()
-    communication_patterns = (
-        await analytics_controller.analyze_communication_patterns()
-    )
+    communication_patterns = await analytics_controller.analyze_communication_patterns()
 
     # CPU optimization recommendations
-    cpu_percent = performance_data.get("system_performance", {}).get(
-        "cpu_percent", 0
-    )
+    cpu_percent = performance_data.get("system_performance", {}).get("cpu_percent", 0)
     if cpu_percent > 80:
         recommendations.append(
             {
@@ -1909,9 +1873,7 @@ async def query_phase9_metrics(query_request: dict):
     time_range = query_request.get("time_range", 3600)  # 1 hour default
 
     # Get current metrics
-    current_metrics = (
-        await analytics_controller.metrics_collector.collect_all_metrics()
-    )
+    current_metrics = await analytics_controller.metrics_collector.collect_all_metrics()
 
     # Filter by metric name if specified
     if metric_name != "all" and metric_name in current_metrics:
@@ -2097,9 +2059,7 @@ async def get_code_quality_score():
                 "B"
                 if overall_score >= 80
                 else (
-                    "C"
-                    if overall_score >= 70
-                    else "D" if overall_score >= 60 else "F"
+                    "C" if overall_score >= 70 else "D" if overall_score >= 60 else "F"
                 )
             )
         ),

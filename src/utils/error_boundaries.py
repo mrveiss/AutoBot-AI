@@ -41,6 +41,7 @@ except ImportError:
     def get_redis_client():
         return None
 
+
 try:
     from src.utils.error_metrics import record_error_metric
 except ImportError:
@@ -75,13 +76,13 @@ class ErrorCategory(Enum):
     USER_INPUT = "user_input"
 
     # HTTP-aligned categories (for API endpoints)
-    VALIDATION = "validation"              # 400 Bad Request
-    AUTHENTICATION = "authentication"      # 401 Unauthorized
-    AUTHORIZATION = "authorization"        # 403 Forbidden
-    NOT_FOUND = "not_found"               # 404 Not Found
-    CONFLICT = "conflict"                 # 409 Conflict
-    RATE_LIMIT = "rate_limit"             # 429 Too Many Requests
-    SERVER_ERROR = "server_error"         # 500 Internal Server Error
+    VALIDATION = "validation"  # 400 Bad Request
+    AUTHENTICATION = "authentication"  # 401 Unauthorized
+    AUTHORIZATION = "authorization"  # 403 Forbidden
+    NOT_FOUND = "not_found"  # 404 Not Found
+    CONFLICT = "conflict"  # 409 Conflict
+    RATE_LIMIT = "rate_limit"  # 429 Too Many Requests
+    SERVER_ERROR = "server_error"  # 500 Internal Server Error
     SERVICE_UNAVAILABLE = "service_unavailable"  # 503 Service Unavailable
     EXTERNAL_SERVICE = "external_service"  # 502 Bad Gateway
 
@@ -693,10 +694,12 @@ def with_error_handling(
         operation: Operation name for logging/tracing
         error_code_prefix: Prefix for error codes (e.g., "KB", "AUTH")
     """
+
     def decorator(func):
         func_operation = operation or func.__name__
 
         if asyncio.iscoroutinefunction(func):
+
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 try:
@@ -709,7 +712,9 @@ def with_error_handling(
                     error_code = f"{error_code_prefix}_{abs(hash(str(e))) % 10000:04d}"
 
                     # Get status code from category
-                    status_code = APIErrorResponse.get_status_code_for_category(category)
+                    status_code = APIErrorResponse.get_status_code_for_category(
+                        category
+                    )
 
                     # Create API error response
                     error_response = APIErrorResponse(
@@ -730,9 +735,9 @@ def with_error_handling(
                     # Raise FastAPI HTTPException
                     try:
                         from fastapi import HTTPException
+
                         raise HTTPException(
-                            status_code=status_code,
-                            detail=error_response.to_dict()
+                            status_code=status_code, detail=error_response.to_dict()
                         )
                     except ImportError:
                         # FastAPI not available, return error dict
@@ -740,6 +745,7 @@ def with_error_handling(
 
             return async_wrapper
         else:
+
             @functools.wraps(func)
             def sync_wrapper(*args, **kwargs):
                 try:
@@ -752,7 +758,9 @@ def with_error_handling(
                     error_code = f"{error_code_prefix}_{abs(hash(str(e))) % 10000:04d}"
 
                     # Get status code from category
-                    status_code = APIErrorResponse.get_status_code_for_category(category)
+                    status_code = APIErrorResponse.get_status_code_for_category(
+                        category
+                    )
 
                     # Create API error response
                     error_response = APIErrorResponse(
@@ -773,9 +781,9 @@ def with_error_handling(
                     # Raise FastAPI HTTPException
                     try:
                         from fastapi import HTTPException
+
                         raise HTTPException(
-                            status_code=status_code,
-                            detail=error_response.to_dict()
+                            status_code=status_code, detail=error_response.to_dict()
                         )
                     except ImportError:
                         # FastAPI not available, return error dict

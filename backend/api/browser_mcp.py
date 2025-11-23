@@ -152,7 +152,9 @@ async def check_rate_limit() -> bool:
             request_counter = {"count": 0, "reset_time": now}
 
         if request_counter["count"] >= MAX_REQUESTS_PER_MINUTE:
-            logger.warning(f"Rate limit exceeded: {request_counter['count']} requests/min")
+            logger.warning(
+                f"Rate limit exceeded: {request_counter['count']} requests/min"
+            )
             return False
 
         request_counter["count"] += 1
@@ -198,7 +200,9 @@ class FillRequest(BaseModel):
 class ScreenshotRequest(BaseModel):
     """Request model for taking screenshots"""
 
-    selector: Optional[str] = Field(None, description="CSS selector for element (full page if omitted)")
+    selector: Optional[str] = Field(
+        None, description="CSS selector for element (full page if omitted)"
+    )
     full_page: Optional[bool] = Field(False, description="Capture full scrollable page")
 
 
@@ -213,7 +217,9 @@ class WaitForSelectorRequest(BaseModel):
 
     selector: str = Field(..., description="CSS selector to wait for")
     timeout: Optional[int] = Field(30000, description="Timeout in milliseconds")
-    state: Optional[str] = Field("visible", description="State: 'attached', 'detached', 'visible', 'hidden'")
+    state: Optional[str] = Field(
+        "visible", description="State: 'attached', 'detached', 'visible', 'hidden'"
+    )
 
 
 class GetTextRequest(BaseModel):
@@ -279,7 +285,10 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "selector": {"type": "string", "description": "CSS selector for element"},
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for element",
+                    },
                     "timeout": {
                         "type": "integer",
                         "description": "Timeout in milliseconds",
@@ -295,7 +304,10 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "selector": {"type": "string", "description": "CSS selector for input field"},
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for input field",
+                    },
                     "value": {"type": "string", "description": "Value to fill"},
                     "timeout": {
                         "type": "integer",
@@ -330,7 +342,10 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "script": {"type": "string", "description": "JavaScript code to execute"}
+                    "script": {
+                        "type": "string",
+                        "description": "JavaScript code to execute",
+                    }
                 },
                 "required": ["script"],
             },
@@ -341,7 +356,10 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "selector": {"type": "string", "description": "CSS selector to wait for"},
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector to wait for",
+                    },
                     "timeout": {
                         "type": "integer",
                         "description": "Timeout in milliseconds",
@@ -363,7 +381,10 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "selector": {"type": "string", "description": "CSS selector for element"}
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for element",
+                    }
                 },
                 "required": ["selector"],
             },
@@ -374,7 +395,10 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "selector": {"type": "string", "description": "CSS selector for element"},
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for element",
+                    },
                     "attribute": {"type": "string", "description": "Attribute name"},
                 },
                 "required": ["selector", "attribute"],
@@ -386,7 +410,10 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "selector": {"type": "string", "description": "CSS selector for select element"},
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for select element",
+                    },
                     "value": {"type": "string", "description": "Value to select"},
                 },
                 "required": ["selector", "value"],
@@ -398,7 +425,10 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "selector": {"type": "string", "description": "CSS selector for element"}
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for element",
+                    }
                 },
                 "required": ["selector"],
             },
@@ -560,7 +590,9 @@ async def screenshot_mcp(request: ScreenshotRequest) -> Dict[str, Any]:
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    logger.info(f"Browser screenshot: selector={request.selector}, full_page={request.full_page}")
+    logger.info(
+        f"Browser screenshot: selector={request.selector}, full_page={request.full_page}"
+    )
 
     result = await send_to_browser_vm(
         "screenshot",

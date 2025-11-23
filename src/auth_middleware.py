@@ -68,10 +68,14 @@ class AuthenticationMiddleware:
 
                 # Use sessions database for authentication sessions
                 # REFACTORED: Use centralized Redis client management
-                self.redis_client = get_redis_client(database="sessions", async_client=False)
+                self.redis_client = get_redis_client(
+                    database="sessions", async_client=False
+                )
                 # Test connection
                 self.redis_client.ping()
-                logger.info("Redis session storage initialized with centralized client management")
+                logger.info(
+                    "Redis session storage initialized with centralized client management"
+                )
         except Exception as e:
             logger.warning(
                 f"Failed to initialize Redis session storage, using in-memory: {e}"

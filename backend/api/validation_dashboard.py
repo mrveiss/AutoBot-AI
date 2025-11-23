@@ -358,7 +358,9 @@ async def get_dashboard_file():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
+        raise_service_unavailable(
+            "API_0005", "Validation dashboard generator not available"
+        )
 
     try:
         # Generate dashboard
@@ -450,7 +452,9 @@ async def get_dashboard_metrics():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
+        raise_service_unavailable(
+            "API_0005", "Validation dashboard generator not available"
+        )
 
     try:
         # Get basic metrics
@@ -509,7 +513,9 @@ async def get_trend_data():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
+        raise_service_unavailable(
+            "API_0005", "Validation dashboard generator not available"
+        )
 
     try:
         # Get trend data
@@ -537,7 +543,9 @@ async def get_system_alerts():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
+        raise_service_unavailable(
+            "API_0005", "Validation dashboard generator not available"
+        )
 
     try:
         # Get current report
@@ -574,7 +582,9 @@ async def get_system_recommendations():
     generator = get_dashboard_generator()
 
     if generator is None:
-        raise_service_unavailable("API_0005", "Validation dashboard generator not available")
+        raise_service_unavailable(
+            "API_0005", "Validation dashboard generator not available"
+        )
 
     try:
         # Get current report

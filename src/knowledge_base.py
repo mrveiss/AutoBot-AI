@@ -92,7 +92,7 @@ class EmbeddingCache:
 
     def _make_key(self, query: str) -> str:
         """Create cache key from query text using hash."""
-        return hashlib.sha256(query.encode('utf-8')).hexdigest()
+        return hashlib.sha256(query.encode("utf-8")).hexdigest()
 
     def _is_expired(self, key: str) -> bool:
         """Check if cached entry has expired."""
@@ -367,7 +367,9 @@ class KnowledgeBase:
             )
 
             # Get async Redis client using pool manager
-            self.aioredis_client = await get_redis_client(async_client=True, database="knowledge")
+            self.aioredis_client = await get_redis_client(
+                async_client=True, database="knowledge"
+            )
 
             # Test async connection
             await self.aioredis_client.ping()
@@ -389,9 +391,7 @@ class KnowledgeBase:
 
             # Create ChromaDB persistent client with telemetry disabled
             chroma_client = create_chromadb_client(
-                db_path=str(chroma_path),
-                allow_reset=False,
-                anonymized_telemetry=False
+                db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
             )
 
             # Get or create collection (ChromaDB handles dimensions automatically)
@@ -610,7 +610,14 @@ class KnowledgeBase:
         return None
 
     @error_boundary(component="knowledge_base", function="search")
-    async def search(self, query: str, top_k: int = 10, similarity_top_k: int = None, filters: Optional[Dict[str, Any]] = None, mode: str = "auto") -> List[Dict[str, Any]]:
+    async def search(
+        self,
+        query: str,
+        top_k: int = 10,
+        similarity_top_k: int = None,
+        filters: Optional[Dict[str, Any]] = None,
+        mode: str = "auto",
+    ) -> List[Dict[str, Any]]:
         """Search the knowledge base with multiple search modes.
 
         Args:
@@ -662,42 +669,73 @@ class KnowledgeBase:
                 chroma_collection.query,
                 query_embeddings=[query_embedding],
                 n_results=similarity_top_k,
-                include=["documents", "metadatas", "distances"]
+                include=["documents", "metadatas", "distances"],
             )
 
             # Format results
             results = []
-            seen_documents = {}  # Track unique documents by metadata to prevent duplicates
+            seen_documents = (
+                {}
+            )  # Track unique documents by metadata to prevent duplicates
 
-            if results_data and 'documents' in results_data and results_data['documents'][0]:
-                for i, doc in enumerate(results_data['documents'][0]):
+            if (
+                results_data
+                and "documents" in results_data
+                and results_data["documents"][0]
+            ):
+                for i, doc in enumerate(results_data["documents"][0]):
                     # Convert distance to similarity score (cosine: 0=identical, 2=opposite)
-                    distance = results_data['distances'][0][i] if 'distances' in results_data else 1.0
-                    score = max(0.0, 1.0 - (distance / 2.0))  # Convert to 0-1 similarity
+                    distance = (
+                        results_data["distances"][0][i]
+                        if "distances" in results_data
+                        else 1.0
+                    )
+                    score = max(
+                        0.0, 1.0 - (distance / 2.0)
+                    )  # Convert to 0-1 similarity
 
-                    metadata = results_data['metadatas'][0][i] if 'metadatas' in results_data else {}
+                    metadata = (
+                        results_data["metadatas"][0][i]
+                        if "metadatas" in results_data
+                        else {}
+                    )
 
                     # Create unique document key to deduplicate chunks from same source
                     # Use fact_id first (most reliable), fallback to title+category
-                    doc_key = metadata.get('fact_id')
+                    doc_key = metadata.get("fact_id")
                     if not doc_key:
-                        title = metadata.get('title', '')
-                        category = metadata.get('category', '')
-                        doc_key = f"{category}:{title}" if (title or category) else f"doc_{i}"
+                        title = metadata.get("title", "")
+                        category = metadata.get("category", "")
+                        doc_key = (
+                            f"{category}:{title}" if (title or category) else f"doc_{i}"
+                        )
 
                     # Keep only highest-scoring result per unique document
-                    if doc_key not in seen_documents or score > seen_documents[doc_key]['score']:
+                    if (
+                        doc_key not in seen_documents
+                        or score > seen_documents[doc_key]["score"]
+                    ):
                         result = {
                             "content": doc,
                             "score": score,
                             "metadata": metadata,
-                            "node_id": results_data['ids'][0][i] if 'ids' in results_data else f"result_{i}",
-                            "doc_id": results_data['ids'][0][i] if 'ids' in results_data else f"result_{i}",  # V1 compatibility
+                            "node_id": (
+                                results_data["ids"][0][i]
+                                if "ids" in results_data
+                                else f"result_{i}"
+                            ),
+                            "doc_id": (
+                                results_data["ids"][0][i]
+                                if "ids" in results_data
+                                else f"result_{i}"
+                            ),  # V1 compatibility
                         }
                         seen_documents[doc_key] = result
 
             # Convert to list and sort by score descending
-            results = sorted(seen_documents.values(), key=lambda x: x['score'], reverse=True)
+            results = sorted(
+                seen_documents.values(), key=lambda x: x["score"], reverse=True
+            )
 
             # Limit to top_k after deduplication
             results = results[:similarity_top_k]
@@ -710,6 +748,7 @@ class KnowledgeBase:
         except Exception as e:
             logger.error(f"Knowledge base search failed: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             return []
 
@@ -722,7 +761,9 @@ class KnowledgeBase:
     ) -> List[Dict[str, Any]]:
         """Internal search implementation with timeout protection (V1 compatibility)"""
         # Delegate to main search method
-        return await self.search(query, similarity_top_k=similarity_top_k, filters=filters, mode=mode)
+        return await self.search(
+            query, similarity_top_k=similarity_top_k, filters=filters, mode=mode
+        )
 
     async def _find_fact_by_unique_key(
         self, unique_key: str
@@ -1176,12 +1217,52 @@ class KnowledgeBase:
                         if fact_data:
                             facts.append(
                                 {
-                                    "id": key.split(":")[1] if isinstance(key, str) else key.decode().split(":")[1],
-                                    "content": fact_data.get(b"content", fact_data.get("content", "")).decode("utf-8") if isinstance(fact_data.get(b"content", fact_data.get("content", "")), bytes) else fact_data.get("content", ""),
-                                    "metadata": json.loads(
-                                        (fact_data.get(b"metadata", fact_data.get("metadata", "{}")).decode("utf-8") if isinstance(fact_data.get(b"metadata", fact_data.get("metadata", "{}")), bytes) else fact_data.get("metadata", "{}"))
+                                    "id": (
+                                        key.split(":")[1]
+                                        if isinstance(key, str)
+                                        else key.decode().split(":")[1]
                                     ),
-                                    "timestamp": (fact_data.get(b"timestamp", fact_data.get("timestamp", "")).decode("utf-8") if isinstance(fact_data.get(b"timestamp", fact_data.get("timestamp", "")), bytes) else fact_data.get("timestamp", "")),
+                                    "content": (
+                                        fact_data.get(
+                                            b"content", fact_data.get("content", "")
+                                        ).decode("utf-8")
+                                        if isinstance(
+                                            fact_data.get(
+                                                b"content", fact_data.get("content", "")
+                                            ),
+                                            bytes,
+                                        )
+                                        else fact_data.get("content", "")
+                                    ),
+                                    "metadata": json.loads(
+                                        (
+                                            fact_data.get(
+                                                b"metadata",
+                                                fact_data.get("metadata", "{}"),
+                                            ).decode("utf-8")
+                                            if isinstance(
+                                                fact_data.get(
+                                                    b"metadata",
+                                                    fact_data.get("metadata", "{}"),
+                                                ),
+                                                bytes,
+                                            )
+                                            else fact_data.get("metadata", "{}")
+                                        )
+                                    ),
+                                    "timestamp": (
+                                        fact_data.get(
+                                            b"timestamp", fact_data.get("timestamp", "")
+                                        ).decode("utf-8")
+                                        if isinstance(
+                                            fact_data.get(
+                                                b"timestamp",
+                                                fact_data.get("timestamp", ""),
+                                            ),
+                                            bytes,
+                                        )
+                                        else fact_data.get("timestamp", "")
+                                    ),
                                 }
                             )
             logger.info(
@@ -1770,11 +1851,15 @@ class KnowledgeBase:
                     )
 
                     # Sanitize metadata for ChromaDB compatibility
-                    sanitized_new_metadata = _sanitize_metadata_for_chromadb(new_metadata)
+                    sanitized_new_metadata = _sanitize_metadata_for_chromadb(
+                        new_metadata
+                    )
 
                     # Create new vector document
                     document = Document(
-                        text=new_content, metadata=sanitized_new_metadata, doc_id=fact_id
+                        text=new_content,
+                        metadata=sanitized_new_metadata,
+                        doc_id=fact_id,
                     )
 
                     # Insert new vector
@@ -1911,7 +1996,7 @@ class KnowledgeBase:
         self,
         file_path: Path,
         category: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Add a document from file (PDF, DOCX, TXT, MD) to knowledge base
@@ -1965,22 +2050,21 @@ class KnowledgeBase:
 
             # Build metadata
             doc_metadata = {
-                'source': str(file_path),
-                'filename': file_path.name,
-                'file_type': file_path.suffix,
-                'category': category or 'documents',
-                'extracted_at': datetime.utcnow().isoformat()
+                "source": str(file_path),
+                "filename": file_path.name,
+                "file_type": file_path.suffix,
+                "category": category or "documents",
+                "extracted_at": datetime.utcnow().isoformat(),
             }
             if metadata:
                 doc_metadata.update(metadata)
 
             # Add to knowledge base using existing add_document method
-            result = await self.add_document(
-                content=text,
-                metadata=doc_metadata
-            )
+            result = await self.add_document(content=text, metadata=doc_metadata)
 
-            logger.info(f"✅ Added {file_path.name} to knowledge base ({len(text)} chars)")
+            logger.info(
+                f"✅ Added {file_path.name} to knowledge base ({len(text)} chars)"
+            )
 
             return {
                 "success": True,
@@ -1988,17 +2072,18 @@ class KnowledgeBase:
                 "source": str(file_path),
                 "file_type": file_path.suffix,
                 "chars_extracted": len(text),
-                "message": f"Successfully added {file_path.name} to knowledge base"
+                "message": f"Successfully added {file_path.name} to knowledge base",
             }
 
         except Exception as e:
             logger.error(f"Failed to add document from {file_path}: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             return {
                 "success": False,
                 "source": str(file_path),
-                "message": f"Failed to add document: {str(e)}"
+                "message": f"Failed to add document: {str(e)}",
             }
 
     async def add_documents_from_directory(
@@ -2007,7 +2092,7 @@ class KnowledgeBase:
         file_types: Optional[List[str]] = None,
         category: Optional[str] = None,
         recursive: bool = True,
-        max_files: Optional[int] = None
+        max_files: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Batch process all documents in a directory
@@ -2064,16 +2149,20 @@ class KnowledgeBase:
                 directory_path=directory_path,
                 file_types=file_types,
                 recursive=recursive,
-                max_files=max_files
+                max_files=max_files,
             )
 
             total_files = len(extracted_texts)
-            logger.info(f"Extracted text from {total_files} files, adding to knowledge base...")
+            logger.info(
+                f"Extracted text from {total_files} files, adding to knowledge base..."
+            )
 
             # P0 OPTIMIZATION: Parallel document processing with controlled concurrency
             # Uses asyncio.gather() with semaphore to process multiple documents concurrently
             # Expected improvement: 5-10x speedup for bulk document ingestion (Issue #65)
-            max_concurrent = 10  # Limit concurrent operations to avoid overwhelming resources
+            max_concurrent = (
+                10  # Limit concurrent operations to avoid overwhelming resources
+            )
             semaphore = asyncio.Semaphore(max_concurrent)
 
             async def process_file_with_limit(file_path: Path, text: str):
@@ -2081,8 +2170,7 @@ class KnowledgeBase:
                 async with semaphore:
                     try:
                         result = await self.add_document_from_file(
-                            file_path=file_path,
-                            category=category
+                            file_path=file_path, category=category
                         )
                         return (file_path, result, None)
                     except Exception as e:
@@ -2091,8 +2179,7 @@ class KnowledgeBase:
 
             # Create tasks for all files
             tasks = [
-                process_file_with_limit(fp, txt)
-                for fp, txt in extracted_texts.items()
+                process_file_with_limit(fp, txt) for fp, txt in extracted_texts.items()
             ]
 
             # Execute all tasks concurrently (up to semaphore limit)
@@ -2101,24 +2188,24 @@ class KnowledgeBase:
             # Process results
             for result in results:
                 if isinstance(result, Exception):
-                    errors.append({
-                        "file": "unknown",
-                        "error": str(result)
-                    })
+                    errors.append({"file": "unknown", "error": str(result)})
                 else:
                     file_path, add_result, error = result
                     if error:
-                        errors.append({
-                            "file": str(file_path),
-                            "error": error
-                        })
+                        errors.append({"file": str(file_path), "error": error})
                     elif add_result and add_result.get("success"):
                         processed_files.append(str(file_path))
                     else:
-                        errors.append({
-                            "file": str(file_path),
-                            "error": add_result.get("message", "Unknown error") if add_result else "No result"
-                        })
+                        errors.append(
+                            {
+                                "file": str(file_path),
+                                "error": (
+                                    add_result.get("message", "Unknown error")
+                                    if add_result
+                                    else "No result"
+                                ),
+                            }
+                        )
 
             processed_count = len(processed_files)
             failed_count = len(errors)
@@ -2140,12 +2227,13 @@ class KnowledgeBase:
                     f"Successfully processed {processed_count}/{total_files} documents"
                     if failed_count == 0
                     else f"Processed {processed_count}/{total_files} documents with {failed_count} errors"
-                )
+                ),
             }
 
         except Exception as e:
             logger.error(f"Error processing directory {directory_path}: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             return {
                 "success": False,
@@ -2155,7 +2243,7 @@ class KnowledgeBase:
                 "directory": str(directory_path),
                 "files": processed_files,
                 "errors": errors,
-                "message": f"Directory processing failed: {str(e)}"
+                "message": f"Directory processing failed: {str(e)}",
             }
 
     def get_librarian(self):
@@ -2178,6 +2266,7 @@ class KnowledgeBase:
         self.ensure_initialized()
 
         from src.agents.kb_librarian_agent import KBLibrarianAgent
+
         return KBLibrarianAgent(knowledge_base=self)
 
     async def close(self):

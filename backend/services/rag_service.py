@@ -282,9 +282,7 @@ class RAGService:
             start_time = time.time()
 
             # Use knowledge base adapter for consistent interface
-            basic_results = await self.kb_adapter.search(
-                query=query, top_k=max_results
-            )
+            basic_results = await self.kb_adapter.search(query=query, top_k=max_results)
 
             metrics.total_time = time.time() - start_time
             metrics.final_results_count = len(basic_results)

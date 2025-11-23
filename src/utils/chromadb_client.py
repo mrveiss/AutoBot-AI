@@ -19,9 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_chromadb_client(
-    db_path: str,
-    allow_reset: bool = False,
-    anonymized_telemetry: bool = False
+    db_path: str, allow_reset: bool = False, anonymized_telemetry: bool = False
 ) -> chromadb.PersistentClient:
     """
     Create a ChromaDB persistent client with consistent configuration.
@@ -46,9 +44,8 @@ def get_chromadb_client(
         client = chromadb.PersistentClient(
             path=str(chroma_path),
             settings=ChromaSettings(
-                allow_reset=allow_reset,
-                anonymized_telemetry=anonymized_telemetry
-            )
+                allow_reset=allow_reset, anonymized_telemetry=anonymized_telemetry
+            ),
         )
 
         logger.info(f"ChromaDB client initialized at: {chroma_path}")

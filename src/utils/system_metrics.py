@@ -47,7 +47,9 @@ class SystemMetricsCollector:
         # REFACTORED: Centralized Redis client management
         # Don't cache clients - always use get_redis_client() for proper connection pooling
         self._metrics_buffer = deque(maxlen=1000)  # Buffer for recent metrics
-        self._collection_interval = config.get("monitoring.metrics.collection_interval", 5)
+        self._collection_interval = config.get(
+            "monitoring.metrics.collection_interval", 5
+        )
         self._retention_hours = config.get("monitoring.metrics.retention_hours", 24)
         self._is_collecting = False
         self._auth_error_logged = False  # Track if auth error was already logged
@@ -237,7 +239,9 @@ class SystemMetricsCollector:
             kb_redis_client = await self._get_redis_client(database="knowledge")
 
             if not kb_redis_client:
-                self.logger.debug("Knowledge base Redis client not available, skipping KB metrics")
+                self.logger.debug(
+                    "Knowledge base Redis client not available, skipping KB metrics"
+                )
                 return metrics
 
             # Get knowledge base statistics from Redis

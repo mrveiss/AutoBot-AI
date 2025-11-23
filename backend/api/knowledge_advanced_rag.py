@@ -33,15 +33,21 @@ class AdvancedSearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
     max_results: int = Field(default=5, ge=1, le=50, description="Maximum results")
-    enable_reranking: bool = Field(default=True, description="Enable cross-encoder reranking")
-    return_context: bool = Field(default=False, description="Return optimized context for RAG")
+    enable_reranking: bool = Field(
+        default=True, description="Enable cross-encoder reranking"
+    )
+    return_context: bool = Field(
+        default=False, description="Return optimized context for RAG"
+    )
     timeout: float = Field(default=None, description="Optional timeout in seconds")
 
 
 class RerankRequest(BaseModel):
     """Request model for reranking existing search results"""
 
-    query: str = Field(..., min_length=1, max_length=1000, description="Original search query")
+    query: str = Field(
+        ..., min_length=1, max_length=1000, description="Original search query"
+    )
     results: List[Dict[str, Any]] = Field(..., description="Search results to rerank")
 
 
@@ -71,10 +77,7 @@ async def get_rag_service_dependency(request: Request) -> RAGService:
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Knowledge base not available"
-        )
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     # Create RAG service (it will initialize itself)
     rag_service = RAGService(kb)
@@ -196,7 +199,9 @@ async def rerank_results(
     - **reranked_results**: Results sorted by rerank score
     - **original_count**: Number of input results
     """
-    logger.info(f"Reranking {len(request.results)} results for query: '{request.query}'")
+    logger.info(
+        f"Reranking {len(request.results)} results for query: '{request.query}'"
+    )
 
     # Perform reranking
     reranked_results = await rag_service.rerank_results(

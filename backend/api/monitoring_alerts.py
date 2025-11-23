@@ -213,9 +213,7 @@ async def get_active_alerts(
                 created_at=alert.created_at.isoformat(),
                 updated_at=alert.updated_at.isoformat(),
                 acknowledged_at=(
-                    alert.acknowledged_at.isoformat()
-                    if alert.acknowledged_at
-                    else None
+                    alert.acknowledged_at.isoformat() if alert.acknowledged_at else None
                 ),
                 acknowledged_by=alert.acknowledged_by,
                 tags=alert.tags,

@@ -93,7 +93,9 @@ async def get_redis_connection():
 
     redis_client = get_redis_client(database="analytics")
     if redis_client is None:
-        logger.warning("Redis client initialization returned None, using in-memory storage")
+        logger.warning(
+            "Redis client initialization returned None, using in-memory storage"
+        )
         return None
 
     return redis_client
@@ -108,18 +110,20 @@ def get_code_collection():
 
         # Create persistent client with telemetry disabled using shared utility
         chroma_client = get_chromadb_client(
-            db_path=str(chroma_path),
-            allow_reset=False,
-            anonymized_telemetry=False
+            db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
         )
 
         # Get or create the code collection
         code_collection = chroma_client.get_or_create_collection(
             name="autobot_code",
-            metadata={"description": "Codebase analytics: functions, classes, problems, duplicates"}
+            metadata={
+                "description": "Codebase analytics: functions, classes, problems, duplicates"
+            },
         )
 
-        logger.info(f"ChromaDB autobot_code collection ready ({code_collection.count()} items)")
+        logger.info(
+            f"ChromaDB autobot_code collection ready ({code_collection.count()} items)"
+        )
         return code_collection
 
     except Exception as e:
@@ -236,13 +240,14 @@ IMPORTANT: Return ONLY the JSON object, no other text."""
         result_text = response.content.strip()
 
         # Extract JSON from response
-        if result_text.startswith('{') and result_text.endswith('}'):
+        if result_text.startswith("{") and result_text.endswith("}"):
             result = json.loads(result_text)
             return result
         else:
             # Try to find JSON object in response
             import re
-            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+
+            json_match = re.search(r"\{.*\}", result_text, re.DOTALL)
             if json_match:
                 result = json.loads(json_match.group())
                 return result
@@ -497,8 +502,7 @@ def analyze_javascript_vue_file(file_path: str) -> Dict[str, Any]:
 
 
 async def scan_codebase(
-    root_path: Optional[str] = None,
-    progress_callback: Optional[callable] = None
+    root_path: Optional[str] = None, progress_callback: Optional[callable] = None
 ) -> Dict[str, Any]:
     """Scan the entire codebase using MCP-like file operations"""
     # Use project-relative path if not specified
@@ -563,7 +567,7 @@ async def scan_codebase(
                 operation="Scanning files",
                 current=0,
                 total=total_files,
-                current_file="Initializing..."
+                current_file="Initializing...",
             )
 
         # Walk through all files
@@ -586,7 +590,7 @@ async def scan_codebase(
                         operation="Scanning files",
                         current=files_processed,
                         total=total_files,
-                        current_file=relative_path
+                        current_file=relative_path,
                     )
 
                 file_analysis = None
@@ -669,7 +673,9 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
     global indexing_tasks
 
     try:
-        logger.info(f"[Task {task_id}] Starting background codebase indexing for: {root_path}")
+        logger.info(
+            f"[Task {task_id}] Starting background codebase indexing for: {root_path}"
+        )
 
         # Initialize task status
         indexing_tasks[task_id] = {
@@ -679,34 +685,40 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
                 "total": 0,
                 "percent": 0,
                 "current_file": "Initializing...",
-                "operation": "Starting indexing"
+                "operation": "Starting indexing",
             },
             "result": None,
             "error": None,
-            "started_at": datetime.now().isoformat()
+            "started_at": datetime.now().isoformat(),
         }
 
         # Progress callback function
-        async def update_progress(operation: str, current: int, total: int, current_file: str):
+        async def update_progress(
+            operation: str, current: int, total: int, current_file: str
+        ):
             percent = int((current / total * 100)) if total > 0 else 0
             indexing_tasks[task_id]["progress"] = {
                 "current": current,
                 "total": total,
                 "percent": percent,
                 "current_file": current_file,
-                "operation": operation
+                "operation": operation,
             }
-            logger.debug(f"[Task {task_id}] Progress: {operation} - {current}/{total} ({percent}%)")
+            logger.debug(
+                f"[Task {task_id}] Progress: {operation} - {current}/{total} ({percent}%)"
+            )
 
         # Scan the codebase with progress tracking
-        analysis_results = await scan_codebase(root_path, progress_callback=update_progress)
+        analysis_results = await scan_codebase(
+            root_path, progress_callback=update_progress
+        )
 
         # Update progress for ChromaDB storage phase
         await update_progress(
             operation="Preparing ChromaDB storage",
             current=0,
             total=1,
-            current_file="Connecting to ChromaDB..."
+            current_file="Connecting to ChromaDB...",
         )
 
         # Store in ChromaDB (run in thread to avoid blocking event loop)
@@ -720,7 +732,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
                 operation="Clearing old ChromaDB data",
                 current=0,
                 total=1,
-                current_file="Removing existing entries..."
+                current_file="Removing existing entries...",
             )
 
             try:
@@ -729,7 +741,9 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
                 existing_ids = existing_data["ids"]
                 if existing_ids:
                     await asyncio.to_thread(code_collection.delete, ids=existing_ids)
-                    logger.info(f"[Task {task_id}] Cleared {len(existing_ids)} existing items from ChromaDB")
+                    logger.info(
+                        f"[Task {task_id}] Cleared {len(existing_ids)} existing items from ChromaDB"
+                    )
             except Exception as e:
                 logger.warning(f"[Task {task_id}] Error clearing collection: {e}")
 
@@ -740,10 +754,10 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
 
             # Store functions
             total_items_to_store = (
-                len(analysis_results["all_functions"]) +
-                len(analysis_results["all_classes"]) +
-                len(analysis_results["all_problems"]) +
-                1  # stats
+                len(analysis_results["all_functions"])
+                + len(analysis_results["all_classes"])
+                + len(analysis_results["all_problems"])
+                + 1  # stats
             )
             items_prepared = 0
 
@@ -751,7 +765,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
                 operation="Storing functions",
                 current=0,
                 total=total_items_to_store,
-                current_file="Processing functions..."
+                current_file="Processing functions...",
             )
 
             for idx, func in enumerate(analysis_results["all_functions"]):
@@ -765,14 +779,20 @@ Docstring: {func.get('docstring', 'No documentation')}
 
                 batch_ids.append(f"function_{idx}_{func['name']}")
                 batch_documents.append(doc_text)
-                batch_metadatas.append({
-                    "type": "function",
-                    "name": func['name'],
-                    "file_path": func.get('file_path', ''),
-                    "start_line": str(func.get('line', 0)),
-                    "parameters": ','.join(func.get('args', [])),
-                    "language": "python" if func.get('file_path', '').endswith('.py') else "javascript"
-                })
+                batch_metadatas.append(
+                    {
+                        "type": "function",
+                        "name": func["name"],
+                        "file_path": func.get("file_path", ""),
+                        "start_line": str(func.get("line", 0)),
+                        "parameters": ",".join(func.get("args", [])),
+                        "language": (
+                            "python"
+                            if func.get("file_path", "").endswith(".py")
+                            else "javascript"
+                        ),
+                    }
+                )
 
                 items_prepared += 1
                 if items_prepared % 100 == 0:
@@ -780,7 +800,7 @@ Docstring: {func.get('docstring', 'No documentation')}
                         operation="Storing functions",
                         current=items_prepared,
                         total=total_items_to_store,
-                        current_file=f"Function {idx+1}/{len(analysis_results['all_functions'])}"
+                        current_file=f"Function {idx+1}/{len(analysis_results['all_functions'])}",
                     )
 
             # Store classes
@@ -788,7 +808,7 @@ Docstring: {func.get('docstring', 'No documentation')}
                 operation="Storing classes",
                 current=items_prepared,
                 total=total_items_to_store,
-                current_file="Processing classes..."
+                current_file="Processing classes...",
             )
 
             for idx, cls in enumerate(analysis_results["all_classes"]):
@@ -802,14 +822,16 @@ Docstring: {cls.get('docstring', 'No documentation')}
 
                 batch_ids.append(f"class_{idx}_{cls['name']}")
                 batch_documents.append(doc_text)
-                batch_metadatas.append({
-                    "type": "class",
-                    "name": cls['name'],
-                    "file_path": cls.get('file_path', ''),
-                    "start_line": str(cls.get('line', 0)),
-                    "methods": ','.join(cls.get('methods', [])),
-                    "language": "python"
-                })
+                batch_metadatas.append(
+                    {
+                        "type": "class",
+                        "name": cls["name"],
+                        "file_path": cls.get("file_path", ""),
+                        "start_line": str(cls.get("line", 0)),
+                        "methods": ",".join(cls.get("methods", [])),
+                        "language": "python",
+                    }
+                )
 
                 items_prepared += 1
                 if items_prepared % 50 == 0:
@@ -817,7 +839,7 @@ Docstring: {cls.get('docstring', 'No documentation')}
                         operation="Storing classes",
                         current=items_prepared,
                         total=total_items_to_store,
-                        current_file=f"Class {idx+1}/{len(analysis_results['all_classes'])}"
+                        current_file=f"Class {idx+1}/{len(analysis_results['all_classes'])}",
                     )
 
             # Store problems
@@ -825,7 +847,7 @@ Docstring: {cls.get('docstring', 'No documentation')}
                 operation="Storing problems",
                 current=items_prepared,
                 total=total_items_to_store,
-                current_file="Processing code problems..."
+                current_file="Processing code problems...",
             )
 
             for idx, problem in enumerate(analysis_results["all_problems"]):
@@ -840,15 +862,17 @@ Suggestion: {problem.get('suggestion', 'No suggestion')}
 
                 batch_ids.append(f"problem_{idx}")
                 batch_documents.append(doc_text)
-                batch_metadatas.append({
-                    "type": "problem",
-                    "problem_type": problem.get('type', ''),
-                    "severity": problem.get('severity', ''),
-                    "file_path": problem.get('file_path', ''),
-                    "line_number": str(problem.get('line', 0)),
-                    "description": problem.get('description', ''),
-                    "suggestion": problem.get('suggestion', '')
-                })
+                batch_metadatas.append(
+                    {
+                        "type": "problem",
+                        "problem_type": problem.get("type", ""),
+                        "severity": problem.get("severity", ""),
+                        "file_path": problem.get("file_path", ""),
+                        "line_number": str(problem.get("line", 0)),
+                        "description": problem.get("description", ""),
+                        "suggestion": problem.get("suggestion", ""),
+                    }
+                )
 
                 items_prepared += 1
                 if items_prepared % 50 == 0:
@@ -856,7 +880,7 @@ Suggestion: {problem.get('suggestion', 'No suggestion')}
                         operation="Storing problems",
                         current=items_prepared,
                         total=total_items_to_store,
-                        current_file=f"Problem {idx+1}/{len(analysis_results['all_problems'])}"
+                        current_file=f"Problem {idx+1}/{len(analysis_results['all_problems'])}",
                     )
 
             # Store stats as a special document
@@ -874,16 +898,20 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
 
             batch_ids.append("codebase_stats")
             batch_documents.append(stats_doc)
-            batch_metadatas.append({
-                "type": "stats",
-                **{k: str(v) for k, v in analysis_results["stats"].items()}
-            })
+            batch_metadatas.append(
+                {
+                    "type": "stats",
+                    **{k: str(v) for k, v in analysis_results["stats"].items()},
+                }
+            )
 
             items_prepared += 1
 
             # Add all to ChromaDB in batches (ChromaDB has max batch size limit)
             if batch_ids:
-                BATCH_SIZE = 5000  # ChromaDB max batch size is ~5461, use 5000 for safety
+                BATCH_SIZE = (
+                    5000  # ChromaDB max batch size is ~5461, use 5000 for safety
+                )
                 total_items = len(batch_ids)
                 items_stored = 0
 
@@ -891,20 +919,20 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
                     operation="Writing to ChromaDB",
                     current=0,
                     total=total_items,
-                    current_file="Batch storage in progress..."
+                    current_file="Batch storage in progress...",
                 )
 
                 for i in range(0, total_items, BATCH_SIZE):
-                    batch_slice_ids = batch_ids[i:i + BATCH_SIZE]
-                    batch_slice_docs = batch_documents[i:i + BATCH_SIZE]
-                    batch_slice_metas = batch_metadatas[i:i + BATCH_SIZE]
+                    batch_slice_ids = batch_ids[i : i + BATCH_SIZE]
+                    batch_slice_docs = batch_documents[i : i + BATCH_SIZE]
+                    batch_slice_metas = batch_metadatas[i : i + BATCH_SIZE]
 
                     # Run blocking ChromaDB add in thread pool
                     await asyncio.to_thread(
                         code_collection.add,
                         ids=batch_slice_ids,
                         documents=batch_slice_docs,
-                        metadatas=batch_slice_metas
+                        metadatas=batch_slice_metas,
                     )
                     items_stored += len(batch_slice_ids)
 
@@ -912,12 +940,16 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
                         operation="Writing to ChromaDB",
                         current=items_stored,
                         total=total_items,
-                        current_file=f"Batch {i//BATCH_SIZE + 1}/{(total_items + BATCH_SIZE - 1) // BATCH_SIZE}"
+                        current_file=f"Batch {i//BATCH_SIZE + 1}/{(total_items + BATCH_SIZE - 1) // BATCH_SIZE}",
                     )
 
-                    logger.info(f"[Task {task_id}] Stored batch {i//BATCH_SIZE + 1}: {len(batch_slice_ids)} items ({items_stored}/{total_items})")
+                    logger.info(
+                        f"[Task {task_id}] Stored batch {i//BATCH_SIZE + 1}: {len(batch_slice_ids)} items ({items_stored}/{total_items})"
+                    )
 
-                logger.info(f"[Task {task_id}] ✅ Stored total of {items_stored} items in ChromaDB")
+                logger.info(
+                    f"[Task {task_id}] ✅ Stored total of {items_stored} items in ChromaDB"
+                )
         else:
             storage_type = "failed"
             raise Exception("ChromaDB connection failed")
@@ -975,15 +1007,18 @@ async def index_codebase():
     # Clean up task reference when done
     def cleanup_task(t):
         _active_tasks.pop(task_id, None)
+
     task.add_done_callback(cleanup_task)
     logger.info(f"🧹 Cleanup callback added")
 
     logger.info(f"📤 About to return JSONResponse")
-    return JSONResponse({
-        "task_id": task_id,
-        "status": "started",
-        "message": "Indexing started in background. Poll /api/analytics/codebase/index/status/{task_id} for progress."
-    })
+    return JSONResponse(
+        {
+            "task_id": task_id,
+            "status": "started",
+            "message": "Indexing started in background. Poll /api/analytics/codebase/index/status/{task_id} for progress.",
+        }
+    )
 
 
 @with_error_handling(
@@ -1011,8 +1046,8 @@ async def get_indexing_status(task_id: str):
             content={
                 "task_id": task_id,
                 "status": "not_found",
-                "error": "Task not found. It may have expired or never existed."
-            }
+                "error": "Task not found. It may have expired or never existed.",
+            },
         )
 
     task_data = indexing_tasks[task_id]
@@ -1025,7 +1060,7 @@ async def get_indexing_status(task_id: str):
         "error": task_data.get("error"),
         "started_at": task_data.get("started_at"),
         "completed_at": task_data.get("completed_at"),
-        "failed_at": task_data.get("failed_at")
+        "failed_at": task_data.get("failed_at"),
     }
 
     return JSONResponse(response)
@@ -1045,10 +1080,7 @@ async def get_codebase_stats():
     if code_collection:
         try:
             # Query ChromaDB for stats
-            results = code_collection.get(
-                ids=["codebase_stats"],
-                include=["metadatas"]
-            )
+            results = code_collection.get(ids=["codebase_stats"], include=["metadatas"])
 
             if results.get("metadatas") and len(results["metadatas"]) > 0:
                 stats_metadata = results["metadatas"][0]
@@ -1072,7 +1104,9 @@ async def get_codebase_stats():
                         stats[field] = int(stats_metadata[field])
 
                 if "average_file_size" in stats_metadata:
-                    stats["average_file_size"] = float(stats_metadata["average_file_size"])
+                    stats["average_file_size"] = float(
+                        stats_metadata["average_file_size"]
+                    )
 
                 timestamp = stats_metadata.get("last_indexed", "Never")
                 storage_type = "chromadb"
@@ -1195,27 +1229,32 @@ async def get_codebase_problems(problem_type: Optional[str] = None):
             if problem_type:
                 where_filter["problem_type"] = problem_type
 
-            results = code_collection.get(
-                where=where_filter,
-                include=["metadatas"]
-            )
+            results = code_collection.get(where=where_filter, include=["metadatas"])
 
             # Extract problems from metadata
             for metadata in results.get("metadatas", []):
-                all_problems.append({
-                    "type": metadata.get("problem_type", ""),
-                    "severity": metadata.get("severity", ""),
-                    "file_path": metadata.get("file_path", ""),
-                    "line_number": int(metadata.get("line_number", 0)) if metadata.get("line_number") else None,
-                    "description": metadata.get("description", ""),
-                    "suggestion": metadata.get("suggestion", "")
-                })
+                all_problems.append(
+                    {
+                        "type": metadata.get("problem_type", ""),
+                        "severity": metadata.get("severity", ""),
+                        "file_path": metadata.get("file_path", ""),
+                        "line_number": (
+                            int(metadata.get("line_number", 0))
+                            if metadata.get("line_number")
+                            else None
+                        ),
+                        "description": metadata.get("description", ""),
+                        "suggestion": metadata.get("suggestion", ""),
+                    }
+                )
 
             storage_type = "chromadb"
             logger.info(f"Retrieved {len(all_problems)} problems from ChromaDB")
 
         except Exception as chroma_error:
-            logger.warning(f"ChromaDB query failed: {chroma_error}, falling back to Redis")
+            logger.warning(
+                f"ChromaDB query failed: {chroma_error}, falling back to Redis"
+            )
             code_collection = None
 
     # Fallback to Redis if ChromaDB fails
@@ -1256,9 +1295,7 @@ async def get_codebase_problems(problem_type: Optional[str] = None):
             "status": "success",
             "problems": all_problems,
             "total_count": len(all_problems),
-            "problem_types": list(
-                set(p.get("type", "unknown") for p in all_problems)
-            ),
+            "problem_types": list(set(p.get("type", "unknown") for p in all_problems)),
             "storage_type": storage_type,
         }
     )
@@ -1282,10 +1319,7 @@ async def get_code_declarations(declaration_type: Optional[str] = None):
             # Query ChromaDB for functions and classes
             where_filter = {"type": {"$in": ["function", "class"]}}
 
-            results = code_collection.get(
-                where=where_filter,
-                include=["metadatas"]
-            )
+            results = code_collection.get(where=where_filter, include=["metadatas"])
 
             # Extract declarations from metadata
             for metadata in results.get("metadatas", []):
@@ -1293,10 +1327,18 @@ async def get_code_declarations(declaration_type: Optional[str] = None):
                     "name": metadata.get("name", ""),
                     "type": metadata.get("type", ""),
                     "file_path": metadata.get("file_path", ""),
-                    "line_number": int(metadata.get("start_line", 0)) if metadata.get("start_line") else 0,
+                    "line_number": (
+                        int(metadata.get("start_line", 0))
+                        if metadata.get("start_line")
+                        else 0
+                    ),
                     "usage_count": 1,  # Default, can be calculated later
                     "is_exported": True,  # Default
-                    "parameters": metadata.get("parameters", "").split(",") if metadata.get("parameters") else []
+                    "parameters": (
+                        metadata.get("parameters", "").split(",")
+                        if metadata.get("parameters")
+                        else []
+                    ),
                 }
                 all_declarations.append(decl)
 
@@ -1304,7 +1346,9 @@ async def get_code_declarations(declaration_type: Optional[str] = None):
             logger.info(f"Retrieved {len(all_declarations)} declarations from ChromaDB")
 
         except Exception as chroma_error:
-            logger.warning(f"ChromaDB query failed: {chroma_error}, returning empty declarations")
+            logger.warning(
+                f"ChromaDB query failed: {chroma_error}, returning empty declarations"
+            )
             # Declarations don't exist in old Redis structure, so just return empty
             storage_type = "chromadb"
 
@@ -1356,17 +1400,24 @@ async def get_duplicate_code():
             # Query ChromaDB for duplicate markers
             # Note: Duplicates will be detected via semantic similarity when we regenerate
             results = code_collection.get(
-                where={"type": "duplicate"},
-                include=["metadatas"]
+                where={"type": "duplicate"}, include=["metadatas"]
             )
 
             # Extract duplicates from metadata
             for metadata in results.get("metadatas", []):
                 duplicate = {
                     "code_snippet": metadata.get("code_snippet", ""),
-                    "files": metadata.get("files", "").split(",") if metadata.get("files") else [],
-                    "similarity_score": float(metadata.get("similarity_score", 0.0)) if metadata.get("similarity_score") else 0.0,
-                    "line_numbers": metadata.get("line_numbers", "")
+                    "files": (
+                        metadata.get("files", "").split(",")
+                        if metadata.get("files")
+                        else []
+                    ),
+                    "similarity_score": (
+                        float(metadata.get("similarity_score", 0.0))
+                        if metadata.get("similarity_score")
+                        else 0.0
+                    ),
+                    "line_numbers": metadata.get("line_numbers", ""),
                 }
                 all_duplicates.append(duplicate)
 
@@ -1374,7 +1425,9 @@ async def get_duplicate_code():
             logger.info(f"Retrieved {len(all_duplicates)} duplicates from ChromaDB")
 
         except Exception as chroma_error:
-            logger.warning(f"ChromaDB query failed: {chroma_error}, returning empty duplicates")
+            logger.warning(
+                f"ChromaDB query failed: {chroma_error}, returning empty duplicates"
+            )
             # Duplicates don't exist yet, will be generated during reindexing
             storage_type = "chromadb"
 
@@ -1388,9 +1441,7 @@ async def get_duplicate_code():
         )
 
     # Sort by number of files affected (most duplicated first)
-    all_duplicates.sort(
-        key=lambda x: len(x.get("files", [])), reverse=True
-    )
+    all_duplicates.sort(key=lambda x: len(x.get("files", [])), reverse=True)
 
     return JSONResponse(
         {

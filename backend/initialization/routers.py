@@ -75,11 +75,31 @@ def load_core_routers():
         (knowledge_mcp_router, "/knowledge", ["knowledge_mcp", "mcp"], "knowledge_mcp"),
         (vnc_mcp_router, "/vnc", ["vnc", "mcp"], "vnc_mcp"),
         (mcp_registry_router, "/mcp", ["mcp", "registry"], "mcp_registry"),
-        (sequential_thinking_mcp_router, "/sequential_thinking", ["sequential_thinking_mcp", "mcp"], "sequential_thinking_mcp"),
-        (structured_thinking_mcp_router, "/structured_thinking", ["structured_thinking_mcp", "mcp"], "structured_thinking_mcp"),
-        (filesystem_mcp_router, "/filesystem", ["filesystem_mcp", "mcp"], "filesystem_mcp"),
+        (
+            sequential_thinking_mcp_router,
+            "/sequential_thinking",
+            ["sequential_thinking_mcp", "mcp"],
+            "sequential_thinking_mcp",
+        ),
+        (
+            structured_thinking_mcp_router,
+            "/structured_thinking",
+            ["structured_thinking_mcp", "mcp"],
+            "structured_thinking_mcp",
+        ),
+        (
+            filesystem_mcp_router,
+            "/filesystem",
+            ["filesystem_mcp", "mcp"],
+            "filesystem_mcp",
+        ),
         (browser_mcp_router, "/browser", ["browser_mcp", "mcp"], "browser_mcp"),
-        (http_client_mcp_router, "/http_client", ["http_client_mcp", "mcp"], "http_client_mcp"),
+        (
+            http_client_mcp_router,
+            "/http_client",
+            ["http_client_mcp", "mcp"],
+            "http_client_mcp",
+        ),
         (database_mcp_router, "/database", ["database_mcp", "mcp"], "database_mcp"),
         (git_mcp_router, "/git", ["git_mcp", "mcp"], "git_mcp"),
         (agent_router, "/agent", ["agent"], "agent"),
@@ -114,6 +134,7 @@ def load_optional_routers():
     # Monitoring router
     try:
         from backend.api.monitoring import router as monitoring_router
+
         optional_routers.append(
             (monitoring_router, "/monitoring", ["monitoring"], "monitoring")
         )
@@ -124,7 +145,10 @@ def load_optional_routers():
     # Terminal router
     try:
         from backend.api.terminal import router as terminal_router
-        optional_routers.append((terminal_router, "/terminal", ["terminal"], "terminal"))
+
+        optional_routers.append(
+            (terminal_router, "/terminal", ["terminal"], "terminal")
+        )
         logger.info("✅ Optional router loaded: terminal")
     except ImportError as e:
         logger.warning(f"⚠️ Optional router not available: terminal - {e}")
@@ -132,6 +156,7 @@ def load_optional_routers():
     # Agent Terminal router
     try:
         from backend.api.agent_terminal import router as agent_terminal_router
+
         optional_routers.append(
             (agent_terminal_router, "", ["agent-terminal"], "agent_terminal")
         )
@@ -144,6 +169,7 @@ def load_optional_routers():
     # WebSockets router
     try:
         from backend.api.websockets import router as websockets_router
+
         # FIXED: No prefix needed - websocket route is already @router.websocket("/ws")
         optional_routers.append((websockets_router, "", ["websockets"], "websockets"))
         logger.info("✅ Optional router loaded: websockets")
@@ -153,6 +179,7 @@ def load_optional_routers():
     # Analytics router
     try:
         from backend.api.analytics import router as analytics_router
+
         optional_routers.append(
             (analytics_router, "/analytics", ["analytics"], "analytics")
         )
@@ -163,7 +190,10 @@ def load_optional_routers():
     # Workflow router
     try:
         from backend.api.workflow import router as workflow_router
-        optional_routers.append((workflow_router, "/workflow", ["workflow"], "workflow"))
+
+        optional_routers.append(
+            (workflow_router, "/workflow", ["workflow"], "workflow")
+        )
         logger.info("✅ Optional router loaded: workflow")
     except ImportError as e:
         logger.warning(f"⚠️ Optional router not available: workflow - {e}")
@@ -171,6 +201,7 @@ def load_optional_routers():
     # Remote Terminal router
     try:
         from backend.api.remote_terminal import router as remote_terminal_router
+
         optional_routers.append(
             (remote_terminal_router, "", ["remote-terminal"], "remote_terminal")
         )
@@ -183,6 +214,7 @@ def load_optional_routers():
     # Batch router
     try:
         from backend.api.batch import router as batch_router
+
         optional_routers.append((batch_router, "/batch", ["batch"], "batch"))
         logger.info("✅ Optional router loaded: batch")
     except ImportError as e:
@@ -190,7 +222,10 @@ def load_optional_routers():
 
     # Advanced Workflow Orchestrator router
     try:
-        from backend.api.advanced_workflow_orchestrator import router as orchestrator_router
+        from backend.api.advanced_workflow_orchestrator import (
+            router as orchestrator_router,
+        )
+
         optional_routers.append(
             (orchestrator_router, "/orchestrator", ["orchestrator"], "orchestrator")
         )
@@ -201,6 +236,7 @@ def load_optional_routers():
     # Logs router
     try:
         from backend.api.logs import router as logs_router
+
         optional_routers.append((logs_router, "/logs", ["logs"], "logs"))
         logger.info("✅ Optional router loaded: logs")
     except ImportError as e:
@@ -209,6 +245,7 @@ def load_optional_routers():
     # RUM (Real User Monitoring) router
     try:
         from backend.api.rum import router as rum_router
+
         optional_routers.append((rum_router, "/rum", ["rum"], "rum"))
         logger.info("✅ Optional router loaded: rum")
     except ImportError as e:
@@ -217,6 +254,7 @@ def load_optional_routers():
     # Secrets router
     try:
         from backend.api.secrets import router as secrets_router
+
         optional_routers.append((secrets_router, "/secrets", ["secrets"], "secrets"))
         logger.info("✅ Optional router loaded: secrets")
     except ImportError as e:
@@ -225,6 +263,7 @@ def load_optional_routers():
     # Cache router
     try:
         from backend.api.cache import router as cache_router
+
         optional_routers.append((cache_router, "/cache", ["cache"], "cache"))
         logger.info("✅ Optional router loaded: cache")
     except ImportError as e:
@@ -233,7 +272,10 @@ def load_optional_routers():
     # Registry router
     try:
         from backend.api.registry import router as registry_router
-        optional_routers.append((registry_router, "/registry", ["registry"], "registry"))
+
+        optional_routers.append(
+            (registry_router, "/registry", ["registry"], "registry")
+        )
         logger.info("✅ Optional router loaded: registry")
     except ImportError as e:
         logger.warning(f"⚠️ Optional router not available: registry - {e}")
@@ -241,6 +283,7 @@ def load_optional_routers():
     # Embeddings router
     try:
         from backend.api.embeddings import router as embeddings_router
+
         optional_routers.append(
             (embeddings_router, "/embeddings", ["embeddings"], "embeddings")
         )
@@ -251,6 +294,7 @@ def load_optional_routers():
     # Workflow Automation router
     try:
         from backend.api.workflow_automation import router as workflow_automation_router
+
         optional_routers.append(
             (
                 workflow_automation_router,
@@ -266,6 +310,7 @@ def load_optional_routers():
     # Research Browser router
     try:
         from backend.api.research_browser import router as research_browser_router
+
         optional_routers.append(
             (
                 research_browser_router,
@@ -281,6 +326,7 @@ def load_optional_routers():
     # Playwright router
     try:
         from backend.api.playwright import router as playwright_router
+
         optional_routers.append(
             (
                 playwright_router,
@@ -296,6 +342,7 @@ def load_optional_routers():
     # Vision router
     try:
         from backend.api.vision import router as vision_router
+
         optional_routers.append(
             (
                 vision_router,
@@ -310,7 +357,10 @@ def load_optional_routers():
 
     # Web Research Settings router
     try:
-        from backend.api.web_research_settings import router as web_research_settings_router
+        from backend.api.web_research_settings import (
+            router as web_research_settings_router,
+        )
+
         optional_routers.append(
             (
                 web_research_settings_router,
@@ -326,8 +376,14 @@ def load_optional_routers():
     # State Tracking router
     try:
         from backend.api.state_tracking import router as state_tracking_router
+
         optional_routers.append(
-            (state_tracking_router, "/state-tracking", ["state-tracking"], "state_tracking")
+            (
+                state_tracking_router,
+                "/state-tracking",
+                ["state-tracking"],
+                "state_tracking",
+            )
         )
         logger.info("✅ Optional router loaded: state_tracking")
     except ImportError as e:
@@ -336,7 +392,10 @@ def load_optional_routers():
     # Services router
     try:
         from backend.api.services import router as services_router
-        optional_routers.append((services_router, "/services", ["services"], "services"))
+
+        optional_routers.append(
+            (services_router, "/services", ["services"], "services")
+        )
         logger.info("✅ Optional router loaded: services")
     except ImportError as e:
         logger.warning(f"⚠️ Optional router not available: services - {e}")
@@ -344,6 +403,7 @@ def load_optional_routers():
     # Elevation router
     try:
         from backend.api.elevation import router as elevation_router
+
         optional_routers.append(
             (elevation_router, "/elevation", ["elevation"], "elevation")
         )
@@ -354,6 +414,7 @@ def load_optional_routers():
     # Auth router
     try:
         from backend.api.auth import router as auth_router
+
         optional_routers.append((auth_router, "/auth", ["auth"], "auth"))
         logger.info("✅ Optional router loaded: auth")
     except ImportError as e:
@@ -362,6 +423,7 @@ def load_optional_routers():
     # Error Monitoring router
     try:
         from backend.api.error_monitoring import router as error_monitoring_router
+
         optional_routers.append(
             (error_monitoring_router, "/errors", ["errors"], "error_monitoring")
         )
@@ -372,6 +434,7 @@ def load_optional_routers():
     # Multimodal router
     try:
         from backend.api.multimodal import router as multimodal_router
+
         optional_routers.append(
             (multimodal_router, "/multimodal", ["multimodal"], "multimodal")
         )
@@ -382,6 +445,7 @@ def load_optional_routers():
     # Hot Reload router
     try:
         from backend.api.hot_reload import router as hot_reload_router
+
         optional_routers.append(
             (hot_reload_router, "/hot-reload", ["hot-reload"], "hot_reload")
         )
@@ -392,6 +456,7 @@ def load_optional_routers():
     # Enterprise Features router
     try:
         from backend.api.enterprise_features import router as enterprise_router
+
         optional_routers.append(
             (enterprise_router, "/enterprise", ["enterprise"], "enterprise")
         )
@@ -404,6 +469,7 @@ def load_optional_routers():
         from backend.api.infrastructure_monitor import (
             router as infrastructure_monitor_router,
         )
+
         optional_routers.append(
             (
                 infrastructure_monitor_router,
@@ -419,6 +485,7 @@ def load_optional_routers():
     # Scheduler router
     try:
         from backend.api.scheduler import router as scheduler_router
+
         optional_routers.append(
             (scheduler_router, "/scheduler", ["scheduler"], "scheduler")
         )
@@ -429,6 +496,7 @@ def load_optional_routers():
     # Templates router
     try:
         from backend.api.templates import router as templates_router
+
         optional_routers.append(
             (templates_router, "/templates", ["templates"], "templates")
         )
@@ -439,6 +507,7 @@ def load_optional_routers():
     # Sandbox router
     try:
         from backend.api.sandbox import router as sandbox_router
+
         optional_routers.append((sandbox_router, "/sandbox", ["sandbox"], "sandbox"))
         logger.info("✅ Optional router loaded: sandbox")
     except ImportError as e:
@@ -447,7 +516,10 @@ def load_optional_routers():
     # Security router
     try:
         from backend.api.security import router as security_router
-        optional_routers.append((security_router, "/security", ["security"], "security"))
+
+        optional_routers.append(
+            (security_router, "/security", ["security"], "security")
+        )
         logger.info("✅ Optional router loaded: security")
     except ImportError as e:
         logger.warning(f"⚠️ Optional router not available: security - {e}")
@@ -455,6 +527,7 @@ def load_optional_routers():
     # Code Search router
     try:
         from backend.api.code_search import router as code_search_router
+
         optional_routers.append(
             (code_search_router, "/code-search", ["code-search"], "code_search")
         )
@@ -465,6 +538,7 @@ def load_optional_routers():
     # Orchestration router
     try:
         from backend.api.orchestration import router as orchestration_router
+
         optional_routers.append(
             (orchestration_router, "/orchestration", ["orchestration"], "orchestration")
         )
@@ -475,6 +549,7 @@ def load_optional_routers():
     # Cache Management router
     try:
         from backend.api.cache_management import router as cache_management_router
+
         optional_routers.append(
             (
                 cache_management_router,
@@ -490,6 +565,7 @@ def load_optional_routers():
     # LLM Optimization router
     try:
         from backend.api.llm_optimization import router as llm_optimization_router
+
         optional_routers.append(
             (
                 llm_optimization_router,
@@ -505,6 +581,7 @@ def load_optional_routers():
     # Enhanced Search router
     try:
         from backend.api.enhanced_search import router as enhanced_search_router
+
         optional_routers.append(
             (
                 enhanced_search_router,
@@ -520,6 +597,7 @@ def load_optional_routers():
     # Enhanced Memory router
     try:
         from backend.api.enhanced_memory import router as enhanced_memory_router
+
         optional_routers.append(
             (
                 enhanced_memory_router,
@@ -535,6 +613,7 @@ def load_optional_routers():
     # Development Speedup router
     try:
         from backend.api.development_speedup import router as development_speedup_router
+
         optional_routers.append(
             (
                 development_speedup_router,
@@ -550,6 +629,7 @@ def load_optional_routers():
     # Advanced Control router
     try:
         from backend.api.advanced_control import router as advanced_control_router
+
         optional_routers.append(
             (
                 advanced_control_router,
@@ -565,6 +645,7 @@ def load_optional_routers():
     # Codebase Analytics router
     try:
         from backend.api.codebase_analytics import router as codebase_analytics_router
+
         optional_routers.append(
             (
                 codebase_analytics_router,
@@ -582,6 +663,7 @@ def load_optional_routers():
         from backend.api.long_running_operations import (
             router as long_running_operations_router,
         )
+
         optional_routers.append(
             (
                 long_running_operations_router,
@@ -592,11 +674,14 @@ def load_optional_routers():
         )
         logger.info("✅ Optional router loaded: long_running_operations")
     except ImportError as e:
-        logger.warning(f"⚠️ Optional router not available: long_running_operations - {e}")
+        logger.warning(
+            f"⚠️ Optional router not available: long_running_operations - {e}"
+        )
 
     # System Validation router
     try:
         from backend.api.system_validation import router as system_validation_router
+
         optional_routers.append(
             (
                 system_validation_router,
@@ -611,7 +696,10 @@ def load_optional_routers():
 
     # Validation Dashboard router
     try:
-        from backend.api.validation_dashboard import router as validation_dashboard_router
+        from backend.api.validation_dashboard import (
+            router as validation_dashboard_router,
+        )
+
         optional_routers.append(
             (
                 validation_dashboard_router,
@@ -627,6 +715,7 @@ def load_optional_routers():
     # LLM Awareness router
     try:
         from backend.api.llm_awareness import router as llm_awareness_router
+
         optional_routers.append(
             (llm_awareness_router, "/llm-awareness", ["llm-awareness"], "llm_awareness")
         )
@@ -637,6 +726,7 @@ def load_optional_routers():
     # Project State router
     try:
         from backend.api.project_state import router as project_state_router
+
         optional_routers.append(
             (project_state_router, "/project-state", ["project-state"], "project_state")
         )
@@ -647,6 +737,7 @@ def load_optional_routers():
     # Metrics router
     try:
         from backend.api.metrics import router as metrics_router
+
         optional_routers.append((metrics_router, "/metrics", ["metrics"], "metrics"))
         logger.info("✅ Optional router loaded: metrics")
     except ImportError as e:
@@ -655,6 +746,7 @@ def load_optional_routers():
     # Startup router
     try:
         from backend.api.startup import router as startup_router
+
         optional_routers.append((startup_router, "/startup", ["startup"], "startup"))
         logger.info("✅ Optional router loaded: startup")
     except ImportError as e:
@@ -663,6 +755,7 @@ def load_optional_routers():
     # Phase Management router
     try:
         from backend.api.phase_management import router as phase_management_router
+
         optional_routers.append(
             (phase_management_router, "/phases", ["phases"], "phase_management")
         )
@@ -673,6 +766,7 @@ def load_optional_routers():
     # Monitoring Alerts router
     try:
         from backend.api.monitoring_alerts import router as monitoring_alerts_router
+
         optional_routers.append(
             (monitoring_alerts_router, "/alerts", ["alerts"], "monitoring_alerts")
         )
@@ -683,8 +777,14 @@ def load_optional_routers():
     # Knowledge Test router
     try:
         from backend.api.knowledge_test import router as knowledge_test_router
+
         optional_routers.append(
-            (knowledge_test_router, "/knowledge-test", ["knowledge-test"], "knowledge_test")
+            (
+                knowledge_test_router,
+                "/knowledge-test",
+                ["knowledge-test"],
+                "knowledge_test",
+            )
         )
         logger.info("✅ Optional router loaded: knowledge_test")
     except ImportError as e:
@@ -693,6 +793,7 @@ def load_optional_routers():
     # Service Monitor router
     try:
         from backend.api.service_monitor import router as service_monitor_router
+
         optional_routers.append(
             (
                 service_monitor_router,
@@ -708,6 +809,7 @@ def load_optional_routers():
     # Base Terminal router
     try:
         from backend.api.base_terminal import router as base_terminal_router
+
         optional_routers.append(
             (base_terminal_router, "/base-terminal", ["base-terminal"], "base_terminal")
         )
@@ -718,6 +820,7 @@ def load_optional_routers():
     # Conversation Files router
     try:
         from backend.api.conversation_files import router as conversation_files_router
+
         optional_routers.append(
             (
                 conversation_files_router,
@@ -733,8 +836,14 @@ def load_optional_routers():
     # Chat Knowledge router
     try:
         from backend.api.chat_knowledge import router as chat_knowledge_router
+
         optional_routers.append(
-            (chat_knowledge_router, "/chat-knowledge", ["chat-knowledge"], "chat_knowledge")
+            (
+                chat_knowledge_router,
+                "/chat-knowledge",
+                ["chat-knowledge"],
+                "chat_knowledge",
+            )
         )
         logger.info("✅ Optional router loaded: chat_knowledge")
     except ImportError as e:
@@ -743,7 +852,10 @@ def load_optional_routers():
     # NPU Workers router
     try:
         from backend.api.npu_workers import router as npu_workers_router
-        optional_routers.append((npu_workers_router, "", ["npu-workers"], "npu_workers"))
+
+        optional_routers.append(
+            (npu_workers_router, "", ["npu-workers"], "npu_workers")
+        )
         logger.info("✅ Optional router loaded: npu_workers (includes prefix /api/npu)")
     except ImportError as e:
         logger.warning(f"⚠️ Optional router not available: npu_workers - {e}")
@@ -751,6 +863,7 @@ def load_optional_routers():
     # Redis Service router
     try:
         from backend.api.redis_service import router as redis_service_router
+
         optional_routers.append(
             (redis_service_router, "/redis-service", ["redis-service"], "redis_service")
         )
@@ -761,8 +874,14 @@ def load_optional_routers():
     # Infrastructure router
     try:
         from backend.api.infrastructure import router as infrastructure_router
+
         optional_routers.append(
-            (infrastructure_router, "/iac", ["Infrastructure as Code"], "infrastructure")
+            (
+                infrastructure_router,
+                "/iac",
+                ["Infrastructure as Code"],
+                "infrastructure",
+            )
         )
         logger.info("✅ Optional router loaded: infrastructure")
     except ImportError as e:

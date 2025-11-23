@@ -35,7 +35,7 @@ warnings.warn(
     "Use src.secure_command_executor.SecureCommandExecutor instead. "
     "This compatibility shim will be removed in future version.",
     DeprecationWarning,
-    stacklevel=2
+    stacklevel=2,
 )
 
 # Re-export SecureCommandExecutor as CommandExecutor for backward compatibility

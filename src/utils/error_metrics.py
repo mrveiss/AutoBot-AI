@@ -96,9 +96,7 @@ class ErrorMetricsCollector:
 
     def _create_stats(self) -> ErrorStats:
         """Create default ErrorStats instance"""
-        return ErrorStats(
-            error_code=None, category="unknown", component="unknown"
-        )
+        return ErrorStats(error_code=None, category="unknown", component="unknown")
 
     async def record_error(
         self,
@@ -171,9 +169,7 @@ class ErrorMetricsCollector:
 
             # Calculate error rate (errors per minute over last hour)
             one_hour_ago = timestamp - 3600
-            recent_count = sum(
-                1 for m in self._metrics if m.timestamp > one_hour_ago
-            )
+            recent_count = sum(1 for m in self._metrics if m.timestamp > one_hour_ago)
             stats.error_rate = recent_count / 60.0
 
         # Persist to Redis if available
@@ -236,7 +232,9 @@ class ErrorMetricsCollector:
                     metric.resolved = True
 
                     # Update stats
-                    stats_key = f"{metric.component}:{metric.error_code or metric.category}"
+                    stats_key = (
+                        f"{metric.component}:{metric.error_code or metric.category}"
+                    )
                     if stats_key in self._stats:
                         self._stats[stats_key].resolved_count += 1
 
@@ -348,9 +346,9 @@ class ErrorMetricsCollector:
         Returns:
             List of ErrorStats sorted by frequency
         """
-        return sorted(
-            self._stats.values(), key=lambda s: s.total_count, reverse=True
-        )[:limit]
+        return sorted(self._stats.values(), key=lambda s: s.total_count, reverse=True)[
+            :limit
+        ]
 
     def set_alert_threshold(
         self, component: str, error_code: Optional[str], threshold: int
@@ -424,14 +422,14 @@ class ErrorMetricsCollector:
             if component:
                 # Reset only specified component
                 keys_to_remove = [
-                    key for key, stats in self._stats.items() if stats.component == component
+                    key
+                    for key, stats in self._stats.items()
+                    if stats.component == component
                 ]
                 for key in keys_to_remove:
                     del self._stats[key]
 
-                self._metrics = [
-                    m for m in self._metrics if m.component != component
-                ]
+                self._metrics = [m for m in self._metrics if m.component != component]
 
                 logger.info(f"Reset error metrics for component: {component}")
             else:

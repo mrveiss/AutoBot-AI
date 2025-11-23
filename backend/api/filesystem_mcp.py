@@ -71,18 +71,23 @@ def is_path_allowed(path: str) -> bool:
             return False
 
         # Verify resolved path matches absolute path (no symlink trickery)
-        if abs_path != real_path and not real_path.startswith(tuple(ALLOWED_DIRECTORIES)):
-            logger.warning(f"Symlink outside allowed directories blocked: {path} -> {real_path}")
+        if abs_path != real_path and not real_path.startswith(
+            tuple(ALLOWED_DIRECTORIES)
+        ):
+            logger.warning(
+                f"Symlink outside allowed directories blocked: {path} -> {real_path}"
+            )
             return False
 
         # Check if path is within allowed directories
         is_allowed = any(
-            real_path.startswith(allowed_dir)
-            for allowed_dir in ALLOWED_DIRECTORIES
+            real_path.startswith(allowed_dir) for allowed_dir in ALLOWED_DIRECTORIES
         )
 
         if not is_allowed:
-            logger.warning(f"Access denied to path outside allowed directories: {real_path}")
+            logger.warning(
+                f"Access denied to path outside allowed directories: {real_path}"
+            )
 
         return is_allowed
 
@@ -101,8 +106,10 @@ class MCPTool(BaseModel):
 
 # Request Models
 
+
 class ReadTextFileRequest(BaseModel):
     """Request model for reading text files"""
+
     path: str = Field(..., description="Absolute path to file")
     head: Optional[int] = Field(None, description="Read only first N lines")
     tail: Optional[int] = Field(None, description="Read only last N lines")
@@ -110,63 +117,80 @@ class ReadTextFileRequest(BaseModel):
 
 class ReadMediaFileRequest(BaseModel):
     """Request model for reading media files (images, audio)"""
+
     path: str = Field(..., description="Absolute path to media file")
 
 
 class ReadMultipleFilesRequest(BaseModel):
     """Request model for reading multiple files"""
+
     paths: List[str] = Field(..., description="List of absolute file paths")
 
 
 class WriteFileRequest(BaseModel):
     """Request model for writing files"""
+
     path: str = Field(..., description="Absolute path to file")
     content: str = Field(..., description="File content to write")
 
 
 class EditFileRequest(BaseModel):
     """Request model for editing files"""
+
     path: str = Field(..., description="Absolute path to file")
-    edits: List[Dict[str, str]] = Field(..., description="List of {old_text, new_text} edits")
-    dry_run: Optional[bool] = Field(False, description="Preview changes without applying")
+    edits: List[Dict[str, str]] = Field(
+        ..., description="List of {old_text, new_text} edits"
+    )
+    dry_run: Optional[bool] = Field(
+        False, description="Preview changes without applying"
+    )
 
 
 class CreateDirectoryRequest(BaseModel):
     """Request model for creating directories"""
+
     path: str = Field(..., description="Absolute path to directory")
 
 
 class ListDirectoryRequest(BaseModel):
     """Request model for listing directory contents"""
+
     path: str = Field(..., description="Absolute path to directory")
 
 
 class ListDirectoryWithSizesRequest(BaseModel):
     """Request model for listing directory with sizes"""
+
     path: str = Field(..., description="Absolute path to directory")
     sort_by: Optional[str] = Field("name", description="Sort by 'name' or 'size'")
 
 
 class MoveFileRequest(BaseModel):
     """Request model for moving/renaming files"""
+
     source: str = Field(..., description="Source path")
     destination: str = Field(..., description="Destination path")
 
 
 class SearchFilesRequest(BaseModel):
     """Request model for searching files"""
+
     path: str = Field(..., description="Directory to search")
     pattern: str = Field(..., description="Search pattern (e.g., '*.py')")
-    exclude_patterns: Optional[List[str]] = Field(None, description="Patterns to exclude")
+    exclude_patterns: Optional[List[str]] = Field(
+        None, description="Patterns to exclude"
+    )
 
 
 class DirectoryTreeRequest(BaseModel):
     """Request model for directory tree"""
+
     path: str = Field(..., description="Root directory path")
 
 
 class GetFileInfoRequest(BaseModel):
     """Request model for file metadata"""
+
     path: str = Field(..., description="File or directory path")
 
 
@@ -186,12 +210,21 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Absolute path to text file"},
-                    "head": {"type": "integer", "description": "Read only first N lines"},
-                    "tail": {"type": "integer", "description": "Read only last N lines"}
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to text file",
+                    },
+                    "head": {
+                        "type": "integer",
+                        "description": "Read only first N lines",
+                    },
+                    "tail": {
+                        "type": "integer",
+                        "description": "Read only last N lines",
+                    },
                 },
-                "required": ["path"]
-            }
+                "required": ["path"],
+            },
         ),
         MCPTool(
             name="read_media_file",
@@ -199,10 +232,13 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Absolute path to media file"}
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to media file",
+                    }
                 },
-                "required": ["path"]
-            }
+                "required": ["path"],
+            },
         ),
         MCPTool(
             name="read_multiple_files",
@@ -213,13 +249,12 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
                     "paths": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "List of absolute file paths to read"
+                        "description": "List of absolute file paths to read",
                     }
                 },
-                "required": ["paths"]
-            }
+                "required": ["paths"],
+            },
         ),
-
         # Write Operations
         MCPTool(
             name="write_file",
@@ -228,10 +263,13 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "Absolute path to file"},
-                    "content": {"type": "string", "description": "File content to write"}
+                    "content": {
+                        "type": "string",
+                        "description": "File content to write",
+                    },
                 },
-                "required": ["path", "content"]
-            }
+                "required": ["path", "content"],
+            },
         ),
         MCPTool(
             name="edit_file",
@@ -245,19 +283,28 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
                         "items": {
                             "type": "object",
                             "properties": {
-                                "old_text": {"type": "string", "description": "Text to find"},
-                                "new_text": {"type": "string", "description": "Replacement text"}
+                                "old_text": {
+                                    "type": "string",
+                                    "description": "Text to find",
+                                },
+                                "new_text": {
+                                    "type": "string",
+                                    "description": "Replacement text",
+                                },
                             },
-                            "required": ["old_text", "new_text"]
+                            "required": ["old_text", "new_text"],
                         },
-                        "description": "List of find-and-replace operations"
+                        "description": "List of find-and-replace operations",
                     },
-                    "dry_run": {"type": "boolean", "description": "Preview changes without applying", "default": False}
+                    "dry_run": {
+                        "type": "boolean",
+                        "description": "Preview changes without applying",
+                        "default": False,
+                    },
                 },
-                "required": ["path", "edits"]
-            }
+                "required": ["path", "edits"],
+            },
         ),
-
         # Directory Management
         MCPTool(
             name="create_directory",
@@ -265,10 +312,13 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Absolute path to directory"}
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to directory",
+                    }
                 },
-                "required": ["path"]
-            }
+                "required": ["path"],
+            },
         ),
         MCPTool(
             name="list_directory",
@@ -276,10 +326,13 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Absolute path to directory"}
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to directory",
+                    }
                 },
-                "required": ["path"]
-            }
+                "required": ["path"],
+            },
         ),
         MCPTool(
             name="list_directory_with_sizes",
@@ -287,16 +340,19 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Absolute path to directory"},
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to directory",
+                    },
                     "sort_by": {
                         "type": "string",
                         "enum": ["name", "size"],
                         "description": "Sort entries by name or size",
-                        "default": "name"
-                    }
+                        "default": "name",
+                    },
                 },
-                "required": ["path"]
-            }
+                "required": ["path"],
+            },
         ),
         MCPTool(
             name="move_file",
@@ -304,13 +360,18 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
             input_schema={
                 "type": "object",
                 "properties": {
-                    "source": {"type": "string", "description": "Source file/directory path"},
-                    "destination": {"type": "string", "description": "Destination path"}
+                    "source": {
+                        "type": "string",
+                        "description": "Source file/directory path",
+                    },
+                    "destination": {
+                        "type": "string",
+                        "description": "Destination path",
+                    },
                 },
-                "required": ["source", "destination"]
-            }
+                "required": ["source", "destination"],
+            },
         ),
-
         # Discovery/Analysis
         MCPTool(
             name="search_files",
@@ -319,15 +380,18 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "Directory to search in"},
-                    "pattern": {"type": "string", "description": "Glob pattern (e.g., '*.py', '**/*.json')"},
+                    "pattern": {
+                        "type": "string",
+                        "description": "Glob pattern (e.g., '*.py', '**/*.json')",
+                    },
                     "exclude_patterns": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Patterns to exclude from results"
-                    }
+                        "description": "Patterns to exclude from results",
+                    },
                 },
-                "required": ["path", "pattern"]
-            }
+                "required": ["path", "pattern"],
+            },
         ),
         MCPTool(
             name="directory_tree",
@@ -337,8 +401,8 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
                 "properties": {
                     "path": {"type": "string", "description": "Root directory path"}
                 },
-                "required": ["path"]
-            }
+                "required": ["path"],
+            },
         ),
         MCPTool(
             name="get_file_info",
@@ -348,19 +412,20 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
                 "properties": {
                     "path": {"type": "string", "description": "File or directory path"}
                 },
-                "required": ["path"]
-            }
+                "required": ["path"],
+            },
         ),
         MCPTool(
             name="list_allowed_directories",
             description="Display current filesystem access boundaries and allowed directory paths",
-            input_schema={"type": "object", "properties": {}}
+            input_schema={"type": "object", "properties": {}},
         ),
     ]
     return tools
 
 
 # Tool Implementations
+
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -371,40 +436,49 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
 async def read_text_file_mcp(request: ReadTextFileRequest) -> Dict[str, Any]:
     """Read text file with security validation"""
     if not is_path_allowed(request.path):
-        raise HTTPException(status_code=403, detail=f"Access denied: Path not in allowed directories")
+        raise HTTPException(
+            status_code=403, detail=f"Access denied: Path not in allowed directories"
+        )
 
     if not os.path.exists(request.path):
         raise HTTPException(status_code=404, detail=f"File not found: {request.path}")
 
     if not os.path.isfile(request.path):
-        raise HTTPException(status_code=400, detail=f"Path is not a file: {request.path}")
+        raise HTTPException(
+            status_code=400, detail=f"Path is not a file: {request.path}"
+        )
 
     # Check file size
     file_size = os.path.getsize(request.path)
     if file_size > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail=f"File too large: {file_size} bytes (max {MAX_FILE_SIZE})")
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large: {file_size} bytes (max {MAX_FILE_SIZE})",
+        )
 
     try:
-        with open(request.path, 'r', encoding='utf-8') as f:
+        with open(request.path, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
         # Apply head/tail filters
         if request.head is not None:
-            lines = lines[:request.head]
+            lines = lines[: request.head]
         elif request.tail is not None:
-            lines = lines[-request.tail:]
+            lines = lines[-request.tail :]
 
-        content = ''.join(lines)
+        content = "".join(lines)
 
         return {
             "success": True,
             "path": request.path,
             "content": content,
             "lines": len(lines),
-            "size_bytes": file_size
+            "size_bytes": file_size,
         }
     except UnicodeDecodeError:
-        raise HTTPException(status_code=400, detail="File is not a text file (encoding error)")
+        raise HTTPException(
+            status_code=400, detail="File is not a text file (encoding error)"
+        )
 
 
 @with_error_handling(
@@ -416,18 +490,24 @@ async def read_text_file_mcp(request: ReadTextFileRequest) -> Dict[str, Any]:
 async def read_media_file_mcp(request: ReadMediaFileRequest) -> Dict[str, Any]:
     """Read media file as base64 with MIME type"""
     if not is_path_allowed(request.path):
-        raise HTTPException(status_code=403, detail="Access denied: Path not in allowed directories")
+        raise HTTPException(
+            status_code=403, detail="Access denied: Path not in allowed directories"
+        )
 
     if not os.path.exists(request.path):
         raise HTTPException(status_code=404, detail=f"File not found: {request.path}")
 
     if not os.path.isfile(request.path):
-        raise HTTPException(status_code=400, detail=f"Path is not a file: {request.path}")
+        raise HTTPException(
+            status_code=400, detail=f"Path is not a file: {request.path}"
+        )
 
     # Check file size
     file_size = os.path.getsize(request.path)
     if file_size > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail=f"File too large: {file_size} bytes")
+        raise HTTPException(
+            status_code=413, detail=f"File too large: {file_size} bytes"
+        )
 
     # Detect MIME type
     mime_type, _ = mimetypes.guess_type(request.path)
@@ -435,20 +515,22 @@ async def read_media_file_mcp(request: ReadMediaFileRequest) -> Dict[str, Any]:
         mime_type = "application/octet-stream"
 
     try:
-        with open(request.path, 'rb') as f:
+        with open(request.path, "rb") as f:
             file_data = f.read()
 
-        base64_data = base64.b64encode(file_data).decode('utf-8')
+        base64_data = base64.b64encode(file_data).decode("utf-8")
 
         return {
             "success": True,
             "path": request.path,
             "mime_type": mime_type,
             "base64_data": base64_data,
-            "size_bytes": file_size
+            "size_bytes": file_size,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error reading media file: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error reading media file: {str(e)}"
+        )
 
 
 @with_error_handling(
@@ -478,17 +560,15 @@ async def read_multiple_files_mcp(request: ReadMultipleFilesRequest) -> Dict[str
 
             file_size = os.path.getsize(path)
             if file_size > MAX_FILE_SIZE:
-                errors.append({"path": path, "error": f"File too large ({file_size} bytes)"})
+                errors.append(
+                    {"path": path, "error": f"File too large ({file_size} bytes)"}
+                )
                 continue
 
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
 
-            results.append({
-                "path": path,
-                "content": content,
-                "size_bytes": file_size
-            })
+            results.append({"path": path, "content": content, "size_bytes": file_size})
         except Exception as e:
             errors.append({"path": path, "error": str(e)})
 
@@ -497,7 +577,7 @@ async def read_multiple_files_mcp(request: ReadMultipleFilesRequest) -> Dict[str
         "files_read": len(results),
         "files_failed": len(errors),
         "results": results,
-        "errors": errors if errors else None
+        "errors": errors if errors else None,
     }
 
 
@@ -510,17 +590,21 @@ async def read_multiple_files_mcp(request: ReadMultipleFilesRequest) -> Dict[str
 async def write_file_mcp(request: WriteFileRequest) -> Dict[str, Any]:
     """Write file with security validation"""
     if not is_path_allowed(request.path):
-        raise HTTPException(status_code=403, detail="Access denied: Path not in allowed directories")
+        raise HTTPException(
+            status_code=403, detail="Access denied: Path not in allowed directories"
+        )
 
     # Create parent directories if needed
     parent_dir = os.path.dirname(request.path)
     if parent_dir and not os.path.exists(parent_dir):
         if not is_path_allowed(parent_dir):
-            raise HTTPException(status_code=403, detail="Access denied: Parent directory not allowed")
+            raise HTTPException(
+                status_code=403, detail="Access denied: Parent directory not allowed"
+            )
         os.makedirs(parent_dir, exist_ok=True)
 
     try:
-        with open(request.path, 'w', encoding='utf-8') as f:
+        with open(request.path, "w", encoding="utf-8") as f:
             f.write(request.content)
 
         file_size = os.path.getsize(request.path)
@@ -529,7 +613,7 @@ async def write_file_mcp(request: WriteFileRequest) -> Dict[str, Any]:
             "success": True,
             "path": request.path,
             "size_bytes": file_size,
-            "message": f"File written successfully"
+            "message": f"File written successfully",
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error writing file: {str(e)}")
@@ -544,16 +628,20 @@ async def write_file_mcp(request: WriteFileRequest) -> Dict[str, Any]:
 async def edit_file_mcp(request: EditFileRequest) -> Dict[str, Any]:
     """Edit file using find-and-replace patterns"""
     if not is_path_allowed(request.path):
-        raise HTTPException(status_code=403, detail="Access denied: Path not in allowed directories")
+        raise HTTPException(
+            status_code=403, detail="Access denied: Path not in allowed directories"
+        )
 
     if not os.path.exists(request.path):
         raise HTTPException(status_code=404, detail=f"File not found: {request.path}")
 
     if not os.path.isfile(request.path):
-        raise HTTPException(status_code=400, detail=f"Path is not a file: {request.path}")
+        raise HTTPException(
+            status_code=400, detail=f"Path is not a file: {request.path}"
+        )
 
     try:
-        with open(request.path, 'r', encoding='utf-8') as f:
+        with open(request.path, "r", encoding="utf-8") as f:
             content = f.read()
 
         original_content = content
@@ -569,7 +657,7 @@ async def edit_file_mcp(request: EditFileRequest) -> Dict[str, Any]:
 
         # Write changes if not dry run
         if not request.dry_run:
-            with open(request.path, 'w', encoding='utf-8') as f:
+            with open(request.path, "w", encoding="utf-8") as f:
                 f.write(content)
 
         return {
@@ -579,7 +667,7 @@ async def edit_file_mcp(request: EditFileRequest) -> Dict[str, Any]:
             "dry_run": request.dry_run,
             "changes": edits_applied,
             "size_before": len(original_content),
-            "size_after": len(content)
+            "size_after": len(content),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error editing file: {str(e)}")
@@ -594,7 +682,9 @@ async def edit_file_mcp(request: EditFileRequest) -> Dict[str, Any]:
 async def create_directory_mcp(request: CreateDirectoryRequest) -> Dict[str, Any]:
     """Create directory with recursive parent creation"""
     if not is_path_allowed(request.path):
-        raise HTTPException(status_code=403, detail="Access denied: Path not in allowed directories")
+        raise HTTPException(
+            status_code=403, detail="Access denied: Path not in allowed directories"
+        )
 
     try:
         os.makedirs(request.path, exist_ok=True)
@@ -602,10 +692,12 @@ async def create_directory_mcp(request: CreateDirectoryRequest) -> Dict[str, Any
         return {
             "success": True,
             "path": request.path,
-            "message": "Directory created successfully"
+            "message": "Directory created successfully",
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating directory: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error creating directory: {str(e)}"
+        )
 
 
 @with_error_handling(
@@ -617,13 +709,19 @@ async def create_directory_mcp(request: CreateDirectoryRequest) -> Dict[str, Any
 async def list_directory_mcp(request: ListDirectoryRequest) -> Dict[str, Any]:
     """List directory contents with type prefixes"""
     if not is_path_allowed(request.path):
-        raise HTTPException(status_code=403, detail="Access denied: Path not in allowed directories")
+        raise HTTPException(
+            status_code=403, detail="Access denied: Path not in allowed directories"
+        )
 
     if not os.path.exists(request.path):
-        raise HTTPException(status_code=404, detail=f"Directory not found: {request.path}")
+        raise HTTPException(
+            status_code=404, detail=f"Directory not found: {request.path}"
+        )
 
     if not os.path.isdir(request.path):
-        raise HTTPException(status_code=400, detail=f"Path is not a directory: {request.path}")
+        raise HTTPException(
+            status_code=400, detail=f"Path is not a directory: {request.path}"
+        )
 
     try:
         entries = []
@@ -639,10 +737,12 @@ async def list_directory_mcp(request: ListDirectoryRequest) -> Dict[str, Any]:
             "success": True,
             "path": request.path,
             "entry_count": len(entries),
-            "entries": entries
+            "entries": entries,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error listing directory: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error listing directory: {str(e)}"
+        )
 
 
 @with_error_handling(
@@ -651,16 +751,24 @@ async def list_directory_mcp(request: ListDirectoryRequest) -> Dict[str, Any]:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/list_directory_with_sizes")
-async def list_directory_with_sizes_mcp(request: ListDirectoryWithSizesRequest) -> Dict[str, Any]:
+async def list_directory_with_sizes_mcp(
+    request: ListDirectoryWithSizesRequest,
+) -> Dict[str, Any]:
     """List directory with detailed size information"""
     if not is_path_allowed(request.path):
-        raise HTTPException(status_code=403, detail="Access denied: Path not in allowed directories")
+        raise HTTPException(
+            status_code=403, detail="Access denied: Path not in allowed directories"
+        )
 
     if not os.path.exists(request.path):
-        raise HTTPException(status_code=404, detail=f"Directory not found: {request.path}")
+        raise HTTPException(
+            status_code=404, detail=f"Directory not found: {request.path}"
+        )
 
     if not os.path.isdir(request.path):
-        raise HTTPException(status_code=400, detail=f"Path is not a directory: {request.path}")
+        raise HTTPException(
+            status_code=400, detail=f"Path is not a directory: {request.path}"
+        )
 
     try:
         entries = []
@@ -669,12 +777,14 @@ async def list_directory_with_sizes_mcp(request: ListDirectoryWithSizesRequest) 
             is_dir = os.path.isdir(full_path)
             size = 0 if is_dir else os.path.getsize(full_path)
 
-            entries.append({
-                "name": name,
-                "type": "directory" if is_dir else "file",
-                "size_bytes": size,
-                "path": full_path
-            })
+            entries.append(
+                {
+                    "name": name,
+                    "type": "directory" if is_dir else "file",
+                    "size_bytes": size,
+                    "path": full_path,
+                }
+            )
 
         # Sort by requested field
         if request.sort_by == "size":
@@ -687,10 +797,12 @@ async def list_directory_with_sizes_mcp(request: ListDirectoryWithSizesRequest) 
             "path": request.path,
             "entry_count": len(entries),
             "sorted_by": request.sort_by,
-            "entries": entries
+            "entries": entries,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error listing directory: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error listing directory: {str(e)}"
+        )
 
 
 @with_error_handling(
@@ -702,16 +814,26 @@ async def list_directory_with_sizes_mcp(request: ListDirectoryWithSizesRequest) 
 async def move_file_mcp(request: MoveFileRequest) -> Dict[str, Any]:
     """Move or rename file/directory"""
     if not is_path_allowed(request.source):
-        raise HTTPException(status_code=403, detail="Access denied: Source path not in allowed directories")
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Source path not in allowed directories",
+        )
 
     if not is_path_allowed(request.destination):
-        raise HTTPException(status_code=403, detail="Access denied: Destination path not in allowed directories")
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Destination path not in allowed directories",
+        )
 
     if not os.path.exists(request.source):
-        raise HTTPException(status_code=404, detail=f"Source not found: {request.source}")
+        raise HTTPException(
+            status_code=404, detail=f"Source not found: {request.source}"
+        )
 
     if os.path.exists(request.destination):
-        raise HTTPException(status_code=409, detail=f"Destination already exists: {request.destination}")
+        raise HTTPException(
+            status_code=409, detail=f"Destination already exists: {request.destination}"
+        )
 
     try:
         shutil.move(request.source, request.destination)
@@ -720,7 +842,7 @@ async def move_file_mcp(request: MoveFileRequest) -> Dict[str, Any]:
             "success": True,
             "source": request.source,
             "destination": request.destination,
-            "message": "File moved successfully"
+            "message": "File moved successfully",
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error moving file: {str(e)}")
@@ -735,13 +857,19 @@ async def move_file_mcp(request: MoveFileRequest) -> Dict[str, Any]:
 async def search_files_mcp(request: SearchFilesRequest) -> Dict[str, Any]:
     """Search for files matching pattern"""
     if not is_path_allowed(request.path):
-        raise HTTPException(status_code=403, detail="Access denied: Path not in allowed directories")
+        raise HTTPException(
+            status_code=403, detail="Access denied: Path not in allowed directories"
+        )
 
     if not os.path.exists(request.path):
-        raise HTTPException(status_code=404, detail=f"Directory not found: {request.path}")
+        raise HTTPException(
+            status_code=404, detail=f"Directory not found: {request.path}"
+        )
 
     if not os.path.isdir(request.path):
-        raise HTTPException(status_code=400, detail=f"Path is not a directory: {request.path}")
+        raise HTTPException(
+            status_code=400, detail=f"Path is not a directory: {request.path}"
+        )
 
     try:
         import fnmatch
@@ -754,7 +882,9 @@ async def search_files_mcp(request: SearchFilesRequest) -> Dict[str, Any]:
                 # Check if matches pattern
                 if fnmatch.fnmatch(filename, request.pattern):
                     # Check if excluded
-                    excluded = any(fnmatch.fnmatch(filename, pat) for pat in exclude_patterns)
+                    excluded = any(
+                        fnmatch.fnmatch(filename, pat) for pat in exclude_patterns
+                    )
                     if not excluded:
                         full_path = os.path.join(root, filename)
                         matches.append(full_path)
@@ -764,7 +894,7 @@ async def search_files_mcp(request: SearchFilesRequest) -> Dict[str, Any]:
             "search_path": request.path,
             "pattern": request.pattern,
             "matches_found": len(matches),
-            "matches": matches
+            "matches": matches,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error searching files: {str(e)}")
@@ -779,13 +909,19 @@ async def search_files_mcp(request: SearchFilesRequest) -> Dict[str, Any]:
 async def directory_tree_mcp(request: DirectoryTreeRequest) -> Dict[str, Any]:
     """Get recursive directory tree as JSON"""
     if not is_path_allowed(request.path):
-        raise HTTPException(status_code=403, detail="Access denied: Path not in allowed directories")
+        raise HTTPException(
+            status_code=403, detail="Access denied: Path not in allowed directories"
+        )
 
     if not os.path.exists(request.path):
-        raise HTTPException(status_code=404, detail=f"Directory not found: {request.path}")
+        raise HTTPException(
+            status_code=404, detail=f"Directory not found: {request.path}"
+        )
 
     if not os.path.isdir(request.path):
-        raise HTTPException(status_code=400, detail=f"Path is not a directory: {request.path}")
+        raise HTTPException(
+            status_code=400, detail=f"Path is not a directory: {request.path}"
+        )
 
     def build_tree(path):
         """Recursively build directory tree"""
@@ -793,7 +929,7 @@ async def directory_tree_mcp(request: DirectoryTreeRequest) -> Dict[str, Any]:
             "name": os.path.basename(path),
             "type": "directory",
             "path": path,
-            "children": []
+            "children": [],
         }
 
         try:
@@ -802,11 +938,9 @@ async def directory_tree_mcp(request: DirectoryTreeRequest) -> Dict[str, Any]:
                 if os.path.isdir(full_path):
                     tree["children"].append(build_tree(full_path))
                 else:
-                    tree["children"].append({
-                        "name": name,
-                        "type": "file",
-                        "path": full_path
-                    })
+                    tree["children"].append(
+                        {"name": name, "type": "file", "path": full_path}
+                    )
         except PermissionError:
             tree["error"] = "Permission denied"
 
@@ -815,13 +949,11 @@ async def directory_tree_mcp(request: DirectoryTreeRequest) -> Dict[str, Any]:
     try:
         tree = build_tree(request.path)
 
-        return {
-            "success": True,
-            "root_path": request.path,
-            "tree": tree
-        }
+        return {"success": True, "root_path": request.path, "tree": tree}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error building directory tree: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error building directory tree: {str(e)}"
+        )
 
 
 @with_error_handling(
@@ -833,7 +965,9 @@ async def directory_tree_mcp(request: DirectoryTreeRequest) -> Dict[str, Any]:
 async def get_file_info_mcp(request: GetFileInfoRequest) -> Dict[str, Any]:
     """Get comprehensive file/directory metadata"""
     if not is_path_allowed(request.path):
-        raise HTTPException(status_code=403, detail="Access denied: Path not in allowed directories")
+        raise HTTPException(
+            status_code=403, detail="Access denied: Path not in allowed directories"
+        )
 
     if not os.path.exists(request.path):
         raise HTTPException(status_code=404, detail=f"Path not found: {request.path}")
@@ -857,12 +991,11 @@ async def get_file_info_mcp(request: GetFileInfoRequest) -> Dict[str, Any]:
             mime_type, _ = mimetypes.guess_type(request.path)
             info["mime_type"] = mime_type or "application/octet-stream"
 
-        return {
-            "success": True,
-            **info
-        }
+        return {"success": True, **info}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting file info: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting file info: {str(e)}"
+        )
 
 
 @with_error_handling(
@@ -880,6 +1013,6 @@ async def list_allowed_directories_mcp() -> Dict[str, Any]:
         "security_info": {
             "path_traversal_blocked": True,
             "symlink_validation": True,
-            "max_file_size_bytes": MAX_FILE_SIZE
-        }
+            "max_file_size_bytes": MAX_FILE_SIZE,
+        },
     }

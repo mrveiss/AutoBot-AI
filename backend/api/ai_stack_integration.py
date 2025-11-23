@@ -263,9 +263,7 @@ async def analyze_documents(documents: List[Dict[str, Any]]):
     ai_client = await get_ai_stack_client()
     result = await ai_client.analyze_documents(documents)
 
-    return create_success_response(
-        result, "Document analysis completed successfully"
-    )
+    return create_success_response(result, "Document analysis completed successfully")
 
 
 # ====================================================================
@@ -298,10 +296,7 @@ async def enhanced_chat(
             kb_context = await knowledge_base.search(query=request.message, top_k=5)
             if kb_context:
                 kb_summary = "\n".join(
-                    [
-                        f"- {item.get('content', '')[:200]}..."
-                        for item in kb_context[:3]
-                    ]
+                    [f"- {item.get('content', '')[:200]}..." for item in kb_context[:3]]
                 )
                 enhanced_context = (
                     f"{request.context or ''}\n\nRelevant knowledge:\n{kb_summary}"
@@ -316,9 +311,7 @@ async def enhanced_chat(
         chat_history=request.chat_history,
     )
 
-    return create_success_response(
-        chat_result, "Enhanced chat completed successfully"
-    )
+    return create_success_response(chat_result, "Enhanced chat completed successfully")
 
 
 # ====================================================================
@@ -369,9 +362,7 @@ async def enhanced_knowledge_search(
     # Local knowledge base search
     if knowledge_base:
         try:
-            local_results = await knowledge_base.search(
-                query=query, top_k=max_results
-            )
+            local_results = await knowledge_base.search(query=query, top_k=max_results)
             results["local_kb"] = local_results
         except Exception as e:
             logger.warning(f"Local KB search failed: {e}")
@@ -401,9 +392,7 @@ async def get_system_knowledge(knowledge_category: Optional[str] = None):
     ai_client = await get_ai_stack_client()
     result = await ai_client.get_system_knowledge(knowledge_category)
 
-    return create_success_response(
-        result, "System knowledge retrieved successfully"
-    )
+    return create_success_response(result, "System knowledge retrieved successfully")
 
 
 # ====================================================================
@@ -571,9 +560,7 @@ async def multi_agent_query(
 
         if "classification" in agents:
             try:
-                classification_result = await ai_client.classify_content(
-                    content=query
-                )
+                classification_result = await ai_client.classify_content(content=query)
                 results["classification"] = classification_result
             except Exception as e:
                 results["classification"] = {"error": str(e)}

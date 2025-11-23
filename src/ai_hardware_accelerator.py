@@ -191,32 +191,29 @@ class AIHardwareAccelerator:
             # Use singleton HTTP client for connection pooling
             http_client = get_http_client()
             async with await http_client.get(
-                f"{self.npu_worker_url}/health",
-                timeout=aiohttp.ClientTimeout(total=5)
+                f"{self.npu_worker_url}/health", timeout=aiohttp.ClientTimeout(total=5)
             ) as response:
-                    if response.status == 200:
-                        health_data = await response.json()
-                        npu_available = health_data.get("npu_available", False)
+                if response.status == 200:
+                    health_data = await response.json()
+                    npu_available = health_data.get("npu_available", False)
 
-                        self.device_status[HardwareDevice.NPU][
-                            "available"
-                        ] = npu_available
-                        self.device_status[HardwareDevice.NPU][
-                            "last_check"
-                        ] = datetime.now()
+                    self.device_status[HardwareDevice.NPU]["available"] = npu_available
+                    self.device_status[HardwareDevice.NPU][
+                        "last_check"
+                    ] = datetime.now()
 
-                        if npu_available:
-                            logger.info("✅ NPU Worker available and ready")
-                            await self._update_npu_metrics(health_data)
-                        else:
-                            logger.warning(
-                                "⚠️ NPU Worker connected but NPU hardware unavailable"
-                            )
+                    if npu_available:
+                        logger.info("✅ NPU Worker available and ready")
+                        await self._update_npu_metrics(health_data)
                     else:
                         logger.warning(
-                            f"⚠️ NPU Worker health check failed: {response.status}"
+                            "⚠️ NPU Worker connected but NPU hardware unavailable"
                         )
-                        self.device_status[HardwareDevice.NPU]["available"] = False
+                else:
+                    logger.warning(
+                        f"⚠️ NPU Worker health check failed: {response.status}"
+                    )
+                    self.device_status[HardwareDevice.NPU]["available"] = False
         except Exception as e:
             logger.warning(f"⚠️ NPU Worker connection failed: {e}")
             self.device_status[HardwareDevice.NPU]["available"] = False
@@ -480,18 +477,18 @@ class AIHardwareAccelerator:
         async with await http_client.post(
             f"{self.npu_worker_url}/inference",
             json=request_data,
-            timeout=aiohttp.ClientTimeout(total=task.timeout_seconds)
+            timeout=aiohttp.ClientTimeout(total=task.timeout_seconds),
         ) as response:
-                if response.status == 200:
-                    result_data = await response.json()
-                    if result_data.get("status") == "completed":
-                        return result_data.get("result", {})
-                    else:
-                        raise Exception(
-                            f"NPU processing failed: {result_data.get('error')}"
-                        )
+            if response.status == 200:
+                result_data = await response.json()
+                if result_data.get("status") == "completed":
+                    return result_data.get("result", {})
                 else:
-                    raise Exception(f"NPU Worker HTTP error: {response.status}")
+                    raise Exception(
+                        f"NPU processing failed: {result_data.get('error')}"
+                    )
+            else:
+                raise Exception(f"NPU Worker HTTP error: {response.status}")
 
     def _get_optimal_npu_model(self, task: ProcessingTask) -> str:
         """Get optimal NPU model for task."""

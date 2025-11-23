@@ -556,9 +556,7 @@ async def get_gpu_details():
                 "memory_utilization_percent": m.memory_utilization_percent,
                 "temperature_celsius": m.temperature_celsius,
             }
-            for m in list(phase9_monitor.gpu_metrics_buffer)[
-                -60:
-            ]  # Last 60 samples
+            for m in list(phase9_monitor.gpu_metrics_buffer)[-60:]  # Last 60 samples
         ],
         "optimization_status": {
             "target_utilization": phase9_monitor.performance_baselines[
@@ -594,9 +592,7 @@ async def get_npu_details():
                 "acceleration_ratio": m.acceleration_ratio,
                 "inference_count": m.inference_count,
             }
-            for m in list(phase9_monitor.npu_metrics_buffer)[
-                -60:
-            ]  # Last 60 samples
+            for m in list(phase9_monitor.npu_metrics_buffer)[-60:]  # Last 60 samples
         ],
         "optimization_status": {
             "target_acceleration": phase9_monitor.performance_baselines[
@@ -621,12 +617,8 @@ async def get_services_health():
     services_health = {
         "timestamp": time.time(),
         "total_services": len(service_metrics),
-        "healthy_services": sum(
-            1 for s in service_metrics if s.status == "healthy"
-        ),
-        "degraded_services": sum(
-            1 for s in service_metrics if s.status == "degraded"
-        ),
+        "healthy_services": sum(1 for s in service_metrics if s.status == "healthy"),
+        "degraded_services": sum(1 for s in service_metrics if s.status == "degraded"),
         "critical_services": sum(
             1 for s in service_metrics if s.status in ["critical", "offline"]
         ),
@@ -657,10 +649,7 @@ async def get_services_health():
     services_health["overall_status"] = overall_status
     services_health["health_percentage"] = (
         round(
-            (
-                services_health["healthy_services"]
-                / services_health["total_services"]
-            )
+            (services_health["healthy_services"] / services_health["total_services"])
             * 100,
             1,
         )
@@ -722,9 +711,7 @@ async def export_metrics(
         metrics_buffer,
     ) in phase9_monitor.service_metrics_buffer.items():
         filtered_metrics = [
-            m.__dict__
-            for m in metrics_buffer
-            if start_time <= m.timestamp <= end_time
+            m.__dict__ for m in metrics_buffer if start_time <= m.timestamp <= end_time
         ]
         if filtered_metrics:
             export_data["service_metrics"][service_name] = filtered_metrics

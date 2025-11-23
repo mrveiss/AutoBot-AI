@@ -56,7 +56,7 @@ class AIStackClient:
             "port": NetworkConstants.AI_STACK_PORT,
             "timeout": 60,
             "retry_attempts": 3,
-            "retry_delay": 1.0
+            "retry_delay": 1.0,
         }
 
         # Get base_url from configuration if not provided

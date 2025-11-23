@@ -405,7 +405,7 @@ class Phase9PerformanceMonitor:
             http_client = get_http_client()
             async with await http_client.get(
                 f"http://{npu_host}:{npu_port}/stats",
-                timeout=aiohttp.ClientTimeout(total=5.0)
+                timeout=aiohttp.ClientTimeout(total=5.0),
             ) as response:
                 if response.status == 200:
                     return await response.json()
@@ -633,12 +633,10 @@ class Phase9PerformanceMonitor:
             http_client = get_http_client()
             async with await http_client.get(
                 f"http://{backend_host}:{NetworkConstants.BACKEND_PORT}/api/health",
-                timeout=aiohttp.ClientTimeout(total=2.0)
+                timeout=aiohttp.ClientTimeout(total=2.0),
             ) as response:
                 if response.status == 200:
-                    return round(
-                        (time.time() - start_time) * 1000, 1
-                    )  # Convert to ms
+                    return round((time.time() - start_time) * 1000, 1)  # Convert to ms
 
             return 999.0  # High latency if failed
         except Exception:
@@ -733,7 +731,7 @@ class Phase9PerformanceMonitor:
                     http_client = get_http_client()
                     async with await http_client.get(
                         f"http://{host}:{port}{path}",
-                        timeout=aiohttp.ClientTimeout(total=5.0)
+                        timeout=aiohttp.ClientTimeout(total=5.0),
                     ) as response:
                         if response.status == 200:
                             status = "healthy"

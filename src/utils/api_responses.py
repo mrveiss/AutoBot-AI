@@ -118,9 +118,7 @@ class ErrorResponse(BaseModel):
 
     success: bool = Field(False, description="Always false for errors")
     error: str = Field(..., description="Error message")
-    error_code: Optional[str] = Field(
-        None, description="Machine-readable error code"
-    )
+    error_code: Optional[str] = Field(None, description="Machine-readable error code")
     details: Optional[Dict[str, Any]] = Field(
         None, description="Additional error details"
     )

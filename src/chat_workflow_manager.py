@@ -167,9 +167,7 @@ class ChatWorkflowManager:
         tool_calls = []
         # Match both single and double quotes, and both TOOL_CALL and tool_call (case-insensitive)
         # Format: <TOOL_CALL name="..." params='...' OR params="...">...</TOOL_CALL>
-        pattern = (
-            r'<tool_call\s+name="([^"]+)"\s+params=(["\'])({[^}]+})\2>([^<]*)</tool_call>'
-        )
+        pattern = r'<tool_call\s+name="([^"]+)"\s+params=(["\'])({[^}]+})\2>([^<]*)</tool_call>'
 
         logger.debug(f"[_parse_tool_calls] Using regex pattern: {pattern}")
 
@@ -178,7 +176,9 @@ class ChatWorkflowManager:
         for match in matches:
             match_count += 1
             tool_name = match.group(1)
-            params_str = match.group(3)  # Group 2 is the quote character, group 3 is the JSON
+            params_str = match.group(
+                3
+            )  # Group 2 is the quote character, group 3 is the JSON
             description = match.group(4)
 
             try:
@@ -434,10 +434,10 @@ class ChatWorkflowManager:
 
                 # Initialize Redis client for conversation history
                 try:
-                    self.redis_client = await get_redis_client(async_client=True, database="main")
-                    logger.info(
-                        "✅ Redis client initialized for conversation history"
+                    self.redis_client = await get_redis_client(
+                        async_client=True, database="main"
                     )
+                    logger.info("✅ Redis client initialized for conversation history")
                 except Exception as redis_error:
                     logger.warning(
                         f"⚠️ Redis initialization failed: {redis_error} - continuing without persistence"
@@ -519,9 +519,7 @@ class ChatWorkflowManager:
                 )
         return converted
 
-    async def _initialize_chat_session(
-        self, session_id: str, message: str
-    ) -> tuple:
+    async def _initialize_chat_session(self, session_id: str, message: str) -> tuple:
         """
         Initialize session and terminal, detect exit intent.
 
@@ -569,13 +567,19 @@ class ChatWorkflowManager:
 
         # Determine if conversation should end
         user_wants_exit = False
-        if classification.intent == ConversationIntent.END and safety_check.is_safe_to_end:
+        if (
+            classification.intent == ConversationIntent.END
+            and safety_check.is_safe_to_end
+        ):
             user_wants_exit = True
             logger.info(
                 f"User wants to exit conversation - Intent: {classification.intent.value}, "
                 f"Confidence: {classification.confidence:.2f}, Reason: {classification.reasoning}"
             )
-        elif classification.intent == ConversationIntent.END and not safety_check.is_safe_to_end:
+        elif (
+            classification.intent == ConversationIntent.END
+            and not safety_check.is_safe_to_end
+        ):
             # Safety guard overrides END intent
             user_wants_exit = False
             logger.info(
@@ -606,9 +610,7 @@ class ChatWorkflowManager:
                         session_id
                     )
             else:
-                terminal_session_id = self.terminal_tool.active_sessions.get(
-                    session_id
-                )
+                terminal_session_id = self.terminal_tool.active_sessions.get(session_id)
 
             logger.info(
                 f"Terminal session ID for conversation {session_id}: {terminal_session_id}"
@@ -639,6 +641,7 @@ class ChatWorkflowManager:
 
             if not ollama_endpoint:
                 from src.unified_config_manager import UnifiedConfigManager
+
                 config = UnifiedConfigManager()
                 ollama_host = config.get_host("ollama")
                 ollama_port = config.get_port("ollama")
@@ -652,16 +655,16 @@ class ChatWorkflowManager:
                     f"Invalid endpoint URL: {ollama_endpoint}, using config-based default"
                 )
                 from src.unified_config_manager import UnifiedConfigManager
+
                 config = UnifiedConfigManager()
                 ollama_host = config.get_host("ollama")
                 ollama_port = config.get_port("ollama")
                 ollama_endpoint = f"http://{ollama_host}:{ollama_port}/api/generate"
 
         except Exception as config_error:
-            logger.error(
-                f"Failed to load Ollama endpoint from config: {config_error}"
-            )
+            logger.error(f"Failed to load Ollama endpoint from config: {config_error}")
             from src.unified_config_manager import UnifiedConfigManager
+
             config = UnifiedConfigManager()
             ollama_host = config.get_host("ollama")
             ollama_port = config.get_port("ollama")
@@ -670,13 +673,9 @@ class ChatWorkflowManager:
         # Load system prompt
         try:
             system_prompt = get_prompt("chat.system_prompt_simple")
-            logger.debug(
-                "[ChatWorkflowManager] Loaded simplified system prompt"
-            )
+            logger.debug("[ChatWorkflowManager] Loaded simplified system prompt")
         except Exception as prompt_error:
-            logger.error(
-                f"Failed to load system prompt from file: {prompt_error}"
-            )
+            logger.error(f"Failed to load system prompt from file: {prompt_error}")
             system_prompt = """You are AutoBot. Execute commands using:
 <TOOL_CALL name="execute_command" params='{"command":"cmd"}'>desc</TOOL_CALL>
 
@@ -716,9 +715,12 @@ NEVER teach commands - ALWAYS execute them."""
         except Exception as config_error:
             logger.error(f"Failed to load model from config: {config_error}")
             import os
+
             selected_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "mistral:7b")
 
-        logger.info(f"[ChatWorkflowManager] Making Ollama request to: {ollama_endpoint}")
+        logger.info(
+            f"[ChatWorkflowManager] Making Ollama request to: {ollama_endpoint}"
+        )
         logger.info(f"[ChatWorkflowManager] Using model: {selected_model}")
 
         return {
@@ -878,7 +880,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                 selected_model=selected_model,
                 streaming=False,  # Non-streaming for terminal
             ):
-                if hasattr(msg, 'content'):
+                if hasattr(msg, "content"):
                     interpretation += msg.content
 
             logger.info(
@@ -889,6 +891,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
             if session_id and interpretation:
                 try:
                     from src.chat_history_manager import ChatHistoryManager
+
                     chat_mgr = ChatHistoryManager()
                     await chat_mgr.add_message(
                         sender="assistant",
@@ -962,17 +965,23 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
         # Don't wait until end of streaming - approval requests must survive backend restarts
         try:
             from src.chat_history_manager import ChatHistoryManager
+
             chat_mgr = ChatHistoryManager()
             await chat_mgr.add_message(
                 sender="assistant",
                 text=approval_msg.content,
                 message_type="command_approval_request",
                 raw_data=approval_msg.metadata,  # Preserve terminal_session_id!
-                session_id=session_id
+                session_id=session_id,
             )
-            logger.info(f"✅ Persisted approval request immediately: session={session_id}, terminal={terminal_session_id}")
+            logger.info(
+                f"✅ Persisted approval request immediately: session={session_id}, terminal={terminal_session_id}"
+            )
         except Exception as persist_error:
-            logger.error(f"Failed to persist approval request immediately: {persist_error}", exc_info=True)
+            logger.error(
+                f"Failed to persist approval request immediately: {persist_error}",
+                exc_info=True,
+            )
 
         # Yield waiting message
         yield WorkflowMessage(
@@ -985,9 +994,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
         )
 
         # Wait for approval with timeout (poll terminal session)
-        logger.info(
-            f"🔍 [APPROVAL POLLING] Waiting for approval of command: {command}"
-        )
+        logger.info(f"🔍 [APPROVAL POLLING] Waiting for approval of command: {command}")
         logger.info(
             f"🔍 [APPROVAL POLLING] Chat session: {session_id}, Terminal session: {terminal_session_id}"
         )
@@ -1005,8 +1012,10 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
 
             # Check if approval has been processed
             try:
-                session_info = await self.terminal_tool.agent_terminal_service.get_session_info(
-                    terminal_session_id
+                session_info = (
+                    await self.terminal_tool.agent_terminal_service.get_session_info(
+                        terminal_session_id
+                    )
                 )
 
                 # Log polling attempts every 10 seconds
@@ -1017,10 +1026,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                     )
 
                 # If pending_approval is None, command was either approved or denied
-                if (
-                    session_info
-                    and session_info.get("pending_approval") is None
-                ):
+                if session_info and session_info.get("pending_approval") is None:
                     # Check session history for execution result
                     command_history = session_info.get("command_history", [])
                     if command_history:
@@ -1059,7 +1065,9 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                         else:
                             # CRITICAL FIX: Command in history doesn't match - wait a bit longer
                             # but don't poll forever (max 10 seconds after pending_approval is None)
-                            if elapsed_time > max_wait_time - 3590:  # 10 seconds after approval cleared
+                            if (
+                                elapsed_time > max_wait_time - 3590
+                            ):  # 10 seconds after approval cleared
                                 logger.warning(
                                     f"⚠️ [APPROVAL POLLING] Timeout: pending_approval is None but command not found in history. "
                                     f"Expected: '{command}', Last in history: '{last_command.get('command')}'. "
@@ -1074,9 +1082,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                         )
                         break
             except Exception as check_error:
-                logger.error(
-                    f"Error checking approval status: {check_error}"
-                )
+                logger.error(f"Error checking approval status: {check_error}")
 
         # Yield final result as a dict (not WorkflowMessage) for caller to process
         yield approval_result
@@ -1107,9 +1113,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
             session.conversation_history = session.conversation_history[-10:]
 
         # Persist to both Redis (short-term cache) and file (long-term storage)
-        await self._save_conversation_history(
-            session_id, session.conversation_history
-        )
+        await self._save_conversation_history(session_id, session.conversation_history)
         await self._append_to_transcript(session_id, message, llm_response)
 
     async def _process_tool_calls(
@@ -1205,12 +1209,14 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                             streaming=True,
                         ):
                             yield interp_chunk
-                            if hasattr(interp_chunk, 'content'):
+                            if hasattr(interp_chunk, "content"):
                                 additional_response += interp_chunk.content
 
                     elif approval_result:
                         # Command failed or denied
-                        error = approval_result.get("error", "Command was denied or failed")
+                        error = approval_result.get(
+                            "error", "Command was denied or failed"
+                        )
                         additional_response += f"\n\n❌ {error}"
                         yield WorkflowMessage(
                             type="error",
@@ -1219,7 +1225,9 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                         )
                     else:
                         # Timeout
-                        additional_response += f"\n\n⏱️ Approval timeout for command: {command}"
+                        additional_response += (
+                            f"\n\n⏱️ Approval timeout for command: {command}"
+                        )
                         yield WorkflowMessage(
                             type="error",
                             content=f"Approval timeout for command: {command}",
@@ -1239,7 +1247,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                         selected_model,
                         streaming=False,
                     ):
-                        if hasattr(msg, 'content'):
+                        if hasattr(msg, "content"):
                             interpretation += msg.content
                         # Yield the interpretation message to the caller
                         yield msg
@@ -1253,8 +1261,8 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                 "message_type": "command_result_interpretation",
                                 "command": command,
                                 "executed": True,
-                        },
-                    )
+                            },
+                        )
                     additional_response += f"\n\n{interpretation}"
 
                 elif result.get("status") == "error":
@@ -1289,8 +1297,8 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
 
         try:
             # Stage 1: Initialize session and check for exit intent
-            session, terminal_session_id, user_wants_exit = await self._initialize_chat_session(
-                session_id, message
+            session, terminal_session_id, user_wants_exit = (
+                await self._initialize_chat_session(session_id, message)
             )
 
             # CRITICAL: Persist user message IMMEDIATELY at start to prevent data loss on restart
@@ -1301,11 +1309,15 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                     sender="user",
                     text=message,
                     message_type="default",
-                    session_id=session_id
+                    session_id=session_id,
                 )
-                logger.debug(f"✅ Persisted user message immediately: session={session_id}")
+                logger.debug(
+                    f"✅ Persisted user message immediately: session={session_id}"
+                )
             except Exception as persist_error:
-                logger.error(f"Failed to persist user message immediately: {persist_error}")
+                logger.error(
+                    f"Failed to persist user message immediately: {persist_error}"
+                )
 
             if user_wants_exit:
                 logger.info(
@@ -1329,7 +1341,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                         sender="assistant",
                         text=exit_msg.content,
                         message_type="exit_acknowledgment",
-                        session_id=session_id
+                        session_id=session_id,
                     )
                 except Exception as persist_error:
                     logger.error(f"Failed to persist exit message: {persist_error}")
@@ -1388,10 +1400,14 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                         if chunk_text:
                                             # Normalize TOOL_CALL spacing
                                             chunk_text = re.sub(
-                                                r"<TOOL_\s+CALL", "<TOOL_CALL", chunk_text
+                                                r"<TOOL_\s+CALL",
+                                                "<TOOL_CALL",
+                                                chunk_text,
                                             )
                                             chunk_text = re.sub(
-                                                r"</TOOL_\s+CALL>", "</TOOL_CALL>", chunk_text
+                                                r"</TOOL_\s+CALL>",
+                                                "</TOOL_CALL>",
+                                                chunk_text,
                                             )
 
                                             llm_response += chunk_text
@@ -1413,7 +1429,9 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                             break
 
                                     except json.JSONDecodeError as e:
-                                        logger.error(f"Failed to parse stream chunk: {e}")
+                                        logger.error(
+                                            f"Failed to parse stream chunk: {e}"
+                                        )
                                         continue
 
                             logger.info(
@@ -1438,9 +1456,15 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                     # Collect important WorkflowMessages for persistence
                                     # NOTE: command_approval_request is persisted immediately, don't collect it here
                                     # Collect terminal commands, terminal output, and errors for end-of-stream persistence
-                                    if tool_msg.type in ["terminal_command", "terminal_output", "error"]:
+                                    if tool_msg.type in [
+                                        "terminal_command",
+                                        "terminal_output",
+                                        "error",
+                                    ]:
                                         workflow_messages.append(tool_msg)
-                                        logger.debug(f"Collected WorkflowMessage for persistence: type={tool_msg.type}")
+                                        logger.debug(
+                                            f"Collected WorkflowMessage for persistence: type={tool_msg.type}"
+                                        )
 
                                     yield tool_msg
 
@@ -1457,10 +1481,14 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                 # Persist all collected WorkflowMessages
                                 for wf_msg in workflow_messages:
                                     # Map WorkflowMessage type to chat message type
-                                    message_type = wf_msg.type  # e.g., "command_approval_request", "terminal_command"
+                                    message_type = (
+                                        wf_msg.type
+                                    )  # e.g., "command_approval_request", "terminal_command"
 
                                     # Determine sender based on message type
-                                    sender = "assistant"  # Most messages are from assistant
+                                    sender = (
+                                        "assistant"  # Most messages are from assistant
+                                    )
                                     if message_type == "terminal_output":
                                         sender = "system"
 
@@ -1469,21 +1497,28 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                         text=wf_msg.content,
                                         message_type=message_type,
                                         raw_data=wf_msg.metadata,  # Include metadata as rawData
-                                        session_id=session_id
+                                        session_id=session_id,
                                     )
-                                    logger.debug(f"Persisted WorkflowMessage to chat history: type={message_type}, session={session_id}")
+                                    logger.debug(
+                                        f"Persisted WorkflowMessage to chat history: type={message_type}, session={session_id}"
+                                    )
 
                                 # Persist final assistant response
                                 await chat_mgr.add_message(
                                     sender="assistant",
                                     text=llm_response,
                                     message_type="llm_response",
-                                    session_id=session_id
+                                    session_id=session_id,
                                 )
-                                logger.info(f"✅ Persisted complete conversation to chat history: session={session_id}, workflow_messages={len(workflow_messages)}")
+                                logger.info(
+                                    f"✅ Persisted complete conversation to chat history: session={session_id}, workflow_messages={len(workflow_messages)}"
+                                )
 
                             except Exception as persist_error:
-                                logger.error(f"Failed to persist WorkflowMessages to chat history: {persist_error}", exc_info=True)
+                                logger.error(
+                                    f"Failed to persist WorkflowMessages to chat history: {persist_error}",
+                                    exc_info=True,
+                                )
                         else:
                             logger.error(
                                 f"[ChatWorkflowManager] Ollama request failed: {response.status_code}"

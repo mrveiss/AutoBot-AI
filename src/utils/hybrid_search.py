@@ -34,7 +34,9 @@ class HybridSearchEngine:
         self.semantic_weight = config.get("search.hybrid.semantic_weight", 0.7)
         self.keyword_weight = config.get("search.hybrid.keyword_weight", 0.3)
         self.min_keyword_score = config.get("search.hybrid.min_keyword_score", 0.1)
-        self.keyword_boost_factor = config.get("search.hybrid.keyword_boost_factor", 1.5)
+        self.keyword_boost_factor = config.get(
+            "search.hybrid.keyword_boost_factor", 1.5
+        )
 
         # Search parameters
         self.semantic_top_k = config.get("search.hybrid.semantic_top_k", 15)

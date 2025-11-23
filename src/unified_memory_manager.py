@@ -44,6 +44,7 @@ import aiosqlite
 
 try:
     import psutil
+
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
@@ -60,8 +61,10 @@ logger = logging.getLogger(__name__)
 # ENUMS - Shared across all storage strategies
 # ============================================================================
 
+
 class TaskStatus(Enum):
     """Task execution status enumeration"""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -72,6 +75,7 @@ class TaskStatus(Enum):
 
 class TaskPriority(Enum):
     """Task priority levels"""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -80,6 +84,7 @@ class TaskPriority(Enum):
 
 class MemoryCategory(Enum):
     """General purpose memory categories"""
+
     TASK = "task"
     EXECUTION = "execution"
     STATE = "state"
@@ -91,14 +96,16 @@ class MemoryCategory(Enum):
 
 class StorageStrategy(Enum):
     """Storage strategies for unified store() method"""
+
     TASK_EXECUTION = "task_execution"  # Task-centric storage
     GENERAL_MEMORY = "general_memory"  # Category-based storage
-    CACHED = "cached"                   # LRU cache only
+    CACHED = "cached"  # LRU cache only
 
 
 # ============================================================================
 # DATA MODELS - Structured data classes
 # ============================================================================
+
 
 @dataclass
 class TaskExecutionRecord:
@@ -114,6 +121,7 @@ class TaskExecutionRecord:
     - Parent/child relationships
     - Markdown references
     """
+
     task_id: str
     task_name: str
     description: str
@@ -145,6 +153,7 @@ class MemoryEntry:
     - Optional embedding storage
     - Reference path tracking
     """
+
     id: Optional[int]
     category: Union[MemoryCategory, str]
     content: str
@@ -157,6 +166,7 @@ class MemoryEntry:
 # ============================================================================
 # PROTOCOLS - Interface Segregation Principle
 # ============================================================================
+
 
 class ITaskStorage(Protocol):
     """
@@ -179,8 +189,7 @@ class ITaskStorage(Protocol):
         ...
 
     async def get_task_history(
-        self,
-        filters: Dict[str, Any]
+        self, filters: Dict[str, Any]
     ) -> List[TaskExecutionRecord]:
         """Query task history with filters"""
         ...
@@ -203,9 +212,7 @@ class IGeneralStorage(Protocol):
         ...
 
     async def retrieve(
-        self,
-        category: Union[MemoryCategory, str],
-        filters: Dict[str, Any]
+        self, category: Union[MemoryCategory, str], filters: Dict[str, Any]
     ) -> List[MemoryEntry]:
         """Retrieve memories by category and filters"""
         ...
@@ -251,6 +258,7 @@ class ICacheManager(Protocol):
 # COMPONENT IMPLEMENTATIONS - Single Responsibility Principle
 # ============================================================================
 
+
 class TaskStorage:
     """
     Task-specific storage implementation (ITaskStorage)
@@ -269,7 +277,8 @@ class TaskStorage:
     async def initialize(self):
         """Initialize task execution history table"""
         async with self._get_connection() as conn:
-            await conn.execute("""
+            await conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS task_execution_history (
                     task_id TEXT PRIMARY KEY,
                     task_name TEXT NOT NULL,
@@ -290,28 +299,36 @@ class TaskStorage:
                     subtask_ids_json TEXT,
                     metadata_json TEXT
                 )
-            """)
+            """
+            )
 
             # Indexes for common queries
-            await conn.execute("""
+            await conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_task_status
                 ON task_execution_history(status)
-            """)
-            await conn.execute("""
+            """
+            )
+            await conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_task_created
                 ON task_execution_history(created_at)
-            """)
-            await conn.execute("""
+            """
+            )
+            await conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_task_agent
                 ON task_execution_history(agent_type)
-            """)
+            """
+            )
 
             await conn.commit()
 
     async def log_task(self, record: TaskExecutionRecord) -> str:
         """Log task execution record"""
         async with self._get_connection() as conn:
-            await conn.execute("""
+            await conn.execute(
+                """
                 INSERT OR REPLACE INTO task_execution_history (
                     task_id, task_name, description, status, priority,
                     created_at, started_at, completed_at, duration_seconds,
@@ -319,26 +336,32 @@ class TaskStorage:
                     retry_count, markdown_references_json, parent_task_id,
                     subtask_ids_json, metadata_json
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                record.task_id,
-                record.task_name,
-                record.description,
-                record.status.value,
-                record.priority.value,
-                record.created_at,
-                record.started_at,
-                record.completed_at,
-                record.duration_seconds,
-                record.agent_type,
-                json.dumps(record.inputs) if record.inputs else None,
-                json.dumps(record.outputs) if record.outputs else None,
-                record.error_message,
-                record.retry_count,
-                json.dumps(record.markdown_references) if record.markdown_references else None,
-                record.parent_task_id,
-                json.dumps(record.subtask_ids) if record.subtask_ids else None,
-                json.dumps(record.metadata) if record.metadata else None
-            ))
+            """,
+                (
+                    record.task_id,
+                    record.task_name,
+                    record.description,
+                    record.status.value,
+                    record.priority.value,
+                    record.created_at,
+                    record.started_at,
+                    record.completed_at,
+                    record.duration_seconds,
+                    record.agent_type,
+                    json.dumps(record.inputs) if record.inputs else None,
+                    json.dumps(record.outputs) if record.outputs else None,
+                    record.error_message,
+                    record.retry_count,
+                    (
+                        json.dumps(record.markdown_references)
+                        if record.markdown_references
+                        else None
+                    ),
+                    record.parent_task_id,
+                    json.dumps(record.subtask_ids) if record.subtask_ids else None,
+                    json.dumps(record.metadata) if record.metadata else None,
+                ),
+            )
             await conn.commit()
 
         logger.debug(f"Logged task: {record.task_id} ({record.status.value})")
@@ -360,13 +383,24 @@ class TaskStorage:
             elif key == "priority" and isinstance(value, TaskPriority):
                 set_clauses.append("priority = ?")
                 values.append(value.value)
-            elif key in ["inputs", "outputs", "metadata", "markdown_references", "subtask_ids"]:
+            elif key in [
+                "inputs",
+                "outputs",
+                "metadata",
+                "markdown_references",
+                "subtask_ids",
+            ]:
                 set_clauses.append(f"{key}_json = ?")
                 values.append(json.dumps(value) if value else None)
             elif key in ["started_at", "completed_at"]:
                 set_clauses.append(f"{key} = ?")
                 values.append(value)
-            elif key in ["duration_seconds", "retry_count", "error_message", "agent_type"]:
+            elif key in [
+                "duration_seconds",
+                "retry_count",
+                "error_message",
+                "agent_type",
+            ]:
                 set_clauses.append(f"{key} = ?")
                 values.append(value)
 
@@ -386,8 +420,7 @@ class TaskStorage:
         async with self._get_connection() as conn:
             conn.row_factory = aiosqlite.Row
             cursor = await conn.execute(
-                "SELECT * FROM task_execution_history WHERE task_id = ?",
-                (task_id,)
+                "SELECT * FROM task_execution_history WHERE task_id = ?", (task_id,)
             )
             row = await cursor.fetchone()
 
@@ -397,8 +430,7 @@ class TaskStorage:
             return self._row_to_record(row)
 
     async def get_task_history(
-        self,
-        filters: Dict[str, Any]
+        self, filters: Dict[str, Any]
     ) -> List[TaskExecutionRecord]:
         """Query task history with filters"""
         where_clauses = []
@@ -416,7 +448,9 @@ class TaskStorage:
         if filters.get("priority"):
             priority = filters["priority"]
             where_clauses.append("priority = ?")
-            values.append(priority.value if isinstance(priority, TaskPriority) else priority)
+            values.append(
+                priority.value if isinstance(priority, TaskPriority) else priority
+            )
 
         if filters.get("start_date"):
             where_clauses.append("created_at >= ?")
@@ -452,25 +486,29 @@ class TaskStorage:
             total = (await cursor.fetchone())[0]
 
             # Tasks by status
-            cursor = await conn.execute("""
+            cursor = await conn.execute(
+                """
                 SELECT status, COUNT(*)
                 FROM task_execution_history
                 GROUP BY status
-            """)
+            """
+            )
             by_status = {row[0]: row[1] for row in await cursor.fetchall()}
 
             # Tasks by priority
-            cursor = await conn.execute("""
+            cursor = await conn.execute(
+                """
                 SELECT priority, COUNT(*)
                 FROM task_execution_history
                 GROUP BY priority
-            """)
+            """
+            )
             by_priority = {row[0]: row[1] for row in await cursor.fetchall()}
 
             return {
                 "total_tasks": total,
                 "by_status": by_status,
-                "by_priority": by_priority
+                "by_priority": by_priority,
             }
 
     def _row_to_record(self, row: aiosqlite.Row) -> TaskExecutionRecord:
@@ -481,19 +519,37 @@ class TaskStorage:
             description=row["description"],
             status=TaskStatus(row["status"]),
             priority=TaskPriority(row["priority"]),
-            created_at=datetime.fromisoformat(row["created_at"]) if isinstance(row["created_at"], str) else row["created_at"],
-            started_at=datetime.fromisoformat(row["started_at"]) if row["started_at"] and isinstance(row["started_at"], str) else row["started_at"],
-            completed_at=datetime.fromisoformat(row["completed_at"]) if row["completed_at"] and isinstance(row["completed_at"], str) else row["completed_at"],
+            created_at=(
+                datetime.fromisoformat(row["created_at"])
+                if isinstance(row["created_at"], str)
+                else row["created_at"]
+            ),
+            started_at=(
+                datetime.fromisoformat(row["started_at"])
+                if row["started_at"] and isinstance(row["started_at"], str)
+                else row["started_at"]
+            ),
+            completed_at=(
+                datetime.fromisoformat(row["completed_at"])
+                if row["completed_at"] and isinstance(row["completed_at"], str)
+                else row["completed_at"]
+            ),
             duration_seconds=row["duration_seconds"],
             agent_type=row["agent_type"],
             inputs=json.loads(row["inputs_json"]) if row["inputs_json"] else None,
             outputs=json.loads(row["outputs_json"]) if row["outputs_json"] else None,
             error_message=row["error_message"],
             retry_count=row["retry_count"],
-            markdown_references=json.loads(row["markdown_references_json"]) if row["markdown_references_json"] else None,
+            markdown_references=(
+                json.loads(row["markdown_references_json"])
+                if row["markdown_references_json"]
+                else None
+            ),
             parent_task_id=row["parent_task_id"],
-            subtask_ids=json.loads(row["subtask_ids_json"]) if row["subtask_ids_json"] else None,
-            metadata=json.loads(row["metadata_json"]) if row["metadata_json"] else None
+            subtask_ids=(
+                json.loads(row["subtask_ids_json"]) if row["subtask_ids_json"] else None
+            ),
+            metadata=json.loads(row["metadata_json"]) if row["metadata_json"] else None,
         )
 
 
@@ -515,7 +571,8 @@ class GeneralStorage:
     async def initialize(self):
         """Initialize memory entries table"""
         async with self._get_connection() as conn:
-            await conn.execute("""
+            await conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS memory_entries (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     category TEXT NOT NULL,
@@ -525,50 +582,64 @@ class GeneralStorage:
                     reference_path TEXT,
                     embedding BLOB
                 )
-            """)
+            """
+            )
 
             # Indexes for common queries
-            await conn.execute("""
+            await conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_memory_category
                 ON memory_entries(category)
-            """)
-            await conn.execute("""
+            """
+            )
+            await conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_memory_timestamp
                 ON memory_entries(timestamp)
-            """)
+            """
+            )
 
             await conn.commit()
 
     async def store(self, entry: MemoryEntry) -> int:
         """Store memory entry"""
-        category_value = entry.category.value if isinstance(entry.category, MemoryCategory) else entry.category
+        category_value = (
+            entry.category.value
+            if isinstance(entry.category, MemoryCategory)
+            else entry.category
+        )
 
         async with self._get_connection() as conn:
-            cursor = await conn.execute("""
+            cursor = await conn.execute(
+                """
                 INSERT INTO memory_entries (
                     category, content, metadata_json, timestamp,
                     reference_path, embedding
                 ) VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                category_value,
-                entry.content,
-                json.dumps(entry.metadata) if entry.metadata else None,
-                entry.timestamp,
-                entry.reference_path,
-                entry.embedding
-            ))
+            """,
+                (
+                    category_value,
+                    entry.content,
+                    json.dumps(entry.metadata) if entry.metadata else None,
+                    entry.timestamp,
+                    entry.reference_path,
+                    entry.embedding,
+                ),
+            )
             await conn.commit()
 
-            logger.debug(f"Stored memory entry: {category_value} (ID: {cursor.lastrowid})")
+            logger.debug(
+                f"Stored memory entry: {category_value} (ID: {cursor.lastrowid})"
+            )
             return cursor.lastrowid
 
     async def retrieve(
-        self,
-        category: Union[MemoryCategory, str],
-        filters: Dict[str, Any]
+        self, category: Union[MemoryCategory, str], filters: Dict[str, Any]
     ) -> List[MemoryEntry]:
         """Retrieve memories by category and filters"""
-        category_value = category.value if isinstance(category, MemoryCategory) else category
+        category_value = (
+            category.value if isinstance(category, MemoryCategory) else category
+        )
 
         where_clauses = ["category = ?"]
         values = [category_value]
@@ -605,12 +676,15 @@ class GeneralStorage:
         """Search memories by content or metadata"""
         async with self._get_connection() as conn:
             conn.row_factory = aiosqlite.Row
-            cursor = await conn.execute("""
+            cursor = await conn.execute(
+                """
                 SELECT * FROM memory_entries
                 WHERE content LIKE ? OR metadata_json LIKE ?
                 ORDER BY timestamp DESC
                 LIMIT 100
-            """, (f"%{query}%", f"%{query}%"))
+            """,
+                (f"%{query}%", f"%{query}%"),
+            )
 
             rows = await cursor.fetchall()
             return [self._row_to_entry(row) for row in rows]
@@ -621,14 +695,15 @@ class GeneralStorage:
 
         async with self._get_connection() as conn:
             cursor = await conn.execute(
-                "DELETE FROM memory_entries WHERE timestamp < ?",
-                (cutoff,)
+                "DELETE FROM memory_entries WHERE timestamp < ?", (cutoff,)
             )
             await conn.commit()
 
             deleted = cursor.rowcount
             if deleted > 0:
-                logger.info(f"Cleaned up {deleted} old memory entries (>{retention_days} days)")
+                logger.info(
+                    f"Cleaned up {deleted} old memory entries (>{retention_days} days)"
+                )
 
             return deleted
 
@@ -641,17 +716,16 @@ class GeneralStorage:
             total = (await cursor.fetchone())[0]
 
             # Entries by category
-            cursor = await conn.execute("""
+            cursor = await conn.execute(
+                """
                 SELECT category, COUNT(*)
                 FROM memory_entries
                 GROUP BY category
-            """)
+            """
+            )
             by_category = {row[0]: row[1] for row in await cursor.fetchall()}
 
-            return {
-                "total_entries": total,
-                "by_category": by_category
-            }
+            return {"total_entries": total, "by_category": by_category}
 
     def _row_to_entry(self, row: aiosqlite.Row) -> MemoryEntry:
         """Convert database row to MemoryEntry"""
@@ -660,9 +734,13 @@ class GeneralStorage:
             category=row["category"],
             content=row["content"],
             metadata=json.loads(row["metadata_json"]) if row["metadata_json"] else {},
-            timestamp=datetime.fromisoformat(row["timestamp"]) if isinstance(row["timestamp"], str) else row["timestamp"],
+            timestamp=(
+                datetime.fromisoformat(row["timestamp"])
+                if isinstance(row["timestamp"], str)
+                else row["timestamp"]
+            ),
             reference_path=row["reference_path"],
-            embedding=row["embedding"]
+            embedding=row["embedding"],
         )
 
 
@@ -727,7 +805,7 @@ class LRUCacheManager:
             "max_size": self.max_size,
             "hits": self.hits,
             "misses": self.misses,
-            "hit_rate": hit_rate
+            "hit_rate": hit_rate,
         }
 
 
@@ -757,7 +835,7 @@ class MemoryMonitor:
                 "process_rss_mb": memory_info.rss / (1024 * 1024),
                 "process_vms_mb": memory_info.vms / (1024 * 1024),
                 "system_percent": system_memory.percent,
-                "system_available_mb": system_memory.available / (1024 * 1024)
+                "system_available_mb": system_memory.available / (1024 * 1024),
             }
         except Exception as e:
             logger.error(f"Failed to get memory usage: {e}")
@@ -778,6 +856,7 @@ class MemoryMonitor:
 # ============================================================================
 # UNIFIED MEMORY MANAGER - Main Class
 # ============================================================================
+
 
 class UnifiedMemoryManager:
     """
@@ -842,7 +921,7 @@ class UnifiedMemoryManager:
         task_storage: Optional[ITaskStorage] = None,
         general_storage: Optional[IGeneralStorage] = None,
         cache_manager: Optional[ICacheManager] = None,
-        monitor: Optional[MemoryMonitor] = None
+        monitor: Optional[MemoryMonitor] = None,
     ):
         """
         Initialize Unified Memory Manager
@@ -870,9 +949,7 @@ class UnifiedMemoryManager:
         self._cache = cache_manager or (
             LRUCacheManager(max_size=cache_size) if enable_cache else None
         )
-        self._monitor = monitor or (
-            MemoryMonitor() if enable_monitoring else None
-        )
+        self._monitor = monitor or (MemoryMonitor() if enable_monitoring else None)
 
         # Database initialization flag and lock (thread-safe lazy initialization)
         self._initialized = False
@@ -941,10 +1018,7 @@ class UnifiedMemoryManager:
         return asyncio.run(self.log_task(record))
 
     async def update_task_status(
-        self,
-        task_id: str,
-        status: TaskStatus,
-        **kwargs
+        self, task_id: str, status: TaskStatus, **kwargs
     ) -> bool:
         """
         Update task status and optional fields
@@ -975,9 +1049,7 @@ class UnifiedMemoryManager:
             raise ValueError("retry_count cannot be negative")
 
         await self._ensure_initialized()
-        return await self._task_storage.update_task(
-            task_id, status=status, **kwargs
-        )
+        return await self._task_storage.update_task(task_id, status=status, **kwargs)
 
     async def get_task(self, task_id: str) -> Optional[TaskExecutionRecord]:
         """
@@ -999,7 +1071,7 @@ class UnifiedMemoryManager:
         priority: Optional[TaskPriority] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-        limit: int = 100
+        limit: int = 100,
     ) -> List[TaskExecutionRecord]:
         """
         Query task execution history with filters
@@ -1022,7 +1094,7 @@ class UnifiedMemoryManager:
             "priority": priority,
             "start_date": start_date,
             "end_date": end_date,
-            "limit": limit
+            "limit": limit,
         }
         return await self._task_storage.get_task_history(filters)
 
@@ -1049,7 +1121,7 @@ class UnifiedMemoryManager:
         content: str,
         metadata: Optional[Dict] = None,
         reference_path: Optional[str] = None,
-        embedding: Optional[bytes] = None
+        embedding: Optional[bytes] = None,
     ) -> int:
         """
         Store general purpose memory entry
@@ -1081,7 +1153,7 @@ class UnifiedMemoryManager:
             metadata=metadata or {},
             timestamp=datetime.now(),
             reference_path=reference_path,
-            embedding=embedding
+            embedding=embedding,
         )
         return await self._general_storage.store(entry)
 
@@ -1091,7 +1163,7 @@ class UnifiedMemoryManager:
         limit: int = 100,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-        reference_path: Optional[str] = None
+        reference_path: Optional[str] = None,
     ) -> List[MemoryEntry]:
         """
         Retrieve memories by category and filters
@@ -1122,7 +1194,7 @@ class UnifiedMemoryManager:
             "limit": limit,
             "start_date": start_date,
             "end_date": end_date,
-            "reference_path": reference_path
+            "reference_path": reference_path,
         }
         return await self._general_storage.retrieve(category, filters)
 
@@ -1220,7 +1292,7 @@ class UnifiedMemoryManager:
     async def store(
         self,
         data: Union[TaskExecutionRecord, MemoryEntry, Any],
-        strategy: StorageStrategy = StorageStrategy.TASK_EXECUTION
+        strategy: StorageStrategy = StorageStrategy.TASK_EXECUTION,
     ) -> Union[str, int]:
         """
         Unified storage interface with strategy pattern
@@ -1265,7 +1337,7 @@ class UnifiedMemoryManager:
                 data.content,
                 data.metadata,
                 data.reference_path,
-                data.embedding
+                data.embedding,
             )
 
         elif strategy == StorageStrategy.CACHED:
@@ -1296,7 +1368,7 @@ class UnifiedMemoryManager:
         stats = {
             "task_storage": await self._task_storage.get_stats(),
             "general_storage": await self._general_storage.get_stats(),
-            "cache": self.cache_stats()
+            "cache": self.cache_stats(),
         }
 
         if self._monitor:
@@ -1328,10 +1400,7 @@ class UnifiedMemoryManager:
             - memories_deleted: Old memories deleted
         """
         await self._ensure_initialized()
-        cleanup_counts = {
-            "cache_evicted": 0,
-            "memories_deleted": 0
-        }
+        cleanup_counts = {"cache_evicted": 0, "memories_deleted": 0}
 
         # Check if cleanup needed
         if self._monitor and self._monitor.should_cleanup(memory_threshold):
@@ -1358,6 +1427,7 @@ class UnifiedMemoryManager:
 # BACKWARD COMPATIBILITY WRAPPERS
 # ============================================================================
 
+
 class EnhancedMemoryManager(UnifiedMemoryManager):
     """
     Backward compatibility wrapper for enhanced_memory_manager.py
@@ -1377,11 +1447,7 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
 
     def __init__(self, db_path: str = "data/enhanced_memory.db"):
         """Initialize with enhanced_memory_manager.py defaults"""
-        super().__init__(
-            db_path=db_path,
-            enable_cache=True,
-            enable_monitoring=False
-        )
+        super().__init__(db_path=db_path, enable_cache=True, enable_monitoring=False)
         logger.info("EnhancedMemoryManager compatibility wrapper initialized")
 
     def log_task_execution(self, record: TaskExecutionRecord) -> str:
@@ -1404,7 +1470,9 @@ class LongTermMemoryManager:
     - analysis/refactoring/test_memory_path_utils.py
     """
 
-    def __init__(self, config_path: Optional[str] = None, db_path: str = "data/agent_memory.db"):
+    def __init__(
+        self, config_path: Optional[str] = None, db_path: str = "data/agent_memory.db"
+    ):
         """
         Initialize with memory_manager.py defaults
 
@@ -1416,16 +1484,18 @@ class LongTermMemoryManager:
             db_path=db_path,
             enable_cache=True,
             enable_monitoring=False,
-            retention_days=90
+            retention_days=90,
         )
-        logger.info(f"LongTermMemoryManager compatibility wrapper initialized at {db_path}")
+        logger.info(
+            f"LongTermMemoryManager compatibility wrapper initialized at {db_path}"
+        )
 
     async def store_memory(
         self,
         category: str,
         content: str,
         metadata: Optional[Dict] = None,
-        embedding: Optional[bytes] = None
+        embedding: Optional[bytes] = None,
     ) -> int:
         """Map old API to new unified API"""
         # Convert string category to enum if possible
@@ -1439,10 +1509,7 @@ class LongTermMemoryManager:
         )
 
     async def retrieve_memories(
-        self,
-        category: str,
-        filters: Optional[Dict] = None,
-        limit: int = 100
+        self, category: str, filters: Optional[Dict] = None, limit: int = 100
     ) -> List[MemoryEntry]:
         """Map old API to new unified API"""
         filters = filters or {}
@@ -1457,7 +1524,7 @@ class LongTermMemoryManager:
             limit=limit,
             start_date=filters.get("start_date"),
             end_date=filters.get("end_date"),
-            reference_path=filters.get("reference_path")
+            reference_path=filters.get("reference_path"),
         )
 
     async def search_by_metadata(self, metadata_query: Dict) -> List[MemoryEntry]:

@@ -341,9 +341,7 @@ async def control_queue(request: QueueControlRequest):
         workflow_scheduler.queue.set_max_concurrent(request.value)
         message = f"Max concurrent workflows set to {request.value}"
     else:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid action: {request.action}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid action: {request.action}")
 
     return {
         "success": True,
@@ -429,9 +427,7 @@ async def schedule_template_workflow(
         scheduled_time=scheduled_time,
         priority=priority,
         complexity=(
-            template.complexity.value
-            if hasattr(template, "complexity")
-            else "simple"
+            template.complexity.value if hasattr(template, "complexity") else "simple"
         ),
         template_id=template_id,
         variables=template_variables,

@@ -145,7 +145,7 @@ class ServiceAuthManager:
             )
             raise_auth_error(
                 "AUTH_0001",
-                f"Timestamp outside {self.timestamp_window}s window (diff: {time_diff}s)"
+                f"Timestamp outside {self.timestamp_window}s window (diff: {time_diff}s)",
             )
 
         # Get service key from Redis

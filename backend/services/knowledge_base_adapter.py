@@ -20,9 +20,7 @@ logger = get_llm_logger("knowledge_base_adapter")
 class KnowledgeBaseProtocol(Protocol):
     """Protocol defining the expected interface for knowledge base implementations."""
 
-    async def search(
-        self, query: str, **kwargs
-    ) -> List[Dict[str, Any]]:
+    async def search(self, query: str, **kwargs) -> List[Dict[str, Any]]:
         """Search for documents matching the query."""
         ...
 

@@ -495,8 +495,13 @@ class ProjectStateManager:
             elif capability.validation_method == "api_endpoint":
                 # URGENT FIX: Prevent circular dependency deadlock for self-referential endpoints
                 backend_url = f"{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-                backend_localhost = f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
-                if backend_url in capability.validation_target or backend_localhost in capability.validation_target:
+                backend_localhost = (
+                    f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
+                )
+                if (
+                    backend_url in capability.validation_target
+                    or backend_localhost in capability.validation_target
+                ):
                     # Skip validation of our own endpoints to prevent deadlock
                     return ValidationResult(
                         capability.name,

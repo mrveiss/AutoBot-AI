@@ -167,8 +167,7 @@ class NPUSemanticSearch:
             # Use singleton HTTP client for connection pooling
             http_client = get_http_client()
             async with await http_client.get(
-                f"{self.npu_worker_url}/health",
-                timeout=aiohttp.ClientTimeout(total=5)
+                f"{self.npu_worker_url}/health", timeout=aiohttp.ClientTimeout(total=5)
             ) as response:
                 if response.status == 200:
                     health_data = await response.json()
@@ -591,7 +590,7 @@ class NPUSemanticSearch:
             self.chroma_client = get_chromadb_client(
                 db_path=str(self.chroma_db_path),
                 allow_reset=True,
-                anonymized_telemetry=False
+                anonymized_telemetry=False,
             )
 
             # Initialize collections for each modality

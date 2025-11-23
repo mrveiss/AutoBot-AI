@@ -83,12 +83,16 @@ def check_admin_permission(request: Request) -> bool:
         user_data = auth_middleware.get_user_from_request(request)
 
         if not user_data:
-            raise_auth_error("AUTH_0002", "Authentication required for audit log access")
+            raise_auth_error(
+                "AUTH_0002", "Authentication required for audit log access"
+            )
 
         # Check for admin role
         user_role = user_data.get("role", "guest")
         if user_role != "admin":
-            raise_auth_error("AUTH_0003", "Admin permission required for audit log access")
+            raise_auth_error(
+                "AUTH_0003", "Admin permission required for audit log access"
+            )
 
         return True
 

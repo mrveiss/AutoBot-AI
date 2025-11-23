@@ -577,7 +577,10 @@ if __name__ == "__main__":
         test_commands = [
             ("echo 'Hello, World!'", "test echo command"),
             ("ls -la", "list current directory"),
-            (f"ping -c 3 {NetworkConstants.PUBLIC_DNS_IP}", "test network connectivity"),
+            (
+                f"ping -c 3 {NetworkConstants.PUBLIC_DNS_IP}",
+                "test network connectivity",
+            ),
             ("sleep 5", "test long-running command"),
         ]
 

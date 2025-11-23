@@ -632,7 +632,12 @@ class UnifiedConfigManager:
             ] = selected_model
 
         # Build Ollama endpoint from config instead of hardcoded IP
-        ollama_endpoint = backend_llm.get("local", {}).get("providers", {}).get("ollama", {}).get("endpoint")
+        ollama_endpoint = (
+            backend_llm.get("local", {})
+            .get("providers", {})
+            .get("ollama", {})
+            .get("endpoint")
+        )
 
         # If not explicitly configured, construct from infrastructure config
         if not ollama_endpoint:
@@ -862,7 +867,9 @@ class UnifiedConfigManager:
         ollama_port = self.get_port("ollama")
         if ollama_host and ollama_port:
             return f"http://{ollama_host}:{ollama_port}"
-        return f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
+        return (
+            f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
+        )
 
     def get_redis_url(self) -> str:
         """Get the Redis service URL from configuration (backward compatibility)"""
@@ -881,24 +888,24 @@ class UnifiedConfigManager:
         return {
             "frontend": {
                 "host": str(NetworkConstants.FRONTEND_HOST),
-                "port": NetworkConstants.FRONTEND_PORT
+                "port": NetworkConstants.FRONTEND_PORT,
             },
             "npu_worker": {
                 "host": str(NetworkConstants.NPU_WORKER_HOST),
-                "port": NetworkConstants.NPU_WORKER_PORT
+                "port": NetworkConstants.NPU_WORKER_PORT,
             },
             "redis": {
                 "host": str(NetworkConstants.REDIS_HOST),
-                "port": NetworkConstants.REDIS_PORT
+                "port": NetworkConstants.REDIS_PORT,
             },
             "ai_stack": {
                 "host": str(NetworkConstants.AI_STACK_HOST),
-                "port": NetworkConstants.AI_STACK_PORT
+                "port": NetworkConstants.AI_STACK_PORT,
             },
             "browser": {
                 "host": str(NetworkConstants.BROWSER_HOST),
-                "port": NetworkConstants.BROWSER_PORT
-            }
+                "port": NetworkConstants.BROWSER_PORT,
+            },
         }
 
     # CORS AND SECURITY METHODS (ported from unified_config.py for consolidation)
@@ -1113,7 +1120,10 @@ class UnifiedConfigManager:
                         obj[key] = redact_sensitive_fields(value, current_path)
 
             elif isinstance(obj, list):
-                return [redact_sensitive_fields(item, f"{path}[{i}]") for i, item in enumerate(obj)]
+                return [
+                    redact_sensitive_fields(item, f"{path}[{i}]")
+                    for i, item in enumerate(obj)
+                ]
 
             return obj
 
@@ -1170,7 +1180,9 @@ class UnifiedConfigManager:
                     json.dumps(filtered_data, default=str),
                     ex=self.settings.cache_ttl,
                 )
-                logger.debug(f"Saved {config_type} config to Redis cache (sensitive data filtered)")
+                logger.debug(
+                    f"Saved {config_type} config to Redis cache (sensitive data filtered)"
+                )
 
         except Exception as e:
             logger.debug(f"Failed to save {config_type} to Redis cache: {e}")

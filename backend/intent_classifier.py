@@ -228,11 +228,15 @@ class IntentClassifier:
             "has_continuation_word": any(
                 word in self.CONTINUATION_WORDS for word in words
             ),
-            "has_exit_phrase": any(phrase in message_lower for phrase in self.EXIT_PHRASES),
+            "has_exit_phrase": any(
+                phrase in message_lower for phrase in self.EXIT_PHRASES
+            ),
         }
 
         # Classify based on signals
-        return self._classify_from_signals(message, message_lower, words, signals, conversation_history)
+        return self._classify_from_signals(
+            message, message_lower, words, signals, conversation_history
+        )
 
     def _classify_from_signals(
         self,
@@ -311,7 +315,9 @@ class IntentClassifier:
             if conversation_history and len(conversation_history) > 0:
                 # If assistant just asked a question, user is probably responding
                 last_msg = conversation_history[-1]
-                if last_msg.get("role") == "assistant" and "?" in last_msg.get("content", ""):
+                if last_msg.get("role") == "assistant" and "?" in last_msg.get(
+                    "content", ""
+                ):
                     return IntentClassification(
                         intent=ConversationIntent.CONTINUE,
                         confidence=0.75,
@@ -320,7 +326,15 @@ class IntentClassifier:
                     )
 
             # Single word greetings/acknowledgments
-            if len(words) == 1 and words[0] in {"ok", "okay", "yes", "no", "sure", "thanks", "thank you"}:
+            if len(words) == 1 and words[0] in {
+                "ok",
+                "okay",
+                "yes",
+                "no",
+                "sure",
+                "thanks",
+                "thank you",
+            }:
                 return IntentClassification(
                     intent=ConversationIntent.CONTINUE,
                     confidence=0.70,

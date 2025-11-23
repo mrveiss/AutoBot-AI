@@ -243,7 +243,9 @@ class ServiceRegistry:
                 circuit_breaker_threshold=config.get(
                     "circuit_breaker.service_registry.failure_threshold", 5
                 ),
-                circuit_breaker_timeout=config.get_timeout("circuit_breaker", "recovery"),
+                circuit_breaker_timeout=config.get_timeout(
+                    "circuit_breaker", "recovery"
+                ),
             )
 
             self.services[service_name] = service_config
@@ -341,7 +343,9 @@ class ServiceRegistry:
             else:
                 service.host = config.get(f"services.{service_key}.host", service.host)
             service.port = config.get(f"services.{service_key}.port", service.port)
-            service.scheme = config.get(f"services.{service_key}.scheme", service.scheme)
+            service.scheme = config.get(
+                f"services.{service_key}.scheme", service.scheme
+            )
             service.path = config.get(f"services.{service_key}.path", service.path)
             service.health_endpoint = config.get(
                 f"services.{service_key}.health_endpoint", service.health_endpoint

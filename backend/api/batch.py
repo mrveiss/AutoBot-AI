@@ -146,13 +146,23 @@ async def batch_chat_initialization():
             get_system_health(),
             get_service_health(),
             get_settings(),
-            return_exceptions=True
+            return_exceptions=True,
         )
 
         # Unpack results with error handling
-        chat_sessions = results[0] if not isinstance(results[0], Exception) else {"sessions": []}
-        system_health = results[1] if not isinstance(results[1], Exception) else {"status": "unknown"}
-        service_health = results[2] if not isinstance(results[2], Exception) else {"status": "unknown"}
+        chat_sessions = (
+            results[0] if not isinstance(results[0], Exception) else {"sessions": []}
+        )
+        system_health = (
+            results[1]
+            if not isinstance(results[1], Exception)
+            else {"status": "unknown"}
+        )
+        service_health = (
+            results[2]
+            if not isinstance(results[2], Exception)
+            else {"status": "unknown"}
+        )
         settings = results[3] if not isinstance(results[3], Exception) else {}
 
         response = {
@@ -265,7 +275,7 @@ async def get_settings():
         from backend.fast_app_factory_fix import app
 
         # Try to get settings from app state or return defaults
-        if hasattr(app.state, 'settings'):
+        if hasattr(app.state, "settings"):
             return app.state.settings
 
         # Return default settings structure
@@ -273,7 +283,7 @@ async def get_settings():
             "theme": "light",
             "language": "en",
             "notifications": True,
-            "auto_scroll": True
+            "auto_scroll": True,
         }
     except Exception as e:
         logger.warning(f"Failed to get settings: {e}")

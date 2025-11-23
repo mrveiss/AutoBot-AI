@@ -157,7 +157,11 @@ def list_agents_by_tier(tier: AgentTier) -> list[str]:
         >>> agents = list_agents_by_tier(AgentTier.TIER_1_DEFAULT)
         >>> assert 'frontend-engineer' in agents
     """
-    return [agent_type for agent_type, agent_tier in AGENT_TIER_MAP.items() if agent_tier == tier]
+    return [
+        agent_type
+        for agent_type, agent_tier in AGENT_TIER_MAP.items()
+        if agent_tier == tier
+    ]
 
 
 def get_tier_statistics() -> Dict[AgentTier, Dict[str, any]]:
@@ -179,9 +183,11 @@ def get_tier_statistics() -> Dict[AgentTier, Dict[str, any]]:
         tier: {
             "count": tier_counts[tier],
             "agents": list_agents_by_tier(tier),
-            "cache_hit_rate": get_cache_hit_expectation(list_agents_by_tier(tier)[0])
-            if list_agents_by_tier(tier)
-            else "N/A",
+            "cache_hit_rate": (
+                get_cache_hit_expectation(list_agents_by_tier(tier)[0])
+                if list_agents_by_tier(tier)
+                else "N/A"
+            ),
             "base_prompt": TIER_PROMPT_MAP[tier],
         }
         for tier in AgentTier
@@ -198,5 +204,8 @@ if __name__ == "__main__":
         print(f"  Count: {data['count']}")
         print(f"  Cache Hit Rate: {data['cache_hit_rate']}")
         print(f"  Base Prompt: {data['base_prompt']}")
-        print(f"  Agents: {', '.join(data['agents'][:5])}" + ("..." if len(data['agents']) > 5 else ""))
+        print(
+            f"  Agents: {', '.join(data['agents'][:5])}"
+            + ("..." if len(data["agents"]) > 5 else "")
+        )
         print()

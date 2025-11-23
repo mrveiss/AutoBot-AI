@@ -239,9 +239,7 @@ class GPUSemanticChunker:
         start_time = time.time()
 
         try:
-            logger.info(
-                f"Starting GPU semantic chunking ({len(text)} characters)"
-            )
+            logger.info(f"Starting GPU semantic chunking ({len(text)} characters)")
 
             # For testing, create simple chunks based on paragraphs/sentences
             sentences = self._basic_sentence_split(text)

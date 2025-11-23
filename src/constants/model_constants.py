@@ -31,7 +31,9 @@ class ModelConstants:
     # Default Models - Can be overridden via environment variables
     DEFAULT_OLLAMA_MODEL: str = os.getenv("AUTOBOT_OLLAMA_MODEL", "deepseek-r1:14b")
     DEFAULT_OPENAI_MODEL: str = os.getenv("AUTOBOT_OPENAI_MODEL", "gpt-4")
-    DEFAULT_ANTHROPIC_MODEL: str = os.getenv("AUTOBOT_ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
+    DEFAULT_ANTHROPIC_MODEL: str = os.getenv(
+        "AUTOBOT_ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"
+    )
 
     # Model Providers
     PROVIDER_OLLAMA: str = "ollama"
@@ -52,6 +54,7 @@ class ModelConstants:
     def get_ollama_url() -> str:
         """Get Ollama service URL from environment or default to AI Stack VM"""
         from src.constants.network_constants import NetworkConstants
+
         host = os.getenv("AUTOBOT_OLLAMA_HOST", NetworkConstants.AI_STACK_VM_IP)
         port = os.getenv("AUTOBOT_OLLAMA_PORT", str(NetworkConstants.OLLAMA_PORT))
         return f"http://{host}:{port}"
@@ -60,6 +63,7 @@ class ModelConstants:
     def get_lm_studio_url() -> str:
         """Get LM Studio service URL from environment or default"""
         from src.constants.network_constants import NetworkConstants
+
         host = os.getenv("AUTOBOT_LM_STUDIO_HOST", NetworkConstants.LOCALHOST_IP)
         port = os.getenv("AUTOBOT_LM_STUDIO_PORT", "1234")
         return f"http://{host}:{port}"

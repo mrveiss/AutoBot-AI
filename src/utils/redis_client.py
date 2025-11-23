@@ -148,7 +148,9 @@ class RedisConfig:
         """Auto-load password from environment if not provided"""
         if self.password is None:
             # Try REDIS_PASSWORD first, then AUTOBOT_REDIS_PASSWORD
-            self.password = os.getenv("REDIS_PASSWORD") or os.getenv("AUTOBOT_REDIS_PASSWORD")
+            self.password = os.getenv("REDIS_PASSWORD") or os.getenv(
+                "AUTOBOT_REDIS_PASSWORD"
+            )
 
 
 class RedisConfigLoader:
@@ -187,7 +189,9 @@ class RedisConfigLoader:
                 config_data = yaml.safe_load(f)
 
             configs = {}
-            databases = config_data.get("redis_databases", config_data.get("databases", {}))
+            databases = config_data.get(
+                "redis_databases", config_data.get("databases", {})
+            )
 
             for db_name, db_config in databases.items():
                 configs[db_name] = RedisConfig(
@@ -207,7 +211,9 @@ class RedisConfigLoader:
                     description=db_config.get("description", ""),
                 )
 
-            logger.info(f"Loaded {len(configs)} database configurations from {yaml_path}")
+            logger.info(
+                f"Loaded {len(configs)} database configurations from {yaml_path}"
+            )
             return configs
 
         except Exception as e:
@@ -231,7 +237,11 @@ class RedisConfigLoader:
                         db=0,
                         host=redis_config.host,
                         port=redis_config.port,
-                        password=redis_config.password if hasattr(redis_config, "password") else None,
+                        password=(
+                            redis_config.password
+                            if hasattr(redis_config, "password")
+                            else None
+                        ),
                     )
                 }
         except (ImportError, Exception) as e:
@@ -325,7 +335,9 @@ class ManagerStats:
     @property
     def overall_success_rate(self) -> float:
         """Calculate overall success rate"""
-        total_success = sum(s.successful_operations for s in self.database_stats.values())
+        total_success = sum(
+            s.successful_operations for s in self.database_stats.values()
+        )
         total_failed = sum(s.failed_operations for s in self.database_stats.values())
         total = total_success + total_failed
         if total == 0:
@@ -465,7 +477,9 @@ class RedisConnectionManager:
         self._cleanup_task: Optional[asyncio.Task] = None
 
         self._initialized = True
-        logger.info("Enhanced Redis Connection Manager initialized with consolidated features")
+        logger.info(
+            "Enhanced Redis Connection Manager initialized with consolidated features"
+        )
 
     def _load_redis_config(self) -> Dict[str, Any]:
         """Load Redis configuration from unified config"""
@@ -521,7 +535,11 @@ class RedisConnectionManager:
             socket_connect_timeout=timeout_config.get("socket_connect_timeout", 5.0),
             retry_on_timeout=timeout_config.get("retry_on_timeout", True),
             max_retries=timeout_config.get("max_retries", 3),
-            socket_keepalive_options=self._tcp_keepalive_options if hasattr(self, "_tcp_keepalive_options") else None,
+            socket_keepalive_options=(
+                self._tcp_keepalive_options
+                if hasattr(self, "_tcp_keepalive_options")
+                else None
+            ),
         )
         if "main" not in self._configs:
             self._configs["main"] = default_config
@@ -566,7 +584,9 @@ class RedisConnectionManager:
                 else:
                     raise
             except Exception as e:
-                logger.error(f"Error checking Redis readiness for '{database_name}': {e}")
+                logger.error(
+                    f"Error checking Redis readiness for '{database_name}': {e}"
+                )
                 return False
 
         logger.error(f"Redis '{database_name}' did not become ready within {max_wait}s")
@@ -585,7 +605,9 @@ class RedisConnectionManager:
         - Loading dataset handling
         - TCP keepalive configuration
         """
-        logger.warning(f"🔧 REDIS FIX ACTIVE: Creating async pool for '{database_name}' with MANUAL RETRY (no @retry decorator)")
+        logger.warning(
+            f"🔧 REDIS FIX ACTIVE: Creating async pool for '{database_name}' with MANUAL RETRY (no @retry decorator)"
+        )
         max_attempts = 5
         base_wait = 2
         max_wait = 30
@@ -602,7 +624,8 @@ class RedisConnectionManager:
                     socket_timeout=config.socket_timeout,
                     socket_connect_timeout=config.socket_connect_timeout,
                     socket_keepalive=config.socket_keepalive,
-                    socket_keepalive_options=config.socket_keepalive_options or self._tcp_keepalive_options,
+                    socket_keepalive_options=config.socket_keepalive_options
+                    or self._tcp_keepalive_options,
                     retry_on_timeout=config.retry_on_timeout,
                     health_check_interval=0,  # Disable auto health checks - we check manually
                 )
@@ -614,22 +637,28 @@ class RedisConnectionManager:
 
                 if not ready:
                     await pool.disconnect()  # Clean up pool before retry
-                    raise ConnectionError(f"Redis database '{database_name}' not ready after waiting")
+                    raise ConnectionError(
+                        f"Redis database '{database_name}' not ready after waiting"
+                    )
 
-                logger.info(f"Created async pool for '{database_name}' with retry protection")
+                logger.info(
+                    f"Created async pool for '{database_name}' with retry protection"
+                )
                 return pool
 
             except (ConnectionError, asyncio.TimeoutError) as e:
                 if attempt < max_attempts - 1:
                     # Calculate exponential backoff wait time
-                    wait_time = min(base_wait * (2 ** attempt), max_wait)
+                    wait_time = min(base_wait * (2**attempt), max_wait)
                     logger.warning(
                         f"Redis connection attempt {attempt + 1}/{max_attempts} failed for '{database_name}', "
                         f"retrying in {wait_time}s: {e}"
                     )
                     await asyncio.sleep(wait_time)
                 else:
-                    logger.error(f"All {max_attempts} connection attempts failed for '{database_name}'")
+                    logger.error(
+                        f"All {max_attempts} connection attempts failed for '{database_name}'"
+                    )
                     raise
 
     def _create_sync_pool_with_keepalive(
@@ -659,7 +688,8 @@ class RedisConnectionManager:
             "socket_timeout": config.socket_timeout,
             "socket_connect_timeout": config.socket_connect_timeout,
             "socket_keepalive": True,
-            "socket_keepalive_options": config.socket_keepalive_options or self._tcp_keepalive_options,
+            "socket_keepalive_options": config.socket_keepalive_options
+            or self._tcp_keepalive_options,
             "retry_on_timeout": config.retry_on_timeout,
             "retry": retry_policy,
         }
@@ -667,7 +697,9 @@ class RedisConnectionManager:
         # Remove None values
         pool_params = {k: v for k, v in pool_params.items() if v is not None}
 
-        logger.info(f"Created sync pool for '{database_name}' with TCP keepalive tuning")
+        logger.info(
+            f"Created sync pool for '{database_name}' with TCP keepalive tuning"
+        )
         return redis.ConnectionPool(**pool_params)
 
     def _update_stats(self, database_name: str, success: bool, error: str = None):
@@ -678,7 +710,9 @@ class RedisConnectionManager:
         Now includes Prometheus metrics integration for Issue #65 P1 optimization.
         """
         if database_name not in self._database_stats:
-            self._database_stats[database_name] = RedisStats(database_name=database_name)
+            self._database_stats[database_name] = RedisStats(
+                database_name=database_name
+            )
 
         stats = self._database_stats[database_name]
         if success:
@@ -691,15 +725,15 @@ class RedisConnectionManager:
 
         # Update manager stats
         self._manager_stats.total_operations += 1
-        self._manager_stats.uptime_seconds = (datetime.now() - self._start_time).total_seconds()
+        self._manager_stats.uptime_seconds = (
+            datetime.now() - self._start_time
+        ).total_seconds()
 
         # Record to Prometheus metrics for real-time monitoring
         try:
             metrics = get_metrics_manager()
             metrics.record_request(
-                database=database_name,
-                operation="general",
-                success=success
+                database=database_name, operation="general", success=success
             )
         except Exception as e:
             # Don't let metrics recording failure affect Redis operations
@@ -794,15 +828,17 @@ class RedisConnectionManager:
                 prom_metrics.record_circuit_breaker_event(
                     database=database_name,
                     event="opened",
-                    reason=str(error)[:100]  # Truncate for label safety
+                    reason=str(error)[:100],  # Truncate for label safety
                 )
                 prom_metrics.update_circuit_breaker_state(
                     database=database_name,
                     state="open",
-                    failure_count=self._failure_counts[database_name]
+                    failure_count=self._failure_counts[database_name],
                 )
             except Exception as prom_err:
-                logger.debug(f"Failed to record Prometheus circuit breaker metrics: {prom_err}")
+                logger.debug(
+                    f"Failed to record Prometheus circuit breaker metrics: {prom_err}"
+                )
 
     def _record_success(self, database_name: str, response_time_ms: float):
         """Record a successful operation"""
@@ -990,8 +1026,8 @@ class RedisConnectionManager:
             if database_name not in self._async_pools:
                 async with self._async_lock:
                     if database_name not in self._async_pools:
-                        self._async_pools[database_name] = await self._create_async_pool(
-                            database_name
+                        self._async_pools[database_name] = (
+                            await self._create_async_pool(database_name)
                         )
 
             # Create client from pool
@@ -1027,6 +1063,7 @@ class RedisConnectionManager:
 
     def get_metrics(self, database_name: Optional[str] = None) -> Dict[str, Any]:
         """Get connection metrics"""
+
         def _metrics_to_dict(metrics: ConnectionMetrics) -> Dict[str, Any]:
             """Convert metrics to dict, including computed properties"""
             data = metrics.__dict__.copy()
@@ -1040,7 +1077,9 @@ class RedisConnectionManager:
                 )
             }
         else:
-            return {db: _metrics_to_dict(metrics) for db, metrics in self._metrics.items()}
+            return {
+                db: _metrics_to_dict(metrics) for db, metrics in self._metrics.items()
+            }
 
     def get_health_status(self) -> Dict[str, Any]:
         """Get overall health status"""
@@ -1133,7 +1172,9 @@ class RedisConnectionManager:
         """
         client = await self.get_async_client(database)
         if client is None:
-            raise ConnectionError(f"Could not get Redis client for database '{database}'")
+            raise ConnectionError(
+                f"Could not get Redis client for database '{database}'"
+            )
 
         pipe = client.pipeline()
         try:
@@ -1222,7 +1263,9 @@ class RedisConnectionManager:
 
                     for conn in available_conns:
                         if hasattr(conn, "_last_use"):
-                            idle_time = (datetime.now() - conn._last_use).total_seconds()
+                            idle_time = (
+                                datetime.now() - conn._last_use
+                            ).total_seconds()
                             if idle_time > self._max_idle_time_seconds:
                                 connections_to_remove.append(conn)
 
@@ -1245,7 +1288,9 @@ class RedisConnectionManager:
                     cleaned_total += cleaned_count
 
             except Exception as e:
-                logger.error(f"Error cleaning idle connections for '{database_name}': {e}")
+                logger.error(
+                    f"Error cleaning idle connections for '{database_name}': {e}"
+                )
 
         if cleaned_total > 0:
             logger.info(f"Total idle connections cleaned: {cleaned_total}")
@@ -1450,7 +1495,9 @@ async def close_all_redis_connections():
 
 # Context manager for Redis operations
 @asynccontextmanager
-async def redis_context(database: str = "main") -> AsyncGenerator[async_redis.Redis, None]:
+async def redis_context(
+    database: str = "main",
+) -> AsyncGenerator[async_redis.Redis, None]:
     """
     Async context manager for Redis operations
 
@@ -1470,6 +1517,7 @@ async def redis_context(database: str = "main") -> AsyncGenerator[async_redis.Re
 # BACKWARD COMPATIBILITY LAYER
 # ============================================================================
 # Support for old redis_database_manager imports (archived in P1)
+
 
 class RedisDatabaseManager:
     """
@@ -1491,16 +1539,22 @@ class RedisDatabaseManager:
             "Use get_redis_client() from src.utils.redis_client instead."
         )
 
-    def get_connection(self, database: Union[RedisDatabase, str]) -> Optional[redis.Redis]:
+    def get_connection(
+        self, database: Union[RedisDatabase, str]
+    ) -> Optional[redis.Redis]:
         """Get synchronous Redis connection (DEPRECATED)"""
-        db_name = database.name.lower() if isinstance(database, RedisDatabase) else database
+        db_name = (
+            database.name.lower() if isinstance(database, RedisDatabase) else database
+        )
         return get_redis_client(async_client=False, database=db_name)
 
     async def get_async_connection(
         self, database: Union[RedisDatabase, str]
     ) -> Optional[async_redis.Redis]:
         """Get asynchronous Redis connection (DEPRECATED)"""
-        db_name = database.name.lower() if isinstance(database, RedisDatabase) else database
+        db_name = (
+            database.name.lower() if isinstance(database, RedisDatabase) else database
+        )
         return await get_redis_client(async_client=True, database=db_name)
 
 

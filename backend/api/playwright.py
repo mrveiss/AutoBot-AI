@@ -63,7 +63,9 @@ class ReloadRequest(BaseModel):
 
 
 # Browser VM connection
-BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
+BROWSER_VM_URL = (
+    f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
+)
 
 
 @with_error_handling(
@@ -348,9 +350,9 @@ async def navigate_to_url(request: NavigateRequest):
                 json={
                     "url": request.url,
                     "wait_until": request.wait_until,
-                    "timeout": request.timeout
+                    "timeout": request.timeout,
                 },
-                timeout=aiohttp.ClientTimeout(total=request.timeout / 1000 + 5)
+                timeout=aiohttp.ClientTimeout(total=request.timeout / 1000 + 5),
             ) as response:
                 result = await response.json()
 
@@ -359,7 +361,10 @@ async def navigate_to_url(request: NavigateRequest):
                     return result
                 else:
                     logger.error(f"Navigation failed: {result}")
-                    raise HTTPException(status_code=response.status, detail=result.get("error", "Navigation failed"))
+                    raise HTTPException(
+                        status_code=response.status,
+                        detail=result.get("error", "Navigation failed"),
+                    )
 
     except aiohttp.ClientError as e:
         logger.error(f"Browser VM connection error: {e}")
@@ -388,7 +393,7 @@ async def reload_page(request: ReloadRequest):
             async with session.post(
                 f"{BROWSER_VM_URL}/reload",
                 json={"wait_until": request.wait_until},
-                timeout=aiohttp.ClientTimeout(total=35)
+                timeout=aiohttp.ClientTimeout(total=35),
             ) as response:
                 result = await response.json()
 
@@ -397,7 +402,10 @@ async def reload_page(request: ReloadRequest):
                     return result
                 else:
                     logger.error(f"Reload failed: {result}")
-                    raise HTTPException(status_code=response.status, detail=result.get("error", "Reload failed"))
+                    raise HTTPException(
+                        status_code=response.status,
+                        detail=result.get("error", "Reload failed"),
+                    )
 
     except aiohttp.ClientError as e:
         logger.error(f"Browser VM connection error: {e}")

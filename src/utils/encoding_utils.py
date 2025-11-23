@@ -18,9 +18,7 @@ from pathlib import Path
 
 
 def safe_decode(
-    data: Union[bytes, str],
-    encoding: str = "utf-8",
-    errors: str = "replace"
+    data: Union[bytes, str], encoding: str = "utf-8", errors: str = "replace"
 ) -> str:
     """
     Safely decode bytes to UTF-8 string.
@@ -45,9 +43,7 @@ def safe_decode(
 
 
 def safe_encode(
-    data: Union[bytes, str],
-    encoding: str = "utf-8",
-    errors: str = "replace"
+    data: Union[bytes, str], encoding: str = "utf-8", errors: str = "replace"
 ) -> bytes:
     """
     Safely encode string to UTF-8 bytes.
@@ -81,7 +77,7 @@ def json_dumps_utf8(data: Any, **kwargs) -> str:
         '{"emoji": "🤖"}'  # Not escaped to \\ud83e\\udd16
     """
     # Override ensure_ascii to False for proper UTF-8
-    kwargs['ensure_ascii'] = False
+    kwargs["ensure_ascii"] = False
     return json.dumps(data, **kwargs)
 
 
@@ -99,7 +95,7 @@ def read_utf8_file(file_path: Union[str, Path]) -> str:
         FileNotFoundError: If file doesn't exist
         UnicodeDecodeError: If file contains invalid UTF-8
     """
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
 
 
@@ -111,7 +107,7 @@ def write_utf8_file(file_path: Union[str, Path], content: str) -> None:
         file_path: Path to file
         content: Content to write (string)
     """
-    with open(file_path, 'w', encoding='utf-8') as f:
+    with open(file_path, "w", encoding="utf-8") as f:
         f.write(content)
 
 
@@ -125,14 +121,11 @@ async def async_read_utf8_file(file_path: Union[str, Path]) -> str:
     Returns:
         File contents as UTF-8 string
     """
-    async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
         return await f.read()
 
 
-async def async_write_utf8_file(
-    file_path: Union[str, Path],
-    content: str
-) -> None:
+async def async_write_utf8_file(file_path: Union[str, Path], content: str) -> None:
     """
     Asynchronously write file with UTF-8 encoding.
 
@@ -140,13 +133,12 @@ async def async_write_utf8_file(
         file_path: Path to file
         content: Content to write (string)
     """
-    async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+    async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
         await f.write(content)
 
 
 def run_command_utf8(
-    cmd: Union[str, List[str]],
-    **kwargs
+    cmd: Union[str, List[str]], **kwargs
 ) -> subprocess.CompletedProcess:
     """
     Run subprocess command with UTF-8 encoding.
@@ -164,9 +156,9 @@ def run_command_utf8(
         'Hello 🤖\\n'
     """
     # Force UTF-8 encoding and text mode
-    kwargs['encoding'] = 'utf-8'
-    kwargs['text'] = True
-    kwargs['errors'] = kwargs.get('errors', 'replace')
+    kwargs["encoding"] = "utf-8"
+    kwargs["text"] = True
+    kwargs["errors"] = kwargs.get("errors", "replace")
 
     return subprocess.run(cmd, **kwargs)
 
@@ -192,13 +184,13 @@ def strip_ansi_codes(text: str) -> str:
     import re
 
     # Remove various ANSI escape sequences
-    text = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', text)  # CSI sequences
-    text = re.sub(r'\x1b\][0-9;]*[^\x07]*\x07', '', text)  # OSC with BEL
-    text = re.sub(r'\x1b\][0-9;]*[^\x07\x1b]*(?:\x1b\\)?', '', text)  # OSC with ST
-    text = re.sub(r'\x1b[=>]', '', text)  # Set modes
-    text = re.sub(r'\x1b[()][AB012]', '', text)  # Character sets
-    text = re.sub(r'\[[\?\d;]*[hlHJ]', '', text)  # Bracket sequences
-    text = re.sub(r'\]0;[^\x07\n]*\x07?', '', text)  # Set title
+    text = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", text)  # CSI sequences
+    text = re.sub(r"\x1b\][0-9;]*[^\x07]*\x07", "", text)  # OSC with BEL
+    text = re.sub(r"\x1b\][0-9;]*[^\x07\x1b]*(?:\x1b\\)?", "", text)  # OSC with ST
+    text = re.sub(r"\x1b[=>]", "", text)  # Set modes
+    text = re.sub(r"\x1b[()][AB012]", "", text)  # Character sets
+    text = re.sub(r"\[[\?\d;]*[hlHJ]", "", text)  # Bracket sequences
+    text = re.sub(r"\]0;[^\x07\n]*\x07?", "", text)  # Set title
 
     return text.strip()
 
@@ -243,10 +235,10 @@ def is_terminal_prompt(text: str) -> bool:
         return True  # Only whitespace
 
     # Box-drawing characters commonly used in fancy prompts
-    box_chars = set('┌┐└┘├┤┬┴┼─│╭╮╰╯╱╲╳')
+    box_chars = set("┌┐└┘├┤┬┴┼─│╭╮╰╯╱╲╳")
 
     # Prompt ending symbols
-    prompt_symbols = set('$#>%')
+    prompt_symbols = set("$#>%")
 
     # Check for box-drawing characters
     has_box_chars = any(char in box_chars for char in stripped)
@@ -260,25 +252,27 @@ def is_terminal_prompt(text: str) -> bool:
 
     # Calculate ratio of alphanumeric vs special characters
     alphanumeric_count = sum(1 for c in stripped if c.isalnum())
-    total_chars = len(stripped.replace(' ', '').replace('\r', '').replace('\n', ''))
+    total_chars = len(stripped.replace(" ", "").replace("\r", "").replace("\n", ""))
 
     # If mostly special characters (less than 40% alphanumeric), likely a prompt
     is_mostly_symbols = total_chars > 0 and (alphanumeric_count / total_chars) < 0.4
 
     # Patterns that indicate this is a prompt
     prompt_patterns = [
-        r'^\s*[\$#>%]\s*$',  # Just a prompt symbol
-        r'└─[\$#>%]\s*$',  # Ending prompt line
-        r'┌──.*┘\s*$',  # Box prompt pattern
-        r'^\(.*\).*[\$#>%]\s*$',  # (env) or (venv) with prompt
-        r'^.*@.*:.*[\$#>%]\s*$',  # user@host:path$
+        r"^\s*[\$#>%]\s*$",  # Just a prompt symbol
+        r"└─[\$#>%]\s*$",  # Ending prompt line
+        r"┌──.*┘\s*$",  # Box prompt pattern
+        r"^\(.*\).*[\$#>%]\s*$",  # (env) or (venv) with prompt
+        r"^.*@.*:.*[\$#>%]\s*$",  # user@host:path$
     ]
 
-    matches_pattern = any(re.search(pattern, stripped, re.MULTILINE) for pattern in prompt_patterns)
+    matches_pattern = any(
+        re.search(pattern, stripped, re.MULTILINE) for pattern in prompt_patterns
+    )
 
     # CRITICAL FIX: Check if there's actual command output before the prompt
     # If text has multiple lines with substantial content, it's not just a prompt
-    lines = stripped.split('\n')
+    lines = stripped.split("\n")
     non_prompt_lines = []
     for line in lines:
         line_stripped = line.strip()
@@ -287,33 +281,33 @@ def is_terminal_prompt(text: str) -> bool:
             continue
         # Check if this line is just a prompt
         is_prompt_line = (
-            any(char in box_chars for char in line_stripped) or
-            any(line_stripped.rstrip().endswith(sym) for sym in prompt_symbols) or
-            any(re.match(pattern, line_stripped) for pattern in prompt_patterns)
+            any(char in box_chars for char in line_stripped)
+            or any(line_stripped.rstrip().endswith(sym) for sym in prompt_symbols)
+            or any(re.match(pattern, line_stripped) for pattern in prompt_patterns)
         )
         # If it's a long line without prompt symbols, it's likely output
         if not is_prompt_line and len(line_stripped) > 10:
             non_prompt_lines.append(line_stripped)
 
     # If we have substantial non-prompt lines, this is command output (not just a prompt)
-    has_command_output = len(non_prompt_lines) > 0 and sum(len(l) for l in non_prompt_lines) > 20
+    has_command_output = (
+        len(non_prompt_lines) > 0 and sum(len(l) for l in non_prompt_lines) > 20
+    )
 
     # It's a prompt if:
     # 1. It has box-drawing chars AND ends with prompt symbol AND no real output, OR
     # 2. It matches a known prompt pattern AND no real output, OR
     # 3. It's short and mostly symbols with a prompt ending AND no real output
-    is_prompt = (
-        not has_command_output and (
-            (has_box_chars and ends_with_prompt) or
-            matches_pattern or
-            (is_short and is_mostly_symbols and ends_with_prompt)
-        )
+    is_prompt = not has_command_output and (
+        (has_box_chars and ends_with_prompt)
+        or matches_pattern
+        or (is_short and is_mostly_symbols and ends_with_prompt)
     )
 
     return is_prompt
 
 
-def normalize_line_endings(text: str, target: str = '\n') -> str:
+def normalize_line_endings(text: str, target: str = "\n") -> str:
     """
     Normalize line endings to target format.
 
@@ -329,11 +323,11 @@ def normalize_line_endings(text: str, target: str = '\n') -> str:
         'Hello\\nWorld\\nTest\\n'
     """
     # Replace CRLF and CR with LF
-    text = text.replace('\r\n', '\n')
-    text = text.replace('\r', '\n')
+    text = text.replace("\r\n", "\n")
+    text = text.replace("\r", "\n")
 
-    if target != '\n':
-        text = text.replace('\n', target)
+    if target != "\n":
+        text = text.replace("\n", target)
 
     return text
 
@@ -354,13 +348,11 @@ def ensure_utf8_json_response(data: Any) -> dict:
         >>> from fastapi.responses import JSONResponse
         >>> return JSONResponse(**ensure_utf8_json_response({'hello': '🤖'}))
     """
-    return {
-        'content': data,
-        'media_type': 'application/json; charset=utf-8'
-    }
+    return {"content": data, "media_type": "application/json; charset=utf-8"}
 
 
 # Validation utilities
+
 
 def is_valid_utf8(data: bytes) -> bool:
     """
@@ -379,13 +371,13 @@ def is_valid_utf8(data: bytes) -> bool:
         False
     """
     try:
-        data.decode('utf-8')
+        data.decode("utf-8")
         return True
     except UnicodeDecodeError:
         return False
 
 
-def replace_invalid_utf8(data: bytes, replacement: str = '�') -> str:
+def replace_invalid_utf8(data: bytes, replacement: str = "�") -> str:
     """
     Decode bytes, replacing invalid UTF-8 sequences.
 
@@ -396,10 +388,11 @@ def replace_invalid_utf8(data: bytes, replacement: str = '�') -> str:
     Returns:
         Decoded string with invalid bytes replaced
     """
-    return data.decode('utf-8', errors='replace')
+    return data.decode("utf-8", errors="replace")
 
 
 # Testing utilities
+
 
 def test_utf8_support() -> dict:
     """
@@ -414,40 +407,40 @@ def test_utf8_support() -> dict:
         True
     """
     test_strings = {
-        'ascii': 'Hello World',
-        'cyrillic': 'Привет мир',
-        'chinese': '你好世界',
-        'arabic': 'مرحبا بالعالم',
-        'emoji': '🤖 💻 🚀 ✨',
-        'box_drawing': '┌──(venv)──[~/code]',
-        'mixed': 'ASCII + Emoji 🚀 + 中文',
+        "ascii": "Hello World",
+        "cyrillic": "Привет мир",
+        "chinese": "你好世界",
+        "arabic": "مرحبا بالعالم",
+        "emoji": "🤖 💻 🚀 ✨",
+        "box_drawing": "┌──(venv)──[~/code]",
+        "mixed": "ASCII + Emoji 🚀 + 中文",
     }
 
     results = {}
     for name, text in test_strings.items():
         try:
             # Test round-trip encoding
-            encoded = text.encode('utf-8')
-            decoded = encoded.decode('utf-8')
-            results[name] = (decoded == text)
+            encoded = text.encode("utf-8")
+            decoded = encoded.decode("utf-8")
+            results[name] = decoded == text
         except Exception as e:
             results[name] = f"ERROR: {e}"
 
     return results
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Run UTF-8 support tests
     print("Testing UTF-8 support...")
     results = test_utf8_support()
 
     for name, result in results.items():
-        status = '✅' if result is True else '❌'
+        status = "✅" if result is True else "❌"
         print(f"{status} {name}: {result}")
 
     # Test ANSI stripping
     print("\nTesting ANSI code stripping...")
-    test_ansi = '\x1b[31mRed\x1b[0m [?2004h]0;Title\x07Text'
+    test_ansi = "\x1b[31mRed\x1b[0m [?2004h]0;Title\x07Text"
     cleaned = strip_ansi_codes(test_ansi)
     print(f"Input:  {repr(test_ansi)}")
     print(f"Output: {repr(cleaned)}")

@@ -107,7 +107,9 @@ async def debug_redis_connection():
 
         redis_client = get_redis_client(database="knowledge")
         if redis_client is None:
-            raise ValueError("Redis client initialization returned None - check Redis configuration")
+            raise ValueError(
+                "Redis client initialization returned None - check Redis configuration"
+            )
 
         # Test connection
         redis_client.ping()

@@ -189,7 +189,9 @@ async def validate_session_ownership(
         # Admin users can access all sessions
         user_role = user_data.get("role", "guest")
         if user_role == "admin":
-            logger.debug(f"Admin user {user_data.get('username')} accessing session {session_id}")
+            logger.debug(
+                f"Admin user {user_data.get('username')} accessing session {session_id}"
+            )
             return True
 
         # Validate session ownership
@@ -198,7 +200,9 @@ async def validate_session_ownership(
 
         # If session has no owner set, allow access (legacy sessions)
         if session_owner is None:
-            logger.info(f"Session {session_id} has no owner - allowing access (legacy session)")
+            logger.info(
+                f"Session {session_id} has no owner - allowing access (legacy session)"
+            )
             return True
 
         # Verify current user matches session owner
@@ -208,8 +212,7 @@ async def validate_session_ownership(
                 f"session {session_id} owned by {session_owner}"
             )
             raise HTTPException(
-                status_code=403,
-                detail=f"Access denied: You do not own this session"
+                status_code=403, detail=f"Access denied: You do not own this session"
             )
 
         logger.debug(f"User {current_user} validated as owner of session {session_id}")

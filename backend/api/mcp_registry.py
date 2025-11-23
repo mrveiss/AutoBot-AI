@@ -55,9 +55,7 @@ router = APIRouter(prefix="", tags=["mcp", "registry"])
 CACHE_ENABLED = os.getenv("MCP_REGISTRY_CACHE_ENABLED", "true").lower() == "true"
 CACHE_TTL_SECONDS = int(os.getenv("MCP_REGISTRY_CACHE_TTL", "60"))
 
-logger.info(
-    f"MCP Registry Cache: enabled={CACHE_ENABLED}, TTL={CACHE_TTL_SECONDS}s"
-)
+logger.info(f"MCP Registry Cache: enabled={CACHE_ENABLED}, TTL={CACHE_TTL_SECONDS}s")
 
 
 class MCPToolCache:
@@ -270,7 +268,14 @@ MCP_BRIDGES = [
         "database_mcp",
         "Database Operations - SQLite Query and Management",
         "/api/database/mcp/tools",
-        ["query", "execute", "schema", "tables", "statistics", "sql_injection_prevention"],
+        [
+            "query",
+            "execute",
+            "schema",
+            "tables",
+            "statistics",
+            "sql_injection_prevention",
+        ],
     ),
     (
         "git_mcp",
@@ -721,15 +726,9 @@ async def get_mcp_registry_stats() -> Dict[str, Any]:
             "healthy_bridges": tools_response["healthy_bridges"],
         },
         "tools_by_bridge": bridge_tool_counts,
-        "bridge_health": {
-            b["name"]: b["status"] for b in bridges_response["bridges"]
-        },
+        "bridge_health": {b["name"]: b["status"] for b in bridges_response["bridges"]},
         "available_features": list(
-            set(
-                feature
-                for _, _, _, features in MCP_BRIDGES
-                for feature in features
-            )
+            set(feature for _, _, _, features in MCP_BRIDGES for feature in features)
         ),
         "cache": mcp_cache.get_stats(),
         "timestamp": datetime.now().isoformat(),

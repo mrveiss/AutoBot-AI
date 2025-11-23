@@ -42,19 +42,35 @@ class SequentialThinkingRequest(BaseModel):
     """Request model for sequential thinking tool"""
 
     thought: str = Field(..., description="Current thinking step and analysis")
-    thought_number: int = Field(..., ge=1, description="Current thought number in sequence")
-    total_thoughts: int = Field(..., ge=1, description="Estimated total thoughts needed")
-    next_thought_needed: bool = Field(..., description="Whether another thought step is needed")
+    thought_number: int = Field(
+        ..., ge=1, description="Current thought number in sequence"
+    )
+    total_thoughts: int = Field(
+        ..., ge=1, description="Estimated total thoughts needed"
+    )
+    next_thought_needed: bool = Field(
+        ..., description="Whether another thought step is needed"
+    )
 
     # Optional revision/branching parameters
-    is_revision: Optional[bool] = Field(False, description="Whether this revises previous thinking")
-    revises_thought: Optional[int] = Field(None, ge=1, description="Which thought is being reconsidered")
-    branch_from_thought: Optional[int] = Field(None, ge=1, description="Branching point thought number")
+    is_revision: Optional[bool] = Field(
+        False, description="Whether this revises previous thinking"
+    )
+    revises_thought: Optional[int] = Field(
+        None, ge=1, description="Which thought is being reconsidered"
+    )
+    branch_from_thought: Optional[int] = Field(
+        None, ge=1, description="Branching point thought number"
+    )
     branch_id: Optional[str] = Field(None, description="Branch identifier")
-    needs_more_thoughts: Optional[bool] = Field(False, description="If more thoughts are needed beyond initial estimate")
+    needs_more_thoughts: Optional[bool] = Field(
+        False, description="If more thoughts are needed beyond initial estimate"
+    )
 
     # Session management
-    session_id: Optional[str] = Field("default", description="Thinking session identifier")
+    session_id: Optional[str] = Field(
+        "default", description="Thinking session identifier"
+    )
 
 
 @with_error_handling(
@@ -79,54 +95,59 @@ async def get_sequential_thinking_mcp_tools() -> List[MCPTool]:
                 "properties": {
                     "thought": {
                         "type": "string",
-                        "description": "Your current thinking step and analysis"
+                        "description": "Your current thinking step and analysis",
                     },
                     "thought_number": {
                         "type": "integer",
                         "description": "Current thought number in the sequence",
-                        "minimum": 1
+                        "minimum": 1,
                     },
                     "total_thoughts": {
                         "type": "integer",
                         "description": "Estimated total thoughts needed (can be adjusted)",
-                        "minimum": 1
+                        "minimum": 1,
                     },
                     "next_thought_needed": {
                         "type": "boolean",
-                        "description": "Whether another thought step is needed after this one"
+                        "description": "Whether another thought step is needed after this one",
                     },
                     "is_revision": {
                         "type": "boolean",
                         "description": "Whether this thought revises previous thinking",
-                        "default": False
+                        "default": False,
                     },
                     "revises_thought": {
                         "type": "integer",
                         "description": "Which thought number is being reconsidered (if is_revision is true)",
-                        "minimum": 1
+                        "minimum": 1,
                     },
                     "branch_from_thought": {
                         "type": "integer",
                         "description": "Thought number to branch from (for alternative reasoning paths)",
-                        "minimum": 1
+                        "minimum": 1,
                     },
                     "branch_id": {
                         "type": "string",
-                        "description": "Identifier for the current reasoning branch"
+                        "description": "Identifier for the current reasoning branch",
                     },
                     "needs_more_thoughts": {
                         "type": "boolean",
                         "description": "If more thoughts are needed beyond initial estimate",
-                        "default": False
+                        "default": False,
                     },
                     "session_id": {
                         "type": "string",
                         "description": "Thinking session identifier for tracking multiple sessions",
-                        "default": "default"
-                    }
+                        "default": "default",
+                    },
                 },
-                "required": ["thought", "thought_number", "total_thoughts", "next_thought_needed"]
-            }
+                "required": [
+                    "thought",
+                    "thought_number",
+                    "total_thoughts",
+                    "next_thought_needed",
+                ],
+            },
         )
     ]
     return tools
@@ -152,10 +173,13 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Dict[st
         thinking_sessions[session_id] = []
 
     # Validate thought progression
-    if request.thought_number > request.total_thoughts and not request.needs_more_thoughts:
+    if (
+        request.thought_number > request.total_thoughts
+        and not request.needs_more_thoughts
+    ):
         raise HTTPException(
             status_code=400,
-            detail=f"Thought number {request.thought_number} exceeds total thoughts {request.total_thoughts}. Set needs_more_thoughts=true to extend."
+            detail=f"Thought number {request.thought_number} exceeds total thoughts {request.total_thoughts}. Set needs_more_thoughts=true to extend.",
         )
 
     # Create thought record
@@ -169,18 +193,22 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Dict[st
         "branch_from_thought": request.branch_from_thought,
         "branch_id": request.branch_id,
         "needs_more_thoughts": request.needs_more_thoughts,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
     # Handle revision
     if request.is_revision and request.revises_thought:
         thought_record["revision_of"] = request.revises_thought
-        logger.info(f"Thought {request.thought_number} revises thought {request.revises_thought}")
+        logger.info(
+            f"Thought {request.thought_number} revises thought {request.revises_thought}"
+        )
 
     # Handle branching
     if request.branch_from_thought:
         thought_record["branched_from"] = request.branch_from_thought
-        logger.info(f"Thought {request.thought_number} branches from thought {request.branch_from_thought} (branch: {request.branch_id})")
+        logger.info(
+            f"Thought {request.thought_number} branches from thought {request.branch_from_thought} (branch: {request.branch_id})"
+        )
 
     # Store thought
     thinking_sessions[session_id].append(thought_record)
@@ -200,14 +228,14 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Dict[st
         "progress_percentage": round(progress_percentage, 1),
         "thinking_complete": thinking_complete,
         "session_thought_count": len(thinking_sessions[session_id]),
-        "message": f"Recorded thought {request.thought_number}/{request.total_thoughts}"
+        "message": f"Recorded thought {request.thought_number}/{request.total_thoughts}",
     }
 
     # Add revision info
     if request.is_revision:
         response["revision_info"] = {
             "is_revision": True,
-            "revises_thought": request.revises_thought
+            "revises_thought": request.revises_thought,
         }
 
     # Add branch info
@@ -215,18 +243,28 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Dict[st
         response["branch_info"] = {
             "branched": True,
             "branch_from_thought": request.branch_from_thought,
-            "branch_id": request.branch_id
+            "branch_id": request.branch_id,
         }
 
     # If thinking is complete, provide summary
     if thinking_complete:
         response["summary"] = {
             "total_thoughts_recorded": len(thinking_sessions[session_id]),
-            "revisions_made": sum(1 for t in thinking_sessions[session_id] if t.get("is_revision")),
-            "branches_created": len(set(t.get("branch_id") for t in thinking_sessions[session_id] if t.get("branch_id"))),
-            "thinking_duration_thoughts": request.thought_number
+            "revisions_made": sum(
+                1 for t in thinking_sessions[session_id] if t.get("is_revision")
+            ),
+            "branches_created": len(
+                set(
+                    t.get("branch_id")
+                    for t in thinking_sessions[session_id]
+                    if t.get("branch_id")
+                )
+            ),
+            "thinking_duration_thoughts": request.thought_number,
         }
-        logger.info(f"Sequential thinking session '{session_id}' completed with {request.thought_number} thoughts")
+        logger.info(
+            f"Sequential thinking session '{session_id}' completed with {request.thought_number} thoughts"
+        )
 
     return response
 
@@ -249,9 +287,11 @@ async def get_thinking_session(session_id: str) -> Dict[str, Any]:
         "thought_count": len(thoughts),
         "thoughts": thoughts,
         "revisions": [t for t in thoughts if t.get("is_revision")],
-        "branches": list(set(t.get("branch_id") for t in thoughts if t.get("branch_id"))),
+        "branches": list(
+            set(t.get("branch_id") for t in thoughts if t.get("branch_id"))
+        ),
         "started_at": thoughts[0]["timestamp"] if thoughts else None,
-        "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None
+        "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None,
     }
 
 
@@ -273,7 +313,7 @@ async def clear_thinking_session(session_id: str) -> Dict[str, Any]:
         "success": True,
         "session_id": session_id,
         "thoughts_cleared": thought_count,
-        "message": f"Cleared thinking session '{session_id}'"
+        "message": f"Cleared thinking session '{session_id}'",
     }
 
 
@@ -287,15 +327,18 @@ async def list_thinking_sessions() -> Dict[str, Any]:
     """List all active thinking sessions"""
     sessions = []
     for session_id, thoughts in thinking_sessions.items():
-        sessions.append({
-            "session_id": session_id,
-            "thought_count": len(thoughts),
-            "started_at": thoughts[0]["timestamp"] if thoughts else None,
-            "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None,
-            "complete": not thoughts[-1].get("next_thought_needed", True) if thoughts else False
-        })
+        sessions.append(
+            {
+                "session_id": session_id,
+                "thought_count": len(thoughts),
+                "started_at": thoughts[0]["timestamp"] if thoughts else None,
+                "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None,
+                "complete": (
+                    not thoughts[-1].get("next_thought_needed", True)
+                    if thoughts
+                    else False
+                ),
+            }
+        )
 
-    return {
-        "session_count": len(sessions),
-        "sessions": sessions
-    }
+    return {"session_count": len(sessions), "sessions": sessions}

@@ -453,7 +453,9 @@ class AdvancedRAGOptimizer:
                 for result, ce_score in zip(results, cross_encoder_scores):
                     # Combine cross-encoder score with hybrid score
                     # Cross-encoder gets 80% weight as it's more accurate
-                    result.rerank_score = float(ce_score) * 0.8 + result.hybrid_score * 0.2
+                    result.rerank_score = (
+                        float(ce_score) * 0.8 + result.hybrid_score * 0.2
+                    )
 
                 logger.debug(
                     f"Cross-encoder reranking completed with model for {len(results)} results"
@@ -492,7 +494,9 @@ class AdvancedRAGOptimizer:
             for i, result in enumerate(results):
                 result.relevance_rank = i + 1
 
-            logger.debug(f"Reranking completed: top score = {results[0].rerank_score:.3f}")
+            logger.debug(
+                f"Reranking completed: top score = {results[0].rerank_score:.3f}"
+            )
             return results
 
         except Exception as e:

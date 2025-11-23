@@ -64,7 +64,9 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
 
             if result:
                 app.state.knowledge_base = kb
-                logger.info("✅ Knowledge base created and initialized (unified KnowledgeBase with ChromaDB)")
+                logger.info(
+                    "✅ Knowledge base created and initialized (unified KnowledgeBase with ChromaDB)"
+                )
                 return kb
             else:
                 logger.error("❌ KnowledgeBase initialization returned False")
@@ -73,11 +75,15 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
         except ImportError as import_error:
             logger.error(f"❌ CRITICAL: KnowledgeBase not available: {import_error}")
             import traceback
+
             logger.error(f"Import traceback:\n{traceback.format_exc()}")
             return None
         except Exception as init_error:
-            logger.error(f"❌ CRITICAL: KnowledgeBase initialization failed: {init_error}")
+            logger.error(
+                f"❌ CRITICAL: KnowledgeBase initialization failed: {init_error}"
+            )
             import traceback
+
             logger.error(f"Full traceback:\n{traceback.format_exc()}")
             return None
 

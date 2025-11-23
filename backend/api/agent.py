@@ -123,9 +123,7 @@ async def receive_goal(request: Request, payload: GoalPayload):
                 f"Command failed ({command_status}).\nError:\n{command_error}"
                 f"\nOutput:\n{command_output}"
             )
-            tool_output_content = (
-                f"ERROR: {command_error}\nOUTPUT: {command_output}"
-            )
+            tool_output_content = f"ERROR: {command_error}\nOUTPUT: {command_output}"
     elif tool_name:
         tool_output_content = tool_args.get(
             "output", tool_args.get("message", str(tool_args))
@@ -273,9 +271,7 @@ async def command_approval(request: Request, payload: CommandApprovalPayload):
             "approved": approved,
         }
     else:
-        error_message = (
-            "Redis client not initialized. Cannot process command approval."
-        )
+        error_message = "Redis client not initialized. Cannot process command approval."
         logging.error(error_message)
         return JSONResponse(status_code=500, content={"message": error_message})
 

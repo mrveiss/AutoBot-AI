@@ -267,7 +267,9 @@ async def get_browser_vnc_context_mcp() -> Dict[str, Any]:
 
                     # Include recent observations
                     cache = vnc_observations.get("browser", {})
-                    recent = cache.get("recent_activity", [])[-5:]  # Last 5 observations
+                    recent = cache.get("recent_activity", [])[
+                        -5:
+                    ]  # Last 5 observations
                     context["vnc_state"]["recent_observations"] = recent
     except Exception as e:
         logger.warning(f"Failed to get VNC state: {e}")

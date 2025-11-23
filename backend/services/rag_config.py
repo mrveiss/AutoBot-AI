@@ -95,9 +95,7 @@ class RAGConfig:
             )
 
         if self.timeout_seconds <= 0:
-            raise ValueError(
-                f"timeout_seconds must be > 0, got {self.timeout_seconds}"
-            )
+            raise ValueError(f"timeout_seconds must be > 0, got {self.timeout_seconds}")
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "RAGConfig":
@@ -111,12 +109,8 @@ class RAGConfig:
             RAGConfig instance
         """
         # Extract only known fields
-        known_fields = {
-            field.name for field in cls.__dataclass_fields__.values()
-        }
-        filtered_config = {
-            k: v for k, v in config_dict.items() if k in known_fields
-        }
+        known_fields = {field.name for field in cls.__dataclass_fields__.values()}
+        filtered_config = {k: v for k, v in config_dict.items() if k in known_fields}
 
         return cls(**filtered_config)
 
@@ -162,9 +156,7 @@ def load_rag_config_from_yaml(config_manager: Any) -> RAGConfig:
         if hasattr(config_manager, "get"):
             rag_config_dict = config_manager.get("knowledge", {}).get("rag", {})
         elif hasattr(config_manager, "config"):
-            rag_config_dict = (
-                config_manager.config.get("knowledge", {}).get("rag", {})
-            )
+            rag_config_dict = config_manager.config.get("knowledge", {}).get("rag", {})
 
         if rag_config_dict:
             logger.info("Loaded RAG configuration from config manager")

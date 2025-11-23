@@ -425,8 +425,7 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
 
                 # Wait for approval with cancellation support
                 try:
-                    from src.utils.async_cancellation import \
-                        execute_with_cancellation
+                    from src.utils.async_cancellation import execute_with_cancellation
 
                     approval_result = await execute_with_cancellation(
                         approval_future, f"workflow_approval_{workflow['id']}"
@@ -573,8 +572,7 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
 
         elif agent_type == "research":
             # Real web research
-            from src.agents.research_agent import (ResearchAgent,
-                                                   ResearchRequest)
+            from src.agents.research_agent import ResearchAgent, ResearchRequest
 
             research_agent = ResearchAgent()
 
@@ -635,8 +633,7 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
 
         elif agent_type == "security_scanner":
             # Security scanning agent
-            from src.agents.security_scanner_agent import \
-                security_scanner_agent
+            from src.agents.security_scanner_agent import security_scanner_agent
 
             # Extract scan parameters from action
             scan_context = step.get("inputs", {})
@@ -657,8 +654,7 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
 
         elif agent_type == "network_discovery":
             # Network discovery agent
-            from src.agents.network_discovery_agent import \
-                network_discovery_agent
+            from src.agents.network_discovery_agent import network_discovery_agent
 
             # Extract discovery parameters
             discovery_context = step.get("inputs", {})
@@ -683,8 +679,9 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
 
         elif agent_type == "system_commands":
             # Real system command execution
-            from src.agents.enhanced_system_commands_agent import \
-                EnhancedSystemCommandsAgent
+            from src.agents.enhanced_system_commands_agent import (
+                EnhancedSystemCommandsAgent,
+            )
 
             cmd_agent = EnhancedSystemCommandsAgent()
 

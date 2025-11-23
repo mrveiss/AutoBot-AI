@@ -554,9 +554,7 @@ Please provide a helpful, accurate response based on the available information. 
 
             for query in search_queries[:2]:  # Limit to 2 queries
                 # Try researching with search engine
-                search_url = (
-                    f"{NetworkConstants.GOOGLE_SEARCH_BASE_URL}?q={query.replace(' ', '+')}"
-                )
+                search_url = f"{NetworkConstants.GOOGLE_SEARCH_BASE_URL}?q={query.replace(' ', '+')}"
 
                 research_result = await research_browser_manager.research_url(
                     self.conversation_id, search_url, extract_content=True

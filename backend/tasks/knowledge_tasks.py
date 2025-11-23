@@ -37,15 +37,17 @@ def refresh_system_knowledge(self) -> Dict[str, Any]:
     try:
         # Update state to show we've started
         self.update_state(
-            state='PROGRESS',
+            state="PROGRESS",
             meta={
-                'current': 0,
-                'total': 100,
-                'status': 'Starting system knowledge refresh...'
-            }
+                "current": 0,
+                "total": 100,
+                "status": "Starting system knowledge refresh...",
+            },
         )
 
-        logger.info("Starting comprehensive system knowledge refresh (background task)...")
+        logger.info(
+            "Starting comprehensive system knowledge refresh (background task)..."
+        )
 
         # Run the comprehensive indexing script
         # No timeout here - let it run as long as needed
@@ -76,7 +78,7 @@ def refresh_system_knowledge(self) -> Dict[str, Any]:
                 "status": "success",
                 "commands_indexed": indexed_count,
                 "total_facts": total_facts,
-                "message": "System knowledge refreshed successfully"
+                "message": "System knowledge refreshed successfully",
             }
         else:
             error_msg = result.stderr[:500] if result.stderr else "Unknown error"
@@ -85,7 +87,7 @@ def refresh_system_knowledge(self) -> Dict[str, Any]:
             return {
                 "status": "failed",
                 "error": error_msg,
-                "message": "Knowledge refresh failed"
+                "message": "Knowledge refresh failed",
             }
 
     except Exception as e:
@@ -93,7 +95,7 @@ def refresh_system_knowledge(self) -> Dict[str, Any]:
         return {
             "status": "failed",
             "error": str(e),
-            "message": f"Knowledge refresh failed: {str(e)}"
+            "message": f"Knowledge refresh failed: {str(e)}",
         }
 
 
@@ -112,12 +114,12 @@ def reindex_knowledge_base(self) -> Dict[str, Any]:
     """
     try:
         self.update_state(
-            state='PROGRESS',
+            state="PROGRESS",
             meta={
-                'current': 0,
-                'total': 100,
-                'status': 'Starting knowledge base reindexing...'
-            }
+                "current": 0,
+                "total": 100,
+                "status": "Starting knowledge base reindexing...",
+            },
         )
 
         logger.info("Starting knowledge base reindex (background task)...")
@@ -137,13 +139,15 @@ def reindex_knowledge_base(self) -> Dict[str, Any]:
             # Get updated stats
             stats = loop.run_until_complete(kb.get_stats())
 
-            logger.info(f"Knowledge base reindex complete: {stats.get('total_vectors', 0)} vectors")
+            logger.info(
+                f"Knowledge base reindex complete: {stats.get('total_vectors', 0)} vectors"
+            )
 
             return {
                 "status": "success",
                 "total_vectors": stats.get("total_vectors", 0),
                 "total_facts": stats.get("total_facts", 0),
-                "message": "Knowledge base reindexed successfully"
+                "message": "Knowledge base reindexed successfully",
             }
         finally:
             loop.close()
@@ -153,5 +157,5 @@ def reindex_knowledge_base(self) -> Dict[str, Any]:
         return {
             "status": "failed",
             "error": str(e),
-            "message": f"Reindex failed: {str(e)}"
+            "message": f"Reindex failed: {str(e)}",
         }

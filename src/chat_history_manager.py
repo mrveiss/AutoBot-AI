@@ -67,6 +67,7 @@ class ChatHistoryManager:
         # Use config system instead of hardcoded IP fallback
         # Local import to avoid circular dependency
         from src.unified_config_manager import UnifiedConfigManager
+
         unified_config = UnifiedConfigManager()
         self.redis_host = redis_host or redis_config.get(
             "host", os.getenv("REDIS_HOST", unified_config.get_host("redis"))
@@ -864,7 +865,7 @@ class ChatHistoryManager:
         self,
         session_id: str,
         metadata_filter: Dict[str, Any],
-        metadata_updates: Dict[str, Any]
+        metadata_updates: Dict[str, Any],
     ) -> bool:
         """
         Update metadata for a specific message in a session.
@@ -922,7 +923,9 @@ class ChatHistoryManager:
             return False
 
         except Exception as e:
-            logging.error(f"Error updating message metadata in session {session_id}: {e}")
+            logging.error(
+                f"Error updating message metadata in session {session_id}: {e}"
+            )
             return False
 
     async def clear_history(self):
@@ -1110,7 +1113,9 @@ class ChatHistoryManager:
                 if session_id and session_id not in existing_chat_ids:
                     try:
                         # Create minimal empty chat.json for this orphaned terminal session
-                        chat_file = os.path.join(chats_directory, f"{session_id}_chat.json")
+                        chat_file = os.path.join(
+                            chats_directory, f"{session_id}_chat.json"
+                        )
 
                         # Only create if it doesn't already exist
                         if not os.path.exists(chat_file):
@@ -1122,8 +1127,8 @@ class ChatHistoryManager:
                                 "metadata": {
                                     "auto_created": True,
                                     "reason": "orphaned_terminal_files",
-                                    "source": f"Found {filename}"
-                                }
+                                    "source": f"Found {filename}",
+                                },
                             }
 
                             with open(chat_file, "w", encoding="utf-8") as f:
@@ -1135,26 +1140,32 @@ class ChatHistoryManager:
 
                             # Get file stats for the newly created chat
                             stat = os.stat(chat_file)
-                            created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
-                            last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
+                            created_time = datetime.fromtimestamp(
+                                stat.st_ctime
+                            ).isoformat()
+                            last_modified = datetime.fromtimestamp(
+                                stat.st_mtime
+                            ).isoformat()
 
                             # Add to sessions list
-                            sessions.append({
-                                "id": session_id,
-                                "chatId": session_id,
-                                "title": f"Terminal Session {session_id[:8]}",
-                                "name": f"Terminal Session {session_id[:8]}",
-                                "messages": [],
-                                "messageCount": 0,
-                                "createdAt": created_time,
-                                "createdTime": created_time,
-                                "updatedAt": last_modified,
-                                "lastModified": last_modified,
-                                "isActive": False,
-                                "fileSize": stat.st_size,
-                                "fast_mode": True,
-                                "auto_created": True,  # Mark as auto-created
-                            })
+                            sessions.append(
+                                {
+                                    "id": session_id,
+                                    "chatId": session_id,
+                                    "title": f"Terminal Session {session_id[:8]}",
+                                    "name": f"Terminal Session {session_id[:8]}",
+                                    "messages": [],
+                                    "messageCount": 0,
+                                    "createdAt": created_time,
+                                    "createdTime": created_time,
+                                    "updatedAt": last_modified,
+                                    "lastModified": last_modified,
+                                    "isActive": False,
+                                    "fileSize": stat.st_size,
+                                    "fast_mode": True,
+                                    "auto_created": True,  # Mark as auto-created
+                                }
+                            )
 
                             logging.info(
                                 f"Auto-created chat session for orphaned terminal file: {session_id} (from {filename})"
@@ -1254,7 +1265,9 @@ class ChatHistoryManager:
         dir_path = os.path.dirname(file_path)
 
         # Create temporary file in same directory (required for atomic rename)
-        fd, temp_path = tempfile.mkstemp(dir=dir_path, prefix='.tmp_chat_', suffix='.json')
+        fd, temp_path = tempfile.mkstemp(
+            dir=dir_path, prefix=".tmp_chat_", suffix=".json"
+        )
 
         try:
             # Acquire exclusive lock on the file descriptor
@@ -1262,7 +1275,7 @@ class ChatHistoryManager:
 
             # Write content to temporary file using aiofiles for async I/O
             os.close(fd)  # Close fd so aiofiles can open it
-            async with aiofiles.open(temp_path, 'w') as f:
+            async with aiofiles.open(temp_path, "w") as f:
                 await f.write(content)
 
             # Atomic rename (cross-platform atomic operation)
@@ -1276,7 +1289,9 @@ class ChatHistoryManager:
                 if os.path.exists(temp_path):
                     os.unlink(temp_path)
             except Exception as cleanup_error:
-                logger.warning(f"Failed to cleanup temp file {temp_path}: {cleanup_error}")
+                logger.warning(
+                    f"Failed to cleanup temp file {temp_path}: {cleanup_error}"
+                )
 
             logger.error(f"Atomic write failed for {file_path}: {e}")
             raise e
@@ -1365,7 +1380,9 @@ class ChatHistoryManager:
                 await self._atomic_write(chat_file, encrypted_data)
             except Exception as atomic_error:
                 # Fallback to direct write if atomic write fails
-                logger.warning(f"Atomic write failed, falling back to direct write: {atomic_error}")
+                logger.warning(
+                    f"Atomic write failed, falling back to direct write: {atomic_error}"
+                )
                 async with aiofiles.open(chat_file, "w") as f:
                     await f.write(encrypted_data)
 
@@ -1497,7 +1514,9 @@ class ChatHistoryManager:
                 logger.debug(f"Deleted terminal log for session {session_id}")
 
             # Delete terminal transcript file
-            terminal_transcript = f"{chats_directory}/{session_id}_terminal_transcript.txt"
+            terminal_transcript = (
+                f"{chats_directory}/{session_id}_terminal_transcript.txt"
+            )
             if os.path.exists(terminal_transcript):
                 os.remove(terminal_transcript)
                 logger.debug(f"Deleted terminal transcript for session {session_id}")

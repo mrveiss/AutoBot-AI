@@ -33,7 +33,9 @@ VNC_ENDPOINTS = {
 }
 
 
-async def record_observation(vnc_type: str, observation_type: str, data: Dict[str, Any]):
+async def record_observation(
+    vnc_type: str, observation_type: str, data: Dict[str, Any]
+):
     """
     Record VNC observation to MCP bridge for agent access
 
@@ -97,9 +99,7 @@ async def get_vnc_client(vnc_type: str):
                     )
     except aiohttp.ClientError as e:
         logger.error(f"Failed to fetch vnc.html from {endpoint}: {e}")
-        raise HTTPException(
-            status_code=503, detail=f"VNC server unavailable: {str(e)}"
-        )
+        raise HTTPException(status_code=503, detail=f"VNC server unavailable: {str(e)}")
 
 
 @with_error_handling(
@@ -128,7 +128,9 @@ async def proxy_vnc_assets(vnc_type: str, path: str):
                     content = await response.read()
 
                     # Determine content type
-                    content_type = response.headers.get("Content-Type", "application/octet-stream")
+                    content_type = response.headers.get(
+                        "Content-Type", "application/octet-stream"
+                    )
 
                     return Response(
                         content=content,
@@ -144,9 +146,7 @@ async def proxy_vnc_assets(vnc_type: str, path: str):
                     )
     except aiohttp.ClientError as e:
         logger.error(f"Failed to fetch asset {path} from {endpoint}: {e}")
-        raise HTTPException(
-            status_code=503, detail=f"VNC server unavailable: {str(e)}"
-        )
+        raise HTTPException(status_code=503, detail=f"VNC server unavailable: {str(e)}")
 
 
 @router.websocket("/{vnc_type}/websockify")
@@ -171,7 +171,9 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     logger.info(f"VNC WebSocket proxy connected: {vnc_type} → {ws_url}")
 
     # Record connection event for MCP
-    await record_observation(vnc_type, "connection", {"endpoint": ws_url, "status": "connected"})
+    await record_observation(
+        vnc_type, "connection", {"endpoint": ws_url, "status": "connected"}
+    )
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -186,11 +188,15 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
                             if "bytes" in data:
                                 await vnc_ws.send_bytes(data["bytes"])
                                 # Agent observation point: could log binary data stats
-                                logger.debug(f"[{vnc_type}] Frontend → VNC: {len(data['bytes'])} bytes")
+                                logger.debug(
+                                    f"[{vnc_type}] Frontend → VNC: {len(data['bytes'])} bytes"
+                                )
                             elif "text" in data:
                                 await vnc_ws.send_str(data["text"])
                                 # Agent observation point: could log text messages
-                                logger.debug(f"[{vnc_type}] Frontend → VNC: {data['text']}")
+                                logger.debug(
+                                    f"[{vnc_type}] Frontend → VNC: {data['text']}"
+                                )
                             elif data.get("type") == "websocket.disconnect":
                                 break
                     except WebSocketDisconnect:
@@ -205,13 +211,17 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
                             if msg.type == aiohttp.WSMsgType.BINARY:
                                 await websocket.send_bytes(msg.data)
                                 # Agent observation point: could analyze VNC protocol frames
-                                logger.debug(f"[{vnc_type}] VNC → Frontend: {len(msg.data)} bytes")
+                                logger.debug(
+                                    f"[{vnc_type}] VNC → Frontend: {len(msg.data)} bytes"
+                                )
                             elif msg.type == aiohttp.WSMsgType.TEXT:
                                 await websocket.send_text(msg.data)
                                 # Agent observation point: could log control messages
                                 logger.debug(f"[{vnc_type}] VNC → Frontend: {msg.data}")
                             elif msg.type == aiohttp.WSMsgType.ERROR:
-                                logger.error(f"[{vnc_type}] VNC WebSocket error: {vnc_ws.exception()}")
+                                logger.error(
+                                    f"[{vnc_type}] VNC WebSocket error: {vnc_ws.exception()}"
+                                )
                                 break
                     except Exception as e:
                         logger.error(f"[{vnc_type}] Error forwarding from VNC: {e}")
@@ -256,8 +266,7 @@ async def get_vnc_status(vnc_type: str):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                f"{endpoint}/vnc.html",
-                timeout=aiohttp.ClientTimeout(total=5)
+                f"{endpoint}/vnc.html", timeout=aiohttp.ClientTimeout(total=5)
             ) as response:
                 accessible = response.status == 200
                 return {

@@ -55,7 +55,9 @@ def get_redis_connection(database: str = "main"):
         # Use canonical Redis client - MANDATORY per CLAUDE.md
         client = get_redis_client(async_client=False, database=database)
         if client is None:
-            raise ConnectionError(f"Failed to get Redis client for database '{database}'")
+            raise ConnectionError(
+                f"Failed to get Redis client for database '{database}'"
+            )
         return client
     except Exception as e:
         logger.error(f"Failed to connect to Redis database '{database}': {str(e)}")

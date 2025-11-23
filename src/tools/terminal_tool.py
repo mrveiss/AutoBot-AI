@@ -342,9 +342,7 @@ class TerminalTool:
             # For now, we'll need to list all sessions and find the user's
             # In production, this mapping should be stored
 
-            backend_url = (
-                f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-            )
+            backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
             async with httpx.AsyncClient(timeout=5.0) as client:
                 # List all terminal sessions
@@ -532,9 +530,7 @@ class TerminalTool:
             import httpx
             from src.constants.network_constants import NetworkConstants
 
-            backend_url = (
-                f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-            )
+            backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
             async with httpx.AsyncClient(timeout=10.0) as client:
                 # Fetch chat messages for this conversation

@@ -127,9 +127,7 @@ async def handle_session_action(request: SessionAction):
         result["content"] = content_result
 
     else:
-        raise HTTPException(
-            status_code=400, detail=f"Unknown action: {request.action}"
-        )
+        raise HTTPException(status_code=400, detail=f"Unknown action: {request.action}")
 
     return JSONResponse(status_code=200, content=result)
 
@@ -276,9 +274,7 @@ async def get_browser_info(session_id: str):
 
     # Special handling for chat-browser - create default session if needed
     if not session and session_id == "chat-browser":
-        logger.info(
-            "Creating default chat-browser session for frontend integration"
-        )
+        logger.info("Creating default chat-browser session for frontend integration")
         # Create a default research session for chat integration
         session = research_browser_manager.create_session(
             conversation_id="default-chat",
