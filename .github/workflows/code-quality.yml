@@ -62,8 +62,8 @@ jobs:
       run: |
         python3 -m pip install --no-cache-dir --upgrade pip
         python3 -m pip install --no-cache-dir black isort flake8 autoflake bandit[toml]
-        if [ -f requirements.txt ]; then python3 -m pip install --no-cache-dir -r requirements.txt; fi
-        if [ -f requirements-dev.txt ]; then python3 -m pip install --no-cache-dir -r requirements-dev.txt; fi
+        # Note: Code quality checks don't require project dependencies
+        # Only linting tools are needed
         echo "Final disk usage:"
         df -h
 
