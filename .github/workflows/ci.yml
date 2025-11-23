@@ -8,7 +8,7 @@ on:
 
 jobs:
   security-tests:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
       matrix:
         python-version: ["3.10", "3.11"]
@@ -189,7 +189,7 @@ jobs:
         fail_ci_if_error: false
 
   docker-build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: security-tests
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui'
 
@@ -219,7 +219,7 @@ jobs:
         "
 
   frontend-tests:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
     - uses: actions/checkout@v4
 
@@ -257,7 +257,7 @@ jobs:
         npm run test:unit || echo "⚠️ Frontend tests failing due to mocking issues - continuing CI"
 
   deployment-check:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [security-tests, docker-build, frontend-tests]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui'
 
@@ -376,7 +376,7 @@ jobs:
         path: DEPLOYMENT_SUMMARY.md
 
   notify:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [security-tests, docker-build, frontend-tests, deployment-check]
     if: always()
 

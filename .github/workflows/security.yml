@@ -16,7 +16,7 @@ env:
 jobs:
   dependency-security:
     name: Dependency Security Scan
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
     - name: Checkout code
@@ -81,7 +81,7 @@ jobs:
 
   static-analysis:
     name: Static Application Security Testing (SAST)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
     - name: Checkout code
@@ -136,7 +136,7 @@ jobs:
 
   container-security:
     name: Container Security Scan
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
     - name: Checkout code
@@ -195,7 +195,7 @@ jobs:
 
   compliance-check:
     name: Security Compliance Check
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
     - name: Checkout code
@@ -243,7 +243,7 @@ jobs:
 
   security-summary:
     name: Security Summary Report
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [dependency-security, static-analysis, container-security, compliance-check]
     if: always()
 
