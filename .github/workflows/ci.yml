@@ -45,29 +45,29 @@ jobs:
     - name: Install Python dependencies
       run: |
         # Upgrade pip to latest version for better wheel support
-        python3 -m pip install --upgrade pip==24.0 setuptools wheel
+        python3 -m pip install --break-system-packages --upgrade pip==24.0 setuptools wheel
 
         # Install build dependencies for packages that might need compilation
-        python3 -m pip install --upgrade build
+        python3 -m pip install --break-system-packages --upgrade build
 
         # Install critical packages with binary wheels first
         echo "Installing numpy with binary wheels..."
-        python3 -m pip install "numpy>=1.24.0" --only-binary=:all:
+        python3 -m pip install --break-system-packages "numpy>=1.24.0" --only-binary=:all:
 
         echo "Installing pillow with binary wheels..."
-        python3 -m pip install "pillow>=10.0.0" --only-binary=:all:
+        python3 -m pip install --break-system-packages "pillow>=10.0.0" --only-binary=:all:
 
         echo "Installing cryptography with binary wheels..."
-        python3 -m pip install "cryptography>=45.0.0" --only-binary=:all:
+        python3 -m pip install --break-system-packages "cryptography>=45.0.0" --only-binary=:all:
 
         echo "Installing torch with CPU-only wheels..."
-        python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu --only-binary=:all:
+        python3 -m pip install --break-system-packages torch --index-url https://download.pytorch.org/whl/cpu --only-binary=:all:
 
         echo "Installing CI-safe requirements..."
-        python3 -m pip install -r requirements-ci.txt --prefer-binary
+        python3 -m pip install --break-system-packages -r requirements-ci.txt --prefer-binary
 
         echo "Installing testing dependencies..."
-        python3 -m pip install pytest pytest-asyncio pytest-cov flake8 black isort mypy bandit
+        python3 -m pip install --break-system-packages pytest pytest-asyncio pytest-cov flake8 black isort mypy bandit
 
     - name: Create necessary directories and config files
       run: |
@@ -277,16 +277,16 @@ jobs:
     - name: Install dependencies
       run: |
         # Upgrade pip to latest version for better wheel support
-        python3 -m pip install --upgrade pip==24.0 setuptools wheel
-        python3 -m pip install --upgrade build
+        python3 -m pip install --break-system-packages --upgrade pip==24.0 setuptools wheel
+        python3 -m pip install --break-system-packages --upgrade build
 
         # Install critical packages with binary wheels first
-        python3 -m pip install "numpy>=1.24.0" --only-binary=:all:
-        python3 -m pip install "pillow>=10.0.0" --only-binary=:all:
-        python3 -m pip install "cryptography>=45.0.0" --only-binary=:all:
+        python3 -m pip install --break-system-packages "numpy>=1.24.0" --only-binary=:all:
+        python3 -m pip install --break-system-packages "pillow>=10.0.0" --only-binary=:all:
+        python3 -m pip install --break-system-packages "cryptography>=45.0.0" --only-binary=:all:
 
         # Use CI-safe requirements for deployment test
-        python3 -m pip install -r requirements-ci.txt --prefer-binary
+        python3 -m pip install --break-system-packages -r requirements-ci.txt --prefer-binary
 
     - name: Create necessary directories and config files
       run: |

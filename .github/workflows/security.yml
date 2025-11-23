@@ -45,10 +45,10 @@ jobs:
 
     - name: Install Python dependencies
       run: |
-        python3 -m pip install --upgrade pip
-        python3 -m pip install pip-audit bandit safety
+        python3 -m pip install --break-system-packages --upgrade pip
+        python3 -m pip install --break-system-packages pip-audit bandit safety
         # Use CI-safe requirements (excludes vllm and other GPU-dependent packages)
-        python3 -m pip install -r requirements-ci.txt --prefer-binary
+        python3 -m pip install --break-system-packages -r requirements-ci.txt --prefer-binary
 
     - name: Python Dependency Audit
       run: |
@@ -105,8 +105,8 @@ jobs:
 
     - name: Install SAST tools
       run: |
-        python3 -m pip install --upgrade pip
-        python3 -m pip install bandit semgrep flake8 pylint
+        python3 -m pip install --break-system-packages --upgrade pip
+        python3 -m pip install --break-system-packages bandit semgrep flake8 pylint
 
     - name: Bandit Security Linter
       run: |
