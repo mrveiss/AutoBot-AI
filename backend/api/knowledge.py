@@ -129,23 +129,35 @@ class ScanHostChangesRequest(BaseModel):
     machine_id: str = Field(..., min_length=1, max_length=100)
     force: bool = Field(default=False)
     scan_type: str = Field(default="manpages", max_length=50)
-    auto_vectorize: bool = Field(default=False, description="Automatically vectorize detected changes")
+    auto_vectorize: bool = Field(
+        default=False, description="Automatically vectorize detected changes"
+    )
 
 
 class AdvancedSearchRequest(BaseModel):
     """Request model for advanced RAG search with reranking"""
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
-    max_results: int = Field(default=5, ge=1, le=50, description="Maximum results to return")
-    enable_reranking: bool = Field(default=True, description="Enable cross-encoder reranking")
-    return_context: bool = Field(default=False, description="Return optimized context for RAG")
-    timeout: Optional[float] = Field(default=None, description="Optional timeout in seconds")
+    max_results: int = Field(
+        default=5, ge=1, le=50, description="Maximum results to return"
+    )
+    enable_reranking: bool = Field(
+        default=True, description="Enable cross-encoder reranking"
+    )
+    return_context: bool = Field(
+        default=False, description="Return optimized context for RAG"
+    )
+    timeout: Optional[float] = Field(
+        default=None, description="Optional timeout in seconds"
+    )
 
 
 class RerankRequest(BaseModel):
     """Request model for reranking existing search results"""
 
-    query: str = Field(..., min_length=1, max_length=1000, description="Original search query")
+    query: str = Field(
+        ..., min_length=1, max_length=1000, description="Original search query"
+    )
     results: List[Dict[str, Any]] = Field(..., description="Search results to rerank")
 
 
@@ -398,9 +410,7 @@ async def get_main_categories(req: Request):
                 # Get all facts from knowledge base
                 all_facts = await kb_to_use.get_all_facts()
 
-                logger.info(
-                    f"Categorizing {len(all_facts)} facts into main categories"
-                )
+                logger.info(f"Categorizing {len(all_facts)} facts into main categories")
 
                 # Categorize each fact based on its source/metadata
                 for fact in all_facts:
@@ -542,9 +552,7 @@ async def check_vectorization_status_batch(request: dict, req: Request):
                 )
                 return cached_result
         except Exception as cache_err:
-            logger.debug(
-                f"Cache read failed (continuing without cache): {cache_err}"
-            )
+            logger.debug(f"Cache read failed (continuing without cache): {cache_err}")
 
     # Cache miss - perform batch check
     logger.info(
@@ -704,9 +712,7 @@ async def search_knowledge(request: dict, req: Request):
         fact_count = stats.get("total_facts", 0)
 
         if fact_count == 0:
-            logger.info(
-                "Knowledge base is empty - returning empty results immediately"
-            )
+            logger.info("Knowledge base is empty - returning empty results immediately")
             return {
                 "results": [],
                 "total_results": 0,
@@ -920,9 +926,7 @@ async def rag_enhanced_search(request: dict, req: Request):
                                 "category", "general"
                             ),
                             "score": result.get("score", 0.0),
-                            "source_query": result.get(
-                                "source_query", original_query
-                            ),
+                            "source_query": result.get("source_query", original_query),
                         },
                     }
                 )
@@ -944,9 +948,7 @@ async def rag_enhanced_search(request: dict, req: Request):
                 "total_results": len(all_results),
                 "original_query": original_query,
                 "reformulated_queries": (
-                    reformulated_queries[1:]
-                    if len(reformulated_queries) > 1
-                    else []
+                    reformulated_queries[1:] if len(reformulated_queries) > 1 else []
                 ),
                 "kb_implementation": kb_to_use.__class__.__name__,
                 "agent_metadata": rag_result.get("metadata", {}),
@@ -963,9 +965,7 @@ async def rag_enhanced_search(request: dict, req: Request):
                 "total_results": len(all_results),
                 "original_query": original_query,
                 "reformulated_queries": (
-                    reformulated_queries[1:]
-                    if len(reformulated_queries) > 1
-                    else []
+                    reformulated_queries[1:] if len(reformulated_queries) > 1 else []
                 ),
                 "error": str(e),
                 "rag_enhanced": False,
@@ -1370,9 +1370,7 @@ Type: Command Reference
         # Small delay between batches to prevent overload
         await asyncio.sleep(0.1)
 
-    logger.info(
-        f"System commands population completed. Added {items_added} commands."
-    )
+    logger.info(f"System commands population completed. Added {items_added} commands.")
 
     return {
         "status": "success",
@@ -1633,15 +1631,17 @@ async def get_job_status(task_id: str, req: Request):
         "status": task_result.state,
     }
 
-    if task_result.state == 'PENDING':
+    if task_result.state == "PENDING":
         response["message"] = "Task is queued and waiting to start"
-    elif task_result.state == 'PROGRESS':
+    elif task_result.state == "PROGRESS":
         response["meta"] = task_result.info
-        response["message"] = task_result.info.get('status', 'In progress...')
-    elif task_result.state == 'SUCCESS':
+        response["message"] = task_result.info.get("status", "In progress...")
+    elif task_result.state == "SUCCESS":
         response["result"] = task_result.result
-        response["message"] = task_result.result.get('message', 'Task completed successfully')
-    elif task_result.state == 'FAILURE':
+        response["message"] = task_result.result.get(
+            "message", "Task completed successfully"
+        )
+    elif task_result.state == "FAILURE":
         response["error"] = str(task_result.info)
         response["message"] = f"Task failed: {str(task_result.info)}"
     else:
@@ -1950,9 +1950,7 @@ async def get_knowledge_entries(
 
                 # Format entry for frontend
                 entry = {
-                    "id": (
-                        fact_id.decode() if isinstance(fact_id, bytes) else fact_id
-                    ),
+                    "id": (fact_id.decode() if isinstance(fact_id, bytes) else fact_id),
                     "content": fact.get("content", ""),
                     "title": fact.get("metadata", {}).get("title", "Untitled"),
                     "source": fact.get("metadata", {}).get("source", "unknown"),
@@ -2104,9 +2102,7 @@ async def get_machine_profile(req: Request):
         "cpu_count": psutil.cpu_count(logical=False),
         "cpu_count_logical": psutil.cpu_count(logical=True),
         "memory_total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
-        "memory_available_gb": round(
-            psutil.virtual_memory().available / (1024**3), 2
-        ),
+        "memory_available_gb": round(psutil.virtual_memory().available / (1024**3), 2),
         "disk_total_gb": round(psutil.disk_usage("/").total / (1024**3), 2),
         "disk_free_gb": round(psutil.disk_usage("/").free / (1024**3), 2),
     }
@@ -2169,9 +2165,7 @@ async def get_man_pages_summary(req: Request):
 
                 # Track most recent timestamp
                 created_at = metadata.get("created_at")
-                if created_at and (
-                    last_indexed is None or created_at > last_indexed
-                ):
+                if created_at and (last_indexed is None or created_at > last_indexed):
                     last_indexed = created_at
             except (KeyError, TypeError, ValueError) as e:
                 logger.warning(f"Error parsing fact metadata: {e}")
@@ -2469,8 +2463,8 @@ async def get_facts_by_category(
             detail={
                 "error": "Knowledge base unavailable",
                 "message": "The knowledge base service failed to initialize. Please check server logs.",
-                "code": "KB_INIT_FAILED"
-            }
+                "code": "KB_INIT_FAILED",
+            },
         )
 
     # Check cache first (60 second TTL)
@@ -2509,7 +2503,9 @@ async def get_facts_by_category(
                 continue
 
             # Extract metadata (handle both bytes and string keys from Redis)
-            metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
+            metadata_str = fact_data.get("metadata") or fact_data.get(
+                b"metadata", b"{}"
+            )
             metadata = json.loads(
                 metadata_str.decode("utf-8")
                 if isinstance(metadata_str, bytes)
@@ -2562,9 +2558,7 @@ async def get_facts_by_category(
 
     # Filter by category if specified
     if category:
-        categories_dict = {
-            k: v for k, v in categories_dict.items() if k == category
-        }
+        categories_dict = {k: v for k, v in categories_dict.items() if k == category}
 
     # Limit results per category
     for cat in categories_dict:
@@ -2682,9 +2676,7 @@ async def vectorize_existing_facts(
     kb = await get_or_create_knowledge_base(req.app)
 
     if not kb:
-        raise HTTPException(
-            status_code=500, detail="Knowledge base not initialized"
-        )
+        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     # Get all fact keys from Redis
     fact_keys = await kb._scan_redis_keys_async("fact:*")
@@ -2738,7 +2730,9 @@ async def vectorize_existing_facts(
                     else str(content_raw) if content_raw else ""
                 )
 
-                metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
+                metadata_str = fact_data.get("metadata") or fact_data.get(
+                    b"metadata", b"{}"
+                )
                 metadata = json.loads(
                     metadata_str.decode("utf-8")
                     if isinstance(metadata_str, bytes)
@@ -2762,13 +2756,9 @@ async def vectorize_existing_facts(
                     fact_id=fact_id, content=content, metadata=metadata
                 )
 
-                if result.get("status") == "success" and result.get(
-                    "vector_indexed"
-                ):
+                if result.get("status") == "success" and result.get("vector_indexed"):
                     success_count += 1
-                    processed_facts.append(
-                        {"fact_id": fact_id, "status": "vectorized"}
-                    )
+                    processed_facts.append({"fact_id": fact_id, "status": "vectorized"})
                 else:
                     failed_count += 1
                     logger.warning(
@@ -2986,9 +2976,7 @@ async def vectorize_individual_fact(
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=500, detail="Knowledge base not initialized"
-        )
+        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     # Check if fact exists - facts are stored as individual Redis hashes with key "fact:{uuid}"
     fact_key = f"fact:{fact_id}"
@@ -3018,9 +3006,7 @@ async def vectorize_individual_fact(
     )
 
     # Add background task
-    background_tasks.add_task(
-        _vectorize_fact_background, kb, fact_id, job_id, force
-    )
+    background_tasks.add_task(_vectorize_fact_background, kb, fact_id, job_id, force)
 
     logger.info(
         f"Created vectorization job {job_id} for fact {fact_id} (force={force})"
@@ -3054,9 +3040,7 @@ async def get_vectorization_job_status(job_id: str, req: Request):
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=500, detail="Knowledge base not initialized"
-        )
+        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     # Get job data from Redis
     job_json = kb.redis_client.get(f"vectorization_job:{job_id}")
@@ -3087,9 +3071,7 @@ async def get_failed_vectorization_jobs(req: Request):
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=500, detail="Knowledge base not initialized"
-        )
+        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     # Use SCAN to iterate through keys efficiently (non-blocking)
     failed_jobs = []
@@ -3145,9 +3127,7 @@ async def retry_vectorization_job(
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=500, detail="Knowledge base not initialized"
-        )
+        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     # Get old job data
     old_job_json = kb.redis_client.get(f"vectorization_job:{job_id}")
@@ -3175,9 +3155,7 @@ async def retry_vectorization_job(
         "retry_of": job_id,  # Track that this is a retry
     }
 
-    kb.redis_client.setex(
-        f"vectorization_job:{new_job_id}", 3600, json.dumps(job_data)
-    )
+    kb.redis_client.setex(f"vectorization_job:{new_job_id}", 3600, json.dumps(job_data))
 
     # Add background task
     background_tasks.add_task(
@@ -3214,9 +3192,7 @@ async def delete_vectorization_job(job_id: str, req: Request):
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=500, detail="Knowledge base not initialized"
-        )
+        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     # Delete job from Redis
     deleted = kb.redis_client.delete(f"vectorization_job:{job_id}")
@@ -3249,9 +3225,7 @@ async def clear_failed_vectorization_jobs(req: Request):
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=500, detail="Knowledge base not initialized"
-        )
+        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     # Use SCAN to iterate through keys efficiently (non-blocking)
     deleted_count = 0
@@ -3314,9 +3288,7 @@ async def deduplicate_facts(req: Request, dry_run: bool = True):
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=500, detail="Knowledge base not initialized"
-        )
+        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     logger.info(f"Starting deduplication scan (dry_run={dry_run})...")
 
@@ -3437,10 +3409,7 @@ async def deduplicate_facts(req: Request, dry_run: bool = True):
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/scan_host_changes")
-async def scan_host_changes(
-    req: Request,
-    request_data: ScanHostChangesRequest
-):
+async def scan_host_changes(req: Request, request_data: ScanHostChangesRequest):
     """
     ULTRA-FAST document change scanner using file metadata.
 
@@ -3470,9 +3439,7 @@ async def scan_host_changes(
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=500, detail="Knowledge base not initialized"
-        )
+        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     # Extract parameters from request
     machine_id = request_data.machine_id
@@ -3480,10 +3447,13 @@ async def scan_host_changes(
     scan_type = request_data.scan_type
     auto_vectorize = request_data.auto_vectorize
 
-    logger.info(f"Fast scan starting for {machine_id} (type={scan_type}, auto_vectorize={auto_vectorize})")
+    logger.info(
+        f"Fast scan starting for {machine_id} (type={scan_type}, auto_vectorize={auto_vectorize})"
+    )
 
     # Use ultra-fast metadata-based scanner
     from backend.services.fast_document_scanner import FastDocumentScanner
+
     scanner = FastDocumentScanner(kb.redis_client)
 
     # Perform fast scan (limit to 100 for reasonable response time)
@@ -3491,37 +3461,41 @@ async def scan_host_changes(
         machine_id=machine_id,
         scan_type=scan_type,
         limit=100,  # Process first 100 documents
-        force=force
+        force=force,
     )
 
     # Auto-vectorization: Add changed documents to knowledge base
     if auto_vectorize:
         vectorization_results = {
-            'attempted': 0,
-            'successful': 0,
-            'failed': 0,
-            'skipped': 0,
-            'details': []
+            "attempted": 0,
+            "successful": 0,
+            "failed": 0,
+            "skipped": 0,
+            "details": [],
         }
 
         # Vectorize added and updated documents
-        documents_to_vectorize = result['changes']['added'] + result['changes']['updated']
+        documents_to_vectorize = (
+            result["changes"]["added"] + result["changes"]["updated"]
+        )
 
         for doc_change in documents_to_vectorize:
-            vectorization_results['attempted'] += 1
+            vectorization_results["attempted"] += 1
 
-            command = doc_change.get('command')
-            file_path = doc_change.get('file_path')
-            doc_id = doc_change.get('document_id')
+            command = doc_change.get("command")
+            file_path = doc_change.get("file_path")
+            doc_id = doc_change.get("document_id")
 
             if not file_path or not command:
-                vectorization_results['skipped'] += 1
-                vectorization_results['details'].append({
-                    'doc_id': doc_id,
-                    'command': command,
-                    'status': 'skipped',
-                    'reason': 'Missing file_path or command'
-                })
+                vectorization_results["skipped"] += 1
+                vectorization_results["details"].append(
+                    {
+                        "doc_id": doc_id,
+                        "command": command,
+                        "status": "skipped",
+                        "reason": "Missing file_path or command",
+                    }
+                )
                 continue
 
             try:
@@ -3529,62 +3503,68 @@ async def scan_host_changes(
                 content = scanner.read_man_page_content(file_path, command)
 
                 if not content or len(content.strip()) < 10:
-                    vectorization_results['failed'] += 1
-                    vectorization_results['details'].append({
-                        'doc_id': doc_id,
-                        'command': command,
-                        'status': 'failed',
-                        'reason': 'Empty or too short content'
-                    })
+                    vectorization_results["failed"] += 1
+                    vectorization_results["details"].append(
+                        {
+                            "doc_id": doc_id,
+                            "command": command,
+                            "status": "failed",
+                            "reason": "Empty or too short content",
+                        }
+                    )
                     continue
 
                 # Add to knowledge base with metadata
                 metadata = {
-                    'category': 'system/manpages',
-                    'title': f'man {command}',
-                    'command': command,
-                    'machine_id': machine_id,
-                    'file_path': file_path,
-                    'document_id': doc_id,
-                    'change_type': doc_change.get('change_type'),
-                    'content_size': len(content)
+                    "category": "system/manpages",
+                    "title": f"man {command}",
+                    "command": command,
+                    "machine_id": machine_id,
+                    "file_path": file_path,
+                    "document_id": doc_id,
+                    "change_type": doc_change.get("change_type"),
+                    "content_size": len(content),
                 }
 
                 kb_result = await kb.add_document(
-                    content=content,
-                    metadata=metadata,
-                    doc_id=doc_id
+                    content=content, metadata=metadata, doc_id=doc_id
                 )
 
-                if kb_result.get('status') == 'success':
-                    vectorization_results['successful'] += 1
-                    vectorization_results['details'].append({
-                        'doc_id': doc_id,
-                        'command': command,
-                        'status': 'success',
-                        'fact_id': kb_result.get('fact_id')
-                    })
+                if kb_result.get("status") == "success":
+                    vectorization_results["successful"] += 1
+                    vectorization_results["details"].append(
+                        {
+                            "doc_id": doc_id,
+                            "command": command,
+                            "status": "success",
+                            "fact_id": kb_result.get("fact_id"),
+                        }
+                    )
                 else:
-                    vectorization_results['failed'] += 1
-                    vectorization_results['details'].append({
-                        'doc_id': doc_id,
-                        'command': command,
-                        'status': 'failed',
-                        'reason': kb_result.get('message', 'Unknown error')
-                    })
+                    vectorization_results["failed"] += 1
+                    vectorization_results["details"].append(
+                        {
+                            "doc_id": doc_id,
+                            "command": command,
+                            "status": "failed",
+                            "reason": kb_result.get("message", "Unknown error"),
+                        }
+                    )
 
             except Exception as e:
                 logger.error(f"Vectorization failed for {command}: {e}")
-                vectorization_results['failed'] += 1
-                vectorization_results['details'].append({
-                    'doc_id': doc_id,
-                    'command': command,
-                    'status': 'error',
-                    'reason': str(e)
-                })
+                vectorization_results["failed"] += 1
+                vectorization_results["details"].append(
+                    {
+                        "doc_id": doc_id,
+                        "command": command,
+                        "status": "error",
+                        "reason": str(e),
+                    }
+                )
 
         # Add vectorization results to response
-        result['vectorization'] = vectorization_results
+        result["vectorization"] = vectorization_results
         logger.info(
             f"Vectorization completed: {vectorization_results['successful']}/{vectorization_results['attempted']} successful"
         )
@@ -3609,9 +3589,7 @@ async def find_orphaned_facts(req: Request):
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=500, detail="Knowledge base not initialized"
-        )
+        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     logger.info("Scanning for orphaned facts...")
 
@@ -3650,9 +3628,7 @@ async def find_orphaned_facts(req: Request):
                                         "fact_id": metadata.get("fact_id"),
                                         "fact_key": key,
                                         "title": metadata.get("title", "Unknown"),
-                                        "category": metadata.get(
-                                            "category", "Unknown"
-                                        ),
+                                        "category": metadata.get("category", "Unknown"),
                                         "file_path": file_path,
                                         "source": metadata.get("source", "Unknown"),
                                     }
@@ -3745,9 +3721,7 @@ async def scan_for_unimported_files(req: Request, directory: str = "docs"):
     scan_path = base_path / directory
 
     if not scan_path.exists():
-        raise HTTPException(
-            status_code=404, detail=f"Directory not found: {directory}"
-        )
+        raise HTTPException(status_code=404, detail=f"Directory not found: {directory}")
 
     unimported = []
     needs_reimport = []
@@ -3785,9 +3759,7 @@ async def start_background_vectorization(
     """
     kb = await get_or_create_knowledge_base(req.app)
     if not kb:
-        raise HTTPException(
-            status_code=500, detail="Knowledge base not initialized"
-        )
+        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
     vectorizer = get_background_vectorizer()
 
@@ -3797,9 +3769,7 @@ async def start_background_vectorization(
     return {
         "status": "started",
         "message": "Background vectorization started",
-        "last_run": (
-            vectorizer.last_run.isoformat() if vectorizer.last_run else None
-        ),
+        "last_run": (vectorizer.last_run.isoformat() if vectorizer.last_run else None),
         "is_running": vectorizer.is_running,
     }
 
@@ -3816,9 +3786,7 @@ async def get_vectorization_status(req: Request):
 
     return {
         "is_running": vectorizer.is_running,
-        "last_run": (
-            vectorizer.last_run.isoformat() if vectorizer.last_run else None
-        ),
+        "last_run": (vectorizer.last_run.isoformat() if vectorizer.last_run else None),
         "check_interval": vectorizer.check_interval,
         "batch_size": vectorizer.batch_size,
     }

@@ -629,8 +629,7 @@ async def get_command_state(command_id: str):
 
     if not command:
         raise HTTPException(
-            status_code=404,
-            detail=f"Command {command_id} not found in queue"
+            status_code=404, detail=f"Command {command_id} not found in queue"
         )
 
     # Return command state and output

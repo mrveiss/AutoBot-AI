@@ -109,7 +109,11 @@ class ConversationSafetyGuards:
         # Determine if it's safe to end
         if violated_rules:
             # Override END intent to CONTINUE
-            override_intent = ConversationIntent.CONTINUE if classification.intent == ConversationIntent.END else None
+            override_intent = (
+                ConversationIntent.CONTINUE
+                if classification.intent == ConversationIntent.END
+                else None
+            )
 
             return SafetyCheckResult(
                 is_safe_to_end=False,

@@ -248,9 +248,7 @@ async def pause_takeover_session(session_id: str):
     if success:
         return {"success": True, "session_id": session_id, "status": "paused"}
     else:
-        raise HTTPException(
-            status_code=404, detail="Session not found or not pausable"
-        )
+        raise HTTPException(status_code=404, detail="Session not found or not pausable")
 
 
 @with_error_handling(

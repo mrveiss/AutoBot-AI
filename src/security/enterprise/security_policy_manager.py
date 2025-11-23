@@ -103,7 +103,9 @@ class SecurityPolicyManager:
 
     def __init__(
         self,
-        config_path: str = str(PATH.get_config_path("security", "security_policies.yaml")),
+        config_path: str = str(
+            PATH.get_config_path("security", "security_policies.yaml")
+        ),
     ):
         self.config_path = config_path
         self.config = self._load_config()

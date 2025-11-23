@@ -241,22 +241,30 @@ async def test_redis_connection_immediate(
         client = get_redis_client(async_client=False, database=database)
 
         if client is None:
-            logger.warning(f"⚠️ Redis canonical client unavailable for database: {database}")
+            logger.warning(
+                f"⚠️ Redis canonical client unavailable for database: {database}"
+            )
             return None
 
         # Verify connectivity with immediate ping test
         async with immediate_redis_test(
             NetworkConstants.REDIS_VM_IP,
             NetworkConstants.REDIS_PORT,
-            0  # Database number handled by canonical client
+            0,  # Database number handled by canonical client
         ) as state:
             if state.is_connected:
-                logger.info(f"✅ Redis connection test successful for database: {database}")
+                logger.info(
+                    f"✅ Redis connection test successful for database: {database}"
+                )
                 # Return the canonical client (not the test client)
                 return client
             else:
-                logger.warning(f"⚠️ Redis connection test failed for database: {database}")
+                logger.warning(
+                    f"⚠️ Redis connection test failed for database: {database}"
+                )
                 return None
     except Exception as e:
-        logger.error(f"❌ Redis connection test error for database {database}: {str(e)}")
+        logger.error(
+            f"❌ Redis connection test error for database {database}: {str(e)}"
+        )
         return None

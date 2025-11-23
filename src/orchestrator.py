@@ -47,6 +47,7 @@ from src.autobot_types import TaskComplexity
 # Import task classification (optional)
 try:
     from src.agents.gemma_classification_agent import GemmaClassificationAgent
+
     # Note: TaskClassificationResult doesn't exist yet, using quoted type annotations
     # from src.task_classification import TaskClassificationResult
 
@@ -253,6 +254,7 @@ class ConsolidatedOrchestrator:
     def __init__(self, config_mgr=None):
         # Use provided config_manager or fall back to global config_manager
         from src.unified_config_manager import config_manager as global_config_manager
+
         self.config_manager = config_mgr or global_config_manager
         self.config = OrchestratorConfig(self.config_manager)
 

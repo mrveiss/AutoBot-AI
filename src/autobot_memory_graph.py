@@ -185,7 +185,7 @@ class AutoBotMemoryGraph:
             # Database 9 is used for Memory Graph entities
             self.redis_client = await get_redis_client(
                 async_client=True,
-                database="memory"  # Will map to DB 9 via redis_database_manager
+                database="memory",  # Will map to DB 9 via redis_database_manager
             )
 
             # Test connection

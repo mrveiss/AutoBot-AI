@@ -192,7 +192,9 @@ class AuditLogger:
         self.batch_timeout_seconds = batch_timeout_seconds
 
         # Get VM identification
-        self.vm_source = os.getenv("AUTOBOT_BACKEND_HOST", NetworkConstants.MAIN_MACHINE_IP)
+        self.vm_source = os.getenv(
+            "AUTOBOT_BACKEND_HOST", NetworkConstants.MAIN_MACHINE_IP
+        )
         self.vm_name = self._get_vm_name()
 
         # Batch processing

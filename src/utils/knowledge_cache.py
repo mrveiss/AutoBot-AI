@@ -29,7 +29,7 @@ warnings.warn(
     "Use src.utils.advanced_cache_manager instead. "
     "This compatibility shim will be removed in future version.",
     DeprecationWarning,
-    stacklevel=2
+    stacklevel=2,
 )
 
 # Re-export everything from advanced_cache_manager for backward compatibility

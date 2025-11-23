@@ -79,9 +79,9 @@ class DocumentExtractor:
 
     # Supported file types by category
     SUPPORTED_FORMATS = {
-        'pdf': ['.pdf'],
-        'docx': ['.docx', '.doc'],
-        'text': ['.txt', '.md', '.rst', '.markdown', '.text']
+        "pdf": [".pdf"],
+        "docx": [".docx", ".doc"],
+        "text": [".txt", ".md", ".rst", ".markdown", ".text"],
     }
 
     @staticmethod
@@ -107,7 +107,7 @@ class DocumentExtractor:
         if not file_path.exists():
             raise FileNotFoundError(f"PDF file not found: {file_path}")
 
-        if file_path.suffix.lower() != '.pdf':
+        if file_path.suffix.lower() != ".pdf":
             raise ValueError(f"File is not a PDF: {file_path}")
 
         def extract_sync():
@@ -122,7 +122,9 @@ class DocumentExtractor:
                         if text and text.strip():
                             pages.append(text)
                     except Exception as e:
-                        logger.warning(f"Failed to extract page {page_num} from {file_path.name}: {e}")
+                        logger.warning(
+                            f"Failed to extract page {page_num} from {file_path.name}: {e}"
+                        )
                         continue
 
                 return "\n\n".join(pages)
@@ -156,7 +158,7 @@ class DocumentExtractor:
         if not file_path.exists():
             raise FileNotFoundError(f"DOCX file not found: {file_path}")
 
-        if file_path.suffix.lower() not in ['.docx', '.doc']:
+        if file_path.suffix.lower() not in [".docx", ".doc"]:
             raise ValueError(f"File is not a DOCX: {file_path}")
 
         def extract_sync():
@@ -179,7 +181,9 @@ class DocumentExtractor:
         return await asyncio.to_thread(extract_sync)
 
     @staticmethod
-    async def extract_from_text(file_path: Union[str, Path], encoding: str = 'utf-8') -> str:
+    async def extract_from_text(
+        file_path: Union[str, Path], encoding: str = "utf-8"
+    ) -> str:
         """
         Extract text from plain text file with proper UTF-8 encoding
 
@@ -203,7 +207,7 @@ class DocumentExtractor:
             raise FileNotFoundError(f"Text file not found: {file_path}")
 
         try:
-            async with aiofiles.open(file_path, 'r', encoding=encoding) as f:
+            async with aiofiles.open(file_path, "r", encoding=encoding) as f:
                 return await f.read()
         except UnicodeDecodeError as e:
             logger.error(f"Encoding error reading {file_path} with {encoding}: {e}")
@@ -243,11 +247,11 @@ class DocumentExtractor:
         suffix = file_path.suffix.lower()
 
         # Route based on file extension
-        if suffix in DocumentExtractor.SUPPORTED_FORMATS['pdf']:
+        if suffix in DocumentExtractor.SUPPORTED_FORMATS["pdf"]:
             return await DocumentExtractor.extract_from_pdf(file_path)
-        elif suffix in DocumentExtractor.SUPPORTED_FORMATS['docx']:
+        elif suffix in DocumentExtractor.SUPPORTED_FORMATS["docx"]:
             return await DocumentExtractor.extract_from_docx(file_path)
-        elif suffix in DocumentExtractor.SUPPORTED_FORMATS['text']:
+        elif suffix in DocumentExtractor.SUPPORTED_FORMATS["text"]:
             return await DocumentExtractor.extract_from_text(file_path)
         else:
             raise ValueError(
@@ -260,7 +264,7 @@ class DocumentExtractor:
         directory_path: Union[str, Path],
         file_types: Optional[List[str]] = None,
         recursive: bool = True,
-        max_files: Optional[int] = None
+        max_files: Optional[int] = None,
     ) -> Dict[Path, str]:
         """
         Extract text from all supported documents in a directory
@@ -309,13 +313,13 @@ class DocumentExtractor:
             file_types = DocumentExtractor.get_supported_extensions()
 
         # Collect all matching files
-        glob_pattern = '**/*' if recursive else '*'
+        glob_pattern = "**/*" if recursive else "*"
         all_files = []
 
         for file_type in file_types:
             # Ensure file type starts with dot
-            if not file_type.startswith('.'):
-                file_type = f'.{file_type}'
+            if not file_type.startswith("."):
+                file_type = f".{file_type}"
 
             for file_path in directory_path.glob(f"{glob_pattern}{file_type}"):
                 if file_path.is_file():

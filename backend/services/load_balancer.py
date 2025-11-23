@@ -315,7 +315,9 @@ class NPULoadBalancer:
         self._health_monitor_task: Optional[asyncio.Task] = None
         self._running = False
         self._selection_lock = asyncio.Lock()
-        self._workers_lock = threading.Lock()  # CRITICAL: Protect concurrent worker dictionary access
+        self._workers_lock = (
+            threading.Lock()
+        )  # CRITICAL: Protect concurrent worker dictionary access
 
         logger.info(
             f"NPU Load Balancer initialized with {strategy} strategy, "

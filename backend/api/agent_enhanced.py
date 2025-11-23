@@ -253,10 +253,7 @@ async def execute_enhanced_goal(
             kb_results = await knowledge_base.search(query=payload.goal, top_k=5)
             if kb_results:
                 kb_context = "\n".join(
-                    [
-                        f"- {item.get('content', '')[:200]}..."
-                        for item in kb_results[:3]
-                    ]
+                    [f"- {item.get('content', '')[:200]}..." for item in kb_results[:3]]
                 )
                 enhanced_context = (
                     f"{payload.context or ''}\n\nRelevant knowledge:\n{kb_context}"

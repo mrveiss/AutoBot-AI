@@ -58,7 +58,10 @@ class AsyncLongTermMemoryManager:
         # Memory database path from centralized config
         memory_config = self.config.get("memory", {})
         data_config = self.config.get("data", {})
-        default_db_path = global_config_manager.get_path("data", "long_term_db") or "data/agent_memory.db"
+        default_db_path = (
+            global_config_manager.get_path("data", "long_term_db")
+            or "data/agent_memory.db"
+        )
         self.db_path = PathUtils.resolve_path(
             memory_config.get("long_term_db_path")
             or data_config.get("long_term_db_path", default_db_path)

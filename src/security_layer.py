@@ -20,7 +20,9 @@ class SecurityLayer:
         self.security_config = global_config_manager.get("security_config", {})
 
         # Check for single-user mode (development/personal use)
-        self.single_user_mode = os.getenv("AUTOBOT_SINGLE_USER_MODE", "true").lower() in ["true", "1", "yes"]
+        self.single_user_mode = os.getenv(
+            "AUTOBOT_SINGLE_USER_MODE", "true"
+        ).lower() in ["true", "1", "yes"]
 
         # If single-user mode is enabled, disable all authentication
         if self.single_user_mode:

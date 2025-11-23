@@ -127,7 +127,7 @@ def validate_chat_session_id(session_id: str) -> bool:
         return False
 
     # Security: reject path traversal and null bytes
-    if any(char in session_id for char in ['/', '\\', '..', '\0']):
+    if any(char in session_id for char in ["/", "\\", "..", "\0"]):
         return False
 
     # Accept if it's a valid UUID
@@ -149,7 +149,7 @@ def validate_chat_session_id(session_id: str) -> bool:
 
     # Accept legacy/test session IDs (alphanumeric + underscore + hyphen)
     # This allows "test_conv" while rejecting malicious inputs
-    if re.match(r'^[a-zA-Z0-9_-]+$', session_id):
+    if re.match(r"^[a-zA-Z0-9_-]+$", session_id):
         return True
 
     return False
@@ -324,7 +324,9 @@ def get_chat_history_manager(request: Request):
 # =============================================================================
 
 
-def log_chat_error(error: Exception, context: str = "chat", request_id: str = "unknown") -> None:
+def log_chat_error(
+    error: Exception, context: str = "chat", request_id: str = "unknown"
+) -> None:
     """
     Log chat-related errors with consistent formatting.
 

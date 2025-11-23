@@ -191,6 +191,7 @@ def catalog_error_response(
 
 # Convenience functions for common error categories
 
+
 def raise_auth_error(
     error_code: str = "AUTH_0002", context: Optional[str] = None
 ) -> None:
@@ -236,14 +237,13 @@ def raise_llm_error(error_code: str, context: Optional[str] = None) -> None:
     raise_catalog_error_simple(error_code, context)
 
 
-def raise_db_error(
-    error_code: str = "DB_0003", context: Optional[str] = None
-) -> None:
+def raise_db_error(error_code: str = "DB_0003", context: Optional[str] = None) -> None:
     """Raise database error"""
     raise_catalog_error_simple(error_code, context)
 
 
 # Migration helpers for backward compatibility
+
 
 def migrate_http_exception(
     original_status_code: int,

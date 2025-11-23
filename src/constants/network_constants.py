@@ -50,11 +50,15 @@ class NetworkConstants:
 
     # Network prefixes for IP validation
     VM_IP_PREFIX: str = "172.16.168."  # AutoBot VM network prefix
-    DEFAULT_SCAN_NETWORK: str = "192.168.1.0/24"  # Default network range for scanning tools
+    DEFAULT_SCAN_NETWORK: str = (
+        "192.168.1.0/24"  # Default network range for scanning tools
+    )
     PUBLIC_DNS_IP: str = "8.8.8.8"  # Google Public DNS for connectivity testing
 
     # Special purpose IPs
-    DUMMY_ROUTE_IP: str = "10.255.255.255"  # Dummy IP for local IP detection via socket routing
+    DUMMY_ROUTE_IP: str = (
+        "10.255.255.255"  # Dummy IP for local IP detection via socket routing
+    )
     TEST_HOST_IP: str = "172.16.168.99"  # Test host IP for unit tests (not a real VM)
 
     # Standard ports

@@ -234,8 +234,8 @@ class UnifiedKnowledgeManager:
             )
 
         # Optional component: Temporal knowledge manager
-        self._temporal_manager: Optional[ITemporalManager] = (
-            temporal_manager or (TemporalKnowledgeManager() if enable_temporal else None)
+        self._temporal_manager: Optional[ITemporalManager] = temporal_manager or (
+            TemporalKnowledgeManager() if enable_temporal else None
         )
 
         # Initialization state
@@ -569,7 +569,9 @@ class UnifiedKnowledgeManager:
         if not self._temporal_manager:
             return None
 
-        return self._temporal_manager.register_content(content_id, metadata, content_hash)
+        return self._temporal_manager.register_content(
+            content_id, metadata, content_hash
+        )
 
     def update_content_access(self, content_id: str):
         """
@@ -691,7 +693,9 @@ class UnifiedKnowledgeManager:
         analytics["temporal_tracking_enabled"] = True
         return analytics
 
-    async def start_temporal_background_processing(self, check_interval_minutes: int = 30):
+    async def start_temporal_background_processing(
+        self, check_interval_minutes: int = 30
+    ):
         """
         Start background processing for temporal management
 
@@ -1021,7 +1025,9 @@ class UnifiedKnowledgeManager:
                 temporal_backup_path.write_text(
                     json.dumps(temporal_data, indent=2), encoding="utf-8"
                 )
-                backup_info["components"]["temporal_metadata"] = str(temporal_backup_path)
+                backup_info["components"]["temporal_metadata"] = str(
+                    temporal_backup_path
+                )
 
         logger.info(f"Knowledge backup completed: {backup_info['components']}")
         return backup_info

@@ -206,7 +206,9 @@ class SQLQueryRequest(BaseModel):
         """Ensure query is SELECT only"""
         normalized = v.strip().upper()
         if not normalized.startswith("SELECT"):
-            raise ValueError("Only SELECT queries allowed. Use execute_sql for modifications.")
+            raise ValueError(
+                "Only SELECT queries allowed. Use execute_sql for modifications."
+            )
         return v
 
 
@@ -456,9 +458,7 @@ async def database_query_mcp(request: SQLQueryRequest) -> Dict[str, Any]:
 
     except sqlite3.Error as e:
         logger.error(f"SQLite error: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Database query error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")
     finally:
         if conn:
             conn.close()
@@ -544,9 +544,7 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Dict[str, Any]:
 
     except sqlite3.Error as e:
         logger.error(f"SQLite execute error: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Database execute error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Database execute error: {str(e)}")
     finally:
         if conn:
             conn.close()
@@ -612,9 +610,7 @@ async def database_list_tables_mcp(request: TableListRequest) -> Dict[str, Any]:
 
     except sqlite3.Error as e:
         logger.error(f"SQLite error listing tables: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error listing tables: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error listing tables: {str(e)}")
     finally:
         if conn:
             conn.close()
@@ -861,7 +857,9 @@ async def get_database_mcp_status() -> Dict[str, Any]:
         time_until_reset = max(
             0,
             60
-            - (datetime.now(timezone.utc) - query_counter["reset_time"]).total_seconds(),
+            - (
+                datetime.now(timezone.utc) - query_counter["reset_time"]
+            ).total_seconds(),
         )
 
     # Check database availability

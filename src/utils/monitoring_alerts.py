@@ -149,7 +149,9 @@ class RedisNotificationChannel(AlertNotificationChannel):
 
             self.redis_client = get_redis_client(database="metrics")
             if self.redis_client is None:
-                logger.warning("Redis client initialization returned None (Redis disabled?)")
+                logger.warning(
+                    "Redis client initialization returned None (Redis disabled?)"
+                )
         except Exception as e:
             logger.warning(f"Could not initialize Redis for alerts: {e}")
 
@@ -304,7 +306,9 @@ class MonitoringAlertsManager:
 
             self.redis_client = get_redis_client(database="metrics")
             if self.redis_client is None:
-                logger.warning("Redis client initialization returned None (Redis disabled?)")
+                logger.warning(
+                    "Redis client initialization returned None (Redis disabled?)"
+                )
         except Exception as e:
             logger.warning(f"Could not initialize Redis for alert storage: {e}")
 

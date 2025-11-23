@@ -877,17 +877,15 @@ async def delete_session(
         try:
             if file_action == "delete":
                 # Delete all files in conversation
-                deleted_count = (
-                    await conversation_file_manager.delete_session_files(session_id)
+                deleted_count = await conversation_file_manager.delete_session_files(
+                    session_id
                 )
                 file_deletion_result = {
                     "files_handled": True,
                     "action_taken": "delete",
                     "files_deleted": deleted_count,
                 }
-                logger.info(
-                    f"Deleted {deleted_count} files for session {session_id}"
-                )
+                logger.info(f"Deleted {deleted_count} files for session {session_id}")
 
             elif file_action == "transfer_kb":
                 # Transfer files to knowledge base
@@ -896,18 +894,14 @@ async def delete_session(
                         session_id=session_id,
                         destination="kb",
                         target_path=parsed_file_options.get("target_path"),
-                        tags=parsed_file_options.get(
-                            "tags", ["conversation_archive"]
-                        ),
+                        tags=parsed_file_options.get("tags", ["conversation_archive"]),
                         copy=False,  # Move, not copy
                     )
                 )
                 file_deletion_result = {
                     "files_handled": True,
                     "action_taken": "transfer_kb",
-                    "files_transferred": transfer_result.get(
-                        "total_transferred", 0
-                    ),
+                    "files_transferred": transfer_result.get("total_transferred", 0),
                     "files_failed": transfer_result.get("total_failed", 0),
                 }
                 logger.info(
@@ -927,9 +921,7 @@ async def delete_session(
                 file_deletion_result = {
                     "files_handled": True,
                     "action_taken": "transfer_shared",
-                    "files_transferred": transfer_result.get(
-                        "total_transferred", 0
-                    ),
+                    "files_transferred": transfer_result.get("total_transferred", 0),
                     "files_failed": transfer_result.get("total_failed", 0),
                 }
                 logger.info(
@@ -937,9 +929,7 @@ async def delete_session(
                 )
 
         except Exception as file_error:
-            logger.error(
-                f"Error handling files for session {session_id}: {file_error}"
-            )
+            logger.error(f"Error handling files for session {session_id}: {file_error}")
             file_deletion_result = {
                 "files_handled": False,
                 "action_taken": file_action,
@@ -954,7 +944,7 @@ async def delete_session(
     # This prevents orphaned terminal sessions with stale pending_approval states
     terminal_cleanup_result = {
         "terminal_sessions_closed": 0,
-        "pending_approvals_cleared": 0
+        "pending_approvals_cleared": 0,
     }
 
     agent_terminal_service = getattr(request.app.state, "agent_terminal_service", None)
@@ -987,7 +977,7 @@ async def delete_session(
         except Exception as terminal_cleanup_error:
             logger.error(
                 f"Failed to cleanup terminal sessions for chat {session_id}: {terminal_cleanup_error}",
-                exc_info=True
+                exc_info=True,
             )
             # Don't fail the chat deletion if terminal cleanup fails
             terminal_cleanup_result["error"] = str(terminal_cleanup_error)
@@ -1199,9 +1189,7 @@ async def send_chat_message_by_id(
     chat_history_manager = get_chat_history_manager(request)
 
     # Lazy initialize chat_workflow_manager if needed
-    chat_workflow_manager = getattr(
-        request.app.state, "chat_workflow_manager", None
-    )
+    chat_workflow_manager = getattr(request.app.state, "chat_workflow_manager", None)
     if chat_workflow_manager is None:
         try:
             from src.chat_workflow_manager import ChatWorkflowManager
@@ -1209,9 +1197,7 @@ async def send_chat_message_by_id(
             chat_workflow_manager = ChatWorkflowManager()
             await chat_workflow_manager.initialize()
             request.app.state.chat_workflow_manager = chat_workflow_manager
-            logger.info(
-                "✅ Lazy-initialized chat_workflow_manager with async Redis"
-            )
+            logger.info("✅ Lazy-initialized chat_workflow_manager with async Redis")
         except Exception as e:
             logger.error(f"Failed to lazy-initialize chat_workflow_manager: {e}")
 
@@ -1225,7 +1211,10 @@ async def send_chat_message_by_id(
         ) = get_exceptions_lazy()
         raise InternalError(
             "Chat services not available",
-            details={"chat_history_manager": bool(chat_history_manager), "chat_workflow_manager": bool(chat_workflow_manager)},
+            details={
+                "chat_history_manager": bool(chat_history_manager),
+                "chat_workflow_manager": bool(chat_workflow_manager),
+            },
         )
 
     # Process the message using ChatWorkflowManager and stream response
@@ -1316,9 +1305,7 @@ async def send_chat_message_by_id(
     )
 
 
-async def merge_messages(
-    existing: List[Dict], new: List[Dict]
-) -> List[Dict]:
+async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
     """
     Merge message lists with deduplication to prevent race conditions.
 
@@ -1412,7 +1399,9 @@ async def save_chat_by_id(
         )
     except Exception as merge_error:
         # Fallback to new messages only if merge fails
-        logger.warning(f"[{request_id}] Message merge failed, using new messages only: {merge_error}")
+        logger.warning(
+            f"[{request_id}] Message merge failed, using new messages only: {merge_error}"
+        )
         merged_messages = new_messages
 
     # Save the merged chat session
@@ -1442,9 +1431,7 @@ async def save_chat_by_id(
 async def delete_chat_by_id(
     chat_id: str,
     request: Request,
-    ownership: Dict = Depends(
-        validate_chat_ownership
-    ),  # SECURITY: Validate ownership
+    ownership: Dict = Depends(validate_chat_ownership),  # SECURITY: Validate ownership
 ):
     """Delete chat session by ID (frontend compatibility endpoint)"""
     request_id = generate_request_id()
@@ -1495,9 +1482,7 @@ async def send_direct_chat_response(
     log_request_context(request, "send_direct_response", request_id)
 
     # Get ChatWorkflowManager from app state
-    chat_workflow_manager = getattr(
-        request.app.state, "chat_workflow_manager", None
-    )
+    chat_workflow_manager = getattr(request.app.state, "chat_workflow_manager", None)
 
     if chat_workflow_manager is None:
         # Lazy initialize
@@ -1507,9 +1492,7 @@ async def send_direct_chat_response(
             chat_workflow_manager = ChatWorkflowManager()
             await chat_workflow_manager.initialize()
             request.app.state.chat_workflow_manager = chat_workflow_manager
-            logger.info(
-                "✅ Lazy-initialized chat_workflow_manager for /chat/direct"
-            )
+            logger.info("✅ Lazy-initialized chat_workflow_manager for /chat/direct")
         except Exception as e:
             logger.error(f"Failed to lazy-initialize chat_workflow_manager: {e}")
             (

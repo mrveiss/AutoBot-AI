@@ -93,7 +93,9 @@ class ModelOptimizer:
         """
         try:
             # Get config file path (project root / config / llm_models.yaml)
-            config_path = Path(__file__).parent.parent.parent / "config" / "llm_models.yaml"
+            config_path = (
+                Path(__file__).parent.parent.parent / "config" / "llm_models.yaml"
+            )
 
             if config_path.exists():
                 with open(config_path, "r") as f:
@@ -102,9 +104,15 @@ class ModelOptimizer:
                 performance_data = config_data.get("performance_classification", {})
 
                 return {
-                    ModelPerformanceLevel.LIGHTWEIGHT: performance_data.get("lightweight", []),
-                    ModelPerformanceLevel.STANDARD: performance_data.get("standard", []),
-                    ModelPerformanceLevel.ADVANCED: performance_data.get("advanced", []),
+                    ModelPerformanceLevel.LIGHTWEIGHT: performance_data.get(
+                        "lightweight", []
+                    ),
+                    ModelPerformanceLevel.STANDARD: performance_data.get(
+                        "standard", []
+                    ),
+                    ModelPerformanceLevel.ADVANCED: performance_data.get(
+                        "advanced", []
+                    ),
                 }
 
             # Fallback to environment variable if config not found
@@ -121,7 +129,9 @@ class ModelOptimizer:
         except Exception as e:
             # Final fallback
             default_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:1b")
-            logging.error(f"Error loading model classifications: {e}, using default: {default_model}")
+            logging.error(
+                f"Error loading model classifications: {e}, using default: {default_model}"
+            )
             return {
                 ModelPerformanceLevel.LIGHTWEIGHT: [default_model],
                 ModelPerformanceLevel.STANDARD: [default_model],

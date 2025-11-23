@@ -43,12 +43,17 @@ def start_vnc_server() -> Dict[str, str]:
             [
                 "/usr/bin/vncserver",
                 ":1",
-                "-localhost", "no",
-                "-SecurityTypes", "None",
-                "-rfbport", "5901",
+                "-localhost",
+                "no",
+                "-SecurityTypes",
+                "None",
+                "-rfbport",
+                "5901",
                 "--I-KNOW-THIS-IS-INSECURE",
-                "-geometry", "1920x1080",
-                "-depth", "24",
+                "-geometry",
+                "1920x1080",
+                "-depth",
+                "24",
             ],
             capture_output=True,
             text=True,
@@ -63,12 +68,15 @@ def start_vnc_server() -> Dict[str, str]:
             }
 
         # Start websockify for noVNC access
-        websockify_bind = f"{NetworkConstants.BIND_ALL_INTERFACES}:{NetworkConstants.VNC_PORT}"
+        websockify_bind = (
+            f"{NetworkConstants.BIND_ALL_INTERFACES}:{NetworkConstants.VNC_PORT}"
+        )
         vnc_target = f"{NetworkConstants.LOCALHOST_NAME}:5901"
         subprocess.Popen(
             [
                 "/usr/bin/websockify",
-                "--web", "/usr/share/novnc",
+                "--web",
+                "/usr/share/novnc",
                 websockify_bind,
                 vnc_target,
             ],
@@ -140,6 +148,7 @@ async def restart_vnc_server() -> Dict[str, str]:
 
         # Wait a moment for cleanup
         import time
+
         time.sleep(1)
 
         # Start fresh

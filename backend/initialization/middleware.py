@@ -50,7 +50,9 @@ def configure_cors(app: FastAPI, allow_origins: Optional[List[str]] = None):
         allow_headers=["*"],
     )
 
-    logger.info(f"✅ CORS middleware configured with {len(allow_origins)} allowed origins")
+    logger.info(
+        f"✅ CORS middleware configured with {len(allow_origins)} allowed origins"
+    )
 
 
 def configure_gzip(app: FastAPI, minimum_size: int = 1000):

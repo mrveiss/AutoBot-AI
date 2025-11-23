@@ -179,4 +179,6 @@ if __name__ == "__main__":
         print("✅ Distributed Redis connection working correctly!")
     else:
         print("❌ Distributed Redis connection failed!")
-        print(f"Check that Redis VM ({NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}) is accessible")
+        print(
+            f"Check that Redis VM ({NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}) is accessible"
+        )

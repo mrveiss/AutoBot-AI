@@ -261,7 +261,9 @@ class ErrorCatalog:
             "total_errors": len(self._catalog),
             "catalog_path": str(self._catalog_path) if self._catalog_path else None,
             "version": self._raw_data.get("version") if self._raw_data else None,
-            "last_updated": self._raw_data.get("last_updated") if self._raw_data else None,
+            "last_updated": (
+                self._raw_data.get("last_updated") if self._raw_data else None
+            ),
             "by_category": category_counts,
             "by_component": component_counts,
         }

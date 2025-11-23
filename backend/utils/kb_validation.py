@@ -56,8 +56,8 @@ async def ensure_knowledge_base(req: Request, operation: str = "operation"):
                 "error": "Knowledge base unavailable",
                 "message": "The knowledge base service failed to initialize. Please check server logs or contact administrator.",
                 "operation": operation,
-                "code": "KB_INIT_FAILED"
-            }
+                "code": "KB_INIT_FAILED",
+            },
         )
 
     return kb
@@ -85,6 +85,7 @@ def require_knowledge_base(operation: str = "operation"):
     Note:
         Endpoint function must have 'req: Request' parameter and 'kb=None' parameter
     """
+
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -96,7 +97,7 @@ def require_knowledge_base(operation: str = "operation"):
                     break
 
             if req is None:
-                req = kwargs.get('req') or kwargs.get('request')
+                req = kwargs.get("req") or kwargs.get("request")
 
             if req is None:
                 raise ValueError(
@@ -108,10 +109,11 @@ def require_knowledge_base(operation: str = "operation"):
             kb = await ensure_knowledge_base(req, operation)
 
             # Inject KB into kwargs
-            kwargs['kb'] = kb
+            kwargs["kb"] = kb
 
             # Call original function
             return await func(*args, **kwargs)
 
         return wrapper
+
     return decorator

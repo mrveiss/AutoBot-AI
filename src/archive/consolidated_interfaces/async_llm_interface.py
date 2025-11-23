@@ -35,7 +35,9 @@ class LLMSettings(BaseSettings):
     """LLM configuration using pydantic-settings for async config management"""
 
     # Ollama settings
-    ollama_host: str = Field(default=NetworkConstants.MAIN_MACHINE_IP, env="OLLAMA_HOST")
+    ollama_host: str = Field(
+        default=NetworkConstants.MAIN_MACHINE_IP, env="OLLAMA_HOST"
+    )
     ollama_port: int = Field(default=NetworkConstants.OLLAMA_PORT, env="OLLAMA_PORT")
     ollama_timeout: float = Field(default=30.0, env="OLLAMA_TIMEOUT")
 

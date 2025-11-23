@@ -65,9 +65,7 @@ from urllib.parse import urlparse
 
 
 def validate_non_empty_string(
-    value: Optional[str],
-    field_name: str = "Value",
-    strip: bool = True
+    value: Optional[str], field_name: str = "Value", strip: bool = True
 ) -> str:
     """
     Validate that string is not None, not empty, and not just whitespace.
@@ -109,7 +107,7 @@ def validate_string_length(
     value: str,
     field_name: str = "Value",
     min_length: Optional[int] = None,
-    max_length: Optional[int] = None
+    max_length: Optional[int] = None,
 ) -> str:
     """
     Validate string length bounds.
@@ -139,14 +137,10 @@ def validate_string_length(
     length = len(value)
 
     if min_length is not None and length < min_length:
-        raise ValueError(
-            f"{field_name} too short (minimum {min_length} characters)"
-        )
+        raise ValueError(f"{field_name} too short (minimum {min_length} characters)")
 
     if max_length is not None and length > max_length:
-        raise ValueError(
-            f"{field_name} too long (maximum {max_length} characters)"
-        )
+        raise ValueError(f"{field_name} too long (maximum {max_length} characters)")
 
     return value
 
@@ -155,7 +149,7 @@ def validate_string_pattern(
     value: str,
     pattern: Union[str, re.Pattern],
     field_name: str = "Value",
-    error_message: Optional[str] = None
+    error_message: Optional[str] = None,
 ) -> str:
     """
     Validate string matches regex pattern.
@@ -197,10 +191,7 @@ def validate_string_pattern(
 
 
 def sanitize_string(
-    value: str,
-    strip: bool = True,
-    lowercase: bool = False,
-    uppercase: bool = False
+    value: str, strip: bool = True, lowercase: bool = False, uppercase: bool = False
 ) -> str:
     """
     Sanitize string with common transformations.
@@ -236,10 +227,7 @@ def sanitize_string(
 
 
 def sanitize_alphanumeric(
-    value: str,
-    allowed_chars: str = "_-.",
-    strip: bool = True,
-    lowercase: bool = False
+    value: str, allowed_chars: str = "_-.", strip: bool = True, lowercase: bool = False
 ) -> str:
     """
     Sanitize to alphanumeric with optional additional characters.
@@ -284,8 +272,7 @@ def sanitize_alphanumeric(
 
 
 def validate_non_empty_collection(
-    value: Optional[Collection],
-    field_name: str = "Collection"
+    value: Optional[Collection], field_name: str = "Collection"
 ) -> Collection:
     """
     Validate collection is not None or empty.
@@ -320,7 +307,7 @@ def validate_collection_size(
     value: Collection,
     field_name: str = "Collection",
     min_size: Optional[int] = None,
-    max_size: Optional[int] = None
+    max_size: Optional[int] = None,
 ) -> Collection:
     """
     Validate collection size bounds.
@@ -347,14 +334,10 @@ def validate_collection_size(
     size = len(value)
 
     if min_size is not None and size < min_size:
-        raise ValueError(
-            f"{field_name} too small (minimum {min_size} items)"
-        )
+        raise ValueError(f"{field_name} too small (minimum {min_size} items)")
 
     if max_size is not None and size > max_size:
-        raise ValueError(
-            f"{field_name} too large (maximum {max_size} items)"
-        )
+        raise ValueError(f"{field_name} too large (maximum {max_size} items)")
 
     return value
 
@@ -368,7 +351,7 @@ def validate_in_choices(
     value: Any,
     choices: Union[Set, Iterable],
     field_name: str = "Value",
-    case_sensitive: bool = True
+    case_sensitive: bool = True,
 ) -> Any:
     """
     Validate value is in allowed choices.
@@ -420,9 +403,7 @@ def validate_in_choices(
 
 
 def validate_file_extension(
-    filename: str,
-    allowed_extensions: Set[str],
-    field_name: str = "File"
+    filename: str, allowed_extensions: Set[str], field_name: str = "File"
 ) -> str:
     """
     Validate file has allowed extension.
@@ -447,8 +428,7 @@ def validate_file_extension(
     """
     # Normalize extensions to have leading dot
     normalized_extensions = {
-        ext if ext.startswith(".") else f".{ext}"
-        for ext in allowed_extensions
+        ext if ext.startswith(".") else f".{ext}" for ext in allowed_extensions
     }
 
     # Get file extension
@@ -463,9 +443,7 @@ def validate_file_extension(
 
 
 def validate_filename_safe(
-    filename: str,
-    field_name: str = "Filename",
-    max_length: int = 255
+    filename: str, field_name: str = "Filename", max_length: int = 255
 ) -> str:
     """
     Validate filename is safe (no path traversal, reasonable length).
@@ -508,7 +486,7 @@ def validate_file_size(
     size: int,
     field_name: str = "File",
     max_size: Optional[int] = None,
-    min_size: Optional[int] = None
+    min_size: Optional[int] = None,
 ) -> int:
     """
     Validate file size bounds.
@@ -548,10 +526,7 @@ def validate_file_size(
 # ============================================================================
 
 
-def validate_email(
-    value: str,
-    field_name: str = "Email"
-) -> str:
+def validate_email(value: str, field_name: str = "Email") -> str:
     """
     Validate email format (basic check).
 
@@ -573,7 +548,7 @@ def validate_email(
         ValueError: Invalid Email format
     """
     # Basic email pattern
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
 
     if not re.match(pattern, value):
         raise ValueError(f"Invalid {field_name} format")
@@ -582,9 +557,7 @@ def validate_email(
 
 
 def validate_url(
-    value: str,
-    field_name: str = "URL",
-    require_https: bool = False
+    value: str, field_name: str = "URL", require_https: bool = False
 ) -> str:
     """
     Validate URL format.
@@ -628,10 +601,7 @@ def validate_url(
         raise ValueError(f"Invalid {field_name} format")
 
 
-def validate_uuid(
-    value: str,
-    field_name: str = "UUID"
-) -> str:
+def validate_uuid(value: str, field_name: str = "UUID") -> str:
     """
     Validate UUID format.
 
@@ -653,7 +623,7 @@ def validate_uuid(
         ValueError: Invalid UUID format
     """
     # UUID v4 pattern
-    pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    pattern = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 
     if not re.match(pattern, value.lower()):
         raise ValueError(f"Invalid {field_name} format")
@@ -670,7 +640,7 @@ def validate_username(
     value: str,
     min_length: int = 3,
     max_length: int = 50,
-    allowed_special_chars: str = "_-."
+    allowed_special_chars: str = "_-.",
 ) -> str:
     """
     Validate username with common rules.
@@ -706,16 +676,14 @@ def validate_username(
     validate_string_length(value, "Username", min_length, max_length)
 
     # Validate alphanumeric + special chars
-    value = sanitize_alphanumeric(value, allowed_chars=allowed_special_chars, strip=False)
+    value = sanitize_alphanumeric(
+        value, allowed_chars=allowed_special_chars, strip=False
+    )
 
     return value
 
 
-def validate_password(
-    value: str,
-    min_length: int = 8,
-    max_length: int = 128
-) -> str:
+def validate_password(value: str, min_length: int = 8, max_length: int = 128) -> str:
     """
     Validate password with common rules.
 

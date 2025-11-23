@@ -481,9 +481,7 @@ class AdvancedCacheManager:
         result = await self.get("session_data", key)
         return result.get("data") if result else None
 
-    async def simple_set(
-        self, key: str, value: Any, ttl: Optional[int] = None
-    ) -> bool:
+    async def simple_set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """
         Simple cache set (backward compatible with CacheManager).
         Uses DYNAMIC strategy with custom or default TTL.

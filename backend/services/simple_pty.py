@@ -109,7 +109,9 @@ class SimplePTY:
             if self.configure_terminal_echo(slave_fd, enable=True):
                 logger.info(f"Terminal echo enabled for PTY session {self.session_id}")
             else:
-                logger.warning(f"Terminal echo configuration failed for PTY session {self.session_id} (continuing anyway)")
+                logger.warning(
+                    f"Terminal echo configuration failed for PTY session {self.session_id} (continuing anyway)"
+                )
 
             # Start bash process
             env = os.environ.copy()

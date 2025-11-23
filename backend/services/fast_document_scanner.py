@@ -23,15 +23,17 @@ logger = logging.getLogger(__name__)
 @dataclass
 class FileMetadata:
     """Lightweight file metadata for fast comparison"""
+
     path: str
     mtime: float  # Modification time
-    size: int     # File size in bytes
+    size: int  # File size in bytes
     exists: bool = True
 
 
 @dataclass
 class DocumentChange:
     """Document change record"""
+
     document_id: str
     command: str
     title: str
@@ -71,8 +73,8 @@ class FastDocumentScanner:
             {'ls': ['/usr/share/man/man1/ls.1.gz'], ...}
         """
         man_paths = [
-            '/usr/share/man',
-            '/usr/local/share/man',
+            "/usr/share/man",
+            "/usr/local/share/man",
         ]
 
         command_files = {}
@@ -83,20 +85,20 @@ class FastDocumentScanner:
 
             # Walk through man1-man8 directories
             for section in range(1, 9):
-                section_dir = os.path.join(base_path, f'man{section}')
+                section_dir = os.path.join(base_path, f"man{section}")
                 if not os.path.exists(section_dir):
                     continue
 
                 try:
                     for filename in os.listdir(section_dir):
                         # Extract command name (handle .gz compression)
-                        if filename.endswith('.gz'):
+                        if filename.endswith(".gz"):
                             command = filename[:-3]  # Remove .gz
                         else:
                             command = filename
 
                         # Remove section suffix (.1, .2, etc.)
-                        command = command.rsplit('.', 1)[0]
+                        command = command.rsplit(".", 1)[0]
 
                         full_path = os.path.join(section_dir, filename)
 
@@ -122,10 +124,7 @@ class FastDocumentScanner:
         try:
             stat = os.stat(file_path)
             return FileMetadata(
-                path=file_path,
-                mtime=stat.st_mtime,
-                size=stat.st_size,
-                exists=True
+                path=file_path, mtime=stat.st_mtime, size=stat.st_size, exists=True
             )
         except (FileNotFoundError, PermissionError):
             return None
@@ -147,10 +146,10 @@ class FastDocumentScanner:
             return None
 
         return FileMetadata(
-            path=cached_data.get('path', file_path),
-            mtime=float(cached_data.get('mtime', 0)),
-            size=int(cached_data.get('size', 0)),
-            exists=cached_data.get('exists', 'true').lower() == 'true'
+            path=cached_data.get("path", file_path),
+            mtime=float(cached_data.get("mtime", 0)),
+            size=int(cached_data.get("size", 0)),
+            exists=cached_data.get("exists", "true").lower() == "true",
         )
 
     def _cache_metadata(self, metadata: FileMetadata) -> None:
@@ -161,12 +160,15 @@ class FastDocumentScanner:
             metadata: File metadata to cache
         """
         cache_key = f"{self.CACHE_KEY_PREFIX}{metadata.path}"
-        self.redis.hset(cache_key, mapping={
-            'path': metadata.path,
-            'mtime': str(metadata.mtime),
-            'size': str(metadata.size),
-            'exists': 'true' if metadata.exists else 'false'
-        })
+        self.redis.hset(
+            cache_key,
+            mapping={
+                "path": metadata.path,
+                "mtime": str(metadata.mtime),
+                "size": str(metadata.size),
+                "exists": "true" if metadata.exists else "false",
+            },
+        )
         # Expire after 7 days
         self.redis.expire(cache_key, 604800)
 
@@ -174,7 +176,7 @@ class FastDocumentScanner:
         self,
         current_files: Dict[str, List[str]],
         machine_id: str,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
     ) -> Dict[str, List[DocumentChange]]:
         """
         Detect document changes using file metadata (ULTRA FAST).
@@ -187,11 +189,7 @@ class FastDocumentScanner:
         Returns:
             Dict with 'added', 'updated', 'removed' lists
         """
-        changes = {
-            'added': [],
-            'updated': [],
-            'removed': []
-        }
+        changes = {"added": [], "updated": [], "removed": []}
 
         # Get cached command list for this host
         cache_key = f"{self.SCAN_CACHE_KEY}{machine_id}"
@@ -209,7 +207,7 @@ class FastDocumentScanner:
 
         # Check for new or updated documents
         for command in commands_to_check:
-            if checked_count >= (limit or float('inf')):
+            if checked_count >= (limit or float("inf")):
                 break
 
             file_paths = current_files[command]
@@ -231,28 +229,35 @@ class FastDocumentScanner:
 
             if cached_meta is None:
                 # New document
-                changes['added'].append(DocumentChange(
-                    document_id=doc_id,
-                    command=command,
-                    title=f"man {command}",
-                    change_type='added',
-                    timestamp=time.time(),
-                    file_path=file_path,
-                    size=current_meta.size,
-                    mtime=current_meta.mtime
-                ))
-            elif current_meta.mtime != cached_meta.mtime or current_meta.size != cached_meta.size:
+                changes["added"].append(
+                    DocumentChange(
+                        document_id=doc_id,
+                        command=command,
+                        title=f"man {command}",
+                        change_type="added",
+                        timestamp=time.time(),
+                        file_path=file_path,
+                        size=current_meta.size,
+                        mtime=current_meta.mtime,
+                    )
+                )
+            elif (
+                current_meta.mtime != cached_meta.mtime
+                or current_meta.size != cached_meta.size
+            ):
                 # Updated document (mtime or size changed)
-                changes['updated'].append(DocumentChange(
-                    document_id=doc_id,
-                    command=command,
-                    title=f"man {command}",
-                    change_type='updated',
-                    timestamp=time.time(),
-                    file_path=file_path,
-                    size=current_meta.size,
-                    mtime=current_meta.mtime
-                ))
+                changes["updated"].append(
+                    DocumentChange(
+                        document_id=doc_id,
+                        command=command,
+                        title=f"man {command}",
+                        change_type="updated",
+                        timestamp=time.time(),
+                        file_path=file_path,
+                        size=current_meta.size,
+                        mtime=current_meta.mtime,
+                    )
+                )
 
             # Cache current metadata
             self._cache_metadata(current_meta)
@@ -261,13 +266,15 @@ class FastDocumentScanner:
         # Check for removed documents
         removed_commands = cached_commands - current_commands
         for command in removed_commands:
-            changes['removed'].append(DocumentChange(
-                document_id=f"man-{command}",
-                command=command,
-                title=f"man {command}",
-                change_type='removed',
-                timestamp=time.time()
-            ))
+            changes["removed"].append(
+                DocumentChange(
+                    document_id=f"man-{command}",
+                    command=command,
+                    title=f"man {command}",
+                    change_type="removed",
+                    timestamp=time.time(),
+                )
+            )
 
         # Update cached command list
         if commands_to_check:
@@ -280,9 +287,9 @@ class FastDocumentScanner:
     def scan_for_changes(
         self,
         machine_id: str,
-        scan_type: str = 'manpages',
+        scan_type: str = "manpages",
         limit: Optional[int] = None,
-        force: bool = False
+        force: bool = False,
     ) -> Dict:
         """
         Fast scan for document changes.
@@ -298,7 +305,9 @@ class FastDocumentScanner:
         """
         start_time = time.time()
 
-        logger.info(f"Fast scan starting for {machine_id} (type={scan_type}, limit={limit})")
+        logger.info(
+            f"Fast scan starting for {machine_id} (type={scan_type}, limit={limit})"
+        )
 
         # Get all man page files (FAST - filesystem scan only)
         command_files = self._get_man_page_paths()
@@ -312,24 +321,26 @@ class FastDocumentScanner:
         scan_duration = time.time() - start_time
 
         result = {
-            'status': 'success',
-            'machine_id': machine_id,
-            'scan_type': scan_type,
-            'scan_method': 'file_metadata',  # Indicate fast method
-            'total_available': total_available,
-            'total_scanned': limit or total_available,
-            'scan_duration_seconds': round(scan_duration, 3),
-            'changes': {
-                'added': [asdict(c) for c in changes['added']],
-                'updated': [asdict(c) for c in changes['updated']],
-                'removed': [asdict(c) for c in changes['removed']]
+            "status": "success",
+            "machine_id": machine_id,
+            "scan_type": scan_type,
+            "scan_method": "file_metadata",  # Indicate fast method
+            "total_available": total_available,
+            "total_scanned": limit or total_available,
+            "scan_duration_seconds": round(scan_duration, 3),
+            "changes": {
+                "added": [asdict(c) for c in changes["added"]],
+                "updated": [asdict(c) for c in changes["updated"]],
+                "removed": [asdict(c) for c in changes["removed"]],
             },
-            'summary': {
-                'added': len(changes['added']),
-                'updated': len(changes['updated']),
-                'removed': len(changes['removed']),
-                'unchanged': (limit or total_available) - len(changes['added']) - len(changes['updated'])
-            }
+            "summary": {
+                "added": len(changes["added"]),
+                "updated": len(changes["updated"]),
+                "removed": len(changes["removed"]),
+                "unchanged": (limit or total_available)
+                - len(changes["added"])
+                - len(changes["updated"]),
+            },
         }
 
         logger.info(
@@ -354,11 +365,11 @@ class FastDocumentScanner:
         """
         try:
             # Try reading file directly (handles .gz)
-            if file_path.endswith('.gz'):
-                with gzip.open(file_path, 'rt', encoding='utf-8', errors='ignore') as f:
+            if file_path.endswith(".gz"):
+                with gzip.open(file_path, "rt", encoding="utf-8", errors="ignore") as f:
                     return f.read()
             else:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     return f.read()
 
         except Exception as file_error:
@@ -367,22 +378,26 @@ class FastDocumentScanner:
             # Fallback to subprocess (slower but more reliable)
             try:
                 result = subprocess.run(
-                    ['man', command],
+                    ["man", command],
                     capture_output=True,
                     text=True,
-                    encoding='utf-8',
-                    errors='ignore',
-                    timeout=5
+                    encoding="utf-8",
+                    errors="ignore",
+                    timeout=5,
                 )
                 if result.returncode == 0 and result.stdout:
                     return result.stdout
                 else:
-                    logger.warning(f"subprocess.run failed for 'man {command}': {result.stderr}")
+                    logger.warning(
+                        f"subprocess.run failed for 'man {command}': {result.stderr}"
+                    )
                     return None
 
             except subprocess.TimeoutExpired:
                 logger.warning(f"Timeout reading man page for {command}")
                 return None
             except Exception as subprocess_error:
-                logger.error(f"Failed to read man page for {command}: {subprocess_error}")
+                logger.error(
+                    f"Failed to read man page for {command}: {subprocess_error}"
+                )
                 return None

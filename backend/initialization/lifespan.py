@@ -34,7 +34,7 @@ app_state: Dict[str, Any] = {
     "background_llm_sync": None,
     "config": None,
     "initialization_status": "starting",  # starting, phase1, phase2, ready, error
-    "initialization_message": "Backend starting..."
+    "initialization_message": "Backend starting...",
 }
 
 
@@ -112,7 +112,9 @@ async def initialize_critical_services(app: FastAPI):
             await conversation_file_manager.initialize()
             app.state.conversation_file_manager = conversation_file_manager
             app_state["conversation_file_manager"] = conversation_file_manager
-            logger.info("✅ [ 40%] Conversation Files DB: Database initialized and verified")
+            logger.info(
+                "✅ [ 40%] Conversation Files DB: Database initialized and verified"
+            )
         except Exception as conv_file_error:
             logger.error(
                 f"❌ CRITICAL: Conversation files database initialization failed: {conv_file_error}"
@@ -171,14 +173,18 @@ async def initialize_background_services(app: FastAPI):
             app.state.knowledge_base = None
 
         # Initialize NPU Worker WebSocket subscriptions - NON-CRITICAL
-        logger.info("✅ [ 80%] NPU Workers: Initializing WebSocket event subscriptions...")
+        logger.info(
+            "✅ [ 80%] NPU Workers: Initializing WebSocket event subscriptions..."
+        )
         try:
             from backend.api.websockets import init_npu_worker_websocket
 
             init_npu_worker_websocket()
             logger.info("✅ [ 80%] NPU Workers: WebSocket subscriptions initialized")
         except Exception as npu_ws_error:
-            logger.warning(f"NPU worker WebSocket initialization failed: {npu_ws_error}")
+            logger.warning(
+                f"NPU worker WebSocket initialization failed: {npu_ws_error}"
+            )
 
         # Initialize Memory Graph - NON-CRITICAL
         logger.info("✅ [ 85%] Memory Graph: Initializing memory graph...")
@@ -197,7 +203,9 @@ async def initialize_background_services(app: FastAPI):
             app.state.memory_graph = None
 
         # Initialize Background LLM Sync - NON-CRITICAL
-        logger.info("✅ [ 90%] Background LLM Sync: Initializing AI Stack integration...")
+        logger.info(
+            "✅ [ 90%] Background LLM Sync: Initializing AI Stack integration..."
+        )
         try:
             from backend.services.ai_stack_client import AIStackClient
 
@@ -262,6 +270,7 @@ def create_lifespan_manager():
         app = FastAPI(lifespan=create_lifespan_manager())
         ```
     """
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Application lifespan manager with critical and background initialization"""

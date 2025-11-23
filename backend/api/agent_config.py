@@ -26,7 +26,9 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 logger = logging.getLogger(__name__)
 
 # Get default LLM model from environment (NO HARDCODING)
-DEFAULT_LLM_MODEL = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", "llama3.2:1b"))
+DEFAULT_LLM_MODEL = os.getenv(
+    "AUTOBOT_DEFAULT_LLM_MODEL", os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", "llama3.2:1b")
+)
 
 router = APIRouter()
 

@@ -129,7 +129,9 @@ def is_repository_allowed(repo_path: str) -> bool:
                     path.relative_to(allowed_path)
                 except ValueError:
                     # Path is not relative to allowed_path (symlink escape)
-                    logger.warning(f"Symlink escape attempt detected: {repo_path} -> {path}")
+                    logger.warning(
+                        f"Symlink escape attempt detected: {repo_path} -> {path}"
+                    )
                     continue
 
                 # Verify it's actually a git repository
@@ -308,9 +310,7 @@ async def execute_git_command(
         raise
     except Exception as e:
         logger.error(f"Git command execution error: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Git command failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Git command failed: {str(e)}")
 
 
 # Pydantic Models
@@ -331,9 +331,7 @@ class GitStatusRequest(BaseModel):
         default="/home/kali/Desktop/AutoBot",
         description="Repository path (must be whitelisted)",
     )
-    short: Optional[bool] = Field(
-        default=False, description="Use short format output"
-    )
+    short: Optional[bool] = Field(default=False, description="Use short format output")
 
 
 class GitLogRequest(BaseModel):
@@ -349,9 +347,7 @@ class GitLogRequest(BaseModel):
         le=MAX_LOG_ENTRIES,
         description=f"Maximum number of commits (1-{MAX_LOG_ENTRIES})",
     )
-    oneline: Optional[bool] = Field(
-        default=False, description="Use one-line format"
-    )
+    oneline: Optional[bool] = Field(default=False, description="Use one-line format")
     file_path: Optional[str] = Field(
         default=None, description="Filter log to specific file"
     )
@@ -390,9 +386,7 @@ class GitDiffRequest(BaseModel):
     staged: Optional[bool] = Field(
         default=False, description="Show staged changes only"
     )
-    file_path: Optional[str] = Field(
-        default=None, description="Diff specific file"
-    )
+    file_path: Optional[str] = Field(default=None, description="Diff specific file")
     commit: Optional[str] = Field(
         default=None, description="Compare with specific commit"
     )
@@ -685,9 +679,7 @@ async def git_status_mcp(request: GitStatusRequest) -> Dict[str, Any]:
         )
 
     if not is_repository_allowed(request.repo_path):
-        raise HTTPException(
-            status_code=403, detail="Repository not in whitelist"
-        )
+        raise HTTPException(status_code=403, detail="Repository not in whitelist")
 
     logger.info(f"Git status for {request.repo_path}")
 
@@ -726,9 +718,7 @@ async def git_log_mcp(request: GitLogRequest) -> Dict[str, Any]:
         )
 
     if not is_repository_allowed(request.repo_path):
-        raise HTTPException(
-            status_code=403, detail="Repository not in whitelist"
-        )
+        raise HTTPException(status_code=403, detail="Repository not in whitelist")
 
     logger.info(f"Git log for {request.repo_path}")
 
@@ -741,9 +731,7 @@ async def git_log_mcp(request: GitLogRequest) -> Dict[str, Any]:
 
     if request.file_path:
         if not sanitize_git_args([request.file_path]):
-            raise HTTPException(
-                status_code=400, detail="Invalid file path"
-            )
+            raise HTTPException(status_code=400, detail="Invalid file path")
         args.extend(["--", request.file_path])
 
     result = await execute_git_command(request.repo_path, args)
@@ -777,9 +765,7 @@ async def git_diff_mcp(request: GitDiffRequest) -> Dict[str, Any]:
         )
 
     if not is_repository_allowed(request.repo_path):
-        raise HTTPException(
-            status_code=403, detail="Repository not in whitelist"
-        )
+        raise HTTPException(status_code=403, detail="Repository not in whitelist")
 
     logger.info(f"Git diff for {request.repo_path}")
 
@@ -791,9 +777,7 @@ async def git_diff_mcp(request: GitDiffRequest) -> Dict[str, Any]:
         args.append(request.commit)
     if request.file_path:
         if not sanitize_git_args([request.file_path]):
-            raise HTTPException(
-                status_code=400, detail="Invalid file path"
-            )
+            raise HTTPException(status_code=400, detail="Invalid file path")
         args.extend(["--", request.file_path])
 
     result = await execute_git_command(request.repo_path, args)
@@ -832,9 +816,7 @@ async def git_branch_mcp(request: GitBranchRequest) -> Dict[str, Any]:
         )
 
     if not is_repository_allowed(request.repo_path):
-        raise HTTPException(
-            status_code=403, detail="Repository not in whitelist"
-        )
+        raise HTTPException(status_code=403, detail="Repository not in whitelist")
 
     logger.info(f"Git branch for {request.repo_path}")
 
@@ -887,14 +869,10 @@ async def git_blame_mcp(request: GitBlameRequest) -> Dict[str, Any]:
         )
 
     if not is_repository_allowed(request.repo_path):
-        raise HTTPException(
-            status_code=403, detail="Repository not in whitelist"
-        )
+        raise HTTPException(status_code=403, detail="Repository not in whitelist")
 
     if not sanitize_git_args([request.file_path]):
-        raise HTTPException(
-            status_code=400, detail="Invalid file path"
-        )
+        raise HTTPException(status_code=400, detail="Invalid file path")
 
     logger.info(f"Git blame for {request.file_path} in {request.repo_path}")
 
@@ -935,9 +913,7 @@ async def git_show_mcp(request: GitShowRequest) -> Dict[str, Any]:
         )
 
     if not is_repository_allowed(request.repo_path):
-        raise HTTPException(
-            status_code=403, detail="Repository not in whitelist"
-        )
+        raise HTTPException(status_code=403, detail="Repository not in whitelist")
 
     logger.info(f"Git show {request.ref} in {request.repo_path}")
 
@@ -1027,7 +1003,8 @@ async def get_git_mcp_status() -> Dict[str, Any]:
         current_rate = git_counter["count"]
         time_until_reset = max(
             0,
-            60 - (datetime.now(timezone.utc) - git_counter["reset_time"]).total_seconds(),
+            60
+            - (datetime.now(timezone.utc) - git_counter["reset_time"]).total_seconds(),
         )
 
     return {

@@ -265,8 +265,16 @@ class WorkflowAutomationManager:
 
         # Update active workflows count in Prometheus
         workflow_type = "automated_workflow"
-        active_count = len([w for w in self.active_workflows.values() if w.started_at and not w.completed_at])
-        self.prometheus_metrics.update_active_workflows(workflow_type=workflow_type, count=active_count)
+        active_count = len(
+            [
+                w
+                for w in self.active_workflows.values()
+                if w.started_at and not w.completed_at
+            ]
+        )
+        self.prometheus_metrics.update_active_workflows(
+            workflow_type=workflow_type, count=active_count
+        )
 
         # Send workflow start message to frontend
         await self._send_workflow_message(
@@ -574,15 +582,28 @@ class WorkflowAutomationManager:
         if workflow.prometheus_start_time:
             duration = time.time() - workflow.prometheus_start_time
             workflow_type = "automated_workflow"
-            failed_steps = len([s for s in workflow.steps if s.status == WorkflowStepStatus.FAILED])
+            failed_steps = len(
+                [s for s in workflow.steps if s.status == WorkflowStepStatus.FAILED]
+            )
             status = "failed" if failed_steps > 0 else "success"
             self.prometheus_metrics.record_workflow_execution(
                 workflow_type=workflow_type, status=status, duration=duration
             )
 
             # Update active workflows count (decrement)
-            active_count = len([w for w in self.active_workflows.values() if w.started_at and not w.completed_at]) - 1
-            self.prometheus_metrics.update_active_workflows(workflow_type=workflow_type, count=max(0, active_count))
+            active_count = (
+                len(
+                    [
+                        w
+                        for w in self.active_workflows.values()
+                        if w.started_at and not w.completed_at
+                    ]
+                )
+                - 1
+            )
+            self.prometheus_metrics.update_active_workflows(
+                workflow_type=workflow_type, count=max(0, active_count)
+            )
 
         # Send completion message
         await self._send_workflow_message(
@@ -627,8 +648,19 @@ class WorkflowAutomationManager:
             )
 
             # Update active workflows count (decrement)
-            active_count = len([w for w in self.active_workflows.values() if w.started_at and not w.completed_at]) - 1
-            self.prometheus_metrics.update_active_workflows(workflow_type=workflow_type, count=max(0, active_count))
+            active_count = (
+                len(
+                    [
+                        w
+                        for w in self.active_workflows.values()
+                        if w.started_at and not w.completed_at
+                    ]
+                )
+                - 1
+            )
+            self.prometheus_metrics.update_active_workflows(
+                workflow_type=workflow_type, count=max(0, active_count)
+            )
 
         await self._send_workflow_message(
             workflow.session_id,
@@ -1169,7 +1201,9 @@ async def workflow_websocket(websocket: WebSocket, session_id: str):
                     control_request = WorkflowControlRequest(
                         workflow_id=workflow_id, action=action
                     )
-                    await get_workflow_manager().handle_workflow_control(control_request)
+                    await get_workflow_manager().handle_workflow_control(
+                        control_request
+                    )
 
     except WebSocketDisconnect:
         # Clean up on disconnect

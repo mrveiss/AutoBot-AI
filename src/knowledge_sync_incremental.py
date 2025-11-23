@@ -324,9 +324,7 @@ class IncrementalKnowledgeSync:
             base_metadata["category"] = category
 
             # Use GPU semantic chunker
-            chunks = await self.semantic_chunker.chunk_text(
-                content, base_metadata
-            )
+            chunks = await self.semantic_chunker.chunk_text(content, base_metadata)
 
             processing_time = time.time() - start_time
 

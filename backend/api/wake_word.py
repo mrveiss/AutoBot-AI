@@ -24,12 +24,16 @@ router = APIRouter(tags=["wake_word", "voice"])
 
 class WakeWordCheckRequest(BaseModel):
     """Request to check text for wake word"""
+
     text: str = Field(..., description="Text to check for wake word")
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Recognition confidence")
+    confidence: float = Field(
+        default=1.0, ge=0.0, le=1.0, description="Recognition confidence"
+    )
 
 
 class WakeWordCheckResponse(BaseModel):
     """Response for wake word check"""
+
     detected: bool
     wake_word: str = ""
     confidence: float = 0.0
@@ -39,6 +43,7 @@ class WakeWordCheckResponse(BaseModel):
 
 class WakeWordConfigRequest(BaseModel):
     """Request to update wake word configuration"""
+
     enabled: bool = None
     wake_words: List[str] = None
     confidence_threshold: float = None
@@ -49,12 +54,16 @@ class WakeWordConfigRequest(BaseModel):
 
 class AddWakeWordRequest(BaseModel):
     """Request to add a new wake word"""
+
     wake_word: str = Field(..., min_length=2, max_length=50)
 
 
 class ReportFeedbackRequest(BaseModel):
     """Request to report detection feedback"""
-    is_correct: bool = Field(..., description="True if detection was correct, False if false positive")
+
+    is_correct: bool = Field(
+        ..., description="True if detection was correct, False if false positive"
+    )
 
 
 @with_error_handling(
@@ -79,7 +88,7 @@ async def check_wake_word(request: WakeWordCheckRequest) -> WakeWordCheckRespons
             wake_word=event.wake_word,
             confidence=event.confidence,
             timestamp=event.timestamp,
-            metadata=event.metadata
+            metadata=event.metadata,
         )
 
     return WakeWordCheckResponse(detected=False)
@@ -96,7 +105,7 @@ async def get_wake_words() -> Dict[str, Any]:
     detector = get_wake_word_detector()
     return {
         "wake_words": detector.get_wake_words(),
-        "total": len(detector.get_wake_words())
+        "total": len(detector.get_wake_words()),
     }
 
 
@@ -115,13 +124,13 @@ async def add_wake_word(request: AddWakeWordRequest) -> Dict[str, Any]:
         return {
             "success": True,
             "message": f"Wake word '{request.wake_word}' added successfully",
-            "wake_words": detector.get_wake_words()
+            "wake_words": detector.get_wake_words(),
         }
 
     return {
         "success": False,
         "message": f"Wake word '{request.wake_word}' already exists",
-        "wake_words": detector.get_wake_words()
+        "wake_words": detector.get_wake_words(),
     }
 
 
@@ -139,7 +148,7 @@ async def remove_wake_word(wake_word: str) -> Dict[str, Any]:
     if len(detector.get_wake_words()) <= 1:
         raise HTTPException(
             status_code=400,
-            detail="Cannot remove the last wake word. At least one must remain."
+            detail="Cannot remove the last wake word. At least one must remain.",
         )
 
     success = detector.remove_wake_word(wake_word)
@@ -148,13 +157,10 @@ async def remove_wake_word(wake_word: str) -> Dict[str, Any]:
         return {
             "success": True,
             "message": f"Wake word '{wake_word}' removed successfully",
-            "wake_words": detector.get_wake_words()
+            "wake_words": detector.get_wake_words(),
         }
 
-    raise HTTPException(
-        status_code=404,
-        detail=f"Wake word '{wake_word}' not found"
-    )
+    raise HTTPException(status_code=404, detail=f"Wake word '{wake_word}' not found")
 
 
 @with_error_handling(
@@ -199,7 +205,7 @@ async def update_wake_word_config(request: WakeWordConfigRequest) -> Dict[str, A
     return {
         "success": True,
         "message": "Configuration updated",
-        "config": detector.get_config()
+        "config": detector.get_config(),
     }
 
 
@@ -228,7 +234,7 @@ async def reset_wake_word_stats() -> Dict[str, Any]:
     return {
         "success": True,
         "message": "Statistics reset successfully",
-        "stats": detector.get_stats()
+        "stats": detector.get_stats(),
     }
 
 
@@ -248,16 +254,14 @@ async def report_detection_feedback(request: ReportFeedbackRequest) -> Dict[str,
 
     if request.is_correct:
         detector.report_true_positive()
-        message = "True positive reported - threshold may be adjusted for better convenience"
+        message = (
+            "True positive reported - threshold may be adjusted for better convenience"
+        )
     else:
         detector.report_false_positive()
         message = "False positive reported - threshold increased to reduce false alarms"
 
-    return {
-        "success": True,
-        "message": message,
-        "stats": detector.get_stats()
-    }
+    return {"success": True, "message": message, "stats": detector.get_stats()}
 
 
 @with_error_handling(
@@ -273,7 +277,7 @@ async def enable_wake_word() -> Dict[str, Any]:
     return {
         "success": True,
         "message": "Wake word detection enabled",
-        "config": detector.get_config()
+        "config": detector.get_config(),
     }
 
 
@@ -290,5 +294,5 @@ async def disable_wake_word() -> Dict[str, Any]:
     return {
         "success": True,
         "message": "Wake word detection disabled",
-        "config": detector.get_config()
+        "config": detector.get_config(),
     }

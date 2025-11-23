@@ -592,7 +592,9 @@ def get_optimized_prompt(
         )
     except KeyError:
         # Fallback if dynamic template not found
-        logger.warning("Dynamic context template not found, using minimal dynamic section")
+        logger.warning(
+            "Dynamic context template not found, using minimal dynamic section"
+        )
         dynamic_context = f"\n\n## Session Context\nSession ID: {session_id or 'N/A'}\nDate: {datetime.now().strftime('%Y-%m-%d')}"
 
     # Combine: static prefix + dynamic suffix

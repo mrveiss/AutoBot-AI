@@ -499,7 +499,9 @@ class UnifiedLLMInterface:
         ollama_base_url = config_manager.get(
             "llm.ollama.base_url", get_service_url("ollama")
         )
-        ollama_model = config_manager.get("llm.ollama.default_model", ModelConstants.DEFAULT_OLLAMA_MODEL)
+        ollama_model = config_manager.get(
+            "llm.ollama.default_model", ModelConstants.DEFAULT_OLLAMA_MODEL
+        )
 
         configs[ProviderType.OLLAMA] = ProviderConfig(
             provider_type=ProviderType.OLLAMA,

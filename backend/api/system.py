@@ -130,7 +130,9 @@ async def get_system_health(request: Request = None):
             "timestamp": datetime.now().isoformat(),
             "initialization": {
                 "status": app_state.get("initialization_status", "unknown"),
-                "message": app_state.get("initialization_message", "Status unavailable")
+                "message": app_state.get(
+                    "initialization_message", "Status unavailable"
+                ),
             },
             "components": {
                 "backend": "healthy",
@@ -205,7 +207,9 @@ async def get_system_health(request: Request = None):
 @cache_response(cache_key="system_info", ttl=300)  # Cache for 5 minutes
 async def get_system_info():
     """Get system information"""
-    python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    python_version = (
+        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
 
     system_info = {
         "name": "AutoBot Backend",

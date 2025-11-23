@@ -26,7 +26,9 @@ from src.constants.network_constants import NetworkConstants
 logger = logging.getLogger(__name__)
 
 # ANSI escape code regex pattern
-ANSI_ESCAPE_PATTERN = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b\][^\a]*\a|\x1b[=>]|\x1b\?[0-9]+[hl]')
+ANSI_ESCAPE_PATTERN = re.compile(
+    r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b\][^\a]*\a|\x1b[=>]|\x1b\?[0-9]+[hl]"
+)
 
 
 class TerminalLogger:
@@ -160,7 +162,7 @@ class TerminalLogger:
         """Remove ANSI escape codes from text."""
         if not text:
             return text
-        return ANSI_ESCAPE_PATTERN.sub('', text)
+        return ANSI_ESCAPE_PATTERN.sub("", text)
 
     def _format_log_line(self, entry: Dict[str, Any]) -> str:
         """Format log entry as a readable log line (with ANSI codes stripped)."""
@@ -188,11 +190,15 @@ class TerminalLogger:
 
             # Add truncated output (stripped of ANSI codes)
             if result.get("stdout"):
-                stdout = self._strip_ansi_codes(result["stdout"])[:200].replace("\n", " ")
+                stdout = self._strip_ansi_codes(result["stdout"])[:200].replace(
+                    "\n", " "
+                )
                 line += f" | OUTPUT: {stdout}..."
 
             if result.get("stderr"):
-                stderr = self._strip_ansi_codes(result["stderr"])[:200].replace("\n", " ")
+                stderr = self._strip_ansi_codes(result["stderr"])[:200].replace(
+                    "\n", " "
+                )
                 line += f" | ERROR: {stderr}..."
 
         return line

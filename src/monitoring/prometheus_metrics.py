@@ -8,8 +8,13 @@ Provides centralized metrics collection and exposure.
 
 from typing import Optional
 
-from prometheus_client import (CollectorRegistry, Counter, Gauge, Histogram,
-                               generate_latest)
+from prometheus_client import (
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 
 
 class PrometheusMetricsManager:

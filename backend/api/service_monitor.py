@@ -70,7 +70,9 @@ class ServiceMonitor:
 
             self.redis_client = get_redis_client(database="monitoring")
             if self.redis_client is None:
-                logger.warning("Redis client initialization returned None (Redis disabled?)")
+                logger.warning(
+                    "Redis client initialization returned None (Redis disabled?)"
+                )
         except Exception as e:
             logger.warning(f"Could not initialize Redis client: {e}")
 
@@ -274,7 +276,9 @@ class ServiceMonitor:
             start_time = time.time()
 
             # Use configuration system for knowledge base URL
-            kb_url = config.get_service_url("backend", "/api/knowledge_base/stats/basic")
+            kb_url = config.get_service_url(
+                "backend", "/api/knowledge_base/stats/basic"
+            )
 
             timeout = aiohttp.ClientTimeout(
                 total=config.get_timeout("knowledge_base", "search"),
@@ -518,7 +522,12 @@ class ServiceMonitor:
             remote_vms = {
                 name: host
                 for name, host in vm_hosts.items()
-                if host not in [NetworkConstants.LOCALHOST_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.MAIN_MACHINE_IP]
+                if host
+                not in [
+                    NetworkConstants.LOCALHOST_IP,
+                    NetworkConstants.LOCALHOST_NAME,
+                    NetworkConstants.MAIN_MACHINE_IP,
+                ]
             }
 
             # Add main machine status
@@ -944,7 +953,11 @@ async def get_single_vm_status(vm_name: str):
     host = vm_hosts[vm_name]
 
     # Special case for main machine
-    if host in [NetworkConstants.LOCALHOST_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.MAIN_MACHINE_IP]:
+    if host in [
+        NetworkConstants.LOCALHOST_IP,
+        NetworkConstants.LOCALHOST_NAME,
+        NetworkConstants.MAIN_MACHINE_IP,
+    ]:
         return VMStatus(
             name="Main Machine (WSL)",
             host=host,
@@ -978,7 +991,12 @@ async def debug_vm_config():
             "remote_vms": {
                 name: host
                 for name, host in vm_hosts.items()
-                if host not in [NetworkConstants.LOCALHOST_IP, NetworkConstants.LOCALHOST_NAME, NetworkConstants.MAIN_MACHINE_IP]
+                if host
+                not in [
+                    NetworkConstants.LOCALHOST_IP,
+                    NetworkConstants.LOCALHOST_NAME,
+                    NetworkConstants.MAIN_MACHINE_IP,
+                ]
             },
         }
     except Exception as e:

@@ -43,6 +43,7 @@ from tenacity import (
 from src.circuit_breaker import circuit_breaker_async
 from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
+
 # REFACTORED: Removed unused import from deprecated redis_pool_manager
 # from src.redis_pool_manager import get_redis_async
 from src.retry_mechanism import retry_network_operation
@@ -126,14 +127,14 @@ class LLMSettings(BaseSettings):
     """LLM configuration using pydantic-settings for async config management"""
 
     # Ollama settings
-    ollama_host: str = Field(default=NetworkConstants.MAIN_MACHINE_IP, env="OLLAMA_HOST")
+    ollama_host: str = Field(
+        default=NetworkConstants.MAIN_MACHINE_IP, env="OLLAMA_HOST"
+    )
     ollama_port: int = Field(default=NetworkConstants.OLLAMA_PORT, env="OLLAMA_PORT")
     # Removed timeout - using circuit breaker pattern instead
 
     # Model settings
-    default_model: str = Field(
-        default="mistral:7b", env="DEFAULT_LLM_MODEL"
-    )
+    default_model: str = Field(default="mistral:7b", env="DEFAULT_LLM_MODEL")
     temperature: float = Field(default=0.7, env="LLM_TEMPERATURE")
     top_k: int = Field(default=40, env="LLM_TOP_K")
     top_p: float = Field(default=0.9, env="LLM_TOP_P")
@@ -562,7 +563,7 @@ class LLMInterface:
                 http_client = get_http_client()
                 async with await http_client.get(
                     f"{self.ollama_host}/api/tags",
-                    timeout=aiohttp.ClientTimeout(total=5)
+                    timeout=aiohttp.ClientTimeout(total=5),
                 ) as response:
                     return response.status == 200
 
@@ -1092,18 +1093,28 @@ class LLMInterface:
 
         try:
             # Initialize vLLM provider if not already initialized
-            if not hasattr(self, '_vllm_provider') or self._vllm_provider is None:
+            if not hasattr(self, "_vllm_provider") or self._vllm_provider is None:
                 # Get model configuration
-                model_name = request.model_name or config.get("llm.vllm.default_model", "meta-llama/Llama-3.2-3B-Instruct")
+                model_name = request.model_name or config.get(
+                    "llm.vllm.default_model", "meta-llama/Llama-3.2-3B-Instruct"
+                )
 
                 vllm_config = {
                     "model": model_name,
-                    "tensor_parallel_size": config.get("llm.vllm.tensor_parallel_size", 1),
-                    "gpu_memory_utilization": config.get("llm.vllm.gpu_memory_utilization", 0.9),
+                    "tensor_parallel_size": config.get(
+                        "llm.vllm.tensor_parallel_size", 1
+                    ),
+                    "gpu_memory_utilization": config.get(
+                        "llm.vllm.gpu_memory_utilization", 0.9
+                    ),
                     "max_model_len": config.get("llm.vllm.max_model_len", 8192),
-                    "trust_remote_code": config.get("llm.vllm.trust_remote_code", False),
+                    "trust_remote_code": config.get(
+                        "llm.vllm.trust_remote_code", False
+                    ),
                     "dtype": config.get("llm.vllm.dtype", "auto"),
-                    "enable_chunked_prefill": config.get("llm.vllm.enable_chunked_prefill", True),  # Prefix caching
+                    "enable_chunked_prefill": config.get(
+                        "llm.vllm.enable_chunked_prefill", True
+                    ),  # Prefix caching
                 }
 
                 self._vllm_provider = VLLMProvider(vllm_config)
@@ -1219,7 +1230,7 @@ class LLMInterface:
         available_tools: Optional[list] = None,
         recent_context: Optional[str] = None,
         additional_params: Optional[dict] = None,
-        **llm_params
+        **llm_params,
     ) -> LLMResponse:
         """
         Convenience method for chat completion with vLLM-optimized prompts.
@@ -1274,7 +1285,7 @@ class LLMInterface:
                 {"role": "user", "content": user_message},
             ],
             provider="vllm",  # Use vLLM for prefix caching
-            **llm_params
+            **llm_params,
         )
 
         # Execute

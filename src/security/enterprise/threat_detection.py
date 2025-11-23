@@ -95,7 +95,9 @@ class ThreatDetectionEngine:
 
     def __init__(
         self,
-        config_path: str = str(PATH.get_config_path("security", "threat_detection.yaml")),
+        config_path: str = str(
+            PATH.get_config_path("security", "threat_detection.yaml")
+        ),
     ):
         self.config_path = config_path
         self.config = self._load_config()

@@ -205,7 +205,9 @@ class CommandExecutionQueue:
             return commands
 
         except Exception as e:
-            logger.error(f"Failed to get terminal commands for {terminal_session_id}: {e}")
+            logger.error(
+                f"Failed to get terminal commands for {terminal_session_id}: {e}"
+            )
             return []
 
     async def get_chat_commands(
@@ -271,7 +273,9 @@ class CommandExecutionQueue:
             logger.error(f"Failed to get pending approvals: {e}")
             return []
 
-    async def get_latest_pending_for_chat(self, chat_id: str) -> Optional[CommandExecution]:
+    async def get_latest_pending_for_chat(
+        self, chat_id: str
+    ) -> Optional[CommandExecution]:
         """
         Get the most recent pending approval for a chat.
 
@@ -281,7 +285,9 @@ class CommandExecutionQueue:
         Returns:
             Latest pending command or None
         """
-        commands = await self.get_chat_commands(chat_id, state_filter=CommandState.PENDING_APPROVAL)
+        commands = await self.get_chat_commands(
+            chat_id, state_filter=CommandState.PENDING_APPROVAL
+        )
         return commands[0] if commands else None
 
     async def approve_command(
