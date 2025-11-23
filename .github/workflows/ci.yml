@@ -20,7 +20,7 @@ jobs:
       run: |
         # Use pyenv Python if available
         if [ -d "$HOME/.pyenv" ]; then
-          export PATH="$HOME/.pyenv/shims:$PATH"
+          echo "$HOME/.pyenv/shims" >> $GITHUB_PATH
           eval "$(pyenv init -)"
         fi
         python3 --version
@@ -44,11 +44,6 @@ jobs:
 
     - name: Install Python dependencies
       run: |
-        # Ensure pyenv is in PATH
-        if [ -d "$HOME/.pyenv" ]; then
-          export PATH="$HOME/.pyenv/shims:$PATH"
-          eval "$(pyenv init -)"
-        fi
         # Upgrade pip to latest version for better wheel support
         python3 -m pip install --upgrade pip==24.0 setuptools wheel
 
@@ -273,7 +268,7 @@ jobs:
       run: |
         # Use pyenv Python if available
         if [ -d "$HOME/.pyenv" ]; then
-          export PATH="$HOME/.pyenv/shims:$PATH"
+          echo "$HOME/.pyenv/shims" >> $GITHUB_PATH
           eval "$(pyenv init -)"
         fi
         python3 --version
@@ -281,11 +276,6 @@ jobs:
 
     - name: Install dependencies
       run: |
-        # Ensure pyenv is in PATH
-        if [ -d "$HOME/.pyenv" ]; then
-          export PATH="$HOME/.pyenv/shims:$PATH"
-          eval "$(pyenv init -)"
-        fi
         # Upgrade pip to latest version for better wheel support
         python3 -m pip install --upgrade pip==24.0 setuptools wheel
         python3 -m pip install --upgrade build

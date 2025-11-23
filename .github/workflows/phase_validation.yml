@@ -28,7 +28,7 @@ jobs:
       run: |
         # Use pyenv Python if available, otherwise system Python
         if [ -d "$HOME/.pyenv" ]; then
-          export PATH="$HOME/.pyenv/shims:$PATH"
+          echo "$HOME/.pyenv/shims" >> $GITHUB_PATH
           eval "$(pyenv init -)"
         fi
         python3 --version
@@ -50,11 +50,6 @@ jobs:
 
     - name: Install Python dependencies
       run: |
-        # Ensure pyenv is in PATH
-        if [ -d "$HOME/.pyenv" ]; then
-          export PATH="$HOME/.pyenv/shims:$PATH"
-          eval "$(pyenv init -)"
-        fi
         python3 -m pip install --upgrade pip
         python3 -m pip install aiohttp psutil requests pyyaml
 
