@@ -189,8 +189,8 @@
             @vectorize-folder="handleVectorizeFolder"
           />
 
-          <!-- Load More button for cursor-based pagination -->
-          <div v-if="hasMoreEntries && !isLoadingMore" class="load-more-container">
+          <!-- Load More button for cursor-based pagination (only for user knowledge modes) -->
+          <div v-if="(props.mode === 'user' || props.mode === 'user-knowledge') && hasMoreEntries && !isLoadingMore" class="load-more-container">
             <BaseButton
               variant="primary"
               @click="loadMoreEntries"
@@ -201,7 +201,7 @@
             </BaseButton>
           </div>
 
-          <div v-if="isLoadingMore" class="loading-more">
+          <div v-if="(props.mode === 'user' || props.mode === 'user-knowledge') && isLoadingMore" class="loading-more">
             <i class="fas fa-spinner fa-spin"></i>
             <span>Loading more entries...</span>
           </div>
@@ -1078,6 +1078,8 @@ onUnmounted(() => {
 
 // Watch mode changes
 watch(() => props.mode, () => {
+  // Reset pagination state when switching modes
+  resetPagination()
   loadKnowledgeTree(loadKnowledgeTreeFn)
   clearSelection()
   expandedNodes.value.clear()
