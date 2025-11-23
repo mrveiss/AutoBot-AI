@@ -559,13 +559,16 @@ export function setupGlobalChunkErrorHandlers() {
     const target = event.target as HTMLScriptElement | HTMLLinkElement
 
     if (target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
+      const url = target.tagName === 'LINK'
+        ? (target as HTMLLinkElement).href
+        : (target as HTMLScriptElement).src
+
       console.warn('[CacheManagement] Resource loading error detected:', {
-        url: target.href || (target as HTMLScriptElement).src,
+        url: url,
         type: target.tagName
       })
 
       // Check if this looks like a chunk loading error
-      const url = target.href || (target as HTMLScriptElement).src
       if (url?.includes('/js/') || url?.includes('chunk')) {
 
         try {

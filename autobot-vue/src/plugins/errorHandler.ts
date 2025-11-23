@@ -81,7 +81,11 @@ class GlobalErrorHandler {
         const response = await originalFetch(...args)
 
         if (!response.ok) {
-          const requestUrl = typeof args[0] === 'string' ? args[0] : args[0]?.url
+          const requestUrl = typeof args[0] === 'string'
+            ? args[0]
+            : args[0] instanceof URL
+              ? args[0].href
+              : (args[0] as Request)?.url
 
           // Track HTTP errors
           rumAgent.trackError('http_error', {
@@ -136,10 +140,16 @@ class GlobalErrorHandler {
         }
 
         // Track network errors
+        const requestUrl = typeof args[0] === 'string'
+          ? args[0]
+          : args[0] instanceof URL
+            ? args[0].href
+            : (args[0] as Request)?.url
+
         rumAgent.trackError('network_error', {
           message: (error as Error).message,
           stack: (error as Error).stack,
-          url: typeof args[0] === 'string' ? args[0] : args[0]?.url,
+          url: requestUrl,
           source: 'fetch_interceptor'
         })
 
