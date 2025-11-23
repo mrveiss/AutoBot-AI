@@ -398,6 +398,7 @@ export default {
     const loading = ref(false)
     const browserStatus = ref('initializing')
     const currentUrl = ref(props.initialUrl)
+    const pageTitle = ref('')
     const addressBarUrl = ref(props.initialUrl)
     const isPopout = ref(false)
     const isFullscreen = ref(false)
@@ -907,6 +908,7 @@ export default {
       loading,
       browserStatus,
       currentUrl,
+      pageTitle,
       addressBarUrl,
       isPopout,
       isFullscreen,
