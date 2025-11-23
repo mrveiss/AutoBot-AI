@@ -362,7 +362,7 @@ const openDocument = async (document: KnowledgeDocument) => {
     // Fetch full document if content is not available or truncated
     if (!document.content || document.content.length < 300) {
       const fullDocument = await knowledgeRepo.getDocument(document.id)
-      selectedDocument.value = fullDocument as KnowledgeDocument
+      selectedDocument.value = fullDocument as unknown as KnowledgeDocument
     } else {
       selectedDocument.value = document
     }
