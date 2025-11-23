@@ -64,7 +64,8 @@ export function useInfrastructure() {
       return data
     } catch (err: any) {
       error.value = err.message || 'Failed to fetch hosts'
-      showSubtleErrorNotification('Fetch Hosts Failed', error.value, 'error')
+      // Issue #156 Fix: Handle null error.value with fallback
+      showSubtleErrorNotification('Fetch Hosts Failed', error.value || 'Unknown error', 'error')
       console.error('Error fetching hosts:', err)
       return { hosts: [] }
     } finally {
@@ -96,11 +97,13 @@ export function useInfrastructure() {
         hosts.value.push(data as Host)
       }
 
-      showSubtleErrorNotification('Host Added', `Successfully added ${data.hostname}`, 'success')
+      // Issue #156 Fix: Change 'success' to 'info' (valid severity type)
+      showSubtleErrorNotification('Host Added', `Successfully added ${data.hostname}`, 'info')
       return data
     } catch (err: any) {
       error.value = err.message || 'Failed to add host'
-      showSubtleErrorNotification('Add Host Failed', error.value, 'error')
+      // Issue #156 Fix: Handle null error.value with fallback
+      showSubtleErrorNotification('Add Host Failed', error.value || 'Unknown error', 'error')
       console.error('Error adding host:', err)
       throw err
     } finally {
@@ -124,11 +127,13 @@ export function useInfrastructure() {
         hosts.value[index] = { ...hosts.value[index], ...data }
       }
 
-      showSubtleErrorNotification('Host Updated', `Successfully updated ${data.hostname}`, 'success')
+      // Issue #156 Fix: Change 'success' to 'info' (valid severity type)
+      showSubtleErrorNotification('Host Updated', `Successfully updated ${data.hostname}`, 'info')
       return data
     } catch (err: any) {
       error.value = err.message || 'Failed to update host'
-      showSubtleErrorNotification('Update Host Failed', error.value, 'error')
+      // Issue #156 Fix: Handle null error.value with fallback
+      showSubtleErrorNotification('Update Host Failed', error.value || 'Unknown error', 'error')
       console.error('Error updating host:', err)
       throw err
     } finally {
@@ -146,10 +151,12 @@ export function useInfrastructure() {
     try {
       await api.delete(`/api/iac/hosts/${hostId}`)
       hosts.value = hosts.value.filter(h => h.id !== hostId)
-      showSubtleErrorNotification('Host Deleted', 'Successfully deleted host', 'success')
+      // Issue #156 Fix: Change 'success' to 'info' (valid severity type)
+      showSubtleErrorNotification('Host Deleted', 'Successfully deleted host', 'info')
     } catch (err: any) {
       error.value = err.message || 'Failed to delete host'
-      showSubtleErrorNotification('Delete Host Failed', error.value, 'error')
+      // Issue #156 Fix: Handle null error.value with fallback
+      showSubtleErrorNotification('Delete Host Failed', error.value || 'Unknown error', 'error')
       console.error('Error deleting host:', err)
       throw err
     } finally {
@@ -181,11 +188,13 @@ export function useInfrastructure() {
         }
       })
 
-      showSubtleErrorNotification('Deployment Started', `Deploying to ${hostIds.length} host(s)`, 'success')
+      // Issue #156 Fix: Change 'success' to 'info' (valid severity type)
+      showSubtleErrorNotification('Deployment Started', `Deploying to ${hostIds.length} host(s)`, 'info')
       return data
     } catch (err: any) {
       error.value = err.message || 'Failed to start deployment'
-      showSubtleErrorNotification('Deployment Failed', error.value, 'error')
+      // Issue #156 Fix: Handle null error.value with fallback
+      showSubtleErrorNotification('Deployment Failed', error.value || 'Unknown error', 'error')
       console.error('Error deploying:', err)
       throw err
     } finally {
@@ -237,7 +246,8 @@ export function useInfrastructure() {
       const data = await response.json()
 
       if (data.success) {
-        showSubtleErrorNotification('Connection Test', 'Successfully connected to host', 'success')
+        // Issue #156 Fix: Change 'success' to 'info' (valid severity type)
+        showSubtleErrorNotification('Connection Test', 'Successfully connected to host', 'info')
       } else {
         showSubtleErrorNotification('Connection Test', data.error || 'Failed to connect', 'error')
       }

@@ -1,14 +1,13 @@
 import { defineAsyncComponent, defineComponent, h } from 'vue'
 import type { AsyncComponentLoader, Component } from 'vue'
 import AsyncErrorFallback from '@/components/async/AsyncErrorFallback.vue'
+// Issue #156 Fix: Import RumAgent to get complete Window.rum type
+import '../utils/RumAgent'
 
 // Type declarations for global objects
 declare global {
   interface Window {
-    rum?: {
-      trackError: (type: string, data: any) => void
-      trackUserInteraction: (type: string, element: any, data: any) => void
-    }
+    // Issue #156 Fix: rum is declared in RumAgent.ts with complete type
     __webpack_require__?: {
       cache: Record<string, any>
     }
@@ -124,13 +123,16 @@ export function defineRobustAsyncComponent(
       retryCount = 0
 
       return component
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`[RobustAsyncComponent] Failed to load ${name}:`, error)
 
+      // Issue #156 Fix: Type guard for error message property
+      const errorMessage = (error as any)?.message || String(error)
+
       // Check if this is a chunk loading error
-      const isChunkError = error?.message?.includes('Loading chunk') ||
-                           error?.message?.includes('ChunkLoadError') ||
-                           error?.message?.includes('Loading CSS chunk')
+      const isChunkError = errorMessage.includes('Loading chunk') ||
+                           errorMessage.includes('ChunkLoadError') ||
+                           errorMessage.includes('Loading CSS chunk')
 
       if (isChunkError) {
         console.warn(`[RobustAsyncComponent] Chunk loading error detected for ${name}, using cache management...`)

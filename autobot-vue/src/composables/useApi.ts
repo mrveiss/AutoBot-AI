@@ -64,16 +64,19 @@ export function useApiWithState() {
 
       try {
         return await apiCall()
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('API call failed:', error)
 
         if (showErrorToast && !silent) {
+          // Issue #156 Fix: Add type guards for unknown error
+          const errorObj = error as any // Type assertion for error with response/message properties
+
           // Use subtle error notification instead of intrusive popup
-          const fullErrorMessage = error.response?.data?.detail || error.message || errorMessage
+          const fullErrorMessage = errorObj.response?.data?.detail || errorObj.message || errorMessage
 
           // Check if this is a network/server error
-          const isServerError = error.response?.status >= 500 || error.message?.includes('HTTP 500')
-          const isNetworkError = error.message?.includes('Failed to fetch') || error.message?.includes('Network Error')
+          const isServerError = errorObj.response?.status >= 500 || errorObj.message?.includes('HTTP 500')
+          const isNetworkError = errorObj.message?.includes('Failed to fetch') || errorObj.message?.includes('Network Error')
 
           // Determine severity
           const severity = (isServerError || isNetworkError) ? 'warning' : 'error'
@@ -191,7 +194,11 @@ export function useChatApi() {
      */
     async resetChat() {
       return withErrorHandling(
-        () => api.resetChat(),
+        // Issue #156 Fix: ApiClient doesn't have resetChat(), use direct HTTP call
+        async () => {
+          const response = await api.post('/api/chat/reset')
+          return await response.json()
+        },
         { errorMessage: 'Failed to reset chat' }
       )
     },
@@ -245,7 +252,11 @@ export function useSettingsApi() {
      */
     async getBackendSettings() {
       return withErrorHandling(
-        () => api.getBackendSettings(),
+        // Issue #156 Fix: ApiClient doesn't have getBackendSettings(), use direct HTTP call
+        async () => {
+          const response = await api.get('/api/settings/backend')
+          return await response.json()
+        },
         {
           errorMessage: 'Failed to load backend settings',
           fallbackValue: {}
@@ -258,7 +269,11 @@ export function useSettingsApi() {
      */
     async updateBackendSettings(settings: Record<string, any>) {
       return withErrorHandling(
-        () => api.saveBackendSettings(settings),
+        // Issue #156 Fix: ApiClient doesn't have saveBackendSettings(), use direct HTTP call
+        async () => {
+          const response = await api.post('/api/settings/backend', settings)
+          return await response.json()
+        },
         { errorMessage: 'Failed to update backend settings' }
       )
     }
@@ -277,7 +292,11 @@ export function useKnowledgeApi() {
      */
     async search(query: string, limit = 10) {
       return withErrorHandling(
-        () => api.searchKnowledge(query, limit),
+        // Issue #156 Fix: ApiClient doesn't have searchKnowledge(), use direct HTTP call
+        async () => {
+          const response = await api.get(`/api/knowledge/search?query=${encodeURIComponent(query)}&limit=${limit}`)
+          return await response.json()
+        },
         {
           errorMessage: 'Failed to search knowledge base',
           fallbackValue: { results: [] }
@@ -290,7 +309,11 @@ export function useKnowledgeApi() {
      */
     async addText(text: string, title?: string, source?: string) {
       return withErrorHandling(
-        () => api.addTextToKnowledge(text, title, source),
+        // Issue #156 Fix: ApiClient doesn't have addTextToKnowledge(), use direct HTTP call
+        async () => {
+          const response = await api.post('/api/knowledge/text', { text, title, source })
+          return await response.json()
+        },
         { errorMessage: 'Failed to add text to knowledge base' }
       )
     },
@@ -300,7 +323,11 @@ export function useKnowledgeApi() {
      */
     async addUrl(url: string, method = 'fetch') {
       return withErrorHandling(
-        () => api.addUrlToKnowledge(url, method),
+        // Issue #156 Fix: ApiClient doesn't have addUrlToKnowledge(), use direct HTTP call
+        async () => {
+          const response = await api.post('/api/knowledge/url', { url, method })
+          return await response.json()
+        },
         { errorMessage: 'Failed to add URL to knowledge base' }
       )
     },
@@ -310,7 +337,13 @@ export function useKnowledgeApi() {
      */
     async addFile(file: File) {
       return withErrorHandling(
-        () => api.addFileToKnowledge(file),
+        // Issue #156 Fix: ApiClient doesn't have addFileToKnowledge(), use direct HTTP call
+        async () => {
+          const formData = new FormData()
+          formData.append('file', file)
+          const response = await api.post('/api/knowledge/file', formData)
+          return await response.json()
+        },
         { errorMessage: 'Failed to add file to knowledge base' }
       )
     }
@@ -329,10 +362,15 @@ export function useConnectionStatus() {
      */
     async testConnection() {
       return withErrorHandling(
-        () => api.testConnection(),
+        // Issue #156 Fix: ApiClient doesn't have testConnection(), use checkHealth() instead
+        async () => {
+          const result = await api.checkHealth()
+          // Issue #156 Fix: Use null as string | null to allow both null and string in error property
+          return { connected: true, result, error: null as string | null }
+        },
         {
           errorMessage: 'Connection test failed',
-          fallbackValue: { connected: false, error: 'Connection test failed' },
+          fallbackValue: { connected: false, result: null, error: 'Connection test failed' },
           silent: true // Connection tests shouldn't show user notifications
         }
       )
@@ -342,21 +380,24 @@ export function useConnectionStatus() {
      * Get current base URL
      */
     getBaseUrl() {
-      return api.getBaseUrl()
+      // Issue #156 Fix: ApiClient doesn't have getBaseUrl(), access private property via type assertion
+      return (api as any).baseUrl || ''
     },
 
     /**
      * Update base URL
      */
     setBaseUrl(url: string) {
-      api.setBaseUrl(url)
+      // Issue #156 Fix: ApiClient doesn't have setBaseUrl(), set private property via type assertion
+      (api as any).baseUrl = url
     },
 
     /**
      * Update timeout
      */
     setTimeout(timeout: number) {
-      api.setTimeout(timeout)
+      // Issue #156 Fix: ApiClient doesn't have setTimeout(), set private property via type assertion
+      (api as any).timeout = timeout
     }
   }
 }
@@ -373,7 +414,11 @@ export function useFileApi() {
      */
     async listFiles(path = '') {
       return withErrorHandling(
-        () => api.listFiles(path),
+        // Issue #156 Fix: ApiClient doesn't have listFiles(), use direct HTTP call
+        async () => {
+          const response = await api.get(`/api/files/list?path=${encodeURIComponent(path)}`)
+          return await response.json()
+        },
         {
           errorMessage: 'Failed to list files',
           fallbackValue: {
@@ -392,7 +437,15 @@ export function useFileApi() {
      */
     async uploadFile(file: File, path = '', overwrite = false) {
       return withErrorHandling(
-        () => api.uploadFile(file, path, overwrite),
+        // Issue #156 Fix: ApiClient doesn't have uploadFile(), use direct HTTP call
+        async () => {
+          const formData = new FormData()
+          formData.append('file', file)
+          formData.append('path', path)
+          formData.append('overwrite', String(overwrite))
+          const response = await api.post('/api/files/upload', formData)
+          return await response.json()
+        },
         { errorMessage: 'Failed to upload file' }
       )
     },
@@ -402,7 +455,11 @@ export function useFileApi() {
      */
     async viewFile(path: string) {
       return withErrorHandling(
-        () => api.viewFile(path),
+        // Issue #156 Fix: ApiClient doesn't have viewFile(), use direct HTTP call
+        async () => {
+          const response = await api.get(`/api/files/view?path=${encodeURIComponent(path)}`)
+          return await response.json()
+        },
         { errorMessage: 'Failed to view file' }
       )
     },
@@ -412,7 +469,11 @@ export function useFileApi() {
      */
     async deleteFile(path: string) {
       return withErrorHandling(
-        () => api.deleteFile(path),
+        // Issue #156 Fix: ApiClient doesn't have deleteFile(), use direct HTTP call
+        async () => {
+          const response = await api.delete(`/api/files?path=${encodeURIComponent(path)}`)
+          return await response.json()
+        },
         { errorMessage: 'Failed to delete file' }
       )
     },
@@ -422,7 +483,11 @@ export function useFileApi() {
      */
     async downloadFile(path: string) {
       return withErrorHandling(
-        () => api.downloadFile(path),
+        // Issue #156 Fix: ApiClient doesn't have downloadFile(), use direct HTTP call
+        async () => {
+          const response = await api.get(`/api/files/download?path=${encodeURIComponent(path)}`)
+          return await response.blob()
+        },
         { errorMessage: 'Failed to download file' }
       )
     },
@@ -432,7 +497,11 @@ export function useFileApi() {
      */
     async createDirectory(path = '', name: string) {
       return withErrorHandling(
-        () => api.createDirectory(path, name),
+        // Issue #156 Fix: ApiClient doesn't have createDirectory(), use direct HTTP call
+        async () => {
+          const response = await api.post('/api/files/directory', { path, name })
+          return await response.json()
+        },
         { errorMessage: 'Failed to create directory' }
       )
     },
@@ -442,7 +511,11 @@ export function useFileApi() {
      */
     async getFileStats() {
       return withErrorHandling(
-        () => api.getFileStats(),
+        // Issue #156 Fix: ApiClient doesn't have getFileStats(), use direct HTTP call
+        async () => {
+          const response = await api.get('/api/files/stats')
+          return await response.json()
+        },
         {
           errorMessage: 'Failed to get file statistics',
           fallbackValue: {

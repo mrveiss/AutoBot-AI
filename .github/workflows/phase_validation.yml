@@ -230,7 +230,7 @@ jobs:
         echo "=========================="
 
         if [ -f "phase_validation_results.json" ]; then
-          python3 -c "
+          python3 <<'PYSCRIPT'
 import json
 with open('phase_validation_results.json', 'r') as f:
     results = json.load(f)
@@ -250,7 +250,7 @@ elif maturity >= 60:
     print('🔧 System is development-ready')
 else:
     print('🚧 System needs additional development')
-"
+PYSCRIPT
         else
           echo "❌ No validation results found"
         fi
