@@ -705,9 +705,15 @@ const loadUserKnowledge = async () => {
 }
 
 const loadMoreEntries = async () => {
+  // Save expanded paths before rebuild to preserve tree state
+  const expandedPaths = getExpandedPaths(treeData.value, expandedNodes.value)
+
   await loadMore()
   // Rebuild tree with all accumulated entries
   buildTreeFromEntries(allLoadedEntries.value)
+
+  // Restore expanded state after rebuild
+  restoreExpandedState(treeData.value, expandedPaths)
 }
 
 const buildTreeFromEntries = (entries: any[]) => {
@@ -991,6 +997,44 @@ const findNode = (nodes: TreeNode[], id: string): TreeNode | null => {
     }
   }
   return null
+}
+
+// Helper to collect paths of expanded nodes before tree rebuild
+const getExpandedPaths = (nodes: TreeNode[], expandedNodeIds: Set<string>): Set<string> => {
+  const paths = new Set<string>()
+
+  const collectPaths = (nodes: TreeNode[]) => {
+    for (const node of nodes) {
+      if (expandedNodeIds.has(node.id)) {
+        paths.add(node.path)
+      }
+      if (node.children) {
+        collectPaths(node.children)
+      }
+    }
+  }
+
+  collectPaths(nodes)
+  return paths
+}
+
+// Helper to restore expanded state from paths after tree rebuild
+const restoreExpandedState = (nodes: TreeNode[], expandedPaths: Set<string>) => {
+  const newExpandedIds = new Set<string>()
+
+  const restorePaths = (nodes: TreeNode[]) => {
+    for (const node of nodes) {
+      if (expandedPaths.has(node.path)) {
+        newExpandedIds.add(node.id)
+      }
+      if (node.children) {
+        restorePaths(node.children)
+      }
+    }
+  }
+
+  restorePaths(nodes)
+  expandedNodes.value = newExpandedIds
 }
 
 const clearSelection = () => {
