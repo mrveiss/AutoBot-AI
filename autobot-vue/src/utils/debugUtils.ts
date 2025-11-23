@@ -360,7 +360,7 @@ export function setStorageJson(
   value: any,
   type: StorageType = 'localStorage'
 ): boolean {
-  const json = safeJsonStringify(value, null)
+  const json = safeJsonStringify(value)
   if (json === null) {
     return false
   }

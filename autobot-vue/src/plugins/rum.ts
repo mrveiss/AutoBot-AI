@@ -15,9 +15,10 @@ export default {
     // Configure Vue error handler
     app.config.errorHandler = (error, instance, info) => {
       // Track Vue errors with RUM
+      const err = error as Error
       rumAgent.trackError('vue_error', {
-        message: error.message,
-        stack: error.stack,
+        message: err.message,
+        stack: err.stack,
         componentInfo: info,
         component: (instance as any)?.$options?.name || 'unknown'
       })
