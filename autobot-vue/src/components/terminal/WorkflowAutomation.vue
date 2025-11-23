@@ -249,7 +249,7 @@ const startAutomatedWorkflow = (workflowData: WorkflowData) => {
     totalSteps: workflowData.steps.length,
     command: step.command,
     description: step.description || `Execute: ${step.command}`,
-    explanation: step.explanation || null,
+    explanation: step.explanation,
     requiresConfirmation: step.requiresConfirmation !== false // Default to true
   })) || []
 
@@ -262,7 +262,7 @@ const startAutomatedWorkflow = (workflowData: WorkflowData) => {
     totalSteps: workflowData.steps.length,
     command: step.command,
     description: step.description || `Execute: ${step.command}`,
-    explanation: step.explanation || null,
+    explanation: step.explanation,
     requiresConfirmation: step.requiresConfirmation !== false // Default to true
   }))
   automationQueue.value = queue
