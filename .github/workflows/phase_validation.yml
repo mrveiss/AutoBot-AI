@@ -230,7 +230,8 @@ jobs:
         echo "=========================="
 
         if [ -f "phase_validation_results.json" ]; then
-          python3 -c "import json
+          python3 -c "
+import json
 with open('phase_validation_results.json', 'r') as f:
     results = json.load(f)
 
