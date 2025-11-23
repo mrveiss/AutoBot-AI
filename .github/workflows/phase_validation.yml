@@ -18,7 +18,7 @@ env:
 jobs:
   phase-validation:
     name: AutoBot Phase Validation
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
     - name: Checkout code
@@ -256,7 +256,7 @@ else:
 
   integration-validation:
     name: Integration Phase Validation
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: phase-validation
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev_new_gui'
 
