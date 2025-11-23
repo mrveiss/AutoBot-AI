@@ -513,34 +513,37 @@ export function useArrowKeys(
   },
   options: Omit<KeyPressOptions, 'condition'> = {}
 ): void {
-  const handleArrowKey = (event: KeyboardEvent): void => {
-    switch (event.key) {
+  // Issue #156 Fix: addEventListener expects Event, not KeyboardEvent
+  // Type as Event and assert to KeyboardEvent inside
+  const handleArrowKey = (event: Event): void => {
+    const keyEvent = event as KeyboardEvent
+    switch (keyEvent.key) {
       case 'ArrowUp':
         if (handlers.up) {
-          if (options.preventDefault) event.preventDefault()
-          if (options.stopPropagation) event.stopPropagation()
-          handlers.up(event)
+          if (options.preventDefault) keyEvent.preventDefault()
+          if (options.stopPropagation) keyEvent.stopPropagation()
+          handlers.up(keyEvent)
         }
         break
       case 'ArrowDown':
         if (handlers.down) {
-          if (options.preventDefault) event.preventDefault()
-          if (options.stopPropagation) event.stopPropagation()
-          handlers.down(event)
+          if (options.preventDefault) keyEvent.preventDefault()
+          if (options.stopPropagation) keyEvent.stopPropagation()
+          handlers.down(keyEvent)
         }
         break
       case 'ArrowLeft':
         if (handlers.left) {
-          if (options.preventDefault) event.preventDefault()
-          if (options.stopPropagation) event.stopPropagation()
-          handlers.left(event)
+          if (options.preventDefault) keyEvent.preventDefault()
+          if (options.stopPropagation) keyEvent.stopPropagation()
+          handlers.left(keyEvent)
         }
         break
       case 'ArrowRight':
         if (handlers.right) {
-          if (options.preventDefault) event.preventDefault()
-          if (options.stopPropagation) event.stopPropagation()
-          handlers.right(event)
+          if (options.preventDefault) keyEvent.preventDefault()
+          if (options.stopPropagation) keyEvent.stopPropagation()
+          handlers.right(keyEvent)
         }
         break
     }
