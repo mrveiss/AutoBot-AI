@@ -354,10 +354,13 @@ export const useTerminalStore = defineStore('terminal', () => {
     requestAgentControl,
     cleanup
   }
-}, {
+},
+// @ts-ignore - pinia-plugin-persistedstate options
+{
   persist: {
     key: 'autobot-terminal-store',
     storage: localStorage,
+    // @ts-ignore - pinia-plugin-persistedstate paths option
     paths: ['selectedHost'] // Only persist selectedHost (Map objects don't serialize to JSON correctly)
   }
 })
