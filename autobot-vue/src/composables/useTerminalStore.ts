@@ -354,15 +354,10 @@ export const useTerminalStore = defineStore('terminal', () => {
     requestAgentControl,
     cleanup
   }
-},
-// Issue #156 Fix: pinia-plugin-persistedstate types not properly integrated
-// persist and paths options are valid but TypeScript doesn't recognize them
-// @ts-expect-error - pinia-plugin-persistedstate options
-{
+}, {
   persist: {
     key: 'autobot-terminal-store',
     storage: localStorage,
-    // @ts-expect-error - pinia-plugin-persistedstate paths option
     paths: ['selectedHost'] // Only persist selectedHost (Map objects don't serialize to JSON correctly)
   }
 })
