@@ -6,7 +6,7 @@
  */
 
 import { buildDefaultServiceUrl, buildDefaultVncUrl } from './defaults.js';
-import { NetworkConstants } from '../constants/network-constants.js';
+import { NetworkConstants } from '../constants/network';
 
 export default class ServiceDiscovery {
   constructor() {

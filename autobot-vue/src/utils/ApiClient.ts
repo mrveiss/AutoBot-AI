@@ -1,5 +1,5 @@
 import appConfig from '@/config/AppConfig.js';
-import { NetworkConstants } from '@/constants/network-constants.js';
+import { NetworkConstants } from '@/constants/network';
 
 // Type definitions for API client
 export interface RequestOptions {

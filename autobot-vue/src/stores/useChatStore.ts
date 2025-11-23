@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { generateChatId, generateMessageId } from '@/utils/ChatIdGenerator.js'
-import { NetworkConstants } from '@/constants/network-constants.js'
+import { NetworkConstants } from '@/constants/network'
 
 export interface ChatMessage {
   id: string

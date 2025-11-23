@@ -6,7 +6,7 @@
  */
 
 import { ref, onMounted, onUnmounted } from 'vue'
-import { NetworkConstants } from '@/constants/network-constants.js'
+import { NetworkConstants } from '@/constants/network'
 import redisServiceAPI from '@/services/RedisServiceAPI'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 

@@ -750,7 +750,7 @@
 import type { HealthStatus } from "@/types/settings"
 
 import { computed, ref, reactive, onMounted } from 'vue'
-import { NetworkConstants } from '@/constants/network-constants.js'
+import { NetworkConstants } from '@/constants/network'
 
 
 interface EmbeddingSettings {

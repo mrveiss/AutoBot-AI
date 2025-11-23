@@ -6,7 +6,7 @@
  */
 
 import { vi } from 'vitest'
-import { NetworkConstants, ServiceURLs } from '@/constants/network-constants.js'
+import { NetworkConstants, ServiceURLs } from '@/constants/network'
 
 // Test environment configuration
 export const TEST_CONFIG = {

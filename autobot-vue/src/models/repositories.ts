@@ -3,7 +3,7 @@
  * Provides type-safe access to backend services
  */
 
-import { NetworkConstants } from '@/constants/network-constants.js'
+import { NetworkConstants } from '@/constants/network'
 import type { SearchResult } from '@/stores/useKnowledgeStore'
 
 const API_BASE = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}/api`

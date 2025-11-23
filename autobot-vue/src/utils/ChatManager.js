@@ -1,7 +1,7 @@
 // ChatManager.js - Centralized chat management utility
 import appConfig from '@/config/AppConfig.js';
 import apiClient from '@/utils/ApiClient.js';
-import { NetworkConstants } from '@/constants/network-constants.js';
+import { NetworkConstants } from '@/constants/network';
 
 class ChatManager {
   constructor() {

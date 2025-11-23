@@ -128,7 +128,7 @@ import batchApiService from '@/services/BatchApiService'
 // MIGRATED: Using AppConfig.js for better configuration management
 import appConfig from '@/config/AppConfig.js'
 // FIXED: Import NetworkConstants for IP fallback values
-import { NetworkConstants } from '@/constants/network-constants.js'
+import { NetworkConstants } from '@/constants/network'
 
 // Components
 import ErrorBoundary from '@/components/ErrorBoundary.vue'

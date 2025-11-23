@@ -8,7 +8,7 @@
  * - Real-time connection recovery
  */
 
-import { NetworkConstants, ServiceURLs } from '../constants/network-constants.js';
+import { NetworkConstants, ServiceURLs } from '../constants/network';
 
 export class BackendFallbackService {
   constructor() {
