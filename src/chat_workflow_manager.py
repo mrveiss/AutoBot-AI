@@ -30,23 +30,6 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
-from backend.dependencies import global_config_manager
-from src.utils.redis_client import get_redis_client as get_redis_manager
-from src.async_chat_workflow import AsyncChatWorkflow, MessageType, WorkflowMessage
-
-# Import intent detection functions - Phase 2 Refactoring
-from src.chat_intent_detector import (
-    detect_exit_intent,
-    detect_user_intent,
-    select_context_prompt,
-)
-
-# Import comprehensive intent classification system - Issue #159
-from backend.intent_classifier import (
-    ConversationIntent,
-    IntentClassification,
-    IntentClassifier,
-)
 from backend.conversation_context import (
     ConversationContext,
     ConversationContextAnalyzer,
@@ -54,6 +37,22 @@ from backend.conversation_context import (
 from backend.conversation_safety import (
     ConversationSafetyGuards,
     SafetyCheckResult,
+)
+from backend.dependencies import global_config_manager
+
+# Import comprehensive intent classification system - Issue #159
+from backend.intent_classifier import (
+    ConversationIntent,
+    IntentClassification,
+    IntentClassifier,
+)
+from src.async_chat_workflow import AsyncChatWorkflow, MessageType, WorkflowMessage
+
+# Import intent detection functions - Phase 2 Refactoring
+from src.chat_intent_detector import (
+    detect_exit_intent,
+    detect_user_intent,
+    select_context_prompt,
 )
 from src.constants.network_constants import NetworkConstants
 from src.prompt_manager import get_prompt
@@ -63,6 +62,7 @@ from src.utils.error_boundaries import (
     error_boundary,
     get_error_boundary_manager,
 )
+from src.utils.redis_client import get_redis_client as get_redis_manager
 
 logger = logging.getLogger(__name__)
 
@@ -150,8 +150,8 @@ class ChatWorkflowManager:
         Returns:
             List of tool call dictionaries
         """
-        import re
         import html
+        import re
 
         logger.debug(
             f"[_parse_tool_calls] Searching for TOOL_CALL markers in text of length {len(text)}"

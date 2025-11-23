@@ -25,16 +25,16 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+import redis.asyncio as async_redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import (
     RedisError,
 )
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
-from src.utils.redis_client import get_redis_client as get_redis_manager
-import redis.asyncio as async_redis
 from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import unified_config_manager
+from src.utils.redis_client import get_redis_client as get_redis_manager
 
 logger = logging.getLogger(__name__)
 

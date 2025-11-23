@@ -11,7 +11,8 @@ with caching, validation, and integration with error_boundaries.py
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 import yaml
 
 from src.utils.error_boundaries import ErrorCategory

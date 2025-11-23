@@ -21,28 +21,26 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+# REUSABLE PRINCIPLE: Dependency Injection - import queue manager
+from backend.models.command_execution import CommandExecution, CommandState, RiskLevel
+from backend.services.command_approval_manager import (
+    AgentRole,
+    CommandApprovalManager,
+)
+from backend.services.command_execution_queue import get_command_queue
+from src.chat_history_manager import (  # CRITICAL FIX: Chat integration
+    ChatHistoryManager,
+)
+from src.chat_workflow_manager import ChatWorkflowManager  # For LLM interpretation
 from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 from src.logging.terminal_logger import TerminalLogger
 from src.monitoring.prometheus_metrics import get_metrics_manager
-from src.chat_history_manager import (
-    ChatHistoryManager,
-)  # CRITICAL FIX: Chat integration
-from src.chat_workflow_manager import ChatWorkflowManager  # For LLM interpretation
 from src.secure_command_executor import (
     CommandRisk,
     SecureCommandExecutor,
     SecurityPolicy,
 )
-
-# REUSABLE PRINCIPLE: Dependency Injection - import queue manager
-from backend.models.command_execution import CommandExecution, CommandState, RiskLevel
-from backend.services.command_execution_queue import get_command_queue
-from backend.services.command_approval_manager import (
-    AgentRole,
-    CommandApprovalManager,
-)
-
 
 # ============================================================================
 # REUSABLE HELPER FUNCTIONS (Single Responsibility Principle)
@@ -914,6 +912,7 @@ class AgentTerminalService:
         """
         import asyncio
         import time as time_module
+
         from backend.services.simple_pty import simple_pty_manager
 
         logger.info(f"[PTY_EXEC] Executing in PTY: {command}")

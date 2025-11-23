@@ -20,13 +20,13 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.catalog_http_exceptions import (
+    raise_not_found_error,
     raise_server_error,
     raise_service_unavailable,
-    raise_not_found_error,
     raise_validation_error,
 )
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 

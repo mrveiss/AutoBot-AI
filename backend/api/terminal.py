@@ -1061,8 +1061,8 @@ class ConsolidatedTerminalWebSocket:
                 # Prevents saving blank prompts and terminal UI elements to chat
                 if should_save and self._output_buffer.strip():
                     from src.utils.encoding_utils import (
-                        strip_ansi_codes,
                         is_terminal_prompt,
+                        strip_ansi_codes,
                     )
 
                     clean_content = strip_ansi_codes(self._output_buffer).strip()

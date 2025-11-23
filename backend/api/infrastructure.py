@@ -21,7 +21,6 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Upload
 from fastapi.responses import JSONResponse
 
 from backend.models.infrastructure import InfraHost, InfraRole
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from backend.schemas.infrastructure import (
     DeploymentCreate,
     DeploymentDetailResponse,
@@ -39,6 +38,7 @@ from backend.schemas.infrastructure import (
 from backend.services.infrastructure_db import InfrastructureDB
 from backend.services.ssh_provisioner import SSHKeyProvisioner
 from backend.tasks.deployment_tasks import deploy_host
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Infrastructure as Code"])

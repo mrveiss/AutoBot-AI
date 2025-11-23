@@ -22,8 +22,8 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from src.utils.redis_client import get_redis_client
 from src.constants.network_constants import NetworkConstants
+from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 

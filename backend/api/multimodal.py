@@ -26,7 +26,6 @@ from src.ai_hardware_accelerator import HardwareDevice, accelerated_embedding_ge
 
 # Import AutoBot multi-modal components
 from src.constants.network_constants import NetworkConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.npu_semantic_search import get_npu_search_engine
 from src.unified_multimodal_processor import (
     ModalityType,
@@ -34,6 +33,7 @@ from src.unified_multimodal_processor import (
     ProcessingIntent,
     unified_processor,
 )
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

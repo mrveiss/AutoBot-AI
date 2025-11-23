@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from src.constants.network_constants import NetworkConstants
 from src.constants.model_constants import ModelConstants
+from src.constants.network_constants import NetworkConstants
 
 # Conditional imports for optional dependencies
 try:

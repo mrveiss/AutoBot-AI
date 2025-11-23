@@ -6,16 +6,16 @@ Fast Document Scanner - Optimized Change Detection
 Uses file metadata instead of content reading for 100x speed improvement
 """
 
-import os
-import json
-import time
 import gzip
-import subprocess
-from pathlib import Path
-from typing import Dict, List, Set, Tuple, Optional
-from dataclasses import dataclass, asdict
-from datetime import datetime
+import json
 import logging
+import os
+import subprocess
+import time
+from dataclasses import asdict, dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 

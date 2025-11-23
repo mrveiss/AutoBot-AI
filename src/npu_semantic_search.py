@@ -19,7 +19,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import aiohttp
 import numpy as np
 
-from src.utils.http_client import get_http_client
 from src.ai_hardware_accelerator import (
     HardwareDevice,
     ProcessingTask,
@@ -33,6 +32,7 @@ from src.constants.network_constants import NetworkConstants
 from src.knowledge_base import KnowledgeBase
 from src.unified_config_manager import cfg
 from src.utils.chromadb_client import get_chromadb_client
+from src.utils.http_client import get_http_client
 from src.utils.logging_manager import get_llm_logger
 
 # Import ChromaDB for multi-modal vector storage

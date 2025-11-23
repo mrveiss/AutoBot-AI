@@ -58,7 +58,6 @@ from pathlib import Path
 from typing import Any, Collection, Iterable, Optional, Set, Union
 from urllib.parse import urlparse
 
-
 # ============================================================================
 # String Validators
 # ============================================================================

@@ -19,13 +19,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from src.utils.chromadb_client import get_chromadb_client
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
 from src.llm_interface import LLMInterface
+from src.utils.chromadb_client import get_chromadb_client
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

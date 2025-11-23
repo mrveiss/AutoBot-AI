@@ -30,8 +30,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from src.constants.network_constants import NetworkConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.constants.path_constants import PATH
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))

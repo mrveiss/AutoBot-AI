@@ -90,8 +90,8 @@ from tenacity import (
 )
 
 from src.constants.network_constants import NetworkConstants
-from src.unified_config_manager import config as config_manager
 from src.monitoring.prometheus_metrics import get_metrics_manager
+from src.unified_config_manager import config as config_manager
 
 logger = logging.getLogger(__name__)
 

@@ -19,9 +19,10 @@ import aiohttp
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from src.constants.network_constants import NetworkConstants
+
 # Import unified configuration system - NO HARDCODED VALUES
 from src.unified_config_manager import UnifiedConfigManager
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

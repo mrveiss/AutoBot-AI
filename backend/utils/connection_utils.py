@@ -15,8 +15,8 @@ from typing import Any, Dict
 
 import requests
 
-from src.constants.network_constants import NetworkConstants
 from src.constants.model_constants import ModelConstants
+from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import (
     HTTP_PROTOCOL,
     OLLAMA_HOST_IP,

@@ -33,7 +33,6 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 import aiofiles
 import aioredis
 import redis  # Needed for type hints (Optional[redis.Redis])
-from src.utils.chromadb_client import get_chromadb_client as create_chromadb_client
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from llama_index.core import Document, Settings, VectorStoreIndex
 from llama_index.core.node_parser import SentenceSplitter
@@ -46,6 +45,7 @@ from pypdf import PdfReader
 from src.circuit_breaker import circuit_breaker_async
 from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import UnifiedConfigManager
+from src.utils.chromadb_client import get_chromadb_client as create_chromadb_client
 from src.utils.error_boundaries import (
     ErrorCategory,
     ErrorContext,

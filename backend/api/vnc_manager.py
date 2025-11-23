@@ -6,9 +6,10 @@ VNC Manager API - Automatic VNC server lifecycle management
 Ensures VNC server is always available when noVNC tab is accessed
 """
 
-import subprocess
 import logging
+import subprocess
 from typing import Dict
+
 from fastapi import APIRouter, HTTPException
 
 from src.constants.network_constants import NetworkConstants

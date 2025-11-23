@@ -18,10 +18,9 @@ import redis
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-
 # Import unified configuration system - NO HARDCODED VALUES
 from src.unified_config_manager import UnifiedConfigManager
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Create singleton config instance
 config = UnifiedConfigManager()

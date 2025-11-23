@@ -34,12 +34,12 @@ warnings.warn(
 
 # Re-export everything from advanced_cache_manager for backward compatibility
 from src.utils.advanced_cache_manager import (
-    get_knowledge_cache,
-    get_cached_knowledge_results,
+    advanced_cache,
     cache_knowledge_results,
     clear_knowledge_cache,
+    get_cached_knowledge_results,
+    get_knowledge_cache,
     get_knowledge_cache_stats,
-    advanced_cache,
 )
 
 # Legacy class wrapper (for direct instantiation compatibility)

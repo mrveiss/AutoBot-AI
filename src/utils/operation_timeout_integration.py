@@ -34,9 +34,9 @@ from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants, ServiceURLs
 from src.utils.catalog_http_exceptions import (
-    raise_validation_error,
-    raise_server_error,
     raise_not_found_error,
+    raise_server_error,
+    raise_validation_error,
 )
 
 from .long_running_operations_framework import (

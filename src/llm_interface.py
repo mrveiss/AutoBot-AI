@@ -42,7 +42,6 @@ from tenacity import (
 # Import unified configuration and dependencies
 from src.circuit_breaker import circuit_breaker_async
 from src.constants.network_constants import NetworkConstants
-from src.utils.http_client import get_http_client
 
 # REFACTORED: Removed unused import from deprecated redis_pool_manager
 # from src.redis_pool_manager import get_redis_async
@@ -54,6 +53,7 @@ from src.utils.error_boundaries import (
     error_boundary,
     get_error_boundary_manager,
 )
+from src.utils.http_client import get_http_client
 
 from .utils.async_stream_processor import StreamCompletionSignal, StreamProcessor
 
@@ -1264,8 +1264,8 @@ class LLMInterface:
             ... )
             >>> print(f"Cache hit rate: {response.metadata.get('cache_hit_rate', 0):.1f}%")
         """
-        from src.prompt_manager import get_optimized_prompt
         from src.agent_tier_classifier import get_base_prompt_for_agent
+        from src.prompt_manager import get_optimized_prompt
 
         # Get optimized prompt (98.7% cacheable)
         system_prompt = get_optimized_prompt(

@@ -9,7 +9,7 @@ This module provides reusable components for creating consistent dashboards
 across the AutoBot platform. Supports both dark (GitHub-style) and light themes.
 """
 
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 
 def get_dark_theme_css() -> str:
