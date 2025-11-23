@@ -125,7 +125,7 @@ const statusVariant = computed(() => {
     'error': 'danger',
     'deploying': 'info'
   }
-  return statusMap[props.host.status] || 'secondary'
+  return statusMap[props.host.status || 'pending'] || 'secondary'
 })
 
 // NOTE: formatDate removed - now using formatDateTime from @/utils/formatHelpers

@@ -153,11 +153,11 @@ const retryJob = async (jobId: string) => {
 
       console.log(`Job ${jobId} retry started as ${data.new_job_id}`)
     } else {
-      error.value = `Failed to retry job: ${data.message || 'Unknown error'}`
+      error.value = new Error(`Failed to retry job: ${data.message || 'Unknown error'}`)
     }
   } catch (err) {
     console.error('Error retrying job:', err)
-    error.value = `Error retrying job: ${err}`
+    error.value = new Error(`Error retrying job: ${err}`)
   } finally {
     retryingJobs.value.delete(jobId)
   }
