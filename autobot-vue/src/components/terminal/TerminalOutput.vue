@@ -16,8 +16,8 @@
       aria-label="Terminal command output"
       @click="$emit('focus-input')"
       tabindex="0"
-      @keyup.enter="$event.target.click()"
-      @keyup.space="$event.target.click()"
+      @keyup.enter="($event.target as HTMLElement)?.click()"
+      @keyup.space="($event.target as HTMLElement)?.click()"
     >
       <div
         v-for="(line, index) in outputLines"

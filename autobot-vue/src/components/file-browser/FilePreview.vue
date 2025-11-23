@@ -47,7 +47,7 @@
 
         <!-- JSON Preview -->
         <div v-else-if="previewFile.type === 'json'" class="json-preview">
-          <pre><code>{{ formatJson(previewFile.content) }}</code></pre>
+          <pre><code>{{ formatJson(previewFile.content || '') }}</code></pre>
         </div>
 
         <!-- PDF Preview -->

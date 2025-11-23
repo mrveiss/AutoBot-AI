@@ -26,7 +26,7 @@
         <tr
           v-for="(file, index) in files"
           :key="file.name || file.id || `file-${index}`"
-          :ref="el => setRowRef(el, index)"
+          :ref="el => setRowRef(el as HTMLElement | null, index)"
           :tabindex="index === focusedIndex ? 0 : -1"
           :aria-selected="index === focusedIndex"
           role="button"

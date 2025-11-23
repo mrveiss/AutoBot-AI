@@ -61,6 +61,13 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted, onUnmounted, computed, watch } from 'vue'
 
+// Extend Window interface to include custom properties
+declare global {
+  interface Window {
+    terminalFocusInterval?: number | null
+  }
+}
+
 interface Props {
   currentInput: string
   currentPrompt: string
@@ -181,7 +188,7 @@ onMounted(() => {
 })
 
 // Define document click handler function for proper cleanup
-const handleDocumentClick = (event) => {
+const handleDocumentClick = (event: MouseEvent) => {
   const terminalContainer = document.querySelector('.terminal-window-standalone')
   if (terminalContainer && terminalContainer.contains(event.target as Node) &&
       event.target !== terminalInput.value && props.canInput) {

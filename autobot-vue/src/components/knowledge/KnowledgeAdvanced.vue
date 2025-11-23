@@ -490,7 +490,7 @@ onUnmounted(() => {
 // Initial load
 onMounted(() => {
   // Check if knowledge base has content to update populate statuses
-  if (store.stats.total_facts > 0) {
+  if (store.stats?.total_facts && store.stats.total_facts > 0) {
     // Could check for specific content types here
   }
 })
