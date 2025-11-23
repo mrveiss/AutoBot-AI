@@ -481,7 +481,7 @@ const startHeartbeat = () => {
     clearInterval(heartbeatInterval.value)
   }
   // Check connection every 60 seconds (reduced from 30 to minimize UI updates)
-  heartbeatInterval.value = setInterval(checkConnection, 60000)
+  heartbeatInterval.value = setInterval(checkConnection, 60000) as unknown as number
 }
 
 // Auto-save functionality
@@ -496,7 +496,7 @@ const enableAutoSave = () => {
       controller.saveChatSession()
         .catch((error: any) => console.warn('Auto-save failed:', error))
     }
-  }, 2 * 60 * 1000)
+  }, 2 * 60 * 1000) as unknown as number
 }
 
 // Message polling functionality - fetches new messages periodically
@@ -525,7 +525,7 @@ const startMessagePolling = () => {
         }
       }
     }
-  }, 10000)  // Poll every 10 seconds (optimized from 3s)
+  }, 10000) as unknown as number  // Poll every 10 seconds (optimized from 3s)
 }
 
 // Keyboard shortcuts

@@ -57,14 +57,15 @@ app.config.errorHandler = (err, instance, info) => {
   console.error('[Vue Error Handler]', err, info)
 
   // Check if this is a chunk loading error
-  if (err?.message?.includes('Loading chunk') ||
-      err?.message?.includes('ChunkLoadError') ||
-      err?.message?.includes('Loading CSS chunk')) {
+  const error = err as Error
+  if (error?.message?.includes('Loading chunk') ||
+      error?.message?.includes('ChunkLoadError') ||
+      error?.message?.includes('Loading CSS chunk')) {
     console.warn('[Vue Error Handler] Chunk loading error detected, initiating cache clear...')
 
     // Import and use cache management
     import('./utils/cacheManagement').then(({ handleChunkLoadingError }) => {
-      handleChunkLoadingError(err as Error, instance?.$?.type?.name || 'Unknown')
+      handleChunkLoadingError(error, instance?.$?.type?.name || 'Unknown')
     }).catch(cacheError => {
       console.error('[Vue Error Handler] Failed to handle chunk error:', cacheError)
       // Fallback to hard reload
