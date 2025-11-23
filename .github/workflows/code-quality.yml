@@ -17,8 +17,13 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python (use system installation)
+    - name: Set up Python environment
       run: |
+        # Use pyenv Python if available
+        if [ -d "$HOME/.pyenv" ]; then
+          export PATH="$HOME/.pyenv/shims:$PATH"
+          eval "$(pyenv init -)"
+        fi
         python3 --version
         echo "PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')" >> $GITHUB_ENV
 
@@ -45,6 +50,11 @@ jobs:
 
     - name: Install dependencies
       run: |
+        # Ensure pyenv is in PATH
+        if [ -d "$HOME/.pyenv" ]; then
+          export PATH="$HOME/.pyenv/shims:$PATH"
+          eval "$(pyenv init -)"
+        fi
         python3 -m pip install --no-cache-dir --upgrade pip
         python3 -m pip install --no-cache-dir black isort flake8 autoflake bandit[toml]
         if [ -f requirements.txt ]; then python3 -m pip install --no-cache-dir -r requirements.txt; fi
