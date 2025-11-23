@@ -17,17 +17,18 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Verify Python installation
+    - name: Set up Python (use system installation)
       run: |
         python3 --version
-        which python3
+        echo "PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')" >> $GITHUB_ENV
 
     - name: Cache pip dependencies
       uses: actions/cache@v3
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        key: ${{ runner.os }}-py${{ env.PYTHON_VERSION }}-pip-${{ hashFiles('**/requirements*.txt', '**/requirements-dev.txt') }}
         restore-keys: |
+          ${{ runner.os }}-py${{ env.PYTHON_VERSION }}-pip-
           ${{ runner.os }}-pip-
 
     - name: Free up disk space

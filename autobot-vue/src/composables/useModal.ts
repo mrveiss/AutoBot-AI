@@ -313,7 +313,8 @@ export function useModalGroup<T extends string>(names: T[]) {
    * Close all modals in the group
    */
   const closeAll = async (): Promise<void> => {
-    const closePromises = Object.values(modals).map(modal => modal.close())
+    // Issue #156 Fix: Add type assertion for Object.values result
+    const closePromises = (Object.values(modals) as UseModalReturn[]).map(modal => modal.close())
     await Promise.all(closePromises)
   }
 
@@ -321,7 +322,8 @@ export function useModalGroup<T extends string>(names: T[]) {
    * Open all modals in the group
    */
   const openAll = async (): Promise<void> => {
-    const openPromises = Object.values(modals).map(modal => modal.open())
+    // Issue #156 Fix: Add type assertion for Object.values result
+    const openPromises = (Object.values(modals) as UseModalReturn[]).map(modal => modal.open())
     await Promise.all(openPromises)
   }
 
@@ -329,14 +331,16 @@ export function useModalGroup<T extends string>(names: T[]) {
    * Check if any modal in group is open
    */
   const hasOpenModal = computed(() =>
-    Object.values(modals).some(modal => modal.isOpen.value)
+    // Issue #156 Fix: Add type assertion for Object.values result
+    (Object.values(modals) as UseModalReturn[]).some(modal => modal.isOpen.value)
   )
 
   /**
    * Check if all modals in group are closed
    */
   const allClosed = computed(() =>
-    Object.values(modals).every(modal => !modal.isOpen.value)
+    // Issue #156 Fix: Add type assertion for Object.values result
+    (Object.values(modals) as UseModalReturn[]).every(modal => !modal.isOpen.value)
   )
 
   return {

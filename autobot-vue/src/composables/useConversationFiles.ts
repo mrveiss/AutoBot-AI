@@ -70,10 +70,12 @@ export function useConversationFiles(sessionId: string) {
 
     try {
       const response = await api.get(`/api/conversation-files/conversation/${sessionId}/list`)
+      // Issue #156 Fix: Call .json() to get data from Response
+      const data = await response.json()
 
-      if (response.data) {
-        files.value = response.data.files || []
-        stats.value = response.data.stats || {
+      if (data) {
+        files.value = data.files || []
+        stats.value = data.stats || {
           total_files: 0,
           total_size_bytes: 0,
           uploads_count: 0,
@@ -131,7 +133,10 @@ export function useConversationFiles(sessionId: string) {
         }
       )
 
-      if (response.data?.success) {
+      // Issue #156 Fix: Call .json() to get data from Response
+      const data = await response.json()
+
+      if (data?.success) {
         // Reload files to get updated list
         await loadFiles()
         uploadProgress.value = 100
@@ -206,8 +211,8 @@ export function useConversationFiles(sessionId: string) {
         { responseType: 'blob' }
       )
 
-      // Create download link
-      const blob = new Blob([response.data])
+      // Issue #156 Fix: Call .blob() to get blob data from Response
+      const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
