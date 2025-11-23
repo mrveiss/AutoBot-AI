@@ -6,7 +6,7 @@
       <select
         id="theme-select"
         :value="uiSettings.theme"
-        @change="updateSetting('theme', $event.target.value)"
+        @change="handleSelectChange('theme')"
       >
         <option value="light">Light</option>
         <option value="dark">Dark</option>
@@ -18,7 +18,7 @@
       <select
         id="language-select"
         :value="uiSettings.language"
-        @change="updateSetting('language', $event.target.value)"
+        @change="handleSelectChange('language')"
       >
         <option value="en">English</option>
         <option value="es">Spanish</option>
@@ -31,7 +31,7 @@
         id="show-timestamps"
         type="checkbox"
         :checked="uiSettings.show_timestamps"
-        @change="updateSetting('show_timestamps', $event.target.checked)"
+        @change="handleCheckboxChange('show_timestamps')"
       />
     </div>
     <div class="setting-item">
@@ -40,7 +40,7 @@
         id="show-status-bar"
         type="checkbox"
         :checked="uiSettings.show_status_bar"
-        @change="updateSetting('show_status_bar', $event.target.checked)"
+        @change="handleCheckboxChange('show_status_bar')"
       />
     </div>
     <div class="setting-item">
@@ -51,7 +51,7 @@
         :value="uiSettings.auto_refresh_interval"
         min="5"
         max="300"
-        @input="updateSetting('auto_refresh_interval', parseInt($event.target.value))"
+        @input="handleNumberInputChange('auto_refresh_interval')"
       />
     </div>
   </div>
@@ -80,6 +80,22 @@ const emit = defineEmits<Emits>()
 
 const updateSetting = (key: string, value: any) => {
   emit('setting-changed', key, value)
+}
+
+// Issue #156 Fix: Typed event handlers to replace inline $event.target usage
+const handleSelectChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLSelectElement
+  updateSetting(key, target.value)
+}
+
+const handleCheckboxChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateSetting(key, target.checked)
+}
+
+const handleNumberInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateSetting(key, parseInt(target.value))
 }
 </script>
 

@@ -40,9 +40,10 @@
     />
 
     <!-- Backend Settings -->
+    <!-- Issue #156 Fix: Convert null to undefined for BackendSettings prop -->
     <BackendSettings
       v-if="activeTab === 'backend'"
-      :backendSettings="settings.backend"
+      :backendSettings="settings.backend || undefined"
       :isSettingsLoaded="isSettingsLoaded"
       :activeBackendSubTab="activeBackendSubTab"
       :healthStatus="healthStatus"
@@ -227,7 +228,9 @@ const updateChatSetting = (key: string, value: any) => {
       message_retention_days: 30
     } as ChatSettingsType
   }
-  (settings.value.chat as ChatSettingsType)[key as keyof ChatSettingsType] = value
+  // Issue #156 Fix: Use Record<string, any> type assertion for dynamic property assignment
+  const chatSettings = settings.value.chat as Record<string, any>
+  chatSettings[key] = value
   markAsChanged()
 }
 
@@ -282,7 +285,9 @@ const updateUISetting = (key: string, value: any) => {
       auto_refresh_interval: 30
     } as UISettingsType
   }
-  (settings.value.ui as UISettingsType)[key as keyof UISettingsType] = value
+  // Issue #156 Fix: Use Record<string, any> type assertion for dynamic property assignment
+  const uiSettings = settings.value.ui as Record<string, any>
+  uiSettings[key] = value
   markAsChanged()
 }
 
@@ -298,7 +303,9 @@ const updateLoggingSetting = (key: string, value: any) => {
       log_sql: false
     } as LoggingSettingsType
   }
-  (settings.value.logging as LoggingSettingsType)[key as keyof LoggingSettingsType] = value
+  // Issue #156 Fix: Use Record<string, any> type assertion for dynamic property assignment
+  const loggingSettings = settings.value.logging as Record<string, any>
+  loggingSettings[key] = value
   markAsChanged()
 }
 

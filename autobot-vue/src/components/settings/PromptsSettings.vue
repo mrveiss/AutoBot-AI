@@ -38,7 +38,7 @@
       <h4>Editing: {{ promptsSettings.selectedPrompt.name || promptsSettings.selectedPrompt.id }}</h4>
       <textarea
         :value="promptsSettings.editedContent || ''"
-        @input="updateEditedContent($event.target.value)"
+        @input="handleTextareaInput"
         rows="10"
         placeholder="Edit prompt content here..."
       ></textarea>
@@ -109,6 +109,12 @@ const selectPrompt = (prompt: Prompt) => {
 
 const updateEditedContent = (content: string) => {
   emit('edited-content-changed', content)
+}
+
+// Issue #156 Fix: Typed event handler to replace inline $event.target usage
+const handleTextareaInput = (event: Event) => {
+  const target = event.target as HTMLTextAreaElement
+  updateEditedContent(target.value)
 }
 
 const clearSelectedPrompt = () => {

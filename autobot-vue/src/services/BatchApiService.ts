@@ -142,9 +142,11 @@ export class BatchApiService {
     console.log(`🚀 Processing ${requests.length} requests in parallel`);
 
     const promises = requests.map(async (request) => {
+      // Issue #156 Fix: Move destructuring outside try block so catch block can access variables
+      const { endpoint, method, data } = request;
+
       try {
         let response;
-        const { endpoint, method, data } = request;
 
         switch (method.toUpperCase()) {
           case 'GET':

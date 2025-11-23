@@ -1,6 +1,12 @@
 /**
  * RUM Console Helper - Provides easy console commands for RUM control
+ *
+ * Issue #156 Fix: Import RumAgent to ensure Window.rum type is available
  */
+
+import type { ApiCall } from './RumAgent'
+// Import the module to ensure Window.rum declaration is loaded
+import './RumAgent'
 
 // Add global RUM console commands
 declare global {
@@ -54,14 +60,15 @@ window.rumHelp = () => {
   `)
 }
 
+// Issue #156 Fix: Add type annotations for call parameters
 window.rumStats = () => {
   if (!window.rum) {
     return
   }
-  
+
   const metrics = window.rum.getMetrics()
-  const slowCalls = metrics.apiCalls.filter(call => call.isSlow).length
-  const timeouts = metrics.apiCalls.filter(call => call.isTimeout).length
+  const slowCalls = metrics.apiCalls.filter((call: ApiCall) => call.isSlow).length
+  const timeouts = metrics.apiCalls.filter((call: ApiCall) => call.isTimeout).length
   const errors = metrics.errors.length
   
   console.log(`
@@ -90,17 +97,18 @@ window.rumIssues = () => {
   })
 }
 
+// Issue #156 Fix: Add type annotations for call parameters
 window.rumApiStats = () => {
   if (!window.rum) {
     return
   }
-  
+
   const metrics = window.rum.getMetrics()
   const apiCalls = metrics.apiCalls
-  
+
   // Group by endpoint
   const endpointStats: Record<string, any> = {}
-  apiCalls.forEach(call => {
+  apiCalls.forEach((call: ApiCall) => {
     const endpoint = call.url
     if (!endpointStats[endpoint]) {
       endpointStats[endpoint] = {
@@ -134,33 +142,42 @@ window.rumApiStats = () => {
   })
 }
 
+// Issue #156 Fix: Proper typing for debug wrapper functions
 window.rumDebug = () => {
   if (!window.rum) {
     return
   }
-  
+
   // Enable verbose logging
-  const originalTrackApiCall = window.rum.trackApiCall
-  window.rum.trackApiCall = function(this: any, ...args: any[]) {
-    return originalTrackApiCall.apply(this, args)
+  const originalTrackApiCall = window.rum.trackApiCall.bind(window.rum)
+  window.rum.trackApiCall = function(
+    method: string,
+    url: string,
+    startTime: number,
+    endTime: number,
+    status: string | number,
+    error?: Error | null
+  ) {
+    return originalTrackApiCall(method, url, startTime, endTime, status, error)
   }
-  
-  const originalTrackError = window.rum.trackError
-  window.rum.trackError = function(this: any, ...args: any[]) {
-    return originalTrackError.apply(this, args)
+
+  const originalTrackError = window.rum.trackError.bind(window.rum)
+  window.rum.trackError = function(type: string, data: any) {
+    return originalTrackError(type, data)
   }
-  
+
 }
 
+// Issue #156 Fix: Add non-null assertion for window.rum after check
 window.rumTestApi = () => {
   if (!window.rum) {
     return
   }
-  
+
   const start = performance.now()
   setTimeout(() => {
     const end = performance.now()
-    window.rum.trackApiCall('GET', '/test/endpoint', start, end, 200)
+    window.rum?.trackApiCall('GET', '/test/endpoint', start, end, 200)
   }, 100)
 }
 
