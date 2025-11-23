@@ -10,13 +10,14 @@ This document contains development guidelines, project setup instructions, and a
 
 ### **Every Task Must:**
 
-1. **Link to GitHub Issue/Task** - ALL work must be tied to a GitHub issue in https://github.com/mrveiss/AutoBot-AI (MANDATORY)
-2. **Create TodoWrite** to track progress (MANDATORY)
-3. **Search Memory MCP** for similar past work: `mcp__memory__search_nodes`
-4. **Break down into subtasks** - Execute every task as smaller, manageable subtasks (MANDATORY)
+1. **Link to GitHub Issue** - ALL work must be tied to a GitHub issue in https://github.com/mrveiss/AutoBot-AI (MANDATORY - PRIMARY task tracking)
+2. **Search Memory MCP** for similar past work: `mcp__memory__search_nodes`
+3. **Break down into subtasks** - Execute every task as smaller, manageable subtasks (MANDATORY)
+4. **Use TodoWrite** for current session subtasks - Links to parent GitHub issue (for immediate tracking only)
 5. **Use specialized agents** for complex tasks
 6. **Code review is mandatory** for ALL code changes (use `code-reviewer` agent)
-7. **Store in Memory MCP** - At session end, store conversation/decisions/findings (MANDATORY)
+7. **Update GitHub Issue** with progress comments throughout work
+8. **Store in Memory MCP** - At session end, store conversation/decisions/findings (MANDATORY)
 
 ### **Workflow Violation Self-Check**
 
@@ -522,7 +523,51 @@ backups/         # Backup files (gitignored)
 
 ## 📋 TASK MANAGEMENT
 
-**MANDATORY: Use Memory MCP for persistent task storage**
+**⚠️ MANDATORY RULE: ALL WORK MUST BE TRACKED IN GITHUB ISSUES**
+
+### **Task Tracking Hierarchy:**
+
+**1. GitHub Issues - PRIMARY task tracking (MANDATORY)**
+- **ALL work** must be tied to a GitHub issue in https://github.com/mrveiss/AutoBot-AI
+- Issues provide traceability, project management, and collaboration
+- **NEVER start work without a GitHub issue**
+- Update issue comments with progress and decisions
+
+**2. TodoWrite - Immediate/short-term tracking only**
+- **Use ONLY during active work sessions** to track subtasks
+- Helps manage current workflow and subtask execution
+- **NOT a replacement for GitHub issues**
+- All TodoWrite tasks must link to a parent GitHub issue
+
+**3. Memory MCP - Persistent storage of findings/decisions**
+- Store conversations, decisions, and findings at session end
+- Create relationships between problems and solutions
+- Search before starting work to learn from past work
+
+### **Workflow Example:**
+
+```bash
+# 1. Check GitHub issue exists (REQUIRED)
+gh issue view 156
+
+# 2. Add progress comment to GitHub issue
+gh issue comment 156 --body "Starting work on LoggingSettings.vue"
+
+# 3. Use TodoWrite for current session subtasks
+TodoWrite: [
+  "Issue #156: Fix LoggingSettings.vue (12 errors)",
+  "Add typed event handlers",
+  "Run type-check verification"
+]
+
+# 4. Update GitHub issue when complete
+gh issue comment 156 --body "LoggingSettings.vue: 12 → 0 errors ✅"
+
+# 5. Store findings in Memory MCP at session end
+mcp__memory__create_entities --entities '[...]'
+```
+
+### **Memory MCP Commands:**
 
 ```bash
 # View current tasks
@@ -537,8 +582,6 @@ mcp__memory__add_observations --observations '[{"entityName": "Task Name", "cont
 # Create task dependencies
 mcp__memory__create_relations --relations '[{"from": "Task B", "to": "Task A", "relationType": "depends_on"}]'
 ```
-
-**Use TodoWrite for immediate/short-term tracking during active work**
 
 👉 **Complete Memory Storage Guide**: [`docs/developer/MEMORY_STORAGE_ROUTINE.md`](docs/developer/MEMORY_STORAGE_ROUTINE.md)
 
@@ -824,17 +867,28 @@ This includes:
 ### **Task Start Checklist**
 
 ```bash
-# 1. TodoWrite (MANDATORY)
-TodoWrite: Track task progress
+# 1. GitHub Issue (MANDATORY - PRIMARY task tracking)
+gh issue view <issue-number>  # Verify issue exists
+gh issue comment <issue-number> --body "Starting work on..."
 
 # 2. Memory MCP Search
 mcp__memory__search_nodes --query "relevant keywords"
 
-# 3. Agent Delegation (for complex tasks)
+# 3. TodoWrite (for current session subtasks only)
+TodoWrite: [
+  "Issue #<number>: Main task description",
+  "Subtask 1",
+  "Subtask 2"
+]
+
+# 4. Agent Delegation (for complex tasks)
 Task(subagent_type="appropriate-agent", description="...", prompt="...")
 
-# 4. Code Review (MANDATORY for code changes)
+# 5. Code Review (MANDATORY for code changes)
 Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
+
+# 6. Update GitHub Issue when complete
+gh issue comment <issue-number> --body "Task complete ✅"
 ```
 
 ### **Critical Policies**
@@ -849,7 +903,7 @@ Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
 | **Subtask Execution** | ✅ MANDATORY - Break down every task into subtasks |
 | **Memory Storage** | ✅ MANDATORY - Store conversations/decisions at session end |
 | **Process Control** | ⚠️ ALWAYS ask user approval before start/stop/restart |
-| **TodoWrite** | ✅ MANDATORY for all tasks |
+| **TodoWrite** | ✅ Use for immediate session tracking - NOT a replacement for GitHub issues |
 | **Code Review** | ✅ MANDATORY for all code changes |
 | **UTF-8 Encoding** | ✅ MANDATORY - Always specify encoding='utf-8' explicitly |
 | **Frontend Server** | ⚠️ ONLY on VM1 (172.16.168.21:5173) |
@@ -859,9 +913,12 @@ Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
 
 ### **Workflow Violations - Self Check**
 
+**Before starting work:**
+- Is this work tied to a GitHub issue in https://github.com/mrveiss/AutoBot-AI? ✓ (MANDATORY)
+- Did I add a comment to the GitHub issue noting I'm starting? ✓
+
 **During work:**
-- Is this work tied to a GitHub issue in https://github.com/mrveiss/AutoBot-AI? ✓
-- Did I create TodoWrite? ✓
+- Did I create TodoWrite for current session subtasks? ✓
 - Did I break down task into subtasks? ✓
 - Did I search Memory MCP? ✓
 - Am I using agents for complex tasks? ✓
@@ -869,8 +926,10 @@ Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
 - Am I fixing root cause (not workaround)? ✓
 - Did I use permanent file names (no _fix, _v2, _temp)? ✓
 - If consolidating: Did I preserve ALL features and choose BEST implementation? ✓
+- Did I update GitHub issue with progress? ✓
 
 **At session end:**
+- Did I update GitHub issue with final results? ✓ (MANDATORY)
 - Did I store conversation in Memory MCP? ✓
 - Did I document decisions with rationale? ✓
 - Did I link problems to solutions? ✓
