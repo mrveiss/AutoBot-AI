@@ -180,7 +180,7 @@ export async function runComprehensiveChunkTests(): Promise<void> {
     // Show user-friendly summary
     if (report.overallSuccess) {
 
-      if (typeof window !== 'undefined' && window.confirm) {
+      if (typeof window !== 'undefined') {
         const shouldShowDetails = confirm('All chunk loading tests passed! Would you like to see detailed results?')
         if (shouldShowDetails) {
           console.table(chunkResults.results)
