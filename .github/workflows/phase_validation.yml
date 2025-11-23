@@ -50,8 +50,8 @@ jobs:
 
     - name: Install Python dependencies
       run: |
-        python3 -m pip install --upgrade pip
-        python3 -m pip install aiohttp psutil requests pyyaml
+        python3 -m pip install --break-system-packages --upgrade pip
+        python3 -m pip install --break-system-packages aiohttp psutil requests pyyaml
 
     - name: Create necessary directories and config files
       run: |
@@ -95,7 +95,7 @@ jobs:
       run: |
         # Start backend in background for endpoint validation
         cd backend
-        python3 -m pip install -r ../requirements-ci.txt --prefer-binary
+        python3 -m pip install --break-system-packages -r ../requirements-ci.txt --prefer-binary
         timeout 60s python3 main.py &
         BACKEND_PID=$!
         sleep 10  # Give backend time to start
