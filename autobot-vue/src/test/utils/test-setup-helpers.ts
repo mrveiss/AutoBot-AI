@@ -2,8 +2,8 @@ import { vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import type { Router } from 'vue-router'
-// Issue #156 Fix: Corrected Python-style import to TypeScript syntax
-import { NetworkConstants, ServiceURLs } from '@/constants/network'
+// Issue #156 Fix: Import from network-constants.js (has .d.ts declarations)
+import { NetworkConstants, ServiceURLs } from '@/constants/network-constants'
 
 /**
  * Setup helpers for consistent test environment configuration
