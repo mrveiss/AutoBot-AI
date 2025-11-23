@@ -59,7 +59,7 @@
         </BaseButton>
         <h3>{{ getSelectedCategoryName() }}</h3>
       </div>
-      <KnowledgeBrowser :mode="selectedMainCategory!" :preselected-category="selectedMainCategory" />
+      <KnowledgeBrowser :mode="selectedMainCategory!" :preselected-category="selectedMainCategory!" />
     </div>
 
     <!-- System Category Documents Panel -->
