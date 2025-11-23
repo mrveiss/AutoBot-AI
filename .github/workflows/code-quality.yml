@@ -69,23 +69,23 @@ jobs:
 
     - name: Check code formatting with Black
       run: |
-        black --check --line-length=88 backend/ src/ || {
+        python3 -m black --check --line-length=88 backend/ src/ || {
           echo "❌ Black formatting check failed"
-          echo "Run 'black --line-length=88 backend/ src/' to fix"
+          echo "Run 'python3 -m black --line-length=88 backend/ src/' to fix"
           exit 1
         }
 
     - name: Check import sorting with isort
       run: |
-        isort --check --profile=black --line-length=88 backend/ src/ || {
+        python3 -m isort --check --profile=black --line-length=88 backend/ src/ || {
           echo "❌ isort check failed"
-          echo "Run 'isort --profile=black --line-length=88 backend/ src/' to fix"
+          echo "Run 'python3 -m isort --profile=black --line-length=88 backend/ src/' to fix"
           exit 1
         }
 
     - name: Lint with flake8
       run: |
-        flake8 backend/ src/ \
+        python3 -m flake8 backend/ src/ \
           --max-line-length=88 \
           --extend-ignore=E203,W503 \
           --exclude=node_modules,.venv,venv,__pycache__,.git,temp,logs,reports,archive \
@@ -97,18 +97,18 @@ jobs:
 
     - name: Check for unused imports with autoflake
       run: |
-        autoflake --check --recursive \
+        python3 -m autoflake --check --recursive \
           --remove-all-unused-imports \
           --remove-unused-variables \
           backend/ src/ || {
           echo "❌ Unused imports/variables detected"
-          echo "Run 'autoflake --in-place --recursive --remove-all-unused-imports --remove-unused-variables backend/ src/' to fix"
+          echo "Run 'python3 -m autoflake --in-place --recursive --remove-all-unused-imports --remove-unused-variables backend/ src/' to fix"
           exit 1
         }
 
     - name: Security check with bandit
       run: |
-        bandit -c .bandit -r backend/ src/ || {
+        python3 -m bandit -c .bandit -r backend/ src/ || {
           echo "⚠️ Security issues detected"
           exit 1
         }
