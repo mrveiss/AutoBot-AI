@@ -16,10 +16,10 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
+    - name: Verify Python installation
+      run: |
+        python3 --version
+        which python3
 
     - name: Install system dependencies
       run: |
@@ -40,34 +40,29 @@ jobs:
     - name: Install Python dependencies
       run: |
         # Upgrade pip to latest version for better wheel support
-        python -m pip install --upgrade pip==24.0 setuptools wheel
+        python3 -m pip install --upgrade pip==24.0 setuptools wheel
 
         # Install build dependencies for packages that might need compilation
-        python -m pip install --upgrade build
+        python3 -m pip install --upgrade build
 
         # Install critical packages with binary wheels first
         echo "Installing numpy with binary wheels..."
-        # Use compatible numpy version for Python 3.10/3.11
-        if [[ "${{ matrix.python-version }}" == "3.10" ]]; then
-          pip install "numpy==1.24.4" --only-binary=:all:
-        else
-          pip install "numpy==1.26.4" --only-binary=:all:
-        fi
+        python3 -m pip install "numpy>=1.24.0" --only-binary=:all:
 
         echo "Installing pillow with binary wheels..."
-        pip install "pillow>=10.0.0" --only-binary=:all:
+        python3 -m pip install "pillow>=10.0.0" --only-binary=:all:
 
         echo "Installing cryptography with binary wheels..."
-        pip install "cryptography==45.0.4" --only-binary=:all:
+        python3 -m pip install "cryptography>=45.0.0" --only-binary=:all:
 
         echo "Installing torch with CPU-only wheels..."
-        pip install torch --index-url https://download.pytorch.org/whl/cpu --only-binary=:all:
+        python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu --only-binary=:all:
 
         echo "Installing CI-safe requirements..."
-        pip install -r requirements-ci.txt --prefer-binary
+        python3 -m pip install -r requirements-ci.txt --prefer-binary
 
         echo "Installing testing dependencies..."
-        pip install pytest pytest-asyncio pytest-cov flake8 black isort mypy bandit
+        python3 -m pip install pytest pytest-asyncio pytest-cov flake8 black isort mypy bandit
 
     - name: Create necessary directories and config files
       run: |
@@ -210,7 +205,7 @@ jobs:
     - name: Test Docker sandbox integration
       run: |
         echo "🧪 Testing Docker sandbox integration..."
-        python -c "
+        python3 -c "
         from src.secure_command_executor import SecureCommandExecutor
         executor = SecureCommandExecutor(use_docker_sandbox=True)
         docker_cmd = executor._build_docker_command('echo test')
@@ -264,24 +259,24 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.10"
+    - name: Verify Python installation
+      run: |
+        python3 --version
+        which python3
 
     - name: Install dependencies
       run: |
         # Upgrade pip to latest version for better wheel support
-        python -m pip install --upgrade pip==24.0 setuptools wheel
-        python -m pip install --upgrade build
+        python3 -m pip install --upgrade pip==24.0 setuptools wheel
+        python3 -m pip install --upgrade build
 
         # Install critical packages with binary wheels first
-        pip install "numpy==1.24.4" --only-binary=:all:
-        pip install "pillow>=10.0.0" --only-binary=:all:
-        pip install "cryptography==45.0.4" --only-binary=:all:
+        python3 -m pip install "numpy>=1.24.0" --only-binary=:all:
+        python3 -m pip install "pillow>=10.0.0" --only-binary=:all:
+        python3 -m pip install "cryptography>=45.0.0" --only-binary=:all:
 
         # Use CI-safe requirements for deployment test
-        pip install -r requirements-ci.txt --prefer-binary
+        python3 -m pip install -r requirements-ci.txt --prefer-binary
 
     - name: Create necessary directories and config files
       run: |
@@ -333,13 +328,13 @@ jobs:
         echo "✅ All required files present"
 
         # Test configuration loading
-        python -c "
+        python3 -c "
         from src.config import config
         print('✅ Configuration system working')
         "
 
         # Test core imports
-        python -c "
+        python3 -c "
         from src.enhanced_security_layer import EnhancedSecurityLayer
         from src.secure_command_executor import SecureCommandExecutor
         from backend.app_factory import create_app
