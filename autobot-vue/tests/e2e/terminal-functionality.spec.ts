@@ -16,7 +16,7 @@ test.describe('Terminal Functionality Tests', () => {
     const terminalButton = page.locator('text=Terminal').or(
       page.locator('[data-testid="terminal"]')
     ).or(
-      page.locator('text=terminal', { ignoreCase: true })
+      page.locator('text=/terminal/i')
     );
     
     if (await terminalButton.count() > 0) {
@@ -83,7 +83,7 @@ test.describe('Terminal Functionality Tests', () => {
     const terminalButton = page.locator('text=Terminal').or(
       page.locator('[data-testid="terminal"]')
     ).or(
-      page.locator('text=terminal', { ignoreCase: true })
+      page.locator('text=/terminal/i')
     );
     
     if (await terminalButton.count() > 0) {

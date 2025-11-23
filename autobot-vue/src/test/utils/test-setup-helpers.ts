@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import type { Router } from 'vue-router'
 // Issue #156 Fix: Corrected Python-style import to TypeScript syntax
-import { NetworkConstants, ServiceURLs } from '@/constants/network-constants'
+import { NetworkConstants, ServiceURLs } from '@/constants/network'
 
 /**
  * Setup helpers for consistent test environment configuration
