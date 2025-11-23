@@ -828,7 +828,9 @@ class ChatHistoryManager:
             "sender": sender,
             "text": text,
             "messageType": message_type,
-            "metadata": raw_data,  # CRITICAL FIX: Use 'metadata' to match frontend expectations
+            "metadata": (
+                raw_data
+            ),  # CRITICAL FIX: Use 'metadata' to match frontend expectations
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
@@ -1076,17 +1078,25 @@ class ChatHistoryManager:
                             # Frontend-compatible property names
                             "id": chat_id,  # Frontend expects 'id'
                             "chatId": chat_id,  # Keep for backward compatibility
-                            "title": chat_name,  # Frontend expects 'title' - use actual name from file
+                            "title": (
+                                chat_name
+                            ),  # Frontend expects 'title' - use actual name from file
                             "name": chat_name,  # Keep for backward compatibility
                             "messages": [],  # Frontend expects messages array - empty in fast mode
                             "messageCount": message_count,  # Actual count from file
                             "createdAt": created_time,  # Frontend expects 'createdAt'
-                            "createdTime": created_time,  # Keep for backward compatibility
+                            "createdTime": (
+                                created_time
+                            ),  # Keep for backward compatibility
                             "updatedAt": last_modified,  # Frontend expects 'updatedAt'
-                            "lastModified": last_modified,  # Keep for backward compatibility
+                            "lastModified": (
+                                last_modified
+                            ),  # Keep for backward compatibility
                             "isActive": False,  # Frontend expects 'isActive'
                             "fileSize": file_size,
-                            "fast_mode": True,  # Indicate this is fast mode without full data
+                            "fast_mode": (
+                                True
+                            ),  # Indicate this is fast mode without full data
                         }
                     )
                 except Exception as e:

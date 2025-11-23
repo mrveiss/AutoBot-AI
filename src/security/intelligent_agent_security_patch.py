@@ -199,13 +199,13 @@ PATCH_INSTRUCTIONS = """
    cp src/intelligence/intelligent_agent.py src/intelligence/intelligent_agent.py.backup
 
 2. ADD SECURITY IMPORTS (at top of file, after existing imports):
-   
+
    from src.security.prompt_injection_detector import get_prompt_injection_detector, InjectionRisk
    from src.security.secure_llm_command_parser import get_secure_llm_parser
    from src.enhanced_security_layer import EnhancedSecurityLayer
 
 3. INITIALIZE SECURITY IN __init__ (add to IntelligentAgent.__init__):
-   
+
    # Security components (CVE-AUTOBOT-2025-002 fix)
    self.injection_detector = get_prompt_injection_detector(strict_mode=True)
    self.secure_parser = get_secure_llm_parser(strict_mode=True)
@@ -213,10 +213,10 @@ PATCH_INSTRUCTIONS = """
    logger.info("✅ Security components initialized")
 
 4. SANITIZE USER INPUT (in process_natural_language_goal method, line ~194):
-   
+
    # BEFORE:
    logger.info(f"Processing natural language goal: {user_input}")
-   
+
    # AFTER:
    # Layer 1: Sanitize user input for injection attempts
    try:
@@ -239,19 +239,19 @@ PATCH_INSTRUCTIONS = """
            metadata={"security_error": True}
        )
        return
-   
+
    logger.info(f"Processing sanitized goal: {user_input}")
 
 5. VALIDATE CONVERSATION CONTEXT (in process_natural_language_goal, before adding to context):
-   
+
    # BEFORE: (line ~197)
    self.state.conversation_context.append({...})
-   
+
    # AFTER:
    # Validate conversation context for poisoning
    try:
-       history = [{"user": msg.get("content", ""), "assistant": ""} 
-                  for msg in self.state.conversation_context 
+       history = [{"user": msg.get("content", ""), "assistant": ""}
+                  for msg in self.state.conversation_context
                   if msg.get("type") == "user_input"]
        is_safe = self.injection_detector.validate_conversation_context(history)
        if not is_safe:
@@ -264,20 +264,20 @@ PATCH_INSTRUCTIONS = """
            return
    except Exception as e:
        logger.warning(f"Context validation warning: {e}")
-   
+
    self.state.conversation_context.append({...})
 
 6. REPLACE _parse_llm_commands METHOD (entire method replacement, lines ~608-636):
-   
+
    def _parse_llm_commands(self, llm_response: str, user_goal: str = "") -> List[Dict[str, str]]:
        '''
        Securely parse commands from LLM response with injection protection
-       
+
        SECURITY FIX: Now uses SecureLLMCommandParser for validation
        '''
        # Use secure parser instead of naive string parsing
        validated_commands = self.secure_parser.parse_commands(llm_response, user_goal)
-       
+
        # Convert ValidatedCommand objects to dict format
        command_dicts = []
        for validated in validated_commands:
@@ -288,20 +288,20 @@ PATCH_INSTRUCTIONS = """
                "risk_level": validated.risk_level.value,
                "validation_metadata": validated.validation_metadata
            })
-       
+
        logger.info(f"✅ Securely parsed {len(command_dicts)} commands")
        return command_dicts
 
 7. UPDATE _handle_complex_goal (line ~446 - add user_goal parameter):
-   
+
    # BEFORE:
    commands = self._parse_llm_commands(llm_response)
-   
+
    # AFTER:
    commands = self._parse_llm_commands(llm_response, user_goal=user_input)
 
 8. ADD SECURITY AUDIT LOGGING (in _handle_complex_goal, after command execution):
-   
+
    # After command execution loop (around line ~472)
    # Log security event for audit
    self.security_layer.audit_log(
@@ -316,11 +316,11 @@ PATCH_INSTRUCTIONS = """
    )
 
 9. TEST THE PATCH:
-   
+
    python tests/test_prompt_injection_protection.py
 
 10. VERIFY SECURITY:
-    
+
     - Test with injection attack scenarios
     - Verify all attacks are blocked
     - Check audit logs for security events

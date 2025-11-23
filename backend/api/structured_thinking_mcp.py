@@ -279,7 +279,9 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Dict[str, Any]:
         "thinking_complete": thinking_complete,
         "stage_distribution": stage_counts,
         "session_thought_count": len(session_thoughts),
-        "message": f"Processed thought {request.thought_number}/{request.total_thoughts} in {request.stage.value} stage",
+        "message": (
+            f"Processed thought {request.thought_number}/{request.total_thoughts} in {request.stage.value} stage"
+        ),
     }
 
     # Identify related thoughts (same tags)

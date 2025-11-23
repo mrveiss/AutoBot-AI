@@ -183,10 +183,12 @@ async def update_llm_provider(provider_data: dict):
 
         return {
             "status": "success",
-            "message": "LLM provider configuration updated successfully using unified config system",
+            "message": (
+                "LLM provider configuration updated successfully using unified config system"
+            ),
             "current_config": {
-                "provider_type": current_llm_config.get("unified", {}).get(
-                    "provider_type", "local"
+                "provider_type": (
+                    current_llm_config.get("unified", {}).get("provider_type", "local")
                 ),
                 "selected_model": (
                     current_llm_config.get("unified", {})
@@ -308,9 +310,11 @@ async def update_embedding_model(embedding_data: dict):
             "message": f"Embedding model updated to {provider}/{model}",
             "current_config": {
                 "provider": embedding_config.get("provider", provider),
-                "selected_model": embedding_config.get("providers", {})
-                .get(provider, {})
-                .get("selected_model", model),
+                "selected_model": (
+                    embedding_config.get("providers", {})
+                    .get(provider, {})
+                    .get("selected_model", model)
+                ),
             },
         }
 
@@ -352,14 +356,18 @@ async def get_comprehensive_llm_status():
                             .get("selected_model")
                         ),
                         "status": "connected",  # Assume connected for now
-                        "model": local_config.get("providers", {})
-                        .get("ollama", {})
-                        .get("selected_model", ""),
-                        "endpoint": local_config.get("providers", {})
-                        .get("ollama", {})
-                        .get(
-                            "host",
-                            config.get_service_url("ollama"),
+                        "model": (
+                            local_config.get("providers", {})
+                            .get("ollama", {})
+                            .get("selected_model", "")
+                        ),
+                        "endpoint": (
+                            local_config.get("providers", {})
+                            .get("ollama", {})
+                            .get(
+                                "host",
+                                config.get_service_url("ollama"),
+                            )
                         ),
                     },
                     "lmstudio": {
@@ -369,14 +377,18 @@ async def get_comprehensive_llm_status():
                             .get("selected_model")
                         ),
                         "status": "disconnected",  # Typically not running
-                        "model": local_config.get("providers", {})
-                        .get("lmstudio", {})
-                        .get("selected_model", ""),
-                        "endpoint": local_config.get("providers", {})
-                        .get("lmstudio", {})
-                        .get(
-                            "endpoint",
-                            f"{config.get_service_url('ollama')}/v1",
+                        "model": (
+                            local_config.get("providers", {})
+                            .get("lmstudio", {})
+                            .get("selected_model", "")
+                        ),
+                        "endpoint": (
+                            local_config.get("providers", {})
+                            .get("lmstudio", {})
+                            .get(
+                                "endpoint",
+                                f"{config.get_service_url('ollama')}/v1",
+                            )
                         ),
                     },
                 },
@@ -394,12 +406,16 @@ async def get_comprehensive_llm_status():
                             .get("api_key")
                             else "connected"
                         ),
-                        "model": cloud_config.get("providers", {})
-                        .get("openai", {})
-                        .get("selected_model", ""),
-                        "endpoint": cloud_config.get("providers", {})
-                        .get("openai", {})
-                        .get("endpoint", "https://api.openai.com/v1"),
+                        "model": (
+                            cloud_config.get("providers", {})
+                            .get("openai", {})
+                            .get("selected_model", "")
+                        ),
+                        "endpoint": (
+                            cloud_config.get("providers", {})
+                            .get("openai", {})
+                            .get("endpoint", "https://api.openai.com/v1")
+                        ),
                     },
                     "anthropic": {
                         "configured": bool(
@@ -414,12 +430,16 @@ async def get_comprehensive_llm_status():
                             .get("api_key")
                             else "connected"
                         ),
-                        "model": cloud_config.get("providers", {})
-                        .get("anthropic", {})
-                        .get("selected_model", ""),
-                        "endpoint": cloud_config.get("providers", {})
-                        .get("anthropic", {})
-                        .get("endpoint", "https://api.anthropic.com/v1"),
+                        "model": (
+                            cloud_config.get("providers", {})
+                            .get("anthropic", {})
+                            .get("selected_model", "")
+                        ),
+                        "endpoint": (
+                            cloud_config.get("providers", {})
+                            .get("anthropic", {})
+                            .get("endpoint", "https://api.anthropic.com/v1")
+                        ),
                     },
                 },
             },

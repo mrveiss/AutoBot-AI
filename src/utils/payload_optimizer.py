@@ -477,9 +477,7 @@ class PayloadOptimizer:
             "total_size_saved": self.total_size_saved,
             "compression_count": self.compression_count,
             "chunking_count": self.chunking_count,
-            "average_savings": (
-                self.total_size_saved / max(self.total_optimizations, 1)
-            ),
+            "average_savings": self.total_size_saved / max(self.total_optimizations, 1),
             "settings": {
                 "max_size": self.max_size,
                 "warning_size": self.warning_size,

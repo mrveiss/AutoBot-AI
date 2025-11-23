@@ -1416,10 +1416,14 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                                 type="response",
                                                 content=chunk_text,
                                                 metadata={
-                                                    "message_type": "llm_response_chunk",
+                                                    "message_type": (
+                                                        "llm_response_chunk"
+                                                    ),
                                                     "model": selected_model,
                                                     "streaming": True,
-                                                    "terminal_session_id": terminal_session_id,
+                                                    "terminal_session_id": (
+                                                        terminal_session_id
+                                                    ),
                                                 },
                                             )
                                             # Don't collect streaming chunks - only collect complete messages

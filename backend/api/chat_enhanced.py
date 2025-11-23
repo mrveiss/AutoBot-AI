@@ -247,7 +247,9 @@ async def process_enhanced_chat_message(
                 logger.error(f"AI Stack chat failed: {e}")
                 # Fallback to basic response
                 ai_response = {
-                    "content": "I apologize, but I'm experiencing technical difficulties with my enhanced AI capabilities. Please try again in a moment.",
+                    "content": (
+                        "I apologize, but I'm experiencing technical difficulties with my enhanced AI capabilities. Please try again in a moment."
+                    ),
                     "role": "assistant",
                     "metadata": {"source": "fallback", "error": "ai_stack_unavailable"},
                 }
@@ -255,7 +257,9 @@ async def process_enhanced_chat_message(
         else:
             # Basic chat without AI Stack (backward compatibility)
             ai_response = {
-                "content": "Thank you for your message. I'm currently running in basic mode without enhanced AI capabilities.",
+                "content": (
+                    "Thank you for your message. I'm currently running in basic mode without enhanced AI capabilities."
+                ),
                 "role": "assistant",
                 "metadata": {"source": "basic_chat"},
             }

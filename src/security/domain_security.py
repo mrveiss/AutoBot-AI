@@ -174,7 +174,9 @@ class DomainSecurityManager:
         self.session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=30.0),
             headers={
-                "User-Agent": "AutoBot-Security/1.0 (+https://autobot.internal/security)"
+                "User-Agent": (
+                    "AutoBot-Security/1.0 (+https://autobot.internal/security)"
+                )
             },
         )
         return self
@@ -264,7 +266,9 @@ class DomainSecurityManager:
                 result.update(
                     {
                         "safe": False,
-                        "reason": f"Domain is blacklisted: {blacklist_result['reason']}",
+                        "reason": (
+                            f"Domain is blacklisted: {blacklist_result['reason']}"
+                        ),
                         "threats_detected": ["BLACKLISTED_DOMAIN"],
                         "metadata": {
                             **result["metadata"],
@@ -314,7 +318,9 @@ class DomainSecurityManager:
                 result.update(
                     {
                         "safe": False,
-                        "reason": f"Low reputation score: {reputation_score:.2f} < {reputation_threshold}",
+                        "reason": (
+                            f"Low reputation score: {reputation_score:.2f} < {reputation_threshold}"
+                        ),
                         "threats_detected": ["LOW_REPUTATION"],
                     }
                 )
@@ -593,15 +599,19 @@ class DomainSecurityManager:
             "whitelist_patterns": len(self.whitelist_patterns),
             "blacklist_patterns": len(self.blacklist_patterns),
             "security_config": {
-                "enabled": self.config.config.get("domain_security", {}).get(
-                    "enabled", False
+                "enabled": (
+                    self.config.config.get("domain_security", {}).get("enabled", False)
                 ),
-                "whitelist_mode": self.config.config.get("domain_security", {}).get(
-                    "whitelist_mode", False
+                "whitelist_mode": (
+                    self.config.config.get("domain_security", {}).get(
+                        "whitelist_mode", False
+                    )
                 ),
-                "reputation_threshold": self.config.config.get(
-                    "domain_security", {}
-                ).get("reputation_threshold", 0.7),
+                "reputation_threshold": (
+                    self.config.config.get("domain_security", {}).get(
+                        "reputation_threshold", 0.7
+                    )
+                ),
             },
         }
 

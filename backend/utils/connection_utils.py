@@ -250,7 +250,7 @@ class ConnectionTester:
                 else:
                     return {
                         "status": "not_configured",
-                        "message": ("Redis is not enabled in memory configuration"),
+                        "message": "Redis is not enabled in memory configuration",
                     }
 
             if not redis_host or not redis_port:
@@ -353,7 +353,9 @@ class ConnectionTester:
                         "current_model": current_model,
                         "model_available": model_available,
                         "provider": provider,
-                        "message": f"Embedding model '{current_model}' {'available' if model_available else 'not found'}",
+                        "message": (
+                            f"Embedding model '{current_model}' {'available' if model_available else 'not found'}"
+                        ),
                     }
                 else:
                     return {

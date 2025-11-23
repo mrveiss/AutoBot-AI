@@ -117,7 +117,9 @@ def get_code_collection():
         code_collection = chroma_client.get_or_create_collection(
             name="autobot_code",
             metadata={
-                "description": "Codebase analytics: functions, classes, problems, duplicates"
+                "description": (
+                    "Codebase analytics: functions, classes, problems, duplicates"
+                )
             },
         )
 
@@ -295,8 +297,12 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Dict[str
                                 "type": "long_function",
                                 "severity": "medium",
                                 "line": node.lineno,
-                                "description": f"Function '{node.name}' is {func_length} lines long",
-                                "suggestion": "Consider breaking into smaller functions",
+                                "description": (
+                                    f"Function '{node.name}' is {func_length} lines long"
+                                ),
+                                "suggestion": (
+                                    "Consider breaking into smaller functions"
+                                ),
                             }
                         )
 
@@ -958,7 +964,9 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
         indexing_tasks[task_id]["status"] = "completed"
         indexing_tasks[task_id]["result"] = {
             "status": "success",
-            "message": f"Indexed {analysis_results['stats']['total_files']} files using {storage_type} storage",
+            "message": (
+                f"Indexed {analysis_results['stats']['total_files']} files using {storage_type} storage"
+            ),
             "stats": analysis_results["stats"],
             "storage_type": storage_type,
             "timestamp": datetime.now().isoformat(),
@@ -1016,7 +1024,9 @@ async def index_codebase():
         {
             "task_id": task_id,
             "status": "started",
-            "message": "Indexing started in background. Poll /api/analytics/codebase/index/status/{task_id} for progress.",
+            "message": (
+                "Indexing started in background. Poll /api/analytics/codebase/index/status/{task_id} for progress."
+            ),
         }
     )
 
@@ -1491,7 +1501,9 @@ async def clear_codebase_cache():
     return JSONResponse(
         {
             "status": "success",
-            "message": f"Cleared {len(keys_to_delete) if redis_client else deleted_count} cache entries from {storage_type}",
+            "message": (
+                f"Cleared {len(keys_to_delete) if redis_client else deleted_count} cache entries from {storage_type}"
+            ),
             "deleted_keys": len(keys_to_delete) if redis_client else deleted_count,
             "storage_type": storage_type,
         }

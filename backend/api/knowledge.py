@@ -388,8 +388,12 @@ async def get_main_categories(req: Request):
         try:
             # Try to get cached counts first (instant lookup)
             cache_keys = {
-                KnowledgeCategory.AUTOBOT_DOCUMENTATION: "kb:stats:category:autobot-documentation",
-                KnowledgeCategory.SYSTEM_KNOWLEDGE: "kb:stats:category:system-knowledge",
+                KnowledgeCategory.AUTOBOT_DOCUMENTATION: (
+                    "kb:stats:category:autobot-documentation"
+                ),
+                KnowledgeCategory.SYSTEM_KNOWLEDGE: (
+                    "kb:stats:category:system-knowledge"
+                ),
                 KnowledgeCategory.USER_KNOWLEDGE: "kb:stats:category:user-knowledge",
             }
 
@@ -719,7 +723,9 @@ async def search_knowledge(request: dict, req: Request):
                 "query": query,
                 "mode": mode,
                 "kb_implementation": kb_to_use.__class__.__name__,
-                "message": "Knowledge base is empty - no documents to search. Add documents in the Manage tab.",
+                "message": (
+                    "Knowledge base is empty - no documents to search. Add documents in the Manage tab."
+                ),
             }
     except Exception as stats_err:
         logger.warning(f"Could not check KB stats: {stats_err}")
@@ -837,7 +843,9 @@ async def rag_enhanced_search(request: dict, req: Request):
             )
             return {
                 "status": "success",
-                "synthesized_response": "The knowledge base is currently empty. Please add documents in the Manage tab to enable search functionality.",
+                "synthesized_response": (
+                    "The knowledge base is currently empty. Please add documents in the Manage tab to enable search functionality."
+                ),
                 "results": [],
                 "query": query,
                 "reformulated_query": query,
@@ -916,14 +924,16 @@ async def rag_enhanced_search(request: dict, req: Request):
                     {
                         "content": result.get("content", ""),
                         "metadata": {
-                            "filename": result.get("metadata", {}).get(
-                                "title", "Unknown"
+                            "filename": (
+                                result.get("metadata", {}).get("title", "Unknown")
                             ),
-                            "source": result.get("metadata", {}).get(
-                                "source", "knowledge_base"
+                            "source": (
+                                result.get("metadata", {}).get(
+                                    "source", "knowledge_base"
+                                )
                             ),
-                            "category": result.get("metadata", {}).get(
-                                "category", "general"
+                            "category": (
+                                result.get("metadata", {}).get("category", "general")
                             ),
                             "score": result.get("score", 0.0),
                             "source_query": result.get("source_query", original_query),
@@ -960,7 +970,9 @@ async def rag_enhanced_search(request: dict, req: Request):
             # Return search results without synthesis
             return {
                 "status": "partial_success",
-                "synthesized_response": f"Found {len(all_results)} relevant documents but synthesis failed: {str(e)}",
+                "synthesized_response": (
+                    f"Found {len(all_results)} relevant documents but synthesis failed: {str(e)}"
+                ),
                 "results": all_results,
                 "total_results": len(all_results),
                 "original_query": original_query,
@@ -973,7 +985,9 @@ async def rag_enhanced_search(request: dict, req: Request):
     else:
         return {
             "status": "success",
-            "synthesized_response": f"No relevant documents found for query: '{original_query}'",
+            "synthesized_response": (
+                f"No relevant documents found for query: '{original_query}'"
+            ),
             "results": [],
             "total_results": 0,
             "original_query": original_query,
@@ -1183,7 +1197,9 @@ async def populate_system_commands(request: dict, req: Request):
         },
         {
             "command": "docker",
-            "description": "Container platform for building, running and managing applications",
+            "description": (
+                "Container platform for building, running and managing applications"
+            ),
             "usage": "docker [options] COMMAND",
             "examples": [
                 "docker run -it ubuntu bash",
@@ -1870,7 +1886,9 @@ Type: System Configuration
     mode = "Force reindex" if force_reindex else "Incremental update"
     return {
         "status": "success",
-        "message": f"{mode}: Successfully imported {items_added} AutoBot documents ({items_skipped} skipped, {items_failed} failed)",
+        "message": (
+            f"{mode}: Successfully imported {items_added} AutoBot documents ({items_skipped} skipped, {items_failed} failed)"
+        ),
         "items_added": items_added,
         "items_skipped": items_skipped,
         "items_failed": items_failed,
@@ -1950,7 +1968,7 @@ async def get_knowledge_entries(
 
                 # Format entry for frontend
                 entry = {
-                    "id": (fact_id.decode() if isinstance(fact_id, bytes) else fact_id),
+                    "id": fact_id.decode() if isinstance(fact_id, bytes) else fact_id,
                     "content": fact.get("content", ""),
                     "title": fact.get("metadata", {}).get("title", "Untitled"),
                     "source": fact.get("metadata", {}).get("source", "unknown"),
@@ -2220,7 +2238,9 @@ async def initialize_machine_knowledge(request: dict, req: Request):
 
     return {
         "status": "success",
-        "message": f"Machine knowledge initialized. Added {commands_added} system commands.",
+        "message": (
+            f"Machine knowledge initialized. Added {commands_added} system commands."
+        ),
         "items_added": commands_added,
         "components": {
             "system_commands": commands_added,
@@ -2361,7 +2381,9 @@ async def clear_all_knowledge(request: dict, req: Request):
 
     return {
         "status": "success",
-        "message": f"Successfully cleared knowledge base. Removed {items_removed} entries.",
+        "message": (
+            f"Successfully cleared knowledge base. Removed {items_removed} entries."
+        ),
         "items_removed": items_removed,
         "items_before": items_before,
     }
@@ -2406,8 +2428,8 @@ async def _enhance_search_with_rag(
                     "content": result.get("content", ""),
                     "metadata": {
                         "filename": result.get("metadata", {}).get("title", "Unknown"),
-                        "source": result.get("metadata", {}).get(
-                            "source", "knowledge_base"
+                        "source": (
+                            result.get("metadata", {}).get("source", "knowledge_base")
                         ),
                         "score": result.get("score", 0.0),
                     },
@@ -2462,7 +2484,9 @@ async def get_facts_by_category(
             status_code=503,
             detail={
                 "error": "Knowledge base unavailable",
-                "message": "The knowledge base service failed to initialize. Please check server logs.",
+                "message": (
+                    "The knowledge base service failed to initialize. Please check server logs."
+                ),
                 "code": "KB_INIT_FAILED",
             },
         )
@@ -2778,7 +2802,9 @@ async def vectorize_existing_facts(
 
     return {
         "status": "success",
-        "message": f"Vectorization complete: {success_count} successful, {failed_count} failed, {skipped_count} skipped",
+        "message": (
+            f"Vectorization complete: {success_count} successful, {failed_count} failed, {skipped_count} skipped"
+        ),
         "processed": len(fact_keys),
         "success": success_count,
         "failed": failed_count,
@@ -3769,7 +3795,7 @@ async def start_background_vectorization(
     return {
         "status": "started",
         "message": "Background vectorization started",
-        "last_run": (vectorizer.last_run.isoformat() if vectorizer.last_run else None),
+        "last_run": vectorizer.last_run.isoformat() if vectorizer.last_run else None,
         "is_running": vectorizer.is_running,
     }
 
@@ -3786,7 +3812,7 @@ async def get_vectorization_status(req: Request):
 
     return {
         "is_running": vectorizer.is_running,
-        "last_run": (vectorizer.last_run.isoformat() if vectorizer.last_run else None),
+        "last_run": vectorizer.last_run.isoformat() if vectorizer.last_run else None,
         "check_interval": vectorizer.check_interval,
         "batch_size": vectorizer.batch_size,
     }

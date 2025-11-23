@@ -106,7 +106,9 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
                     "status": "success",
                     "feature": request.feature_name,
                     "result": result,
-                    "message": f"Enterprise feature '{request.feature_name}' enabled successfully",
+                    "message": (
+                        f"Enterprise feature '{request.feature_name}' enabled successfully"
+                    ),
                 },
             )
         else:
@@ -116,7 +118,9 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
                     "status": "error",
                     "feature": request.feature_name,
                     "result": result,
-                    "message": f"Failed to enable enterprise feature: {result.get('message', 'Unknown error')}",
+                    "message": (
+                        f"Failed to enable enterprise feature: {result.get('message', 'Unknown error')}"
+                    ),
                 },
             )
 
@@ -161,22 +165,31 @@ async def enable_all_enterprise_features():
             "result": result,
             "success_rate": f"{success_rate * 100:.1f}%",
             "enterprise_capabilities": {
-                "web_research_orchestration": "web_research_orchestration"
-                in result["enabled_features"],
-                "cross_vm_load_balancing": "cross_vm_load_balancing"
-                in result["enabled_features"],
-                "intelligent_task_routing": "intelligent_task_routing"
-                in result["enabled_features"],
-                "comprehensive_health_monitoring": "comprehensive_health_monitoring"
-                in result["enabled_features"],
-                "graceful_degradation": "graceful_degradation"
-                in result["enabled_features"],
-                "enterprise_configuration": "enterprise_configuration_management"
-                in result["enabled_features"],
-                "zero_downtime_deployment": "zero_downtime_deployment"
-                in result["enabled_features"],
+                "web_research_orchestration": (
+                    "web_research_orchestration" in result["enabled_features"]
+                ),
+                "cross_vm_load_balancing": (
+                    "cross_vm_load_balancing" in result["enabled_features"]
+                ),
+                "intelligent_task_routing": (
+                    "intelligent_task_routing" in result["enabled_features"]
+                ),
+                "comprehensive_health_monitoring": (
+                    "comprehensive_health_monitoring" in result["enabled_features"]
+                ),
+                "graceful_degradation": (
+                    "graceful_degradation" in result["enabled_features"]
+                ),
+                "enterprise_configuration": (
+                    "enterprise_configuration_management" in result["enabled_features"]
+                ),
+                "zero_downtime_deployment": (
+                    "zero_downtime_deployment" in result["enabled_features"]
+                ),
             },
-            "message": f"Phase 4 enterprise features enablement completed: {len(result['enabled_features'])}/{result['total_features']} features enabled",
+            "message": (
+                f"Phase 4 enterprise features enablement completed: {len(result['enabled_features'])}/{result['total_features']} features enabled"
+            ),
         }
 
         if result["failed_features"]:
@@ -305,7 +318,9 @@ async def bulk_enable_features(request: BulkFeatureRequest):
             content={
                 "status": "success",
                 "results": results,
-                "summary": f"Enabled: {len(results['enabled'])}, Failed: {len(results['failed'])}, Skipped: {len(results['skipped'])}",
+                "summary": (
+                    f"Enabled: {len(results['enabled'])}, Failed: {len(results['failed'])}, Skipped: {len(results['skipped'])}"
+                ),
             },
         )
 
@@ -369,7 +384,9 @@ async def get_enterprise_health():
             content={
                 "status": "success",
                 "health": health_status,
-                "summary": f"Health: {health_status['overall_health']}, Issues: {critical_issues}, Warnings: {warnings}",
+                "summary": (
+                    f"Health: {health_status['overall_health']}, Issues: {critical_issues}, Warnings: {warnings}"
+                ),
             },
         )
 
@@ -610,7 +627,9 @@ async def validate_phase4_completion():
                 },
                 "cross_vm_load_balancing": {
                     "enabled": status["capabilities"]["load_balancing"],
-                    "description": "Intelligent load distribution across 6-VM infrastructure",
+                    "description": (
+                        "Intelligent load distribution across 6-VM infrastructure"
+                    ),
                     "impact": "Optimal resource utilization and performance",
                 },
                 "intelligent_task_routing": {
@@ -673,7 +692,9 @@ async def validate_phase4_completion():
             content={
                 "status": "success",
                 "validation": validation_results,
-                "message": f"Phase 4 validation completed: {completion_percentage:.1f}% enterprise features enabled",
+                "message": (
+                    f"Phase 4 validation completed: {completion_percentage:.1f}% enterprise features enabled"
+                ),
             },
         )
 

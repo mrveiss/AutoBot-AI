@@ -282,7 +282,9 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
             return {
                 "best_option": evaluations[0],
                 "all_evaluations": evaluations,
-                "ranking_rationale": "Ranked by overall score considering safety, quality, and efficiency",
+                "ranking_rationale": (
+                    "Ranked by overall score considering safety, quality, and efficiency"
+                ),
                 "recommendation": evaluations[0]["evaluation"].recommendation,
             }
 

@@ -45,29 +45,33 @@ async def get_frontend_config():
                 "retry_attempts": full_config.get("api", {}).get("retry_attempts", 3),
             },
             "websocket": {
-                "url": f"ws://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/ws",
-                "reconnect_attempts": full_config.get("websocket", {}).get(
-                    "reconnect_attempts", 5
+                "url": (
+                    f"ws://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/ws"
                 ),
-                "reconnect_delay": full_config.get("websocket", {}).get(
-                    "reconnect_delay", 1000
+                "reconnect_attempts": (
+                    full_config.get("websocket", {}).get("reconnect_attempts", 5)
+                ),
+                "reconnect_delay": (
+                    full_config.get("websocket", {}).get("reconnect_delay", 1000)
                 ),
             },
             "features": {
-                "chat_enabled": full_config.get("features", {}).get(
-                    "chat_enabled", True
+                "chat_enabled": (
+                    full_config.get("features", {}).get("chat_enabled", True)
                 ),
-                "knowledge_base_enabled": full_config.get("features", {}).get(
-                    "knowledge_base_enabled", True
+                "knowledge_base_enabled": (
+                    full_config.get("features", {}).get("knowledge_base_enabled", True)
                 ),
-                "terminal_enabled": full_config.get("features", {}).get(
-                    "terminal_enabled", True
+                "terminal_enabled": (
+                    full_config.get("features", {}).get("terminal_enabled", True)
                 ),
-                "desktop_enabled": full_config.get("features", {}).get(
-                    "desktop_enabled", True
+                "desktop_enabled": (
+                    full_config.get("features", {}).get("desktop_enabled", True)
                 ),
-                "system_monitoring_enabled": full_config.get("features", {}).get(
-                    "system_monitoring_enabled", True
+                "system_monitoring_enabled": (
+                    full_config.get("features", {}).get(
+                        "system_monitoring_enabled", True
+                    )
                 ),
             },
             "ui": {
@@ -77,14 +81,14 @@ async def get_frontend_config():
                 "notifications": full_config.get("ui", {}).get("notifications", True),
             },
             "performance": {
-                "cache_enabled": full_config.get("performance", {}).get(
-                    "cache_enabled", True
+                "cache_enabled": (
+                    full_config.get("performance", {}).get("cache_enabled", True)
                 ),
-                "lazy_loading": full_config.get("performance", {}).get(
-                    "lazy_loading", True
+                "lazy_loading": (
+                    full_config.get("performance", {}).get("lazy_loading", True)
                 ),
-                "chunk_loading": full_config.get("performance", {}).get(
-                    "chunk_loading", True
+                "chunk_loading": (
+                    full_config.get("performance", {}).get("chunk_loading", True)
                 ),
             },
             "hosts": [
@@ -165,7 +169,9 @@ async def get_frontend_config():
                 "retry_attempts": api_config.get("retry_attempts", 3),
             },
             "websocket": {
-                "url": f"ws://{backend_config.get('host')}:{backend_config.get('port')}/ws",
+                "url": (
+                    f"ws://{backend_config.get('host')}:{backend_config.get('port')}/ws"
+                ),
                 "reconnect_attempts": websocket_config.get("reconnect_attempts", 5),
                 "reconnect_delay": websocket_config.get("reconnect_delay", 1000),
             },

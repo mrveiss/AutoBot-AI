@@ -761,7 +761,7 @@ class ConsolidatedChatWorkflow:
     ) -> Dict[str, Any]:
         """Build comprehensive LLM context - enhanced from all versions"""
 
-        system_prompt = """You are AutoBot, an advanced autonomous Linux administration platform. 
+        system_prompt = """You are AutoBot, an advanced autonomous Linux administration platform.
 You provide accurate, helpful responses based on available knowledge and research."""
 
         # Build context based on knowledge status
@@ -883,8 +883,10 @@ Please provide the best assistance possible, being clear about any limitations i
                 sources.append(
                     {
                         "type": "knowledge_base",
-                        "title": result.get("metadata", {}).get(
-                            "title", "Knowledge Base Entry"
+                        "title": (
+                            result.get("metadata", {}).get(
+                                "title", "Knowledge Base Entry"
+                            )
                         ),
                         "source": result.get("metadata", {}).get("source"),
                         "score": result.get("score", 0.0),

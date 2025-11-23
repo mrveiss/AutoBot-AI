@@ -217,7 +217,9 @@ class WebResearchIntegration:
         if not self.enabled:
             return {
                 "status": "disabled",
-                "message": "Web research is disabled. Enable it in settings to use this feature.",
+                "message": (
+                    "Web research is disabled. Enable it in settings to use this feature."
+                ),
                 "query": query,
                 "results": [],
                 "timestamp": datetime.now().isoformat(),

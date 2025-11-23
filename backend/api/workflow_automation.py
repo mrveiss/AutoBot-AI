@@ -779,7 +779,9 @@ class WorkflowAutomationManager:
             security_judgment = await self.security_risk_judge.evaluate_command_security(
                 step.command,
                 {
-                    "working_directory": "/home/user",  # Could be actual working directory
+                    "working_directory": (
+                        "/home/user"
+                    ),  # Could be actual working directory
                     "user": "user",
                     "session_type": "automated_workflow",
                 },
@@ -1076,7 +1078,9 @@ async def control_workflow(request: WorkflowControlRequest):
         if success:
             return {
                 "success": True,
-                "message": f"Workflow control action '{request.action}' executed successfully",
+                "message": (
+                    f"Workflow control action '{request.action}' executed successfully"
+                ),
             }
         else:
             raise HTTPException(

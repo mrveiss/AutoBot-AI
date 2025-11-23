@@ -407,7 +407,9 @@ class AgentOrchestrator:
             logger.error(f"Agent Orchestrator error: {e}")
             return {
                 "status": "error",
-                "response": "I encountered an error while processing your request. Please try rephrasing it.",
+                "response": (
+                    "I encountered an error while processing your request. Please try rephrasing it."
+                ),
                 "error": str(e),
                 "agent_used": "orchestrator",
                 "routing_strategy": "error_fallback",

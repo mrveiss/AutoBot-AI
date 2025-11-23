@@ -482,8 +482,9 @@ class AnalyticsController:
                     kb_info = await redis_conn.info()
                     stats["knowledge_base_usage"] = {
                         "keys_count": kb_info.get("db1", {}).get("keys", 0),
-                        "memory_usage_mb": kb_info.get("used_memory", 0)
-                        / (1024 * 1024),
+                        "memory_usage_mb": (
+                            kb_info.get("used_memory", 0) / (1024 * 1024)
+                        ),
                     }
             except Exception:
                 stats["knowledge_base_usage"] = {"error": "Unable to retrieve KB stats"}
@@ -514,8 +515,9 @@ class AnalyticsController:
                 trends["performance_trends"] = {
                     "cpu_trend": cpu_trend,
                     "memory_trend": memory_trend,
-                    "trend_period_minutes": len(recent_performance)
-                    * 2,  # Assuming 2-minute intervals
+                    "trend_period_minutes": (
+                        len(recent_performance) * 2
+                    ),  # Assuming 2-minute intervals
                 }
 
             # API usage trends
@@ -722,9 +724,7 @@ async def get_detailed_system_health():
             else:
                 response = requests.get(f"{service_url}/health", timeout=5)
                 detailed_health["service_connectivity"][service_name] = {
-                    "status": (
-                        "healthy" if response.status_code == 200 else "unhealthy"
-                    ),
+                    "status": "healthy" if response.status_code == 200 else "unhealthy",
                     "response_time": response.elapsed.total_seconds(),
                     "status_code": response.status_code,
                 }
@@ -740,7 +740,9 @@ async def get_detailed_system_health():
         detailed_health["resource_alerts"].append(
             {
                 "type": "cpu_high",
-                "message": f"CPU usage at {system_resources['cpu']['percent_overall']:.1f}%",
+                "message": (
+                    f"CPU usage at {system_resources['cpu']['percent_overall']:.1f}%"
+                ),
                 "severity": "warning",
             }
         )
@@ -749,7 +751,9 @@ async def get_detailed_system_health():
         detailed_health["resource_alerts"].append(
             {
                 "type": "memory_high",
-                "message": f"Memory usage at {system_resources['memory']['percent']:.1f}%",
+                "message": (
+                    f"Memory usage at {system_resources['memory']['percent']:.1f}%"
+                ),
                 "severity": "warning",
             }
         )
@@ -772,23 +776,25 @@ async def get_performance_metrics():
         recent_history = list(analytics_state["performance_history"])[-10:]
         metrics["historical_context"] = {
             "samples_count": len(recent_history),
-            "avg_cpu_last_10": sum(h.get("cpu_percent", 0) for h in recent_history)
-            / len(recent_history),
-            "avg_memory_last_10": sum(
-                h.get("memory_percent", 0) for h in recent_history
-            )
-            / len(recent_history),
+            "avg_cpu_last_10": (
+                sum(h.get("cpu_percent", 0) for h in recent_history)
+                / len(recent_history)
+            ),
+            "avg_memory_last_10": (
+                sum(h.get("memory_percent", 0) for h in recent_history)
+                / len(recent_history)
+            ),
         }
 
     # Store current metrics in history
     current_snapshot = {
         "timestamp": datetime.now().isoformat(),
         "cpu_percent": metrics.get("system_performance", {}).get("cpu_percent", 0),
-        "memory_percent": metrics.get("system_performance", {}).get(
-            "memory_percent", 0
+        "memory_percent": (
+            metrics.get("system_performance", {}).get("memory_percent", 0)
         ),
-        "gpu_utilization": metrics.get("hardware_performance", {}).get(
-            "gpu_utilization", 0
+        "gpu_utilization": (
+            metrics.get("hardware_performance", {}).get("gpu_utilization", 0)
         ),
     }
     analytics_state["performance_history"].append(current_snapshot)
@@ -828,7 +834,9 @@ async def get_communication_patterns():
             patterns["pattern_insights"].append(
                 {
                     "type": "performance_concern",
-                    "message": f"Found {len(high_latency_endpoints)} high-frequency endpoints with high latency",
+                    "message": (
+                        f"Found {len(high_latency_endpoints)} high-frequency endpoints with high latency"
+                    ),
                     "details": high_latency_endpoints[:3],  # Show top 3
                 }
             )
@@ -842,7 +850,9 @@ async def get_communication_patterns():
             patterns["pattern_insights"].append(
                 {
                     "type": "reliability_concern",
-                    "message": f"Found {len(high_error_endpoints)} endpoints with high error rates",
+                    "message": (
+                        f"Found {len(high_error_endpoints)} endpoints with high error rates"
+                    ),
                     "details": high_error_endpoints[:3],
                 }
             )
@@ -935,8 +945,8 @@ async def get_code_analysis_status():
         status["code_index_mcp"] = {
             "path": str(analytics_controller.code_index_path),
             "config_available": (
-                analytics_controller.code_index_path / "pyproject.toml"
-            ).exists(),
+                (analytics_controller.code_index_path / "pyproject.toml").exists()
+            ),
         }
 
     return status
@@ -1046,7 +1056,9 @@ async def get_code_quality_metrics():
             quality_metrics["recommendations"].append(
                 {
                     "type": "complexity",
-                    "message": "High complexity detected. Consider refactoring complex functions.",
+                    "message": (
+                        "High complexity detected. Consider refactoring complex functions."
+                    ),
                     "priority": "medium",
                 }
             )
@@ -1077,7 +1089,9 @@ async def get_communication_chains():
         return {
             "status": "no_analysis_available",
             "message": "No communication chain analysis found.",
-            "suggestion": "POST /api/analytics/code/index with analysis_type='communication_chains'",
+            "suggestion": (
+                "POST /api/analytics/code/index with analysis_type='communication_chains'"
+            ),
         }
 
     chains = cached_analysis["communication_chains"]
@@ -1113,7 +1127,9 @@ async def get_communication_chains():
         enhanced_chains["insights"].append(
             {
                 "type": "unused_endpoints",
-                "message": f"Found {len(unused_endpoints)} endpoints that are defined but not used",
+                "message": (
+                    f"Found {len(unused_endpoints)} endpoints that are defined but not used"
+                ),
                 "details": unused_endpoints[:5],
             }
         )
@@ -1123,7 +1139,9 @@ async def get_communication_chains():
         enhanced_chains["insights"].append(
             {
                 "type": "undocumented_endpoints",
-                "message": f"Found {len(runtime_only)} endpoints in use but not in static analysis",
+                "message": (
+                    f"Found {len(runtime_only)} endpoints in use but not in static analysis"
+                ),
                 "details": runtime_only[:5],
             }
         )
@@ -1744,7 +1762,9 @@ async def get_phase9_optimization_recommendations():
                 "type": "cpu_optimization",
                 "priority": "high",
                 "title": "Optimize CPU Usage",
-                "description": "CPU usage is consistently high. Consider optimizing background processes.",
+                "description": (
+                    "CPU usage is consistently high. Consider optimizing background processes."
+                ),
                 "impact": "High",
                 "estimated_improvement": "15-25% performance boost",
                 "actions": [
@@ -1765,7 +1785,9 @@ async def get_phase9_optimization_recommendations():
                 "type": "memory_optimization",
                 "priority": "medium",
                 "title": "Optimize Memory Usage",
-                "description": "Memory usage is high. Consider memory optimization strategies.",
+                "description": (
+                    "Memory usage is high. Consider memory optimization strategies."
+                ),
                 "impact": "Medium",
                 "estimated_improvement": "10-20% memory reduction",
                 "actions": [
@@ -1783,7 +1805,9 @@ async def get_phase9_optimization_recommendations():
                 "type": "api_optimization",
                 "priority": "high",
                 "title": "Optimize API Response Times",
-                "description": f"Average API response time is {communication_patterns.get('avg_response_time', 0):.2f}s",
+                "description": (
+                    f"Average API response time is {communication_patterns.get('avg_response_time', 0):.2f}s"
+                ),
                 "impact": "High",
                 "estimated_improvement": "50-70% faster responses",
                 "actions": [
@@ -1972,7 +1996,9 @@ async def analyze_communication_chains_detailed():
                     "type": "unused_endpoints",
                     "count": len(unused_endpoints),
                     "endpoints": unused_endpoints[:10],
-                    "recommendation": "Consider removing unused endpoints or adding tests",
+                    "recommendation": (
+                        "Consider removing unused endpoints or adding tests"
+                    ),
                 }
             )
 
@@ -1986,7 +2012,9 @@ async def analyze_communication_chains_detailed():
                     "type": "high_error_endpoints",
                     "count": len(high_error_endpoints),
                     "endpoints": high_error_endpoints,
-                    "recommendation": "Investigate and fix endpoints with high error rates",
+                    "recommendation": (
+                        "Investigate and fix endpoints with high error rates"
+                    ),
                 }
             )
 
@@ -2117,15 +2145,21 @@ async def websocket_live_analytics(websocket: WebSocket):
                             {
                                 "type": "performance_update",
                                 "data": {
-                                    "cpu_percent": performance_data.get(
-                                        "system_performance", {}
-                                    ).get("cpu_percent", 0),
-                                    "memory_percent": performance_data.get(
-                                        "system_performance", {}
-                                    ).get("memory_percent", 0),
-                                    "gpu_utilization": performance_data.get(
-                                        "hardware_performance", {}
-                                    ).get("gpu_utilization", 0),
+                                    "cpu_percent": (
+                                        performance_data.get(
+                                            "system_performance", {}
+                                        ).get("cpu_percent", 0)
+                                    ),
+                                    "memory_percent": (
+                                        performance_data.get(
+                                            "system_performance", {}
+                                        ).get("memory_percent", 0)
+                                    ),
+                                    "gpu_utilization": (
+                                        performance_data.get(
+                                            "hardware_performance", {}
+                                        ).get("gpu_utilization", 0)
+                                    ),
                                     "active_connections": len(
                                         analytics_state["websocket_connections"]
                                     ),

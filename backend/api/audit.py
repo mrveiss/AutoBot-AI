@@ -451,7 +451,9 @@ async def cleanup_old_logs(
 
         return {
             "success": True,
-            "message": f"Audit logs older than {cleanup_request.days_to_keep} days have been deleted",
+            "message": (
+                f"Audit logs older than {cleanup_request.days_to_keep} days have been deleted"
+            ),
             "days_retained": cleanup_request.days_to_keep,
         }
 

@@ -223,7 +223,7 @@ class AsyncLongTermMemoryManager:
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 """
-                INSERT OR REPLACE INTO memory_entries 
+                INSERT OR REPLACE INTO memory_entries
                 (category, content, metadata, timestamp, reference_path, embedding, content_hash)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -256,7 +256,7 @@ class AsyncLongTermMemoryManager:
             if category:
                 query = f"""
                     SELECT id, category, content, metadata, timestamp, reference_path, embedding
-                    FROM memory_entries 
+                    FROM memory_entries
                     WHERE category = ?
                     ORDER BY {order_by}
                     LIMIT ? OFFSET ?
@@ -265,7 +265,7 @@ class AsyncLongTermMemoryManager:
             else:
                 query = f"""
                     SELECT id, category, content, metadata, timestamp, reference_path, embedding
-                    FROM memory_entries 
+                    FROM memory_entries
                     ORDER BY {order_by}
                     LIMIT ? OFFSET ?
                 """
@@ -306,8 +306,8 @@ class AsyncLongTermMemoryManager:
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 """
-                INSERT INTO task_logs 
-                (task_id, task_type, status, description, result, execution_time_ms, 
+                INSERT INTO task_logs
+                (task_id, task_type, status, description, result, execution_time_ms,
                  error_message, started_at, completed_at, metadata)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -347,7 +347,7 @@ class AsyncLongTermMemoryManager:
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 """
-                INSERT INTO agent_states 
+                INSERT INTO agent_states
                 (state_name, state_data, phase, active_tasks, system_status, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
@@ -381,7 +381,7 @@ class AsyncLongTermMemoryManager:
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 """
-                INSERT INTO conversation_history 
+                INSERT INTO conversation_history
                 (session_id, role, content, timestamp, message_id, response_time_ms, token_usage, model_used)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -414,7 +414,7 @@ class AsyncLongTermMemoryManager:
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 """
-                INSERT INTO config_history 
+                INSERT INTO config_history
                 (config_key, old_value, new_value, change_reason, timestamp)
                 VALUES (?, ?, ?, ?, ?)
                 """,

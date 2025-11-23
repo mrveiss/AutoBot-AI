@@ -210,8 +210,9 @@ class MultiModalPerformanceMonitor:
                 "optimization_status": {
                     "last_optimization": self.last_optimization,
                     "time_since_optimization": timestamp - self.last_optimization,
-                    "needs_optimization": timestamp - self.last_optimization
-                    > self.optimization_interval,
+                    "needs_optimization": (
+                        timestamp - self.last_optimization > self.optimization_interval
+                    ),
                 },
             }
 
@@ -235,7 +236,9 @@ class MultiModalPerformanceMonitor:
 
             return {
                 "device_name": self.device_properties.name,
-                "compute_capability": f"{self.device_properties.major}.{self.device_properties.minor}",
+                "compute_capability": (
+                    f"{self.device_properties.major}.{self.device_properties.minor}"
+                ),
                 "total_memory_gb": self.total_gpu_memory / 1024**3,
                 "allocated_mb": allocated / 1024 / 1024,
                 "reserved_mb": reserved / 1024 / 1024,
@@ -350,8 +353,9 @@ class MultiModalPerformanceMonitor:
             "average_gpu_utilization": float(gpu_utilization),
             "current_batch_sizes": self.batch_sizes.copy(),
             "gpu_available": self.gpu_available,
-            "mixed_precision_capable": self.gpu_available
-            and hasattr(torch.cuda, "amp"),
+            "mixed_precision_capable": (
+                self.gpu_available and hasattr(torch.cuda, "amp")
+            ),
             "last_optimization": self.last_optimization,
             "optimization_status": (
                 "recent" if time.time() - self.last_optimization < 60 else "needed"

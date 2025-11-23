@@ -179,7 +179,9 @@ async def select_optimal_model(request: OptimizationRequest):
                     "memory_percent": resources["memory_percent"],
                     "available_memory_gb": resources["available_memory_gb"],
                 },
-                "selection_criteria": "Balanced for performance, quality, and resource efficiency",
+                "selection_criteria": (
+                    "Balanced for performance, quality, and resource efficiency"
+                ),
             },
             "timestamp": time.time(),
         }
@@ -435,7 +437,9 @@ async def benchmark_model(
             "test_queries": test_queries,
             "iterations_per_query": iterations,
             "status": "benchmark_scheduled",
-            "message": "Benchmark scheduled. In a real implementation, this would run the actual model tests.",
+            "message": (
+                "Benchmark scheduled. In a real implementation, this would run the actual model tests."
+            ),
             "expected_metrics": [
                 "average_response_time",
                 "tokens_per_second",
@@ -477,7 +481,9 @@ async def get_system_resources():
                 {
                     "type": "warning",
                     "message": "High CPU usage detected",
-                    "suggestion": "Consider using lighter models or reducing concurrent requests",
+                    "suggestion": (
+                        "Consider using lighter models or reducing concurrent requests"
+                    ),
                 }
             )
 

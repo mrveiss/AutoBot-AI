@@ -420,8 +420,9 @@ class MockProvider(LLMProvider):
                 content = f"Mock response to: {user_content[:50]}..."
 
             usage = {
-                "prompt_tokens": sum(len(msg["content"]) for msg in request.messages)
-                // 4,
+                "prompt_tokens": (
+                    sum(len(msg["content"]) for msg in request.messages) // 4
+                ),
                 "completion_tokens": len(content) // 4,
                 "total_tokens": 0,
             }
@@ -738,7 +739,7 @@ class UnifiedLLMInterface:
             "total_requests": self._total_requests,
             "successful_requests": self._successful_requests,
             "failed_requests": self._failed_requests,
-            "success_rate": (self._successful_requests / max(1, self._total_requests)),
+            "success_rate": self._successful_requests / max(1, self._total_requests),
             "providers": {},
         }
 

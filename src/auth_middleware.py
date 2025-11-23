@@ -258,8 +258,10 @@ class AuthenticationMiddleware:
             "role": user_data["role"],
             "email": user_data.get("email", ""),
             "iat": datetime.datetime.utcnow(),
-            "exp": datetime.datetime.utcnow()
-            + datetime.timedelta(hours=self.jwt_expiry_hours),
+            "exp": (
+                datetime.datetime.utcnow()
+                + datetime.timedelta(hours=self.jwt_expiry_hours)
+            ),
         }
 
         return jwt.encode(payload, self.jwt_secret, algorithm=self.jwt_algorithm)

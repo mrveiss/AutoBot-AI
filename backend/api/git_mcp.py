@@ -512,7 +512,9 @@ async def get_git_mcp_tools() -> List[MCPTool]:
                 "properties": {
                     "repo_path": {
                         "type": "string",
-                        "description": "Repository path (default: /home/kali/Desktop/AutoBot)",
+                        "description": (
+                            "Repository path (default: /home/kali/Desktop/AutoBot)"
+                        ),
                         "default": "/home/kali/Desktop/AutoBot",
                     },
                     "short": {
@@ -577,7 +579,9 @@ async def get_git_mcp_tools() -> List[MCPTool]:
                     },
                     "commit": {
                         "type": "string",
-                        "description": "Compare with specific commit (e.g., HEAD~1, abc123)",
+                        "description": (
+                            "Compare with specific commit (e.g., HEAD~1, abc123)"
+                        ),
                     },
                 },
                 "required": [],

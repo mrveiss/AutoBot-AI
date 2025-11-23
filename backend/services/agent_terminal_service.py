@@ -67,7 +67,9 @@ def map_risk_to_level(risk: CommandRisk) -> RiskLevel:
         CommandRisk.MODERATE: RiskLevel.MEDIUM,  # Moderate commands → Medium risk
         CommandRisk.HIGH: RiskLevel.HIGH,  # High risk commands → High risk
         CommandRisk.CRITICAL: RiskLevel.CRITICAL,  # Critical commands → Critical risk
-        CommandRisk.FORBIDDEN: RiskLevel.CRITICAL,  # Forbidden commands → Critical risk (blocked)
+        CommandRisk.FORBIDDEN: (
+            RiskLevel.CRITICAL
+        ),  # Forbidden commands → Critical risk (blocked)
     }
     return risk_mapping.get(risk, RiskLevel.MEDIUM)
 
@@ -460,8 +462,12 @@ class AgentTerminalService:
                 "created_at": session.created_at,
                 "last_activity": session.last_activity,
                 "metadata": session.metadata,
-                "pty_session_id": session.pty_session_id,  # CRITICAL: Store PTY session ID
-                "pending_approval": session.pending_approval,  # CRITICAL: Persist pending approvals for page reload
+                "pty_session_id": (
+                    session.pty_session_id
+                ),  # CRITICAL: Store PTY session ID
+                "pending_approval": (
+                    session.pending_approval
+                ),  # CRITICAL: Persist pending approvals for page reload
             }
 
             import json
@@ -1189,10 +1195,18 @@ class AgentTerminalService:
                     "description": description,
                     "agent_role": session.agent_role.value,
                     "approval_required": True,
-                    "command_id": cmd_execution.command_id,  # CRITICAL: Return command_id to frontend
-                    "terminal_session_id": cmd_execution.terminal_session_id,  # For frontend linking
-                    "is_interactive": is_interactive,  # Issue #33 - Frontend can show stdin UI
-                    "interactive_reasons": interactive_reasons,  # Issue #33 - Display to user
+                    "command_id": (
+                        cmd_execution.command_id
+                    ),  # CRITICAL: Return command_id to frontend
+                    "terminal_session_id": (
+                        cmd_execution.terminal_session_id
+                    ),  # For frontend linking
+                    "is_interactive": (
+                        is_interactive
+                    ),  # Issue #33 - Frontend can show stdin UI
+                    "interactive_reasons": (
+                        interactive_reasons
+                    ),  # Issue #33 - Display to user
                 }
 
         # Execute command (auto-approved safe commands)
@@ -1924,7 +1938,9 @@ class AgentTerminalService:
             "command_count": len(session.command_history),
             "pending_approval": session.pending_approval,
             "metadata": session.metadata,
-            "pty_alive": pty_alive,  # CRITICAL FIX: Add pty_alive to prevent auto-recreation
+            "pty_alive": (
+                pty_alive
+            ),  # CRITICAL FIX: Add pty_alive to prevent auto-recreation
         }
 
     async def _store_auto_approve_rule(

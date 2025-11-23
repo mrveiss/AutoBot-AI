@@ -1206,10 +1206,13 @@ class ThreatDetectionEngine:
             "recent_events_count": len(self.recent_events),
             "active_user_profiles": len(self.user_profiles),
             "active_sessions": len(self.user_sessions),
-            "detection_rate": self.stats["threats_detected"]
-            / max(1, self.stats["total_events_processed"]),
-            "false_positive_rate": self.stats["false_positives"]
-            / max(1, self.stats["threats_detected"]),
+            "detection_rate": (
+                self.stats["threats_detected"]
+                / max(1, self.stats["total_events_processed"])
+            ),
+            "false_positive_rate": (
+                self.stats["false_positives"] / max(1, self.stats["threats_detected"])
+            ),
         }
 
     async def get_user_risk_assessment(self, user_id: str) -> Dict:

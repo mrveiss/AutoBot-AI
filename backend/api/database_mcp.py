@@ -266,12 +266,16 @@ async def get_database_mcp_tools() -> List[MCPTool]:
                 "properties": {
                     "database": {
                         "type": "string",
-                        "description": "Database name (conversation_files, agent_memory, knowledge_base, project_state, autobot)",
+                        "description": (
+                            "Database name (conversation_files, agent_memory, knowledge_base, project_state, autobot)"
+                        ),
                         "enum": list(DATABASE_WHITELIST.keys()),
                     },
                     "query": {
                         "type": "string",
-                        "description": "SQL SELECT query. Use ? for parameters to prevent injection.",
+                        "description": (
+                            "SQL SELECT query. Use ? for parameters to prevent injection."
+                        ),
                     },
                     "params": {
                         "type": "array",
@@ -280,7 +284,9 @@ async def get_database_mcp_tools() -> List[MCPTool]:
                     },
                     "limit": {
                         "type": "integer",
-                        "description": f"Max rows to return (default: 100, max: {MAX_RESULT_ROWS})",
+                        "description": (
+                            f"Max rows to return (default: 100, max: {MAX_RESULT_ROWS})"
+                        ),
                         "minimum": 1,
                         "maximum": MAX_RESULT_ROWS,
                     },
@@ -301,7 +307,9 @@ async def get_database_mcp_tools() -> List[MCPTool]:
                     },
                     "statement": {
                         "type": "string",
-                        "description": "SQL INSERT/UPDATE/DELETE statement. Use ? for parameters.",
+                        "description": (
+                            "SQL INSERT/UPDATE/DELETE statement. Use ? for parameters."
+                        ),
                     },
                     "params": {
                         "type": "array",
@@ -340,7 +348,9 @@ async def get_database_mcp_tools() -> List[MCPTool]:
                     },
                     "table": {
                         "type": "string",
-                        "description": "Specific table to describe (optional, omit for all tables)",
+                        "description": (
+                            "Specific table to describe (optional, omit for all tables)"
+                        ),
                     },
                 },
                 "required": ["database"],

@@ -67,8 +67,9 @@ async def get_fresh_knowledge_stats(request: Request = None):
             "debug_info": {
                 "vector_count": stats.get("total_documents", 0),
                 "indexed_count": stats.get("indexed_documents", 0),
-                "mismatch": stats.get("total_documents", 0)
-                != stats.get("indexed_documents", 0),
+                "mismatch": (
+                    stats.get("total_documents", 0) != stats.get("indexed_documents", 0)
+                ),
             },
         }
 

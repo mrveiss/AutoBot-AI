@@ -411,8 +411,9 @@ class TakeoverManager:
         # Create completion record
         completion_data = {
             "session_id": session_id,
-            "duration_minutes": (session.ended_at - session.started_at).total_seconds()
-            / 60,
+            "duration_minutes": (
+                (session.ended_at - session.started_at).total_seconds() / 60
+            ),
             "actions_count": len(session.actions_taken),
             "resolution": resolution,
             "handback_notes": handback_notes,

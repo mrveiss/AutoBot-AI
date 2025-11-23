@@ -119,12 +119,15 @@ class ExistingOperationMigrator:
                             i + 1,
                             total_files,
                             {
-                                "files_per_second": len(indexed_files)
-                                / max(
-                                    1,
-                                    (
-                                        datetime.now() - context.operation.started_at
-                                    ).total_seconds(),
+                                "files_per_second": (
+                                    len(indexed_files)
+                                    / max(
+                                        1,
+                                        (
+                                            datetime.now()
+                                            - context.operation.started_at
+                                        ).total_seconds(),
+                                    )
                                 ),
                                 "current_file": str(file_path),
                             },

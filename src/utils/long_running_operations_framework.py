@@ -902,8 +902,13 @@ async def execute_codebase_indexing(
                     i + 1,
                     total_files,
                     {
-                        "files_per_second": (i + 1)
-                        / max(1, time.time() - context.operation.started_at.timestamp())
+                        "files_per_second": (
+                            (i + 1)
+                            / max(
+                                1,
+                                time.time() - context.operation.started_at.timestamp(),
+                            )
+                        )
                     },
                     f"Indexed {i + 1} of {total_files} files",
                 )

@@ -297,7 +297,7 @@ class SystemKnowledgeManager:
                         {
                             "description": "Check image capacity for hidden data",
                             "command": "steghide info suspicious.jpg",
-                            "expected_output": ("capacity: 57.8% (can hide data)"),
+                            "expected_output": "capacity: 57.8% (can hide data)",
                         },
                     ],
                     "troubleshooting": [
@@ -419,7 +419,7 @@ class SystemKnowledgeManager:
                         "exiftool {image_file}",
                         "strings {image_file} | head -20",
                     ],
-                    "expected_output": ("EXIF data, embedded comments, text strings"),
+                    "expected_output": "EXIF data, embedded comments, text strings",
                 },
                 {
                     "step": 3,

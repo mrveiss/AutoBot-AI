@@ -163,9 +163,12 @@ class GPUAccelerationOptimizer:
                             "name": gpu_name,
                             "memory_gb": round(memory_mb / 1024, 1),
                             "cuda_version": cuda_version,
-                            "tensor_cores": "RTX"
-                            in gpu_name,  # RTX cards have Tensor Cores
-                            "mixed_precision": True,  # Modern NVIDIA GPUs support mixed precision
+                            "tensor_cores": (
+                                "RTX" in gpu_name
+                            ),  # RTX cards have Tensor Cores
+                            "mixed_precision": (
+                                True
+                            ),  # Modern NVIDIA GPUs support mixed precision
                         }
                     )
 
@@ -314,7 +317,9 @@ class GPUAccelerationOptimizer:
                     {
                         "gpu_utilization_percent": gpu_metrics.utilization_percent,
                         "memory_used_mb": gpu_metrics.memory_used_mb,
-                        "memory_utilization_percent": gpu_metrics.memory_utilization_percent,
+                        "memory_utilization_percent": (
+                            gpu_metrics.memory_utilization_percent
+                        ),
                         "temperature_celsius": gpu_metrics.temperature_celsius,
                         "power_draw_watts": gpu_metrics.power_draw_watts,
                     }

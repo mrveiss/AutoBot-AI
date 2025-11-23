@@ -76,8 +76,10 @@ class SecurityLayer:
                     "deprecated_role": user_role,
                     "action_attempted": action_type,
                     "resource": resource,
-                    "message": "God/superuser/root roles deprecated for security. "
-                    "Downgrading to admin with granular permissions.",
+                    "message": (
+                        "God/superuser/root roles deprecated for security. "
+                        "Downgrading to admin with granular permissions."
+                    ),
                 },
             )
             user_role = "admin"  # Downgrade to admin with proper permissions

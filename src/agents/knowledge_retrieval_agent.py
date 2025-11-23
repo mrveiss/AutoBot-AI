@@ -286,7 +286,9 @@ Guidelines:
                 {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
-                    "content": f"Context:\n{context_text}\n\nQuestion: {query}\n\nProvide a brief answer:",
+                    "content": (
+                        f"Context:\n{context_text}\n\nQuestion: {query}\n\nProvide a brief answer:"
+                    ),
                 },
             ]
 

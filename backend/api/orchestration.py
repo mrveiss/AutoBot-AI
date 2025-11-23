@@ -357,12 +357,12 @@ async def get_agent_capabilities():
             agent_details[agent] = {
                 "capabilities": [cap.value for cap in caps],
                 "performance": {
-                    "reliability": enhanced_orchestrator.agent_performance[
-                        agent
-                    ].reliability_score,
-                    "total_tasks": enhanced_orchestrator.agent_performance[
-                        agent
-                    ].total_tasks,
+                    "reliability": (
+                        enhanced_orchestrator.agent_performance[agent].reliability_score
+                    ),
+                    "total_tasks": (
+                        enhanced_orchestrator.agent_performance[agent].total_tasks
+                    ),
                 },
             }
 
@@ -438,9 +438,13 @@ async def get_orchestration_examples():
         content={
             "examples": {
                 "parallel_research": {
-                    "goal": "Research the latest developments in quantum computing and AI",
+                    "goal": (
+                        "Research the latest developments in quantum computing and AI"
+                    ),
                     "strategy": "parallel",
-                    "description": "Multiple research agents work simultaneously on different aspects",
+                    "description": (
+                        "Multiple research agents work simultaneously on different aspects"
+                    ),
                 },
                 "sequential_installation": {
                     "goal": "Install Docker, configure it, and deploy a test container",
@@ -448,19 +452,29 @@ async def get_orchestration_examples():
                     "description": "Installation steps must be performed in order",
                 },
                 "collaborative_analysis": {
-                    "goal": "Analyze this codebase for security vulnerabilities and performance issues",
+                    "goal": (
+                        "Analyze this codebase for security vulnerabilities and performance issues"
+                    ),
                     "strategy": "collaborative",
-                    "description": "Security and performance agents share findings in real-time",
+                    "description": (
+                        "Security and performance agents share findings in real-time"
+                    ),
                 },
                 "pipeline_processing": {
-                    "goal": "Extract data from documents, transform it, and generate a report",
+                    "goal": (
+                        "Extract data from documents, transform it, and generate a report"
+                    ),
                     "strategy": "pipeline",
                     "description": "Each stage processes and passes data to the next",
                 },
                 "adaptive_complex": {
-                    "goal": "Help me refactor this legacy application to use microservices",
+                    "goal": (
+                        "Help me refactor this legacy application to use microservices"
+                    ),
                     "strategy": "adaptive",
-                    "description": "Strategy adapts based on codebase complexity and progress",
+                    "description": (
+                        "Strategy adapts based on codebase complexity and progress"
+                    ),
                 },
             },
             "usage_tips": [

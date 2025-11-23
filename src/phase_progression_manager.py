@@ -56,9 +56,13 @@ class PhaseProgressionManager:
         self.config = {
             "auto_progression_enabled": True,
             "minimum_phase_duration": 3600,  # 1 hour minimum between progressions
-            "validation_threshold": 95.0,  # Minimum completion percentage for progression
+            "validation_threshold": (
+                95.0
+            ),  # Minimum completion percentage for progression
             "rollback_threshold": 75.0,  # Below this, consider rollback
-            "max_concurrent_phases": 3,  # Maximum phases that can be active simultaneously
+            "max_concurrent_phases": (
+                3
+            ),  # Maximum phases that can be active simultaneously
             "progression_cooldown": 1800,  # 30 minutes between progression attempts
         }
 
@@ -685,8 +689,9 @@ class PhaseProgressionManager:
                 else None
             ),
             "auto_progression_enabled": self.config["auto_progression_enabled"],
-            "system_maturity": len(self.current_capabilities)
-            * 10,  # Rough maturity score
+            "system_maturity": (
+                len(self.current_capabilities) * 10
+            ),  # Rough maturity score
         }
 
     async def trigger_manual_progression(

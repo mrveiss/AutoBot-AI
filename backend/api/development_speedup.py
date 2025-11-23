@@ -444,18 +444,22 @@ async def get_recommendations_endpoint(
 
         # Add some quick metrics for dashboard
         metrics = {
-            "duplicate_savings": result.get("duplicate_code", {})
-            .get("potential_savings", {})
-            .get("lines_of_code", 0),
-            "technical_debt_items": result.get("code_patterns", {}).get(
-                "high_priority_issues", 0
+            "duplicate_savings": (
+                result.get("duplicate_code", {})
+                .get("potential_savings", {})
+                .get("lines_of_code", 0)
+            ),
+            "technical_debt_items": (
+                result.get("code_patterns", {}).get("high_priority_issues", 0)
             ),
             "unused_imports": len(
                 result.get("import_analysis", {}).get("potential_unused_imports", [])
             ),
-            "refactoring_opportunities": result.get(
-                "refactoring_opportunities", {}
-            ).get("total_opportunities", 0),
+            "refactoring_opportunities": (
+                result.get("refactoring_opportunities", {}).get(
+                    "total_opportunities", 0
+                )
+            ),
             "quality_issues": result.get("quality_issues", {}).get("total_issues", 0),
         }
 
@@ -539,9 +543,13 @@ async def get_development_speedup_status():
                 },
                 "search_index": search_status,
                 "thresholds": {
-                    "duplicate_similarity": _get_dev_speedup_agent().duplicate_threshold,
+                    "duplicate_similarity": (
+                        _get_dev_speedup_agent().duplicate_threshold
+                    ),
                     "min_duplicate_lines": _get_dev_speedup_agent().min_duplicate_lines,
-                    "complexity_threshold": _get_dev_speedup_agent().complexity_threshold,
+                    "complexity_threshold": (
+                        _get_dev_speedup_agent().complexity_threshold
+                    ),
                 },
             },
         )
@@ -572,13 +580,17 @@ async def get_analysis_examples():
                         "root_path": "/path/to/project",
                         "analysis_type": "comprehensive",
                     },
-                    "use_case": "Get complete overview of codebase health and improvement opportunities",
+                    "use_case": (
+                        "Get complete overview of codebase health and improvement opportunities"
+                    ),
                 },
                 "duplicate_detection": {
                     "description": "Find duplicate code blocks",
                     "endpoint": "/api/development_speedup/duplicates",
                     "parameters": {"path": "/path/to/project", "min_lines": 5},
-                    "use_case": "Identify and eliminate code duplication to reduce maintenance burden",
+                    "use_case": (
+                        "Identify and eliminate code duplication to reduce maintenance burden"
+                    ),
                 },
                 "pattern_analysis": {
                     "description": "Identify code patterns and anti-patterns",

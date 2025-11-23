@@ -431,7 +431,9 @@ async def get_sandbox_examples():
                 "python_script": {
                     "description": "Execute a Python script",
                     "request": {
-                        "script_content": "import sys\nprint(f'Python {sys.version}')\nprint('Secure execution successful!')",
+                        "script_content": (
+                            "import sys\nprint(f'Python {sys.version}')\nprint('Secure execution successful!')"
+                        ),
                         "language": "python",
                         "security_level": "medium",
                     },
@@ -450,7 +452,9 @@ async def get_sandbox_examples():
                     },
                 },
                 "network_enabled": {
-                    "description": "Execute with network access (medium/low security only)",
+                    "description": (
+                        "Execute with network access (medium/low security only)"
+                    ),
                     "request": {
                         "command": f"ping -c 3 {NetworkConstants.PUBLIC_DNS_IP}",
                         "security_level": "medium",

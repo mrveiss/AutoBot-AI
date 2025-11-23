@@ -617,8 +617,9 @@ async def get_agents_status():
                     agent in agents_info.get("agents", [])
                     for agent in ["research", "web_research_assistant"]
                 ),
-                "development_tools": "development_speedup"
-                in agents_info.get("agents", []),
+                "development_tools": (
+                    "development_speedup" in agents_info.get("agents", [])
+                ),
             }
         )
 
@@ -686,7 +687,9 @@ async def receive_goal_compat(
 
         # Fallback to basic response
         return {
-            "message": f"Goal received: {goal}. Enhanced AI capabilities temporarily unavailable."
+            "message": (
+                f"Goal received: {goal}. Enhanced AI capabilities temporarily unavailable."
+            )
         }
 
 

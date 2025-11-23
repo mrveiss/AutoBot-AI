@@ -625,7 +625,9 @@ class ClaudeAPIOptimizationSuite:
                 "payload_optimization_enabled": self.config.enable_payload_optimization,
                 "request_batching_enabled": self.config.enable_request_batching,
                 "graceful_degradation_enabled": self.config.enable_graceful_degradation,
-                "todowrite_optimization_enabled": self.config.enable_todowrite_optimization,
+                "todowrite_optimization_enabled": (
+                    self.config.enable_todowrite_optimization
+                ),
                 "pattern_analysis_enabled": self.config.enable_pattern_analysis,
             },
             "metrics": {
@@ -636,7 +638,9 @@ class ClaudeAPIOptimizationSuite:
                 "requests_cached": self.metrics.requests_cached,
                 "api_calls_saved": self.metrics.api_calls_saved,
                 "total_response_time_saved": self.metrics.total_response_time_saved,
-                "conversation_crashes_prevented": self.metrics.conversation_crashes_prevented,
+                "conversation_crashes_prevented": (
+                    self.metrics.conversation_crashes_prevented
+                ),
                 "optimization_efficiency": (
                     (
                         self.metrics.api_calls_saved

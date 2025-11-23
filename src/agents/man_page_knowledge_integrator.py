@@ -206,8 +206,9 @@ class ManPageParser:
                 examples.append(
                     {
                         "command": command_line,
-                        "description": " ".join(description_lines).strip()
-                        or "Example usage",
+                        "description": (
+                            " ".join(description_lines).strip() or "Example usage"
+                        ),
                     }
                 )
 

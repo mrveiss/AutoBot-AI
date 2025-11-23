@@ -344,7 +344,9 @@ and suggest alternatives."""
             if re.search(pattern, command, re.IGNORECASE):
                 return {
                     "is_safe": False,
-                    "security_warning": f"Command contains dangerous pattern: {pattern}",
+                    "security_warning": (
+                        f"Command contains dangerous pattern: {pattern}"
+                    ),
                     "recommended_action": "reject",
                 }
 
@@ -361,7 +363,9 @@ and suggest alternatives."""
             if main_command not in self.allowed_commands:
                 return {
                     "is_safe": False,
-                    "security_warning": f"Command '{main_command}' not in allowed commands list",
+                    "security_warning": (
+                        f"Command '{main_command}' not in allowed commands list"
+                    ),
                     "recommended_action": "review_manually",
                 }
 

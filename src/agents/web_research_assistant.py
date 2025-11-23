@@ -212,8 +212,10 @@ class WebResearchAssistant:
                         f"General information and resources related to {query}..."
                     ),
                     "domain": "example.com",
-                    "content": f"This is general content about {query}. "
-                    "It includes basic information and common use cases.",
+                    "content": (
+                        f"This is general content about {query}. "
+                        "It includes basic information and common use cases."
+                    ),
                 }
             ]
 

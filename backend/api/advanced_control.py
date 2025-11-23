@@ -341,9 +341,7 @@ async def get_system_status():
         "memory_percent": psutil.virtual_memory().percent,
         "disk_usage": psutil.disk_usage("/").percent,
         "process_count": len(psutil.pids()),
-        "load_average": (
-            psutil.getloadavg() if hasattr(psutil, "getloadavg") else None
-        ),
+        "load_average": psutil.getloadavg() if hasattr(psutil, "getloadavg") else None,
     }
 
     # Get streaming sessions

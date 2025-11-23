@@ -430,7 +430,9 @@ class EnterpriseFeatureManager:
                 logger.error(f"❌ Failed to enable feature: {feature_name}")
                 return {
                     "status": "error",
-                    "message": f"Failed to enable {feature_name}: {result.get('error', 'Unknown error')}",
+                    "message": (
+                        f"Failed to enable {feature_name}: {result.get('error', 'Unknown error')}"
+                    ),
                     "feature": feature_name,
                 }
 

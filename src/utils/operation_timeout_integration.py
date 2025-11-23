@@ -306,9 +306,9 @@ class OperationIntegrationManager:
                     await websocket.send_json(
                         {
                             "type": "current_progress",
-                            "data": self._convert_operation_to_response(
-                                operation
-                            ).dict(),
+                            "data": (
+                                self._convert_operation_to_response(operation).dict()
+                            ),
                         }
                     )
 
@@ -468,9 +468,11 @@ class OperationIntegrationManager:
             return {
                 "total_tests": len(test_files),
                 "results": results,
-                "success_rate": len([r for r in results if r.get("exit_code") == 0])
-                / len(results)
-                * 100,
+                "success_rate": (
+                    len([r for r in results if r.get("exit_code") == 0])
+                    / len(results)
+                    * 100
+                ),
             }
 
         return operation_func

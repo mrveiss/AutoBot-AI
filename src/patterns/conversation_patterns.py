@@ -113,12 +113,22 @@ class ConversationPatterns:
     def get_response_template(self, conversation_type: ConversationType) -> str:
         """Get response template for a conversation type."""
         templates = {
-            ConversationType.GREETING: "Hello! I'm AutoBot, your AI assistant. I'm here to help you with various tasks including system commands, research, security analysis, and more. What can I help you with today?",
-            ConversationType.STATUS_INQUIRY: "I'm doing well and ready to help! My systems are operational and I'm equipped with various capabilities. What would you like to work on?",
-            ConversationType.GRATITUDE: "You're welcome! I'm always happy to help. Let me know if you need anything else.",
-            ConversationType.FAREWELL: "Goodbye! Feel free to return anytime you need assistance. Have a great day!",
+            ConversationType.GREETING: (
+                "Hello! I'm AutoBot, your AI assistant. I'm here to help you with various tasks including system commands, research, security analysis, and more. What can I help you with today?"
+            ),
+            ConversationType.STATUS_INQUIRY: (
+                "I'm doing well and ready to help! My systems are operational and I'm equipped with various capabilities. What would you like to work on?"
+            ),
+            ConversationType.GRATITUDE: (
+                "You're welcome! I'm always happy to help. Let me know if you need anything else."
+            ),
+            ConversationType.FAREWELL: (
+                "Goodbye! Feel free to return anytime you need assistance. Have a great day!"
+            ),
             ConversationType.AFFIRMATION: "Great! How can I assist you?",
-            ConversationType.NEGATION: "No problem! Let me know if you need help with anything else.",
+            ConversationType.NEGATION: (
+                "No problem! Let me know if you need help with anything else."
+            ),
         }
         return templates.get(
             conversation_type,

@@ -292,7 +292,9 @@ class DevelopmentSpeedupAgent:
                 "name": "Exception Handling Anti-pattern",
                 "query": "except.*pass",
                 "type": "regex",
-                "suggestion": "Consider logging exceptions or handling them specifically",
+                "suggestion": (
+                    "Consider logging exceptions or handling them specifically"
+                ),
             },
             {
                 "name": "TODO/FIXME Comments",

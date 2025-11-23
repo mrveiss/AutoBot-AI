@@ -337,9 +337,7 @@ class SystemCommandAgent:
             {
                 "chat_id": chat_id,
                 "command": command,
-                "warning": (
-                    "⚠️ This command may be dangerous. Please confirm execution."
-                ),
+                "warning": "⚠️ This command may be dangerous. Please confirm execution.",
                 "requires_confirmation": True,
             },
         )

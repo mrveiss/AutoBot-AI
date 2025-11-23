@@ -174,7 +174,9 @@ async def start_hot_reload():
 
         return {
             "success": True,
-            "message": "Hot reload manager started and chat workflow modules registered",
+            "message": (
+                "Hot reload manager started and chat workflow modules registered"
+            ),
         }
 
     except Exception as e:

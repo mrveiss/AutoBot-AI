@@ -159,12 +159,22 @@ class SSOIntegrationFramework:
                 "service_url": "https://autobot.company.com",
                 "acs_url": "/api/auth/saml/acs",
                 "sls_url": "/api/auth/saml/sls",
-                "name_id_format": "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent",
+                "name_id_format": (
+                    "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"
+                ),
                 "attribute_mapping": {
-                    "email": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
-                    "first_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
-                    "last_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
-                    "groups": "http://schemas.microsoft.com/ws/2008/06/identity/claims/groups",
+                    "email": (
+                        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+                    ),
+                    "first_name": (
+                        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
+                    ),
+                    "last_name": (
+                        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
+                    ),
+                    "groups": (
+                        "http://schemas.microsoft.com/ws/2008/06/identity/claims/groups"
+                    ),
                 },
             },
             # OAuth2/OpenID Connect configuration
@@ -328,7 +338,9 @@ class SSOIntegrationFramework:
                     "tenant_id": self.config["azure_ad"]["tenant_id"],
                     "client_id": self.config["azure_ad"].get("client_id", ""),
                     "client_secret": self.config["azure_ad"].get("client_secret", ""),
-                    "authority": f"https://login.microsoftonline.com/{self.config['azure_ad']['tenant_id']}",
+                    "authority": (
+                        f"https://login.microsoftonline.com/{self.config['azure_ad']['tenant_id']}"
+                    ),
                     "scope": ["openid", "profile", "email", "User.Read"],
                 },
                 auto_enable=True,
@@ -432,7 +444,7 @@ class SSOIntegrationFramework:
             saml_config = self.config.get("saml", {})
 
             authn_request = f"""
-            <samlp:AuthnRequest 
+            <samlp:AuthnRequest
                 xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
                 xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
                 ID="{request_id}"
@@ -459,7 +471,9 @@ class SSOIntegrationFramework:
                 }
 
             return {
-                "auth_url": f"{provider.config['sso_url']}?SAMLRequest={urllib.parse.quote(encoded_request)}&RelayState={state or ''}",
+                "auth_url": (
+                    f"{provider.config['sso_url']}?SAMLRequest={urllib.parse.quote(encoded_request)}&RelayState={state or ''}"
+                ),
                 "request_id": request_id,
                 "method": "redirect",
             }

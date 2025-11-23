@@ -374,7 +374,9 @@ async def create_agent_terminal_session(
         "host": session.host,
         "state": session.state.value,
         "created_at": session.created_at,
-        "pty_session_id": session.pty_session_id,  # CRITICAL: Frontend needs this for WebSocket connection
+        "pty_session_id": (
+            session.pty_session_id
+        ),  # CRITICAL: Frontend needs this for WebSocket connection
     }
 
 
@@ -415,7 +417,9 @@ async def list_agent_terminal_sessions(
                 "created_at": s.created_at,
                 "last_activity": s.last_activity,
                 "command_count": len(s.command_history),
-                "pty_session_id": s.pty_session_id,  # CRITICAL: Frontend needs this for WebSocket connection
+                "pty_session_id": (
+                    s.pty_session_id
+                ),  # CRITICAL: Frontend needs this for WebSocket connection
             }
             for s in sessions
         ],
@@ -667,7 +671,9 @@ async def agent_terminal_info():
     return {
         "name": "Agent Terminal API",
         "version": "1.0.0",
-        "description": "Secure terminal access for AI agents with approval workflow and user control",
+        "description": (
+            "Secure terminal access for AI agents with approval workflow and user control"
+        ),
         "features": [
             "Agent session management",
             "Command execution with risk assessment",
@@ -684,7 +690,9 @@ async def agent_terminal_info():
             "list_sessions": "GET /api/agent-terminal/sessions",
             "get_session": "GET /api/agent-terminal/sessions/{session_id}",
             "delete_session": "DELETE /api/agent-terminal/sessions/{session_id}",
-            "execute_command": "POST /api/agent-terminal/execute?session_id={session_id}",
+            "execute_command": (
+                "POST /api/agent-terminal/execute?session_id={session_id}"
+            ),
             "approve_command": "POST /api/agent-terminal/sessions/{session_id}/approve",
             "get_command_state": "GET /api/agent-terminal/commands/{command_id}",
             "interrupt": "POST /api/agent-terminal/sessions/{session_id}/interrupt",

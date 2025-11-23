@@ -670,8 +670,10 @@ class ConsolidatedTerminalWebSocket:
             await self.send_message(
                 {
                     "type": "security_warning",
-                    "content": f"Command blocked due to {risk_level.value} "
-                    f"risk level: {command}",
+                    "content": (
+                        f"Command blocked due to {risk_level.value} "
+                        f"risk level: {command}"
+                    ),
                     "risk_level": risk_level.value,
                     "timestamp": time.time(),
                 }
@@ -1360,8 +1362,10 @@ class ConsolidatedTerminalManager:
                     "sessions": {
                         sid: {
                             "is_connected": sid in self.active_connections,
-                            "commands_executed": self.session_stats.get(sid, {}).get(
-                                "commands_executed", 0
+                            "commands_executed": (
+                                self.session_stats.get(sid, {}).get(
+                                    "commands_executed", 0
+                                )
                             ),
                         }
                         for sid in pty_sessions.keys()
@@ -1389,7 +1393,9 @@ async def create_terminal_session(request: TerminalSessionRequest):
     session_config = {
         "session_id": session_id,
         "user_id": request.user_id,
-        "conversation_id": request.conversation_id,  # For linking chat to terminal logging
+        "conversation_id": (
+            request.conversation_id
+        ),  # For linking chat to terminal logging
         "security_level": request.security_level,
         "enable_logging": request.enable_logging,
         "enable_workflow_control": request.enable_workflow_control,
@@ -1993,7 +1999,9 @@ async def get_terminal_capabilities():
         "session_management": True,
         "terminal_types": {
             "tools_terminal": {
-                "description": "Standalone system terminal for direct command execution",
+                "description": (
+                    "Standalone system terminal for direct command execution"
+                ),
                 "features": ["direct_execution", "no_approval", "system_admin"],
             },
             "chat_terminal": {
@@ -2100,7 +2108,9 @@ async def get_terminal_features():
         ],
         "features": {
             "pty_shell": "Full PTY shell support with SimplePTY implementation",
-            "websocket_streaming": "Real-time bidirectional communication via WebSocket",
+            "websocket_streaming": (
+                "Real-time bidirectional communication via WebSocket"
+            ),
             "security_validation": "Command risk assessment via SecureCommandExecutor",
             "session_cleanup": "Proper resource cleanup on disconnect",
             "approval_workflow": "User approval for high-risk commands (Chat Terminal)",

@@ -436,8 +436,8 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
                             "url": content["url"],
                             "domain": content["domain"],
                             "is_trusted": content["is_trusted"],
-                            "quality_score": content.get("quality_assessment", {}).get(
-                                "score", 0
+                            "quality_score": (
+                                content.get("quality_assessment", {}).get("score", 0)
                             ),
                         }
                     )

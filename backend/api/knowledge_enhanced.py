@@ -396,8 +396,10 @@ async def extract_knowledge(request_data: KnowledgeExtractionRequest, req: Reque
                             store_result = await kb_to_use.store_fact(
                                 content=fact.get("content", ""),
                                 metadata={
-                                    "title": request_data.title
-                                    or fact.get("title", "Extracted Knowledge"),
+                                    "title": (
+                                        request_data.title
+                                        or fact.get("title", "Extracted Knowledge")
+                                    ),
                                     "source": request_data.source,
                                     "category": request_data.category,
                                     "extraction_confidence": fact.get(

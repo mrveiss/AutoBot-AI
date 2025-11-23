@@ -127,7 +127,9 @@ class SecureWebResearch:
                     research_result.update(
                         {
                             "status": "blocked_unsafe_query",
-                            "message": f"Query blocked for security: {', '.join(query_validation['threats_detected'])}",
+                            "message": (
+                                f"Query blocked for security: {', '.join(query_validation['threats_detected'])}"
+                            ),
                             "security": {
                                 **research_result["security"],
                                 "threats_detected": query_validation[
@@ -154,7 +156,9 @@ class SecureWebResearch:
                     research_result.update(
                         {
                             "status": "requires_confirmation",
-                            "message": f"Query requires user confirmation due to {query_validation['risk_level']} risk level",
+                            "message": (
+                                f"Query requires user confirmation due to {query_validation['risk_level']} risk level"
+                            ),
                             "confirmation_required": True,
                             "risk_factors": query_validation.get("warnings", []),
                         }
@@ -254,11 +258,14 @@ class SecureWebResearch:
                 research_result.update(
                     {
                         "status": "success",
-                        "message": f"Secure research completed with {len(secure_results)} validated results",
+                        "message": (
+                            f"Secure research completed with {len(secure_results)} validated results"
+                        ),
                         "results": secure_results,
                         "total_results_found": len(raw_results["results"]),
-                        "results_filtered": len(raw_results["results"])
-                        - len(secure_results),
+                        "results_filtered": (
+                            len(raw_results["results"]) - len(secure_results)
+                        ),
                     }
                 )
 

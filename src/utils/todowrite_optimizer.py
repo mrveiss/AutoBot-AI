@@ -638,7 +638,9 @@ class TodoWriteOptimizer:
             recommendations["todowrite_optimizations"].append(
                 {
                     "type": "pending_optimization",
-                    "message": f"You have {len(self.pending_todos)} pending todos that could be optimized",
+                    "message": (
+                        f"You have {len(self.pending_todos)} pending todos that could be optimized"
+                    ),
                     "potential_savings": len(self.pending_todos) - 1,
                     "action": "call process_optimization_batch()",
                 }

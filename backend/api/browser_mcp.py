@@ -326,7 +326,9 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
                 "properties": {
                     "selector": {
                         "type": "string",
-                        "description": "CSS selector for element (full page if omitted)",
+                        "description": (
+                            "CSS selector for element (full page if omitted)"
+                        ),
                     },
                     "full_page": {
                         "type": "boolean",

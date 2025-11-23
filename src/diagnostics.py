@@ -283,7 +283,9 @@ class PerformanceOptimizedDiagnostics:
                 analysis["optimal_areas"].append(
                     {
                         "type": "cpu",
-                        "message": f"CPU usage low at {cpu_usage}% - good performance headroom",
+                        "message": (
+                            f"CPU usage low at {cpu_usage}% - good performance headroom"
+                        ),
                     }
                 )
 
@@ -294,7 +296,9 @@ class PerformanceOptimizedDiagnostics:
                     {
                         "type": "memory",
                         "severity": "high",
-                        "message": f"Memory usage at {memory_info.get('used_percent', 0)}% - approaching limit",
+                        "message": (
+                            f"Memory usage at {memory_info.get('used_percent', 0)}% - approaching limit"
+                        ),
                     }
                 )
 
@@ -307,7 +311,9 @@ class PerformanceOptimizedDiagnostics:
                         {
                             "type": "gpu",
                             "severity": "medium",
-                            "message": f"GPU utilization low at {gpu_util}% - AI workloads may not be GPU-accelerated",
+                            "message": (
+                                f"GPU utilization low at {gpu_util}% - AI workloads may not be GPU-accelerated"
+                            ),
                         }
                     )
                 elif gpu_util > 95:
@@ -315,14 +321,18 @@ class PerformanceOptimizedDiagnostics:
                         {
                             "type": "gpu",
                             "severity": "medium",
-                            "message": f"GPU utilization at {gpu_util}% - may be saturated",
+                            "message": (
+                                f"GPU utilization at {gpu_util}% - may be saturated"
+                            ),
                         }
                     )
                 else:
                     analysis["optimal_areas"].append(
                         {
                             "type": "gpu",
-                            "message": f"GPU utilization at {gpu_util}% - good performance",
+                            "message": (
+                                f"GPU utilization at {gpu_util}% - good performance"
+                            ),
                         }
                     )
 
@@ -344,7 +354,9 @@ class PerformanceOptimizedDiagnostics:
                     {
                         "category": "memory",
                         "priority": "high",
-                        "recommendation": "Consider implementing more aggressive memory cleanup in chat history and conversation managers",
+                        "recommendation": (
+                            "Consider implementing more aggressive memory cleanup in chat history and conversation managers"
+                        ),
                         "action": "Add memory limits and periodic cleanup routines",
                     }
                 )
@@ -357,8 +369,12 @@ class PerformanceOptimizedDiagnostics:
                     {
                         "category": "gpu",
                         "priority": "medium",
-                        "recommendation": "GPU underutilized - verify semantic chunking and AI workloads are GPU-accelerated",
-                        "action": "Check CUDA availability and batch sizes in AI processing",
+                        "recommendation": (
+                            "GPU underutilized - verify semantic chunking and AI workloads are GPU-accelerated"
+                        ),
+                        "action": (
+                            "Check CUDA availability and batch sizes in AI processing"
+                        ),
                     }
                 )
 
@@ -369,8 +385,12 @@ class PerformanceOptimizedDiagnostics:
                     {
                         "category": "cpu",
                         "priority": "low",
-                        "recommendation": f"High-core system ({cpu_cores} cores) - ensure parallel processing is optimized",
-                        "action": "Verify thread pool sizes and async concurrency limits",
+                        "recommendation": (
+                            f"High-core system ({cpu_cores} cores) - ensure parallel processing is optimized"
+                        ),
+                        "action": (
+                            "Verify thread pool sizes and async concurrency limits"
+                        ),
                     }
                 )
 
@@ -445,7 +465,9 @@ def get_performance_metrics() -> Dict[str, Any]:
         "system_resources": performance_diagnostics.check_system_resources(),
         "memory_cleanup_available": True,
         "timeout_optimizations_active": True,
-        "max_user_permission_timeout": performance_diagnostics.max_user_permission_timeout,
+        "max_user_permission_timeout": (
+            performance_diagnostics.max_user_permission_timeout
+        ),
         "performance_mode": "optimized",
     }
 

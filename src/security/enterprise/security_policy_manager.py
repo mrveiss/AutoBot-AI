@@ -315,7 +315,9 @@ class SecurityPolicyManager:
                             "numbers": True,
                             "special_chars": True,
                         },
-                        "description": "Passwords must contain uppercase, lowercase, numbers, and special characters",
+                        "description": (
+                            "Passwords must contain uppercase, lowercase, numbers, and special characters"
+                        ),
                     },
                     {
                         "name": "password_history",
@@ -337,7 +339,9 @@ class SecurityPolicyManager:
                     {
                         "name": "idle_timeout_minutes",
                         "value": 30,
-                        "description": "Sessions timeout after 30 minutes of inactivity",
+                        "description": (
+                            "Sessions timeout after 30 minutes of inactivity"
+                        ),
                     },
                     {
                         "name": "absolute_timeout_hours",
@@ -358,7 +362,9 @@ class SecurityPolicyManager:
             },
             {
                 "name": "Data Protection Policy",
-                "description": "Defines data classification and protection requirements",
+                "description": (
+                    "Defines data classification and protection requirements"
+                ),
                 "policy_type": PolicyType.DATA_PROTECTION,
                 "rules": [
                     {
@@ -383,7 +389,9 @@ class SecurityPolicyManager:
                             "anonymization_required": True,
                             "consent_tracking": True,
                         },
-                        "description": "PII must be detected, anonymized, and consent tracked",
+                        "description": (
+                            "PII must be detected, anonymized, and consent tracked"
+                        ),
                     },
                 ],
             },

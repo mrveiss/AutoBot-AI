@@ -1177,8 +1177,9 @@ class VoiceProcessingSystem:
     def get_system_status(self) -> Dict[str, Any]:
         """Get voice processing system status"""
         return {
-            "speech_recognition_available": self.speech_recognition.recognizer
-            is not None,
+            "speech_recognition_available": (
+                self.speech_recognition.recognizer is not None
+            ),
             "tts_available": self.tts_engine.tts_engine is not None,
             "command_history_count": len(self.voice_command_history),
             "supported_commands": [cmd.value for cmd in VoiceCommand],

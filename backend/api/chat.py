@@ -338,14 +338,18 @@ async def process_chat_message(
         else:
             # Fallback response
             ai_response = {
-                "content": "I'm currently unable to generate a response. Please try again.",
+                "content": (
+                    "I'm currently unable to generate a response. Please try again."
+                ),
                 "role": "assistant",
             }
 
     except Exception as e:
         logger.error(f"LLM generation failed: {e}")
         ai_response = {
-            "content": "I encountered an error processing your message. Please try again.",
+            "content": (
+                "I encountered an error processing your message. Please try again."
+            ),
             "role": "assistant",
         }
 
@@ -1086,7 +1090,9 @@ async def export_session(session_id: str, request: Request, format: str = "json"
         content=session_data,
         media_type=content_types[format],
         headers={
-            "Content-Disposition": f"attachment; filename=chat_session_{session_id}.{format}"
+            "Content-Disposition": (
+                f"attachment; filename=chat_session_{session_id}.{format}"
+            )
         },
     )
 

@@ -274,7 +274,9 @@ def get_plotly_dark_config() -> Dict[str, Any]:
         "plot_bgcolor": "#161b22",
         "font": {
             "color": "#c9d1d9",
-            "family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            "family": (
+                "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+            ),
         },
         "xaxis": {"gridcolor": "#30363d", "linecolor": "#30363d"},
         "yaxis": {"gridcolor": "#30363d", "linecolor": "#30363d"},
@@ -303,7 +305,9 @@ def get_plotly_light_config() -> Dict[str, Any]:
         "plot_bgcolor": "white",
         "font": {
             "color": "#333",
-            "family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            "family": (
+                "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+            ),
         },
         "xaxis": {"gridcolor": "#e2e8f0", "linecolor": "#cbd5e0"},
         "yaxis": {"gridcolor": "#e2e8f0", "linecolor": "#cbd5e0"},

@@ -229,23 +229,33 @@ class TemplateResponseStrategy(FallbackStrategy):
         self.templates = {
             "code_analysis": {
                 "patterns": ["analyze", "review", "check", "code", "function", "class"],
-                "template": "I'm currently unable to perform detailed code analysis due to service issues. For code review, please check for:\n- Syntax errors\n- Logic issues\n- Performance concerns\n- Security vulnerabilities\nPlease try again later for detailed analysis.",
+                "template": (
+                    "I'm currently unable to perform detailed code analysis due to service issues. For code review, please check for:\n- Syntax errors\n- Logic issues\n- Performance concerns\n- Security vulnerabilities\nPlease try again later for detailed analysis."
+                ),
             },
             "explanation": {
                 "patterns": ["explain", "what is", "how does", "define", "describe"],
-                "template": "I'm currently experiencing service issues and cannot provide detailed explanations. Please refer to documentation or try again later for comprehensive information.",
+                "template": (
+                    "I'm currently experiencing service issues and cannot provide detailed explanations. Please refer to documentation or try again later for comprehensive information."
+                ),
             },
             "troubleshooting": {
                 "patterns": ["error", "problem", "issue", "bug", "fix", "troubleshoot"],
-                "template": "I'm currently unable to provide detailed troubleshooting due to service issues. Common steps to try:\n1. Check logs for error messages\n2. Verify configuration settings\n3. Restart the service\n4. Check network connectivity\nPlease try again later for specific guidance.",
+                "template": (
+                    "I'm currently unable to provide detailed troubleshooting due to service issues. Common steps to try:\n1. Check logs for error messages\n2. Verify configuration settings\n3. Restart the service\n4. Check network connectivity\nPlease try again later for specific guidance."
+                ),
             },
             "file_operations": {
                 "patterns": ["file", "read", "write", "create", "directory", "path"],
-                "template": "I'm currently unable to perform file operations due to service issues. Please use standard file management tools or try again later.",
+                "template": (
+                    "I'm currently unable to perform file operations due to service issues. Please use standard file management tools or try again later."
+                ),
             },
             "general": {
                 "patterns": [],
-                "template": "I'm currently experiencing service issues and unable to provide detailed responses. Please try again later.",
+                "template": (
+                    "I'm currently experiencing service issues and unable to provide detailed responses. Please try again later."
+                ),
             },
         }
 
@@ -291,9 +301,15 @@ class StaticResponseStrategy(FallbackStrategy):
 
     def __init__(self):
         self.static_responses = {
-            "service_unavailable": "AutoBot is currently experiencing technical difficulties. Please try again later.",
-            "maintenance": "AutoBot is currently undergoing maintenance. Service will be restored shortly.",
-            "emergency": "AutoBot services are temporarily unavailable. Please contact support if this issue persists.",
+            "service_unavailable": (
+                "AutoBot is currently experiencing technical difficulties. Please try again later."
+            ),
+            "maintenance": (
+                "AutoBot is currently undergoing maintenance. Service will be restored shortly."
+            ),
+            "emergency": (
+                "AutoBot services are temporarily unavailable. Please contact support if this issue persists."
+            ),
         }
 
     async def can_handle(self, request: str, context: Dict[str, Any]) -> bool:
@@ -563,8 +579,9 @@ class GracefulDegradationManager:
                 "last_success": self.service_status.last_success,
                 "last_failure": self.service_status.last_failure,
             },
-            "degradation_active": self.service_status.degradation_level
-            != DegradationLevel.NORMAL,
+            "degradation_active": (
+                self.service_status.degradation_level != DegradationLevel.NORMAL
+            ),
         }
 
     async def force_degradation_level(self, level: DegradationLevel):

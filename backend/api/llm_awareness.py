@@ -379,8 +379,9 @@ async def llm_awareness_health():
             "awareness_module_loaded": awareness is not None,
             "context_available": context is not None,
             "capabilities_loaded": len(context["current_capabilities"]["active"]) > 0,
-            "phase_info_available": "current_phase"
-            in context.get("phase_information", {}),
+            "phase_info_available": (
+                "current_phase" in context.get("phase_information", {})
+            ),
             "cache_functional": awareness._context_cache is not None,
         }
 
