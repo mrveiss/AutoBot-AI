@@ -280,9 +280,9 @@ async function handleSubmit() {
 
     // Remove empty/unused fields
     if (authType.value === 'key') {
-      delete submitData.ssh_password
+      submitData.ssh_password = undefined
     } else {
-      delete submitData.ssh_key_path
+      submitData.ssh_key_path = undefined
     }
 
     emit('submit', submitData)
