@@ -51,8 +51,8 @@ except ImportError:
     logging.warning("psutil not available - memory monitoring disabled")
 
 from src.constants.network_constants import NetworkConstants
-from src.utils.database_pool import get_connection_pool
 from src.utils.common import PathUtils
+from src.utils.database_pool import get_connection_pool
 
 logger = logging.getLogger(__name__)
 

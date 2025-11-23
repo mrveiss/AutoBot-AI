@@ -26,12 +26,12 @@ from pydantic import BaseModel, Field
 from backend.services.audit_logger import AuditEntry, AuditResult, get_audit_logger
 from src.auth_middleware import auth_middleware
 from src.constants.network_constants import NetworkConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.catalog_http_exceptions import (
     raise_auth_error,
     raise_server_error,
     raise_validation_error,
 )
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 logger = logging.getLogger(__name__)

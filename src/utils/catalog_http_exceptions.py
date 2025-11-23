@@ -10,9 +10,10 @@ Makes migration from hardcoded errors to catalog-based errors straightforward
 
 import logging
 from typing import Optional
+
 from fastapi import HTTPException
 
-from src.utils.error_catalog import get_error, ErrorDefinition
+from src.utils.error_catalog import ErrorDefinition, get_error
 
 logger = logging.getLogger(__name__)
 

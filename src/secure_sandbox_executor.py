@@ -19,9 +19,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import docker
 from docker.errors import ContainerError, DockerException, ImageNotFound
 
+import docker
 from src.constants.network_constants import NetworkConstants
 from src.utils.redis_client import get_redis_client
 

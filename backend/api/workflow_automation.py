@@ -23,10 +23,10 @@ from backend.api.terminal import ConsolidatedTerminalWebSocket
 from src.constants.network_constants import NetworkConstants
 from src.enhanced_orchestrator import EnhancedOrchestrator
 from src.monitoring.prometheus_metrics import get_metrics_manager
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import existing orchestrator and workflow components
 from src.orchestrator import Orchestrator
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

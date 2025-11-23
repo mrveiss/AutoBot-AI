@@ -477,6 +477,7 @@ class TerminalTool:
         """
         try:
             import httpx
+
             from src.constants.network_constants import NetworkConstants
 
             # Query AGENT terminal API for sessions linked to this conversation
@@ -528,6 +529,7 @@ class TerminalTool:
         """
         try:
             import httpx
+
             from src.constants.network_constants import NetworkConstants
 
             backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"

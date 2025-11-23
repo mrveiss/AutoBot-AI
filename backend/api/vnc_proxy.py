@@ -17,7 +17,7 @@ import logging
 from typing import Any, Dict, Optional
 
 import aiohttp
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 
 from src.constants.network_constants import NetworkConstants

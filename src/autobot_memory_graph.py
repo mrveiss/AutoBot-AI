@@ -35,8 +35,8 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-import redis.asyncio as async_redis  # Modern async Redis with JSON support
 import numpy as np
+import redis.asyncio as async_redis  # Modern async Redis with JSON support
 from cachetools import LRUCache
 
 from src.constants.network_constants import NetworkConstants

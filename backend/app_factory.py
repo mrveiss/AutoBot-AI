@@ -15,8 +15,8 @@ from fastapi.staticfiles import StaticFiles
 
 # Import initialization modules
 from backend.initialization import (
-    create_lifespan_manager,
     configure_middleware,
+    create_lifespan_manager,
     load_core_routers,
     load_optional_routers,
     register_root_endpoints,

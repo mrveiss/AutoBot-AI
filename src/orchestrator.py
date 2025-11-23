@@ -26,10 +26,10 @@ from src.circuit_breaker import circuit_breaker_async
 from src.constants.network_constants import NetworkConstants
 from src.conversation import ConversationManager
 from src.llm_interface import LLMInterface
-from src.unified_memory_manager import LongTermMemoryManager
 from src.retry_mechanism import RetryStrategy, retry_network_operation
 from src.task_execution_tracker import Priority, TaskType, task_tracker
 from src.unified_config_manager import config_manager
+from src.unified_memory_manager import LongTermMemoryManager
 from src.utils.logging_manager import get_logger
 
 # Import KnowledgeBase for enhanced features

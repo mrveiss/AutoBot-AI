@@ -14,11 +14,12 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Callable, Dict, Optional, Type, TypeVar
 
+import redis.asyncio as async_redis
+
 from src.constants.network_constants import NetworkConstants
 from src.llm_interface import LLMInterface, LLMSettings, get_llm_interface
 from src.unified_config_manager import UnifiedConfigManager, unified_config_manager
 from src.utils.redis_client import get_redis_client
-import redis.asyncio as async_redis
 
 logger = logging.getLogger(__name__)
 

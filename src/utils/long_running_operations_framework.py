@@ -48,8 +48,8 @@ from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 
 from .adaptive_timeouts import (
-    AdaptiveTimeoutConfig,
     AdaptiveTimeout,
+    AdaptiveTimeoutConfig,
     TimeoutCategory,
 )
 

@@ -214,7 +214,7 @@ class DocumentParser:
     def _parse_ods(self, file_path: Path, metadata: Dict) -> str:
         """Extract text from ODS using odfpy"""
         from odf.opendocument import load
-        from odf.table import Table, TableRow, TableCell
+        from odf.table import Table, TableCell, TableRow
 
         doc = load(str(file_path))
 
@@ -236,9 +236,9 @@ class DocumentParser:
 
     def _parse_odp(self, file_path: Path, metadata: Dict) -> str:
         """Extract text from ODP/ODG using odfpy"""
-        from odf.opendocument import load
-        from odf.draw import Page
         from odf import text as odf_text
+        from odf.draw import Page
+        from odf.opendocument import load
 
         doc = load(str(file_path))
 

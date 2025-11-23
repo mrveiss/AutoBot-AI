@@ -19,10 +19,10 @@ from typing import Any, Dict, List, Optional, Protocol
 
 from src.constants.network_constants import NetworkConstants
 from utils.adaptive_memory_manager import get_adaptive_memory_manager
-from utils.optimized_redis_manager import get_optimized_redis_manager
 
 # Import streaming components
 from utils.llm_stream_processor import get_llm_streaming_interface
+from utils.optimized_redis_manager import get_optimized_redis_manager
 
 logger = logging.getLogger(__name__)
 

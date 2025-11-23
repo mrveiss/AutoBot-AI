@@ -60,7 +60,6 @@ from backend.services.ai_stack_client import close_ai_stack_client, get_ai_stack
 
 # Import additional modules
 from src.api_registry import APIRegistry
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import authentication and security middleware
 from src.auth_middleware import AuthenticationMiddleware
@@ -72,6 +71,7 @@ from src.constants.network_constants import NetworkConstants
 # Redis connections now managed centrally via src.utils.redis_client::get_redis_client()
 from src.security_layer import SecurityLayer
 from src.utils.background_llm_sync import background_llm_sync
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.logging_manager import get_logger
 
 # Get centralized logger

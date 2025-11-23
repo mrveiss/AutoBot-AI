@@ -9,16 +9,16 @@ for the error handling system. Integrates with error_boundaries and error_catalo
 """
 
 import asyncio
+import json
 import logging
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
-import json
+from typing import Any, Dict, List, Optional
 
-from src.utils.error_catalog import get_error, ErrorDefinition
 from src.utils.error_boundaries import ErrorCategory
+from src.utils.error_catalog import ErrorDefinition, get_error
 
 logger = logging.getLogger(__name__)
 

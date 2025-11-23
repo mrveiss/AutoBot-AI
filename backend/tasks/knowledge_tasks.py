@@ -10,7 +10,7 @@ Celery tasks for long-running knowledge base operations with progress tracking.
 import logging
 import subprocess
 import sys
-from typing import Dict, Any
+from typing import Any, Dict
 
 from backend.celery_app import celery_app
 
@@ -125,8 +125,9 @@ def reindex_knowledge_base(self) -> Dict[str, Any]:
         logger.info("Starting knowledge base reindex (background task)...")
 
         # Import here to avoid circular dependencies
-        from src.knowledge_base import KnowledgeBase
         import asyncio
+
+        from src.knowledge_base import KnowledgeBase
 
         # Run async reindex in new event loop
         loop = asyncio.new_event_loop()

@@ -34,8 +34,8 @@ except ImportError:
 
 # Import Advanced RAG Service for reranking
 try:
-    from backend.services.rag_service import RAGService, get_rag_service
     from backend.services.rag_config import get_rag_config, update_rag_config
+    from backend.services.rag_service import RAGService, get_rag_service
 
     ADVANCED_RAG_AVAILABLE = True
 except ImportError:

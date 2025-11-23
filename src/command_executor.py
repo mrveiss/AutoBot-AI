@@ -40,9 +40,11 @@ warnings.warn(
 
 # Re-export SecureCommandExecutor as CommandExecutor for backward compatibility
 from src.secure_command_executor import (
-    SecureCommandExecutor as CommandExecutor,
-    SecurityPolicy,
     CommandRisk,
+)
+from src.secure_command_executor import SecureCommandExecutor as CommandExecutor
+from src.secure_command_executor import (
+    SecurityPolicy,
 )
 
 __all__ = [

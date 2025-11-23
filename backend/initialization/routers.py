@@ -16,32 +16,32 @@ import logging
 # Core router imports - these are required for basic functionality
 from backend.api.agent import router as agent_router
 from backend.api.agent_config import router as agent_config_router
+from backend.api.browser_mcp import router as browser_mcp_router
 from backend.api.chat import router as chat_router
+from backend.api.database_mcp import router as database_mcp_router
 from backend.api.developer import router as developer_router
 from backend.api.files import router as files_router
+from backend.api.filesystem_mcp import router as filesystem_mcp_router
 from backend.api.frontend_config import router as frontend_config_router
+from backend.api.git_mcp import router as git_mcp_router
+from backend.api.http_client_mcp import router as http_client_mcp_router
 from backend.api.intelligent_agent import router as intelligent_agent_router
 from backend.api.knowledge import router as knowledge_router
+from backend.api.knowledge_mcp import router as knowledge_mcp_router
 from backend.api.llm import router as llm_router
+from backend.api.mcp_registry import router as mcp_registry_router
 from backend.api.memory import router as memory_router
 from backend.api.prompts import router as prompts_router
 from backend.api.redis import router as redis_router
+from backend.api.sequential_thinking_mcp import router as sequential_thinking_mcp_router
 from backend.api.settings import router as settings_router
+from backend.api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from backend.api.system import router as system_router
+from backend.api.vnc_manager import router as vnc_router
+from backend.api.vnc_mcp import router as vnc_mcp_router
+from backend.api.vnc_proxy import router as vnc_proxy_router
 from backend.api.voice import router as voice_router
 from backend.api.wake_word import router as wake_word_router
-from backend.api.vnc_manager import router as vnc_router
-from backend.api.vnc_proxy import router as vnc_proxy_router
-from backend.api.knowledge_mcp import router as knowledge_mcp_router
-from backend.api.vnc_mcp import router as vnc_mcp_router
-from backend.api.mcp_registry import router as mcp_registry_router
-from backend.api.sequential_thinking_mcp import router as sequential_thinking_mcp_router
-from backend.api.structured_thinking_mcp import router as structured_thinking_mcp_router
-from backend.api.filesystem_mcp import router as filesystem_mcp_router
-from backend.api.browser_mcp import router as browser_mcp_router
-from backend.api.http_client_mcp import router as http_client_mcp_router
-from backend.api.database_mcp import router as database_mcp_router
-from backend.api.git_mcp import router as git_mcp_router
 
 logger = logging.getLogger(__name__)
 

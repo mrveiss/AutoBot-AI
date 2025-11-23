@@ -26,10 +26,10 @@ from backend.api.workflow_automation import (
 
 # Import existing components
 from src.constants.network_constants import NetworkConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.enhanced_orchestrator import EnhancedOrchestrator
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
