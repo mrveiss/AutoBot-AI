@@ -111,19 +111,19 @@ jobs:
     - name: Bandit Security Linter
       run: |
         echo "## Bandit Security Analysis" >> $GITHUB_STEP_SUMMARY
-        bandit -r src/ backend/ -f json -o bandit-report.json || true
-        bandit -r src/ backend/ -f txt || true
+        python3 -m bandit -r src/ backend/ -f json -o bandit-report.json || true
+        python3 -m bandit -r src/ backend/ -f txt || true
 
     - name: Semgrep SAST Scan
       run: |
         echo "## Semgrep Security Analysis" >> $GITHUB_STEP_SUMMARY
-        semgrep --config=auto --json --output=semgrep-report.json src/ backend/ || true
-        semgrep --config=auto src/ backend/ || true
+        python3 -m semgrep --config=auto --json --output=semgrep-report.json src/ backend/ || true
+        python3 -m semgrep --config=auto src/ backend/ || true
 
     - name: Python Code Quality Check
       run: |
         echo "## Code Quality Analysis" >> $GITHUB_STEP_SUMMARY
-        flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503 \
+        python3 -m flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503 \
           --output-file=flake8-report.txt || true
         cat flake8-report.txt || true
 
