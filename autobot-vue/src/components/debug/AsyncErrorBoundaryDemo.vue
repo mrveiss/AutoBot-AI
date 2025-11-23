@@ -98,13 +98,37 @@ import { ref, computed, onMounted } from 'vue'
 import { createAsyncComponent, createLazyComponent, AsyncComponentErrorRecovery } from '@/utils/asyncComponentHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
-const loading = ref(false)
-const currentScenario = ref(null)
-const currentComponent = ref(null)
-const componentKey = ref(0)
-const logs = ref([])
+// Issue #156 Fix: Add proper TypeScript interfaces
+interface Scenario {
+  id: string
+  name: string
+  icon: string
+  description: string
+  expectedBehavior: string
+  createComponent: () => any
+}
 
-const stats = ref({
+interface LogEntry {
+  type: string
+  message: string
+  timestamp: string
+}
+
+interface DemoStats {
+  totalErrors: number
+  retryAttempts: number
+  successfulLoads: number
+  averageLoadTime: number
+  loadTimes: number[]
+}
+
+const loading = ref(false)
+const currentScenario = ref<Scenario | null>(null)
+const currentComponent = ref<any>(null)
+const componentKey = ref(0)
+const logs = ref<LogEntry[]>([])
+
+const stats = ref<DemoStats>({
   totalErrors: 0,
   retryAttempts: 0,
   successfulLoads: 0,
@@ -116,7 +140,8 @@ const errorRecoveryStats = computed(() => {
   return AsyncComponentErrorRecovery.getStats()
 })
 
-const scenarios = [
+// Issue #156 Fix: Explicitly type scenarios array
+const scenarios: Scenario[] = [
   {
     id: 'chunk-loading-failure',
     name: 'Chunk Loading Failure',
@@ -290,7 +315,8 @@ const addLog = (type: string, message: string) => {
   }
 }
 
-const loadScenario = async (scenario) => {
+// Issue #156 Fix: Type scenario parameter
+const loadScenario = async (scenario: Scenario) => {
   if (loading.value) return
 
   loading.value = true
@@ -308,9 +334,10 @@ const loadScenario = async (scenario) => {
       loading.value = false
     }, 500)
 
-  } catch (error) {
+  } catch (error: unknown) {
     loading.value = false
-    addLog('error', `Failed to create scenario component: ${error.message}`)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    addLog('error', `Failed to create scenario component: ${errorMessage}`)
   }
 }
 
@@ -324,7 +351,8 @@ const handleComponentError = (error: Error) => {
   }
 }
 
-const handleComponentLoaded = (component) => {
+// Issue #156 Fix: Type component parameter
+const handleComponentLoaded = (component: any) => {
   stats.value.successfulLoads++
   addLog('success', `Component loaded successfully: ${component?.name || 'Unknown'}`)
 

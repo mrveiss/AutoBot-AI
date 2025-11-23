@@ -2,8 +2,9 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { apiService } from '../api.js'
+// Issue #156 Fix: Corrected Python-style import to TypeScript syntax
+import { NetworkConstants, ServiceURLs } from '@/constants/network-constants'
 import {
-from src.constants import NetworkConstants, ServiceURLs
   createMockApiResponse,
   createMockChatMessage,
   createMockChatSession,

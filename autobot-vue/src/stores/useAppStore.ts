@@ -2,7 +2,8 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { generateChatId } from '@/utils/ChatIdGenerator.js'
 
-export type TabType = 'chat' | 'desktop' | 'knowledge' | 'tools' | 'monitoring' | 'secrets' | 'settings'
+// Issue #156 Fix: Changed 'desktop' to 'infrastructure' to match router routes
+export type TabType = 'chat' | 'infrastructure' | 'knowledge' | 'tools' | 'monitoring' | 'secrets' | 'settings'
 
 export interface BackendStatus {
   text: string
@@ -187,16 +188,17 @@ export const useAppStore = defineStore('app', () => {
     
     // Handle router navigation if router is provided
     if (router) {
-      const routeMap = {
+      // Issue #156 Fix: Changed 'desktop' to 'infrastructure' to match TabType and router routes
+      const routeMap: Record<TabType, string> = {
         'chat': '/chat',
-        'desktop': '/desktop', 
+        'infrastructure': '/infrastructure',
         'knowledge': '/knowledge',
         'secrets': '/secrets',
         'tools': '/tools',
         'monitoring': '/monitoring',
         'settings': '/settings'
       };
-      
+
       const targetRoute = routeMap[tab];
       if (targetRoute && router.currentRoute.value.path !== targetRoute) {
         router.push(targetRoute);
@@ -446,6 +448,7 @@ export const useAppStore = defineStore('app', () => {
     resetNotificationSettings
   }
 }, {
+  // Issue #156 Fix: Type assertion for pinia-plugin-persistedstate 'paths' property
   persist: {
     key: 'autobot-app',
     storage: localStorage,
@@ -455,5 +458,5 @@ export const useAppStore = defineStore('app', () => {
       'notificationSettings',
       'activeTab'
     ]
-  }
+  } as any
 })

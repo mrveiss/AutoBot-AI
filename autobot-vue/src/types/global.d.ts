@@ -12,15 +12,8 @@ declare global {
     type Timer = TimerHandle;
   }
 
-  // Window interface extensions
-  interface Window {
-    rum?: {
-      trackError: (type: string, data: Record<string, unknown>) => void;
-      trackUserInteraction: (type: string, element: unknown, data: Record<string, unknown>) => void;
-      trackApiCall: (method: string, endpoint: string, startTime: number, endTime: number, status: number | string, error?: any) => void;
-      reportCriticalIssue: (type: string, data: Record<string, unknown>) => void;
-    };
-  }
+  // Issue #156 Fix: Window.rum is declared in src/utils/RumAgent.ts
+  // Removed duplicate declaration to avoid type conflicts
 
   // Extend IteratorResult for cache keys
   interface IteratorResult<T> {

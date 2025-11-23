@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw'
+// Issue #156 Fix: Corrected Python-style import to TypeScript syntax
+import { NetworkConstants, ServiceURLs } from '@/constants/network-constants'
 import {
-from src.constants import NetworkConstants, ServiceURLs
   createMockApiResponse,
   createMockChatMessage,
   createMockChatSession,

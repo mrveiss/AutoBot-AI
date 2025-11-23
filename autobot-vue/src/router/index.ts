@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import type { Component } from 'vue'
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
 import { setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
@@ -540,13 +541,17 @@ router.beforeEach(async (to, from, next) => {
     // Continue navigation
     next()
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[Router] Navigation guard error:', error)
+
+    // Issue #156 Fix: Type guard for error handling
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
 
     if (window.rum) {
       window.rum.trackError('navigation_guard_error', {
-        message: error.message,
-        stack: error.stack,
+        message: errorMessage,
+        stack: errorStack,
         from: from.path,
         to: to.path
       })

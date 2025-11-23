@@ -29,7 +29,7 @@
           id="cache-enabled"
           type="checkbox"
           :checked="cacheConfig.enabled"
-          @change="updateCacheConfig('enabled', $event.target.checked)"
+          @change="handleCheckboxChange('enabled')"
         />
       </div>
       <div class="setting-item">
@@ -40,7 +40,7 @@
           :value="cacheConfig.defaultTTL"
           min="10"
           max="86400"
-          @input="updateCacheConfig('defaultTTL', parseInt($event.target.value))"
+          @input="handleNumberInputChange('defaultTTL')"
         />
       </div>
       <div class="setting-item">
@@ -51,7 +51,7 @@
           :value="cacheConfig.maxCacheSizeMB"
           min="10"
           max="1000"
-          @input="updateCacheConfig('maxCacheSizeMB', parseInt($event.target.value))"
+          @input="handleNumberInputChange('maxCacheSizeMB')"
         />
       </div>
 
@@ -124,7 +124,7 @@
       <div class="redis-cache-grid">
         <div v-for="(dbInfo, dbName) in redisStats" :key="dbName" class="redis-db-item">
           <div class="db-info">
-            <h5>{{ dbName.charAt(0).toUpperCase() + dbName.slice(1) }} (DB {{ dbInfo.database }})</h5>
+            <h5>{{ formatDbName(dbName) }} (DB {{ dbInfo.database }})</h5>
             <div class="db-details">
               <span class="key-count">{{ dbInfo.key_count || 0 }} keys</span>
               <span class="memory-usage">{{ dbInfo.memory_usage || '0B' }}</span>
@@ -134,7 +134,7 @@
             </div>
           </div>
           <button
-            @click="$emit('clear-redis-cache', dbName)"
+            @click="$emit('clear-redis-cache', String(dbName))"
             :disabled="isClearing || !dbInfo.connected"
             class="clear-db-btn"
           >
@@ -295,6 +295,23 @@ const redisStats = computed(() => props.cacheStats?.redis_databases || {})
 
 const updateCacheConfig = (key: string, value: any) => {
   emit('cache-config-changed', key, value)
+}
+
+// Issue #156 Fix: Typed event handlers to replace inline $event.target usage
+const handleCheckboxChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateCacheConfig(key, target.checked)
+}
+
+const handleNumberInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateCacheConfig(key, parseInt(target.value))
+}
+
+// Issue #156 Fix: Helper to format database name with proper typing
+const formatDbName = (dbName: string | number): string => {
+  const nameStr = String(dbName)
+  return nameStr.charAt(0).toUpperCase() + nameStr.slice(1)
 }
 
 </script>

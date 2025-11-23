@@ -291,6 +291,7 @@
     <!-- Delete Confirmation Dialog -->
     <BaseModal
       v-model="showDeleteDialog"
+      title="Confirm Deletion"
       size="small"
       :closeOnOverlay="!isDeletingWorker && !operationInProgress"
     >
@@ -323,6 +324,7 @@
     <BaseModal
       v-if="selectedWorkerMetrics"
       v-model="showMetricsDialog"
+      title="Worker Metrics"
       size="large"
     >
       <template #title>
@@ -470,11 +472,11 @@ const isTestingWorker = ref<Record<string, boolean>>({})
 const workerFormError = ref<string | null>(null)
 const operationInProgress = ref(false)
 
-// Use composables for modals
-const { isOpen: showAddWorkerDialog, open: openAddWorkerDialog, close: closeAddWorkerDialog } = useModal('add-worker')
-const { isOpen: showEditWorkerDialog, open: openEditWorkerDialog, close: closeEditWorkerDialog } = useModal('edit-worker')
-const { isOpen: showDeleteDialog, open: openDeleteDialog, close: closeDeleteDialog } = useModal('delete-worker')
-const { isOpen: showMetricsDialog, open: openMetricsDialog, close: closeMetricsDialog } = useModal('metrics')
+// Issue #156 Fix: useModal expects ModalOptions object with id property
+const { isOpen: showAddWorkerDialog, open: openAddWorkerDialog, close: closeAddWorkerDialog } = useModal({ id: 'add-worker' })
+const { isOpen: showEditWorkerDialog, open: openEditWorkerDialog, close: closeEditWorkerDialog } = useModal({ id: 'edit-worker' })
+const { isOpen: showDeleteDialog, open: openDeleteDialog, close: closeDeleteDialog } = useModal({ id: 'delete-worker' })
+const { isOpen: showMetricsDialog, open: openMetricsDialog, close: closeMetricsDialog } = useModal({ id: 'metrics' })
 
 // Use composables for async operations
 const { execute: loadWorkersOp, loading: isLoading } = useAsyncOperation()

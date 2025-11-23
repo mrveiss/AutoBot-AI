@@ -7,7 +7,7 @@
         id="auto-scroll"
         type="checkbox"
         :checked="chatSettings.auto_scroll"
-        @change="updateSetting('auto_scroll', $event.target.checked)"
+        @change="handleCheckboxChange('auto_scroll')"
       />
     </div>
     <div class="setting-item">
@@ -18,7 +18,7 @@
         :value="chatSettings.max_messages"
         min="10"
         max="1000"
-        @input="updateSetting('max_messages', parseInt($event.target.value))"
+        @input="handleNumberInputChange('max_messages')"
       />
     </div>
     <div class="setting-item">
@@ -29,7 +29,7 @@
         :value="chatSettings.message_retention_days"
         min="1"
         max="365"
-        @input="updateSetting('message_retention_days', parseInt($event.target.value))"
+        @input="handleNumberInputChange('message_retention_days')"
       />
     </div>
   </div>
@@ -56,6 +56,17 @@ const emit = defineEmits<Emits>()
 
 const updateSetting = (key: string, value: any) => {
   emit('setting-changed', key, value)
+}
+
+// Issue #156 Fix: Typed event handlers to replace inline $event.target usage
+const handleCheckboxChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateSetting(key, target.checked)
+}
+
+const handleNumberInputChange = (key: string) => (event: Event) => {
+  const target = event.target as HTMLInputElement
+  updateSetting(key, parseInt(target.value))
 }
 </script>
 
