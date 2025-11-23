@@ -228,29 +228,9 @@ jobs:
       run: |
         echo "🎯 Phase Validation Summary"
         echo "=========================="
-
         if [ -f "phase_validation_results.json" ]; then
-          python3 <<'PYSCRIPT'
-import json
-with open('phase_validation_results.json', 'r') as f:
-    results = json.load(f)
-
-maturity = results.get('overall_maturity', 0)
-phases = results.get('phases', [])
-
-print(f'📊 Overall System Maturity: {maturity:.1f}%')
-print(f'📋 Phases Evaluated: {len(phases)}')
-
-complete_phases = sum(1 for p in phases if p.get('status') == 'complete')
-print(f'✅ Complete Phases: {complete_phases}/{len(phases)}')
-
-if maturity >= 80:
-    print('🎉 System is production-ready!')
-elif maturity >= 60:
-    print('🔧 System is development-ready')
-else:
-    print('🚧 System needs additional development')
-PYSCRIPT
+          echo "✅ Phase validation results available"
+          cat phase_validation_results.json | python3 -m json.tool | head -20 || true
         else
           echo "❌ No validation results found"
         fi
