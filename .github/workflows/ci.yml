@@ -16,15 +16,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python environment
-      run: |
-        # Use pyenv Python if available
-        if [ -d "$HOME/.pyenv" ]; then
-          echo "$HOME/.pyenv/shims" >> $GITHUB_PATH
-          eval "$(pyenv init -)"
-        fi
-        python3 --version
-        which python3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version || '3.10' }}
+        cache: 'pip'
 
     - name: Install system dependencies
       run: |
@@ -264,15 +260,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python environment
-      run: |
-        # Use pyenv Python if available
-        if [ -d "$HOME/.pyenv" ]; then
-          echo "$HOME/.pyenv/shims" >> $GITHUB_PATH
-          eval "$(pyenv init -)"
-        fi
-        python3 --version
-        which python3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version || '3.10' }}
+        cache: 'pip'
 
     - name: Install dependencies
       run: |
