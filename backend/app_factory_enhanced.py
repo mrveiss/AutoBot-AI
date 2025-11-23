@@ -387,17 +387,19 @@ def create_enhanced_app() -> FastAPI:
                 getattr(app.state, "ai_stack_agents", {}).get("agents", [])
             ),
             "capabilities": {
-                "rag_enhanced_search": background_init_status.get("ai_stack")
-                == "ready",
-                "multi_agent_coordination": background_init_status.get(
-                    "ai_stack_agents"
-                )
-                == "ready",
-                "knowledge_extraction": background_init_status.get("ai_stack")
-                == "ready",
+                "rag_enhanced_search": (
+                    background_init_status.get("ai_stack") == "ready"
+                ),
+                "multi_agent_coordination": (
+                    background_init_status.get("ai_stack_agents") == "ready"
+                ),
+                "knowledge_extraction": (
+                    background_init_status.get("ai_stack") == "ready"
+                ),
                 "enhanced_chat": background_init_status.get("ai_stack") == "ready",
-                "npu_acceleration": background_init_status.get("ai_stack_agents")
-                == "ready",
+                "npu_acceleration": (
+                    background_init_status.get("ai_stack_agents") == "ready"
+                ),
             },
         }
 

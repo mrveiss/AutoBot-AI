@@ -321,7 +321,9 @@ async def _fetch_tools_from_bridges() -> Dict[str, Any]:
                                     "input_schema": tool["input_schema"],
                                     "bridge": bridge_name,
                                     "bridge_description": bridge_desc,
-                                    "endpoint": f"{endpoint.replace('/tools', '')}/{tool['name']}",
+                                    "endpoint": (
+                                        f"{endpoint.replace('/tools', '')}/{tool['name']}"
+                                    ),
                                     "features": features,
                                 }
                             )

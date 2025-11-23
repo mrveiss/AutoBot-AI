@@ -49,7 +49,9 @@ class SecurityScannerAgent:
             if not self._validate_target(target):
                 return {
                     "status": "error",
-                    "message": "Target validation failed. Only authorized targets allowed.",
+                    "message": (
+                        "Target validation failed. Only authorized targets allowed."
+                    ),
                 }
 
             # Execute appropriate scan based on type
@@ -331,7 +333,9 @@ class SecurityScannerAgent:
                                         "type": "warning",
                                         "path": path,
                                         "status": response.status,
-                                        "message": "Potentially sensitive path accessible",
+                                        "message": (
+                                            "Potentially sensitive path accessible"
+                                        ),
                                     }
                                 )
                     except Exception:

@@ -444,8 +444,8 @@ class ComplianceManager:
 
         # Add PII-specific metadata
         audit_event["pii_handling"] = {
-            "anonymization_applied": self.config.get("privacy_controls", {}).get(
-                "anonymization", False
+            "anonymization_applied": (
+                self.config.get("privacy_controls", {}).get("anonymization", False)
             ),
             "consent_verified": await self._verify_consent(audit_event),
             "retention_period": self._get_pii_retention_period(audit_event),
@@ -612,7 +612,9 @@ class ComplianceManager:
                     "violation_type": "unauthorized_admin_action",
                     "severity": "high",
                     "control": "CC6.1",
-                    "description": "Administrative action performed without proper authorization",
+                    "description": (
+                        "Administrative action performed without proper authorization"
+                    ),
                 }
             )
 

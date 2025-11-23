@@ -505,7 +505,9 @@ class ContextCollector:
                 constraints.append(
                     {
                         "type": "high_memory_usage",
-                        "description": f"Memory usage at {resource_info['memory_percent']}%",
+                        "description": (
+                            f"Memory usage at {resource_info['memory_percent']}%"
+                        ),
                         "severity": "high",
                         "affects": ["memory_intensive_operations"],
                     }
@@ -574,7 +576,9 @@ class ContextCollector:
                                 "action": "click_element",
                                 "target": element.get("id"),
                                 "confidence": element.get("confidence", 0.5),
-                                "description": f"Click {element.get('text', 'element')}",
+                                "description": (
+                                    f"Click {element.get('text', 'element')}"
+                                ),
                             }
                         )
 
@@ -633,8 +637,12 @@ class ContextCollector:
                     "risk_type": "low_context_confidence",
                     "severity": "medium",
                     "probability": 0.7,
-                    "description": f"{len(low_confidence_elements)} context elements have low confidence",
-                    "mitigation": "Gather additional context or request human verification",
+                    "description": (
+                        f"{len(low_confidence_elements)} context elements have low confidence"
+                    ),
+                    "mitigation": (
+                        "Gather additional context or request human verification"
+                    ),
                 }
             )
 

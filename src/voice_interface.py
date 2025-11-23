@@ -121,14 +121,18 @@ class VoiceInterface:
             except sr.RequestError as e:
                 return {
                     "status": "error",
-                    "message": "Could not request results from Google "
-                    f"Speech Recognition service; {e}",
+                    "message": (
+                        "Could not request results from Google "
+                        f"Speech Recognition service; {e}"
+                    ),
                 }
             except Exception as e:
                 return {
                     "status": "error",
-                    "message": "An unexpected error occurred during "
-                    f"speech recognition: {e}",
+                    "message": (
+                        "An unexpected error occurred during "
+                        f"speech recognition: {e}"
+                    ),
                 }
 
     async def speak_text(self, text: str) -> Dict[str, Any]:
@@ -201,7 +205,7 @@ class VoiceInterface:
         # sd.wait()
         return {
             "status": "error",
-            "message": ("Coqui TTS integration is a placeholder. Not implemented."),
+            "message": "Coqui TTS integration is a placeholder. Not implemented.",
         }
 
 

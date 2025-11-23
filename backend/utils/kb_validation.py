@@ -54,7 +54,9 @@ async def ensure_knowledge_base(req: Request, operation: str = "operation"):
             status_code=503,
             detail={
                 "error": "Knowledge base unavailable",
-                "message": "The knowledge base service failed to initialize. Please check server logs or contact administrator.",
+                "message": (
+                    "The knowledge base service failed to initialize. Please check server logs or contact administrator."
+                ),
                 "operation": operation,
                 "code": "KB_INIT_FAILED",
             },

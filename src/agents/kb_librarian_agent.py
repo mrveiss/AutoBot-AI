@@ -49,8 +49,8 @@ class KBLibrarianAgent:
                     formatted_results.append(
                         {
                             "content": result.get("content", ""),
-                            "source": result.get("metadata", {}).get(
-                                "source", "Unknown"
+                            "source": (
+                                result.get("metadata", {}).get("source", "Unknown")
                             ),
                             "score": result.get("score", 0.0),
                             "metadata": result.get("metadata", {}),
@@ -112,7 +112,9 @@ class KBLibrarianAgent:
         except Exception as e:
             logger.error(f"KB-LIBRARIAN: LLM error: {e}")
             return {
-                "answer": "I'm sorry, I encountered an error while generating a response.",
+                "answer": (
+                    "I'm sorry, I encountered an error while generating a response."
+                ),
                 "knowledge_base_results": kb_results,
                 "sources": [result["source"] for result in kb_results],
                 "error": str(e),

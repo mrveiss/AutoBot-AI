@@ -354,7 +354,9 @@ Focus on practical assessment that helps improve agent performance and user expe
                     "consensus_strengths": self._find_consensus_strengths(evaluations),
                     "common_weaknesses": self._find_common_weaknesses(evaluations),
                 },
-                "recommendation": f"Best response from {evaluations[0]['agent_type']} agent",
+                "recommendation": (
+                    f"Best response from {evaluations[0]['agent_type']} agent"
+                ),
             }
 
         except Exception as e:

@@ -104,12 +104,16 @@ async def get_sequential_thinking_mcp_tools() -> List[MCPTool]:
                     },
                     "total_thoughts": {
                         "type": "integer",
-                        "description": "Estimated total thoughts needed (can be adjusted)",
+                        "description": (
+                            "Estimated total thoughts needed (can be adjusted)"
+                        ),
                         "minimum": 1,
                     },
                     "next_thought_needed": {
                         "type": "boolean",
-                        "description": "Whether another thought step is needed after this one",
+                        "description": (
+                            "Whether another thought step is needed after this one"
+                        ),
                     },
                     "is_revision": {
                         "type": "boolean",
@@ -118,12 +122,16 @@ async def get_sequential_thinking_mcp_tools() -> List[MCPTool]:
                     },
                     "revises_thought": {
                         "type": "integer",
-                        "description": "Which thought number is being reconsidered (if is_revision is true)",
+                        "description": (
+                            "Which thought number is being reconsidered (if is_revision is true)"
+                        ),
                         "minimum": 1,
                     },
                     "branch_from_thought": {
                         "type": "integer",
-                        "description": "Thought number to branch from (for alternative reasoning paths)",
+                        "description": (
+                            "Thought number to branch from (for alternative reasoning paths)"
+                        ),
                         "minimum": 1,
                     },
                     "branch_id": {
@@ -132,12 +140,16 @@ async def get_sequential_thinking_mcp_tools() -> List[MCPTool]:
                     },
                     "needs_more_thoughts": {
                         "type": "boolean",
-                        "description": "If more thoughts are needed beyond initial estimate",
+                        "description": (
+                            "If more thoughts are needed beyond initial estimate"
+                        ),
                         "default": False,
                     },
                     "session_id": {
                         "type": "string",
-                        "description": "Thinking session identifier for tracking multiple sessions",
+                        "description": (
+                            "Thinking session identifier for tracking multiple sessions"
+                        ),
                         "default": "default",
                     },
                 },
@@ -228,7 +240,9 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Dict[st
         "progress_percentage": round(progress_percentage, 1),
         "thinking_complete": thinking_complete,
         "session_thought_count": len(thinking_sessions[session_id]),
-        "message": f"Recorded thought {request.thought_number}/{request.total_thoughts}",
+        "message": (
+            f"Recorded thought {request.thought_number}/{request.total_thoughts}"
+        ),
     }
 
     # Add revision info

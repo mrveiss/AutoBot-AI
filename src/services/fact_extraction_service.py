@@ -146,7 +146,9 @@ class FactExtractionService:
                 "processing_time": extraction_result.processing_time,
                 "average_confidence": extraction_result.average_confidence,
                 "fact_type_distribution": extraction_result.fact_type_distribution,
-                "temporal_type_distribution": extraction_result.temporal_type_distribution,
+                "temporal_type_distribution": (
+                    extraction_result.temporal_type_distribution
+                ),
                 "extraction_metadata": extraction_result.extraction_metadata,
             }
 

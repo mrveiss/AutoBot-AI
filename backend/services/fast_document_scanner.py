@@ -337,9 +337,11 @@ class FastDocumentScanner:
                 "added": len(changes["added"]),
                 "updated": len(changes["updated"]),
                 "removed": len(changes["removed"]),
-                "unchanged": (limit or total_available)
-                - len(changes["added"])
-                - len(changes["updated"]),
+                "unchanged": (
+                    (limit or total_available)
+                    - len(changes["added"])
+                    - len(changes["updated"])
+                ),
             },
         }
 

@@ -648,10 +648,9 @@ class TaskQueue:
             "completed_tasks": completed_count,
             "failed_tasks": failed_count,
             "scheduled_tasks": scheduled_count,
-            "total_tasks": pending_count
-            + running_count
-            + completed_count
-            + failed_count,
+            "total_tasks": (
+                pending_count + running_count + completed_count + failed_count
+            ),
             "workers": len(self.workers),
             "is_running": self.is_running,
             "registered_functions": list(self.task_registry.keys()),

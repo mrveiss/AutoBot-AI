@@ -358,7 +358,9 @@ class ConfigService:
             )
             return {
                 "status": "success",
-                "message": "LLM configuration updated successfully using unified config system",
+                "message": (
+                    "LLM configuration updated successfully using unified config system"
+                ),
             }
         except Exception as e:
             logger.error(f"Error updating LLM config: {str(e)}")

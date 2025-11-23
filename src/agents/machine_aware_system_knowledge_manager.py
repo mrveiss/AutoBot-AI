@@ -320,7 +320,9 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 # Keep only the relevant installation method
                 adapted_tool["installation"] = {
                     package_manager: installation[package_manager],
-                    "system": f"Optimized for {self.current_machine_profile.os_type.value}",
+                    "system": (
+                        f"Optimized for {self.current_machine_profile.os_type.value}"
+                    ),
                 }
             else:
                 # No suitable installation method
@@ -710,8 +712,8 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                                 "command": tool.get("name"),
                                 "purpose": tool.get("purpose"),
                                 "source": "man_page",
-                                "machine_id": knowledge_data.get("metadata", {}).get(
-                                    "machine_id"
+                                "machine_id": (
+                                    knowledge_data.get("metadata", {}).get("machine_id")
                                 ),
                                 "file_path": str(yaml_file),
                                 "relevance_score": searchable_text.count(query.lower()),

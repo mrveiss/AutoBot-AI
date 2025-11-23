@@ -183,9 +183,13 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 "variable": r"([a-zA-Z_][a-zA-Z0-9_]*)\s*=",
             },
             "javascript": {
-                "function": r"(?:function\s+([a-zA-Z_][a-zA-Z0-9_]*)|([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*function|\bconst\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(?:\(.*?\)\s*=>|\bfunction))",
+                "function": (
+                    r"(?:function\s+([a-zA-Z_][a-zA-Z0-9_]*)|([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*function|\bconst\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(?:\(.*?\)\s*=>|\bfunction))"
+                ),
                 "class": r"class\s+([a-zA-Z_][a-zA-Z0-9_]*)",
-                "import": r'(?:import|require)\s*\(\s*[\'"]([^\'"]+)[\'"]|import\s+.*?\s+from\s+[\'"]([^\'"]+)[\'"]',
+                "import": (
+                    r'(?:import|require)\s*\(\s*[\'"]([^\'"]+)[\'"]|import\s+.*?\s+from\s+[\'"]([^\'"]+)[\'"]'
+                ),
                 "variable": r"(?:const|let|var)\s+([a-zA-Z_][a-zA-Z0-9_]*)",
             },
         }

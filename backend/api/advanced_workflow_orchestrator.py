@@ -578,8 +578,9 @@ complexity, and requirements:
         complexity_indicators = {
             "simple": len(request_lower.split()) < 10,
             "moderate": 10 <= len(request_lower.split()) < 20,
-            "complex": len(request_lower.split()) >= 20
-            or "enterprise" in request_lower,
+            "complex": (
+                len(request_lower.split()) >= 20 or "enterprise" in request_lower
+            ),
         }
 
         complexity = WorkflowComplexity.SIMPLE

@@ -389,8 +389,12 @@ class EnhancedProjectStateTracker:
                 ]["system_maturity_score"],
                 TrackingMetric.SYSTEM_MATURITY: capabilities["system_maturity"],
                 TrackingMetric.ERROR_RATE: await self._get_error_rate(),
-                TrackingMetric.PROGRESSION_VELOCITY: self._calculate_progression_velocity(),
-                TrackingMetric.USER_INTERACTIONS: await self._get_user_interactions_count(),
+                TrackingMetric.PROGRESSION_VELOCITY: (
+                    self._calculate_progression_velocity()
+                ),
+                TrackingMetric.USER_INTERACTIONS: (
+                    await self._get_user_interactions_count()
+                ),
                 TrackingMetric.API_CALLS: await self._get_api_calls_count(),
             }
 

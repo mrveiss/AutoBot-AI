@@ -366,7 +366,9 @@ async def mcp_summarize_knowledge_topic(request: Dict[str, Any]):
         if not results:
             return {
                 "success": True,
-                "summary": f"No information found about '{topic}' in the knowledge base.",
+                "summary": (
+                    f"No information found about '{topic}' in the knowledge base."
+                ),
                 "source_count": 0,
             }
 
@@ -591,7 +593,9 @@ async def get_mcp_schema():
     return {
         "name": "autobot-knowledge-base",
         "version": "2.0.0",
-        "description": "MCP tools for accessing AutoBot's knowledge base via LangChain, LlamaIndex, and Redis",
+        "description": (
+            "MCP tools for accessing AutoBot's knowledge base via LangChain, LlamaIndex, and Redis"
+        ),
         "tools": await get_mcp_tools(),
         "backends": {
             "langchain": "LangChain for orchestration and QA chains",

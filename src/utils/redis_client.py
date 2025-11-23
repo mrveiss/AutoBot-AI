@@ -688,8 +688,9 @@ class RedisConnectionManager:
             "socket_timeout": config.socket_timeout,
             "socket_connect_timeout": config.socket_connect_timeout,
             "socket_keepalive": True,
-            "socket_keepalive_options": config.socket_keepalive_options
-            or self._tcp_keepalive_options,
+            "socket_keepalive_options": (
+                config.socket_keepalive_options or self._tcp_keepalive_options
+            ),
             "retry_on_timeout": config.retry_on_timeout,
             "retry": retry_policy,
         }

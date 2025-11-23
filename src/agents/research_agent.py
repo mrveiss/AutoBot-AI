@@ -77,21 +77,27 @@ class ResearchAgent:
                 "nmap": {
                     "title": "Nmap - Network Discovery and Security Auditing",
                     "url": "https://nmap.org/",
-                    "content": "Nmap is a free and open source utility for network discovery and security auditing. Features include host discovery, port scanning, version detection, and OS detection.",
+                    "content": (
+                        "Nmap is a free and open source utility for network discovery and security auditing. Features include host discovery, port scanning, version detection, and OS detection."
+                    ),
                     "installation": "sudo apt-get install nmap",
                     "usage": "nmap -sS -O target_ip",
                 },
                 "masscan": {
                     "title": "Masscan - Fast Port Scanner",
                     "url": "https://github.com/robertdavidgraham/masscan",
-                    "content": "Masscan is a TCP port scanner that can scan the entire Internet in under 6 minutes. It's designed to be fast and efficient for large-scale scanning.",
+                    "content": (
+                        "Masscan is a TCP port scanner that can scan the entire Internet in under 6 minutes. It's designed to be fast and efficient for large-scale scanning."
+                    ),
                     "installation": "sudo apt-get install masscan",
                     "usage": "masscan -p1-65535 <target_network> --rate=1000",
                 },
                 "zmap": {
                     "title": "ZMap - Fast Internet-wide Network Scanner",
                     "url": "https://zmap.io/",
-                    "content": "ZMap is a fast single packet network scanner designed for Internet-wide network surveys. It can scan the entire Internet in about 45 minutes.",
+                    "content": (
+                        "ZMap is a fast single packet network scanner designed for Internet-wide network surveys. It can scan the entire Internet in about 45 minutes."
+                    ),
                     "installation": "sudo apt-get install zmap",
                     "usage": "zmap -p 443 -o results.txt",
                 },
@@ -175,8 +181,12 @@ class ResearchAgent:
                 "tools_found": list(tools_data.keys()),
                 "detailed_info": tools_data,
                 "research_results": [r.dict() for r in research_results],
-                "recommendation": "nmap is the most versatile and widely-used network scanning tool",
-                "summary": f"Found {len(tools_data)} network scanning tools: {', '.join(tools_data.keys())}. Recommendation: nmap is the most versatile and widely-used network scanning tool.",
+                "recommendation": (
+                    "nmap is the most versatile and widely-used network scanning tool"
+                ),
+                "summary": (
+                    f"Found {len(tools_data)} network scanning tools: {', '.join(tools_data.keys())}. Recommendation: nmap is the most versatile and widely-used network scanning tool."
+                ),
             }
 
         # Fallback to general research

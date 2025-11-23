@@ -1035,7 +1035,9 @@ class ComputerVisionSystem:
                 {
                     "type": "automation",
                     "priority": "high",
-                    "description": f"Found {len(screen_state.automation_opportunities)} automation opportunities",
+                    "description": (
+                        f"Found {len(screen_state.automation_opportunities)} automation opportunities"
+                    ),
                     "actions": ["create_automation_workflow", "test_interactions"],
                 }
             )
@@ -1049,7 +1051,9 @@ class ComputerVisionSystem:
                 {
                     "type": "ui_analysis",
                     "priority": "medium",
-                    "description": f"{len(low_confidence_elements)} elements have low detection confidence",
+                    "description": (
+                        f"{len(low_confidence_elements)} elements have low detection confidence"
+                    ),
                     "actions": ["improve_detection", "manual_verification"],
                 }
             )
@@ -1082,10 +1086,12 @@ class ComputerVisionSystem:
                 "timestamp": latest_analysis.timestamp,
                 "elements_detected": len(latest_analysis.ui_elements),
                 "confidence": latest_analysis.confidence_score,
-                "automation_ready": latest_analysis.context_analysis.get(
-                    "automation_readiness", {}
-                ).get("recommendation")
-                == "ready",
+                "automation_ready": (
+                    latest_analysis.context_analysis.get(
+                        "automation_readiness", {}
+                    ).get("recommendation")
+                    == "ready"
+                ),
             },
             "history_count": len(self.analysis_history),
             "trending_confidence": (

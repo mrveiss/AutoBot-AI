@@ -349,9 +349,15 @@ class UnifiedChatService:
         self.processors = {
             MessageType.GENERAL: GeneralChatProcessor(),
             MessageType.KNOWLEDGE: KnowledgeChatProcessor(),
-            MessageType.RESEARCH: KnowledgeChatProcessor(),  # Use knowledge processor for research
-            MessageType.TERMINAL: GeneralChatProcessor(),  # TODO: Implement terminal processor
-            MessageType.SYSTEM: GeneralChatProcessor(),  # TODO: Implement system processor
+            MessageType.RESEARCH: (
+                KnowledgeChatProcessor()
+            ),  # Use knowledge processor for research
+            MessageType.TERMINAL: (
+                GeneralChatProcessor()
+            ),  # TODO: Implement terminal processor
+            MessageType.SYSTEM: (
+                GeneralChatProcessor()
+            ),  # TODO: Implement system processor
         }
 
         self.redis_manager = None

@@ -451,9 +451,8 @@ class SecureSandboxExecutor:
                 "memory_used": memory_stats.get("usage", 0),
                 "memory_limit": memory_stats.get("limit", 0),
                 "memory_percent": (
-                    memory_stats.get("usage", 0) / memory_stats.get("limit", 1)
-                )
-                * 100,
+                    (memory_stats.get("usage", 0) / memory_stats.get("limit", 1)) * 100
+                ),
             }
         except Exception as e:
             self.logger.error(f"Failed to parse resource usage: {e}")

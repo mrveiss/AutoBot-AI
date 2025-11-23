@@ -366,11 +366,21 @@ class ServiceMonitor:
     def _get_service_check_command(self, vm_name: str) -> str:
         """Get the appropriate service check command for each VM based on architecture"""
         service_checks = {
-            "frontend": 'ps aux | grep -v grep | grep -c "vite\\|node.*vue\\|nginx" || echo "0"',
-            "redis": 'systemctl is-active redis-server || ps aux | grep -v grep | grep -c redis-server || echo "offline"',
-            "ai_stack": 'ps aux | grep -v grep | grep -c "python.*ai\\|ollama" || echo "0"',
-            "npu_worker": 'ps aux | grep -v grep | grep -c "npu\\|openvino" || echo "0"',
-            "browser_service": 'ps aux | grep -v grep | grep -c "playwright\\|chromium" || echo "0"',
+            "frontend": (
+                'ps aux | grep -v grep | grep -c "vite\\|node.*vue\\|nginx" || echo "0"'
+            ),
+            "redis": (
+                'systemctl is-active redis-server || ps aux | grep -v grep | grep -c redis-server || echo "offline"'
+            ),
+            "ai_stack": (
+                'ps aux | grep -v grep | grep -c "python.*ai\\|ollama" || echo "0"'
+            ),
+            "npu_worker": (
+                'ps aux | grep -v grep | grep -c "npu\\|openvino" || echo "0"'
+            ),
+            "browser_service": (
+                'ps aux | grep -v grep | grep -c "playwright\\|chromium" || echo "0"'
+            ),
         }
 
         # Return the specific check for this VM, or a generic process count

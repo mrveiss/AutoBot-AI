@@ -98,7 +98,9 @@ class TerminalTool:
 
             return {
                 "status": "success",
-                "session_id": session.pty_session_id,  # Return PTY session ID (matches chat)
+                "session_id": (
+                    session.pty_session_id
+                ),  # Return PTY session ID (matches chat)
                 "agent_role": session.agent_role.value,
                 "host": session.host,
             }
@@ -614,15 +616,23 @@ class TerminalTool:
         """
         return {
             "name": "terminal_tool",
-            "description": "Secure terminal access for command execution with approval workflow",
+            "description": (
+                "Secure terminal access for command execution with approval workflow"
+            ),
             "methods": {
                 "create_session": {
-                    "description": "Create a new terminal session for this conversation",
+                    "description": (
+                        "Create a new terminal session for this conversation"
+                    ),
                     "parameters": {
                         "agent_id": "Unique identifier for the agent",
                         "conversation_id": "Chat conversation ID",
-                        "agent_role": "Role (chat_agent, automation_agent, system_agent, admin_agent)",
-                        "host": "Target host (main, frontend, npu-worker, redis, ai-stack, browser)",
+                        "agent_role": (
+                            "Role (chat_agent, automation_agent, system_agent, admin_agent)"
+                        ),
+                        "host": (
+                            "Target host (main, frontend, npu-worker, redis, ai-stack, browser)"
+                        ),
                     },
                     "returns": "Session creation result",
                 },
@@ -657,7 +667,9 @@ class TerminalTool:
                 "audit_logging": "All commands logged with security metadata",
             },
             "usage_example": {
-                "step1": "create_session(agent_id='chat_agent_1', conversation_id='abc123')",
+                "step1": (
+                    "create_session(agent_id='chat_agent_1', conversation_id='abc123')"
+                ),
                 "step2": "execute_command(conversation_id='abc123', command='ls -la')",
                 "step3": "close_session(conversation_id='abc123')",
             },

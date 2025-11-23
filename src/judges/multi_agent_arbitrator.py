@@ -219,10 +219,10 @@ class MultiAgentArbitrator(BaseLLMJudge):
                 "consensus_method": consensus_method,
                 "evaluation_summary": {
                     "total_responses": len(evaluations),
-                    "average_quality": sum(
-                        e["evaluation"].overall_score for e in evaluations
-                    )
-                    / len(evaluations),
+                    "average_quality": (
+                        sum(e["evaluation"].overall_score for e in evaluations)
+                        / len(evaluations)
+                    ),
                     "agreement_level": consensus_confidence,
                 },
                 "detailed_evaluations": evaluations,

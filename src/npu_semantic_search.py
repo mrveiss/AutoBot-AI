@@ -509,8 +509,12 @@ class NPUSemanticSearch:
                                 "iteration": iteration,
                                 "total_time_ms": (end_time - start_time) * 1000,
                                 "results_count": len(search_results),
-                                "embedding_time_ms": metrics.embedding_generation_time_ms,
-                                "search_time_ms": metrics.similarity_computation_time_ms,
+                                "embedding_time_ms": (
+                                    metrics.embedding_generation_time_ms
+                                ),
+                                "search_time_ms": (
+                                    metrics.similarity_computation_time_ms
+                                ),
                                 "device_used": metrics.device_used,
                             }
                         )

@@ -239,7 +239,9 @@ class Conversation:
             self.messages.append(error_msg)
 
             return {
-                "response": "I encountered an error processing your request. Please try again.",
+                "response": (
+                    "I encountered an error processing your request. Please try again."
+                ),
                 "error": str(e),
                 "conversation_id": self.conversation_id,
             }
@@ -569,8 +571,9 @@ Please provide a helpful, accurate response based on the available information. 
                             "content": research_result.get("content", {}),
                             "session_id": research_result.get("session_id"),
                             "browser_url": research_result.get("browser_url"),
-                            "interaction_required": research_result.get("status")
-                            == "interaction_required",
+                            "interaction_required": (
+                                research_result.get("status") == "interaction_required"
+                            ),
                         }
                     )
 
@@ -583,8 +586,9 @@ Please provide a helpful, accurate response based on the available information. 
                             "query": query,
                             "url": search_url,
                             "research_session": research_result.get("session_id"),
-                            "interaction_required": research_result.get("status")
-                            == "interaction_required",
+                            "interaction_required": (
+                                research_result.get("status") == "interaction_required"
+                            ),
                         },
                     )
 

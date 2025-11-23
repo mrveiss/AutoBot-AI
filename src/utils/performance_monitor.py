@@ -607,9 +607,11 @@ class Phase9PerformanceMonitor:
                                 ),
                                 "cpu_percent": proc_info["cpu_percent"] or 0,
                                 "memory_mb": round(memory_mb, 2),
-                                "create_time": datetime.fromtimestamp(
-                                    proc_info["create_time"]
-                                ).isoformat(),
+                                "create_time": (
+                                    datetime.fromtimestamp(
+                                        proc_info["create_time"]
+                                    ).isoformat()
+                                ),
                                 "running_time_minutes": round(
                                     (time.time() - proc_info["create_time"]) / 60, 1
                                 ),
@@ -956,7 +958,9 @@ class Phase9PerformanceMonitor:
                         {
                             "category": "gpu",
                             "severity": "warning",
-                            "message": f"GPU utilization below target: {gpu['utilization_percent']:.1f}% < {self.performance_baselines['gpu_utilization_target']}%",
+                            "message": (
+                                f"GPU utilization below target: {gpu['utilization_percent']:.1f}% < {self.performance_baselines['gpu_utilization_target']}%"
+                            ),
                             "recommendation": "Verify AI workloads are GPU-accelerated",
                             "timestamp": time.time(),
                         }
@@ -967,7 +971,9 @@ class Phase9PerformanceMonitor:
                         {
                             "category": "gpu",
                             "severity": "critical",
-                            "message": f"GPU thermal throttling active at {gpu['temperature_celsius']}°C",
+                            "message": (
+                                f"GPU thermal throttling active at {gpu['temperature_celsius']}°C"
+                            ),
                             "recommendation": "Check cooling and reduce workload",
                             "timestamp": time.time(),
                         }
@@ -985,8 +991,12 @@ class Phase9PerformanceMonitor:
                         {
                             "category": "npu",
                             "severity": "warning",
-                            "message": f"NPU acceleration ratio below target: {npu['acceleration_ratio']:.1f}x < {self.performance_baselines['npu_acceleration_target']}x",
-                            "recommendation": "Optimize NPU utilization or check driver status",
+                            "message": (
+                                f"NPU acceleration ratio below target: {npu['acceleration_ratio']:.1f}x < {self.performance_baselines['npu_acceleration_target']}x"
+                            ),
+                            "recommendation": (
+                                "Optimize NPU utilization or check driver status"
+                            ),
                             "timestamp": time.time(),
                         }
                     )
@@ -1003,8 +1013,12 @@ class Phase9PerformanceMonitor:
                         {
                             "category": "memory",
                             "severity": "warning",
-                            "message": f"High memory usage: {system['memory_usage_percent']:.1f}%",
-                            "recommendation": "Enable aggressive cleanup or check for memory leaks",
+                            "message": (
+                                f"High memory usage: {system['memory_usage_percent']:.1f}%"
+                            ),
+                            "recommendation": (
+                                "Enable aggressive cleanup or check for memory leaks"
+                            ),
                             "timestamp": time.time(),
                         }
                     )
@@ -1017,7 +1031,9 @@ class Phase9PerformanceMonitor:
                         {
                             "category": "cpu",
                             "severity": "warning",
-                            "message": f"High CPU load: {system['cpu_load_1m']:.1f} on {system['cpu_cores_logical']}-core system",
+                            "message": (
+                                f"High CPU load: {system['cpu_load_1m']:.1f} on {system['cpu_cores_logical']}-core system"
+                            ),
                             "recommendation": "Check for CPU-intensive processes",
                             "timestamp": time.time(),
                         }
@@ -1031,8 +1047,12 @@ class Phase9PerformanceMonitor:
                             {
                                 "category": "service",
                                 "severity": "critical",
-                                "message": f"Service {service['service_name']} is {service['status']}",
-                                "recommendation": "Check service health and restart if necessary",
+                                "message": (
+                                    f"Service {service['service_name']} is {service['status']}"
+                                ),
+                                "recommendation": (
+                                    "Check service health and restart if necessary"
+                                ),
                                 "timestamp": time.time(),
                             }
                         )
@@ -1045,8 +1065,12 @@ class Phase9PerformanceMonitor:
                             {
                                 "category": "performance",
                                 "severity": "warning",
-                                "message": f"{service['service_name']} slow response: {service['response_time_ms']:.0f}ms",
-                                "recommendation": "Investigate service performance bottlenecks",
+                                "message": (
+                                    f"{service['service_name']} slow response: {service['response_time_ms']:.0f}ms"
+                                ),
+                                "recommendation": (
+                                    "Investigate service performance bottlenecks"
+                                ),
                                 "timestamp": time.time(),
                             }
                         )
@@ -1238,9 +1262,15 @@ class Phase9PerformanceMonitor:
                         {
                             "category": "gpu",
                             "priority": "medium",
-                            "recommendation": "GPU underutilized - verify AI workloads use GPU acceleration",
-                            "action": "Check CUDA availability and batch sizes in semantic chunking",
-                            "expected_improvement": "2-3x performance increase for AI tasks",
+                            "recommendation": (
+                                "GPU underutilized - verify AI workloads use GPU acceleration"
+                            ),
+                            "action": (
+                                "Check CUDA availability and batch sizes in semantic chunking"
+                            ),
+                            "expected_improvement": (
+                                "2-3x performance increase for AI tasks"
+                            ),
                         }
                     )
 
@@ -1249,8 +1279,12 @@ class Phase9PerformanceMonitor:
                         {
                             "category": "gpu",
                             "priority": "high",
-                            "recommendation": "GPU memory near capacity - optimize memory usage",
-                            "action": "Reduce batch sizes or implement gradient checkpointing",
+                            "recommendation": (
+                                "GPU memory near capacity - optimize memory usage"
+                            ),
+                            "action": (
+                                "Reduce batch sizes or implement gradient checkpointing"
+                            ),
                             "expected_improvement": "Prevent out-of-memory errors",
                         }
                     )
@@ -1264,9 +1298,15 @@ class Phase9PerformanceMonitor:
                         {
                             "category": "npu",
                             "priority": "medium",
-                            "recommendation": "NPU acceleration below optimal - check model optimization",
-                            "action": "Verify OpenVINO model optimization and NPU driver status",
-                            "expected_improvement": "Up to 5x speedup for inference tasks",
+                            "recommendation": (
+                                "NPU acceleration below optimal - check model optimization"
+                            ),
+                            "action": (
+                                "Verify OpenVINO model optimization and NPU driver status"
+                            ),
+                            "expected_improvement": (
+                                "Up to 5x speedup for inference tasks"
+                            ),
                         }
                     )
 
@@ -1280,8 +1320,12 @@ class Phase9PerformanceMonitor:
                             "category": "memory",
                             "priority": "high",
                             "recommendation": "High memory usage detected",
-                            "action": "Enable aggressive cleanup in chat history and conversation managers",
-                            "expected_improvement": "Prevent system slowdown and swapping",
+                            "action": (
+                                "Enable aggressive cleanup in chat history and conversation managers"
+                            ),
+                            "expected_improvement": (
+                                "Prevent system slowdown and swapping"
+                            ),
                         }
                     )
 
@@ -1291,7 +1335,9 @@ class Phase9PerformanceMonitor:
                             "category": "cpu",
                             "priority": "medium",
                             "recommendation": "High CPU load detected",
-                            "action": "Optimize parallel processing and check for CPU-intensive tasks",
+                            "action": (
+                                "Optimize parallel processing and check for CPU-intensive tasks"
+                            ),
                             "expected_improvement": "Better system responsiveness",
                         }
                     )

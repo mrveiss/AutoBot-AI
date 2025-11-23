@@ -709,8 +709,10 @@ async def find_code_duplicates(request: AnalyticsRequest):
                             "potential_savings": (
                                 f"Could refactor {len(similar_blocks)} similar blocks"
                             ),
-                            "refactor_priority": len(similar_blocks)
-                            * max(block["confidence"] for block in similar_blocks),
+                            "refactor_priority": (
+                                len(similar_blocks)
+                                * max(block["confidence"] for block in similar_blocks)
+                            ),
                         }
                     )
 

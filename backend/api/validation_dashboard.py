@@ -121,7 +121,9 @@ def generate_fallback_report():
             "recommendations": [
                 {
                     "title": "Optimize Redis Memory Usage",
-                    "description": "Consider implementing data expiration policies for Redis keys",
+                    "description": (
+                        "Consider implementing data expiration policies for Redis keys"
+                    ),
                     "urgency": "medium",
                     "action": "Review Redis configuration and implement key expiration",
                 },

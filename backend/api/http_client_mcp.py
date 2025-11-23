@@ -289,7 +289,9 @@ async def get_http_client_mcp_tools() -> List[MCPTool]:
                     },
                     "headers": {
                         "type": "object",
-                        "description": "Optional HTTP headers (sensitive headers blocked)",
+                        "description": (
+                            "Optional HTTP headers (sensitive headers blocked)"
+                        ),
                         "additionalProperties": {"type": "string"},
                     },
                     "params": {
@@ -299,7 +301,9 @@ async def get_http_client_mcp_tools() -> List[MCPTool]:
                     },
                     "timeout": {
                         "type": "integer",
-                        "description": f"Request timeout in seconds (default: {DEFAULT_TIMEOUT}, max: {MAX_TIMEOUT})",
+                        "description": (
+                            f"Request timeout in seconds (default: {DEFAULT_TIMEOUT}, max: {MAX_TIMEOUT})"
+                        ),
                         "minimum": 1,
                         "maximum": MAX_TIMEOUT,
                     },

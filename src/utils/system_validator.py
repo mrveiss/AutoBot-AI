@@ -91,8 +91,12 @@ class SystemValidator:
 
         # Service endpoints
         self.base_urls = {
-            "backend": f"http://{config.get_host('backend')}:{config.get_port('backend')}",
-            "frontend": f"http://{config.get_host('frontend')}:{config.get_port('frontend')}",
+            "backend": (
+                f"http://{config.get_host('backend')}:{config.get_port('backend')}"
+            ),
+            "frontend": (
+                f"http://{config.get_host('frontend')}:{config.get_port('frontend')}"
+            ),
             "ollama": f"http://{config.get_host('ollama')}:{config.get_port('ollama')}",
             "redis": None,  # Special handling for Redis
         }

@@ -96,8 +96,9 @@ async def authorize_elevation(auth: ElevationAuthorization):
         session_data = {
             "token": session_token,
             "created": datetime.now(),
-            "expires": datetime.now()
-            + timedelta(minutes=15 if auth.remember_session else 5),
+            "expires": (
+                datetime.now() + timedelta(minutes=15 if auth.remember_session else 5)
+            ),
             "request_id": request_id,
         }
 

@@ -413,7 +413,7 @@ class WakeWordDetector:
             "total_detections": total,
             "true_positives": self.stats.true_positives,
             "false_positives": self.stats.false_positives,
-            "accuracy": (self.stats.true_positives / max(total, 1) * 100),
+            "accuracy": self.stats.true_positives / max(total, 1) * 100,
             "average_confidence": self.stats.average_confidence,
             "total_listening_time": self.stats.total_listening_time,
             "cpu_usage_percent": self.stats.cpu_usage_percent,

@@ -563,8 +563,9 @@ async def get_gpu_details():
                 "gpu_utilization_target"
             ],
             "current_efficiency": _calculate_gpu_efficiency(gpu_metrics),
-            "throttling_detected": gpu_metrics.thermal_throttling
-            or gpu_metrics.power_throttling,
+            "throttling_detected": (
+                gpu_metrics.thermal_throttling or gpu_metrics.power_throttling
+            ),
         },
     }
 
@@ -721,7 +722,9 @@ async def export_metrics(
         return JSONResponse(
             content=export_data,
             headers={
-                "Content-Disposition": f"attachment; filename=autobot_metrics_{int(end_time)}.json"
+                "Content-Disposition": (
+                    f"attachment; filename=autobot_metrics_{int(end_time)}.json"
+                )
             },
         )
 
@@ -736,7 +739,9 @@ async def export_metrics(
             generate(),
             media_type="text/csv",
             headers={
-                "Content-Disposition": f"attachment; filename=autobot_metrics_{int(end_time)}.csv"
+                "Content-Disposition": (
+                    f"attachment; filename=autobot_metrics_{int(end_time)}.csv"
+                )
             },
         )
 
@@ -1049,8 +1054,10 @@ class HardwareMonitor:
             gpu_data = dashboard.get("gpu", {})
 
             return {
-                "available": dashboard.get("hardware_acceleration", {}).get(
-                    "gpu_available", False
+                "available": (
+                    dashboard.get("hardware_acceleration", {}).get(
+                        "gpu_available", False
+                    )
                 ),
                 "utilization_percent": gpu_data.get("utilization_percent", 0),
                 "memory_used_mb": gpu_data.get("memory_used_mb", 0),
@@ -1072,8 +1079,10 @@ class HardwareMonitor:
             npu_data = dashboard.get("npu", {})
 
             return {
-                "available": dashboard.get("hardware_acceleration", {}).get(
-                    "npu_available", False
+                "available": (
+                    dashboard.get("hardware_acceleration", {}).get(
+                        "npu_available", False
+                    )
                 ),
                 "utilization_percent": npu_data.get("utilization_percent", 0),
                 "acceleration_ratio": npu_data.get("acceleration_ratio", 0),

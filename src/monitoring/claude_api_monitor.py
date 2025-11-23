@@ -380,7 +380,7 @@ class ClaudeAPIMonitor:
         basic_stats = {
             "monitoring_uptime": uptime,
             "total_calls": self.usage_tracker.total_calls,
-            "calls_per_hour": (self.usage_tracker.total_calls / max(uptime / 3600, 1)),
+            "calls_per_hour": self.usage_tracker.total_calls / max(uptime / 3600, 1),
             "average_payload_size": (
                 self.usage_tracker.total_payload_size
                 / max(self.usage_tracker.total_calls, 1)
@@ -436,7 +436,9 @@ class ClaudeAPIMonitor:
                     "type": "rate_limit",
                     "priority": "high",
                     "message": "API usage approaching limits",
-                    "action": "Implement request batching or increase delays between calls",
+                    "action": (
+                        "Implement request batching or increase delays between calls"
+                    ),
                 }
             )
 

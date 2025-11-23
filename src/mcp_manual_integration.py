@@ -372,7 +372,9 @@ class MCPManualService:
                 "section": "1",
                 "description": "list directory contents",
                 "synopsis": "ls [OPTION]... [FILE]...",
-                "content": "Basic file listing command. Use ls -la for detailed output.",
+                "content": (
+                    "Basic file listing command. Use ls -la for detailed output."
+                ),
                 "source": "fallback",
             },
             "grep": {
@@ -620,25 +622,33 @@ class MCPManualService:
             "ls": {
                 "name": "ls",
                 "description": "list directory contents",
-                "content": "Usage: ls [OPTION]... [FILE]...\nList information about the FILEs.",
+                "content": (
+                    "Usage: ls [OPTION]... [FILE]...\nList information about the FILEs."
+                ),
                 "source": "fallback_help",
             },
             "grep": {
                 "name": "grep",
                 "description": "search text using patterns",
-                "content": "Usage: grep [OPTIONS] PATTERN [FILE...]\nSearch for PATTERN in each FILE.",
+                "content": (
+                    "Usage: grep [OPTIONS] PATTERN [FILE...]\nSearch for PATTERN in each FILE."
+                ),
                 "source": "fallback_help",
             },
             "cat": {
                 "name": "cat",
                 "description": "concatenate files and print on the standard output",
-                "content": "Usage: cat [OPTION]... [FILE]...\nConcatenate FILE(s) to standard output.",
+                "content": (
+                    "Usage: cat [OPTION]... [FILE]...\nConcatenate FILE(s) to standard output."
+                ),
                 "source": "fallback_help",
             },
             "curl": {
                 "name": "curl",
                 "description": "transfer data from or to a server",
-                "content": "Usage: curl [options...] <url>\nTransfer data from or to a server.",
+                "content": (
+                    "Usage: curl [options...] <url>\nTransfer data from or to a server."
+                ),
                 "source": "fallback_help",
             },
         }
@@ -922,7 +932,9 @@ class MCPManualService:
                     results.append(
                         {
                             "title": f"Manual: {manual.command_name}",
-                            "content": f"{manual.description}\n\nSyntax: {manual.syntax}",
+                            "content": (
+                                f"{manual.description}\n\nSyntax: {manual.syntax}"
+                            ),
                             "source": "command_manual",
                             "relevance": 0.7,
                             "command": manual.command_name,
@@ -972,19 +984,25 @@ class MCPManualService:
         fallback_docs = {
             "autobot": {
                 "title": "AutoBot Documentation",
-                "content": "AutoBot is an intelligent automation platform with distributed VM architecture.",
+                "content": (
+                    "AutoBot is an intelligent automation platform with distributed VM architecture."
+                ),
                 "source": "fallback",
                 "relevance": 0.9,
             },
             "linux": {
                 "title": "Linux Command Information",
-                "content": "Use man command_name to get detailed manual pages for Linux commands.",
+                "content": (
+                    "Use man command_name to get detailed manual pages for Linux commands."
+                ),
                 "source": "fallback",
                 "relevance": 0.7,
             },
             "help": {
                 "title": "Getting Help",
-                "content": "Use --help flag with most commands to get usage information.",
+                "content": (
+                    "Use --help flag with most commands to get usage information."
+                ),
                 "source": "fallback",
                 "relevance": 0.8,
             },
@@ -1006,7 +1024,9 @@ class MCPManualService:
             "results": [
                 {
                     "title": f"Documentation search for: {query}",
-                    "content": f'Search performed for "{query}". Try using man command_name for manual pages.',
+                    "content": (
+                        f'Search performed for "{query}". Try using man command_name for manual pages.'
+                    ),
                     "source": "fallback",
                     "relevance": 0.5,
                 }

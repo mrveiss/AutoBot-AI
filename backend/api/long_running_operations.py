@@ -589,9 +589,11 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
             await websocket.send_json(
                 {
                     "type": "current_progress",
-                    "data": operation_integration_manager._convert_operation_to_response(
-                        operation
-                    ).dict(),
+                    "data": (
+                        operation_integration_manager._convert_operation_to_response(
+                            operation
+                        ).dict()
+                    ),
                 }
             )
 

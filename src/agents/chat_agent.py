@@ -136,7 +136,9 @@ class ChatAgent(StandardizedAgent):
             logger.error(f"Chat Agent error processing message: {e}")
             return {
                 "status": "error",
-                "response_text": "I'm having trouble processing your message right now. Could you try rephrasing it?",
+                "response_text": (
+                    "I'm having trouble processing your message right now. Could you try rephrasing it?"
+                ),
                 "error": str(e),
                 "agent_type": "chat",
                 "model_used": self.model_name,

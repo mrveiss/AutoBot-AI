@@ -198,7 +198,9 @@ class EnhancedSecurityLayer:
                     "deprecated_role": user_role,
                     "action_attempted": action_type,
                     "resource": resource,
-                    "message": "God/superuser/root roles deprecated. Update to admin role.",
+                    "message": (
+                        "God/superuser/root roles deprecated. Update to admin role."
+                    ),
                 },
             )
             # Downgrade to admin role with proper permissions and audit logging

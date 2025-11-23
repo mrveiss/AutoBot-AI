@@ -909,7 +909,9 @@ class KnowledgeBase:
                         )
                         return {
                             "status": "duplicate",
-                            "message": f"Fact already exists with unique key: {unique_key}",
+                            "message": (
+                                f"Fact already exists with unique key: {unique_key}"
+                            ),
                             "fact_id": existing_fact["fact_id"],
                             "duplicate_of": existing_fact["fact_id"],
                             "existing_created_at": existing_fact.get("created_at"),
@@ -947,7 +949,9 @@ class KnowledgeBase:
                             )
                             return {
                                 "status": "duplicate",
-                                "message": f"Fact already exists with same category and title",
+                                "message": (
+                                    f"Fact already exists with same category and title"
+                                ),
                                 "fact_id": existing_fact_id,
                                 "duplicate_of": existing_fact_id,
                                 "existing_created_at": created_at,
@@ -1053,7 +1057,9 @@ class KnowledgeBase:
                     # Vector indexing failed - fact is in Redis but NOT searchable
                     return {
                         "status": "partial_success",
-                        "message": f"Fact stored in Redis but NOT indexed for search: {error_msg}",
+                        "message": (
+                            f"Fact stored in Redis but NOT indexed for search: {error_msg}"
+                        ),
                         "fact_id": fact_id,
                         "vector_indexed": False,
                         "searchable": False,
@@ -1173,8 +1179,8 @@ class KnowledgeBase:
                             "metadata": json.loads(
                                 fact_data.get(b"metadata", b"{}").decode("utf-8")
                             ),
-                            "timestamp": fact_data.get(b"timestamp", b"").decode(
-                                "utf-8"
+                            "timestamp": (
+                                fact_data.get(b"timestamp", b"").decode("utf-8")
                             ),
                         }
                     )
@@ -1196,9 +1202,9 @@ class KnowledgeBase:
                                             "utf-8"
                                         )
                                     ),
-                                    "timestamp": fact_data.get(
-                                        b"timestamp", b""
-                                    ).decode("utf-8"),
+                                    "timestamp": (
+                                        fact_data.get(b"timestamp", b"").decode("utf-8")
+                                    ),
                                 }
                             )
             else:

@@ -171,7 +171,9 @@ class RAGAgent(StandardizedAgent):
             logger.error(f"RAG Agent error: {e}")
             return {
                 "status": "error",
-                "synthesized_response": "I encountered an error while synthesizing information from the documents.",
+                "synthesized_response": (
+                    "I encountered an error while synthesizing information from the documents."
+                ),
                 "error": str(e),
                 "agent_type": "rag",
                 "model_used": self.model_name,

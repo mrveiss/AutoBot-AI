@@ -161,9 +161,13 @@ class SystemMetricsCollector:
 
         # Service endpoints to check
         services = {
-            "backend": f"http://{config.get_host('backend')}:{config.get_port('backend')}/api/health",
+            "backend": (
+                f"http://{config.get_host('backend')}:{config.get_port('backend')}/api/health"
+            ),
             "redis": None,  # Special handling for Redis
-            "ollama": f"http://{config.get_host('ollama')}:{config.get_port('ollama')}/api/tags",
+            "ollama": (
+                f"http://{config.get_host('ollama')}:{config.get_port('ollama')}/api/tags"
+            ),
         }
 
         # HTTP timeout for health checks

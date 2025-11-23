@@ -825,7 +825,9 @@ class EnhancedOrchestrator:
                 knowledge_items.append(
                     {
                         "type": "success_pattern",
-                        "content": f"Successful workflow pattern for: {user_request[:100]}",
+                        "content": (
+                            f"Successful workflow pattern for: {user_request[:100]}"
+                        ),
                         "agents_used": execution_result.get("agents_involved", []),
                         "success_rate": execution_result.get("success_rate", 0),
                     }
@@ -870,7 +872,9 @@ class EnhancedOrchestrator:
             {
                 "error_message": error_message,
                 "failure_time": datetime.now().isoformat(),
-                "failure_analysis": "Workflow execution failed - requires investigation",
+                "failure_analysis": (
+                    "Workflow execution failed - requires investigation"
+                ),
             }
         )
 
@@ -954,7 +958,9 @@ class EnhancedOrchestrator:
                         "documentation_type": doc.documentation_type.value,
                         "created_at": doc.created_at.isoformat(),
                         "updated_at": doc.updated_at.isoformat(),
-                        "relevance_score": 1.0,  # Placeholder for actual relevance scoring
+                        "relevance_score": (
+                            1.0
+                        ),  # Placeholder for actual relevance scoring
                     }
                 )
 

@@ -880,7 +880,9 @@ async def get_entity_graph(
             graph_data = {
                 "entities": entities[:20],  # Limit to 20 for graph visualization
                 "total_available": len(entities),
-                "note": "Showing sample of entities. Provide entity_id for specific graph.",
+                "note": (
+                    "Showing sample of entities. Provide entity_id for specific graph."
+                ),
             }
 
         logger.info(f"[{request_id}] Graph data prepared")

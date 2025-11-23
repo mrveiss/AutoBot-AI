@@ -549,7 +549,9 @@ class ResearchBrowserManager:
                 "source": "mhtml_file",
                 "file_path": mhtml_path,
                 "file_size": file_size,
-                "text_content": "Content extracted from MHTML backup (parsing not yet implemented)",
+                "text_content": (
+                    "Content extracted from MHTML backup (parsing not yet implemented)"
+                ),
                 "content_length": file_size,
             }
 

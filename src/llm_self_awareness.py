@@ -63,7 +63,9 @@ class LLMSelfAwareness:
                 "system_identity": {
                     "name": "AutoBot",
                     "version": "1.0.0",
-                    "description": "Advanced AI-powered automation and development assistant",
+                    "description": (
+                        "Advanced AI-powered automation and development assistant"
+                    ),
                     "current_phase": project_status["current_phase"],
                     "system_maturity": capabilities["system_maturity"],
                 },
@@ -77,21 +79,29 @@ class LLMSelfAwareness:
                 "phase_information": {
                     "current_phase": project_status["current_phase"],
                     "completion_status": state_summary["current_state"]["phase_states"],
-                    "completed_phases": state_summary["current_state"][
-                        "system_metrics"
-                    ].get("phase_completion", 0),
+                    "completed_phases": (
+                        state_summary["current_state"]["system_metrics"].get(
+                            "phase_completion", 0
+                        )
+                    ),
                     "total_phases": 10,
                 },
                 "system_metrics": {
-                    "maturity_score": state_summary["current_state"][
-                        "system_metrics"
-                    ].get("system_maturity", 0),
-                    "validation_score": state_summary["current_state"][
-                        "system_metrics"
-                    ].get("validation_score", 0),
-                    "capability_count": state_summary["current_state"][
-                        "system_metrics"
-                    ].get("capability_count", 0),
+                    "maturity_score": (
+                        state_summary["current_state"]["system_metrics"].get(
+                            "system_maturity", 0
+                        )
+                    ),
+                    "validation_score": (
+                        state_summary["current_state"]["system_metrics"].get(
+                            "validation_score", 0
+                        )
+                    ),
+                    "capability_count": (
+                        state_summary["current_state"]["system_metrics"].get(
+                            "capability_count", 0
+                        )
+                    ),
                 },
                 "operational_status": {
                     "auto_progression_enabled": capabilities[
@@ -424,8 +434,12 @@ You should be aware of your current capabilities and limitations based on the sy
                 {
                     "type": "phase_progression",
                     "current_phase": context["phase_information"]["current_phase"],
-                    "completion": f"{context['phase_information']['completed_phases']}/10 phases complete",
-                    "next_action": "Run phase validation to check progression eligibility",
+                    "completion": (
+                        f"{context['phase_information']['completed_phases']}/10 phases complete"
+                    ),
+                    "next_action": (
+                        "Run phase validation to check progression eligibility"
+                    ),
                 }
             )
 

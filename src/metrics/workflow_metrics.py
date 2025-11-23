@@ -433,9 +433,9 @@ class WorkflowMetricsCollector:
                     "completed_steps": workflow["completed_steps"],
                     "total_steps": workflow["total_steps"],
                     "progress_percent": (
-                        workflow["completed_steps"] / max(workflow["total_steps"], 1)
-                    )
-                    * 100,
+                        (workflow["completed_steps"] / max(workflow["total_steps"], 1))
+                        * 100
+                    ),
                     "current_step_timings": workflow["step_timings"],
                 }
 

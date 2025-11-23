@@ -166,7 +166,9 @@ async def clear_cache():
 
         return {
             "status": "success",
-            "message": "Configuration cache cleared. Settings will be reloaded on next request.",
+            "message": (
+                "Configuration cache cleared. Settings will be reloaded on next request."
+            ),
             "available_endpoints": {
                 "clear_all_redis": "/api/cache/redis/clear/all",
                 "clear_specific_redis": "/api/cache/redis/clear/{database_name}",

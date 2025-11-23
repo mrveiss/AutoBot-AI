@@ -163,8 +163,9 @@ class SystemIntegration:
         if action not in ["start", "stop", "restart"]:
             return {
                 "status": "error",
-                "message": "Invalid service action. Must be 'start', "
-                "'stop', or 'restart'.",
+                "message": (
+                    "Invalid service action. Must be 'start', " "'stop', or 'restart'."
+                ),
             }
 
         if self.os_type == "Windows":
@@ -276,9 +277,11 @@ class SystemIntegration:
         #             "message": f"COM interaction failed: {e}"}
         return {
             "status": "error",
-            "message": f"Windows COM interaction for '{app_name}' is a "
-            "placeholder. Not implemented without pywin32 and "
-            "specific use case.",
+            "message": (
+                f"Windows COM interaction for '{app_name}' is a "
+                "placeholder. Not implemented without pywin32 and "
+                "specific use case."
+            ),
         }
 
     # --- Linux-specific (DBus - placeholders) ---
@@ -312,8 +315,10 @@ class SystemIntegration:
         #             "message": f"DBus interaction failed: {e}"}
         return {
             "status": "error",
-            "message": f"Linux DBus interaction for '{service}' is a "
-            "placeholder. Not implemented without specific use case.",
+            "message": (
+                f"Linux DBus interaction for '{service}' is a "
+                "placeholder. Not implemented without specific use case."
+            ),
         }
 
     def get_process_info(
@@ -343,8 +348,10 @@ class SystemIntegration:
         if not processes_info and (process_name or pid):
             return {
                 "status": "error",
-                "message": f"No process found matching name '{process_name}' "
-                f"or PID '{pid}'.",
+                "message": (
+                    f"No process found matching name '{process_name}' "
+                    f"or PID '{pid}'."
+                ),
             }
 
         return {"status": "success", "processes": processes_info}
@@ -365,8 +372,10 @@ class SystemIntegration:
         except psutil.AccessDenied:
             return {
                 "status": "error",
-                "message": "Access denied to terminate process with PID "
-                f"{pid}. Requires elevated privileges.",
+                "message": (
+                    "Access denied to terminate process with PID "
+                    f"{pid}. Requires elevated privileges."
+                ),
             }
         except Exception as e:
             return {
@@ -413,8 +422,10 @@ class SystemIntegration:
                     # For other content types, return a message indicating it's not text
                     return {
                         "status": "error",
-                        "message": "Unsupported content type for direct text "
-                        f"extraction: {content_type}",
+                        "message": (
+                            "Unsupported content type for direct text "
+                            f"extraction: {content_type}"
+                        ),
                         "url": url,
                     }
 

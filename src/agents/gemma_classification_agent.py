@@ -174,7 +174,9 @@ Respond with valid JSON:
                             "prompt": prompt,
                             "stream": True,
                             "options": {
-                                "temperature": 0.3,  # Low temperature for consistent classification
+                                "temperature": (
+                                    0.3
+                                ),  # Low temperature for consistent classification
                                 "top_p": 0.9,
                                 "num_predict": 200,  # Limit response length
                             },

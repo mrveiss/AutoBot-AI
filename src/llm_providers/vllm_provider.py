@@ -138,8 +138,10 @@ class VLLMProvider:
                     "usage": {
                         "prompt_tokens": len(output.prompt_token_ids),
                         "completion_tokens": len(output.outputs[0].token_ids),
-                        "total_tokens": len(output.prompt_token_ids)
-                        + len(output.outputs[0].token_ids),
+                        "total_tokens": (
+                            len(output.prompt_token_ids)
+                            + len(output.outputs[0].token_ids)
+                        ),
                     },
                     "model": self.model_name,
                     "provider": "vllm",

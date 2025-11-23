@@ -483,8 +483,9 @@ class DomainReputationService:
             **self.stats,
             "cache_size": len(self.reputation_cache),
             "threat_feeds_loaded": len(self.threat_feeds),
-            "cache_hit_rate": self.stats["cache_hits"]
-            / max(1, self.stats["total_checks"]),
+            "cache_hit_rate": (
+                self.stats["cache_hits"] / max(1, self.stats["total_checks"])
+            ),
         }
 
     async def bulk_check_domains(

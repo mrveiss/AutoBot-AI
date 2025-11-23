@@ -139,11 +139,21 @@ class LLMFailsafeAgent:
     def _init_emergency_responses(self):
         """Initialize emergency static responses"""
         self.emergency_responses = {
-            "default": "AutoBot Emergency Mode: I'm experiencing technical difficulties but I'm still here to help. Please try again or contact support if the issue persists.",
-            "greeting": "Hello! AutoBot is currently in emergency mode due to system issues, but I'm still operational for basic assistance.",
-            "help": "Emergency Help: AutoBot systems are degraded. For immediate assistance, please:\n1. Try rephrasing your request\n2. Check system logs\n3. Restart the service if needed\n4. Contact technical support",
-            "error": "An error occurred in the primary systems. AutoBot is operating in emergency mode. Your request has been noted and I'll assist as best I can.",
-            "status": f"AutoBot Emergency Status - {time.strftime('%Y-%m-%d %H:%M:%S')}: Basic functions operational, primary LLM systems unavailable.",
+            "default": (
+                "AutoBot Emergency Mode: I'm experiencing technical difficulties but I'm still here to help. Please try again or contact support if the issue persists."
+            ),
+            "greeting": (
+                "Hello! AutoBot is currently in emergency mode due to system issues, but I'm still operational for basic assistance."
+            ),
+            "help": (
+                "Emergency Help: AutoBot systems are degraded. For immediate assistance, please:\n1. Try rephrasing your request\n2. Check system logs\n3. Restart the service if needed\n4. Contact technical support"
+            ),
+            "error": (
+                "An error occurred in the primary systems. AutoBot is operating in emergency mode. Your request has been noted and I'll assist as best I can."
+            ),
+            "status": (
+                f"AutoBot Emergency Status - {time.strftime('%Y-%m-%d %H:%M:%S')}: Basic functions operational, primary LLM systems unavailable."
+            ),
         }
 
     def _create_structured_messages(
@@ -164,7 +174,9 @@ class LLMFailsafeAgent:
         # Add system message with structured instructions
         system_content = {
             "role": "system",
-            "instructions": "You are AutoBot, an advanced autonomous AI platform specifically designed for Linux system administration and intelligent task automation. You are NOT a Meta AI model or related to Transformers. You are an enterprise-grade automation platform with 20+ specialized AI agents, expert Linux knowledge, and multi-modal processing capabilities.",
+            "instructions": (
+                "You are AutoBot, an advanced autonomous AI platform specifically designed for Linux system administration and intelligent task automation. You are NOT a Meta AI model or related to Transformers. You are an enterprise-grade automation platform with 20+ specialized AI agents, expert Linux knowledge, and multi-modal processing capabilities."
+            ),
             "response_format": {
                 "type": "conversational",
                 "style": "professional but friendly",
@@ -199,7 +211,9 @@ class LLMFailsafeAgent:
                 system_content["context_info"]["knowledge_base"] = {
                     "documents_found": context["kb_documents_found"],
                     "has_context": True,
-                    "instruction": "Use the provided knowledge base context to inform your response. Cite sources when using KB information.",
+                    "instruction": (
+                        "Use the provided knowledge base context to inform your response. Cite sources when using KB information."
+                    ),
                 }
 
             if context.get("response_type"):

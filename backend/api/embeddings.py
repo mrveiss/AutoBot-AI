@@ -233,7 +233,9 @@ async def refresh_embedding_models(provider_name: str):
                 status_code=400,
                 content={
                     "status": "error",
-                    "message": f"Model refresh not implemented for provider: {provider_name}",
+                    "message": (
+                        f"Model refresh not implemented for provider: {provider_name}"
+                    ),
                 },
             )
 

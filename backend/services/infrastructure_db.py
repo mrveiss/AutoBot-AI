@@ -663,9 +663,11 @@ class InfrastructureDB:
                 "total_roles": session.query(InfraRole).count(),
                 "total_deployments": session.query(InfraDeployment).count(),
                 "deployments_by_status": {},
-                "active_credentials": session.query(InfraCredential)
-                .filter(InfraCredential.is_active == True)
-                .count(),
+                "active_credentials": (
+                    session.query(InfraCredential)
+                    .filter(InfraCredential.is_active == True)
+                    .count()
+                ),
             }
 
             # Count hosts by status

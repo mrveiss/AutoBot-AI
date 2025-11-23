@@ -268,10 +268,12 @@ async def execute_workflow(
             return {
                 "success": False,
                 "type": "complex_workflow_blocked",
-                "result": "Complex workflow orchestration is temporarily "
-                "disabled due to blocking operations. This request "
-                "requires multi-agent coordination which is not yet "
-                "available in the current implementation.",
+                "result": (
+                    "Complex workflow orchestration is temporarily "
+                    "disabled due to blocking operations. This request "
+                    "requires multi-agent coordination which is not yet "
+                    "available in the current implementation."
+                ),
                 "complexity": result.get("complexity", "unknown"),
                 "suggested_agents": result.get("suggested_agents", []),
             }

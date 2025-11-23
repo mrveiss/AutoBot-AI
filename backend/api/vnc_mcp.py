@@ -78,7 +78,9 @@ async def get_vnc_mcp_tools() -> List[MCPTool]:
                     "vnc_type": {
                         "type": "string",
                         "enum": ["desktop", "browser"],
-                        "description": "Which VNC to check: 'desktop' (main machine) or 'browser' (Playwright headed mode)",
+                        "description": (
+                            "Which VNC to check: 'desktop' (main machine) or 'browser' (Playwright headed mode)"
+                        ),
                         "default": "browser",
                     }
                 },
@@ -151,7 +153,9 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Dict[str, Any]:
                     "accessible": status_data.get("accessible", False),
                     "endpoint": status_data.get("endpoint"),
                     "status_code": response.status,
-                    "message": f"VNC {vnc_type} is {'accessible' if status_data.get('accessible') else 'not accessible'}",
+                    "message": (
+                        f"VNC {vnc_type} is {'accessible' if status_data.get('accessible') else 'not accessible'}"
+                    ),
                 }
     except Exception as e:
         logger.error(f"Failed to check VNC status for {vnc_type}: {e}")
@@ -204,7 +208,9 @@ async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Dict[str, 
         "observation_count": len(filtered_activity),
         "observations": filtered_activity,
         "last_check": last_check.isoformat() if last_check else None,
-        "message": f"Retrieved {len(filtered_activity)} VNC observations from last {duration}s",
+        "message": (
+            f"Retrieved {len(filtered_activity)} VNC observations from last {duration}s"
+        ),
     }
 
 

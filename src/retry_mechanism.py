@@ -293,10 +293,12 @@ class RetryMechanism:
         return {
             **self.stats,
             "success_rate": (
-                (self.stats["total_attempts"] - self.stats["failed_operations"])
-                / max(1, self.stats["total_attempts"])
-            )
-            * 100,
+                (
+                    (self.stats["total_attempts"] - self.stats["failed_operations"])
+                    / max(1, self.stats["total_attempts"])
+                )
+                * 100
+            ),
         }
 
     def reset_stats(self):

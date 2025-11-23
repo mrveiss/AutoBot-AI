@@ -24,10 +24,16 @@ class DocumentParser:
             ".pdf": "application/pdf",
             # Microsoft Office
             ".doc": "application/msword",
-            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".docx": (
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
+            ".xlsx": (
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
             ".ppt": "application/vnd.ms-powerpoint",
-            ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".pptx": (
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            ),
             # OpenDocument
             ".odt": "application/vnd.oasis.opendocument.text",
             ".ods": "application/vnd.oasis.opendocument.spreadsheet",

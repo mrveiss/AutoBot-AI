@@ -76,8 +76,9 @@ async def get_frontend_config():
             },
         },
         "api": {
-            "timeout": config.get("backend.timeout", 60)
-            * 1000,  # Convert to milliseconds
+            "timeout": (
+                config.get("backend.timeout", 60) * 1000
+            ),  # Convert to milliseconds
             "retry_attempts": config.get("backend.max_retries", 3),
             "streaming": config.get("backend.streaming", False),
         },

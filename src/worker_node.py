@@ -97,7 +97,7 @@ class WorkerNode:
                 "count": psutil.cpu_count(logical=True),
                 "physical_count": psutil.cpu_count(logical=False),
                 "usage_percent": psutil.cpu_percent(interval=1),
-                "freq_mhz": (psutil.cpu_freq().current if psutil.cpu_freq() else "N/A"),
+                "freq_mhz": psutil.cpu_freq().current if psutil.cpu_freq() else "N/A",
             },
             "ram": {
                 "total_gb": round(psutil.virtual_memory().total / (1024**3), 2),

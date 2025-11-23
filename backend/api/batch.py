@@ -225,13 +225,15 @@ def _get_sessions_sync(chat_history_manager):
                     sessions.append(
                         {
                             "id": chat_id,
-                            "title": f"Chat {chat_id[-8:] if len(chat_id) > 8 else chat_id}",
-                            "created_at": datetime.fromtimestamp(
-                                stat.st_ctime
-                            ).isoformat(),
-                            "updated_at": datetime.fromtimestamp(
-                                stat.st_mtime
-                            ).isoformat(),
+                            "title": (
+                                f"Chat {chat_id[-8:] if len(chat_id) > 8 else chat_id}"
+                            ),
+                            "created_at": (
+                                datetime.fromtimestamp(stat.st_ctime).isoformat()
+                            ),
+                            "updated_at": (
+                                datetime.fromtimestamp(stat.st_mtime).isoformat()
+                            ),
                             "message_count": 0,  # Skip message count for speed
                         }
                     )

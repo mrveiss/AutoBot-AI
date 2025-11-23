@@ -173,9 +173,9 @@ class SystemResourceMonitor:
                 "cpu_percent": psutil.cpu_percent(),
                 "memory_mb": psutil.virtual_memory().used / 1024 / 1024,
                 "memory_percent": psutil.virtual_memory().percent,
-                "disk_percent": psutil.disk_usage("/").used
-                / psutil.disk_usage("/").total
-                * 100,
+                "disk_percent": (
+                    psutil.disk_usage("/").used / psutil.disk_usage("/").total * 100
+                ),
                 "timestamp": datetime.now().isoformat(),
             }
         except Exception as e:

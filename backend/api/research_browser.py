@@ -305,7 +305,9 @@ async def get_browser_info(session_id: str):
             "vnc_url": PLAYWRIGHT_VNC_URL.replace(
                 "vnc.html", ""
             ),  # NoVNC web interface
-            "direct_url": get_vnc_direct_url(),  # Intelligent VNC connection (5900 or 5901)
+            "direct_url": (
+                get_vnc_direct_url()
+            ),  # Intelligent VNC connection (5900 or 5901)
             "session_active": session.status == "active",
             "environment": "container" if os.path.exists("/.dockerenv") else "host",
         }

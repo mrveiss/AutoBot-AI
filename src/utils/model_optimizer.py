@@ -681,7 +681,9 @@ class ModelOptimizer:
                     {
                         "type": "info",
                         "message": "No model usage history available yet",
-                        "action": "Continue using the system to build performance profiles",
+                        "action": (
+                            "Continue using the system to build performance profiles"
+                        ),
                     }
                 )
                 return suggestions
@@ -700,9 +702,13 @@ class ModelOptimizer:
                 suggestions.append(
                     {
                         "type": "warning",
-                        "message": f"Found {len(underperforming)} underperforming models",
+                        "message": (
+                            f"Found {len(underperforming)} underperforming models"
+                        ),
                         "models": [m.name for m in underperforming],
-                        "action": "Consider avoiding these models or investigating issues",
+                        "action": (
+                            "Consider avoiding these models or investigating issues"
+                        ),
                     }
                 )
 
@@ -729,7 +735,9 @@ class ModelOptimizer:
                                 }
                                 for m in slow_models
                             ],
-                            "action": "Consider using faster alternatives for time-sensitive tasks",
+                            "action": (
+                                "Consider using faster alternatives for time-sensitive tasks"
+                            ),
                         }
                     )
 
@@ -747,7 +755,9 @@ class ModelOptimizer:
                         "type": "optimization",
                         "message": "Heavily used lightweight models detected",
                         "models": [m.name for m in lightweight_overused],
-                        "action": "Consider upgrading to more capable models for better quality",
+                        "action": (
+                            "Consider upgrading to more capable models for better quality"
+                        ),
                     }
                 )
 
@@ -763,9 +773,13 @@ class ModelOptimizer:
                     suggestions.append(
                         {
                             "type": "resource",
-                            "message": "System has available resources for larger models",
+                            "message": (
+                                "System has available resources for larger models"
+                            ),
                             "available_models": [m.name for m in large_models],
-                            "action": "Consider using more capable models for better results",
+                            "action": (
+                                "Consider using more capable models for better results"
+                            ),
                         }
                     )
 

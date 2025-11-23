@@ -194,7 +194,9 @@ class UnifiedConfigManager:
                         "provider": "ollama",
                         "providers": {
                             "ollama": {
-                                "endpoint": f"http://{ollama_host}:{ollama_port}/api/generate",
+                                "endpoint": (
+                                    f"http://{ollama_host}:{ollama_port}/api/generate"
+                                ),
                                 "host": f"http://{ollama_host}:{ollama_port}",
                                 "models": [],
                                 "selected_model": os.getenv(
@@ -207,7 +209,9 @@ class UnifiedConfigManager:
                         "provider": "ollama",
                         "providers": {
                             "ollama": {
-                                "endpoint": f"http://{ollama_host}:{ollama_port}/api/embeddings",
+                                "endpoint": (
+                                    f"http://{ollama_host}:{ollama_port}/api/embeddings"
+                                ),
                                 "host": f"http://{ollama_host}:{ollama_port}",
                                 "models": [],
                                 "selected_model": os.getenv(
@@ -616,8 +620,12 @@ class UnifiedConfigManager:
                         "ollama": {
                             "selected_model": self.get_selected_model(),
                             "models": [],
-                            "endpoint": f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}/api/generate",
-                            "host": f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}",
+                            "endpoint": (
+                                f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}/api/generate"
+                            ),
+                            "host": (
+                                f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
+                            ),
                         }
                     },
                 },
@@ -649,10 +657,12 @@ class UnifiedConfigManager:
         return {
             "ollama": {
                 "selected_model": selected_model,
-                "models": backend_llm.get("local", {})
-                .get("providers", {})
-                .get("ollama", {})
-                .get("models", []),
+                "models": (
+                    backend_llm.get("local", {})
+                    .get("providers", {})
+                    .get("ollama", {})
+                    .get("models", [])
+                ),
                 "endpoint": ollama_endpoint,
             },
             "unified": backend_llm,  # New unified format
@@ -669,7 +679,9 @@ class UnifiedConfigManager:
             "server_port": int(
                 os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT))
             ),
-            "api_endpoint": f"http://localhost:{os.getenv('AUTOBOT_BACKEND_PORT', str(NetworkConstants.BACKEND_PORT))}",
+            "api_endpoint": (
+                f"http://localhost:{os.getenv('AUTOBOT_BACKEND_PORT', str(NetworkConstants.BACKEND_PORT))}"
+            ),
             "timeout": 60,
             "max_retries": 3,
             "streaming": False,

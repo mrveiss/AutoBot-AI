@@ -271,8 +271,8 @@ async def check_monitoring_health():
             "overall_health": status.system_health.get("status", "unknown"),
             "gpu_active": status.gpu_status.get("utilization_percent", 0) > 0,
             "npu_available": status.npu_status.get("openvino_support", False),
-            "memory_usage_percent": status.system_resources.get("memory", {}).get(
-                "percent", 0
+            "memory_usage_percent": (
+                status.system_resources.get("memory", {}).get("percent", 0)
             ),
             "timestamp": datetime.now().isoformat(),
         }
