@@ -1,9 +1,13 @@
 import { fileURLToPath } from 'node:url'
-import { mergeConfig, defineConfig, configDefaults } from 'vitest/config'
+import { mergeConfig, defineConfig, configDefaults, type UserConfig } from 'vitest/config'
 import viteConfig from './vite.config'
 
+// Issue #156 Fix: Define reporters outside to avoid type conflict (no as const - vitest expects mutable array)
+const reporters = process.env.CI ? ['junit', 'default'] : ['default']
+
+// Issue #156 Fix: Type assertion to resolve mergeConfig/defineConfig type conflict
 export default mergeConfig(
-  viteConfig,
+  viteConfig as UserConfig,
   defineConfig({
     test: {
       // Test environment setup
@@ -28,7 +32,8 @@ export default mergeConfig(
         reporter: ['text', 'json', 'html', 'lcov'],
         reportsDirectory: 'coverage',
         exclude: [
-          ...configDefaults.coverage.exclude,
+          // Issue #156 Fix: Ensure configDefaults.coverage.exclude is defined before spreading
+          ...(configDefaults.coverage?.exclude || []),
           'src/test/**',
           'src/**/*.d.ts',
           'src/**/*.config.ts',
@@ -56,10 +61,11 @@ export default mergeConfig(
       restoreMocks: true,
 
       // Reporter configuration
-      reporter: process.env.CI ? ['junit', 'default'] : ['default'],
+      // Issue #156 Fix: Use pre-defined reporters variable (plural 'reporters')
+      reporters: reporters,
       outputFile: {
         junit: 'test-results/junit.xml',
       },
     },
-  }),
+  }) as UserConfig,
 )

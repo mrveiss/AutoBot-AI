@@ -2,7 +2,8 @@ import { vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import type { Router } from 'vue-router'
-from src.constants import NetworkConstants, ServiceURLs
+// Issue #156 Fix: Corrected Python-style import to TypeScript syntax
+import { NetworkConstants, ServiceURLs } from '@/constants/network-constants'
 
 /**
  * Setup helpers for consistent test environment configuration
@@ -18,8 +19,9 @@ export const setupTestEnv = () => {
 // Mock window properties commonly used in components
 export const setupWindowMocks = () => {
   // Mock window.location
+  // Issue #156 Fix: Type assertion for window.location mock
   delete (window as any).location
-  window.location = {
+  ;(window as any).location = {
     ...window.location,
     href: 'http://localhost:3000/',
     origin: 'http://localhost:3000',
@@ -61,9 +63,10 @@ export const setupWindowMocks = () => {
   })
 
   // Mock notification API
+  // Issue #156 Fix: Type assertions for Notification mock
   global.Notification = vi.fn() as any
-  global.Notification.permission = 'granted'
-  global.Notification.requestPermission = vi.fn(() => Promise.resolve('granted'))
+  ;(global.Notification as any).permission = 'granted'
+  ;(global.Notification as any).requestPermission = vi.fn(() => Promise.resolve('granted'))
 }
 
 // Setup Pinia store for testing
@@ -93,7 +96,8 @@ export const setupTestRouter = (routes: any[] = []) => {
 
 // Mock fetch API with custom responses
 export const setupFetchMock = (responses: Record<string, any> = {}) => {
-  global.fetch = vi.fn((url: string, options?: any) => {
+  // Issue #156 Fix: Type url parameter as string | URL
+  global.fetch = vi.fn((url: string | URL, options?: any) => {
     const urlString = typeof url === 'string' ? url : url.toString()
     const method = options?.method || 'GET'
     const key = `${method} ${urlString}`
@@ -141,10 +145,11 @@ export const setupWebSocketMocks = () => {
   })) as any
 
   // WebSocket constants
-  global.WebSocket.CONNECTING = 0
-  global.WebSocket.OPEN = 1
-  global.WebSocket.CLOSING = 2
-  global.WebSocket.CLOSED = 3
+  // Issue #156 Fix: Type assertions for read-only WebSocket constants
+  ;(global.WebSocket as any).CONNECTING = 0
+  ;(global.WebSocket as any).OPEN = 1
+  ;(global.WebSocket as any).CLOSING = 2
+  ;(global.WebSocket as any).CLOSED = 3
 }
 
 // Setup console mocks to reduce test noise
