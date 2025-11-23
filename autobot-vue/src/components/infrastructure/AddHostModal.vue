@@ -272,17 +272,21 @@ async function handleSubmit() {
       .map(t => t.trim())
       .filter(t => t.length > 0)
 
-    // Prepare form data
-    const submitData = {
-      ...formData.value,
+    // Prepare form data - only include relevant auth field
+    const submitData: any = {
+      hostname: formData.value.hostname,
+      ip_address: formData.value.ip_address,
+      ssh_user: formData.value.ssh_user,
+      description: formData.value.description,
+      ansible_group: formData.value.ansible_group,
       tags
     }
 
-    // Remove empty/unused fields
+    // Add auth-specific field
     if (authType.value === 'key') {
-      submitData.ssh_password = undefined
+      submitData.ssh_key_path = formData.value.ssh_key_path
     } else {
-      submitData.ssh_key_path = undefined
+      submitData.ssh_password = formData.value.ssh_password
     }
 
     emit('submit', submitData)
