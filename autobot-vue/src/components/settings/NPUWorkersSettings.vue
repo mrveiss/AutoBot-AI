@@ -371,7 +371,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
-import { NetworkConstants } from '@/constants/network-constants.js'
+import { NetworkConstants } from '@/constants/network'
 import { useModal } from '@/composables/useModal'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import EmptyState from '@/components/ui/EmptyState.vue'

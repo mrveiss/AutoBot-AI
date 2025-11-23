@@ -3,7 +3,7 @@ import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { apiService } from '../api.js'
 // Issue #156 Fix: Corrected Python-style import to TypeScript syntax
-import { NetworkConstants, ServiceURLs } from '@/constants/network-constants'
+import { NetworkConstants, ServiceURLs } from '@/constants/network'
 import {
   createMockApiResponse,
   createMockChatMessage,
@@ -93,8 +93,9 @@ describe('API Service Integration Tests', () => {
       const result = await apiService.getChatHistory()
 
       expect(result.success).toBe(true)
-      expect(result.data.sessions).toHaveLength(2)
-      expect(result.data.sessions[0].name).toBe('Session 1')
+      // Issue #156 Fix: getChatHistory() returns ApiResponse<ChatMessage[]>, not { sessions: [] }
+      expect(result.data).toBeDefined()
+      expect(result.data).toHaveLength(2)
     })
 
     it('retrieves specific chat messages', async () => {
@@ -117,8 +118,9 @@ describe('API Service Integration Tests', () => {
       const result = await apiService.getChatMessages('chat-123')
 
       expect(result.success).toBe(true)
-      expect(result.data.messages).toHaveLength(2)
-      expect(result.data.chatId).toBe('chat-123')
+      // Issue #156 Fix: getChatMessages() returns ApiResponse<{ history: ChatMessage[] }>, not { messages, chatId }
+      expect(result.data).toBeDefined()
+      expect(result.data!.history).toHaveLength(2)
     })
 
     it('deletes chat history successfully', async () => {
@@ -199,7 +201,12 @@ describe('API Service Integration Tests', () => {
         })
       )
 
-      const result = await apiService.approveWorkflowStep('workflow-123', 'step-2')
+      // Issue #156 Fix: approveWorkflowStep expects WorkflowApproval object, not string
+      const result = await apiService.approveWorkflowStep('workflow-123', {
+        workflowId: 'workflow-123',
+        stepId: 'step-2',
+        approved: true
+      })
 
       expect(result.success).toBe(true)
       expect(result.data.approved).toBe(true)
@@ -584,7 +591,9 @@ describe('API Service Integration Tests', () => {
       const result = await apiService.getChatMessages('large-chat')
 
       expect(result.success).toBe(true)
-      expect(result.data.messages).toHaveLength(1000)
+      // Issue #156 Fix: getChatMessages() returns ApiResponse<{ history: ChatMessage[] }>, not { messages }
+      expect(result.data).toBeDefined()
+      expect(result.data!.history).toHaveLength(1000)
     })
   })
 })

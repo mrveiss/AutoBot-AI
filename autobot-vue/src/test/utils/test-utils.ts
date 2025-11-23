@@ -15,7 +15,8 @@ const testRoutes = [
 // Create test router
 export const createTestRouter = (routes = testRoutes, initialEntries = ['/']) => {
   const router = createRouter({
-    history: createMemoryHistory(initialEntries),
+    // Issue #156 Fix: createMemoryHistory() takes no arguments, use router.push() for initial route
+    history: createMemoryHistory(),
     routes,
   })
 
@@ -28,10 +29,11 @@ export const createTestRouter = (routes = testRoutes, initialEntries = ['/']) =>
 }
 
 // Enhanced render function with common setup
-export interface CustomRenderOptions extends Omit<RenderOptions, 'global'> {
+// Issue #156 Fix: RenderOptions<C> requires 1 type argument
+export interface CustomRenderOptions extends Omit<RenderOptions<any>, 'global'> {
   router?: boolean
   pinia?: boolean
-  global?: RenderOptions['global']
+  global?: RenderOptions<any>['global']
 }
 
 export const renderComponent = (
@@ -40,7 +42,8 @@ export const renderComponent = (
 ) => {
   const { router = false, pinia = false, global = {}, ...renderOptions } = options
 
-  const globalConfig: RenderOptions['global'] = {
+  // Issue #156 Fix: RenderOptions<C> requires 1 type argument
+  const globalConfig: RenderOptions<any>['global'] = {
     ...global,
     plugins: [
       ...(global.plugins || []),
@@ -137,10 +140,11 @@ export const createMockSettings = (overrides = {}) => ({
 })
 
 // Helper to create mock functions with return values
+// Issue #156 Fix: Vitest Mock<T> requires 0-1 type arguments, not 2
 export const createMockFn = <T extends (...args: any[]) => any>(
   returnValue?: ReturnType<T>
-): Mock<Parameters<T>, ReturnType<T>> => {
-  const mockFn = vi.fn() as Mock<Parameters<T>, ReturnType<T>>
+): Mock<T> => {
+  const mockFn = vi.fn() as Mock<T>
   if (returnValue !== undefined) {
     mockFn.mockReturnValue(returnValue)
   }
@@ -148,10 +152,11 @@ export const createMockFn = <T extends (...args: any[]) => any>(
 }
 
 // Helper to create mock functions that resolve with values
+// Issue #156 Fix: Vitest Mock<T> requires 0-1 type arguments, not 2
 export const createMockAsyncFn = <T extends (...args: any[]) => Promise<any>>(
   resolveValue?: Awaited<ReturnType<T>>
-): Mock<Parameters<T>, ReturnType<T>> => {
-  const mockFn = vi.fn() as Mock<Parameters<T>, ReturnType<T>>
+): Mock<T> => {
+  const mockFn = vi.fn() as Mock<T>
   if (resolveValue !== undefined) {
     mockFn.mockResolvedValue(resolveValue)
   }

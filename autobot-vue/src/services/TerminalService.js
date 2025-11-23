@@ -6,7 +6,7 @@
 import { reactive, ref } from 'vue';
 import appConfig from '@/config/AppConfig.js';
 import apiClient from '@/utils/ApiClient.js';
-import { NetworkConstants } from '@/constants/network-constants.js';
+import { NetworkConstants } from '@/constants/network';
 
 // Use singleton ApiClient instance for terminal operations
 

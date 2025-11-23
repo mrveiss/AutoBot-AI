@@ -197,7 +197,7 @@
 import { ref, onMounted, computed, onUnmounted } from 'vue'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import appConfig from '@/config/AppConfig.js'
-import { NetworkConstants } from '@/constants/network-constants.js'
+import { NetworkConstants } from '@/constants/network'
 import { formatTime } from '@/utils/formatHelpers'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
 

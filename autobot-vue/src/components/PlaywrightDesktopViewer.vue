@@ -42,7 +42,7 @@
 <script>
 import { ref, onMounted, onUnmounted } from 'vue';
 import appConfig from '@/config/AppConfig.js';
-import { NetworkConstants } from '@/constants/network-constants.js';
+import { NetworkConstants } from '@/constants/network';
 
 export default {
   name: 'PlaywrightDesktopViewer',

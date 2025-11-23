@@ -6,7 +6,7 @@
 import appConfig from '@/config/AppConfig.js';
 import errorHandler from '@/utils/ErrorHandler.js';
 import { EnhancedFetch } from '@/utils/ApiCircuitBreaker.js';
-import { NetworkConstants } from '@/constants/network-constants.js';
+import { NetworkConstants } from '@/constants/network';
 
 class ApiClient {
   constructor() {

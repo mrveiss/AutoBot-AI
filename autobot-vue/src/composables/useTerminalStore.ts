@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 // FIXED: Import NetworkConstants for default host IPs
-import { NetworkConstants } from '@/constants/network-constants.js'
+import { NetworkConstants } from '@/constants/network'
 
 // Host configuration interface
 export interface HostConfig {
@@ -96,8 +96,10 @@ async function loadHostsFromBackend(): Promise<void> {
   try {
     const config = await appConfig.getBackendConfig()
 
-    // Check both config.hosts and config.config.hosts for compatibility
-    const hosts = config?.hosts || config?.config?.hosts
+    // Issue #156 Fix: TypeScript doesn't know about hosts/config.hosts properties on AppConfig
+    // Use type assertion to access dynamic properties
+    const configAny = config as any
+    const hosts = configAny?.hosts || configAny?.config?.hosts
 
     if (hosts && Array.isArray(hosts) && hosts.length > 0) {
       // Validate that each host has required fields
@@ -352,10 +354,15 @@ export const useTerminalStore = defineStore('terminal', () => {
     requestAgentControl,
     cleanup
   }
-}, {
+},
+// Issue #156 Fix: pinia-plugin-persistedstate types not properly integrated
+// persist and paths options are valid but TypeScript doesn't recognize them
+// @ts-expect-error - pinia-plugin-persistedstate options
+{
   persist: {
     key: 'autobot-terminal-store',
     storage: localStorage,
+    // @ts-expect-error - pinia-plugin-persistedstate paths option
     paths: ['selectedHost'] // Only persist selectedHost (Map objects don't serialize to JSON correctly)
   }
 })

@@ -1,6 +1,6 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosResponse } from 'axios'
-import { NetworkConstants } from '@/constants/network-constants.js'
+import { NetworkConstants } from '@/constants/network'
 
 export interface ChatMessage {
   id: string

@@ -1,6 +1,6 @@
 import { vi, type Mock } from 'vitest'
 import { createMockApiResponse } from '../utils/test-utils'
-import { NetworkConstants } from '@/constants/network-constants.js'
+import { NetworkConstants } from '@/constants/network'
 
 // Mock API client that matches the real ApiClient interface
 export class MockApiClient {

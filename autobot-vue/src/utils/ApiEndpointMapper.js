@@ -3,7 +3,7 @@
  * Provides graceful fallback handling and caching for API endpoint calls
  */
 
-import { NetworkConstants } from '@/constants/network-constants.js';
+import { NetworkConstants } from '@/constants/network';
 
 class ApiEndpointMapper {
   constructor() {
