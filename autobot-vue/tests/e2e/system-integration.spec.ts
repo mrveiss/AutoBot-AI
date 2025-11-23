@@ -16,7 +16,7 @@ test.describe('System Integration and Stability Tests', () => {
     page.on('console', msg => {
       if (msg.type() === 'error') {
         criticalErrors.push(msg.text());
-      } else if (msg.type() === 'warn') {
+      } else if (msg.type() === 'warning') {
         warnings.push(msg.text());
       }
     });
@@ -138,7 +138,7 @@ test.describe('System Integration and Stability Tests', () => {
       });
       
       ws.on('socketerror', error => {
-        wsErrors.push({ url: ws.url(), error: error.message });
+        wsErrors.push({ url: ws.url(), error: error });
       });
     });
 
