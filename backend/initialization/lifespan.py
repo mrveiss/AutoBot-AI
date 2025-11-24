@@ -198,9 +198,71 @@ async def initialize_background_services(app: FastAPI):
             app.state.memory_graph = memory_graph
             app_state["memory_graph"] = memory_graph
             logger.info("✅ [ 85%] Memory Graph: Memory graph initialized successfully")
+
+            # Initialize Graph-RAG Service - depends on knowledge base and memory graph
+            logger.info("✅ [ 87%] Graph-RAG: Initializing graph-aware RAG service...")
+            try:
+                from backend.services.rag_service import RAGService
+                from src.services.graph_rag_service import GraphRAGService
+
+                if app.state.knowledge_base:
+                    rag_service = RAGService(
+                        knowledge_base=app.state.knowledge_base,
+                        enable_advanced_rag=True,
+                        timeout_seconds=10.0,
+                    )
+                    await rag_service.initialize()
+
+                    graph_rag_service = GraphRAGService(
+                        rag_service=rag_service,
+                        memory_graph=memory_graph,
+                        graph_weight=0.3,
+                        enable_entity_extraction=True,
+                    )
+                    app.state.graph_rag_service = graph_rag_service
+                    app_state["graph_rag_service"] = graph_rag_service
+                    logger.info(
+                        "✅ [ 87%] Graph-RAG: Graph-aware RAG service initialized successfully"
+                    )
+                else:
+                    logger.info(
+                        "🔄 [ 87%] Graph-RAG: Skipped (knowledge base not available)"
+                    )
+            except Exception as graph_rag_error:
+                logger.warning(
+                    f"Graph-RAG service initialization failed: {graph_rag_error}"
+                )
+                app.state.graph_rag_service = None
+
+            # Initialize Entity Extractor - depends on memory graph
+            logger.info("✅ [ 88%] Entity Extractor: Initializing entity extractor...")
+            try:
+                from src.agents.graph_entity_extractor import GraphEntityExtractor
+                from src.agents.knowledge_extraction_agent import (
+                    KnowledgeExtractionAgent,
+                )
+
+                knowledge_extraction_agent = KnowledgeExtractionAgent()
+                entity_extractor = GraphEntityExtractor(
+                    extraction_agent=knowledge_extraction_agent,
+                    memory_graph=memory_graph,
+                    confidence_threshold=0.6,
+                    enable_relationship_inference=True,
+                )
+                app.state.entity_extractor = entity_extractor
+                app_state["entity_extractor"] = entity_extractor
+                logger.info(
+                    "✅ [ 88%] Entity Extractor: Entity extractor initialized successfully"
+                )
+            except Exception as entity_error:
+                logger.warning(f"Entity extractor initialization failed: {entity_error}")
+                app.state.entity_extractor = None
+
         except Exception as memory_error:
             logger.warning(f"Memory graph initialization failed: {memory_error}")
             app.state.memory_graph = None
+            app.state.graph_rag_service = None
+            app.state.entity_extractor = None
 
         # Initialize Background LLM Sync - NON-CRITICAL
         logger.info(
