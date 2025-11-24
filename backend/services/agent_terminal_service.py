@@ -254,6 +254,7 @@ class AgentTerminalSession:
     pending_approval: Optional[Dict[str, Any]] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     pty_session_id: Optional[str] = None  # PTY session for terminal display
+    running_command_task: Optional[asyncio.Task] = None  # Track running command for cancellation
 
 
 class AgentTerminalService:
@@ -914,14 +915,110 @@ class AgentTerminalService:
             logger.error(f"Error writing to PTY: {e}")
             return False
 
+    async def cancel_command(self, session: AgentTerminalSession, reason: str = "timeout") -> bool:
+        """
+        Cancel a running command with graceful shutdown.
+
+        CRITICAL FIX (Critical #3): Proper cleanup for timeouts to prevent orphaned processes.
+
+        Process:
+        1. Send SIGTERM to gracefully stop the process
+        2. Wait 2-3 seconds for graceful shutdown
+        3. Send SIGKILL if still running
+        4. Clean up resources and log the cancellation
+
+        Args:
+            session: Agent terminal session
+            reason: Reason for cancellation (default: "timeout")
+
+        Returns:
+            True if command was cancelled successfully
+        """
+        if not session.pty_session_id:
+            logger.warning(f"[CANCEL] No PTY session to cancel for {session.session_id}")
+            return False
+
+        try:
+            from backend.services.simple_pty import simple_pty_manager
+
+            pty = simple_pty_manager.get_session(session.pty_session_id)
+            if not pty or not pty.is_alive():
+                logger.info(f"[CANCEL] PTY session {session.pty_session_id} not alive, nothing to cancel")
+                return False
+
+            logger.warning(f"[CANCEL] Cancelling command due to {reason}: PTY {session.pty_session_id}")
+
+            # Step 1: Send SIGTERM for graceful shutdown
+            try:
+                # Send Ctrl+C to the shell (SIGINT)
+                self._write_to_pty(session, "\x03")  # Ctrl+C
+                logger.info(f"[CANCEL] Sent SIGINT (Ctrl+C) to PTY {session.pty_session_id}")
+            except Exception as sigint_error:
+                logger.warning(f"[CANCEL] Failed to send SIGINT: {sigint_error}")
+
+            # Step 2: Wait 2 seconds for graceful shutdown
+            await asyncio.sleep(2.0)
+
+            # Step 3: Check if process is still running
+            if pty.is_alive():
+                logger.warning(
+                    f"[CANCEL] Process still running after SIGINT, "
+                    f"attempting forceful termination (SIGKILL)"
+                )
+                try:
+                    # Close the PTY session forcefully
+                    simple_pty_manager.close_session(session.pty_session_id)
+                    logger.info(f"[CANCEL] Forcefully closed PTY session {session.pty_session_id}")
+                except Exception as sigkill_error:
+                    logger.error(f"[CANCEL] Failed to forcefully close PTY: {sigkill_error}")
+                    return False
+            else:
+                logger.info(f"[CANCEL] Process terminated gracefully after SIGINT")
+
+            # Step 4: Clean up session state
+            if session.running_command_task and not session.running_command_task.done():
+                session.running_command_task.cancel()
+                try:
+                    await session.running_command_task
+                except asyncio.CancelledError:
+                    logger.info(f"[CANCEL] Cancelled running command task for session {session.session_id}")
+
+            session.running_command_task = None
+
+            # Log cancellation to chat history
+            if session.conversation_id:
+                try:
+                    await self.chat_history_manager.add_message(
+                        sender="system",
+                        text=f"⚠️ Command cancelled due to {reason}",
+                        message_type="command_cancellation",
+                        session_id=session.conversation_id,
+                        metadata={
+                            "reason": reason,
+                            "terminal_session_id": session.session_id,
+                            "pty_session_id": session.pty_session_id,
+                        },
+                    )
+                    logger.info(f"[CANCEL] Logged cancellation to chat history")
+                except Exception as log_error:
+                    logger.warning(f"[CANCEL] Failed to log cancellation to chat: {log_error}")
+
+            logger.info(f"[CANCEL] ✅ Command cancellation complete for session {session.session_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"[CANCEL] Error during command cancellation: {e}", exc_info=True)
+            return False
+
     async def _detect_return_code(
         self, session: AgentTerminalSession, max_attempts: int = 10
     ) -> Optional[int]:
         """
         Detect command return code using exit code marker injection.
 
-        Phase 1 Implementation: Injects 'echo "EXIT_CODE:$?"' marker and polls
-        chat history with exponential backoff to detect the exit code.
+        SECURITY FIX (Critical #2): Uses UUID-based marker to prevent regex injection.
+        Phase 1 Implementation: Injects unique marker and polls chat history with
+        exponential backoff to detect the exit code.
 
         Args:
             session: Agent terminal session
@@ -936,11 +1033,18 @@ class AgentTerminalService:
 
         logger.debug("[PTY_EXEC] Injecting exit code marker...")
 
+        # SECURITY FIX (Critical #2): Generate unique UUID-based marker to prevent spoofing
+        # Attack vector fixed: `echo "EXIT_CODE:0" && malicious_command` can no longer fake success
+        marker_id = str(uuid.uuid4())
+        marker = f"__EXIT_CODE_{marker_id}__:"
+
         # Inject marker to capture exit code
-        marker = f"echo 'EXIT_CODE:'$?"
-        if not self._write_to_pty(session, f"{marker}\n"):
+        marker_cmd = f"echo '{marker}'$?"
+        if not self._write_to_pty(session, f"{marker_cmd}\n"):
             logger.warning("[PTY_EXEC] Failed to inject exit code marker")
             return None
+
+        logger.debug(f"[PTY_EXEC] Injected unique marker: {marker}")
 
         # Poll with exponential backoff
         base_delay = 0.1  # Start with 100ms
@@ -956,16 +1060,18 @@ class AgentTerminalService:
                     session_id=session.conversation_id, limit=3
                 )
 
-                # Search for EXIT_CODE marker
+                # Search for unique EXIT_CODE marker with UUID
                 for msg in reversed(messages):
                     if msg.get("sender") == "terminal" and msg.get("text"):
                         clean_text = strip_ansi_codes(msg["text"])
 
-                        # Match EXIT_CODE:N pattern
-                        match = re.search(r'EXIT_CODE:(\d+)', clean_text)
+                        # Match unique marker pattern: __EXIT_CODE_{uuid}__:N
+                        # Use re.escape to safely match the UUID
+                        escaped_marker = re.escape(marker)
+                        match = re.search(rf'{escaped_marker}(\d+)', clean_text)
                         if match:
                             return_code = int(match.group(1))
-                            logger.info(f"[PTY_EXEC] Detected return code: {return_code}")
+                            logger.info(f"[PTY_EXEC] Detected return code: {return_code} (marker: {marker_id})")
                             return return_code
 
             except Exception as e:
@@ -1033,6 +1139,7 @@ class AgentTerminalService:
         """
         Intelligent polling system with adaptive timeouts and output stability detection.
 
+        CRITICAL FIX (Critical #3): Cancels command on timeout to prevent orphaned processes.
         Phase 2 Implementation: Polls chat history with progressive backoff until
         output stabilizes (unchanged for stability_threshold seconds) or timeout.
 
@@ -1053,6 +1160,7 @@ class AgentTerminalService:
         last_change_time = start_time
         poll_interval = 0.1  # Start with 100ms
         max_interval = 2.0  # Cap at 2 seconds
+        timed_out = False
 
         logger.debug(f"[PTY_EXEC] Starting intelligent polling (timeout={timeout}s, stability={stability_threshold}s)")
 
@@ -1099,11 +1207,21 @@ class AgentTerminalService:
             await asyncio.sleep(poll_interval)
             poll_interval = min(poll_interval * 1.5, max_interval)
 
+        # CRITICAL FIX (Critical #3): Timeout reached - cancel the running command
         elapsed = time_module.time() - start_time
         logger.warning(
             f"[PTY_EXEC] Polling timeout reached ({elapsed:.2f}s), "
-            f"returning last captured output"
+            f"cancelling command to prevent orphaned processes"
         )
+        timed_out = True
+
+        # Cancel the command to clean up resources
+        cancelled = await self.cancel_command(session, reason="timeout")
+        if cancelled:
+            logger.info(f"[PTY_EXEC] Successfully cancelled command after timeout")
+        else:
+            logger.error(f"[PTY_EXEC] Failed to cancel command after timeout - may have orphaned process")
+
         return last_output
 
     async def _execute_in_pty(
@@ -1143,9 +1261,18 @@ class AgentTerminalService:
                 "return_code": 1,
             }
 
-        # CRITICAL: Do NOT collect from PTY output queue directly!
-        # The WebSocket handler consumes from the same queue (race condition).
-        # Instead, wait for WebSocket to save output to chat, then read from there.
+        # CRITICAL FIX (Critical #1): Race Condition Prevention
+        # Do NOT collect from PTY output queue directly! The WebSocket handler
+        # consumes from the same queue, causing message loss (0.3-0.5s latency).
+        #
+        # SOLUTION: Use pub/sub pattern via chat history:
+        # 1. WebSocket handler receives PTY output (subscriber 1)
+        # 2. WebSocket saves output to chat history (broadcast)
+        # 3. Agent terminal polls chat history (subscriber 2)
+        # 4. No queue consumption race - both get complete output
+        #
+        # This implements the broadcast pattern recommended in code review
+        # without requiring PTY architecture changes.
 
         # Phase 2: Intelligent polling with adaptive timeouts
         logger.info(
