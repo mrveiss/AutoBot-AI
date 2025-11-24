@@ -944,10 +944,7 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
                         operation="Writing to ChromaDB",
                         current=items_stored,
                         total=total_items,
-                        current_file=(
-                            f"Batch {i//BATCH_SIZE + 1}/{(total_items + BATCH_SIZE -"
-                            f"1) // BATCH_SIZE}"
-                        )
+                        current_file=f"Batch {i//BATCH_SIZE + 1}/{(total_items + BATCH_SIZE - 1) // BATCH_SIZE}"
                     )
 
                     logger.info(
