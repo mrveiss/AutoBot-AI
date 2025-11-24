@@ -237,9 +237,10 @@
 </template>
 
 <script lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
+import { useWebResearchStore } from '@/stores/useWebResearchStore'
 
 interface UpdateMessage {
   text: string
@@ -252,50 +253,19 @@ interface TestResult {
   [key: string]: any
 }
 
-interface RateLimiter {
-  current_requests?: number
-  max_requests?: number
-}
-
-interface CacheStats {
-  cache_size?: number
-  rate_limiter?: RateLimiter
-}
-
-interface ResearchStatus {
-  enabled: boolean
-  preferred_method: string
-  cache_stats: CacheStats | null
-  circuit_breakers: any
-}
-
 export default {
   name: 'WebResearchSettings',
   setup() {
-    // Reactive state
+    // Use centralized Pinia store
+    const webResearchStore = useWebResearchStore()
+
+    // Local UI state
     const updateMessage = ref<UpdateMessage | null>(null)
     const testResult = ref<TestResult | null>(null)
 
-    const researchStatus = reactive<ResearchStatus>({
-      enabled: false,
-      preferred_method: 'basic',
-      cache_stats: null,
-      circuit_breakers: null
-    })
-
-    const researchSettings = reactive({
-      enabled: false,
-      require_user_confirmation: true,
-      preferred_method: 'basic',
-      max_results: 5,
-      timeout_seconds: 30,
-      auto_research_threshold: 0.3,
-      rate_limit_requests: 5,
-      rate_limit_window: 60,
-      store_results_in_kb: true,
-      anonymize_requests: true,
-      filter_adult_content: true
-    })
+    // Direct refs from store (for v-model compatibility)
+    const researchSettings = webResearchStore.settings
+    const researchStatus = webResearchStore.status
 
     // Show message utility
     const showMessage = (text: string, type: string = 'info') => {
@@ -312,14 +282,14 @@ export default {
         const statusResponse = await apiClient.get('/web-research/status')
         const statusData = await statusResponse.json()
         if (statusData.status === 'success') {
-          Object.assign(researchStatus, statusData)
+          webResearchStore.updateStatus(statusData)
         }
 
         // Load settings
         const settingsResponse = await apiClient.get('/web-research/settings')
         const settingsData = await settingsResponse.json()
         if (settingsData.status === 'success') {
-          Object.assign(researchSettings, settingsData.settings)
+          webResearchStore.updateSettings(settingsData.settings)
         }
       },
       {
