@@ -19,6 +19,7 @@ from fastapi import HTTPException, Request
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.catalog_http_exceptions import raise_auth_error, raise_server_error
+from src.utils.redis_client import get_redis_client
 
 logger = structlog.get_logger()
 

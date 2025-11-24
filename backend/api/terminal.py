@@ -121,6 +121,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from backend.services.simple_pty import simple_pty_manager
 from src.chat_history_manager import ChatHistoryManager
 from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
@@ -798,7 +799,7 @@ class ConsolidatedTerminalWebSocket:
             if is_password:
                 try:
                     self.pty_process.set_echo(True)
-                except:
+                except Exception:
                     pass
 
             await self.send_message(
@@ -1913,7 +1914,7 @@ async def terminal_health_check():
     """
     try:
         # Check if manager is operational
-        active_sessions = len(manager.sessions)
+        active_sessions = len(simple_pty_manager.sessions)
 
         return {
             "status": "healthy",
@@ -1926,7 +1927,7 @@ async def terminal_health_check():
             },
             "metrics": {
                 "active_sessions": active_sessions,
-                "manager_initialized": manager is not None,
+                "manager_initialized": simple_pty_manager is not None,
             },
         }
     except Exception as e:
@@ -1966,7 +1967,7 @@ async def get_terminal_system_status():
                 "agent_integration": True,  # Chat Terminal feature
             },
             "session_info": {
-                "active_sessions": len(manager.sessions),
+                "active_sessions": len(simple_pty_manager.sessions),
                 "max_concurrent_sessions": None,  # No hard limit
             },
         }
@@ -2148,4 +2149,4 @@ async def get_terminal_statistics(session_id: str = None):
         GET /api/terminal/stats - Get overall system statistics
         GET /api/terminal/stats?session_id=abc123 - Get stats for session abc123
     """
-    return manager.get_terminal_stats(session_id)
+    return session_manager.get_terminal_stats(session_id)

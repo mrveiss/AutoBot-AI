@@ -422,8 +422,8 @@ describe('useErrorHandler Composable', () => {
               return 'success'
             },
             {
-              onSuccess: () => callOrder.push('onSuccess'),
-              onFinally: () => callOrder.push('onFinally')
+              onSuccess: () => { callOrder.push('onSuccess') },
+              onFinally: () => { callOrder.push('onFinally') }
             }
           )
           return { execute }
@@ -439,7 +439,7 @@ describe('useErrorHandler Composable', () => {
 
     it('should handle async callbacks', async () => {
       const onSuccess = vi.fn(async () => {
-        return 'done'
+        // Async callback - no return needed
       })
 
       const TestComponent = defineComponent({

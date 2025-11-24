@@ -434,7 +434,7 @@ class ChatWorkflowManager:
 
                 # Initialize Redis client for conversation history
                 try:
-                    self.redis_client = await get_redis_client(
+                    self.redis_client = await get_redis_manager(
                         async_client=True, database="main"
                     )
                     logger.info("✅ Redis client initialized for conversation history")

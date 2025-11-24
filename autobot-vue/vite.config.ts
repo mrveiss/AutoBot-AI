@@ -259,6 +259,9 @@ export default defineConfig({
 
         // Improved cache-busting strategy
         assetFileNames: (assetInfo) => {
+          if (!assetInfo.name) {
+            return `assets/[name]-[hash:12][extname]`;
+          }
           const info = assetInfo.name.split('.');
           const ext = info[info.length - 1];
           if (/png|jpe?g|svg|gif|tiff|bmp|ico/i.test(ext)) {

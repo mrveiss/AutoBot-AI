@@ -355,7 +355,7 @@ export const mockWebSocketBehavior = {
         close: vi.fn(),
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
-        onerror: null,
+        onerror: null as any,
       }
 
       // Simulate connection timeout after 30 seconds

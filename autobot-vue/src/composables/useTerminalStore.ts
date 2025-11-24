@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import appConfig from '@/config/AppConfig.js'
+import type { BackendConfig } from '@/types/app-config'
 // FIXED: Import NetworkConstants for default host IPs
 import { NetworkConstants } from '@/constants/network'
 
@@ -94,16 +95,15 @@ export function getAvailableHosts(): HostConfig[] {
 // Load hosts configuration from backend
 async function loadHostsFromBackend(): Promise<void> {
   try {
-    const config = await appConfig.getBackendConfig()
+    const config: BackendConfig = await appConfig.getBackendConfig()
 
-    // Issue #156 Fix: TypeScript doesn't know about hosts/config.hosts properties on AppConfig
-    // Use type assertion to access dynamic properties
-    const configAny = config as any
-    const hosts = configAny?.hosts || configAny?.config?.hosts
+    // Issue #156 Fix: Use typed AppConfig with BackendConfig interface
+    // Proper type safety without type assertions
+    const hosts = config.hosts || config.config?.hosts
 
     if (hosts && Array.isArray(hosts) && hosts.length > 0) {
       // Validate that each host has required fields
-      const validHosts = hosts.filter((h: any) => h.id && h.name && h.ip)
+      const validHosts = hosts.filter((h) => h.id && h.name && h.ip)
       if (validHosts.length > 0) {
         // Backend provided valid host configuration
         AVAILABLE_HOSTS = validHosts
@@ -189,9 +189,12 @@ export const useTerminalStore = defineStore('terminal', () => {
 
   const removeSession = (sessionId: string): void => {
     // Ensure sessions.value is a Map (handles persistence/hydration issues)
+    // Type-safe conversion: When Pinia persists/restores, Map becomes Record<string, TerminalSession>
     if (!(sessions.value instanceof Map)) {
-      const entries = Object.entries(sessions.value as any)
-      sessions.value = new Map(entries as any)
+      type SessionEntry = [string, TerminalSession]
+      const plainObject: Record<string, TerminalSession> = sessions.value as unknown as Record<string, TerminalSession>
+      const entries: SessionEntry[] = Object.entries(plainObject)
+      sessions.value = new Map(entries)
     }
 
     sessions.value.delete(sessionId)
@@ -297,10 +300,13 @@ export const useTerminalStore = defineStore('terminal', () => {
   }
 
   // Ensure sessions is a Map (handles persistence/hydration issues)
+  // Type-safe conversion: When Pinia persists/restores, Map becomes Record<string, TerminalSession>
   const ensureSessionsMap = (): Map<string, TerminalSession> => {
     if (!(sessions.value instanceof Map)) {
-      const entries = Object.entries(sessions.value as any)
-      sessions.value = new Map(entries as any)
+      type SessionEntry = [string, TerminalSession]
+      const plainObject: Record<string, TerminalSession> = sessions.value as unknown as Record<string, TerminalSession>
+      const entries: SessionEntry[] = Object.entries(plainObject)
+      sessions.value = new Map(entries)
     }
     return sessions.value
   }
@@ -354,13 +360,10 @@ export const useTerminalStore = defineStore('terminal', () => {
     requestAgentControl,
     cleanup
   }
-},
-// @ts-ignore - pinia-plugin-persistedstate options
-{
+}, {
   persist: {
     key: 'autobot-terminal-store',
     storage: localStorage,
-    // @ts-ignore - pinia-plugin-persistedstate paths option
     paths: ['selectedHost'] // Only persist selectedHost (Map objects don't serialize to JSON correctly)
   }
 })

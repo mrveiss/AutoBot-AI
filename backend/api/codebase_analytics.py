@@ -676,8 +676,6 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
     - result: final results when completed
     - error: error message if failed
     """
-    global indexing_tasks
-
     try:
         logger.info(
             f"[Task {task_id}] Starting background codebase indexing for: {root_path}"
@@ -1048,8 +1046,6 @@ async def get_indexing_status(task_id: str):
     - result: Final indexing results (if completed)
     - error: Error message (if failed)
     """
-    global indexing_tasks
-
     if task_id not in indexing_tasks:
         return JSONResponse(
             status_code=404,
@@ -1181,7 +1177,6 @@ async def get_hardcoded_values(hardcode_type: Optional[str] = None):
                     all_hardcodes.extend(json.loads(hardcodes_data))
         storage_type = "redis"
     else:
-        global _in_memory_storage
         if not _in_memory_storage:
             return JSONResponse(
                 {
@@ -1485,7 +1480,6 @@ async def clear_codebase_cache():
         storage_type = "redis"
     else:
         # Clear in-memory storage
-        global _in_memory_storage
         if _in_memory_storage:
             keys_to_delete = []
             for key in _in_memory_storage.scan_iter("codebase:*"):

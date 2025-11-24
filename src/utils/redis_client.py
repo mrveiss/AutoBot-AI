@@ -74,6 +74,7 @@ from enum import Enum
 from pathlib import Path
 from threading import Lock
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+from weakref import WeakSet
 
 import redis
 import redis.asyncio as async_redis

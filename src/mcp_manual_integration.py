@@ -273,8 +273,8 @@ class MCPManualService:
                 return {
                     "name": command,
                     "section": "1",  # Default section
-                    "description": self._extract_description(manual_text),
-                    "synopsis": self._extract_synopsis(manual_text),
+                    "description": self._extract_description(command, manual_text),
+                    "synopsis": self._extract_synopsis(command, manual_text),
                     "content": manual_text,
                     "source": "system_manual",
                 }
@@ -340,7 +340,7 @@ class MCPManualService:
                 logger.warning(f"Failed to parse manual text: {e}")
         return None
 
-    def _extract_description(self, manual_text: str) -> str:
+    def _extract_description(self, command: str, manual_text: str) -> str:
         """Extract description from manual text."""
         lines = manual_text.split("\n")
         for i, line in enumerate(lines):
@@ -352,7 +352,7 @@ class MCPManualService:
                         return desc_line
         return f"Manual page for {command.split()[0]}"
 
-    def _extract_synopsis(self, manual_text: str) -> str:
+    def _extract_synopsis(self, command: str, manual_text: str) -> str:
         """Extract synopsis from manual text."""
         lines = manual_text.split("\n")
         for i, line in enumerate(lines):

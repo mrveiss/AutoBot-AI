@@ -206,7 +206,6 @@ init_startup_messages()
 # Additional function to reset/clear startup state (useful for restarts)
 def reset_startup_state():
     """Reset startup state for fresh restart"""
-    global startup_state
     startup_state["current_phase"] = StartupPhase.INITIALIZING
     startup_state["progress"] = 0
     startup_state["messages"] = []

@@ -35,8 +35,6 @@ router = APIRouter(tags=["chat_knowledge"])
 
 async def get_chat_knowledge_manager_instance(request: Request = None):
     """PERFORMANCE OPTIMIZATION: Get chat knowledge manager instance, preferring pre-initialized app.state"""
-    global chat_knowledge_manager
-
     # Try to use pre-initialized manager from app state first
     if request is not None:
         app_manager = getattr(request.app.state, "chat_knowledge_manager", None)

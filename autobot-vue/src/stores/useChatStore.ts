@@ -464,7 +464,6 @@ export const useChatStore = defineStore('chat', () => {
     key: 'autobot-chat-store',
     storage: localStorage,
     // Only persist essential chat data, not sensitive information
-    // @ts-expect-error - paths is valid in pinia-plugin-persistedstate but not typed in Pinia core
     paths: ['sessions', 'currentSessionId', 'settings.autoSave', 'settings.persistHistory', 'sidebarCollapsed'],
     // Exclude sensitive settings like API keys, system prompts, etc.
     serializer: {

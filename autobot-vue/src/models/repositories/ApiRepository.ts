@@ -1,5 +1,7 @@
 import type { ApiResponse, RequestOptions } from '@/types/models'
 
+// Note: Window.rum type is defined in @/utils/RumAgent.ts
+
 export interface ApiConfig {
   baseUrl: string
   timeout: number
@@ -97,8 +99,8 @@ export class ApiRepository {
 
   private trackApiCall(method: string, endpoint: string, startTime: number, endTime: number, status: number | string, error?: Error): void {
     // Fix TypeScript error with proper window.rum type checking
-    if (typeof window !== 'undefined' && window.rum && typeof window.rum.trackApiCall === 'function') {
-      window.rum.trackApiCall(method, endpoint, startTime, endTime, status, error)
+    if (typeof window !== 'undefined' && (window as any).rum && typeof (window as any).rum.trackApiCall === 'function') {
+      (window as any).rum.trackApiCall(method, endpoint, startTime, endTime, status, error)
     }
   }
 

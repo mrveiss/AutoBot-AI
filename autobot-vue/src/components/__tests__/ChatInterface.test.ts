@@ -393,7 +393,7 @@ describe('ChatInterface', () => {
       expect(chatItem).toBeInTheDocument()
 
       // Test keyboard activation
-      chatItem?.focus()
+      ;(chatItem as HTMLElement)?.focus()
       await user.keyboard('{Enter}')
 
       await waitFor(() => {

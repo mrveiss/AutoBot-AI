@@ -640,10 +640,10 @@ const loadAnalytics = () => analytics.execute(async () => {
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useAsyncOperation, createAsyncOperations } from '@/composables/useAsyncOperation'
-import { NetworkConstants } from '@/constants/network.ts'
+import { networkConfig } from '@/constants/network.ts'
 
-// Backend URL from NetworkConstants (no hardcoded IPs)
-const BACKEND_URL = NetworkConstants.getBackendUrl()
+// Backend URL from networkConfig (no hardcoded IPs, respects deployment mode)
+const BACKEND_URL = networkConfig.backendUrl
 
 // =============================================================================
 // Example 1: Simple Async Operation

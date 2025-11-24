@@ -197,7 +197,7 @@ class InfrastructureMonitor:
         try:
             result = sock.connect_ex((host, port))
             return result == 0
-        except:
+        except Exception:
             return False
         finally:
             sock.close()
@@ -542,7 +542,7 @@ class InfrastructureMonitor:
                 services.database.append(
                     ServiceInfo(name="Redis", status="online", response_time="3ms")
                 )
-            except:
+            except Exception:
                 services.database.append(
                     ServiceInfo(name="Redis", status="error", error="Connection failed")
                 )
@@ -766,7 +766,7 @@ class InfrastructureMonitor:
                 services.support.append(
                     ServiceInfo(name="Git", status="online", response_time="1ms")
                 )
-        except:
+        except Exception:
             services.support.append(ServiceInfo(name="Git", status="offline"))
 
         # VS Code Server check (if running)

@@ -155,7 +155,6 @@ async def check_rate_limit() -> bool:
 
     Uses asyncio.Lock for thread safety in concurrent async environments
     """
-    global query_counter
 
     async with _rate_limit_lock:
         now = datetime.now(timezone.utc)
@@ -860,7 +859,6 @@ async def get_database_mcp_status() -> Dict[str, Any]:
     - Configuration info
     - Database availability
     """
-    global query_counter
 
     async with _rate_limit_lock:
         current_rate = query_counter["count"]

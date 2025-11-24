@@ -76,7 +76,7 @@ describe('useLocalStorage Composable', () => {
       {
         get(target, prop) {
           if (prop in target) {
-            return target[prop]
+            return target[prop as keyof typeof target]
           }
           // For data keys, return from mock
           if (typeof prop === 'string' && prop in localStorageMock) {

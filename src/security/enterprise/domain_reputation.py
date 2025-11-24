@@ -171,7 +171,7 @@ class DomainReputationService:
             return False
         if domain.startswith(".") or domain.endswith("."):
             return False
-        if not "." in domain:
+        if "." not in domain:
             return False
         return True
 

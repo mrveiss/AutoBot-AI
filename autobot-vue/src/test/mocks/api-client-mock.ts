@@ -28,7 +28,7 @@ export class MockApiClient {
           json: () => Promise.resolve(response),
         })
       }
-      return this.get.mockImplementation()
+      return Promise.reject(new Error(`Unexpected GET request to ${url}`))
     })
   }
 
@@ -41,7 +41,7 @@ export class MockApiClient {
           json: () => Promise.resolve(response),
         })
       }
-      return this.post.mockImplementation()
+      return Promise.reject(new Error(`Unexpected POST request to ${url}`))
     })
   }
 
@@ -50,7 +50,7 @@ export class MockApiClient {
       if (url === endpoint) {
         return Promise.reject(new Error(`HTTP ${status}`))
       }
-      return this[method].mockImplementation()
+      return Promise.reject(new Error(`Unexpected ${method.toUpperCase()} request to ${url}`))
     })
   }
 

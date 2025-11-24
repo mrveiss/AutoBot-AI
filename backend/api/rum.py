@@ -101,7 +101,6 @@ rum_logger = setup_rum_logger()
 async def configure_rum(config: RumConfig):
     """Configure RUM monitoring settings"""
     try:
-        global rum_config
         rum_config = config.dict()
 
         # Reinitialize logger with new settings
@@ -134,8 +133,6 @@ async def configure_rum(config: RumConfig):
 @router.post("/event")
 async def log_rum_event(event: RumEvent):
     """Log a RUM event from the frontend"""
-    global rum_events, rum_sessions
-
     try:
         if not rum_config["enabled"]:
             return {"status": "disabled", "message": "RUM monitoring is disabled"}
@@ -199,7 +196,6 @@ async def log_rum_event(event: RumEvent):
 async def disable_rum():
     """Disable RUM monitoring"""
     try:
-        global rum_config
         rum_config["enabled"] = False
 
         rum_logger.info("RUM monitoring disabled via API")
@@ -220,7 +216,6 @@ async def disable_rum():
 @router.post("/clear")
 async def clear_rum_data():
     """Clear all RUM data"""
-    global rum_events, rum_sessions
 
     try:
         events_cleared = len(rum_events)
@@ -255,7 +250,6 @@ async def clear_rum_data():
 @router.get("/export")
 async def export_rum_data():
     """Export RUM data for analysis"""
-    global rum_events, rum_sessions
 
     try:
         export_data = {
@@ -296,7 +290,6 @@ async def export_rum_data():
 @router.get("/status")
 async def get_rum_status():
     """Get current RUM status and statistics"""
-    global rum_events, rum_sessions
 
     try:
         # Calculate session statistics

@@ -38,8 +38,6 @@ router = APIRouter(tags=["advanced_workflow"])
 
 async def get_advanced_orchestrator_instance(request: Request = None):
     """PERFORMANCE OPTIMIZATION: Get orchestrator instance, preferring pre-initialized app.state"""
-    global advanced_orchestrator
-
     # Try to use pre-initialized orchestrator from app state first
     if request is not None:
         app_orchestrator = getattr(
