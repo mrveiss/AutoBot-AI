@@ -239,7 +239,7 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
                     raise HTTPException(
                         status_code=400,
                         detail="error_message required for failed status",
-                    ),
+                    )
                 success = memory_manager.fail_task(task_id, request.error_message)
 
         if not success:
