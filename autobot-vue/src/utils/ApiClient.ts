@@ -5,6 +5,8 @@ import { NetworkConstants } from '@/constants/network';
 export interface RequestOptions {
   headers?: Record<string, string>;
   timeout?: number;
+  onUploadProgress?: (progressEvent: any) => void; // For upload progress tracking
+  responseType?: string; // For response type specification (e.g., 'blob')
 }
 
 export interface ApiResponse {
