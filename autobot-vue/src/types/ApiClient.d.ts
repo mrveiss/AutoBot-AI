@@ -49,6 +49,7 @@ declare module '@/utils/ApiClient' {
     setTimeout(timeout: number): void
     setBaseUrl(url: string): void
     getBaseUrl(): string
+    invalidateCache(): void
     testConnection(): Promise<any>
     checkHealth(): Promise<any>
   }

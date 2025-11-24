@@ -22,6 +22,7 @@ export class ApiClient {
   private baseUrl: string;
   private defaultHeaders: Record<string, string>;
   private baseUrlPromise: Promise<string> | null;
+  private defaultTimeout: number;
 
   constructor() {
     this.baseUrl = ''; // Will be loaded async
@@ -29,7 +30,24 @@ export class ApiClient {
       'Content-Type': 'application/json',
     };
     this.baseUrlPromise = null;
+    this.defaultTimeout = 30000; // Default 30s timeout
     this.initializeBaseUrl();
+  }
+
+  // Public setter for base URL (used by plugin configuration)
+  setBaseUrl(url: string): void {
+    this.baseUrl = url;
+  }
+
+  // Public setter for default timeout (used by plugin configuration)
+  setTimeout(timeout: number): void {
+    this.defaultTimeout = timeout;
+  }
+
+  // Invalidate cache (placeholder for future caching implementation)
+  invalidateCache(): void {
+    // Currently no caching implemented
+    // This method exists for future caching functionality
   }
 
   // Initialize base URL async
@@ -65,7 +83,7 @@ export class ApiClient {
       method = 'GET',
       headers = {},
       body,
-      timeout = appConfig.get('api.timeout', 30000),
+      timeout = options.timeout || this.defaultTimeout,
     } = options;
 
     // Ensure base URL is loaded
