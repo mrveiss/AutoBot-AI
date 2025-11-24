@@ -460,7 +460,7 @@ async def upload_file(
             status_code=413,
             detail=(
                 "File too large. Maximum size: " f"{MAX_FILE_SIZE // (1024*1024)}MB"
-            ),
+            )
         )
 
     # Validate content for security threats

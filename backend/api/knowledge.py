@@ -371,8 +371,10 @@ async def get_main_categories(req: Request):
 
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
+    has_redis = kb_to_use.aioredis_client is not None if kb_to_use else False
     logger.info(
-        f"get_main_categories - kb_to_use: {kb_to_use is not None}, has_redis: {kb_to_use.aioredis_client is not None if kb_to_use else False}"
+        f"get_main_categories - kb_to_use: {kb_to_use is not None}, "
+        f"has_redis: {has_redis}"
     )
 
     # Initialize category counts
@@ -484,7 +486,8 @@ async def check_vectorization_status_batch(request: dict, req: Request):
     Args:
         request: {
             "fact_ids": ["id1", "id2", ...],  # Required: List of fact IDs to check
-            "include_dimensions": bool,        # Optional: Include vector dimensions (default: false)
+            "include_dimensions": bool,        # Optional: Include vector dimensions
+                                               # (default: false)
             "use_cache": bool                  # Optional: Use cached results (default: true)
         }
 
@@ -687,7 +690,10 @@ async def add_text_to_knowledge(request: dict, req: Request):
 )
 @router.post("/search")
 async def search_knowledge(request: dict, req: Request):
-    """Search knowledge base with optional RAG enhancement - FIXED parameter mismatch between KnowledgeBase and KnowledgeBaseV2"""
+    """
+    Search knowledge base with optional RAG enhancement.
+    FIXED parameter mismatch between KnowledgeBase and KnowledgeBaseV2.
+    """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
@@ -726,7 +732,8 @@ async def search_knowledge(request: dict, req: Request):
                 "mode": mode,
                 "kb_implementation": kb_to_use.__class__.__name__,
                 "message": (
-                    "Knowledge base is empty - no documents to search. Add documents in the Manage tab."
+                    "Knowledge base is empty - no documents to search. "
+                    "Add documents in the Manage tab."
                 ),
             }
     except Exception as stats_err:
@@ -831,7 +838,8 @@ async def rag_enhanced_search(request: dict, req: Request):
     search_limit = limit if request.get("limit") is not None else top_k
 
     logger.info(
-        f"RAG-enhanced search request: '{query}' (top_k={search_limit}, reformulate={reformulate_query})"
+        f"RAG-enhanced search request: '{query}' "
+        f"(top_k={search_limit}, reformulate={reformulate_query})"
     )
 
     # Check if knowledge base is empty - fast check to avoid timeout
@@ -841,12 +849,14 @@ async def rag_enhanced_search(request: dict, req: Request):
 
         if fact_count == 0:
             logger.info(
-                "Knowledge base is empty - returning empty RAG results immediately"
+                "Knowledge base is empty - "
+                "returning empty RAG results immediately"
             )
             return {
                 "status": "success",
                 "synthesized_response": (
-                    "The knowledge base is currently empty. Please add documents in the Manage tab to enable search functionality."
+                    "The knowledge base is currently empty. "
+                    "Please add documents in the Manage tab to enable search functionality."
                 ),
                 "results": [],
                 "query": query,
