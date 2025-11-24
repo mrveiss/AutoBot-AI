@@ -502,10 +502,7 @@ async def mcp_langchain_qa_chain(request: Dict[str, Any]):
                 answer = await asyncio.to_thread(kb.llm.complete, prompt)
                 answer = str(answer)
             else:
-                answer = (
-                    f"Based on the search results: {search_results[0].get('content', "
-                    f"'')[:500]}..."
-                )
+                answer = f"Based on the search results: {search_results[0].get('content', '')[:500]}..."
 
 
         return {
