@@ -503,7 +503,7 @@ async def mcp_langchain_qa_chain(request: Dict[str, Any]):
                 answer = str(answer)
             else:
                 answer = (
-                    f"Based on the search results: {search_results[0].get('content',"
+                    f"Based on the search results: {search_results[0].get('content', "
                     f"'')[:500]}..."
                 )
 
