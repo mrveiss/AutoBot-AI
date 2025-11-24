@@ -490,7 +490,7 @@ class PromptManager:
 
             cached_data = redis_client.get(cache_key)
             if cached_data:
-                logger.debug(f"Loading prompts from Redis prompts database (DB 2)")
+                logger.debug("Loading prompts from Redis prompts database (DB 2)")
                 return json.loads(cached_data)
         except Exception as e:
             logger.debug(f"Redis prompts cache load failed: {e}")
@@ -594,8 +594,12 @@ def get_optimized_prompt(
         # Fallback if dynamic template not found
         logger.warning(
             "Dynamic context template not found, using minimal dynamic section"
+        ),
+        dynamic_context = (
+            f"\n\n## Session Context\nSession ID: {session_id or 'N/A'}\nDate:"
+            f"{datetime.now().strftime('%Y-%m-%d')}"
         )
-        dynamic_context = f"\n\n## Session Context\nSession ID: {session_id or 'N/A'}\nDate: {datetime.now().strftime('%Y-%m-%d')}"
+
 
     # Combine: static prefix + dynamic suffix
     # This ordering is CRITICAL for vLLM prefix caching

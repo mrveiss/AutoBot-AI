@@ -334,7 +334,7 @@ async def get_playwright_service() -> PlaywrightService:
         if not container_host:
             raise ValueError(
                 "AUTOBOT_BROWSER_SERVICE_HOST environment variable must be set"
-            )
+            ),
         _playwright_service = PlaywrightService(container_host=container_host)
         await _playwright_service.initialize()
 

@@ -52,11 +52,11 @@ ALLOWED_EXTENSIONS = {
     ".sh",
     ".bat",
     ".sql",
-    ".pdf",
+    ".pd",
     ".png",
     ".jpg",
     ".jpeg",
-    ".gif",
+    ".gi",
     ".svg",
     ".ico",
     ".doc",
@@ -212,7 +212,7 @@ async def validate_session_ownership(
                 f"session {session_id} owned by {session_owner}"
             )
             raise HTTPException(
-                status_code=403, detail=f"Access denied: You do not own this session"
+                status_code=403, detail="Access denied: You do not own this session"
             )
 
         logger.debug(f"User {current_user} validated as owner of session {session_id}")
@@ -794,7 +794,10 @@ async def transfer_conversation_files(
 
         return FileTransferResponse(
             success=result["total_failed"] == 0,
-            message=f"Transferred {result['total_transferred']} files, {result['total_failed']} failed",
+            message=(
+                f"Transferred {result['total_transferred']} files,"
+                f"{result['total_failed']} failed"
+            ),
             transferred_files=result["transferred_files"],
             failed_files=result["failed_files"],
             total_transferred=result["total_transferred"],

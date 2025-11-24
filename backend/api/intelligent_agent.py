@@ -84,7 +84,7 @@ async def get_agent() -> "IntelligentAgent":
 
             logger.info(
                 "Initializing intelligent agent with lazy-loaded dependencies..."
-            )
+            ),
             _agent_instance = IntelligentAgent(
                 LLMInterface(), KnowledgeBase(), WorkerNode(), CommandValidator()
             )

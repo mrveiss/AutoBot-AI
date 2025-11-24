@@ -225,7 +225,7 @@ async def execute_workflow(
     # Get both orchestrators from app state
     lightweight_orchestrator = getattr(
         request.app.state, "lightweight_orchestrator", None
-    )
+    ),
     orchestrator = getattr(request.app.state, "orchestrator", None)
 
     if lightweight_orchestrator is None:
@@ -291,7 +291,7 @@ async def execute_workflow(
     # Create workflow response
     workflow_response = await orchestrator.create_workflow_response(
         workflow_request.user_message
-    )
+    ),
     workflow_id = (
         workflow_request.workflow_id
         or workflow_response.get("workflow_id")
@@ -544,7 +544,7 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
         step["agent_type"].split(".")[1]
         if "." in step["agent_type"]
         else step["agent_type"]
-    )
+    ),
     action = step["action"]
     step_id = step.get("step_id", f"step_{agent_type}")
 
@@ -581,7 +581,7 @@ async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrat
             if "research tools" in action.lower():
                 request = ResearchRequest(
                     query="network security scanning tools", focus="tools"
-                )
+                ),
                 result = await research_agent.research_specific_tools(request)
                 step["result"] = (
                     f"Research completed: {result.get('summary', 'Tools researched')}"

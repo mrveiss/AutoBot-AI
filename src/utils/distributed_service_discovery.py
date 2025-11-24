@@ -422,7 +422,7 @@ async def get_service_url(service_name: str) -> str:
         system_defaults = (
             unified_config_manager.get_config_section("service_discovery_defaults")
             or {}
-        )
+        ),
         fallback_host = system_defaults.get("fallback_host", "localhost")
         fallback_port = system_defaults.get("fallback_port", 8000)
         return f"http://{fallback_host}:{fallback_port}"

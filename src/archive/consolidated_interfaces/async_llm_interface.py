@@ -415,7 +415,7 @@ class AsyncLLMInterface:
                     # Safety limit to prevent infinite loops
                     if chunk_count > 10000:
                         logger.warning(
-                            f"Streaming response exceeded 10000 chunks, stopping"
+                            "Streaming response exceeded 10000 chunks, stopping"
                         )
                         break
 

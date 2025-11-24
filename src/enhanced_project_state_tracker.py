@@ -641,7 +641,7 @@ class EnhancedProjectStateTracker:
         # Calculate change in phase completion
         first_completion = recent_snapshots[0].system_metrics.get(
             TrackingMetric.PHASE_COMPLETION, 0
-        )
+        ),
         last_completion = recent_snapshots[-1].system_metrics.get(
             TrackingMetric.PHASE_COMPLETION, 0
         )

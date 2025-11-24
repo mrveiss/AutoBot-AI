@@ -912,7 +912,7 @@ class SecurityPolicyManager:
         # Calculate overall compliance score
         total_coverage = sum(
             pc["coverage_percentage"] for pc in report["policy_coverage"].values()
-        )
+        ),
         avg_coverage = (
             total_coverage / len(report["policy_coverage"])
             if report["policy_coverage"]

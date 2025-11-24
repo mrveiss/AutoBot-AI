@@ -64,7 +64,10 @@ class OCRRequest(BaseModel):
 
     region: Optional[Dict[str, int]] = Field(
         None,
-        description="Region to extract text from {x, y, width, height}. If None, analyzes full screen.",
+        description=(
+            "Region to extract text from {x, y, width, height}. If None,"
+            "analyzes full screen."
+        )
     )
     session_id: Optional[str] = None
 

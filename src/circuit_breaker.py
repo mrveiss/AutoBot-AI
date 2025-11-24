@@ -170,7 +170,7 @@ class CircuitBreaker:
                 1
                 for call in recent_calls
                 if call.duration > self.config.slow_call_threshold
-            )
+            ),
             slow_call_rate = slow_calls / len(recent_calls) if recent_calls else 0.0
 
             if slow_call_rate >= self.config.slow_call_rate_threshold:

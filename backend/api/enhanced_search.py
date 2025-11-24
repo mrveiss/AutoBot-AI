@@ -72,7 +72,10 @@ class OptimizationRequest(BaseModel):
 
     workload_type: str = Field(
         "balanced",
-        description="Workload type: latency_optimized, throughput_optimized, quality_optimized, balanced",
+        description=(
+            "Workload type: latency_optimized, throughput_optimized, quality_optimized,"
+            "balanced"
+        )
     )
 
 
@@ -106,7 +109,10 @@ async def enhanced_semantic_search(request: SearchRequest):
             except ValueError:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Invalid device '{request.force_device}'. Must be one of: npu, gpu, cpu",
+                    detail=(
+                        f"Invalid device '{request.force_device}'. Must be one of: npu, gpu,"
+                        f"cpu"
+                    )
                 )
 
         # Perform enhanced search

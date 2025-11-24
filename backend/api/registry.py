@@ -63,7 +63,10 @@ class APIRegistry:
                 module_path="backend.api.chat_consolidated",
                 prefix="/api",
                 tags=["chat", "consolidated", "all"],
-                description="CONSOLIDATED chat router with ALL functionality from 5 routers - ZERO functionality loss",
+                description=(
+                    "CONSOLIDATED chat router with ALL functionality from 5 routers -"
+                    "ZERO functionality loss"
+                ),
                 version="v1.0",
             ),
             "settings": RouterConfig(
@@ -95,7 +98,8 @@ class APIRegistry:
                 description="Developer mode configuration and debugging utilities",
             ),
             # Chat and Communication - NOW CONSOLIDATED
-            # OLD: Separate chat.py, async_chat.py, chat_unified.py, chat_improved.py, chat_knowledge.py
+            # OLD: Separate chat.py, async_chat.py, chat_unified.py, chat_improved.py,
+            # chat_knowledge.py
             # NEW: All functionality consolidated into single router with ZERO loss
             "websockets": RouterConfig(
                 name="websockets",
@@ -231,7 +235,10 @@ class APIRegistry:
                 prefix="/api/monitoring/phase9",
                 tags=["monitoring", "phase9", "gpu", "npu", "performance"],
                 status=RouterStatus.ENABLED,
-                description="Phase 9 comprehensive performance monitoring for GPU/NPU utilization and multi-modal AI",
+                description=(
+                    "Phase 9 comprehensive performance monitoring for GPU/NPU utilization and"
+                    "multi-modal AI"
+                )
             ),
             "system_validation": RouterConfig(
                 name="system_validation",

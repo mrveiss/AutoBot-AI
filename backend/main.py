@@ -23,7 +23,7 @@ from src.utils.logging_manager import get_logger
 
 # Get centralized logger (respects AUTOBOT_LOG_LEVEL environment variable)
 logger = get_logger(__name__, "backend")
-logger.info(f"📊 Log level configured via centralized logging manager")
+logger.info("📊 Log level configured via centralized logging manager")
 
 # Create the consolidated FastAPI application instance
 logger.info("🚀 Initializing AutoBot Backend with consolidated factory...")

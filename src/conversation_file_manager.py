@@ -92,7 +92,7 @@ class ConversationFileManager:
             os.getenv(
                 "AUTOBOT_STORAGE_DIR", str(project_root / "data" / "conversation_files")
             )
-        )
+        ),
         default_db = Path(
             os.getenv(
                 "AUTOBOT_DB_PATH", str(project_root / "data" / "conversation_files.db")
@@ -368,7 +368,7 @@ class ConversationFileManager:
             file_id = str(uuid.uuid4())
             stored_filename = self._generate_stored_filename(
                 original_filename, file_hash
-            )
+            ),
             file_path = self.storage_dir / stored_filename
 
             # Database operations
@@ -850,7 +850,8 @@ class ConversationFileManager:
             default_schema_dir = project_root / "database" / "schemas"
             schema_dir = Path(os.getenv("AUTOBOT_SCHEMA_DIR", str(default_schema_dir)))
 
-            # Create migration instance with same paths (Bug Fix #6 - pass custom db_path for testing)
+            # Create migration instance with same paths (Bug Fix #6 - pass custom db_path for
+            # testing)
             migration = ConversationFilesMigration(
                 data_dir=self.db_path.parent,
                 schema_dir=schema_dir,
@@ -888,7 +889,7 @@ class ConversationFileManager:
                 """Thread-safe database query for schema version."""
                 connection = sqlite3.connect(
                     str(self.db_path), timeout=30.0, check_same_thread=False
-                )
+                ),
                 cursor = connection.cursor()
 
                 try:
@@ -906,13 +907,14 @@ class ConversationFileManager:
                         return "unknown"
 
                     # Table exists, safe to query version
-                    # Use migration_id for deterministic ordering (applied_at can have same timestamp)
+                    # Use migration_id for deterministic ordering (applied_at can have same
+                    # timestamp)
                     cursor.execute(
                         """
                         SELECT version FROM schema_migrations
                         ORDER BY migration_id DESC LIMIT 1
                     """
-                    )
+                    ),
                     result = cursor.fetchone()
 
                     return result[0] if result else "unknown"
@@ -947,7 +949,7 @@ class ConversationFileManager:
                 FROM conversation_files
                 WHERE is_deleted = 0
             """
-            )
+            ),
             totals = cursor.fetchone()
 
             # Files by session
@@ -957,7 +959,7 @@ class ConversationFileManager:
                 FROM conversation_files
                 WHERE is_deleted = 0
             """
-            )
+            ),
             sessions = cursor.fetchone()
 
             # Deleted files
@@ -967,7 +969,7 @@ class ConversationFileManager:
                 FROM conversation_files
                 WHERE is_deleted = 1
             """
-            )
+            ),
             deleted = cursor.fetchone()
 
             return {

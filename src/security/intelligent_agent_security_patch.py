@@ -77,10 +77,10 @@ class SecureIntelligentAgentMixin:
         )
 
         if result.blocked:
-            logger.error(f"🚨 BLOCKED: User input contains injection patterns")
+            logger.error("🚨 BLOCKED: User input contains injection patterns")
             logger.error(f"Patterns: {result.detected_patterns}")
             raise ValueError(
-                f"User input blocked due to security policy violation: "
+                "User input blocked due to security policy violation: "
                 f"{result.detected_patterns}"
             )
 

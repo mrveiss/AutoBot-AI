@@ -430,7 +430,7 @@ if __name__ == "__main__":
                         print(f"Confidence: {result.confidence:.2f}")
                         model_used = result.context_analysis.get(
                             "model_used", "unknown"
-                        )
+                        ),
                         response_time = result.context_analysis.get(
                             "response_time_ms", 0
                         )

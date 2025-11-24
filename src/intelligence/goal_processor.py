@@ -304,7 +304,7 @@ class GoalProcessor:
         # Boost confidence based on input length and pattern specificity
         pattern_specificity = len(
             pattern.replace(r".{0,10}", "").replace(r".{0,20}", "")
-        )
+        ),
         input_length = len(user_input)
 
         # Longer, more specific patterns get higher confidence

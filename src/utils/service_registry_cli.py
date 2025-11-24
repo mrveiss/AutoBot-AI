@@ -50,7 +50,7 @@ def cmd_status(args):
         registry = get_service_registry(args.config)
         info = registry.get_deployment_info()
 
-        print_status("success", f"Registry initialized successfully")
+        print_status("success", "Registry initialized successfully")
         print(f"   Mode: {info['deployment_mode']}")
         print(f"   Domain: {info['domain']}")
         print(f"   Services: {info['services_count']}")
@@ -161,7 +161,7 @@ async def cmd_test_service(args):
         health = await registry.check_service_health(args.service)
 
         if health.status == ServiceStatus.HEALTHY:
-            print_status("success", f"Service is healthy")
+            print_status("success", "Service is healthy")
             if hasattr(health, "response_time") and health.response_time > 0:
                 print(f"   Response time: {health.response_time:.3f}s")
         else:

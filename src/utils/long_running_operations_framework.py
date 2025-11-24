@@ -232,7 +232,7 @@ class LongRunningTimeoutConfig:
         base_timeout = base_config["base_timeout"]
         per_item_timeout = base_config.get(
             "per_file_timeout", base_config.get("per_test_timeout", 10)
-        )
+        ),
         max_timeout = base_config["max_timeout"]
 
         calculated_timeout = min(
@@ -596,7 +596,7 @@ class LongRunningOperationManager:
             # Set up checkpoint and progress tasks
             checkpoint_task = asyncio.create_task(
                 self._periodic_checkpoint(operation, checkpoint_interval)
-            )
+            ),
             progress_task = asyncio.create_task(
                 self._periodic_progress_report(operation, progress_interval)
             )

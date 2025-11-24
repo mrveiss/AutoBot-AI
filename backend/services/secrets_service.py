@@ -432,7 +432,7 @@ class SecretsService:
             cursor.execute(
                 "UPDATE secrets SET is_active = 0, updated_at = ? WHERE id = ? AND is_active = 1",
                 (datetime.now(timezone.utc).isoformat(), secret_id),
-            )
+            ),
             action = "deactivated"
 
         if cursor.rowcount > 0:
@@ -459,7 +459,7 @@ class SecretsService:
         # Verify secret exists and matches from_scope
         cursor.execute(
             "SELECT scope FROM secrets WHERE id = ? AND is_active = 1", (secret_id,)
-        )
+        ),
         row = cursor.fetchone()
 
         if not row or row[0] != from_scope:
@@ -508,7 +508,7 @@ class SecretsService:
         cursor.execute(
             "SELECT id, name FROM secrets WHERE chat_id = ? AND is_active = 1",
             (chat_id,),
-        )
+        ),
         chat_secrets = cursor.fetchall()
 
         results = {

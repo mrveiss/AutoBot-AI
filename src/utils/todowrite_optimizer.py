@@ -239,7 +239,7 @@ class TodoWriteOptimizer:
         if common_words:
             word_bonus = len(common_words) / max(
                 len(text1_norm.split()), len(text2_norm.split())
-            )
+            ),
             similarity = min(1.0, similarity + (word_bonus * 0.2))
 
         return similarity
@@ -340,7 +340,7 @@ class TodoWriteOptimizer:
         time_span = (
             max(todos, key=lambda t: t.created_at).created_at
             - min(todos, key=lambda t: t.created_at).created_at
-        )
+        ),
         time_score = min(
             2.0, time_span.seconds / 30.0
         )  # Max 2 points for 30+ second span

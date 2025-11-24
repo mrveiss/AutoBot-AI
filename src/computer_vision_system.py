@@ -184,7 +184,7 @@ class ScreenAnalyzer:
                             "audio_result": processing_results[1].result_data,
                             "session_id": session_id,
                         },
-                    )
+                    ),
                     combined_result = await self.multimodal_processor.process(
                         combined_input
                     )
@@ -649,7 +649,8 @@ class ScreenAnalyzer:
                 metadata = result.get("metadata", {})
                 score = result.get("score", 0.0)
 
-                # Create bounding box estimate (in real implementation, would use more sophisticated mapping)
+                # Create bounding box estimate (in real implementation,
+                # would use more sophisticated mapping)
                 # For now, create a centered bounding box as placeholder
                 h, w = screenshot.shape[:2]
                 bbox = {"x": w // 4, "y": h // 4, "width": w // 2, "height": h // 2}
@@ -875,7 +876,7 @@ class ContextAnalyzer:
         # Simple heuristics for application type detection
         button_count = sum(
             1 for el in ui_elements if el.element_type == ElementType.BUTTON
-        )
+        ),
         input_count = sum(
             1 for el in ui_elements if el.element_type == ElementType.INPUT_FIELD
         )

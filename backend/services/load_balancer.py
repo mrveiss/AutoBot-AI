@@ -488,7 +488,7 @@ class NPULoadBalancer:
                 if max_retries > 0 and result.get("fallback"):
                     logger.info(
                         f"Retrying task on different worker (retries left: {max_retries})"
-                    )
+                    ),
                     alternative = await self.select_worker()
                     if alternative and alternative.worker_id != worker_id:
                         return await self.submit_task(

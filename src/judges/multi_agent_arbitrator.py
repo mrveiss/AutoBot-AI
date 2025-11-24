@@ -258,7 +258,7 @@ class MultiAgentArbitrator(BaseLLMJudge):
                 responses, agent_types, context
             )
 
-        prompt = f"""
+        prompt = """
 Please arbitrate between multiple agent responses to determine the best response for the user:
 
 USER REQUEST:
@@ -268,13 +268,13 @@ AGENT RESPONSES TO EVALUATE:
 """
 
         for i, (response, agent_type) in enumerate(zip(responses, agent_types)):
-            prompt += f"""
+            prompt += """
 RESPONSE {i+1} - {agent_type.upper()} AGENT:
 {json.dumps(response, indent=2)}
 
 """
 
-        prompt += f"""
+        prompt += """
 ARBITRATION CONTEXT:
 {json.dumps(arbitration_context, indent=2)}
 
@@ -345,20 +345,20 @@ Focus on selecting the response that provides the most value to the user while m
     ) -> str:
         """Prepare prompt specifically for conflict detection"""
 
-        prompt = f"""
+        prompt = """
 Please analyze the following agent responses for conflicts, contradictions, and inconsistencies:
 
 AGENT RESPONSES:
 """
 
         for i, (response, agent_type) in enumerate(zip(responses, agent_types)):
-            prompt += f"""
+            prompt += """
 RESPONSE {i+1} - {agent_type.upper()} AGENT:
 {json.dumps(response, indent=2)}
 
 """
 
-        prompt += f"""
+        prompt += """
 CONFLICT ANALYSIS REQUIREMENTS:
 
 1. CONSISTENCY CHECK: Identify contradictions between responses

@@ -93,7 +93,10 @@ async def analyze_codebase_endpoint(request: AnalysisRequest):
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid analysis_type. Must be one of: comprehensive, duplicates, patterns, imports, dead_code, refactoring, quality",
+                detail=(
+                    "Invalid analysis_type. Must be one of: comprehensive, duplicates, patterns, imports,"
+                    "dead_code, refactoring, quality"
+                )
             )
 
         return JSONResponse(

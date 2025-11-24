@@ -40,7 +40,7 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 # Router Configuration
 # ====================================================================
 
-router = APIRouter(prefix="/entities", tags=["entity-extraction"])
+router = APIRouter(tags=["entity-extraction"])
 logger = logging.getLogger(__name__)
 
 # ====================================================================

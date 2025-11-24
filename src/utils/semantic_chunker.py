@@ -118,7 +118,8 @@ class AutoBotSemanticChunker:
                 else:
                     logger.info("CUDA not available, using CPU for embeddings")
 
-                # Initialize model with device optimization and retry logic for HuggingFace rate limiting
+                # Initialize model with device optimization and retry logic for
+                # HuggingFace rate limiting
                 max_retries = 3
                 retry_delay = 2  # seconds
 
@@ -169,7 +170,8 @@ class AutoBotSemanticChunker:
                     # Enable mixed precision for GPU if available (with proper error handling)
                     if device == "cuda":
                         try:
-                            # Check if model parameters are properly loaded before precision conversion
+                            # Check if model parameters are properly loaded before precision
+                            # conversion
                             param_count = sum(
                                 p.numel() for p in model.parameters() if p.requires_grad
                             )
@@ -198,7 +200,7 @@ class AutoBotSemanticChunker:
                                 except Exception as tensor_error:
                                     logger.warning(
                                         f"FP16 conversion failed: {tensor_error}, trying FP32"
-                                    )
+                                    ),
                                     model = model.to(device, dtype=torch.float32)
                             else:
                                 logger.warning(
@@ -350,7 +352,7 @@ class AutoBotSemanticChunker:
                     except Exception as device_error:
                         logger.warning(
                             f"Failed to move model to GPU: {device_error}, using CPU"
-                        )
+                        ),
                         device = "cpu"
                 logger.warning(
                     f"Fallback to all-mpnet-base-v2 embedding model on {device}"
@@ -534,7 +536,8 @@ class AutoBotSemanticChunker:
                 logger.warning(
                     "WARNING: Model initialization may block event loop - use async method instead"
                 )
-                # Fall back to direct computation (blocking) - creates a new sync version for fallback
+                # Fall back to direct computation (blocking) - creates a new sync version for
+                # fallback
                 if self._embedding_model is None:
                     self._sync_initialize_model()
                 embeddings = self._embedding_model.encode(

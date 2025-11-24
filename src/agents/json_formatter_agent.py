@@ -138,7 +138,7 @@ class JSONFormatterAgent:
                         confidence = 0.9 if len(matches) == 1 else 0.7
                         if len(matches) > 1:
                             warnings.append(
-                                f"Multiple JSON objects found, using first valid one"
+                                "Multiple JSON objects found, using first valid one"
                             )
 
                         return JSONParseResult(

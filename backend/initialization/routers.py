@@ -894,7 +894,7 @@ def load_optional_routers():
         optional_routers.append(
             (
                 entity_extraction_router,
-                "/api/entities",
+                "/entities",
                 ["entity-extraction"],
                 "entity_extraction",
             )
@@ -910,7 +910,7 @@ def load_optional_routers():
         optional_routers.append(
             (
                 graph_rag_router,
-                "/api/graph-rag",
+                "/graph-rag",
                 ["graph-rag"],
                 "graph_rag",
             )

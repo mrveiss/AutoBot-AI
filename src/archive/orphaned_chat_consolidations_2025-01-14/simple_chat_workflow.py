@@ -106,7 +106,7 @@ class SimpleChatWorkflow:
             # Step 3: Show classification
             await self.send_workflow_message(
                 "debug", "🔍 WORKFLOW: Classifying message type..."
-            )
+            ),
             message_type = MessageType.GENERAL_QUERY
             await self.send_workflow_message(
                 "utility", f"✅ Classified as: {message_type.value}"
@@ -287,7 +287,7 @@ class SimpleChatWorkflow:
                         return f"LLM error: {error_msg}"
                     else:
                         logger.warning(
-                            f"DEBUG: Unexpected dict format, converting to string"
+                            "DEBUG: Unexpected dict format, converting to string"
                         )
                         return str(response)
                 elif isinstance(response, str):
@@ -305,7 +305,7 @@ class SimpleChatWorkflow:
                 return f"Response parsing error: {parse_error}"
 
         except asyncio.TimeoutError:
-            logger.error(f"LLM request timed out after 15 seconds")
+            logger.error("LLM request timed out after 15 seconds")
             return f"Hello! I received your message '{user_message}' but the LLM is taking too long to respond. This might be a temporary issue - please try again."
         except Exception as e:
             logger.error(f"LLM request failed: {e}")

@@ -259,7 +259,7 @@ class EnhancedOrchestrator:
             # Calculate overall suitability score
             workload_factor = 1.0 - (
                 agent.current_workload / agent.max_concurrent_tasks
-            )
+            ),
             performance_factor = agent.success_rate
 
             suitability_score = (
@@ -551,7 +551,7 @@ class EnhancedOrchestrator:
             # Determine overall workflow status
             successful_steps = sum(
                 1 for step in steps if step.get("status") == "completed"
-            )
+            ),
             total_steps = len(steps)
 
             if successful_steps == total_steps:
@@ -980,7 +980,10 @@ if __name__ == "__main__":
 
         # Execute an enhanced workflow
         result = await enhanced_orchestrator.execute_enhanced_workflow(
-            user_request="Research the latest developments in quantum computing and create a summary document",
+            user_request=(
+                "Research the latest developments in quantum computing and"
+                "create a summary document"
+            ),
             context={"priority": "high", "deadline": "2024-01-01"},
         )
 

@@ -185,7 +185,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
                     if s.dimension == JudgmentDimension.SAFETY
                 ),
                 0.0,
-            )
+            ),
             quality_score = next(
                 (
                     s.score

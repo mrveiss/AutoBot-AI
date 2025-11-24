@@ -133,13 +133,13 @@ def test_host_status_update(db: InfrastructureDB, host: InfraHost):
     updated_host = db.get_host(host.id)
     assert updated_host.status == "provisioning"
     assert updated_host.last_seen_at is not None
-    print(f"✅ Updated host status: new → provisioning")
+    print("✅ Updated host status: new → provisioning")
 
     # Update to deployed
     db.update_host_status(host.id, "deployed")
     updated_host = db.get_host(host.id)
     assert updated_host.status == "deployed"
-    print(f"✅ Updated host status: provisioning → deployed")
+    print("✅ Updated host status: provisioning → deployed")
 
     print("\n✅ TEST 4 PASSED: Status updates working correctly")
 
@@ -151,7 +151,11 @@ def test_credential_encryption(db: InfrastructureDB, host: InfraHost):
     print("=" * 80)
 
     # Test SSH key storage
-    test_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\nTEST_KEY_DATA_HERE\n-----END OPENSSH PRIVATE KEY-----"
+    test_private_key = (
+        "-----BEGIN OPENSSH PRIVATE KEY-----\nTEST_KEY_DATA_HERE\n-----END OPENSSH PRIVATE"
+        "KEY-----"
+    )
+
 
     credential = db.store_ssh_credential(
         host_id=host.id,
@@ -163,12 +167,12 @@ def test_credential_encryption(db: InfrastructureDB, host: InfraHost):
     assert credential.id is not None
     assert credential.credential_type == "ssh_key"
     assert credential.is_active == True
-    print(f"✅ Stored encrypted SSH key credential")
+    print("✅ Stored encrypted SSH key credential")
 
     # Retrieve and decrypt
     decrypted = db.get_active_credential(host.id, "ssh_key")
     assert decrypted == test_private_key
-    print(f"✅ Retrieved and decrypted SSH key successfully")
+    print("✅ Retrieved and decrypted SSH key successfully")
 
     # Test password storage
     test_password = "SuperSecurePassword123!"
@@ -177,12 +181,12 @@ def test_credential_encryption(db: InfrastructureDB, host: InfraHost):
     )
 
     assert password_cred.credential_type == "password"
-    print(f"✅ Stored encrypted password credential")
+    print("✅ Stored encrypted password credential")
 
     # Retrieve password
     decrypted_password = db.get_active_credential(host.id, "password")
     assert decrypted_password == test_password
-    print(f"✅ Retrieved and decrypted password successfully")
+    print("✅ Retrieved and decrypted password successfully")
 
     print("\n✅ TEST 5 PASSED: Credential encryption working correctly")
 
@@ -199,12 +203,12 @@ def test_credential_deactivation(db: InfrastructureDB, host: InfraHost):
     # Verify deactivation
     active_password = db.get_active_credential(host.id, "password")
     assert active_password is None
-    print(f"✅ Password credentials deactivated successfully")
+    print("✅ Password credentials deactivated successfully")
 
     # SSH key should still be active
     active_ssh_key = db.get_active_credential(host.id, "ssh_key")
     assert active_ssh_key is not None
-    print(f"✅ SSH key credentials still active")
+    print("✅ SSH key credentials still active")
 
     print("\n✅ TEST 6 PASSED: Credential rotation working correctly")
 
@@ -230,14 +234,14 @@ def test_deployment_tracking(db: InfrastructureDB, host: InfraHost):
     updated_deployment = db.get_deployments(host_id=host.id)[0]
     assert updated_deployment.status == "running"
     assert updated_deployment.started_at is not None
-    print(f"✅ Updated deployment status: queued → running")
+    print("✅ Updated deployment status: queued → running")
 
     # Update to success
     db.update_deployment_status(deployment.id, "success")
     updated_deployment = db.get_deployments(host_id=host.id)[0]
     assert updated_deployment.status == "success"
     assert updated_deployment.completed_at is not None
-    print(f"✅ Updated deployment status: running → success")
+    print("✅ Updated deployment status: running → success")
 
     # Test failed deployment
     failed_deployment = db.create_deployment(
@@ -245,11 +249,11 @@ def test_deployment_tracking(db: InfrastructureDB, host: InfraHost):
     )
     db.update_deployment_status(
         failed_deployment.id, "failed", error_message="Connection timeout"
-    )
+    ),
     updated_failed = db.get_deployments(host_id=host.id, status="failed")[0]
     assert updated_failed.status == "failed"
     assert updated_failed.error_message == "Connection timeout"
-    print(f"✅ Tracked failed deployment with error message")
+    print("✅ Tracked failed deployment with error message")
 
     print("\n✅ TEST 7 PASSED: Deployment tracking working correctly")
 
@@ -283,7 +287,7 @@ def test_audit_logging(db: InfrastructureDB):
     assert sample_log.action is not None
     assert sample_log.resource_type is not None
     assert sample_log.timestamp is not None
-    print(f"✅ Audit log structure validated")
+    print("✅ Audit log structure validated")
 
     print("\n✅ TEST 8 PASSED: Audit logging working correctly")
 
@@ -331,7 +335,7 @@ def test_host_deletion(db: InfrastructureDB, host: InfraHost):
     # Verify cascade deletion
     deployments = db.get_deployments(host_id=host_id)
     assert len(deployments) == 0
-    print(f"✅ Associated deployments cascaded correctly")
+    print("✅ Associated deployments cascaded correctly")
 
     print("\n✅ TEST 10 PASSED: Host deletion with cascade working correctly")
 

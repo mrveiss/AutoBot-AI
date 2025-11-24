@@ -198,7 +198,7 @@ async def detect_hardcodes_and_debt_with_llm(
     try:
         llm = LLMInterface()
 
-        prompt = f"""Analyze this {language} code and identify:
+        prompt = """Analyze this {language} code and identify:
 1. **Hardcoded values** that should be externalized
 2. **Technical debt** patterns
 
@@ -430,7 +430,7 @@ def analyze_javascript_vue_file(file_path: str) -> Dict[str, Any]:
         # Simple regex-based analysis for JS/Vue
         function_pattern = re.compile(
             r"(?:function\s+(\w+)|(\w+)\s*[:=]\s*(?:async\s+)?function|\b(\w+)\s*\(.*?\)\s*\{|const\s+(\w+)\s*=\s*\(.*?\)\s*=>)"
-        )
+        ),
         url_pattern = re.compile(r'[\'"`](https?://[^\'"` ]+)[\'"`]')
         api_pattern = re.compile(r'[\'"`](/api/[^\'"` ]+)[\'"`]')
         ip_pattern = re.compile(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b")
@@ -762,7 +762,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
                 + len(analysis_results["all_classes"])
                 + len(analysis_results["all_problems"])
                 + 1  # stats
-            )
+            ),
             items_prepared = 0
 
             await update_progress(
@@ -773,7 +773,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
             )
 
             for idx, func in enumerate(analysis_results["all_functions"]):
-                doc_text = f"""
+                doc_text = """
 Function: {func['name']}
 File: {func.get('file_path', 'unknown')}
 Line: {func.get('line', 0)}
@@ -816,7 +816,7 @@ Docstring: {func.get('docstring', 'No documentation')}
             )
 
             for idx, cls in enumerate(analysis_results["all_classes"]):
-                doc_text = f"""
+                doc_text = """
 Class: {cls['name']}
 File: {cls.get('file_path', 'unknown')}
 Line: {cls.get('line', 0)}
@@ -855,7 +855,7 @@ Docstring: {cls.get('docstring', 'No documentation')}
             )
 
             for idx, problem in enumerate(analysis_results["all_problems"]):
-                doc_text = f"""
+                doc_text = """
 Problem: {problem.get('type', 'unknown')}
 Severity: {problem.get('severity', 'unknown')}
 File: {problem.get('file_path', 'unknown')}
@@ -888,7 +888,7 @@ Suggestion: {problem.get('suggestion', 'No suggestion')}
                     )
 
             # Store stats as a special document
-            stats_doc = f"""
+            stats_doc = """
 Codebase Statistics:
 Total Files: {analysis_results['stats']['total_files']}
 Total Lines: {analysis_results['stats']['total_lines']}
@@ -915,7 +915,7 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
             if batch_ids:
                 BATCH_SIZE = (
                     5000  # ChromaDB max batch size is ~5461, use 5000 for safety
-                )
+                ),
                 total_items = len(batch_ids)
                 items_stored = 0
 
@@ -944,7 +944,10 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
                         operation="Writing to ChromaDB",
                         current=items_stored,
                         total=total_items,
-                        current_file=f"Batch {i//BATCH_SIZE + 1}/{(total_items + BATCH_SIZE - 1) // BATCH_SIZE}",
+                        current_file=(
+                            f"Batch {i//BATCH_SIZE + 1}/{(total_items + BATCH_SIZE -"
+                            f"1) // BATCH_SIZE}"
+                        )
                     )
 
                     logger.info(
@@ -1004,20 +1007,20 @@ async def index_codebase():
     logger.info(f"🆔 Generated task_id = {task_id}")
 
     # Add async background task using asyncio and store reference
-    logger.info(f"🔄 About to create_task")
+    logger.info("🔄 About to create_task")
     task = asyncio.create_task(do_indexing_with_progress(task_id, root_path))
     logger.info(f"✅ Task created: {task}")
     _active_tasks[task_id] = task
-    logger.info(f"💾 Task stored in _active_tasks")
+    logger.info("💾 Task stored in _active_tasks")
 
     # Clean up task reference when done
     def cleanup_task(t):
         _active_tasks.pop(task_id, None)
 
     task.add_done_callback(cleanup_task)
-    logger.info(f"🧹 Cleanup callback added")
+    logger.info("🧹 Cleanup callback added")
 
-    logger.info(f"📤 About to return JSONResponse")
+    logger.info("📤 About to return JSONResponse")
     return JSONResponse(
         {
             "task_id": task_id,
@@ -1259,7 +1262,7 @@ async def get_codebase_problems(problem_type: Optional[str] = None):
         except Exception as chroma_error:
             logger.warning(
                 f"ChromaDB query failed: {chroma_error}, falling back to Redis"
-            )
+            ),
             code_collection = None
 
     # Fallback to Redis if ChromaDB fails

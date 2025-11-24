@@ -613,14 +613,14 @@ def get_secure_sandbox() -> Optional[SecureSandboxExecutor]:
             try:
                 logger.info(
                     "Initializing secure sandbox for command execution security"
-                )
+                ),
                 _sandbox_instance = SecureSandboxExecutor()
                 logger.info("Secure sandbox initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize secure sandbox: {e}")
                 logger.warning(
                     "Command execution will proceed without sandboxing - SECURITY RISK"
-                )
+                ),
                 _sandbox_instance = None
 
         return _sandbox_instance

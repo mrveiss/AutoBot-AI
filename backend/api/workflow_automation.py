@@ -585,7 +585,7 @@ class WorkflowAutomationManager:
             workflow_type = "automated_workflow"
             failed_steps = len(
                 [s for s in workflow.steps if s.status == WorkflowStepStatus.FAILED]
-            )
+            ),
             status = "failed" if failed_steps > 0 else "success"
             self.prometheus_metrics.record_workflow_execution(
                 workflow_type=workflow_type, status=status, duration=duration
@@ -808,7 +808,7 @@ class WorkflowAutomationManager:
                     if s.dimension.value == "safety"
                 ),
                 0.8,
-            )
+            ),
             security_safety = next(
                 (
                     s.score

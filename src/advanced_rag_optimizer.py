@@ -573,7 +573,7 @@ class AdvancedRAGOptimizer:
             metrics.total_time = time.time() - start_time
             metrics.gpu_acceleration_used = True  # Semantic chunker uses GPU
 
-            logger.info(f"Advanced search completed:")
+            logger.info("Advanced search completed:")
             logger.info(f"  - Total time: {metrics.total_time:.3f}s")
             logger.info(f"  - Documents considered: {metrics.documents_considered}")
             logger.info(f"  - Final results: {metrics.final_results_count}")

@@ -100,12 +100,23 @@ class LLMFailsafeAgent:
             ],
             # Help requests
             r"help|assist|support": [
-                "I can help you with various tasks including:\n- System automation\n- Research and information gathering\n- File operations\n- Development tasks\n\nWhat specifically would you like help with?",
-                "I'm here to assist! You can ask me to help with automation, research, coding, or system tasks.",
+                (
+                    "I can help you with various tasks including:\n"
+                    "- System automation\n- Research and information gathering\n"
+                    "- File operations\n- Development tasks\n\n"
+                    "What specifically would you like help with?"
+                ),
+                (
+                    "I'm here to assist! You can ask me to help with "
+                    "automation, research, coding, or system tasks."
+                ),
             ],
             # Status queries
             r"status|health|working": [
-                "I'm operational and ready to help! Primary LLM systems may be experiencing issues, but I can still assist you.",
+                (
+                    "I'm operational and ready to help! Primary LLM systems "
+                    "may be experiencing issues, but I can still assist you."
+                ),
                 "System status: Basic operations functional. How can I help you today?",
             ],
             # Simple questions
@@ -115,24 +126,49 @@ class LLMFailsafeAgent:
             ],
             # Math/calculations
             r"calculate|math|compute|\d+.*[\+\-\*\/].*\d+": [
-                "I can help with calculations. Please provide the specific math problem you'd like me to solve.",
+                (
+                    "I can help with calculations. Please provide the specific "
+                    "math problem you'd like me to solve."
+                ),
                 "For mathematical calculations, please specify the exact computation you need.",
             ],
             # File operations
             r"file|directory|folder|list.*files": [
-                "I can help with file operations including listing, reading, writing, and organizing files. What specific file task do you need?",
-                "File operations available: list files, read content, create files, organize directories. What would you like to do?",
+                (
+                    "I can help with file operations including listing, reading, "
+                    "writing, and organizing files. What specific file task do you need?"
+                ),
+                (
+                    "File operations available: list files, read content, create files, "
+                    "organize directories. What would you like to do?"
+                ),
             ],
             # System operations
             r"system|install|configure|setup": [
-                "I can assist with system configuration, software installation, and setup tasks. Please specify what you'd like to install or configure.",
-                "System operations available. What specific system task or installation do you need help with?",
+                (
+                    "I can assist with system configuration, software installation, "
+                    "and setup tasks. Please specify what you'd like to install or configure."
+                ),
+                (
+                    "System operations available. What specific system task or "
+                    "installation do you need help with?"
+                ),
             ],
             # Default fallback
             r".*": [
-                "I understand you need assistance. Due to system limitations, I'm operating in basic mode. Can you please rephrase your request more specifically?",
-                "I'm currently in basic operation mode. Please provide a clear, specific request and I'll do my best to help.",
-                "I'm here to help! Could you please be more specific about what you need assistance with?",
+                (
+                    "I understand you need assistance. Due to system limitations, "
+                    "I'm operating in basic mode. Can you please rephrase your "
+                    "request more specifically?"
+                ),
+                (
+                    "I'm currently in basic operation mode. Please provide a clear, "
+                    "specific request and I'll do my best to help."
+                ),
+                (
+                    "I'm here to help! Could you please be more specific about "
+                    "what you need assistance with?"
+                ),
             ],
         }
 
@@ -140,19 +176,38 @@ class LLMFailsafeAgent:
         """Initialize emergency static responses"""
         self.emergency_responses = {
             "default": (
-                "AutoBot Emergency Mode: I'm experiencing technical difficulties but I'm still here to help. Please try again or contact support if the issue persists."
+                (
+                    "AutoBot Emergency Mode: I'm experiencing technical difficulties "
+                    "but I'm still here to help. Please try again or contact support "
+                    "if the issue persists."
+                )
             ),
             "greeting": (
-                "Hello! AutoBot is currently in emergency mode due to system issues, but I'm still operational for basic assistance."
+                (
+                    "Hello! AutoBot is currently in emergency mode due to system issues, "
+                    "but I'm still operational for basic assistance."
+                )
             ),
             "help": (
-                "Emergency Help: AutoBot systems are degraded. For immediate assistance, please:\n1. Try rephrasing your request\n2. Check system logs\n3. Restart the service if needed\n4. Contact technical support"
+                (
+                    "Emergency Help: AutoBot systems are degraded. "
+                    "For immediate assistance, please:\n"
+                    "1. Try rephrasing your request\n2. Check system logs\n"
+                    "3. Restart the service if needed\n4. Contact technical support"
+                )
             ),
             "error": (
-                "An error occurred in the primary systems. AutoBot is operating in emergency mode. Your request has been noted and I'll assist as best I can."
+                (
+                    "An error occurred in the primary systems. AutoBot is operating "
+                    "in emergency mode. Your request has been noted and I'll assist "
+                    "as best I can."
+                )
             ),
             "status": (
-                f"AutoBot Emergency Status - {time.strftime('%Y-%m-%d %H:%M:%S')}: Basic functions operational, primary LLM systems unavailable."
+                (
+                    f"AutoBot Emergency Status - {time.strftime('%Y-%m-%d %H:%M:%S')}: "
+                    f"Basic functions operational, primary LLM systems unavailable."
+                )
             ),
         }
 
@@ -175,7 +230,13 @@ class LLMFailsafeAgent:
         system_content = {
             "role": "system",
             "instructions": (
-                "You are AutoBot, an advanced autonomous AI platform specifically designed for Linux system administration and intelligent task automation. You are NOT a Meta AI model or related to Transformers. You are an enterprise-grade automation platform with 20+ specialized AI agents, expert Linux knowledge, and multi-modal processing capabilities."
+                (
+                    "You are AutoBot, an advanced autonomous AI platform specifically designed "
+                    "for Linux system administration and intelligent task automation. "
+                    "You are NOT a Meta AI model or related to Transformers. "
+                    "You are an enterprise-grade automation platform with 20+ specialized "
+                    "AI agents, expert Linux knowledge, and multi-modal processing capabilities."
+                )
             ),
             "response_format": {
                 "type": "conversational",
@@ -212,7 +273,10 @@ class LLMFailsafeAgent:
                     "documents_found": context["kb_documents_found"],
                     "has_context": True,
                     "instruction": (
-                        "Use the provided knowledge base context to inform your response. Cite sources when using KB information."
+                        (
+                            "Use the provided knowledge base context to inform your response. "
+                            "Cite sources when using KB information."
+                        )
                     ),
                 }
 
@@ -320,7 +384,7 @@ class LLMFailsafeAgent:
                     response_task = llm.chat_completion(messages, llm_type="task")
                     response_data = await asyncio.wait_for(
                         response_task, timeout=self.timeouts[LLMTier.PRIMARY]
-                    )
+                    ),
                     response = response_data.get("response", "")
 
                     if response and len(response.strip()) > 0:
@@ -380,7 +444,7 @@ class LLMFailsafeAgent:
                     response_task = llm.chat_completion(messages, llm_type="task")
                     response_data = await asyncio.wait_for(
                         response_task, timeout=self.timeouts[LLMTier.SECONDARY]
-                    )
+                    ),
                     response = response_data.get("response", "")
 
                     if response and len(response.strip()) > 0:
@@ -532,11 +596,20 @@ class LLMFailsafeAgent:
     ) -> LLMResponse:
         """Create absolute last resort response"""
         # Create a more user-friendly emergency response
-        user_message = "I'm temporarily experiencing technical difficulties. Please try your request again in a moment."
+        user_message = (
+            "I'm temporarily experiencing technical difficulties. "
+            "Please try your request again in a moment."
+        )
         if "timeout" in error_msg.lower() or "connection" in error_msg.lower():
-            user_message = "I'm having trouble connecting to my AI models right now. Please try again in a few seconds."
+            user_message = (
+                "I'm having trouble connecting to my AI models right now. "
+                "Please try again in a few seconds."
+            )
         elif "model" in error_msg.lower():
-            user_message = "My AI models are currently unavailable. I'm working to restore service. Please try again shortly."
+            user_message = (
+                "My AI models are currently unavailable. I'm working to restore service. "
+                "Please try again shortly."
+            )
 
         return LLMResponse(
             content=user_message,

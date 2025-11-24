@@ -345,7 +345,11 @@ class SSHConnectionPool:
                     await asyncio.sleep(delay)
 
         # All attempts failed
-        error_msg = f"Failed to connect to {username}@{host}:{port} after {self.retry_max_attempts} attempts: {last_error}"
+        error_msg = (
+            f"Failed to connect to {username}@{host}:{port} after {self.retry_max_attempts}"
+            f"attempts: {last_error}"
+        )
+
         logger.error(error_msg)
         raise ConnectionError(error_msg)
 
@@ -369,7 +373,7 @@ class SSHConnectionPool:
             # Execute simple command
             stdin, stdout, stderr = conn.client.exec_command(
                 "echo health_check", timeout=5
-            )
+            ),
             output = stdout.read().decode().strip()
 
             if output == "health_check":

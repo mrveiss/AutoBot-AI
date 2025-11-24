@@ -583,7 +583,10 @@ class DevelopmentSpeedupAgent:
             patterns.append(
                 CodePattern(
                     pattern_type="Star Imports",
-                    description=f"Found {len(star_imports)} star imports that could pollute namespace",
+                    description=(
+                        f"Found {len(star_imports)} star imports that could pollute"
+                        f"namespace"
+                    ),
                     occurrences=[(r.file_path, r.line_number) for r in star_imports],
                     confidence=0.9,
                     suggestion="Use explicit imports instead of star imports",
@@ -616,9 +619,15 @@ class DevelopmentSpeedupAgent:
                                         opportunity_type="Long Function",
                                         file_path=file_path,
                                         line_range=(node.lineno, node.end_lineno),
-                                        description=f"Function '{node.name}' is {func_length} lines long",
+                                        description=(
+                                            f"Function '{node.name}' is {func_length} lines"
+                                            f"long"
+                                        ),
                                         complexity_score=min(func_length / 10, 10),
-                                        potential_benefit="Extract smaller functions for better readability and testability",
+                                        potential_benefit=(
+                                            "Extract smaller functions for"
+                                            "better readability and testability"
+                                        )
                                     )
                                 )
 

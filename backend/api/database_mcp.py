@@ -191,7 +191,7 @@ class SQLQueryRequest(BaseModel):
     query: str = Field(..., description="SQL SELECT query (parameterized)")
     params: Optional[List[Any]] = Field(
         default=None, description="Query parameters for ? placeholders"
-    )
+    ),
     limit: Optional[int] = Field(
         default=100,
         ge=1,
@@ -259,7 +259,10 @@ async def get_database_mcp_tools() -> List[MCPTool]:
     tools = [
         MCPTool(
             name="database_query",
-            description="Execute SELECT query on SQLite database. Returns rows as JSON. Rate limited to 60 queries/minute. Only whitelisted databases accessible.",
+            description=(
+                "Execute SELECT query on SQLite database. Returns rows as JSON. Rate limited to 60"
+                "queries/minute. Only whitelisted databases accessible."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -295,7 +298,10 @@ async def get_database_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="database_execute",
-            description="Execute INSERT/UPDATE/DELETE on SQLite database. Only works on non-read-only databases. Use parameterized queries.",
+            description=(
+                "Execute INSERT/UPDATE/DELETE on SQLite database. Only works on non-read-only"
+                "databases. Use parameterized queries."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -336,7 +342,10 @@ async def get_database_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="database_describe_schema",
-            description="Get schema information for database tables including columns, types, and constraints.",
+            description=(
+                "Get schema information for database tables including columns, types,"
+                "and constraints."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -357,7 +366,10 @@ async def get_database_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="database_list_databases",
-            description="List all available whitelisted databases with their access permissions and descriptions.",
+            description=(
+                "List all available whitelisted databases with their access permissions and"
+                "descriptions."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {},
@@ -366,7 +378,10 @@ async def get_database_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="database_statistics",
-            description="Get statistics for a database including size, table count, and last modified time.",
+            description=(
+                "Get statistics for a database including size, table count,"
+                "and last modified time."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -523,7 +538,7 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Dict[str, Any]:
     # Log the operation with warning (data modification)
     logger.warning(
         f"Database EXECUTE on {request.database}: {request.statement[:100]}..."
-    )
+    ),
 
     conn = None
     try:
@@ -599,7 +614,7 @@ async def database_list_tables_mcp(request: TableListRequest) -> Dict[str, Any]:
         # Get all tables
         cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-        )
+        ),
         tables = cursor.fetchall()
 
         # Get row count for each table
@@ -683,7 +698,7 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Dict[str, Any]
             # All tables
             cursor.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-            )
+            ),
             tables = cursor.fetchall()
 
             for (table_name,) in tables:

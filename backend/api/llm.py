@@ -512,7 +512,7 @@ async def get_quick_llm_status():
                 local_config.get("providers", {})
                 .get("ollama", {})
                 .get("selected_model", "")
-            )
+            ),
             status = "connected" if model else "disconnected"
         else:
             # Look in the correct path: unified.cloud.providers.[provider]
@@ -520,12 +520,12 @@ async def get_quick_llm_status():
             provider = cloud_config.get("provider", "openai")
             api_key = (
                 cloud_config.get("providers", {}).get(provider, {}).get("api_key", "")
-            )
+            ),
             model = (
                 cloud_config.get("providers", {})
                 .get(provider, {})
                 .get("selected_model", "")
-            )
+            ),
             status = "connected" if api_key and model else "disconnected"
 
         return JSONResponse(

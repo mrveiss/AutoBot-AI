@@ -195,7 +195,7 @@ Focus on practical assessment that helps improve agent performance and user expe
                     if s.dimension == JudgmentDimension.RELEVANCE
                 ),
                 0.0,
-            )
+            ),
             quality_score = next(
                 (
                     s.score
@@ -211,7 +211,11 @@ Focus on practical assessment that helps improve agent performance and user expe
                 and judgment.overall_score >= self.quality_threshold
             )
 
-            summary = f"Quality: {quality_score:.2f}, Relevance: {relevance_score:.2f}, Overall: {judgment.overall_score:.2f}"
+            summary = (
+                f"Quality: {quality_score:.2f}, Relevance: {relevance_score:.2f},"
+                f"Overall: {judgment.overall_score:.2f}"
+            )
+
 
             return is_good, judgment.overall_score, summary
 

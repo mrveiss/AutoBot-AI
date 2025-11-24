@@ -229,7 +229,7 @@ class ClaudeAPIBatchManager:
         result = await self.batcher.get_result(request_id, timeout)
 
         if result is None:
-            raise Exception(f"Timeout waiting for batched request result")
+            raise Exception("Timeout waiting for batched request result")
 
         return result
 
@@ -297,7 +297,7 @@ class ClaudeAPIBatchManager:
         if self.metrics["total_requests"] > 0:
             batched_ratio = (
                 self.metrics["batched_requests"] / self.metrics["total_requests"]
-            )
+            ),
             batch_efficiency = batched_ratio * 100
 
         batcher_stats = {}

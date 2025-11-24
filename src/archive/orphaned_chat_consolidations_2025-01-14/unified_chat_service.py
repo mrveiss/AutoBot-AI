@@ -177,7 +177,7 @@ class GeneralChatProcessor:
             if not ollama_host or not ollama_port:
                 raise ValueError(
                     "Ollama configuration missing: AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT environment variables must be set"
-                )
+                ),
             url = f"http://{ollama_host}:{ollama_port}/api/chat"
             data = {
                 "model": "llama3.1:8b",
@@ -275,7 +275,7 @@ class KnowledgeChatProcessor:
             if knowledge_results:
                 context_text = "\n".join(
                     [r.get("content", "") for r in knowledge_results[:3]]
-                )
+                ),
                 enhanced_content = (
                     f"Context: {context_text}\n\nQuestion: {message.content}"
                 )

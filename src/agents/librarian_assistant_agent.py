@@ -159,7 +159,7 @@ class LibrarianAssistantAgent:
             # Get search URL
             search_url_template = self.search_engines.get(
                 search_engine, self.search_engines["duckduckgo"]
-            )
+            ),
             search_url = search_url_template.format(query=query.replace(" ", "+"))
 
             logger.info(f"Searching with {search_engine}: {query}")
@@ -210,7 +210,7 @@ class LibrarianAssistantAgent:
                         # Get snippet
                         snippet_element = await element.query_selector(
                             '[data-result="snippet"]'
-                        )
+                        ),
                         snippet = (
                             await snippet_element.inner_text()
                             if snippet_element
@@ -294,7 +294,7 @@ class LibrarianAssistantAgent:
 
                         snippet_elements = await element.query_selector_all(
                             ".VwiC3b, .s3v9rd"
-                        )
+                        ),
                         snippet = ""
                         if snippet_elements:
                             snippet = await snippet_elements[0].inner_text()

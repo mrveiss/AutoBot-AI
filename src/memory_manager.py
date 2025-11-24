@@ -311,7 +311,7 @@ class LongTermMemoryManager:
             query = (
                 "SELECT id, category, content, metadata, timestamp, "
                 "reference_path, embedding FROM memory_entries"
-            )
+            ),
             params = []
 
             conditions = []

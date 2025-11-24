@@ -178,10 +178,10 @@ class ContextCollector:
                 # Determine constraints and available actions
                 constraints = await self._identify_constraints(
                     decision_type, context_elements
-                )
+                ),
                 available_actions = await self._identify_available_actions(
                     decision_type, context_elements
-                )
+                ),
                 risk_factors = await self._assess_risk_factors(context_elements)
 
                 # Get user preferences and historical patterns
@@ -978,7 +978,10 @@ class DecisionEngine:
                 alternative_actions=[],
                 confidence=0.9,
                 confidence_level=ConfidenceLevel.HIGH,
-                reasoning=f"High risk factors detected: {[rf['risk_type'] for rf in high_risk_factors]}",
+                reasoning=(
+                    f"High risk factors detected: {[rf['risk_type'] for"
+                    f"rf in high_risk_factors]}"
+                ),
                 supporting_evidence=[
                     {"type": "risk_analysis", "high_risk_count": len(high_risk_factors)}
                 ],
@@ -1382,7 +1385,10 @@ class ContextAwareDecisionSystem:
             # Create memory task record for the decision
             task_id = self.memory_manager.create_task_record(
                 task_name=f"Decision: {decision.decision_type.value}",
-                description=f"Contextual decision making: {decision.chosen_action.get('action', 'unknown')}",
+                description=(
+                    f"Contextual decision making: {decision.chosen_action.get('action',"
+                    f"'unknown')}"
+                ),
                 priority=TaskPriority.MEDIUM,
                 agent_type="context_aware_decision_system",
                 inputs={

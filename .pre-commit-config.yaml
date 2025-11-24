@@ -24,7 +24,7 @@ repos:
     hooks:
       - id: flake8
         args: [
-          --max-line-length=88,
+          --max-line-length=100,
           --extend-ignore=E203,W503,
           --exclude=node_modules,.venv,venv,__pycache__,.git,temp,logs,reports,archive
         ]

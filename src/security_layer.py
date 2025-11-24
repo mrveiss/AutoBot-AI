@@ -81,7 +81,7 @@ class SecurityLayer:
                         "Downgrading to admin with granular permissions."
                     ),
                 },
-            )
+            ),
             user_role = "admin"  # Downgrade to admin with proper permissions
 
         role_permissions = self.roles.get(user_role, {}).get("permissions", [])

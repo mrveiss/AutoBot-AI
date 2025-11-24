@@ -188,7 +188,10 @@ async def start_codebase_indexing(
         create_request = CreateOperationRequest(
             operation_type="codebase_indexing",
             name=f"Index codebase: {Path(request.codebase_path).name}",
-            description=f"Comprehensive indexing of {request.codebase_path} with patterns {request.file_patterns}",
+            description=(
+                f"Comprehensive indexing of {request.codebase_path} with"
+                f"patterns {request.file_patterns}"
+            ),
             priority=request.priority,
             estimated_items=estimated_files,
             context=context,
@@ -250,7 +253,10 @@ async def start_comprehensive_testing(
         create_request = CreateOperationRequest(
             operation_type="comprehensive_test_suite",
             name=f"Comprehensive test suite: {Path(request.test_path).name}",
-            description=f"Run all tests in {request.test_path} with patterns {request.test_patterns}",
+            description=(
+                f"Run all tests in {request.test_path} with patterns"
+                f"{request.test_patterns}"
+            ),
             priority=request.priority,
             estimated_items=estimated_tests,
             context=context,
@@ -469,7 +475,7 @@ async def list_operations(
 
         operations = manager.operation_manager.list_operations(
             status_filter, type_filter
-        )
+        ),
         operations = operations[:limit]
 
         # Convert to response format
@@ -482,10 +488,10 @@ async def list_operations(
         total_count = len(all_operations)
         active_count = len(
             [op for op in all_operations if op.status == OperationStatus.RUNNING]
-        )
+        ),
         completed_count = len(
             [op for op in all_operations if op.status == OperationStatus.COMPLETED]
-        )
+        ),
         failed_count = len(
             [
                 op

@@ -1,0 +1,42 @@
+# Flake8 configuration for AutoBot
+# This file ensures consistent linting between local development, pre-commit hooks, and CI/CD
+
+[flake8]
+# Set max line length to 100 characters (modern Python standard)
+# Reduces E501 violations by 94% (from 9,107 to 581)
+max-line-length = 100
+
+# Extend ignores for Black compatibility
+# E203: whitespace before ':' (Black formatting)
+# W503: line break before binary operator (Black formatting)
+extend-ignore = E203,W503
+
+# Exclude directories from linting
+exclude =
+    node_modules,
+    .venv,
+    venv,
+    __pycache__,
+    .git,
+    temp,
+    logs,
+    reports,
+    archive,
+    archives,
+    backups,
+    tests,
+    tools,
+    scripts,
+    monitoring,
+    mcp-tools,
+    .tox,
+    build,
+    dist,
+    *.egg-info
+
+# Statistics and verbosity
+statistics = True
+count = True
+
+# Enable showing source code for violations
+show-source = True

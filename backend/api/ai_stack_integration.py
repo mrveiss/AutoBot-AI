@@ -221,7 +221,7 @@ async def rag_query(
         try:
             kb_results = await knowledge_base.search(
                 query=request.query, top_k=request.max_results
-            )
+            ),
             documents = kb_results if isinstance(kb_results, list) else []
         except Exception as e:
             logger.warning(f"Knowledge base search failed: {e}")
@@ -297,7 +297,7 @@ async def enhanced_chat(
             if kb_context:
                 kb_summary = "\n".join(
                     [f"- {item.get('content', '')[:200]}..." for item in kb_context[:3]]
-                )
+                ),
                 enhanced_context = (
                     f"{request.context or ''}\n\nRelevant knowledge:\n{kb_summary}"
                 )

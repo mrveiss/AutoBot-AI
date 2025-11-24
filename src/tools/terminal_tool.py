@@ -209,7 +209,8 @@ class TerminalTool:
                     host="main",
                 )
 
-                # Update session mapping - CRITICAL: Use agent terminal session_id, not pty_session_id
+                # Update session mapping - CRITICAL: Use agent terminal session_id,
+                # not pty_session_id
                 self.active_sessions[conversation_id] = recreate_result.session_id
                 session_id = recreate_result.session_id
 

@@ -99,7 +99,11 @@ class KBLibrarianAgent:
             if self.auto_learning_enabled:
                 await self._trigger_auto_learning(question)
 
-            prompt = f"Question: {question}\n\nNote: No specific information was found in the knowledge base for this question.\n\nAnswer:"
+            prompt = (
+                f"Question: {question}\n\nNote: No specific information was found in the knowledge base"
+                f"for this question.\n\nAnswer:"
+            )
+
 
         # Generate response using LLM
         try:

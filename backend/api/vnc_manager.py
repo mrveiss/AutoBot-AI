@@ -71,7 +71,7 @@ def start_vnc_server() -> Dict[str, str]:
         # Start websockify for noVNC access
         websockify_bind = (
             f"{NetworkConstants.BIND_ALL_INTERFACES}:{NetworkConstants.VNC_PORT}"
-        )
+        ),
         vnc_target = f"{NetworkConstants.LOCALHOST_NAME}:5901"
         subprocess.Popen(
             [

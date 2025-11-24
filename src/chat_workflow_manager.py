@@ -345,7 +345,7 @@ class ChatWorkflowManager:
                 except asyncio.TimeoutError:
                     logger.warning(
                         f"File read timeout after 5s for {transcript_path}, creating new transcript"
-                    )
+                    ),
                     transcript = {
                         "session_id": session_id,
                         "created_at": datetime.now().isoformat(),
@@ -504,7 +504,8 @@ class ChatWorkflowManager:
         Convert conversation history from storage format to classification format.
 
         Storage format: [{"user": "msg", "assistant": "response"}, ...]
-        Classification format: [{"role": "user", "content": "msg"}, {"role": "assistant", "content": "response"}, ...]
+        Classification format: [{"role": "user", "content": "msg"},
+                               {"role": "assistant", "content": "response"}, ...]
 
         Args:
             history: Conversation history in storage format
@@ -714,7 +715,7 @@ NEVER teach commands - ALWAYS execute them."""
             if not selected_model or not isinstance(selected_model, str):
                 logger.error(
                     f"Invalid model selection: {selected_model}, using default"
-                )
+                ),
                 selected_model = default_model
 
             logger.info(f"Using LLM model from config: {selected_model}")
@@ -774,7 +775,8 @@ Output:
 ```
 Return code: {return_code}
 
-Please interpret this output for the user in a clear, helpful way. Explain what it means and answer their original question."""
+Please interpret this output for the user in a clear, helpful way.
+Explain what it means and answer their original question."""
 
         interpretation = ""
 
@@ -952,15 +954,19 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                         llm_response=interpretation
                                     )
                                     logger.info(
-                                        f"✅ [interpret_terminal_command] Persisted user message + interpretation to conversation history for LLM context (session={session_id})"
+                                        f"✅ [interpret_terminal_command] Persisted user message + "
+                                        f"interpretation to conversation history for LLM context "
+                                        f"(session={session_id})"
                                     )
                                 else:
                                     logger.warning(
-                                        f"[interpret_terminal_command] No user message found in session {session_id} - skipping conversation persistence"
+                                        f"[interpret_terminal_command] No user message found in "
+                                        f"session {session_id} - skipping conversation persistence"
                                     )
                         except asyncio.TimeoutError:
                             logger.warning(
-                                f"[interpret_terminal_command] Redis timeout getting session data for {session_id}"
+                                f"[interpret_terminal_command] Redis timeout getting session "
+                                f"data for {session_id}"
                             )
                 except Exception as persist_error:
                     logger.error(
@@ -1036,7 +1042,8 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                 session_id=session_id,
             )
             logger.info(
-                f"✅ Persisted approval request immediately: session={session_id}, terminal={terminal_session_id}"
+                f"✅ Persisted approval request immediately: session={session_id}, "
+                f"terminal={terminal_session_id}"
             )
         except Exception as persist_error:
             logger.error(
@@ -1048,8 +1055,9 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
         yield WorkflowMessage(
             type="response",
             content=(
-                f"\n\n⏳ Waiting for your approval to execute: `{command}`\nRisk level:"
-                f"{result.get('risk')}\nReasons: {', '.join(result.get('reasons', []))}\n"
+                f"\n\n⏳ Waiting for your approval to execute: `{command}`\n"
+                f"Risk level: {result.get('risk')}\n"
+                f"Reasons: {', '.join(result.get('reasons', []))}\n"
             ),
             metadata={
                 "message_type": "approval_waiting",
@@ -1109,7 +1117,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                 "approved"
                                 if last_command.get("approved_by")
                                 else "denied"
-                            )
+                            ),
                             comment = last_command.get(
                                 "approval_comment"
                             ) or last_command.get("denial_reason")
@@ -1390,7 +1398,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
             if user_wants_exit:
                 logger.info(
                     f"[ChatWorkflowManager] User explicitly requested to exit conversation: {session_id}"
-                )
+                ),
                 exit_msg = WorkflowMessage(
                     type="response",
                     content=(
@@ -1474,7 +1482,7 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                                 r"<TOOL_\s+CALL",
                                                 "<TOOL_CALL",
                                                 chunk_text,
-                                            )
+                                            ),
                                             chunk_text = re.sub(
                                                 r"</TOOL_\s+CALL>",
                                                 "</TOOL_CALL>",

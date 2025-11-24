@@ -360,7 +360,7 @@ class DomainReputationService:
             if not api_key:
                 return None
 
-            url = f"https://www.virustotal.com/vtapi/v2/domain/report"
+            url = "https://www.virustotal.com/vtapi/v2/domain/report"
             params = {"apikey": api_key, "domain": domain}
 
             timeout = aiohttp.ClientTimeout(total=config.get("timeout", 5.0))
@@ -448,7 +448,7 @@ class DomainReputationService:
         """Determine action based on reputation assessment"""
         threshold = self.config.get("domain_security", {}).get(
             "reputation_threshold", 0.7
-        )
+        ),
         default_action = self.config.get("domain_security", {}).get(
             "default_action", "warn"
         )

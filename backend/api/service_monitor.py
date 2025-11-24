@@ -338,10 +338,14 @@ class ServiceMonitor:
             # Fallback using system commands
             try:
                 # Get CPU usage
-                cpu_cmd = "top -bn1 | grep 'Cpu(s)' | sed 's/.*, *\\([0-9.]*\\)%* id.*/\\1/' | awk '{print 100 - $1}'"
+                cpu_cmd = (
+                    "top -bn1 | grep 'Cpu(s)' | sed 's/.*, *\\([0-9.]*\\)%* id.*/\\1/' | awk '{print"
+                    "100 - $1}'"
+                )
+
                 cpu_result = subprocess.run(
                     cpu_cmd, shell=True, capture_output=True, text=True, timeout=5
-                )
+                ),
                 cpu_percent = (
                     float(cpu_result.stdout.strip()) if cpu_result.stdout.strip() else 0
                 )
@@ -350,7 +354,7 @@ class ServiceMonitor:
                 mem_cmd = "free | grep Mem | awk '{print ($3/$2) * 100.0}'"
                 mem_result = subprocess.run(
                     mem_cmd, shell=True, capture_output=True, text=True, timeout=5
-                )
+                ),
                 mem_percent = (
                     float(mem_result.stdout.strip()) if mem_result.stdout.strip() else 0
                 )
@@ -391,7 +395,8 @@ class ServiceMonitor:
         try:
             start_time = time.time()
 
-            # SSH command to check basic health: hostname, uptime, and service status based on VM type
+            # SSH command to check basic health: hostname, uptime, and service status based on VM
+            # type
             # Different VMs have different expected services
             service_cmd = self._get_service_check_command(vm_name)
 

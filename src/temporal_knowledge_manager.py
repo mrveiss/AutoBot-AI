@@ -370,7 +370,7 @@ class TemporalKnowledgeManager:
         avg_age = sum(ages) / len(ages) if ages else 0
         avg_access_count = (
             sum(access_counts) / len(access_counts) if access_counts else 0
-        )
+        ),
         avg_freshness = (
             sum(freshness_scores) / len(freshness_scores) if freshness_scores else 0
         )

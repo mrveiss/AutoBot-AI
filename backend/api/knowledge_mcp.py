@@ -123,7 +123,10 @@ async def get_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="add_to_knowledge_base",
-            description="Add new information to the AutoBot knowledge base (stored in Redis vectors)",
+            description=(
+                "Add new information to the AutoBot knowledge base (stored in Redis"
+                "vectors)"
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -377,7 +380,11 @@ async def mcp_summarize_knowledge_topic(request: Dict[str, Any]):
 
         # Use LLM to summarize (if available)
         if hasattr(kb, "llm") and kb.llm:
-            prompt = f"Summarize the following information about '{topic}':\n\n{combined_content}\n\nProvide a concise summary in {max_length} tokens or less."
+            prompt = (
+                f"Summarize the following information about '{topic}':\n\n{combined_content}\n\nProvide"
+                f"a concise summary in {max_length} tokens or less."
+            )
+
             summary = await kb.llm.generate(prompt, max_tokens=max_length)
         else:
             # Fallback to simple truncation
@@ -478,16 +485,28 @@ async def mcp_langchain_qa_chain(request: Dict[str, Any]):
         orchestrator = get_langchain_orchestrator()
         if orchestrator and orchestrator.available:
             # Use LangChain QA chain
-            prompt = f"Based on the following context, answer this question: {question}\n\nContext:\n{context}"
+            prompt = (
+                f"Based on the following context, answer this question:"
+                f"{question}\n\nContext:\n{context}"
+            )
+
             answer = await asyncio.to_thread(orchestrator.llm.predict, prompt)
         else:
             # Fallback to knowledge base LLM
             if hasattr(kb, "llm") and kb.llm:
-                prompt = f"Based on the following context, answer this question: {question}\n\nContext:\n{context}"
+                prompt = (
+                    f"Based on the following context, answer this question:"
+                    f"{question}\n\nContext:\n{context}"
+                )
+
                 answer = await asyncio.to_thread(kb.llm.complete, prompt)
                 answer = str(answer)
             else:
-                answer = f"Based on the search results: {search_results[0].get('content', '')[:500]}..."
+                answer = (
+                    f"Based on the search results: {search_results[0].get('content',"
+                    f"'')[:500]}..."
+                )
+
 
         return {
             "success": True,

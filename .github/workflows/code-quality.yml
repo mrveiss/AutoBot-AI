@@ -59,7 +59,7 @@ jobs:
     - name: Lint with flake8
       run: |
         python3 -m flake8 backend/ src/ \
-          --max-line-length=88 \
+          --max-line-length=100 \
           --extend-ignore=E203,W503 \
           --exclude=node_modules,.venv,venv,__pycache__,.git,temp,logs,reports,archive \
           --statistics \

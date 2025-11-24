@@ -193,7 +193,7 @@ class ToolInstallRequest(BaseModel):
 RISKY_COMMAND_PATTERNS = [
     # File system destructive operations
     "rm -r",
-    "rm -rf",
+    "rm -r",
     "sudo rm",
     "rmdir",
     # Disk operations
@@ -216,7 +216,7 @@ RISKY_COMMAND_PATTERNS = [
     "shutdown",
     "reboot",
     "halt",
-    "poweroff",
+    "powerof",
     # Package management (can be risky)
     "apt-get remove",
     "yum remove",
@@ -339,7 +339,7 @@ class ConsolidatedTerminalWebSocket:
                     if event_type == "output":
                         # Send output to WebSocket
                         await self.send_output(content)
-                    elif event_type in ("eof", "close"):
+                    elif event_type in ("eo", "close"):
                         # PTY closed
                         logger.info(f"PTY closed for session {self.session_id}")
                         await self.send_message(
@@ -446,7 +446,7 @@ class ConsolidatedTerminalWebSocket:
                                 session_id=self.conversation_id,
                             )
                         self._output_buffer = ""
-                        logger.info(f"[CHAT INTEGRATION] Buffer flushed successfully")
+                        logger.info("[CHAT INTEGRATION] Buffer flushed successfully")
             except Exception as e:
                 logger.error(f"Failed to flush output buffer: {e}")
 
@@ -550,7 +550,7 @@ class ConsolidatedTerminalWebSocket:
 
         if not text:
             logger.warning(
-                f"[_handle_input_message] No text found in message, returning"
+                "[_handle_input_message] No text found in message, returning"
             )
             return
 
@@ -653,7 +653,7 @@ class ConsolidatedTerminalWebSocket:
                     message_type="terminal_command",
                     session_id=self.conversation_id,
                 )
-                logger.info(f"[CHAT INTEGRATION] Command saved successfully")
+                logger.info("[CHAT INTEGRATION] Command saved successfully")
             except Exception as e:
                 logger.error(f"Failed to save command to chat: {e}")
 
@@ -780,7 +780,7 @@ class ConsolidatedTerminalWebSocket:
                     # Wait a tiny bit for password to be processed
                     await asyncio.sleep(0.1)
                     self.pty_process.set_echo(True)
-                    logger.info(f"[STDIN] Re-enabled echo after password input")
+                    logger.info("[STDIN] Re-enabled echo after password input")
             else:
                 logger.error(
                     f"[STDIN] Failed to write to PTY for session {self.session_id}"
@@ -1090,7 +1090,7 @@ class ConsolidatedTerminalWebSocket:
                             # Reset buffer after saving
                             self._output_buffer = ""
                             self._last_output_save_time = current_time
-                            logger.info(f"[CHAT INTEGRATION] Output saved successfully")
+                            logger.info("[CHAT INTEGRATION] Output saved successfully")
                         except Exception as e:
                             logger.error(f"Failed to save output to chat: {e}")
                     else:
@@ -1248,7 +1248,8 @@ class ConsolidatedTerminalManager:
 
     def get_session_stats(self, session_id: str) -> dict:
         """Get statistics for a session"""
-        # Note: For sync access, returns reference (caller should use get_session_stats_safe for safety)
+        # Note: For sync access, returns reference (caller should use get_session_stats_safe for
+        # safety)
         return self.session_stats.get(session_id, {})
 
     async def get_command_history(self, session_id: str) -> list:
@@ -1670,7 +1671,7 @@ async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str)
         config = session_manager.session_configs.get(session_id, {})
         security_level = SecurityLevel(
             config.get("security_level", SecurityLevel.STANDARD.value)
-        )
+        ),
         conversation_id = config.get("conversation_id")  # For chat/terminal linking
 
         # Get Redis client for TerminalLogger

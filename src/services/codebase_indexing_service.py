@@ -175,7 +175,7 @@ class CodeChunker:
                             "start_line": i - len(current_chunk) + 1,
                             "end_line": i,
                         }
-                    )
+                    ),
                 current_chunk = []
 
         # Save final chunk
@@ -200,7 +200,7 @@ class CodeChunker:
         # Split Vue file into sections
         template_match = re.search(
             r"<template[^>]*>(.*?)</template>", content, re.DOTALL
-        )
+        ),
         script_match = re.search(r"<script[^>]*>(.*?)</script>", content, re.DOTALL)
         style_match = re.search(r"<style[^>]*>(.*?)</style>", content, re.DOTALL)
 
@@ -346,7 +346,7 @@ class CodeChunker:
                                 "heading": current_heading,
                                 "level": current_level,
                             }
-                        )
+                        ),
                     current_chunk = []
 
         # Save final chunk
@@ -757,7 +757,7 @@ class CodebaseIndexingService:
 
             self.progress.end_time = datetime.now()
 
-            logger.info(f"Codebase indexing completed!")
+            logger.info("Codebase indexing completed!")
             logger.info(
                 f"Results: {self.progress.successful_files} successful, {self.progress.failed_files} failed"
             )

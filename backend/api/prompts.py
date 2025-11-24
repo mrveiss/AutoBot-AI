@@ -45,7 +45,7 @@ async def get_prompts():
         # Adjust path to look for prompts directory at project root
         prompts_dir = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
-        )
+        ),
         prompts = []
         defaults = {}
 
@@ -65,7 +65,7 @@ async def get_prompts():
 
                     prompt_id = (
                         rel_path.replace("/", "_").replace("\\", "_").rsplit(".", 1)[0]
-                    )
+                    ),
                     prompt_type = base_path if base_path else "custom"
 
                     prompt_info = {
@@ -154,7 +154,10 @@ async def get_prompts():
                 if not prompts:
                     raise HTTPException(
                         status_code=504,
-                        detail="Prompts loading timed out. Please try again or contact administrator.",
+                        detail=(
+                            "Prompts loading timed out. Please try again or"
+                            "contact administrator."
+                        )
                     )
         else:
             logger.warning(f"Prompts directory {prompts_dir} not found")

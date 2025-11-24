@@ -669,7 +669,7 @@ METADATA:
         install_pattern = (
             r"(?:apt|apt-get|yum|dnf|pacman|brew|pip|npm)\s+install\s+"
             r"(?:-[yS]\s+)?(\S+)"
-        )
+        ),
         match = re.search(install_pattern, installation_text)
         if match:
             return match.group(1)
@@ -730,7 +730,7 @@ METADATA:
                 start = max(0, content_lower.find(pattern) - 50)
                 end = min(
                     len(content), content_lower.find(pattern) + len(pattern) + 100
-                )
+                ),
                 context = content[start:end]
 
                 tools.append(

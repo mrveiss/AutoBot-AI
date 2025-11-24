@@ -168,7 +168,10 @@ async def clear_redis_cache(database: str):
             if database not in REDIS_DATABASES:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Unknown database '{database}'. Available: {list(REDIS_DATABASES.keys())}",
+                    detail=(
+                        f"Unknown database '{database}'. Available:"
+                        f"{list(REDIS_DATABASES.keys())}"
+                    )
                 )
 
             db_number = REDIS_DATABASES[database]

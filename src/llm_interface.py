@@ -870,7 +870,7 @@ class LLMInterface:
             if not isinstance(response, dict):
                 logger.error(
                     f"Streaming response is not a dict: {type(response)} - {response}"
-                )
+                ),
                 response = {"message": {"content": str(response)}, "model": model}
 
             # Safely extract content with fallback handling

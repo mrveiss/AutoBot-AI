@@ -122,7 +122,10 @@ class CachedResponseStrategy(FallbackStrategy):
             )
 
         return FallbackResponse(
-            content="I apologize, but I'm currently unable to process your request due to service issues. Please try again later.",
+            content=(
+                "I apologize, but I'm currently unable to process your request due to service issues."
+                "Please try again later."
+            ),
             source="cached_response_fallback",
             confidence=0.1,
             degradation_level=DegradationLevel.MINIMAL,

@@ -325,7 +325,10 @@ def create_enhanced_app() -> FastAPI:
     # Create FastAPI app with enhanced lifespan
     app = FastAPI(
         title="AutoBot Enhanced Backend API with AI Stack Integration",
-        description="Comprehensive AI-powered automation platform with advanced RAG, multi-agent coordination, and NPU acceleration",
+        description=(
+            "Comprehensive AI-powered automation platform with advanced RAG,"
+            "multi-agent coordination, and NPU acceleration"
+        ),
         version="2.0.0",
         docs_url="/docs",
         redoc_url="/redoc",
