@@ -16,7 +16,8 @@ from typing import List, Dict, Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import redis
+# Use canonical Redis client utility
+from src.utils.redis_client import get_redis_client
 import logging
 
 from src.constants.network_constants import NetworkConstants

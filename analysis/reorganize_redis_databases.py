@@ -18,10 +18,10 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import redis
 import logging
 
-from src.constants.network_constants import NetworkConstants
+# Use canonical Redis client utility
+from src.utils.redis_client import get_redis_client
 
 logging.basicConfig(level=logging.INFO)
 
@@ -29,18 +29,15 @@ async def main():
     try:
         print("🗂️ Reorganizing Redis databases for optimal separation...")
 
-        # Connect to all databases
+        # Connect to all databases using canonical get_redis_client()
         connections = {}
-        for db in range(4):
-            connections[db] = redis.Redis(
-                host=NetworkConstants.REDIS_VM_IP,
-                port=NetworkConstants.REDIS_PORT,
-                db=db,
-                decode_responses=False,  # Handle binary data
-                socket_timeout=10,
-                socket_connect_timeout=10,
+        db_names = ["main", "knowledge", "cache", "sessions"]  # Named databases 0-3
+        for db_idx, db_name in enumerate(db_names):
+            connections[db_idx] = get_redis_client(
+                async_client=False,
+                database=db_name
             )
-            print(f"✅ Connected to DB{db}: {connections[db].ping()}")
+            print(f"✅ Connected to DB{db_idx} ({db_name}): {connections[db_idx].ping()}")
 
         # Analysis phase - see what's where
         print("\n📊 Current database analysis:")

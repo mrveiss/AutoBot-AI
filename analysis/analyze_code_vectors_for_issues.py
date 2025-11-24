@@ -25,7 +25,8 @@ from pathlib import Path
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import redis
+# Use canonical Redis client utility
+from src.utils.redis_client import get_redis_client
 from src.unified_config_manager import unified_config_manager
 
 logging.basicConfig(level=logging.INFO)
@@ -52,18 +53,12 @@ class CodeIssueAnalyzer:
         }
 
     async def initialize(self):
-        """Initialize Redis connection"""
+        """Initialize Redis connection using canonical get_redis_client()"""
         try:
-            # Get Redis configuration from unified config manager
-            redis_config = unified_config_manager.get_redis_config()
-
-            self.analytics_redis = redis.Redis(
-                host=redis_config.get("host"),
-                port=redis_config.get("port"),
-                db=8,
-                decode_responses=False,
-                socket_timeout=10,
-                socket_connect_timeout=5
+            # Use canonical Redis client utility for analytics database (DB 8)
+            self.analytics_redis = get_redis_client(
+                async_client=False,
+                database="analytics"
             )
 
             ping_result = self.analytics_redis.ping()
