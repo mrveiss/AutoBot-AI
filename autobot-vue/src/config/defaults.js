@@ -4,80 +4,79 @@
  * This file contains ALL fallback values used throughout the AutoBot frontend.
  * This ensures consistency and makes it easy to update network configurations.
  *
- * IMPORTANT: Uses NetworkConstants for all IP addresses - NO HARDCODED VALUES
+ * IMPORTANT: Uses hardcoded fallbacks only - environment variables take precedence
+ * NOTE: This file MUST NOT import from network.ts to avoid circular dependency
  */
 
-import { NetworkConstants } from '../constants/network.ts';
-
 export const DEFAULT_CONFIG = {
-  // Network Infrastructure - AutoBot VM Layout (Uses NetworkConstants)
+  // Network Infrastructure - AutoBot VM Layout
   network: {
     // Backend VM - Main API server
     backend: {
-      host: import.meta.env.VITE_BACKEND_HOST || NetworkConstants.MAIN_MACHINE_IP,
-      port: import.meta.env.VITE_BACKEND_PORT || String(NetworkConstants.BACKEND_PORT),
+      host: import.meta.env.VITE_BACKEND_HOST || '172.16.168.20',
+      port: import.meta.env.VITE_BACKEND_PORT || '8001',
       protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
     },
 
     // Frontend VM - Vue.js development server
     frontend: {
-      host: import.meta.env.VITE_FRONTEND_HOST || NetworkConstants.FRONTEND_VM_IP,
-      port: import.meta.env.VITE_FRONTEND_PORT || String(NetworkConstants.FRONTEND_PORT),
+      host: import.meta.env.VITE_FRONTEND_HOST || '172.16.168.21',
+      port: import.meta.env.VITE_FRONTEND_PORT || '5173',
       protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
     },
 
     // NPU Worker VM - AI processing
     npu_worker: {
-      host: import.meta.env.VITE_NPU_WORKER_HOST || NetworkConstants.NPU_WORKER_VM_IP,
-      port: import.meta.env.VITE_NPU_WORKER_PORT || String(NetworkConstants.NPU_WORKER_PORT),
+      host: import.meta.env.VITE_NPU_WORKER_HOST || '172.16.168.22',
+      port: import.meta.env.VITE_NPU_WORKER_PORT || '8081',
       protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
     },
 
     // Redis VM - Database server
     redis: {
-      host: import.meta.env.VITE_REDIS_HOST || NetworkConstants.REDIS_VM_IP,
-      port: import.meta.env.VITE_REDIS_PORT || String(NetworkConstants.REDIS_PORT),
+      host: import.meta.env.VITE_REDIS_HOST || '172.16.168.23',
+      port: import.meta.env.VITE_REDIS_PORT || '6379',
       protocol: 'redis'
     },
 
     // AI Stack VM - LLM services
     ai_stack: {
-      host: import.meta.env.VITE_AI_STACK_HOST || NetworkConstants.AI_STACK_VM_IP,
-      port: import.meta.env.VITE_AI_STACK_PORT || String(NetworkConstants.AI_STACK_PORT),
+      host: import.meta.env.VITE_AI_STACK_HOST || '172.16.168.24',
+      port: import.meta.env.VITE_AI_STACK_PORT || '8080',
       protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
     },
 
     // Browser Service VM - Playwright automation
     browser: {
-      host: import.meta.env.VITE_BROWSER_HOST || NetworkConstants.BROWSER_VM_IP,
-      port: import.meta.env.VITE_BROWSER_PORT || String(NetworkConstants.BROWSER_SERVICE_PORT),
+      host: import.meta.env.VITE_BROWSER_HOST || '172.16.168.25',
+      port: import.meta.env.VITE_BROWSER_PORT || '3000',
       protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
     },
 
     // Ollama LLM service (runs on main machine)
     ollama: {
-      host: import.meta.env.VITE_OLLAMA_HOST || NetworkConstants.MAIN_MACHINE_IP,
-      port: import.meta.env.VITE_OLLAMA_PORT || String(NetworkConstants.OLLAMA_PORT),
+      host: import.meta.env.VITE_OLLAMA_HOST || '172.16.168.20',
+      port: import.meta.env.VITE_OLLAMA_PORT || '11434',
       protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
     }
   },
 
-  // VNC Service Configuration (Uses NetworkConstants)
+  // VNC Service Configuration
   vnc: {
     desktop: {
-      host: import.meta.env.VITE_DESKTOP_VNC_HOST || NetworkConstants.MAIN_MACHINE_IP,
-      port: import.meta.env.VITE_DESKTOP_VNC_PORT || String(NetworkConstants.VNC_PORT),
+      host: import.meta.env.VITE_DESKTOP_VNC_HOST || '172.16.168.20',
+      port: import.meta.env.VITE_DESKTOP_VNC_PORT || '6080',
       protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http',
       password: import.meta.env.VITE_DESKTOP_VNC_PASSWORD || 'autobot'
     },
     terminal: {
-      host: import.meta.env.VITE_TERMINAL_VNC_HOST || NetworkConstants.MAIN_MACHINE_IP,
-      port: import.meta.env.VITE_TERMINAL_VNC_PORT || String(NetworkConstants.VNC_PORT),
+      host: import.meta.env.VITE_TERMINAL_VNC_HOST || '172.16.168.20',
+      port: import.meta.env.VITE_TERMINAL_VNC_PORT || '6080',
       protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http',
       password: import.meta.env.VITE_TERMINAL_VNC_PASSWORD || 'autobot'
     },
     playwright: {
-      host: import.meta.env.VITE_PLAYWRIGHT_VNC_HOST || NetworkConstants.BROWSER_VM_IP,
+      host: import.meta.env.VITE_PLAYWRIGHT_VNC_HOST || '172.16.168.25',
       port: import.meta.env.VITE_PLAYWRIGHT_VNC_PORT || '5900',
       protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http',
       password: import.meta.env.VITE_PLAYWRIGHT_VNC_PASSWORD || 'autobot'
