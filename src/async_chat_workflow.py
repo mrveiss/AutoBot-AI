@@ -364,7 +364,7 @@ async def process_chat_message(
             response=(
                 f"I apologize, but I'm experiencing a processing delay. Your message was:"
                 f"'{user_message}' (Emergency mode active)"
-            )
+            ),
             message_type=MessageType.GENERAL_QUERY,
             knowledge_status=KnowledgeStatus.BYPASSED,
             kb_results=[],
