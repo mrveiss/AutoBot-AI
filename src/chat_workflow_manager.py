@@ -160,8 +160,10 @@ class ChatWorkflowManager:
         # Decode HTML entities (e.g., &quot; -> ")
         text = html.unescape(text)
 
+        has_tool_call = ('<TOOL_CALL' in text) or ('<tool_call' in text)
         logger.debug(
-            f"[_parse_tool_calls] Checking if '<TOOL_CALL' or '<tool_call' exists in text: {('<TOOL_CALL' in text) or ('<tool_call' in text)}"
+            f"[_parse_tool_calls] Checking if '<TOOL_CALL' or "
+            f"'<tool_call' exists in text: {has_tool_call}"
         )
 
         tool_calls = []
@@ -189,7 +191,8 @@ class ChatWorkflowManager:
                     {"name": tool_name, "params": params, "description": description}
                 )
                 logger.debug(
-                    f"[_parse_tool_calls] Found TOOL_CALL #{match_count}: name={tool_name}, params={params}"
+                    f"[_parse_tool_calls] Found TOOL_CALL #{match_count}: "
+                    f"name={tool_name}, params={params}"
                 )
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse tool call params: {e}")
@@ -197,7 +200,8 @@ class ChatWorkflowManager:
                 continue
 
         logger.info(
-            f"[_parse_tool_calls] Total matches found: {match_count}, successfully parsed: {len(tool_calls)}"
+            f"[_parse_tool_calls] Total matches found: {match_count}, "
+            f"successfully parsed: {len(tool_calls)}"
         )
         return tool_calls
 
@@ -380,7 +384,8 @@ class ChatWorkflowManager:
                 await asyncio.to_thread(temp_path.rename, transcript_path)
 
                 logger.debug(
-                    f"Appended to transcript for session {session_id} ({transcript['message_count']} total messages)"
+                    f"Appended to transcript for session {session_id} "
+                    f"({transcript['message_count']} total messages)"
                 )
 
             except asyncio.TimeoutError:
@@ -440,7 +445,8 @@ class ChatWorkflowManager:
                     logger.info("✅ Redis client initialized for conversation history")
                 except Exception as redis_error:
                     logger.warning(
-                        f"⚠️ Redis initialization failed: {redis_error} - continuing without persistence"
+                        f"⚠️ Redis initialization failed: {redis_error} - "
+                        f"continuing without persistence"
                     )
                     self.redis_client = None
 
@@ -473,7 +479,8 @@ class ChatWorkflowManager:
                 )
 
                 logger.info(
-                    f"Created new workflow session: {session_id} with {len(conversation_history)} messages from history"
+                    f"Created new workflow session: {session_id} with "
+                    f"{len(conversation_history)} messages from history"
                 )
 
             # Update last activity
@@ -866,7 +873,8 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
             selected_model = global_config_manager.get_selected_model()
 
             logger.info(
-                f"[interpret_terminal_command] Starting interpretation for command: {command[:50]}..."
+                f"[interpret_terminal_command] Starting interpretation "
+                f"for command: {command[:50]}..."
             )
 
             # Call the interpretation generator (non-streaming for terminal)
@@ -884,7 +892,8 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                     interpretation += msg.content
 
             logger.info(
-                f"[interpret_terminal_command] Interpretation complete, length: {len(interpretation)}"
+                f"[interpret_terminal_command] Interpretation complete, "
+                f"length: {len(interpretation)}"
             )
 
             # Save interpretation to chat history
@@ -900,11 +909,63 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                         session_id=session_id,
                     )
                     logger.info(
-                        f"[interpret_terminal_command] Saved interpretation to chat session {session_id}"
+                        f"[interpret_terminal_command] Saved interpretation "
+                        f"to chat session {session_id}"
                     )
                 except Exception as e:
                     logger.error(
                         f"[interpret_terminal_command] Failed to save interpretation: {e}"
+                    )
+
+                # CRITICAL FIX: Persist to conversation history (chat:conversation) for LLM context
+                # This fixes the bug where terminal interpretations weren't being tracked in LLM
+                # context
+                try:
+                    # Get the session to access conversation_history
+                    session = await self.get_or_create_session(session_id)
+
+                    # Get the last user message from chat:session (most recent context)
+                    if self.redis_client is not None:
+                        session_key = f"chat:session:{session_id}"
+                        try:
+                            session_data_json = await asyncio.wait_for(
+                                self.redis_client.get(session_key),
+                                timeout=2.0
+                            )
+                            if session_data_json:
+                                session_data = json.loads(session_data_json)
+                                messages = session_data.get("messages", [])
+
+                                # Find the most recent user message
+                                last_user_message = None
+                                for msg in reversed(messages):
+                                    if msg.get("sender") == "user":
+                                        last_user_message = msg.get("text", "")
+                                        break
+
+                                if last_user_message:
+                                    # Persist the exchange to conversation history
+                                    await self._persist_conversation(
+                                        session_id=session_id,
+                                        session=session,
+                                        message=last_user_message,
+                                        llm_response=interpretation
+                                    )
+                                    logger.info(
+                                        f"✅ [interpret_terminal_command] Persisted user message + interpretation to conversation history for LLM context (session={session_id})"
+                                    )
+                                else:
+                                    logger.warning(
+                                        f"[interpret_terminal_command] No user message found in session {session_id} - skipping conversation persistence"
+                                    )
+                        except asyncio.TimeoutError:
+                            logger.warning(
+                                f"[interpret_terminal_command] Redis timeout getting session data for {session_id}"
+                            )
+                except Exception as persist_error:
+                    logger.error(
+                        f"[interpret_terminal_command] Failed to persist to conversation history: {persist_error}",
+                        exc_info=True
                     )
 
             return interpretation
@@ -986,7 +1047,10 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
         # Yield waiting message
         yield WorkflowMessage(
             type="response",
-            content=f"\n\n⏳ Waiting for your approval to execute: `{command}`\nRisk level: {result.get('risk')}\nReasons: {', '.join(result.get('reasons', []))}\n",
+            content=(
+                f"\n\n⏳ Waiting for your approval to execute: `{command}`\nRisk level:"
+                f"{result.get('risk')}\nReasons: {', '.join(result.get('reasons', []))}\n"
+            ),
             metadata={
                 "message_type": "approval_waiting",
                 "command": command,
@@ -1075,7 +1139,8 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                 )
                                 break
                     else:
-                        # CRITICAL FIX: No command history but approval is cleared - break immediately
+                        # CRITICAL FIX: No command history but approval is cleared -
+                        # break immediately
                         logger.warning(
                             f"⚠️ [APPROVAL POLLING] pending_approval is None but no command history. "
                             f"Breaking after {elapsed_time:.1f}s to prevent infinite loop."
@@ -1189,7 +1254,10 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                         # Yield execution confirmation
                         yield WorkflowMessage(
                             type="response",
-                            content="\n\n✅ Command approved and executed! Interpreting results...\n\n",
+                            content=(
+                                "\n\n✅ Command approved and executed! Interpreting"
+                                "results...\n\n"
+                            ),
                             metadata={
                                 "message_type": "command_executed",
                                 "command": command,
@@ -1325,7 +1393,10 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                 )
                 exit_msg = WorkflowMessage(
                     type="response",
-                    content="Goodbye! Feel free to return anytime if you need assistance. Take care!",
+                    content=(
+                        "Goodbye! Feel free to return anytime if you need assistance. Take"
+                        "care!"
+                    ),
                     metadata={
                         "message_type": "exit_acknowledgment",
                         "exit_detected": True,
@@ -1426,7 +1497,8 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                                     ),
                                                 },
                                             )
-                                            # Don't collect streaming chunks - only collect complete messages
+                                            # Don't collect streaming chunks -
+                                            # only collect complete messages
                                             yield chunk_msg
 
                                         if chunk_data.get("done", False):
@@ -1458,8 +1530,10 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
                                     selected_model,
                                 ):
                                     # Collect important WorkflowMessages for persistence
-                                    # NOTE: command_approval_request is persisted immediately, don't collect it here
-                                    # Collect terminal commands, terminal output, and errors for end-of-stream persistence
+                                    # NOTE: command_approval_request is persisted immediately,
+                                    # don't collect it here
+                                    # Collect terminal commands, terminal output,
+                                    # and errors for end-of-stream persistence
                                     if tool_msg.type in [
                                         "terminal_command",
                                         "terminal_output",
@@ -1472,12 +1546,14 @@ Please interpret this output for the user in a clear, helpful way. Explain what 
 
                                     yield tool_msg
 
-                            # Stage 5: Persist conversation (OLD METHOD - keeps for conversation_history)
+                            # Stage 5: Persist conversation (OLD METHOD -
+                            # keeps for conversation_history)
                             await self._persist_conversation(
                                 session_id, session, message, llm_response
                             )
 
-                            # Stage 6: NEW - Persist WorkflowMessages and assistant response to chat history
+                            # Stage 6: NEW - Persist WorkflowMessages and assistant response to chat
+                            # history
                             # (User message already persisted immediately at start)
                             try:
                                 chat_mgr = ChatHistoryManager()
