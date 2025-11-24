@@ -255,7 +255,10 @@ class IntentClassifier:
                 return IntentClassification(
                     intent=ConversationIntent.CLARIFICATION,
                     confidence=0.85,
-                    reasoning="Exit phrase detected but in question form - user asking about exiting",
+                    reasoning=(
+                        "Exit phrase detected but in question form -"
+                        "user asking about exiting"
+                    ),
                     signals=signals,
                 )
 
