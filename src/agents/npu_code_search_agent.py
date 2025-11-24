@@ -527,10 +527,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         try:
             # Check cache first
-            cache_key = (
-                f"{self.search_cache_prefix}{hashlib.md5((query + search_type +"
-                f"str(language)).encode()).hexdigest()}"
-            )
+            cache_key = f"{self.search_cache_prefix}{hashlib.md5((query + search_type + str(language)).encode()).hexdigest()}"
 
             cached_result = self.redis_client.get(cache_key)
 
