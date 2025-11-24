@@ -970,7 +970,8 @@ Explain what it means and answer their original question."""
                             )
                 except Exception as persist_error:
                     logger.error(
-                        f"[interpret_terminal_command] Failed to persist to conversation history: {persist_error}",
+                        f"[interpret_terminal_command] Failed to persist to conversation "
+                        f"history: {persist_error}",
                         exc_info=True
                     )
 
@@ -1068,7 +1069,8 @@ Explain what it means and answer their original question."""
         # Wait for approval with timeout (poll terminal session)
         logger.info(f"🔍 [APPROVAL POLLING] Waiting for approval of command: {command}")
         logger.info(
-            f"🔍 [APPROVAL POLLING] Chat session: {session_id}, Terminal session: {terminal_session_id}"
+            f"🔍 [APPROVAL POLLING] Chat session: {session_id}, "
+            f"Terminal session: {terminal_session_id}"
         )
 
         max_wait_time = 3600  # 1 hour timeout
@@ -1092,9 +1094,14 @@ Explain what it means and answer their original question."""
 
                 # Log polling attempts every 10 seconds
                 if poll_count % 20 == 0:
+                    pending_status = (
+                        session_info.get('pending_approval') is not None
+                        if session_info else 'NO SESSION INFO'
+                    )
                     logger.info(
-                        f"🔍 [APPROVAL POLLING] Still waiting... (elapsed: {elapsed_time:.1f}s, "
-                        f"session: {terminal_session_id}, pending_approval: {session_info.get('pending_approval') is not None if session_info else 'NO SESSION INFO'})"
+                        f"🔍 [APPROVAL POLLING] Still waiting... "
+                        f"(elapsed: {elapsed_time:.1f}s, session: {terminal_session_id}, "
+                        f"pending_approval: {pending_status})"
                     )
 
                 # If pending_approval is None, command was either approved or denied
@@ -1141,8 +1148,10 @@ Explain what it means and answer their original question."""
                                 elapsed_time > max_wait_time - 3590
                             ):  # 10 seconds after approval cleared
                                 logger.warning(
-                                    f"⚠️ [APPROVAL POLLING] Timeout: pending_approval is None but command not found in history. "
-                                    f"Expected: '{command}', Last in history: '{last_command.get('command')}'. "
+                                    f"⚠️ [APPROVAL POLLING] Timeout: pending_approval is None "
+                                    f"but command not found in history. "
+                                    f"Expected: '{command}', "
+                                    f"Last in history: '{last_command.get('command')}'. "
                                     f"Breaking after {elapsed_time:.1f}s."
                                 )
                                 break
@@ -1150,8 +1159,8 @@ Explain what it means and answer their original question."""
                         # CRITICAL FIX: No command history but approval is cleared -
                         # break immediately
                         logger.warning(
-                            f"⚠️ [APPROVAL POLLING] pending_approval is None but no command history. "
-                            f"Breaking after {elapsed_time:.1f}s to prevent infinite loop."
+                            f"⚠️ [APPROVAL POLLING] pending_approval is None but no command "
+                            f"history. Breaking after {elapsed_time:.1f}s to prevent infinite loop."
                         )
                         break
             except Exception as check_error:
@@ -1397,7 +1406,8 @@ Explain what it means and answer their original question."""
 
             if user_wants_exit:
                 logger.info(
-                    f"[ChatWorkflowManager] User explicitly requested to exit conversation: {session_id}"
+                    f"[ChatWorkflowManager] User explicitly requested to exit "
+                    f"conversation: {session_id}"
                 ),
                 exit_msg = WorkflowMessage(
                     type="response",
@@ -1519,7 +1529,8 @@ Explain what it means and answer their original question."""
                                         continue
 
                             logger.info(
-                                f"[ChatWorkflowManager] Full LLM response length: {len(llm_response)} characters"
+                                f"[ChatWorkflowManager] Full LLM response length: "
+                                f"{len(llm_response)} characters"
                             )
 
                             # Stage 4: Process tool calls if present

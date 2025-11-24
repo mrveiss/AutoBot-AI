@@ -914,17 +914,215 @@ class AgentTerminalService:
             logger.error(f"Error writing to PTY: {e}")
             return False
 
+    async def _detect_return_code(
+        self, session: AgentTerminalSession, max_attempts: int = 10
+    ) -> Optional[int]:
+        """
+        Detect command return code using exit code marker injection.
+
+        Phase 1 Implementation: Injects 'echo "EXIT_CODE:$?"' marker and polls
+        chat history with exponential backoff to detect the exit code.
+
+        Args:
+            session: Agent terminal session
+            max_attempts: Maximum polling attempts (default: 10)
+
+        Returns:
+            Return code if detected, None if detection failed
+        """
+        import re
+
+        from src.utils.encoding_utils import strip_ansi_codes
+
+        logger.debug("[PTY_EXEC] Injecting exit code marker...")
+
+        # Inject marker to capture exit code
+        marker = f"echo 'EXIT_CODE:'$?"
+        if not self._write_to_pty(session, f"{marker}\n"):
+            logger.warning("[PTY_EXEC] Failed to inject exit code marker")
+            return None
+
+        # Poll with exponential backoff
+        base_delay = 0.1  # Start with 100ms
+        for attempt in range(max_attempts):
+            await asyncio.sleep(base_delay * (1.5 ** attempt))  # Exponential backoff
+
+            try:
+                if not session.conversation_id:
+                    continue
+
+                # Get recent messages
+                messages = await self.chat_history_manager.get_session_messages(
+                    session_id=session.conversation_id, limit=3
+                )
+
+                # Search for EXIT_CODE marker
+                for msg in reversed(messages):
+                    if msg.get("sender") == "terminal" and msg.get("text"):
+                        clean_text = strip_ansi_codes(msg["text"])
+
+                        # Match EXIT_CODE:N pattern
+                        match = re.search(r'EXIT_CODE:(\d+)', clean_text)
+                        if match:
+                            return_code = int(match.group(1))
+                            logger.info(f"[PTY_EXEC] Detected return code: {return_code}")
+                            return return_code
+
+            except Exception as e:
+                logger.warning(f"[PTY_EXEC] Error detecting return code (attempt {attempt + 1}): {e}")
+
+        # Fallback: Analyze error patterns
+        logger.debug("[PTY_EXEC] Marker detection failed, falling back to error pattern analysis")
+        return await self._analyze_error_patterns(session)
+
+    async def _analyze_error_patterns(self, session: AgentTerminalSession) -> int:
+        """
+        Fallback return code detection via error pattern analysis.
+
+        Analyzes recent terminal output for common error indicators when
+        exit code marker detection fails.
+
+        Args:
+            session: Agent terminal session
+
+        Returns:
+            Return code estimate (0 = success, 1 = error)
+        """
+        import re
+
+        from src.utils.encoding_utils import strip_ansi_codes
+
+        error_patterns = [
+            r'command not found',
+            r'permission denied',
+            r'no such file or directory',
+            r'cannot access',
+            r'error:',
+            r'fatal:',
+            r'failed',
+        ]
+
+        try:
+            if not session.conversation_id:
+                return 0  # Assume success if no conversation
+
+            messages = await self.chat_history_manager.get_session_messages(
+                session_id=session.conversation_id, limit=5
+            )
+
+            for msg in reversed(messages):
+                if msg.get("sender") == "terminal" and msg.get("text"):
+                    clean_text = strip_ansi_codes(msg["text"]).lower()
+
+                    for pattern in error_patterns:
+                        if re.search(pattern, clean_text):
+                            logger.debug(f"[PTY_EXEC] Error pattern detected: {pattern}")
+                            return 1  # Error detected
+
+        except Exception as e:
+            logger.warning(f"[PTY_EXEC] Error pattern analysis failed: {e}")
+
+        return 0  # Assume success if no errors detected
+
+    async def _intelligent_poll_output(
+        self,
+        session: AgentTerminalSession,
+        timeout: float = 30.0,
+        stability_threshold: float = 0.5,
+    ) -> str:
+        """
+        Intelligent polling system with adaptive timeouts and output stability detection.
+
+        Phase 2 Implementation: Polls chat history with progressive backoff until
+        output stabilizes (unchanged for stability_threshold seconds) or timeout.
+
+        Args:
+            session: Agent terminal session
+            timeout: Maximum wait time in seconds (default: 30s)
+            stability_threshold: Seconds of unchanged output to consider stable (default: 0.5s)
+
+        Returns:
+            Collected output from chat history
+        """
+        import time as time_module
+
+        from src.utils.encoding_utils import strip_ansi_codes
+
+        start_time = time_module.time()
+        last_output = ""
+        last_change_time = start_time
+        poll_interval = 0.1  # Start with 100ms
+        max_interval = 2.0  # Cap at 2 seconds
+
+        logger.debug(f"[PTY_EXEC] Starting intelligent polling (timeout={timeout}s, stability={stability_threshold}s)")
+
+        while (time_module.time() - start_time) < timeout:
+            try:
+                current_output = ""
+
+                if session.conversation_id:
+                    messages = await self.chat_history_manager.get_session_messages(
+                        session_id=session.conversation_id, limit=5
+                    )
+
+                    # Find most recent terminal output
+                    for msg in reversed(messages):
+                        if msg.get("sender") == "terminal" and msg.get("text"):
+                            terminal_text = msg["text"]
+                            clean_output = strip_ansi_codes(terminal_text)
+
+                            # Extract output (skip command echo)
+                            lines = clean_output.split("\n")
+                            if len(lines) > 1:
+                                current_output = "\n".join(lines[1:]).strip()
+                            break
+
+                # Check output stability
+                if current_output and current_output == last_output:
+                    stable_duration = time_module.time() - last_change_time
+                    if stable_duration >= stability_threshold:
+                        logger.info(
+                            f"[PTY_EXEC] Output stabilized after {stable_duration:.2f}s, "
+                            f"total elapsed: {time_module.time() - start_time:.2f}s"
+                        )
+                        return current_output
+                elif current_output != last_output:
+                    last_output = current_output
+                    last_change_time = time_module.time()
+                    # Reset interval on new output
+                    poll_interval = 0.1
+
+            except Exception as e:
+                logger.warning(f"[PTY_EXEC] Polling error: {e}")
+
+            # Progressive backoff
+            await asyncio.sleep(poll_interval)
+            poll_interval = min(poll_interval * 1.5, max_interval)
+
+        elapsed = time_module.time() - start_time
+        logger.warning(
+            f"[PTY_EXEC] Polling timeout reached ({elapsed:.2f}s), "
+            f"returning last captured output"
+        )
+        return last_output
+
     async def _execute_in_pty(
-        self, session: AgentTerminalSession, command: str, timeout: float = 5.0
+        self, session: AgentTerminalSession, command: str, timeout: float = 30.0
     ) -> Dict[str, Any]:
         """
         Execute command directly in PTY shell (true collaboration mode).
         User and agent work as one in the same terminal.
 
+        IMPROVEMENTS (Issue #143):
+        - Phase 1: Intelligent return code detection with retry and fallback
+        - Phase 2: Adaptive polling with output stability detection
+        - Increased default timeout from 5s to 30s
+        - Proper error handling and comprehensive logging
+
         Args:
             session: Agent terminal session
             command: Command to execute
-            timeout: Max seconds to wait for output
+            timeout: Max seconds to wait for output (default: 30s)
 
         Returns:
             Dict with status, stdout, stderr, return_code
@@ -949,56 +1147,39 @@ class AgentTerminalService:
         # The WebSocket handler consumes from the same queue (race condition).
         # Instead, wait for WebSocket to save output to chat, then read from there.
 
-        # Wait for command to execute and WebSocket to save output
+        # Phase 2: Intelligent polling with adaptive timeouts
         logger.info(
-            f"[PTY_EXEC] Waiting {timeout}s for command to complete "
-            f"and output to be saved to chat..."
+            f"[PTY_EXEC] Starting intelligent polling (timeout={timeout}s) "
+            f"for command completion..."
         )
-        await asyncio.sleep(min(timeout, 3.0))  # Wait max 3 seconds
 
-        # Read output from chat history (WebSocket saved it there)
-        full_output = ""
-        try:
-            if session.conversation_id:
-                # Get recent terminal messages from chat
-                messages = await self.chat_history_manager.get_session_messages(
-                    session_id=session.conversation_id, limit=5  # Get last 5 messages
-                )
+        full_output = await self._intelligent_poll_output(
+            session=session,
+            timeout=timeout,
+            stability_threshold=0.5,  # 500ms stability threshold
+        )
 
-                # Find the most recent terminal output message
-                for msg in reversed(messages):
-                    if msg.get("sender") == "terminal" and msg.get("text"):
-                        terminal_text = msg["text"]
+        # Phase 1: Detect return code with retry logic
+        return_code = await self._detect_return_code(
+            session=session,
+            max_attempts=10,
+        )
 
-                        # Strip ANSI escape codes to get clean output
-                        from src.utils.encoding_utils import strip_ansi_codes
-
-                        clean_output = strip_ansi_codes(terminal_text)
-
-                        # Extract just the output (after the command line)
-                        # Format is usually: "command\r\noutput\r\n"
-                        lines = clean_output.split("\n")
-                        if len(lines) > 1:
-                            # Skip first line (command echo), get the output
-                            full_output = "\n".join(lines[1:]).strip()
-                            logger.info(
-                                f"[PTY_EXEC] Extracted output from chat: {full_output[:100]}..."
-                            )
-                        break
-
-        except Exception as e:
-            logger.error(f"[PTY_EXEC] Failed to read output from chat: {e}")
-            full_output = ""
+        # If detection failed, default to 0 (success) or analyze errors
+        if return_code is None:
+            logger.warning("[PTY_EXEC] Return code detection failed, using fallback")
+            return_code = 0 if full_output else 1
 
         logger.info(
-            "[PTY_EXEC] Command written to PTY. Output collected from chat for interpretation."
+            f"[PTY_EXEC] Command execution complete. "
+            f"Return code: {return_code}, Output length: {len(full_output)} chars"
         )
 
         return {
-            "status": "success",
+            "status": "success" if return_code == 0 else "error",
             "stdout": full_output,
             "stderr": "",  # PTY combines stdout/stderr
-            "return_code": 0,  # PTY doesn't provide return code directly
+            "return_code": return_code,
         }
 
     async def execute_command(
