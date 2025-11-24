@@ -887,4 +887,36 @@ def load_optional_routers():
     except ImportError as e:
         logger.warning(f"⚠️ Optional router not available: infrastructure - {e}")
 
+    # Entity Extraction router
+    try:
+        from backend.api.entity_extraction import router as entity_extraction_router
+
+        optional_routers.append(
+            (
+                entity_extraction_router,
+                "/api/entities",
+                ["entity-extraction"],
+                "entity_extraction",
+            )
+        )
+        logger.info("✅ Optional router loaded: entity_extraction")
+    except ImportError as e:
+        logger.warning(f"⚠️ Optional router not available: entity_extraction - {e}")
+
+    # Graph-RAG router
+    try:
+        from backend.api.graph_rag import router as graph_rag_router
+
+        optional_routers.append(
+            (
+                graph_rag_router,
+                "/api/graph-rag",
+                ["graph-rag"],
+                "graph_rag",
+            )
+        )
+        logger.info("✅ Optional router loaded: graph_rag")
+    except ImportError as e:
+        logger.warning(f"⚠️ Optional router not available: graph_rag - {e}")
+
     return optional_routers
