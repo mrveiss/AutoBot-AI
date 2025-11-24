@@ -262,7 +262,10 @@ class AsyncChatWorkflow:
             processing_time = time.time() - self._start_time
 
             return ChatWorkflowResult(
-                response=f"I apologize, but I encountered an error while processing your message: {str(e)}",
+                response=(
+                    f"I apologize, but I encountered an error while processing your message:"
+                    f"{str(e)}"
+                ),
                 message_type=MessageType.GENERAL_QUERY,
                 knowledge_status=KnowledgeStatus.BYPASSED,
                 processing_time=processing_time,
@@ -358,7 +361,10 @@ async def process_chat_message(
         )
         # Return emergency fallback response
         return ChatWorkflowResult(
-            response=f"I apologize, but I'm experiencing a processing delay. Your message was: '{user_message}' (Emergency mode active)",
+            response=(
+                f"I apologize, but I'm experiencing a processing delay. Your message was:"
+                f"'{user_message}' (Emergency mode active)"
+            )
             message_type=MessageType.GENERAL_QUERY,
             knowledge_status=KnowledgeStatus.BYPASSED,
             kb_results=[],
