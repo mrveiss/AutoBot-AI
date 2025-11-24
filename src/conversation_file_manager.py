@@ -92,7 +92,7 @@ class ConversationFileManager:
             os.getenv(
                 "AUTOBOT_STORAGE_DIR", str(project_root / "data" / "conversation_files")
             )
-        ),
+        )
         default_db = Path(
             os.getenv(
                 "AUTOBOT_DB_PATH", str(project_root / "data" / "conversation_files.db")
