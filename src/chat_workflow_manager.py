@@ -1536,7 +1536,8 @@ Explain what it means and answer their original question."""
                             # Stage 4: Process tool calls if present
                             tool_calls = self._parse_tool_calls(llm_response)
                             logger.info(
-                                f"[ChatWorkflowManager] Parsed {len(tool_calls)} tool calls from response"
+                                f"[ChatWorkflowManager] Parsed {len(tool_calls)} tool calls "
+                                f"from response"
                             )
 
                             if tool_calls:
@@ -1560,7 +1561,8 @@ Explain what it means and answer their original question."""
                                     ]:
                                         workflow_messages.append(tool_msg)
                                         logger.debug(
-                                            f"Collected WorkflowMessage for persistence: type={tool_msg.type}"
+                                            f"Collected WorkflowMessage for persistence: "
+                                            f"type={tool_msg.type}"
                                         )
 
                                     yield tool_msg
@@ -1599,7 +1601,8 @@ Explain what it means and answer their original question."""
                                         session_id=session_id,
                                     )
                                     logger.debug(
-                                        f"Persisted WorkflowMessage to chat history: type={message_type}, session={session_id}"
+                                        f"Persisted WorkflowMessage to chat history: "
+                                        f"type={message_type}, session={session_id}"
                                     )
 
                                 # Persist final assistant response
@@ -1610,17 +1613,21 @@ Explain what it means and answer their original question."""
                                     session_id=session_id,
                                 )
                                 logger.info(
-                                    f"✅ Persisted complete conversation to chat history: session={session_id}, workflow_messages={len(workflow_messages)}"
+                                    f"✅ Persisted complete conversation to chat history: "
+                                    f"session={session_id}, "
+                                    f"workflow_messages={len(workflow_messages)}"
                                 )
 
                             except Exception as persist_error:
                                 logger.error(
-                                    f"Failed to persist WorkflowMessages to chat history: {persist_error}",
+                                    f"Failed to persist WorkflowMessages to chat history: "
+                                    f"{persist_error}",
                                     exc_info=True,
                                 )
                         else:
                             logger.error(
-                                f"[ChatWorkflowManager] Ollama request failed: {response.status_code}"
+                                f"[ChatWorkflowManager] Ollama request failed: "
+                                f"{response.status_code}"
                             )
 
                             error_msg = WorkflowMessage(
