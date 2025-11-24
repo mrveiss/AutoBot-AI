@@ -206,7 +206,10 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
         # Read Operations
         MCPTool(
             name="read_text_file",
-            description="Read complete text file contents with optional head/tail parameters for large files",
+            description=(
+                "Read complete text file contents with optional head/tail parameters for"
+                "large files"
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -228,7 +231,10 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="read_media_file",
-            description="Read media files (images, audio) as base64-encoded data with MIME type detection",
+            description=(
+                "Read media files (images, audio) as base64-encoded data with"
+                "MIME type detection"
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -242,7 +248,10 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="read_multiple_files",
-            description="Batch read multiple text files efficiently with graceful error handling per file",
+            description=(
+                "Batch read multiple text files efficiently with graceful error handling per"
+                "file"
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -258,7 +267,10 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
         # Write Operations
         MCPTool(
             name="write_file",
-            description="Create new file or completely overwrite existing file with provided content",
+            description=(
+                "Create new file or completely overwrite existing file with"
+                "provided content"
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -273,7 +285,10 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="edit_file",
-            description="Selectively modify file contents using pattern-based find-and-replace edits",
+            description=(
+                "Selectively modify file contents using pattern-based find-and-replace"
+                "edits"
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -308,7 +323,10 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
         # Directory Management
         MCPTool(
             name="create_directory",
-            description="Create directory with automatic parent directory creation (recursive mkdir)",
+            description=(
+                "Create directory with automatic parent directory creation (recursive"
+                "mkdir)"
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -322,7 +340,10 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="list_directory",
-            description="List directory contents with [FILE] and [DIR] prefixes for easy identification",
+            description=(
+                "List directory contents with [FILE] and [DIR] prefixes for"
+                "easy identification"
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -336,7 +357,10 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="list_directory_with_sizes",
-            description="List directory contents with detailed size information and sortable metrics",
+            description=(
+                "List directory contents with detailed size information and"
+                "sortable metrics"
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -375,7 +399,10 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
         # Discovery/Analysis
         MCPTool(
             name="search_files",
-            description="Recursively search for files matching glob pattern with optional exclusion patterns",
+            description=(
+                "Recursively search for files matching glob pattern with"
+                "optional exclusion patterns"
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -395,7 +422,10 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="directory_tree",
-            description="Get recursive directory structure as JSON tree with files and subdirectories",
+            description=(
+                "Get recursive directory structure as JSON tree with files and"
+                "subdirectories"
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -406,7 +436,10 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="get_file_info",
-            description="Get comprehensive file/directory metadata (size, timestamps, permissions, type)",
+            description=(
+                "Get comprehensive file/directory metadata (size, timestamps, permissions,"
+                "type)"
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
