@@ -79,10 +79,7 @@ async def execute_command(request: SandboxExecuteRequest):
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    f"Invalid security level. Must be one of: {[level.value for"
-                    f"level in SandboxSecurityLevel]}"
-                )
+                detail=f"Invalid security level. Must be one of: {[level.value for level in SandboxSecurityLevel]}"
             )
 
         # Create sandbox configuration
@@ -150,10 +147,7 @@ async def execute_script(request: SandboxScriptRequest):
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    f"Invalid security level. Must be one of: {[level.value for"
-                    f"level in SandboxSecurityLevel]}"
-                )
+                detail=f"Invalid security level. Must be one of: {[level.value for level in SandboxSecurityLevel]}"
             )
 
         # Create sandbox configuration
@@ -224,10 +218,7 @@ async def execute_batch(request: SandboxBatchRequest):
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    f"Invalid security level. Must be one of: {[level.value for"
-                    f"level in SandboxSecurityLevel]}"
-                )
+                detail=f"Invalid security level. Must be one of: {[level.value for level in SandboxSecurityLevel]}"
             )
 
         # Create batch script
