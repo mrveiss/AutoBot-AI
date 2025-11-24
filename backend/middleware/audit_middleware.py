@@ -344,7 +344,7 @@ def audit_operation(
                 if resource_handler:
                     try:
                         resource = resource_handler(*args, **kwargs)
-                    except:
+                    except Exception:
                         resource = None
 
                 # Log audit entry (non-blocking)

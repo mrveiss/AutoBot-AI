@@ -121,8 +121,10 @@ class CaptchaSolver:
                 "json": 1,
             }
 
-            async with session.get(result_url, params=result_params) as response:
-                result = await response.json()
+            # Use HTTP client for result polling
+            result = await http_client.get_json(
+                f"{result_url}?key={self.api_key}&action=get&id={captcha_id}&json=1"
+            )
 
             if result.get("status") == 1:
                 logger.info("CAPTCHA solved successfully")

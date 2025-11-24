@@ -9,12 +9,15 @@ Provides REST and WebSocket endpoints for the intelligent agent system.
 
 import logging
 import time
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+
+if TYPE_CHECKING:
+    from src.intelligence.intelligent_agent import IntelligentAgent
 from src.monitoring.prometheus_metrics import get_metrics_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 

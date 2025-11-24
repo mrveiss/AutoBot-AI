@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, List, Optional
 import websockets
 
 from src.constants.network_constants import NetworkConstants
-from src.task_execution_tracker import task_tracker
+from src.task_execution_tracker import TaskPriority, task_tracker
 from src.unified_config_manager import config_manager
 
 logger = logging.getLogger(__name__)

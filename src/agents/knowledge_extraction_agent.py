@@ -48,7 +48,7 @@ class KnowledgeExtractionAgent:
         Args:
             llm_interface: LLM interface for fact extraction (optional)
         """
-        self.llm_interface = llm_interface or get_unified_llm_interface()
+        self.llm_interface = llm_interface or get_llm_interface()
 
         # Configuration
         self.max_facts_per_chunk = config_manager.get(

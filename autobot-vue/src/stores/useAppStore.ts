@@ -448,7 +448,6 @@ export const useAppStore = defineStore('app', () => {
     resetNotificationSettings
   }
 }, {
-  // Issue #156 Fix: Type assertion for pinia-plugin-persistedstate 'paths' property
   persist: {
     key: 'autobot-app',
     storage: localStorage,
@@ -458,5 +457,5 @@ export const useAppStore = defineStore('app', () => {
       'notificationSettings',
       'activeTab'
     ]
-  } as any
+  }
 })

@@ -596,7 +596,7 @@ const formatMessageContent = (content: string): string => {
     .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x1b\\)?/g, '') // OSC sequences: \x1b]...ST
     .replace(/\x1b[=>]/g, '') // Set numeric keypad mode
     .replace(/\x1b[()][AB012]/g, '') // Character set selection
-    .replace(/\[[\?\d;]*[hlHJ]/g, '') // Bracket sequences without ESC: [?2004h, etc.
+    .replace(/\[[?\d;]*[hlHJ]/g, '') // Bracket sequences without ESC: [?2004h, etc.
     .replace(/\]0;[^\x07\n]*\x07?/g, '') // Set title without ESC: ]0;...
     .trim()
 

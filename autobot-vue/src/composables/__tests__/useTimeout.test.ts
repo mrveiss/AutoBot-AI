@@ -341,7 +341,7 @@ describe('useTimeout Composable', () => {
       const wrapper = mount(TestComponent)
       const { debounced, context: ctx } = wrapper.vm
 
-      debounced.call(ctx, 'arg')
+      debounced.call(ctx)
       vi.advanceTimersByTime(500)
 
       expect(capturedThis).toBeDefined()
@@ -1060,7 +1060,7 @@ describe('useTimeout Composable', () => {
       let rejected = false
       let error: Error | null = null
 
-      sleep.promise.catch((err) => {
+      sleep.promise.catch((err: Error) => {
         rejected = true
         error = err
       })
@@ -1071,7 +1071,8 @@ describe('useTimeout Composable', () => {
 
       await expect(sleep.promise).rejects.toThrow('Sleep canceled')
       expect(rejected).toBe(true)
-      expect(error?.message).toBe('Sleep canceled')
+      expect(error).not.toBeNull()
+      expect(error!.message).toBe('Sleep canceled')
     })
 
     it('should handle cancellation before any time passes', async () => {

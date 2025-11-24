@@ -208,7 +208,6 @@ async def check_rate_limit() -> bool:
 
     Uses asyncio.Lock for thread safety in concurrent async environments
     """
-    global git_counter
 
     async with _rate_limit_lock:
         now = datetime.now(timezone.utc)
@@ -1001,7 +1000,6 @@ async def get_git_mcp_status() -> Dict[str, Any]:
     - Rate limit status
     - Configuration info
     """
-    global git_counter
 
     async with _rate_limit_lock:
         current_rate = git_counter["count"]

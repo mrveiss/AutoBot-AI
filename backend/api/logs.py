@@ -535,12 +535,12 @@ async def tail_log(websocket: WebSocket, filename: str):
         logger.error(f"WebSocket error for {filename}: {e}")
         try:
             await websocket.send_json({"error": str(e)})
-        except:
+        except Exception:
             pass
     finally:
         try:
             await websocket.close()
-        except:
+        except Exception:
             pass
 
 

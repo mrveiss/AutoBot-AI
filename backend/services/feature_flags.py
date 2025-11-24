@@ -264,7 +264,7 @@ class FeatureFlags:
                     entry = entry.decode()
                 try:
                     history.append(json.loads(entry))
-                except:
+                except Exception:
                     pass
 
             # Get endpoint overrides

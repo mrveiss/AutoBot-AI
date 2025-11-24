@@ -363,7 +363,7 @@ async def get_version():
         try:
             services_data = await get_services()
             services_count = services_data.total_count
-        except:
+        except Exception:
             # Get default service count from config
             services_count = system_config.get("default_services_count", 6)
 

@@ -218,7 +218,7 @@ export function useAsyncOperation<T = any>(
   return {
     loading,
     error,
-    data,
+    data: data as Ref<T | null>, // Type assertion for Vue 3 ref() inference
     execute,
     reset,
     isSuccess,

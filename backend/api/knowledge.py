@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, validator
 
 from backend.background_vectorization import get_background_vectorizer
 from backend.knowledge_factory import get_or_create_knowledge_base
+from src.exceptions import InternalError
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import RAG Agent for enhanced search capabilities

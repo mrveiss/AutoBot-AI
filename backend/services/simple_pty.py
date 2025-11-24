@@ -324,14 +324,14 @@ class SimplePTY:
         # Signal writer thread to stop
         try:
             self.input_queue.put(None)
-        except:
+        except Exception:
             pass
 
         # Close file descriptor
         if self.master_fd:
             try:
                 os.close(self.master_fd)
-            except:
+            except Exception:
                 pass
             self.master_fd = None
 
@@ -348,7 +348,7 @@ class SimplePTY:
                     self.process.kill()
                     # Wait without timeout for kill to complete
                     self.process.wait()
-            except:
+            except Exception:
                 pass
             self.process = None
 

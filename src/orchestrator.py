@@ -32,6 +32,8 @@ from src.unified_config_manager import config_manager
 from src.unified_memory_manager import LongTermMemoryManager
 from src.utils.logging_manager import get_logger
 
+logger = get_logger("orchestrator")
+
 # Import KnowledgeBase for enhanced features
 try:
     from src.knowledge_base import KnowledgeBase
@@ -101,9 +103,6 @@ except ImportError:
         agent_type: str
         action: str
         description: str
-
-
-logger = get_logger("orchestrator")
 
 
 class TaskPriority(Enum):
@@ -624,7 +623,7 @@ class ConsolidatedOrchestrator:
         user_message: str,
         task_id: str,
         model: str,
-        classification: Optional["TaskClassificationResult"],
+        classification: Optional[Any],
         context: Optional[Dict],
     ) -> Dict[str, Any]:
         """Process request with enhanced orchestration features"""
@@ -715,7 +714,7 @@ class ConsolidatedOrchestrator:
         user_message: str,
         agent_names: List[str],
         context: Optional[Dict],
-        classification: Optional["TaskClassificationResult"],
+        classification: Optional[Any],
     ) -> Dict[str, Any]:
         """Coordinate execution across multiple agents"""
 

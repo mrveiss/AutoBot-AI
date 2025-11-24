@@ -1,7 +1,7 @@
 import { useChatStore } from '@/stores/useChatStore'
 import { useAppStore } from '@/stores/useAppStore'
 import { chatRepository } from '@/models/repositories'
-import apiClient from '@/utils/ApiClient.js'
+import apiClient from '@/utils/ApiClient'
 import type { ChatMessage, ChatSession } from '@/stores/useChatStore'
 
 export class ChatController {

@@ -736,7 +736,6 @@ class ProjectStateManager:
 
     def get_project_status(self, use_cache: bool = True) -> Dict[str, Any]:
         """Get comprehensive project status with optional caching"""
-        global _project_status_cache
 
         # Check cache first if enabled
         if use_cache:
@@ -796,7 +795,6 @@ class ProjectStateManager:
 
     def get_fast_project_status(self) -> Dict[str, Any]:
         """Get a fast project status without validation checks"""
-        global _project_status_cache
 
         # Always use cache for fast status
         current_time = time.time()

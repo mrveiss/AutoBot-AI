@@ -269,7 +269,7 @@ class AccessControlMetrics:
 
                         try:
                             violations.append(json.loads(violation_data))
-                        except:
+                        except Exception:
                             pass
 
                 if len(violations) >= limit:

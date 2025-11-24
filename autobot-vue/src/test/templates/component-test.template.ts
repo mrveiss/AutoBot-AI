@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
+// @ts-expect-error - Template file: Replace '../ComponentName.vue' with actual component path
 import ComponentName from '../ComponentName.vue'
 import {
   renderComponent,

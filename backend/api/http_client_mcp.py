@@ -164,7 +164,6 @@ async def check_rate_limit() -> bool:
 
     Uses asyncio.Lock for thread safety in concurrent async environments
     """
-    global request_counter
 
     async with _rate_limit_lock:
         now = datetime.now(timezone.utc)
@@ -867,7 +866,6 @@ async def get_http_client_mcp_status() -> Dict[str, Any]:
     - Rate limit status
     - Configuration info
     """
-    global request_counter
 
     async with _rate_limit_lock:
         current_rate = request_counter["count"]
