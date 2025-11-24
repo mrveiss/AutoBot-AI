@@ -279,7 +279,8 @@ class AgentTerminalService:
 
         Args:
             redis_client: Redis client for session persistence
-            chat_workflow_manager: Existing ChatWorkflowManager instance (prevents circular initialization)
+            chat_workflow_manager: Existing ChatWorkflowManager instance
+                (prevents circular initialization)
             command_queue: Command execution queue (default: singleton instance)
         """
         self.redis_client = redis_client
@@ -299,7 +300,8 @@ class AgentTerminalService:
         # CRITICAL FIX: Initialize ChatHistoryManager for chat integration
         self.chat_history_manager = ChatHistoryManager()
 
-        # CRITICAL FIX: Use passed ChatWorkflowManager instead of creating new one (prevents circular loop)
+        # CRITICAL FIX: Use passed ChatWorkflowManager instead of creating new one
+        # (prevents circular loop)
         self.chat_workflow_manager = chat_workflow_manager
 
         # REFACTOR: Use CommandApprovalManager for reusable approval logic
@@ -374,7 +376,8 @@ class AgentTerminalService:
             if not existing_pty or not existing_pty.is_alive():
                 if existing_pty and not existing_pty.is_alive():
                     logger.warning(
-                        f"PTY session {pty_session_id} exists but is dead (killed during restart). Recreating..."
+                        f"PTY session {pty_session_id} exists but is dead "
+                        f"(killed during restart). Recreating..."
                     )
                     # Clean up dead PTY first
                     simple_pty_manager.close_session(pty_session_id)
@@ -390,11 +393,12 @@ class AgentTerminalService:
                 else:
                     logger.warning(
                         f"Failed to create PTY session for agent terminal {session_id}"
-                    )
+                    ),
                     pty_session_id = None
             else:
                 logger.info(
-                    f"Reusing existing ALIVE PTY session {pty_session_id} for agent terminal {session_id}"
+                    f"Reusing existing ALIVE PTY session {pty_session_id} "
+                    f"for agent terminal {session_id}"
                 )
 
             # CRITICAL: Register PTY session with terminal session_manager for WebSocket logging
@@ -407,7 +411,8 @@ class AgentTerminalService:
                         "conversation_id": conversation_id,  # Enable TerminalLogger
                     }
                     logger.info(
-                        f"Registered PTY session {pty_session_id} with conversation_id {conversation_id} for logging"
+                        f"Registered PTY session {pty_session_id} with "
+                        f"conversation_id {conversation_id} for logging"
                     )
                 except Exception as e:
                     logger.error(
@@ -513,7 +518,8 @@ class AgentTerminalService:
 
             if not messages:
                 logger.debug(
-                    f"No messages found for conversation {conversation_id}, skipping approval restoration"
+                    f"No messages found for conversation {conversation_id}, "
+                    f"skipping approval restoration"
                 )
                 return
 
@@ -544,7 +550,8 @@ class AgentTerminalService:
                         for keyword in ["approved", "denied", "executed", "rejected"]
                     ):
                         logger.info(
-                            f"Approval request already responded to in conversation {conversation_id}, "
+                            f"Approval request already responded to in "
+                            f"conversation {conversation_id}, "
                             f"skipping restoration"
                         )
                         return
@@ -566,15 +573,18 @@ class AgentTerminalService:
                 session.state = AgentSessionState.AWAITING_APPROVAL
 
                 logger.info(
-                    f"✅ [APPROVAL RESTORED] Restored pending approval for session {session.session_id}: "
+                    f"✅ [APPROVAL RESTORED] Restored pending approval "
+                    f"for session {session.session_id}: "
                     f"command='{command}', risk={metadata.get('risk_level')}"
                 )
                 logger.info(
-                    f"✅ [APPROVAL RESTORED] User can now approve this command even after backend restart"
+                    "✅ [APPROVAL RESTORED] User can now approve this command "
+                    "even after backend restart"
                 )
             else:
                 logger.warning(
-                    f"Found approval request but no command in metadata for conversation {conversation_id}"
+                    f"Found approval request but no command in metadata "
+                    f"for conversation {conversation_id}"
                 )
 
         except Exception as e:
@@ -647,14 +657,14 @@ class AgentTerminalService:
                             session_id=conversation_id,
                         )
                         logger.warning(
-                            f"[CHAT INTEGRATION] Output message saved successfully"
+                            "[CHAT INTEGRATION] Output message saved successfully"
                         )
                 else:
                     logger.warning(
-                        f"[CHAT INTEGRATION] Output text is empty after stripping"
+                        "[CHAT INTEGRATION] Output text is empty after stripping"
                     )
             else:
-                logger.warning(f"[CHAT INTEGRATION] No stdout or stderr in result")
+                logger.warning("[CHAT INTEGRATION] No stdout or stderr in result")
 
             logger.warning(
                 f"[CHAT INTEGRATION] {command_type.capitalize()} command saved to chat successfully"
@@ -856,7 +866,8 @@ class AgentTerminalService:
             True if written successfully
         """
         logger.info(
-            f"[PTY_WRITE] Called for session {session.session_id}, pty_session_id={session.pty_session_id}, text_len={len(text)}"
+            f"[PTY_WRITE] Called for session {session.session_id}, "
+            f"pty_session_id={session.pty_session_id}, text_len={len(text)}"
         )
 
         if not session.pty_session_id:
@@ -868,13 +879,15 @@ class AgentTerminalService:
 
             pty = simple_pty_manager.get_session(session.pty_session_id)
             logger.info(
-                f"[PTY_WRITE] Got PTY session: {pty is not None}, alive: {pty.is_alive() if pty else 'N/A'}"
+                f"[PTY_WRITE] Got PTY session: {pty is not None}, "
+                f"alive: {pty.is_alive() if pty else 'N/A'}"
             )
 
             # If PTY is not alive, recreate it (handles stale sessions after restart)
             if not pty or not pty.is_alive():
                 logger.warning(
-                    f"[PTY_WRITE] PTY session {session.pty_session_id} not alive (exists={pty is not None}), recreating..."
+                    f"[PTY_WRITE] PTY session {session.pty_session_id} not alive "
+                    f"(exists={pty is not None}), recreating..."
                 )
 
                 # Create new PTY with same session ID
@@ -938,7 +951,8 @@ class AgentTerminalService:
 
         # Wait for command to execute and WebSocket to save output
         logger.info(
-            f"[PTY_EXEC] Waiting {timeout}s for command to complete and output to be saved to chat..."
+            f"[PTY_EXEC] Waiting {timeout}s for command to complete "
+            f"and output to be saved to chat..."
         )
         await asyncio.sleep(min(timeout, 3.0))  # Wait max 3 seconds
 
@@ -977,7 +991,7 @@ class AgentTerminalService:
             full_output = ""
 
         logger.info(
-            f"[PTY_EXEC] Command written to PTY. Output collected from chat for interpretation."
+            "[PTY_EXEC] Command written to PTY. Output collected from chat for interpretation."
         )
 
         return {
@@ -1142,7 +1156,8 @@ class AgentTerminalService:
 
                 logger.info(
                     f"Command requires approval: {command} "
-                    f"(agent: {session.agent_id}, risk: {risk.value}, command_id: {cmd_execution.command_id})"
+                    f"(agent: {session.agent_id}, risk: {risk.value}, "
+                    f"command_id: {cmd_execution.command_id})"
                 )
 
                 # Log pending approval command
@@ -1261,7 +1276,7 @@ class AgentTerminalService:
                 try:
                     logger.info(
                         f"[INTERPRETATION] Starting LLM interpretation for command: {command}"
-                    )
+                    ),
                     interpretation = (
                         await self.chat_workflow_manager.interpret_terminal_command(
                             command=command,
@@ -1272,7 +1287,8 @@ class AgentTerminalService:
                         )
                     )
                     logger.info(
-                        f"[INTERPRETATION] LLM interpretation complete, length: {len(interpretation)}"
+                        f"[INTERPRETATION] LLM interpretation complete, "
+                        f"length: {len(interpretation)}"
                     )
                 except Exception as e:
                     logger.error(
@@ -1383,7 +1399,9 @@ class AgentTerminalService:
 
         if not session.pending_approval:
             logger.warning(
-                f"approve_command: No pending approval for session {session_id}. State: {session.state.value}, command_history: {len(session.command_history)} commands"
+                f"approve_command: No pending approval for session {session_id}. "
+                f"State: {session.state.value}, "
+                f"command_history: {len(session.command_history)} commands"
             )
             return {
                 "status": "error",
@@ -1469,7 +1487,8 @@ class AgentTerminalService:
                                     terminal_output = msg.get("text", "")
                                     elapsed_ms = attempt * 200
                                     logger.info(
-                                        f"[OUTPUT FETCH] ✅ Found terminal output after {elapsed_ms}ms: "
+                                        f"[OUTPUT FETCH] ✅ Found terminal output "
+                                        f"after {elapsed_ms}ms: "
                                         f"{len(terminal_output)} chars"
                                     )
                                     break
@@ -1484,11 +1503,13 @@ class AgentTerminalService:
                         if terminal_output:
                             result["stdout"] = terminal_output
                             logger.info(
-                                f"[OUTPUT FETCH] Populated result[stdout] with {len(terminal_output)} chars"
+                                f"[OUTPUT FETCH] Populated result[stdout] with "
+                                f"{len(terminal_output)} chars"
                             )
                         else:
                             logger.warning(
-                                f"[OUTPUT FETCH] No terminal output found after {max_attempts * 200}ms "
+                                f"[OUTPUT FETCH] No terminal output found after "
+                                f"{max_attempts * 200}ms "
                                 f"({max_attempts} attempts)"
                             )
 
@@ -1534,8 +1555,9 @@ class AgentTerminalService:
                 if session.conversation_id:
                     try:
                         logger.info(
-                            f"[INTERPRETATION] Starting LLM interpretation for approved command: {command}"
-                        )
+                            f"[INTERPRETATION] Starting LLM interpretation "
+                            f"for approved command: {command}"
+                        ),
                         interpretation = (
                             await self.chat_workflow_manager.interpret_terminal_command(
                                 command=command,
@@ -1546,7 +1568,8 @@ class AgentTerminalService:
                             )
                         )
                         logger.info(
-                            f"[INTERPRETATION] LLM interpretation complete, length: {len(interpretation)}"
+                            f"[INTERPRETATION] LLM interpretation complete, "
+                        f"length: {len(interpretation)}"
                         )
                     except Exception as e:
                         logger.error(
@@ -1622,12 +1645,14 @@ class AgentTerminalService:
                             )
                     except Exception as metadata_update_error:
                         logger.error(
-                            f"Failed to update chat message metadata (non-fatal): {metadata_update_error}",
+                            f"Failed to update chat message metadata (non-fatal): "
+                            f"{metadata_update_error}",
                             exc_info=True,
                         )
 
                     # CRITICAL FIX: Add approval response message to chat history
-                    # This ensures _restore_pending_approval sees "approved" keyword and doesn't restore
+                    # This ensures _restore_pending_approval sees "approved" keyword
+                    # and doesn't restore
                     try:
                         await self.chat_history_manager.add_message(
                             session_id=session.conversation_id,
@@ -1714,7 +1739,10 @@ class AgentTerminalService:
                     try:
                         await self.chat_history_manager.add_message(
                             sender="user",
-                            text=f"❌ Command denied: `{command}`\n\n💡 **Alternative approach suggested:**\n{comment}",
+                            text=(
+                                f"❌ Command denied: `{command}`\n\n"
+                                f"💡 **Alternative approach suggested:**\n{comment}"
+                            ),
                             message_type="command_denial",
                             session_id=session.conversation_id,
                             metadata={
@@ -1725,10 +1753,11 @@ class AgentTerminalService:
                                 "denied_at": time.time(),
                                 "alternative_suggestion": comment,
                             },
-                        )
+                        ),
                         denial_message_saved = True
                         logger.info(
-                            f"✅ [DENIAL FEEDBACK] Saved user's alternative suggestion to chat: {comment[:50]}..."
+                            f"✅ [DENIAL FEEDBACK] Saved user's alternative "
+                            f"suggestion to chat: {comment[:50]}..."
                         )
                     except Exception as e:
                         logger.error(f"Failed to save denial feedback to chat: {e}")
@@ -1777,7 +1806,8 @@ class AgentTerminalService:
                         )
                 except Exception as metadata_update_error:
                     logger.error(
-                        f"Failed to update chat message metadata (non-fatal): {metadata_update_error}",
+                        f"Failed to update chat message metadata (non-fatal): "
+                        f"{metadata_update_error}",
                         exc_info=True,
                     )
 

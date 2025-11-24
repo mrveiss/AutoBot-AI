@@ -134,7 +134,7 @@ async def get_recent_logs(limit: int = 100):
                 log_files.sort(
                     key=lambda f: os.path.getmtime(os.path.join(log_dir, f)),
                     reverse=True,
-                )
+                ),
                 most_recent = log_files[0]
 
                 # Read the last N lines from the most recent log

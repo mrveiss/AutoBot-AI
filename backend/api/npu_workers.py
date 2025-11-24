@@ -431,7 +431,7 @@ async def get_npu_status():
         online_workers = sum(1 for w in workers if w.status.status == "online")
         total_capacity = sum(
             w.config.max_concurrent_tasks for w in workers if w.config.enabled
-        )
+        ),
         current_load = sum(w.status.current_load for w in workers)
 
         return {

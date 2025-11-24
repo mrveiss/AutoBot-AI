@@ -216,7 +216,7 @@ async def health_check() -> Dict[str, Any]:
             # Test basic operations
             redis_status = (
                 await kb.ping_redis() if hasattr(kb, "ping_redis") else "unknown"
-            )
+            ),
             vector_store_status = "healthy" if kb.vector_store else "unavailable"
 
             status.update(

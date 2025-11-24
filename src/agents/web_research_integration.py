@@ -296,7 +296,11 @@ class WebResearchIntegration:
                 return result
 
             except asyncio.TimeoutError:
-                error_msg = f"Research timed out after {timeout_secs}s using {research_method.value}"
+                error_msg = (
+                    f"Research timed out after {timeout_secs}s using"
+                    f"{research_method.value}"
+                )
+
                 logger.warning(error_msg)
                 circuit_breaker.call_failed()
                 last_error = error_msg

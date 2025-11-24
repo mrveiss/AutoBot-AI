@@ -92,7 +92,7 @@ class OllamaStreamProcessor(StreamProcessor):
 
             # Check for completion signal
             if chunk_json.get("done", False):
-                logger.info(f"🎯 Ollama stream completion signal received (done=true)")
+                logger.info("🎯 Ollama stream completion signal received (done=true)")
                 self.expecting_done = True
                 return True, None  # Natural completion
 
@@ -300,7 +300,7 @@ async def process_llm_stream(
     ]
 
     logger.info(
-        f"🏁 Stream processing complete: "
+        "🏁 Stream processing complete: "
         f"chunks={chunk_count}, "
         f"content_length={len(accumulated_content)}, "
         f"success={completed_successfully}, "

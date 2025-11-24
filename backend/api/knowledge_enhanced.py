@@ -228,7 +228,7 @@ async def enhanced_search(
                     "source": "ai_stack_rag",
                 }
 
-                logger.info(f"RAG search completed successfully")
+                logger.info("RAG search completed successfully")
 
             except AIStackError as e:
                 logger.warning(f"AI Stack RAG search failed: {e}")
@@ -252,7 +252,7 @@ async def enhanced_search(
                 "source": "ai_stack_librarian",
             }
 
-            logger.info(f"Enhanced librarian search completed")
+            logger.info("Enhanced librarian search completed")
 
         except AIStackError as e:
             logger.warning(f"Enhanced librarian search failed: {e}")
@@ -325,7 +325,7 @@ async def rag_search(
                 kb_results = await knowledge_base.search(
                     query=request_data.query,
                     top_k=15,  # Get more documents for RAG context
-                )
+                ),
                 documents = kb_results if isinstance(kb_results, list) else []
                 logger.info(
                     f"Retrieved {len(documents)} documents from local KB for RAG"

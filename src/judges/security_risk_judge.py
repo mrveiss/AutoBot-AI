@@ -186,7 +186,7 @@ class SecurityRiskJudge(BaseLLMJudge):
                     if s.dimension == JudgmentDimension.SAFETY
                 ),
                 0.0,
-            )
+            ),
             security_score = next(
                 (
                     s.score

@@ -472,7 +472,7 @@ class IncrementalKnowledgeSync:
             metrics.files_added = len(new_files)
             metrics.files_removed = len(removed_files)
 
-            logger.info(f"Change analysis:")
+            logger.info("Change analysis:")
             logger.info(f"  - Files scanned: {metrics.total_files_scanned}")
             logger.info(f"  - Changed files: {metrics.files_changed}")
             logger.info(f"  - New files: {metrics.files_added}")

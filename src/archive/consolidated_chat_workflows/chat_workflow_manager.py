@@ -246,7 +246,7 @@ class ChatWorkflowManager:
             except asyncio.TimeoutError:
                 logger.error(
                     f"WORKFLOW: Classification timed out after {self.classification_timeout} seconds"
-                )
+                ),
                 message_type = MessageType.GENERAL_QUERY
                 classification = None
             except Exception as e:
@@ -255,7 +255,7 @@ class ChatWorkflowManager:
 
                 logger.error(
                     f"WORKFLOW: Classification traceback: {traceback.format_exc()}"
-                )
+                ),
                 message_type = MessageType.GENERAL_QUERY
                 classification = None
 
@@ -295,14 +295,14 @@ class ChatWorkflowManager:
                 except asyncio.TimeoutError:
                     logger.warning(
                         "WORKFLOW: Research timed out after 10 seconds, proceeding without research"
-                    )
+                    ),
                     research_results = None
                     librarian_engaged = False
                     mcp_used = False
                 except Exception as e:
                     logger.error(
                         f"WORKFLOW: Research failed: {e}, proceeding without research"
-                    )
+                    ),
                     research_results = None
                     librarian_engaged = False
                     mcp_used = False
@@ -319,7 +319,7 @@ class ChatWorkflowManager:
                         research_results=research_results,
                         classification=classification,
                     )
-                )
+                ),
                 response = await asyncio.wait_for(response_task, timeout=15.0)
                 logger.info(
                     f"WORKFLOW: Response generated successfully, length: {len(response)}"
@@ -775,7 +775,7 @@ class ChatWorkflowManager:
                             "research_conducted": research_results is not None,
                         },
                     )
-                )
+                ),
                 llm_response = await asyncio.wait_for(llm_task, timeout=10.0)
             except asyncio.TimeoutError:
                 logger.error("LLM response timed out after 10 seconds")
@@ -855,7 +855,7 @@ class ChatWorkflowManager:
         self, user_message: str, context: Dict[str, Any]
     ) -> str:
         """Create prompt when sufficient knowledge is available"""
-        return f"""You are AutoBot, an advanced autonomous AI platform designed for Linux system administration and intelligent task automation. You are NOT a Meta AI model or related to Transformers - you are an enterprise-grade automation platform with 20+ specialized AI agents.
+        return """You are AutoBot, an advanced autonomous AI platform designed for Linux system administration and intelligent task automation. You are NOT a Meta AI model or related to Transformers - you are an enterprise-grade automation platform with 20+ specialized AI agents.
 
 The user asked: "{user_message}"
 
@@ -873,7 +873,7 @@ Remember: You are AutoBot - a Linux system administration expert and automation 
         self, user_message: str, context: Dict[str, Any]
     ) -> str:
         """Create prompt when only partial knowledge is available"""
-        return f"""You are AutoBot, an advanced autonomous AI platform designed for Linux system administration and intelligent task automation. You are NOT a Meta AI model or related to Transformers - you are an enterprise-grade automation platform with 20+ specialized AI agents.
+        return """You are AutoBot, an advanced autonomous AI platform designed for Linux system administration and intelligent task automation. You are NOT a Meta AI model or related to Transformers - you are an enterprise-grade automation platform with 20+ specialized AI agents.
 
 The user asked: "{user_message}"
 
@@ -895,21 +895,21 @@ Remember: You are AutoBot - a Linux system administration expert and automation 
     ) -> str:
         """Create prompt when no knowledge is available - avoid hallucination"""
 
-        base_response = f"""You are AutoBot, an advanced autonomous AI platform designed for Linux system administration and intelligent task automation. You are NOT a Meta AI model or related to Transformers - you are an enterprise-grade automation platform with 20+ specialized AI agents.
+        base_response = """You are AutoBot, an advanced autonomous AI platform designed for Linux system administration and intelligent task automation. You are NOT a Meta AI model or related to Transformers - you are an enterprise-grade automation platform with 20+ specialized AI agents.
 
 The user asked: "{user_message}"
 
 I don't have specific knowledge about this topic in my knowledge base."""
 
         if research_results and "web_research" in research_results:
-            base_response += f"""
+            base_response += """
 
 However, I conducted research and found:
 {research_results}
 
 Based on this research, I can provide some guidance, but I recommend verifying this information from authoritative sources."""
         elif research_results and research_results.get("research_available"):
-            base_response += f"""
+            base_response += """
 
 Do you want me to research this topic? (yes/no)
 
@@ -917,11 +917,11 @@ If you answer 'no', I'll end this workflow here. If you answer 'yes', I can help
         else:
             # Research agent disabled or unavailable
             if not self.web_research_enabled:
-                base_response += f"""
+                base_response += """
 
 Currently, the research agent is disabled in settings. I can only provide information from my local knowledge base and documentation files."""
             else:
-                base_response += f"""
+                base_response += """
 
 Currently, the research agent is not available. I can only provide information from my local knowledge base and documentation files."""
 

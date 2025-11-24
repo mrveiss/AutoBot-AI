@@ -780,7 +780,10 @@ if __name__ == "__main__":
         # Add temporary knowledge
         knowledge_id = await manager.add_temporary_knowledge(
             chat_id="test_chat_123",
-            content="FastAPI is a modern web framework for Python with automatic API documentation.",
+            content=(
+                "FastAPI is a modern web framework for Python with automatic API"
+                "documentation."
+            ),
             metadata={"category": "framework"},
         )
 

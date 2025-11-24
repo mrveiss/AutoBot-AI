@@ -58,7 +58,7 @@ class RAGConfig:
         if not (0.99 <= weight_sum <= 1.01):
             logger.warning(
                 f"Hybrid weights sum to {weight_sum:.2f}, normalizing to 1.0"
-            )
+            ),
             total = weight_sum
             self.hybrid_weight_semantic /= total
             self.hybrid_weight_keyword /= total

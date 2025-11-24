@@ -389,7 +389,7 @@ class ProjectStateManager:
                 # Load current phase
                 cursor.execute(
                     "SELECT value FROM project_state WHERE key = 'current_phase'"
-                )
+                ),
                 row = cursor.fetchone()
                 if row:
                     try:
@@ -507,7 +507,7 @@ class ProjectStateManager:
                         capability.name,
                         ValidationStatus.PASSED,
                         1.0,
-                        f"Self-referential endpoint validation skipped to prevent deadlock",
+                        "Self-referential endpoint validation skipped to prevent deadlock",
                     )
 
                 import requests

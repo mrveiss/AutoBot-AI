@@ -151,7 +151,7 @@ class ErrorCatalog:
                         logger.warning(
                             f"Invalid category '{category_str}' for {error_code}, "
                             f"defaulting to SERVER_ERROR"
-                        )
+                        ),
                         category = ErrorCategory.SERVER_ERROR
 
                     # Create ErrorDefinition

@@ -394,7 +394,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 for element in element_list:
                     element_key = (
                         f"{self.index_prefix}element:{element_type}:{element['name']}"
-                    )
+                    ),
                     element_data = {
                         "file_path": relative_path,
                         "line_number": element.get("line_number", 0),
@@ -527,7 +527,11 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         try:
             # Check cache first
-            cache_key = f"{self.search_cache_prefix}{hashlib.md5((query + search_type + str(language)).encode()).hexdigest()}"
+            cache_key = (
+                f"{self.search_cache_prefix}{hashlib.md5((query + search_type +"
+                f"str(language)).encode()).hexdigest()}"
+            )
+
             cached_result = self.redis_client.get(cache_key)
 
             if cached_result:

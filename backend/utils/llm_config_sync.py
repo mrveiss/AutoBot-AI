@@ -52,7 +52,7 @@ class LLMConfigurationSynchronizer:
             )
 
             logger.info(f"Raw LLM config structure: {current_llm_config}")
-            logger.info(f"Checking path: local.providers.ollama.selected_model")
+            logger.info("Checking path: local.providers.ollama.selected_model")
 
             logger.info(f"Current global LLM model: '{current_selected_model}'")
 
@@ -63,7 +63,7 @@ class LLMConfigurationSynchronizer:
             for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
                 agent_model = global_config_manager.get_nested(
                     f"agents.{agent_id}.model", config["default_model"]
-                )
+                ),
                 agent_enabled = global_config_manager.get_nested(
                     f"agents.{agent_id}.enabled", config["enabled"]
                 )
@@ -94,7 +94,11 @@ class LLMConfigurationSynchronizer:
                 sync_reason = "No global LLM model configured"
             elif common_model and current_selected_model != common_model:
                 sync_needed = True
-                sync_reason = f"Global model '{current_selected_model}' differs from agent model '{common_model}'"
+                sync_reason = (
+                    f"Global model '{current_selected_model}' differs from agent model"
+                    f"'{common_model}'"
+                )
+
 
             # Perform synchronization if needed
             if sync_needed and common_model:

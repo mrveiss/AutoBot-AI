@@ -332,7 +332,7 @@ class VisionProcessor(BaseModalProcessor):
                     else:
                         clip_inputs = self.clip_processor(
                             images=image, return_tensors="pt"
-                        )
+                        ),
                         clip_features = self.clip_model.get_image_features(
                             **clip_inputs
                         )
@@ -358,17 +358,17 @@ class VisionProcessor(BaseModalProcessor):
                                 max_length=50,
                                 num_beams=3,
                                 temperature=0.8,
-                            )
+                            ),
                             caption = self.blip_processor.batch_decode(
                                 generated_ids, skip_special_tokens=True
                             )[0].strip()
                     else:
                         blip_inputs = self.blip_processor(
                             images=image, return_tensors="pt"
-                        )
+                        ),
                         generated_ids = self.blip_model.generate(
                             **blip_inputs, max_length=50, num_beams=3, temperature=0.8
-                        )
+                        ),
                         caption = self.blip_processor.batch_decode(
                             generated_ids, skip_special_tokens=True
                         )[0].strip()
@@ -382,24 +382,24 @@ class VisionProcessor(BaseModalProcessor):
                         with torch.autocast(device_type="cuda", dtype=torch.float16):
                             vqa_inputs = self.blip_processor(
                                 images=image, text=question, return_tensors="pt"
-                            )
+                            ),
                             vqa_inputs = {
                                 k: v.to(self.device) if torch.is_tensor(v) else v
                                 for k, v in vqa_inputs.items()
                             }
                             generated_ids = self.blip_model.generate(
                                 **vqa_inputs, max_length=30
-                            )
+                            ),
                             vqa_answer = self.blip_processor.batch_decode(
                                 generated_ids, skip_special_tokens=True
                             )[0].strip()
                     else:
                         vqa_inputs = self.blip_processor(
                             images=image, text=question, return_tensors="pt"
-                        )
+                        ),
                         generated_ids = self.blip_model.generate(
                             **vqa_inputs, max_length=30
-                        )
+                        ),
                         vqa_answer = self.blip_processor.batch_decode(
                             generated_ids, skip_special_tokens=True
                         )[0].strip()
@@ -633,7 +633,7 @@ class VoiceProcessor(BaseModalProcessor):
                     else:
                         predicted_ids = self.whisper_model.generate(
                             input_features, max_length=448, num_beams=5, temperature=0.8
-                        )
+                        ),
                         transcribed_text = self.whisper_processor.batch_decode(
                             predicted_ids, skip_special_tokens=True
                         )[0].strip()

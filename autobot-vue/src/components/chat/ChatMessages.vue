@@ -38,7 +38,12 @@
               <i :class="getSenderIcon(message.sender)" aria-hidden="true"></i>
             </div>
             <div class="message-info">
-              <span class="sender-name">{{ getSenderName(message.sender) }}</span>
+              <span class="sender-name">
+                {{ getSenderName(message.sender) }}
+                <span v-if="message.sender === 'assistant' && message.metadata?.model" class="model-name">
+                  ({{ message.metadata.model }})
+                </span>
+              </span>
               <span class="message-time">{{ formatTime(message.timestamp) }}</span>
             </div>
           </div>
@@ -1142,6 +1147,10 @@ onMounted(() => {
 
 .sender-name {
   @apply font-semibold text-xs;
+}
+
+.model-name {
+  @apply font-normal text-xs opacity-80 ml-1;
 }
 
 .message-time {

@@ -215,7 +215,7 @@ class ConversationRateLimiter:
 
         minute_requests = len(
             [r for r in self.request_history if current_time - r.timestamp <= 60]
-        )
+        ),
         hour_requests = len(
             [r for r in self.request_history if current_time - r.timestamp <= 3600]
         )
@@ -249,7 +249,7 @@ class ConversationRateLimiter:
 
         minute_requests = len(
             [r for r in self.request_history if r.timestamp > minute_window]
-        )
+        ),
         hour_requests = len(
             [r for r in self.request_history if r.timestamp > hour_window]
         )
@@ -267,13 +267,13 @@ class ConversationRateLimiter:
                     for r in self.request_history
                     if r.timestamp > minute_window
                 ]
-            )
+            ),
             wait_time = max(wait_time, 60 - (current_time - oldest_in_minute))
 
         if hour_exceeded:
             oldest_in_hour = min(
                 [r.timestamp for r in self.request_history if r.timestamp > hour_window]
-            )
+            ),
             wait_time = max(wait_time, 3600 - (current_time - oldest_in_hour))
 
         return {

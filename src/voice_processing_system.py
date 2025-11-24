@@ -343,7 +343,7 @@ class SpeechRecognitionEngine:
                 # Convert numpy array to bytes
                 audio_bytes = (
                     (audio_input.audio_data * 32767).astype(np.int16).tobytes()
-                )
+                ),
                 audio_data = sr.AudioData(audio_bytes, audio_input.sample_rate, 2)
             else:
                 raise ValueError(

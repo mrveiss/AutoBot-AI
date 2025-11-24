@@ -101,7 +101,7 @@ class GPUSemanticChunker:
         self._model_lock = threading.Lock()
         self._gpu_memory_pool_initialized = False
 
-        logger.info(f"GPUSemanticChunker initialized:")
+        logger.info("GPUSemanticChunker initialized:")
         logger.info(f"  - Model: {embedding_model}")
         logger.info(f"  - GPU Batch Size: {gpu_batch_size} (optimized for RTX 4070)")
         logger.info(f"  - GPU Memory Pooling: {enable_gpu_memory_pool}")
@@ -289,7 +289,7 @@ class GPUSemanticChunker:
             total_time = time.time() - start_time
             sentences_per_sec = len(sentences) / total_time if total_time > 0 else 0
 
-            logger.info(f"GPU chunking completed:")
+            logger.info("GPU chunking completed:")
             logger.info(f"  - Total time: {total_time:.3f}s")
             logger.info(f"  - Performance: {sentences_per_sec:.1f} sentences/sec")
             logger.info(f"  - Chunks created: {len(chunks)}")

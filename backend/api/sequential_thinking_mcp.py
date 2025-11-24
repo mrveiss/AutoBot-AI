@@ -191,7 +191,10 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Dict[st
     ):
         raise HTTPException(
             status_code=400,
-            detail=f"Thought number {request.thought_number} exceeds total thoughts {request.total_thoughts}. Set needs_more_thoughts=true to extend.",
+            detail=(
+                f"Thought number {request.thought_number} exceeds total thoughts"
+                f"{request.total_thoughts}. Set needs_more_thoughts=true to extend."
+            )
         )
 
     # Create thought record

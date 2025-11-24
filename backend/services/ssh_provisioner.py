@@ -90,7 +90,7 @@ class SSHKeyProvisioner:
         public_openssh = public_key.public_bytes(
             encoding=serialization.Encoding.OpenSSH,
             format=serialization.PublicFormat.OpenSSH,
-        )
+        ),
         pub_key_str = public_openssh.decode("utf-8")
 
         # Add comment to public key

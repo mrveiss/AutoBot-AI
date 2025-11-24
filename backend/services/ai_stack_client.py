@@ -66,7 +66,7 @@ class AIStackClient:
             if not host or not port:
                 raise ValueError(
                     "AI Stack configuration missing 'host' or 'port' in unified_config_manager"
-                )
+                ),
             base_url = f"http://{host}:{port}"
         self.base_url = base_url.rstrip("/")
         self.session: Optional[aiohttp.ClientSession] = None

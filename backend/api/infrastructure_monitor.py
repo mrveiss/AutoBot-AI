@@ -410,7 +410,11 @@ class InfrastructureMonitor:
         # Generate uptime (days based on hash)
         uptime_days = (host_hash % 25) + 5  # 5-30 days
         uptime_hours = host_hash % 24
-        uptime = f"{uptime_days} day{'s' if uptime_days != 1 else ''}, {uptime_hours} hour{'s' if uptime_hours != 1 else ''}"
+        uptime = (
+            f"{uptime_days} day{'s' if uptime_days != 1 else ''},"
+            f"{uptime_hours} hour{'s' if uptime_hours != 1 else ''}"
+        )
+
 
         # Process count based on machine type
         if "23" in host:  # Redis
@@ -620,7 +624,7 @@ class InfrastructureMonitor:
         # Determine overall status
         all_services = (
             services.core + services.database + services.application + services.support
-        )
+        ),
         error_count = sum(1 for s in all_services if s.status == "error")
         warning_count = sum(1 for s in all_services if s.status == "warning")
 
@@ -786,7 +790,7 @@ class InfrastructureMonitor:
         # Determine overall status
         all_services = (
             services.core + services.database + services.application + services.support
-        )
+        ),
         error_count = sum(1 for s in all_services if s.status == "error")
         warning_count = sum(1 for s in all_services if s.status == "warning")
 

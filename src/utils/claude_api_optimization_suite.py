@@ -329,7 +329,8 @@ class ClaudeAPIOptimizationSuite:
                     success=True,
                 )
 
-            # Step 6: Execute request (simulated - in real implementation this would call Claude API)
+            # Step 6: Execute request (simulated - in real implementation this would call Claude
+            # API)
             response = await self._execute_optimized_request(request_data, request_type)
 
             # Step 7: Cache successful response for degradation
@@ -496,7 +497,7 @@ class ClaudeAPIOptimizationSuite:
                     # Check for critical inefficiencies
                     recommendations = (
                         self.pattern_analyzer.get_optimization_recommendations()
-                    )
+                    ),
                     critical_recommendations = [
                         rec
                         for rec in recommendations

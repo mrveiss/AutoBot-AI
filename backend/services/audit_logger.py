@@ -543,7 +543,7 @@ class AuditLogger:
             # Query sorted set by timestamp range
             start_score = (
                 start_time.timestamp() if current_date == start_time.date() else 0
-            )
+            ),
             end_score = (
                 end_time.timestamp() if current_date == end_date else float("inf")
             )
@@ -793,7 +793,7 @@ class AuditLogger:
                     await audit_db._redis.zcard(f"audit:log:{date_str}")
                     if audit_db._redis
                     else 0
-                )
+                ),
                 today_count = (
                     await audit_db._redis.zcard(f"audit:log:{today_str}")
                     if audit_db._redis

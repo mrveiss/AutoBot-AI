@@ -56,7 +56,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from backend.services.rag_service import RAGService
 from src.advanced_rag_optimizer import RAGMetrics, SearchResult
 from src.autobot_memory_graph import AutoBotMemoryGraph
-from src.utils.error_boundaries import ErrorCategory, error_boundary
+from src.utils.error_boundaries import error_boundary
 from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("graph_rag_service")
@@ -150,7 +150,6 @@ class GraphRAGService:
     @error_boundary(
         component="graph_rag_service",
         function="graph_aware_search",
-        category=ErrorCategory.SERVER_ERROR,
     )
     async def graph_aware_search(
         self,
@@ -420,7 +419,7 @@ class GraphRAGService:
                     # Relationship strength also factors in
                     relationship_strength = relation.get("metadata", {}).get(
                         "strength", 1.0
-                    )
+                    ),
                     proximity_score = base_score * relationship_strength
 
                     # Create SearchResult from entity observations

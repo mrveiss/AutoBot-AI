@@ -367,15 +367,15 @@ class ConsolidatedChatWorkflow:
             ):
                 await self.send_workflow_message(
                     "research_decision", "Research required for comprehensive response"
-                )
+                ),
                 research_results = await self._conduct_research(
                     user_message, message_type, classification
-                )
+                ),
                 librarian_engaged = (
                     research_results.get("librarian_engaged", False)
                     if research_results
                     else False
-                )
+                ),
                 mcp_used = (
                     research_results.get("mcp_used", False)
                     if research_results
@@ -385,7 +385,7 @@ class ConsolidatedChatWorkflow:
             # Step 4: Response Generation
             await self.send_workflow_message(
                 "response_generation", "Generating response with available context..."
-            )
+            ),
             response = await self._generate_response(
                 user_message,
                 message_type,
@@ -461,7 +461,7 @@ class ConsolidatedChatWorkflow:
         try:
             classification_task = asyncio.create_task(
                 self.classification_agent.classify_request(user_message)
-            )
+            ),
             classification = await asyncio.wait_for(
                 classification_task, timeout=self.classification_timeout
             )
@@ -526,7 +526,7 @@ class ConsolidatedChatWorkflow:
 
             search_task = asyncio.create_task(
                 self.kb.search(search_query, max_results=self.max_kb_results)
-            )
+            ),
             kb_results = await asyncio.wait_for(
                 search_task, timeout=self.kb_search_timeout
             )
@@ -669,7 +669,7 @@ class ConsolidatedChatWorkflow:
         try:
             mcp_task = asyncio.create_task(
                 self.mcp_integration.search_manuals(user_message)
-            )
+            ),
             result = await asyncio.wait_for(mcp_task, timeout=10.0)
 
             return {
@@ -804,7 +804,7 @@ You provide accurate, helpful responses based on available knowledge and researc
         for result in research_results.get("results", []):
             research_info += f"\nResearch from {result.get('source', 'unknown')}: {result.get('result', 'No details')}"
 
-        return f"""Based on recent research, please provide a comprehensive answer to this question:
+        return """Based on recent research, please provide a comprehensive answer to this question:
 
 User Question: {user_message}
 
@@ -822,7 +822,7 @@ Please provide an accurate, helpful response that incorporates the research find
                 f"\n- {result.get('content', result.get('text', 'No content'))}"
             )
 
-        return f"""Based on the following knowledge base information, please answer this question:
+        return """Based on the following knowledge base information, please answer this question:
 
 User Question: {user_message}
 
@@ -840,7 +840,7 @@ Please provide a comprehensive answer based on this information."""
                 f"\n- {result.get('content', result.get('text', 'No content'))}"
             )
 
-        return f"""I have some relevant information but may need additional details:
+        return """I have some relevant information but may need additional details:
 
 User Question: {user_message}
 
@@ -863,7 +863,7 @@ Please provide the best answer possible with available information, and indicate
         elif message_type == MessageType.SYSTEM_TASK:
             task_context = "This appears to be a system administration question. "
 
-        return f"""{task_context}Please provide helpful guidance for this question:
+        return """{task_context}Please provide helpful guidance for this question:
 
 User Question: {user_message}
 
@@ -908,7 +908,7 @@ Please provide the best assistance possible, being clear about any limitations i
 
     def _generate_error_response(self, error: str) -> str:
         """Generate user-friendly error response"""
-        return f"I apologize, but I encountered an issue while processing your request. Please try rephrasing your question or try again later."
+        return "I apologize, but I encountered an issue while processing your request. Please try rephrasing your question or try again later."
 
 
 # ==============================================

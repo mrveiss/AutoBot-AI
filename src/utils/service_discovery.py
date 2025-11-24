@@ -205,7 +205,7 @@ class ServiceDiscovery:
             logger.error("Backend configuration missing required 'host' or 'port'")
             backend_host = backend_host or system_defaults.get(
                 "backend_host", "localhost"
-            )
+            ),
             backend_port = backend_port or system_defaults.get("backend_port", 8001)
 
         self.services["backend"] = ServiceEndpoint(

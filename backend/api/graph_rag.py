@@ -38,7 +38,7 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 # Router Configuration
 # ====================================================================
 
-router = APIRouter(prefix="/graph-rag", tags=["graph-rag"])
+router = APIRouter(tags=["graph-rag"])
 logger = logging.getLogger(__name__)
 
 # ====================================================================

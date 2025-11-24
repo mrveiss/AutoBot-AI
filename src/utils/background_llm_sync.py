@@ -153,7 +153,7 @@ class BackgroundLLMSync:
             total_services = len(self.services)
             healthy_services = sum(
                 1 for s in self.services.values() if s.status == "healthy"
-            )
+            ),
             offline_services = sum(
                 1 for s in self.services.values() if s.status == "offline"
             )

@@ -158,7 +158,7 @@ async def process_enhanced_chat_message(
                 model_name = message.metadata.get("model") if message.metadata else None
                 recent_messages = await chat_history_manager.get_session_messages(
                     session_id, model_name=model_name
-                )
+                ),
                 chat_context = recent_messages or []
                 logger.info(
                     f"Retrieved {len(chat_context)} messages for model {model_name or 'default'}"
@@ -181,7 +181,7 @@ async def process_enhanced_chat_message(
                             f"- {item.get('content', '')[:300]}..."
                             for item in kb_results[:3]
                         ]
-                    )
+                    ),
                     enhanced_context = f"Relevant knowledge context:\n{kb_summary}"
                     logger.info(f"Enhanced context with {len(kb_results)} KB results")
             except Exception as e:
@@ -241,7 +241,7 @@ async def process_enhanced_chat_message(
                     },
                 }
 
-                logger.info(f"AI Stack response generated successfully")
+                logger.info("AI Stack response generated successfully")
 
             except AIStackError as e:
                 logger.error(f"AI Stack chat failed: {e}")
@@ -469,7 +469,11 @@ async def stream_enhanced_chat(
                     yield f"data: {json.dumps(error_data)}\n\n"
             else:
                 # Basic streaming fallback
-                fallback_response = "Thank you for your message. Enhanced streaming requires AI Stack integration."
+                fallback_response = (
+                    "Thank you for your message. Enhanced streaming requires AI Stack"
+                    "integration."
+                )
+
                 chunk_data = {
                     "type": "chunk",
                     "content": fallback_response,

@@ -191,7 +191,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 text = (
                     f"✅ Workflow {workflow_id}: Completed step - {step_desc}. "
                     f"Result: {result}"
-                )
+                ),
                 sender = "workflow"
             elif message_type == "workflow_approval_required":
                 workflow_id = raw_data.get("workflow_id", "N/A")[:8]
@@ -204,7 +204,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 text = (
                     f"🎉 Workflow {workflow_id}: Completed successfully with "
                     f"{total_steps} steps"
-                )
+                ),
                 sender = "workflow"
             elif message_type == "workflow_failed":
                 workflow_id = raw_data.get("workflow_id", "N/A")[:8]

@@ -421,10 +421,10 @@ class ToolPatternAnalyzer:
             if sequence_calls:
                 avg_duration = statistics.mean(
                     call.response_time for call in sequence_calls
-                )
+                ),
                 success_rate = sum(1 for call in sequence_calls if call.success) / len(
                     sequence_calls
-                )
+                ),
                 efficiency_score = success_rate * (1 / max(1, avg_duration))
 
                 pattern = ToolPattern(
@@ -466,7 +466,7 @@ class ToolPatternAnalyzer:
                 if len(rapid_calls) >= 4:  # At least 2 rapid sequences
                     avg_duration = statistics.mean(
                         call.response_time for call in rapid_calls
-                    )
+                    ),
                     efficiency_score = 1 / max(
                         1, len(rapid_calls) / 10
                     )  # Penalty for excessive repetition

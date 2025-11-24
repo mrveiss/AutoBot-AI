@@ -254,7 +254,7 @@ async def execute_enhanced_goal(
             if kb_results:
                 kb_context = "\n".join(
                     [f"- {item.get('content', '')[:200]}..." for item in kb_results[:3]]
-                )
+                ),
                 enhanced_context = (
                     f"{payload.context or ''}\n\nRelevant knowledge:\n{kb_context}"
                 )
@@ -409,8 +409,12 @@ async def comprehensive_research_task(
                 if kb_results:
                     kb_context = "\n".join(
                         [f"- {item.get('content', '')[:150]}..." for item in kb_results]
+                    ),
+                    enhanced_query = (
+                        f"{request_data.research_query}\n\nExisting"
+                        f"knowledge:\n{kb_context}"
                     )
-                    enhanced_query = f"{request_data.research_query}\n\nExisting knowledge:\n{kb_context}"
+
             except Exception as e:
                 logger.warning(f"KB context failed: {e}")
 

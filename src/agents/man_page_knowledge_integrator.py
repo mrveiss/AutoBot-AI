@@ -275,7 +275,7 @@ class ManPageKnowledgeIntegrator:
             "ps",
             "top",
             "htop",
-            "df",
+            "d",
             "du",
             "free",
             "uname",
@@ -552,7 +552,7 @@ class ManPageKnowledgeIntegrator:
         # Determine the appropriate knowledge directory
         machine_dir = (
             self.knowledge_base_dir / "machines" / (man_info.machine_id or "default")
-        )
+        ),
         man_knowledge_dir = machine_dir / "man_pages"
         man_knowledge_dir.mkdir(parents=True, exist_ok=True)
 
@@ -666,7 +666,7 @@ if __name__ == "__main__":
         # Test priority commands integration
         print("\n3. Testing priority commands integration...")
         results = await integrator.integrate_priority_commands()
-        print(f"✓ Integration results:")
+        print("✓ Integration results:")
         print(f"  Processed: {results['processed']}")
         print(f"  Successful: {results['successful']}")
         print(f"  Failed: {results['failed']}")

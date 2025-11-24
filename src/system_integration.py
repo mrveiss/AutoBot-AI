@@ -209,7 +209,10 @@ class SystemIntegration:
                     execute_with_elevation(
                         f"systemctl {action} {service_name}",
                         operation=f"Manage service: {service_name}",
-                        reason=f"Need administrator privileges to {action} the {service_name} service",
+                        reason=(
+                            f"Need administrator privileges to {action} the {service_name}"
+                            f"service"
+                        ),
                         risk_level="MEDIUM",
                     )
                 )

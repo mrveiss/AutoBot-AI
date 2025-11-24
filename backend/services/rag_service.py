@@ -192,7 +192,7 @@ class RAGService:
         if context_length > self.config.max_context_length:
             logger.warning(
                 f"Requested context length {context_length} exceeds maximum {self.config.max_context_length}"
-            )
+            ),
             context_length = self.config.max_context_length
 
         try:

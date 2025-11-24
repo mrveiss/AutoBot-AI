@@ -35,7 +35,8 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
                 logger.info("Using existing initialized knowledge base from app state")
                 return kb
             else:
-                # Knowledge base exists but not initialized - initialize it instead of creating new one
+                # Knowledge base exists but not initialized - initialize it instead of creating new
+                # one
                 logger.info(
                     "Knowledge base exists but not initialized, initializing existing instance..."
                 )

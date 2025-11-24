@@ -644,7 +644,7 @@ class TemporalInvalidationService:
 
             avg_processing_time = (
                 total_processing_time / total_sweeps if total_sweeps > 0 else 0
-            )
+            ),
             invalidation_rate = (
                 total_facts_invalidated / total_facts_processed * 100
                 if total_facts_processed > 0

@@ -338,7 +338,7 @@ class ManagerStats:
         """Calculate overall success rate"""
         total_success = sum(
             s.successful_operations for s in self.database_stats.values()
-        )
+        ),
         total_failed = sum(s.failed_operations for s in self.database_stats.values())
         total = total_success + total_failed
         if total == 0:
@@ -608,7 +608,7 @@ class RedisConnectionManager:
         """
         logger.warning(
             f"🔧 REDIS FIX ACTIVE: Creating async pool for '{database_name}' with MANUAL RETRY (no @retry decorator)"
-        )
+        ),
         max_attempts = 5
         base_wait = 2
         max_wait = 30

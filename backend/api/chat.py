@@ -297,7 +297,7 @@ async def process_chat_message(
             model_name = message.metadata.get("model") if message.metadata else None
             recent_messages = await chat_history_manager.get_session_messages(
                 session_id, model_name=model_name
-            )
+            ),
             chat_context = recent_messages or []
             logger.info(
                 f"Retrieved {len(chat_context)} messages for model {model_name or 'default'}"
@@ -883,7 +883,7 @@ async def delete_session(
                 # Delete all files in conversation
                 deleted_count = await conversation_file_manager.delete_session_files(
                     session_id
-                )
+                ),
                 file_deletion_result = {
                     "files_handled": True,
                     "action_taken": "delete",
@@ -901,7 +901,7 @@ async def delete_session(
                         tags=parsed_file_options.get("tags", ["conversation_archive"]),
                         copy=False,  # Move, not copy
                     )
-                )
+                ),
                 file_deletion_result = {
                     "files_handled": True,
                     "action_taken": "transfer_kb",
@@ -921,7 +921,7 @@ async def delete_session(
                         target_path=parsed_file_options.get("target_path"),
                         copy=False,  # Move, not copy
                     )
-                )
+                ),
                 file_deletion_result = {
                     "files_handled": True,
                     "action_taken": "transfer_shared",
@@ -1261,7 +1261,7 @@ async def send_chat_message_by_id(
                 )
                 logger.debug(
                     f"[{request_id}] Processing message {message_count}: type={type(msg)}"
-                )
+                ),
                 msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
                 print(
                     f"[STREAM {request_id}] Message data: {str(msg_data)[:200]}...",
@@ -1407,7 +1407,7 @@ async def save_chat_by_id(
         # Fallback to new messages only if merge fails
         logger.warning(
             f"[{request_id}] Message merge failed, using new messages only: {merge_error}"
-        )
+        ),
         merged_messages = new_messages
 
     # Save the merged chat session
@@ -1535,7 +1535,7 @@ async def send_direct_chat_response(
             logger.error(
                 f"[{request_id}] Direct response streaming error: {e}",
                 exc_info=True,
-            )
+            ),
             error_data = {
                 "type": "error",
                 "content": f"Error processing command approval: {str(e)}",

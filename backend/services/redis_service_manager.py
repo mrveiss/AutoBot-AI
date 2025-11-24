@@ -516,10 +516,13 @@ class RedisServiceManager:
                 ping_start = datetime.now()
                 ping_result = await self.ssh_manager.execute_command(
                     host=self.redis_host,
-                    command=f"redis-cli -h {NetworkConstants.LOCALHOST_IP} -p {NetworkConstants.REDIS_PORT} PING",
+                    command=(
+                        f"redis-cli -h {NetworkConstants.LOCALHOST_IP} -p {NetworkConstants.REDIS_PORT}"
+                        f"PING"
+                    ),
                     timeout=5,
                     validate=False,
-                )
+                ),
                 ping_duration = (datetime.now() - ping_start).total_seconds() * 1000
                 response_time_ms = ping_duration
 

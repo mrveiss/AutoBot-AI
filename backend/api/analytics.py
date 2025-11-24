@@ -214,7 +214,7 @@ class AnalyticsController:
                 sum(self.response_times[endpoint]) / len(self.response_times[endpoint])
                 if self.response_times[endpoint]
                 else 0
-            )
+            ),
             error_rate = (
                 self.error_counts[endpoint] / frequency * 100 if frequency > 0 else 0
             )
@@ -507,7 +507,7 @@ class AnalyticsController:
                 # Calculate trends
                 cpu_trend = self._calculate_trend(
                     [p.get("cpu_percent", 0) for p in recent_performance]
-                )
+                ),
                 memory_trend = self._calculate_trend(
                     [p.get("memory_percent", 0) for p in recent_performance]
                 )
@@ -629,7 +629,7 @@ async def get_dashboard_overview():
     try:
         current_metrics = (
             await analytics_controller.metrics_collector.collect_all_metrics()
-        )
+        ),
         realtime_metrics = {
             name: {
                 "value": metric.value,
@@ -1583,10 +1583,10 @@ async def get_phase9_dashboard_data():
     # Calculate overall health score
     cpu_health = 100 - performance_data.get("system_performance", {}).get(
         "cpu_percent", 0
-    )
+    ),
     memory_health = 100 - performance_data.get("system_performance", {}).get(
         "memory_percent", 0
-    )
+    ),
     gpu_health = 100 - performance_data.get("hardware_performance", {}).get(
         "gpu_utilization", 0
     )
@@ -2166,7 +2166,7 @@ async def websocket_live_analytics(websocket: WebSocket):
                                 },
                                 "timestamp": datetime.now().isoformat(),
                             }
-                        )
+                        ),
                         last_performance_update = current_time
                     except Exception as e:
                         logger.error(f"Performance update error: {e}")
@@ -2193,7 +2193,7 @@ async def websocket_live_analytics(websocket: WebSocket):
                                 },
                                 "timestamp": datetime.now().isoformat(),
                             }
-                        )
+                        ),
                         last_api_update = current_time
                     except Exception as e:
                         logger.error(f"API activity update error: {e}")
@@ -2216,7 +2216,7 @@ async def websocket_live_analytics(websocket: WebSocket):
                                 },
                                 "timestamp": datetime.now().isoformat(),
                             }
-                        )
+                        ),
                         last_health_update = current_time
                     except Exception as e:
                         logger.error(f"System health update error: {e}")

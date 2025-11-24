@@ -815,7 +815,7 @@ class Phase9PerformanceMonitor:
             if isinstance(multimodal_metrics, Exception):
                 self.logger.error(
                     f"Multimodal metrics collection failed: {multimodal_metrics}"
-                )
+                ),
                 multimodal_metrics = None
 
             if isinstance(system_metrics, Exception):
@@ -825,7 +825,7 @@ class Phase9PerformanceMonitor:
             if isinstance(service_metrics, Exception):
                 self.logger.error(
                     f"Service metrics collection failed: {service_metrics}"
-                )
+                ),
                 service_metrics = []
 
             # Store metrics in buffers
@@ -1119,7 +1119,7 @@ class Phase9PerformanceMonitor:
             if metrics.get("services"):
                 healthy_services = sum(
                     1 for s in metrics["services"] if s["status"] == "healthy"
-                )
+                ),
                 total_services = len(metrics["services"])
                 summary_parts.append(
                     f"Services: {healthy_services}/{total_services} healthy"

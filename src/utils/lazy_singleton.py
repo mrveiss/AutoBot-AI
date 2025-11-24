@@ -284,12 +284,12 @@ def lazy_init_singleton_with_check(
                 if not validator(instance):
                     logger.warning(
                         f"Existing {attribute_name} failed validation, re-initializing"
-                    )
+                    ),
                     instance = None
             except Exception as e:
                 logger.warning(
                     f"Validation of existing {attribute_name} failed: {e}, re-initializing"
-                )
+                ),
                 instance = None
 
     # Need to initialize or re-initialize

@@ -28,7 +28,11 @@ def add_monitoring_to_registry():
                 prefix="/api/monitoring/phase9",
                 tags=["monitoring", "phase9", "gpu", "npu", "performance"],
                 status=RouterStatus.ENABLED,
-                description="Phase 9 comprehensive performance monitoring for GPU/NPU utilization and multi-modal AI"
+                description=(
+                    "Phase 9 comprehensive performance monitoring for GPU/NPU utilization and"
+                    "multi-modal AI"
+                )
+
             ),"""
 
     # Insert after the existing monitoring router config

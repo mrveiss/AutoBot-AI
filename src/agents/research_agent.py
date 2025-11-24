@@ -256,21 +256,30 @@ class ResearchAgent:
                 ResearchResult(
                     title="Top Network Scanning Tools 2024",
                     url="https://example.com/network-tools-2024",
-                    content="Comprehensive guide to network scanning tools including Nmap, Masscan, and Zmap with installation instructions and usage examples.",
+                    content=(
+                        "Comprehensive guide to network scanning tools including Nmap, Masscan,"
+                        "and Zmap with installation instructions and usage examples."
+                    ),
                     relevance_score=0.95,
                     source_type="tutorial",
                 ),
                 ResearchResult(
                     title="Nmap Official Documentation",
                     url="https://nmap.org/book/",
-                    content="Official documentation for Nmap network scanner including installation guide, command reference, and scripting examples.",
+                    content=(
+                        "Official documentation for Nmap network scanner including installation guide,"
+                        "command reference, and scripting examples."
+                    ),
                     relevance_score=0.92,
                     source_type="documentation",
                 ),
                 ResearchResult(
                     title="Network Security Scanning Best Practices",
                     url="https://example.com/security-scanning-practices",
-                    content="Best practices for ethical network scanning, including legal considerations and responsible disclosure.",
+                    content=(
+                        "Best practices for ethical network scanning,"
+                        "including legal considerations and responsible disclosure."
+                    ),
                     relevance_score=0.88,
                     source_type="tutorial",
                 ),
@@ -282,7 +291,10 @@ class ResearchAgent:
                 result = ResearchResult(
                     title=f"Research Result {i+1} for '{query}'",
                     url=f"https://example.com/result-{i+1}",
-                    content=f"Mock research content related to '{query}' with {focus} focus. This would contain actual web-scraped content in the real implementation.",
+                    content=(
+                        f"Mock research content related to '{query}' with"
+                        f"{focus} focus. This would contain actual web-scraped content in the real implementation."
+                    ),
                     relevance_score=0.85 - (i * 0.05),
                     source_type="general",
                 )

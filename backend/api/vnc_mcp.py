@@ -71,7 +71,10 @@ async def get_vnc_mcp_tools() -> List[MCPTool]:
     tools = [
         MCPTool(
             name="check_vnc_status",
-            description="Check if VNC connection is active and accessible. Use this to verify browser or desktop VNC is available before attempting observations.",
+            description=(
+                "Check if VNC connection is active and accessible. Use this to verify browser or"
+                "desktop VNC is available before attempting observations."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -89,7 +92,10 @@ async def get_vnc_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="observe_vnc_activity",
-            description="Observe recent VNC activity and traffic. Returns statistics about WebSocket traffic, connection state, and recent interactions. Useful for understanding what the human is viewing/doing in the browser or desktop.",
+            description=(
+                "Observe recent VNC activity and traffic. Returns statistics about WebSocket"
+                "traffic, connection state, and recent interactions. Useful for understanding what the human is viewing/doing in the browser or desktop."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -112,7 +118,10 @@ async def get_vnc_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="get_browser_vnc_context",
-            description="Get current context from browser VNC: what page is visible, what the human is doing. Combines VNC observations with Playwright state for full picture.",
+            description=(
+                "Get current context from browser VNC: what page is visible,"
+                "what the human is doing. Combines VNC observations with Playwright state for full picture."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {},

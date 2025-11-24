@@ -248,10 +248,10 @@ class GPUAccelerationOptimizer:
             # Calculate improvements
             performance_improvement = self._calculate_performance_improvement(
                 baseline, post_optimization
-            )
+            ),
             memory_savings = baseline.get("memory_used_mb", 0) - post_optimization.get(
                 "memory_used_mb", 0
-            )
+            ),
             throughput_improvement = post_optimization.get(
                 "throughput_fps", 0
             ) - baseline.get("throughput_fps", 0)

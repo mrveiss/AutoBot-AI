@@ -248,7 +248,7 @@ class KnowledgeSyncService:
                 recent_syncs = self.sync_history[-10:]  # Last 10 syncs
                 avg_duration = sum(s["duration"] for s in recent_syncs) / len(
                     recent_syncs
-                )
+                ),
                 total_files_processed = sum(
                     s["metrics"]["files_changed"] + s["metrics"]["files_added"]
                     for s in recent_syncs

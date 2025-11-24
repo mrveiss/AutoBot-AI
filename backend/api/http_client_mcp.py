@@ -278,7 +278,10 @@ async def get_http_client_mcp_tools() -> List[MCPTool]:
     tools = [
         MCPTool(
             name="http_get",
-            description="Perform HTTP GET request to retrieve data from a URL. Supports query parameters and custom headers. Rate limited to 120 requests/minute.",
+            description=(
+                "Perform HTTP GET request to retrieve data from a URL. Supports query parameters and"
+                "custom headers. Rate limited to 120 requests/minute."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -312,7 +315,10 @@ async def get_http_client_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="http_post",
-            description="Perform HTTP POST request to send data to a URL. Supports JSON body or form data. Rate limited to 120 requests/minute.",
+            description=(
+                "Perform HTTP POST request to send data to a URL. Supports JSON body or"
+                "form data. Rate limited to 120 requests/minute."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -346,7 +352,10 @@ async def get_http_client_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="http_put",
-            description="Perform HTTP PUT request to update/replace resource. Typically used for complete resource replacement. Rate limited.",
+            description=(
+                "Perform HTTP PUT request to update/replace resource. Typically used for"
+                "complete resource replacement. Rate limited."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -373,7 +382,10 @@ async def get_http_client_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="http_patch",
-            description="Perform HTTP PATCH request for partial resource update. More efficient than PUT for small changes. Rate limited.",
+            description=(
+                "Perform HTTP PATCH request for partial resource update. More efficient than PUT for"
+                "small changes. Rate limited."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -400,7 +412,10 @@ async def get_http_client_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="http_delete",
-            description="Perform HTTP DELETE request to remove a resource. Use with caution as this is destructive. Rate limited.",
+            description=(
+                "Perform HTTP DELETE request to remove a resource. Use with"
+                "caution as this is destructive. Rate limited."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -423,7 +438,10 @@ async def get_http_client_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="http_head",
-            description="Perform HTTP HEAD request to retrieve headers only (no body). Useful for checking resource existence or metadata.",
+            description=(
+                "Perform HTTP HEAD request to retrieve headers only (no body). Useful for"
+                "checking resource existence or metadata."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -504,7 +522,10 @@ async def execute_http_request(
                 if content_length and int(content_length) > MAX_RESPONSE_SIZE:
                     raise HTTPException(
                         status_code=413,
-                        detail=f"Response too large: {content_length} bytes (max: {MAX_RESPONSE_SIZE})",
+                        detail=(
+                            f"Response too large: {content_length} bytes (max:"
+                            f"{MAX_RESPONSE_SIZE})"
+                        )
                     )
 
                 # Read response body with size limit enforcement
@@ -522,7 +543,10 @@ async def execute_http_request(
                         if total_size > MAX_RESPONSE_SIZE:
                             raise HTTPException(
                                 status_code=413,
-                                detail=f"Response exceeded size limit during streaming: {total_size} bytes (max: {MAX_RESPONSE_SIZE})",
+                                detail=(
+                                    f"Response exceeded size limit during streaming:"
+                                    f"{total_size} bytes (max: {MAX_RESPONSE_SIZE})"
+                                )
                             )
                         chunks.append(chunk)
 

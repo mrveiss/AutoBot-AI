@@ -117,7 +117,7 @@ class TakeoverManager:
             timedelta(minutes=timeout_minutes)
             if timeout_minutes
             else self.default_timeout
-        )
+        ),
         expires_at = datetime.now() + timeout
 
         # Create takeover request

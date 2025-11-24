@@ -116,7 +116,7 @@ async def get_services():
 
             monitoring_config = (
                 unified_config_manager.get_config_section("monitoring") or {}
-            )
+            ),
             default_response_time = monitoring_config.get(
                 "default_response_time_ms", 10.0
             )

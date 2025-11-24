@@ -351,7 +351,7 @@ class WebSocketManager:
 
             last_heartbeat = self.last_heartbeat_received.get(
                 connection_id, current_time
-            )
+            ),
             missed_count = self.missed_heartbeats.get(connection_id, 0)
 
             stats["heartbeat_health"][connection_id] = {

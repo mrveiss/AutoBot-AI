@@ -57,7 +57,7 @@ async def get_advanced_orchestrator_instance(request: Request = None):
     # Create new instance as last resort
     logger.info(
         "Creating new AdvancedWorkflowOrchestrator instance (expensive operation)"
-    )
+    ),
     new_orchestrator = AdvancedWorkflowOrchestrator()
 
     # Cache in app state if request available
@@ -672,7 +672,7 @@ complexity, and requirements:
                 TaskComplexity,
                 intent_analysis.get("complexity", "simple").upper(),
                 TaskComplexity.SIMPLE,
-            )
+            ),
             base_steps = (
                 self.enhanced_orchestrator.base_orchestrator.plan_workflow_steps(
                     user_request, complexity

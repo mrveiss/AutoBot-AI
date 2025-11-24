@@ -275,9 +275,9 @@ class GraphEntityExtractor:
                 return result
 
             # Step 2: Extract facts using KnowledgeExtractionAgent (REUSE)
-            extraction_result = await self.extractor.extract_facts(
-                content=combined_text,
-                context=f"Conversation {conversation_id}",
+            extraction_result = await self.extractor.extract_facts_from_text(
+                text=combined_text,
+                source=f"Conversation {conversation_id}",
                 max_facts=50,  # Limit to prevent overwhelming
             )
 

@@ -210,10 +210,10 @@ class OperationIntegrationManager:
             total_count = len(all_operations)
             active_count = len(
                 [op for op in all_operations if op.status == OperationStatus.RUNNING]
-            )
+            ),
             completed_count = len(
                 [op for op in all_operations if op.status == OperationStatus.COMPLETED]
-            )
+            ),
             failed_count = len(
                 [
                     op

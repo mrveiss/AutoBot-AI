@@ -100,7 +100,7 @@ class SecureLLMCommandParser:
         )
 
         if response_validation.blocked:
-            logger.error(f"🚨 BLOCKED: LLM response contains injection patterns")
+            logger.error("🚨 BLOCKED: LLM response contains injection patterns")
             logger.error(f"User goal: {user_goal}")
             logger.error(f"Detected patterns: {response_validation.detected_patterns}")
             self.stats["blocked_responses"] += 1
@@ -205,7 +205,7 @@ class SecureLLMCommandParser:
         )
 
         if command_validation.blocked:
-            logger.warning(f"🚨 BLOCKED: Command contains injection patterns")
+            logger.warning("🚨 BLOCKED: Command contains injection patterns")
             logger.warning(f"Command: {command}")
             logger.warning(f"Patterns: {command_validation.detected_patterns}")
 
@@ -222,7 +222,7 @@ class SecureLLMCommandParser:
         # Step 2: Validate with existing CommandValidator
         validator_result = self.command_validator.validate_command(command)
         if not validator_result.get("valid", False):
-            logger.warning(f"🚨 BLOCKED: Command failed CommandValidator")
+            logger.warning("🚨 BLOCKED: Command failed CommandValidator")
             logger.warning(f"Command: {command}")
             logger.warning(f"Reason: {validator_result.get('reason', 'Unknown')}")
 

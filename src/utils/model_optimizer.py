@@ -355,14 +355,14 @@ class ModelOptimizer:
                 prev_avg_response = float(
                     existing.get(b"avg_response_time")
                     or existing.get("avg_response_time", 0)
-                )
+                ),
                 prev_avg_tokens = float(
                     existing.get(b"avg_tokens_per_second")
                     or existing.get("avg_tokens_per_second", 0)
-                )
+                ),
                 prev_success_rate = float(
                     existing.get(b"success_rate") or existing.get("success_rate", 1.0)
-                )
+                ),
                 use_count = int(
                     existing.get(b"use_count") or existing.get("use_count", 0)
                 )
@@ -493,7 +493,7 @@ class ModelOptimizer:
             if not resource_filtered:
                 self.logger.warning(
                     "No models pass resource filtering, using least resource-intensive"
-                )
+                ),
                 resource_filtered = sorted(suitable_models, key=lambda m: m.size_gb)[:1]
 
             # Score and rank models
@@ -691,7 +691,7 @@ class ModelOptimizer:
             # Find underperforming models
             avg_success_rate = sum(m.success_rate for m in models_with_history) / len(
                 models_with_history
-            )
+            ),
             underperforming = [
                 m
                 for m in models_with_history

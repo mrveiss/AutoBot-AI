@@ -680,7 +680,7 @@ async def validate_phase4_completion():
         # Calculate overall completion percentage
         enabled_features = len(
             [f for f in status["features"].values() if f["status"] == "enabled"]
-        )
+        ),
         total_features = len(status["features"])
         completion_percentage = (enabled_features / total_features) * 100
 

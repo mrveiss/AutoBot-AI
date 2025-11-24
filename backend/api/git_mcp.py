@@ -505,7 +505,10 @@ async def get_git_mcp_tools() -> List[MCPTool]:
     tools = [
         MCPTool(
             name="git_status",
-            description="Get current git repository status including staged, unstaged, and untracked files. Rate limited to 60 ops/minute.",
+            description=(
+                "Get current git repository status including staged, unstaged,"
+                "and untracked files. Rate limited to 60 ops/minute."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -527,7 +530,10 @@ async def get_git_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="git_log",
-            description="Get commit history with optional filtering. Shows author, date, and message.",
+            description=(
+                "Get commit history with optional filtering. Shows author, date,"
+                "and message."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -558,7 +564,10 @@ async def get_git_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="git_diff",
-            description="Show changes between working directory and index, or between commits. Useful for code review.",
+            description=(
+                "Show changes between working directory and index,"
+                "or between commits. Useful for code review."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -608,7 +617,10 @@ async def get_git_mcp_tools() -> List[MCPTool]:
         ),
         MCPTool(
             name="git_blame",
-            description="Show line-by-line authorship of a file. Useful for understanding code history.",
+            description=(
+                "Show line-by-line authorship of a file. Useful for"
+                "understanding code history."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
