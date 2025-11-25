@@ -373,7 +373,6 @@ class DevelopmentSpeedupAgent:
         # Analyze import patterns
         import_stats = defaultdict(int)
         unused_imports = []
-        circular_imports = []
 
         for result in import_results:
             try:
@@ -411,7 +410,7 @@ class DevelopmentSpeedupAgent:
                             }
                         )
 
-            except Exception as e:
+            except Exception:
                 continue
 
         return {
@@ -631,7 +630,7 @@ class DevelopmentSpeedupAgent:
                                     )
                                 )
 
-            except Exception as e:
+            except Exception:
                 continue
 
         return opportunities
@@ -669,7 +668,7 @@ class DevelopmentSpeedupAgent:
                         )
                     )
 
-            except Exception as e:
+            except Exception:
                 continue
 
         return opportunities

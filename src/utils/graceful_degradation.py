@@ -551,8 +551,7 @@ class GracefulDegradationManager:
 
     async def _perform_health_check(self):
         """Perform periodic health check"""
-        # Calculate uptime percentage
-        uptime_duration = time.time() - self.metrics["uptime_start"]
+        # Calculate uptime percentage based on success rate
         if self.metrics["total_requests"] > 0:
             success_rate = (
                 self.metrics["successful_requests"] / self.metrics["total_requests"]

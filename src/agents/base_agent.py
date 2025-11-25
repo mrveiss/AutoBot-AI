@@ -169,14 +169,7 @@ class BaseAgent(ABC):
         Used by container orchestration and load balancers.
         """
         try:
-            # Test basic functionality
-            test_request = AgentRequest(
-                request_id="health_check",
-                agent_type=self.agent_type,
-                action="ping",
-                payload={"test": True},
-            )
-
+            # Test basic functionality via ping
             start_time = datetime.now()
             await self._ping()
             response_time = (datetime.now() - start_time).total_seconds() * 1000

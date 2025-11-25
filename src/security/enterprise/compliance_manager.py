@@ -460,7 +460,6 @@ class ComplianceManager:
         """Verify user consent for PII processing"""
         # This would integrate with consent management system
         # For now, return basic logic
-        user_id = audit_event["user_id"]
         action = audit_event["action"]
 
         # Check if consent is required for this action
@@ -805,8 +804,8 @@ class ComplianceManager:
         }
 
         for framework_name in self.config.get("enabled_frameworks", []):
-            framework = ComplianceFramework(framework_name)
-            requirements = self.compliance_requirements.get(framework, {})
+            # Framework enum and requirements available for future validation
+            _ = ComplianceFramework(framework_name)
 
             status["frameworks"][framework_name] = {
                 "enabled": True,

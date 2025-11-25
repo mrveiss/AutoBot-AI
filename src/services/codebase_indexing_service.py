@@ -475,8 +475,6 @@ class CodebaseIndexingService:
 
     def _should_include_file(self, file_path: Path) -> bool:
         """Check if a file should be included in indexing"""
-        file_name = file_path.name
-
         # Check exclude patterns
         for pattern in self.exclude_patterns:
             if file_path.match(pattern):

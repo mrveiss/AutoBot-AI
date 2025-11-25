@@ -464,8 +464,10 @@ security auditing tool.
         title = source["title"]
         content = source["content"]
         url = source["url"]
+        quality_score = source["quality_score"]
+        relevance = source["relevance"]
 
-        formatted_content = """
+        formatted_content = f"""
 Title: {title}
 Source: {url}
 Query Context: {query}
@@ -473,8 +475,8 @@ Query Context: {query}
 Content:
 {content}
 
-Quality Score: {source['quality_score']}
-Relevance Score: {source['relevance']}
+Quality Score: {quality_score}
+Relevance Score: {relevance}
 """
 
         return formatted_content.strip()

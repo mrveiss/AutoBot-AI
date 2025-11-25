@@ -478,9 +478,6 @@ class EnhancedMemoryManager:
         # Use connection pool instead of direct connection
         pool = get_connection_pool(self.db_path)
         with pool.get_connection() as conn:
-            # Use EagerLoader to prevent N+1 queries
-            eager_loader = EagerLoader()
-
             # Get task IDs first for batch loading
             cursor = conn.execute(query, params)
             task_rows = cursor.fetchall()

@@ -785,7 +785,6 @@ class AgentTerminalService:
         # CRITICAL: Atomic check-and-delete with lock to prevent race conditions
         async with self._sessions_lock:
             if session_id in self.sessions:
-                session = self.sessions[session_id]
                 del self.sessions[session_id]
             else:
                 return False
@@ -943,10 +942,16 @@ class AgentTerminalService:
 
             pty = simple_pty_manager.get_session(session.pty_session_id)
             if not pty or not pty.is_alive():
-                logger.info(f"[CANCEL] PTY session {session.pty_session_id} not alive, nothing to cancel")
+                logger.info(
+                    f"[CANCEL] PTY session {session.pty_session_id} not alive, "
+                    f"nothing to cancel"
+                )
                 return False
 
-            logger.warning(f"[CANCEL] Cancelling command due to {reason}: PTY {session.pty_session_id}")
+            logger.warning(
+                f"[CANCEL] Cancelling command due to {reason}: "
+                f"PTY {session.pty_session_id}"
+            )
 
             # Step 1: Send SIGTERM for graceful shutdown
             try:
@@ -981,7 +986,10 @@ class AgentTerminalService:
                 try:
                     await session.running_command_task
                 except asyncio.CancelledError:
-                    logger.info(f"[CANCEL] Cancelled running command task for session {session.session_id}")
+                    logger.info(
+                        f"[CANCEL] Cancelled running command task for "
+                        f"session {session.session_id}"
+                    )
 
             session.running_command_task = None
 
@@ -1003,7 +1011,10 @@ class AgentTerminalService:
                 except Exception as log_error:
                     logger.warning(f"[CANCEL] Failed to log cancellation to chat: {log_error}")
 
-            logger.info(f"[CANCEL] ✅ Command cancellation complete for session {session.session_id}")
+            logger.info(
+                f"[CANCEL] ✅ Command cancellation complete for "
+                f"session {session.session_id}"
+            )
             return True
 
         except Exception as e:
@@ -1071,11 +1082,17 @@ class AgentTerminalService:
                         match = re.search(rf'{escaped_marker}(\d+)', clean_text)
                         if match:
                             return_code = int(match.group(1))
-                            logger.info(f"[PTY_EXEC] Detected return code: {return_code} (marker: {marker_id})")
+                            logger.info(
+                                f"[PTY_EXEC] Detected return code: {return_code} "
+                                f"(marker: {marker_id})"
+                            )
                             return return_code
 
             except Exception as e:
-                logger.warning(f"[PTY_EXEC] Error detecting return code (attempt {attempt + 1}): {e}")
+                logger.warning(
+                    f"[PTY_EXEC] Error detecting return code "
+                    f"(attempt {attempt + 1}): {e}"
+                )
 
         # Fallback: Analyze error patterns
         logger.debug("[PTY_EXEC] Marker detection failed, falling back to error pattern analysis")
@@ -1160,9 +1177,11 @@ class AgentTerminalService:
         last_change_time = start_time
         poll_interval = 0.1  # Start with 100ms
         max_interval = 2.0  # Cap at 2 seconds
-        timed_out = False
 
-        logger.debug(f"[PTY_EXEC] Starting intelligent polling (timeout={timeout}s, stability={stability_threshold}s)")
+        logger.debug(
+            f"[PTY_EXEC] Starting intelligent polling "
+            f"(timeout={timeout}s, stability={stability_threshold}s)"
+        )
 
         while (time_module.time() - start_time) < timeout:
             try:
@@ -1213,14 +1232,16 @@ class AgentTerminalService:
             f"[PTY_EXEC] Polling timeout reached ({elapsed:.2f}s), "
             f"cancelling command to prevent orphaned processes"
         )
-        timed_out = True
 
         # Cancel the command to clean up resources
         cancelled = await self.cancel_command(session, reason="timeout")
         if cancelled:
             logger.info("[PTY_EXEC] Successfully cancelled command after timeout")
         else:
-            logger.error("[PTY_EXEC] Failed to cancel command after timeout - may have orphaned process")
+            logger.error(
+                "[PTY_EXEC] Failed to cancel command after timeout - "
+                "may have orphaned process"
+            )
 
         return last_output
 
@@ -1735,16 +1756,6 @@ class AgentTerminalService:
                 )
 
             # Execute approved command
-            # User has already approved, so callback always returns True
-            async def pre_approved_callback(approval_data):
-                return True
-
-            executor = SecureCommandExecutor(
-                policy=self.security_policy,
-                require_approval_callback=pre_approved_callback,
-                use_docker_sandbox=False,
-            )
-
             try:
                 # Log approval
                 if session.conversation_id:

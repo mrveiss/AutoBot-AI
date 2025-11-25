@@ -492,8 +492,6 @@ Please provide thorough security assessment focusing on safety, security, and co
         detected_patterns = []
         risk_categories = []
 
-        command_lower = command.lower()
-
         for category, patterns in self.dangerous_patterns.items():
             for pattern in patterns:
                 if re.search(pattern, command, re.IGNORECASE):

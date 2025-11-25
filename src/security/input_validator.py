@@ -191,7 +191,6 @@ class WebResearchInputValidator:
                 )
                 return result
 
-            original_query = query
             query = query.strip()
 
             # Length validation

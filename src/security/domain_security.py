@@ -346,8 +346,6 @@ class DomainSecurityManager:
 
     async def _validate_network_access(self, parsed) -> Dict[str, Any]:
         """Validate network-level access permissions"""
-        result = {"allowed": False, "reason": "unknown"}
-
         try:
             domain = parsed.hostname
             port = parsed.port or (443 if parsed.scheme == "https" else 80)

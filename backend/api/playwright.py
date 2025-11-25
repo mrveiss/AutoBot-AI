@@ -26,6 +26,7 @@ from src.unified_config_manager import UnifiedConfigManager
 config = UnifiedConfigManager()
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.http_client import get_http_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -344,27 +345,27 @@ async def navigate_to_url(request: NavigateRequest):
     try:
         logger.info(f"Navigate request: {request.url}")
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{BROWSER_VM_URL}/navigate",
-                json={
-                    "url": request.url,
-                    "wait_until": request.wait_until,
-                    "timeout": request.timeout,
-                },
-                timeout=aiohttp.ClientTimeout(total=request.timeout / 1000 + 5),
-            ) as response:
-                result = await response.json()
+        http_client = get_http_client()
+        async with await http_client.post(
+            f"{BROWSER_VM_URL}/navigate",
+            json={
+                "url": request.url,
+                "wait_until": request.wait_until,
+                "timeout": request.timeout,
+            },
+            timeout=aiohttp.ClientTimeout(total=request.timeout / 1000 + 5),
+        ) as response:
+            result = await response.json()
 
-                if response.status == 200:
-                    logger.info(f"Navigation successful: {result.get('url')}")
-                    return result
-                else:
-                    logger.error(f"Navigation failed: {result}")
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail=result.get("error", "Navigation failed"),
-                    )
+            if response.status == 200:
+                logger.info(f"Navigation successful: {result.get('url')}")
+                return result
+            else:
+                logger.error(f"Navigation failed: {result}")
+                raise HTTPException(
+                    status_code=response.status,
+                    detail=result.get("error", "Navigation failed"),
+                )
 
     except aiohttp.ClientError as e:
         logger.error(f"Browser VM connection error: {e}")
@@ -389,23 +390,23 @@ async def reload_page(request: ReloadRequest):
     try:
         logger.info("Reload request")
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{BROWSER_VM_URL}/reload",
-                json={"wait_until": request.wait_until},
-                timeout=aiohttp.ClientTimeout(total=35),
-            ) as response:
-                result = await response.json()
+        http_client = get_http_client()
+        async with await http_client.post(
+            f"{BROWSER_VM_URL}/reload",
+            json={"wait_until": request.wait_until},
+            timeout=aiohttp.ClientTimeout(total=35),
+        ) as response:
+            result = await response.json()
 
-                if response.status == 200:
-                    logger.info("Reload successful")
-                    return result
-                else:
-                    logger.error(f"Reload failed: {result}")
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail=result.get("error", "Reload failed"),
-                    )
+            if response.status == 200:
+                logger.info("Reload successful")
+                return result
+            else:
+                logger.error(f"Reload failed: {result}")
+                raise HTTPException(
+                    status_code=response.status,
+                    detail=result.get("error", "Reload failed"),
+                )
 
     except aiohttp.ClientError as e:
         logger.error(f"Browser VM connection error: {e}")

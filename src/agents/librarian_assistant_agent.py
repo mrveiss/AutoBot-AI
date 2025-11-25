@@ -715,9 +715,8 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
 
             combined_content = "\n---\n".join(source_contents)
 
-            prompt = """
-Based on the following web research results for the query \"{query}\", "
-"please provide a comprehensive summary that:
+            prompt = f"""
+Based on the following web research results for the query "{query}", please provide a comprehensive summary that:
 
 1. Synthesizes the key information found
 2. Clearly attributes information to sources

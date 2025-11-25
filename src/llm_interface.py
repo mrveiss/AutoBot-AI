@@ -354,7 +354,6 @@ class LLMInterface:
 
     def reload_ollama_configuration(self):
         """Runtime reload of Ollama configuration"""
-        old_host = self.ollama_host
         self.ollama_host = config.get_service_url("ollama")
 
         logger.info(
@@ -911,10 +910,7 @@ class LLMInterface:
         """
         Stream Ollama response with comprehensive timeout protection and error handling
         """
-        full_content = ""
-        chunk_count = 0
         start_time = time.time()
-        last_chunk_time = start_time
 
         logger.info(f"[{request_id}] Starting protected streaming for model {model}")
 

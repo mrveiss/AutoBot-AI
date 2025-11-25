@@ -326,7 +326,6 @@ class ServiceRegistry:
         """Load service configurations from environment variables"""
         for service_name in self.services:
             service = self.services[service_name]
-            env_prefix = f"{service_name.upper().replace('-', '_')}"
 
             # Update from environment variables
             # Load service-specific overrides from config

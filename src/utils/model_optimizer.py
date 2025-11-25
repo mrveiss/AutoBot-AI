@@ -26,6 +26,7 @@ from src.unified_config_manager import UnifiedConfigManager
 # Create singleton config instance
 config = UnifiedConfigManager()
 from src.constants.network_constants import NetworkConstants
+from src.utils.http_client import get_http_client
 from src.utils.redis_client import get_redis_client
 
 
@@ -221,49 +222,51 @@ class ModelOptimizer:
     async def refresh_available_models(self) -> List[ModelInfo]:
         """Refresh the list of available models from Ollama"""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{self._ollama_base_url}/api/tags") as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        models = []
+            http_client = get_http_client()
+            async with await http_client.get(
+                f"{self._ollama_base_url}/api/tags"
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    models = []
 
-                        for model_data in data.get("models", []):
-                            name = model_data.get("name", "")
-                            size_bytes = model_data.get("size", 0)
-                            size_gb = round(size_bytes / (1024**3), 2)
+                    for model_data in data.get("models", []):
+                        name = model_data.get("name", "")
+                        size_bytes = model_data.get("size", 0)
+                        size_gb = round(size_bytes / (1024**3), 2)
 
-                            details = model_data.get("details", {})
-                            parameter_size = details.get("parameter_size", "Unknown")
-                            quantization = details.get("quantization_level", "Unknown")
-                            family = details.get("family", "Unknown")
+                        details = model_data.get("details", {})
+                        parameter_size = details.get("parameter_size", "Unknown")
+                        quantization = details.get("quantization_level", "Unknown")
+                        family = details.get("family", "Unknown")
 
-                            # Classify model performance level
-                            performance_level = self._classify_model_performance(
-                                name, parameter_size
-                            )
-
-                            model_info = ModelInfo(
-                                name=name,
-                                size_gb=size_gb,
-                                parameter_size=parameter_size,
-                                quantization=quantization,
-                                family=family,
-                                performance_level=performance_level,
-                            )
-
-                            # Load performance history if available
-                            await self._load_model_performance_history(model_info)
-                            models.append(model_info)
-
-                        self._models_cache = {model.name: model for model in models}
-                        self.logger.info(f"Refreshed {len(models)} available models")
-                        return models
-
-                    else:
-                        self.logger.error(
-                            f"Failed to fetch models: HTTP {response.status}"
+                        # Classify model performance level
+                        performance_level = self._classify_model_performance(
+                            name, parameter_size
                         )
-                        return []
+
+                        model_info = ModelInfo(
+                            name=name,
+                            size_gb=size_gb,
+                            parameter_size=parameter_size,
+                            quantization=quantization,
+                            family=family,
+                            performance_level=performance_level,
+                        )
+
+                        # Load performance history if available
+                        await self._load_model_performance_history(model_info)
+                        models.append(model_info)
+
+                    self._models_cache = {model.name: model for model in models}
+                    self.logger.info(f"Refreshed {len(models)} available models")
+                    return models
+
+                else:
+                    self.logger.error(
+                        f"Failed to fetch models: HTTP {response.status}"
+                    )
+                    return []
 
         except Exception as e:
             self.logger.error(f"Error refreshing models: {e}")

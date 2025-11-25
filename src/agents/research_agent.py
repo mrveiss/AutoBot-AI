@@ -17,6 +17,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.http_client import get_http_client
 from src.utils.logging_manager import get_logger
 
 # Get centralized logger
@@ -66,7 +67,7 @@ class ResearchAgent:
 
     def __init__(self):
         self.app = FastAPI(title="AutoBot Research Agent", version="1.0.0")
-        self.session: Optional[aiohttp.ClientSession] = None
+        self._http_client = get_http_client()  # Use singleton HTTP client
 
         # Setup routes
         self.setup_routes()
@@ -78,7 +79,9 @@ class ResearchAgent:
                     "title": "Nmap - Network Discovery and Security Auditing",
                     "url": "https://nmap.org/",
                     "content": (
-                        "Nmap is a free and open source utility for network discovery and security auditing. Features include host discovery, port scanning, version detection, and OS detection."
+                        "Nmap is a free and open source utility for network "
+                        "discovery and security auditing. Features include host "
+                        "discovery, port scanning, version detection, OS detection."
                     ),
                     "installation": "sudo apt-get install nmap",
                     "usage": "nmap -sS -O target_ip",
@@ -87,7 +90,9 @@ class ResearchAgent:
                     "title": "Masscan - Fast Port Scanner",
                     "url": "https://github.com/robertdavidgraham/masscan",
                     "content": (
-                        "Masscan is a TCP port scanner that can scan the entire Internet in under 6 minutes. It's designed to be fast and efficient for large-scale scanning."
+                        "Masscan is a TCP port scanner that can scan the entire "
+                        "Internet in under 6 minutes. It's designed to be fast "
+                        "and efficient for large-scale scanning."
                     ),
                     "installation": "sudo apt-get install masscan",
                     "usage": "masscan -p1-65535 <target_network> --rate=1000",
@@ -96,7 +101,9 @@ class ResearchAgent:
                     "title": "ZMap - Fast Internet-wide Network Scanner",
                     "url": "https://zmap.io/",
                     "content": (
-                        "ZMap is a fast single packet network scanner designed for Internet-wide network surveys. It can scan the entire Internet in about 45 minutes."
+                        "ZMap is a fast single packet network scanner designed "
+                        "for Internet-wide network surveys. It can scan the "
+                        "entire Internet in about 45 minutes."
                     ),
                     "installation": "sudo apt-get install zmap",
                     "usage": "zmap -p 443 -o results.txt",
@@ -185,7 +192,9 @@ class ResearchAgent:
                     "nmap is the most versatile and widely-used network scanning tool"
                 ),
                 "summary": (
-                    f"Found {len(tools_data)} network scanning tools: {', '.join(tools_data.keys())}. Recommendation: nmap is the most versatile and widely-used network scanning tool."
+                    f"Found {len(tools_data)} network scanning tools: "
+                    f"{', '.join(tools_data.keys())}. Recommendation: nmap is "
+                    f"the most versatile and widely-used network scanning tool."
                 ),
             }
 
@@ -267,8 +276,9 @@ class ResearchAgent:
                     title="Nmap Official Documentation",
                     url="https://nmap.org/book/",
                     content=(
-                        "Official documentation for Nmap network scanner including installation guide,"
-                        "command reference, and scripting examples."
+                        "Official documentation for Nmap network scanner "
+                        "including installation guide, command reference, "
+                        "and scripting examples."
                     ),
                     relevance_score=0.92,
                     source_type="documentation",
@@ -292,8 +302,9 @@ class ResearchAgent:
                     title=f"Research Result {i+1} for '{query}'",
                     url=f"https://example.com/result-{i+1}",
                     content=(
-                        f"Mock research content related to '{query}' with"
-                        f"{focus} focus. This would contain actual web-scraped content in the real implementation."
+                        f"Mock research content related to '{query}' with "
+                        f"{focus} focus. This would contain actual web-scraped "
+                        f"content in the real implementation."
                     ),
                     relevance_score=0.85 - (i * 0.05),
                     source_type="general",
@@ -313,10 +324,12 @@ class ResearchAgent:
 
         if "network scan" in query.lower():
             return (
-                f"Found {len(results)} relevant resources about network scanning tools. "
-                "Key tools identified include Nmap (most popular), Masscan (fastest), and Zmap (Internet-scale). "
-                "All tools have detailed installation guides and usage examples available. "
-                "Nmap is recommended for beginners due to its comprehensive documentation and versatility."
+                f"Found {len(results)} relevant resources about network "
+                f"scanning tools. Key tools identified include Nmap (most "
+                f"popular), Masscan (fastest), and Zmap (Internet-scale). "
+                f"All tools have detailed installation guides and usage "
+                f"examples available. Nmap is recommended for beginners due "
+                f"to its comprehensive documentation and versatility."
             )
 
         return (

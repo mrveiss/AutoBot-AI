@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Union
 import aiohttp
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.http_client import get_http_client
 
 from ..utils.service_registry import get_service_url
 from .base_agent import (
@@ -133,18 +134,18 @@ class ContainerAgentProxy(BaseAgent):
     """Proxy for agents running in containers"""
 
     def __init__(
-        self, agent_type: str, container_url: str, session: aiohttp.ClientSession
+        self, agent_type: str, container_url: str
     ):
         super().__init__(agent_type, DeploymentMode.CONTAINER)
         self.container_url = container_url.rstrip("/")
-        self.session = session
+        self._http_client = get_http_client()  # Use singleton HTTP client
 
     async def process_request(self, request: AgentRequest) -> AgentResponse:
         """Send request to containerized agent via HTTP"""
         try:
             request_data = serialize_agent_request(request)
 
-            async with self.session.post(
+            async with await self._http_client.post(
                 f"{self.container_url}/process",
                 data=request_data,
                 headers={"Content-Type": "application/json"},
@@ -188,7 +189,7 @@ class ContainerAgentProxy(BaseAgent):
     async def _ping(self) -> bool:
         """Ping the container agent"""
         try:
-            async with self.session.get(
+            async with await self._http_client.get(
                 f"{self.container_url}/health", timeout=aiohttp.ClientTimeout(total=5.0)
             ) as response:
                 return response.status == 200
@@ -205,7 +206,6 @@ class AgentClient:
     def __init__(self, config: Optional[AgentClientConfig] = None):
         self.config = config or AgentClientConfig()
         self.registry = AgentRegistry()
-        self.http_session: Optional[aiohttp.ClientSession] = None
         self.container_agents: Dict[str, ContainerAgentProxy] = {}
 
         # Performance tracking
@@ -213,17 +213,12 @@ class AgentClient:
 
     async def initialize(self):
         """Initialize the agent client"""
-        # Create HTTP session for container communication
-        connector = aiohttp.TCPConnector(limit=100, limit_per_host=30)
-        timeout = aiohttp.ClientTimeout(total=self.config.request_timeout)
-        self.http_session = aiohttp.ClientSession(connector=connector, timeout=timeout)
-
+        # HTTP session handled by singleton HTTPClientManager
         logger.info("Agent client initialized")
 
     async def cleanup(self):
-        """Cleanup resources"""
-        if self.http_session:
-            await self.http_session.close()
+        """Cleanup resources - HTTP session managed by singleton HTTPClientManager"""
+        pass
 
     async def register_local_agent(self, agent: BaseAgent):
         """Register a local agent"""
@@ -232,10 +227,7 @@ class AgentClient:
 
     async def register_container_agent(self, agent_type: str, container_url: str):
         """Register a container agent"""
-        if not self.http_session:
-            await self.initialize()
-
-        proxy = ContainerAgentProxy(agent_type, container_url, self.http_session)
+        proxy = ContainerAgentProxy(agent_type, container_url)
         self.registry.register_agent(agent_type, proxy)
         self.container_agents[agent_type] = proxy
 

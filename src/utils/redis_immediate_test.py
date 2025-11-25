@@ -187,7 +187,7 @@ class RedisCircuitBreaker:
             result = await asyncio.to_thread(client.ping)
             self.record_success()
             return result
-        except Exception as e:
+        except Exception:
             self.record_failure()
             raise
 

@@ -435,29 +435,6 @@ class TodoWriteOptimizer:
             return similar_todos[0].content
 
         # Extract common themes and create comprehensive description
-        all_words = []
-        for todo in similar_todos:
-            all_words.extend(todo.content.lower().split())
-
-        # Find most common words (excluding common words)
-        common_stopwords = {
-            "the",
-            "a",
-            "an",
-            "and",
-            "or",
-            "but",
-            "in",
-            "on",
-            "at",
-            "to",
-            "for",
-            "of",
-            "with",
-            "by",
-        }
-        word_freq = Counter(word for word in all_words if word not in common_stopwords)
-
         # Use the most comprehensive todo as base
         base_todo = max(similar_todos, key=lambda t: len(t.content))
 

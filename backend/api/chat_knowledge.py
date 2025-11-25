@@ -776,6 +776,7 @@ if __name__ == "__main__":
             topic="Python Development",
             keywords=["python", "fastapi", "async"],
         )
+        print(f"Created context: {context}")
 
         # Add temporary knowledge
         knowledge_id = await manager.add_temporary_knowledge(

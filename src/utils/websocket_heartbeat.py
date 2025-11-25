@@ -105,9 +105,6 @@ class WebSocketManager:
 
         state = self.connection_states.get(connection_id, ConnectionState.CONNECTED)
         last_heartbeat_sent = self.last_heartbeat_sent.get(connection_id, 0)
-        last_heartbeat_received = self.last_heartbeat_received.get(
-            connection_id, current_time
-        )
 
         # Check if it's time to send heartbeat
         time_since_last_heartbeat = current_time - last_heartbeat_sent
