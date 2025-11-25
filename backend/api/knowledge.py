@@ -13,6 +13,7 @@ import sys
 import time
 import uuid
 from datetime import datetime
+from enum import Enum
 from pathlib import Path as PathLib
 from typing import Any, Dict, List, Optional
 
@@ -357,6 +358,186 @@ class SearchByTagsRequest(BaseModel):
         if not re.match(r"^[a-z0-9_-]+$", v):
             raise ValueError(f"Invalid tag format: {v}")
         return v
+
+
+# ===== BULK OPERATION MODELS (Issue #79) =====
+
+
+class ExportFormat(str, Enum):
+    """Supported export formats"""
+
+    JSON = "json"
+    CSV = "csv"
+    MARKDOWN = "markdown"
+
+
+class ExportFilters(BaseModel):
+    """Filters for export operations"""
+
+    categories: Optional[List[str]] = Field(default=None, max_items=20)
+    tags: Optional[List[str]] = Field(default=None, max_items=20)
+    date_from: Optional[str] = Field(
+        default=None,
+        description="ISO date string (YYYY-MM-DD)",
+    )
+    date_to: Optional[str] = Field(
+        default=None,
+        description="ISO date string (YYYY-MM-DD)",
+    )
+    fact_ids: Optional[List[str]] = Field(default=None, max_items=1000)
+
+    @validator("date_from", "date_to")
+    def validate_date(cls, v):
+        """Validate date format"""
+        if v:
+            try:
+                datetime.strptime(v, "%Y-%m-%d")
+            except ValueError:
+                raise ValueError(f"Invalid date format: {v}. Use YYYY-MM-DD")
+        return v
+
+
+class ExportRequest(BaseModel):
+    """Request model for knowledge base export"""
+
+    format: ExportFormat = Field(default=ExportFormat.JSON)
+    filters: Optional[ExportFilters] = Field(default=None)
+    include_metadata: bool = Field(default=True)
+    include_tags: bool = Field(default=True)
+    include_embeddings: bool = Field(
+        default=False,
+        description="Include vector embeddings (large file size)",
+    )
+
+
+class ImportRequest(BaseModel):
+    """Request model for knowledge base import"""
+
+    format: ExportFormat = Field(default=ExportFormat.JSON)
+    validate_only: bool = Field(
+        default=False,
+        description="Only validate, don't import",
+    )
+    skip_duplicates: bool = Field(
+        default=True,
+        description="Skip facts that already exist",
+    )
+    overwrite_existing: bool = Field(
+        default=False,
+        description="Overwrite existing facts with same ID",
+    )
+    default_category: str = Field(default="imported", max_length=100)
+
+
+class DeduplicationRequest(BaseModel):
+    """Request model for deduplication operations"""
+
+    similarity_threshold: float = Field(
+        default=0.95,
+        ge=0.5,
+        le=1.0,
+        description="Similarity threshold for detecting duplicates (0.5-1.0)",
+    )
+    dry_run: bool = Field(
+        default=True,
+        description="If True, only report duplicates without merging",
+    )
+    keep_strategy: str = Field(
+        default="newest",
+        description="Strategy for keeping facts: 'newest', 'oldest', 'longest'",
+    )
+    category: Optional[str] = Field(
+        default=None,
+        description="Limit deduplication to specific category",
+    )
+    max_comparisons: int = Field(
+        default=10000,
+        ge=100,
+        le=100000,
+        description="Maximum number of comparisons to avoid timeout",
+    )
+
+    @validator("keep_strategy")
+    def validate_strategy(cls, v):
+        """Validate keep strategy"""
+        valid = ("newest", "oldest", "longest")
+        if v not in valid:
+            raise ValueError(f"Invalid strategy: {v}. Must be one of {valid}")
+        return v
+
+
+class BulkDeleteRequest(BaseModel):
+    """Request model for bulk delete operations"""
+
+    fact_ids: List[str] = Field(
+        ...,
+        min_items=1,
+        max_items=500,
+        description="List of fact IDs to delete",
+    )
+    confirm: bool = Field(
+        default=False,
+        description="Must be True to actually delete",
+    )
+
+    @validator("fact_ids", each_item=True)
+    def validate_fact_id(cls, v):
+        """Validate fact ID format"""
+        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
+            raise ValueError(f"Invalid fact_id format: {v}")
+        if ".." in v or "/" in v or "\\" in v:
+            raise ValueError(f"Path traversal not allowed in fact_id: {v}")
+        return v
+
+
+class BulkCategoryUpdateRequest(BaseModel):
+    """Request model for bulk category updates"""
+
+    fact_ids: List[str] = Field(
+        ...,
+        min_items=1,
+        max_items=500,
+    )
+    new_category: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+    )
+
+    @validator("fact_ids", each_item=True)
+    def validate_fact_id(cls, v):
+        """Validate fact ID format"""
+        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
+            raise ValueError(f"Invalid fact_id format: {v}")
+        return v
+
+    @validator("new_category")
+    def validate_category(cls, v):
+        """Validate category format"""
+        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
+            raise ValueError(f"Invalid category format: {v}")
+        return v
+
+
+class CleanupRequest(BaseModel):
+    """Request model for cleanup operations"""
+
+    remove_empty: bool = Field(
+        default=True,
+        description="Remove facts with empty content",
+    )
+    remove_orphaned_tags: bool = Field(
+        default=True,
+        description="Remove tags with no associated facts",
+    )
+    fix_metadata: bool = Field(
+        default=True,
+        description="Fix malformed metadata JSON",
+    )
+    dry_run: bool = Field(
+        default=True,
+        description="Only report issues without fixing",
+    )
 
 
 # ===== HELPER FUNCTIONS FOR BATCH VECTORIZATION STATUS =====
@@ -4615,3 +4796,296 @@ async def bulk_tag_facts(
         "failed_count": result.get("failed_count", 0),
         "results": result.get("results", []),
     }
+
+
+# ===== BULK OPERATION ENDPOINTS (Issue #79) =====
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="export_knowledge",
+    error_code_prefix="KB",
+)
+@router.post("/export")
+async def export_knowledge(request: ExportRequest, req: Request):
+    """
+    Export knowledge base facts to JSON, CSV, or Markdown.
+
+    Issue #79: Bulk Operations - Export functionality
+
+    Request body:
+    - format: "json", "csv", or "markdown" (default: "json")
+    - filters: Optional filters (categories, tags, date_from, date_to, fact_ids)
+    - include_metadata: Include metadata in export (default: True)
+    - include_tags: Include tags in export (default: True)
+    - include_embeddings: Include vector embeddings (default: False, large file)
+
+    Returns:
+    - success: Boolean status
+    - format: Export format used
+    - total_facts: Number of facts exported
+    - data: Export data as string
+    - exported_at: ISO timestamp
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized",
+        )
+
+    # Extract filters
+    filters = request.filters
+    categories = filters.categories if filters else None
+    tags = filters.tags if filters else None
+    fact_ids = filters.fact_ids if filters else None
+    date_from = filters.date_from if filters else None
+    date_to = filters.date_to if filters else None
+
+    logger.info(f"Export request: format={request.format.value}, include_metadata={request.include_metadata}")
+
+    result = await kb.export_facts(
+        format=request.format.value,
+        categories=categories,
+        tags=tags,
+        fact_ids=fact_ids,
+        date_from=date_from,
+        date_to=date_to,
+        include_metadata=request.include_metadata,
+        include_tags=request.include_tags,
+    )
+
+    return result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="import_knowledge",
+    error_code_prefix="KB",
+)
+@router.post("/import")
+async def import_knowledge(
+    request: ImportRequest,
+    req: Request,
+    data: str = Query(..., description="Import data string"),
+):
+    """
+    Import facts into the knowledge base from JSON or CSV.
+
+    Issue #79: Bulk Operations - Import functionality
+
+    Query parameters:
+    - data: The import data as a string
+
+    Request body:
+    - format: "json" or "csv" (default: "json")
+    - validate_only: Only validate without importing (default: False)
+    - skip_duplicates: Skip existing facts (default: True)
+    - overwrite_existing: Overwrite existing facts (default: False)
+    - default_category: Default category for imported facts (default: "imported")
+
+    Returns:
+    - success: Boolean status
+    - total_facts: Total facts in import data
+    - imported: Number of facts imported
+    - skipped: Number of facts skipped
+    - overwritten: Number of facts overwritten
+    - errors: Any import errors
+    - validation_errors: Any validation errors
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized",
+        )
+
+    logger.info(
+        f"Import request: format={request.format.value}, validate_only={request.validate_only}"
+    )
+
+    result = await kb.import_facts(
+        data=data,
+        format=request.format.value,
+        validate_only=request.validate_only,
+        skip_duplicates=request.skip_duplicates,
+        overwrite_existing=request.overwrite_existing,
+        default_category=request.default_category,
+    )
+
+    return result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="find_duplicates",
+    error_code_prefix="KB",
+)
+@router.post("/deduplicate")
+async def find_duplicates(request: DeduplicationRequest, req: Request):
+    """
+    Find duplicate or near-duplicate facts in the knowledge base.
+
+    Issue #79: Bulk Operations - Deduplication
+
+    Request body:
+    - similarity_threshold: Threshold for near-duplicates (0.5-1.0, default: 0.95)
+    - dry_run: Only report duplicates (default: True)
+    - keep_strategy: "newest", "oldest", or "longest" (default: "newest")
+    - category: Limit to specific category (optional)
+    - max_comparisons: Maximum comparisons to prevent timeout (default: 10000)
+
+    Returns:
+    - success: Boolean status
+    - total_facts_scanned: Number of facts scanned
+    - exact_duplicates: Count of exact duplicates
+    - near_duplicates: Count of near-duplicates
+    - total_duplicates: Total duplicate pairs found
+    - duplicates: List of duplicate pairs with similarity scores
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized",
+        )
+
+    logger.info(
+        f"Deduplication request: threshold={request.similarity_threshold}, "
+        f"dry_run={request.dry_run}, category={request.category}"
+    )
+
+    result = await kb.find_duplicates(
+        similarity_threshold=request.similarity_threshold,
+        category=request.category,
+        max_comparisons=request.max_comparisons,
+    )
+
+    return result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="bulk_delete",
+    error_code_prefix="KB",
+)
+@router.delete("/bulk")
+async def bulk_delete_facts(request: BulkDeleteRequest, req: Request):
+    """
+    Delete multiple facts at once.
+
+    Issue #79: Bulk Operations - Bulk delete
+
+    Request body:
+    - fact_ids: List of fact IDs to delete (max 500)
+    - confirm: Must be True to actually delete (default: False)
+
+    Returns:
+    - success: Boolean status
+    - deleted: Number of facts deleted
+    - not_found: Number of facts not found
+    - errors: Any deletion errors
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized",
+        )
+
+    logger.info(f"Bulk delete request: {len(request.fact_ids)} facts, confirm={request.confirm}")
+
+    result = await kb.bulk_delete(
+        fact_ids=request.fact_ids,
+        confirm=request.confirm,
+    )
+
+    return result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="bulk_update_category",
+    error_code_prefix="KB",
+)
+@router.post("/bulk/category")
+async def bulk_update_category(request: BulkCategoryUpdateRequest, req: Request):
+    """
+    Update category for multiple facts at once.
+
+    Issue #79: Bulk Operations - Bulk category update
+
+    Request body:
+    - fact_ids: List of fact IDs to update (max 500)
+    - new_category: New category to assign
+
+    Returns:
+    - success: Boolean status
+    - updated: Number of facts updated
+    - not_found: Number of facts not found
+    - errors: Any update errors
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized",
+        )
+
+    logger.info(
+        f"Bulk category update: {len(request.fact_ids)} facts → {request.new_category}"
+    )
+
+    result = await kb.bulk_update_category(
+        fact_ids=request.fact_ids,
+        new_category=request.new_category,
+    )
+
+    return result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cleanup_knowledge_base",
+    error_code_prefix="KB",
+)
+@router.post("/cleanup")
+async def cleanup_knowledge_base(request: CleanupRequest, req: Request):
+    """
+    Clean up the knowledge base.
+
+    Issue #79: Bulk Operations - Cleanup
+
+    Request body:
+    - remove_empty: Remove facts with empty content (default: True)
+    - remove_orphaned_tags: Remove tags with no facts (default: True)
+    - fix_metadata: Fix malformed metadata JSON (default: True)
+    - dry_run: Only report issues without fixing (default: True)
+
+    Returns:
+    - success: Boolean status
+    - dry_run: Whether this was a dry run
+    - issues_found: Count of issues by type
+    - issues_details: Details of issues (only in dry_run mode)
+    - fixes_applied: Count of fixes applied (only when not dry_run)
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    if kb is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Knowledge base not initialized",
+        )
+
+    logger.info(
+        f"Cleanup request: dry_run={request.dry_run}, "
+        f"remove_empty={request.remove_empty}, remove_orphaned_tags={request.remove_orphaned_tags}"
+    )
+
+    result = await kb.cleanup(
+        remove_empty=request.remove_empty,
+        remove_orphaned_tags=request.remove_orphaned_tags,
+        fix_metadata=request.fix_metadata,
+        dry_run=request.dry_run,
+    )
+
+    return result
