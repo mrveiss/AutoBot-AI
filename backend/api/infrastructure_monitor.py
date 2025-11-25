@@ -377,26 +377,36 @@ class InfrastructureMonitor:
         # Machine-specific stats based on role - use config for host mapping
         npu_worker_host = config.get_host("npu_worker")
         if host == npu_worker_host:  # NPU Worker - higher CPU, moderate memory
+            base_cpu = 45.0  # Base CPU usage percentage
+            base_disk = 92.0  # Base disk usage percentage
             cpu_load_1m = round(2.1 + (host_hash % 100) / 100, 1)
             memory_used = round(6.2 + (host_hash % 40) / 10, 1)
             memory_total = 16.0
             disk_sizes = ["380G", "350G", "38G"]
         elif "23" in host:  # Redis - high memory, low CPU
+            base_cpu = 15.0
+            base_disk = 90.0
             cpu_load_1m = round(0.5 + (host_hash % 50) / 100, 1)
             memory_used = round(12.8 + (host_hash % 30) / 10, 1)
             memory_total = 16.0
             disk_sizes = ["465G", "420G", "28G"]
         elif "24" in host:  # AI Stack - high CPU and memory
+            base_cpu = 65.0
+            base_disk = 91.0
             cpu_load_1m = round(3.2 + (host_hash % 80) / 100, 1)
             memory_used = round(28.5 + (host_hash % 60) / 10, 1)
             memory_total = 32.0
             disk_sizes = ["930G", "850G", "65G"]
         elif "25" in host:  # Browser - moderate resources
+            base_cpu = 35.0
+            base_disk = 82.0
             cpu_load_1m = round(1.4 + (host_hash % 60) / 100, 1)
             memory_used = round(8.9 + (host_hash % 40) / 10, 1)
             memory_total = 16.0
             disk_sizes = ["465G", "380G", "52G"]
         else:  # VM1 Frontend or others
+            base_cpu = 25.0
+            base_disk = 75.0
             cpu_load_1m = round(1.1 + (host_hash % 70) / 100, 1)
             memory_used = round(5.4 + (host_hash % 50) / 10, 1)
             memory_total = 8.0

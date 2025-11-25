@@ -695,9 +695,9 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
                 # Search in tool data
                 for tool in knowledge_data.get("tools", []):
+                    usage_basic = tool.get("usage", {}).get("basic", "")
                     searchable_text = (
-                        f"{tool.get('name', '')} {tool.get('purpose', '')} {tool.get('usage',"
-                        f"{}).get('basic', '')}"
+                        f"{tool.get('name', '')} {tool.get('purpose', '')} {usage_basic}"
                     )
 
                     # Add options text
