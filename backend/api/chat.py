@@ -1,33 +1,20 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-import asyncio
 import json
 import logging
-import os
-import re
-import uuid
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
-from uuid import uuid4
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-import aiofiles
-import uvicorn
 from fastapi import (
     APIRouter,
     Body,
     Depends,
-    FastAPI,
-    HTTPException,
     Request,
     Response,
-    status,
 )
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field, ValidationError
-from starlette.responses import Response as StarletteResponse
+from pydantic import BaseModel, Field
 
 # Import dependencies and utilities - Using available dependencies
 from backend.dependencies import get_config, get_knowledge_base
@@ -43,15 +30,11 @@ from backend.utils.chat_utils import (
     generate_message_id,
     generate_request_id,
     get_chat_history_manager,
-    log_chat_error,
     log_chat_event,
     validate_chat_session_id,
-    validate_message_content,
 )
 from src.auth_middleware import auth_middleware
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.redis_client import get_redis_client
 
 # Import models - DISABLED: Models don't exist yet
 # from src.models.conversation import ConversationModel

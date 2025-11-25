@@ -9,15 +9,14 @@ Provides endpoints for phase progression, validation, and system state managemen
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from scripts.phase_validation_system import PhaseValidator
-from src.constants.network_constants import NetworkConstants
-from src.phase_progression_manager import ProgressionTrigger, get_progression_manager
+from src.phase_progression_manager import get_progression_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()

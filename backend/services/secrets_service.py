@@ -8,17 +8,14 @@ Handles secure storage, retrieval, and management of secrets with dual-scope sup
 
 import json
 import logging
-import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-import aiofiles
 from cryptography.fernet import Fernet
 
-from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import config_manager
 
 logger = logging.getLogger(__name__)

@@ -19,7 +19,6 @@ from src.computer_vision_system import (
     ElementType,
     InteractionType,
     ScreenAnalyzer,
-    UIElement,
 )
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 

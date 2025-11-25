@@ -10,18 +10,16 @@ Supports real-time analytics, communication patterns, and code analysis integrat
 import asyncio
 import json
 import logging
-import subprocess
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import psutil
 import redis
 import requests
 from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from src.constants import PATH

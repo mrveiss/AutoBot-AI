@@ -6,16 +6,13 @@ RUM (Real User Monitoring) API endpoints for logging frontend events.
 Provides comprehensive logging of user interactions, errors, and performance metrics.
 """
 
-import json
 import logging
-import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()

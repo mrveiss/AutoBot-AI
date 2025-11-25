@@ -9,7 +9,6 @@ import json
 import logging
 import re
 import subprocess
-import sys
 import time
 import uuid
 from datetime import datetime
@@ -36,8 +35,7 @@ except ImportError:
 
 # Import Advanced RAG Service for reranking
 try:
-    from backend.services.rag_config import get_rag_config, update_rag_config
-    from backend.services.rag_service import RAGService, get_rag_service
+    from backend.services.rag_service import RAGService
 
     ADVANCED_RAG_AVAILABLE = True
 except ImportError:
@@ -826,7 +824,6 @@ async def get_main_categories(req: Request):
         except Exception as e:
             logger.error(f"Error categorizing facts: {e}")
             # Fallback: just show 0 if we can't categorize
-            pass
 
     # Build main categories with counts
     main_categories = []

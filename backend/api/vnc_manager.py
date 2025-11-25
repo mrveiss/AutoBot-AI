@@ -6,11 +6,12 @@ VNC Manager API - Automatic VNC server lifecycle management
 Ensures VNC server is always available when noVNC tab is accessed
 """
 
+import asyncio
 import logging
 import subprocess
 from typing import Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import with_error_handling
@@ -147,10 +148,8 @@ async def restart_vnc_server() -> Dict[str, str]:
             timeout=5,
         )
 
-        # Wait a moment for cleanup
-        import time
-
-        time.sleep(1)
+        # Wait a moment for cleanup (async to not block event loop)
+        await asyncio.sleep(1)
 
         # Start fresh
         return start_vnc_server()

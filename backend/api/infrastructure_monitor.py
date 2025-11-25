@@ -8,7 +8,6 @@ Monitors multiple machines and their service hierarchies
 
 import asyncio
 import logging
-import os
 import socket
 import subprocess
 import time
