@@ -31,8 +31,6 @@ from backend.services.command_execution_queue import get_command_queue
 from src.chat_history_manager import (  # CRITICAL FIX: Chat integration
     ChatHistoryManager,
 )
-from src.chat_workflow_manager import ChatWorkflowManager  # For LLM interpretation
-from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 from src.logging.terminal_logger import TerminalLogger
 from src.monitoring.prometheus_metrics import get_metrics_manager
@@ -1266,10 +1264,7 @@ class AgentTerminalService:
         Returns:
             Dict with status, stdout, stderr, return_code
         """
-        import asyncio
-        import time as time_module
 
-        from backend.services.simple_pty import simple_pty_manager
 
         logger.info(f"[PTY_EXEC] Executing in PTY: {command}")
 

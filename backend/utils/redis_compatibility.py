@@ -8,9 +8,8 @@ Provides backward compatibility for existing code while transitioning to async R
 
 import asyncio
 import warnings
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.logging_manager import get_logger
 
 from .async_redis_manager import get_redis_manager
@@ -219,7 +218,6 @@ class RedisCompatibilityWrapper:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit"""
         # Connections are managed by the async Redis manager
-        pass
 
 
 # Global compatibility instances for each database

@@ -11,9 +11,8 @@ while maintaining backward compatibility with existing chat endpoints.
 import asyncio
 import json
 import logging
-import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -30,11 +29,9 @@ from backend.utils.chat_utils import (
     generate_chat_session_id,
     generate_request_id,
     get_chat_history_manager,
-    log_chat_error,
     log_chat_event,
     validate_chat_session_id,
 )
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

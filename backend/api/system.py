@@ -7,12 +7,8 @@ import sys
 from datetime import datetime
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import JSONResponse
 
-from backend.services.config_service import ConfigService
-from backend.utils.connection_utils import ModelManager
 from src.constants.model_constants import ModelConstants as ModelConsts
-from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import UnifiedConfigManager
 
 # Add caching support from unified cache manager (P4 Cache Consolidation)
@@ -378,7 +374,7 @@ async def get_detailed_health(request: Request):
 
         # Check LLM interface
         try:
-            from src.llm_interface import LLMInterface
+            pass
 
             detailed_components["llm"] = "available"
         except Exception as e:
@@ -386,7 +382,7 @@ async def get_detailed_health(request: Request):
 
         # Check knowledge base
         try:
-            from src.knowledge_base import KnowledgeBase
+            pass
 
             detailed_components["knowledge_base"] = "available"
         except Exception as e:
@@ -599,7 +595,7 @@ async def get_cache_activity():
 async def get_system_metrics():
     """Get system performance metrics"""
     try:
-        import time
+        pass
 
         import psutil
 
