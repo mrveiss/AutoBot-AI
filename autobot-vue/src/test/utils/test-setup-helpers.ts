@@ -13,7 +13,7 @@ import { NetworkConstants, ServiceURLs } from '@/constants/network'
 export const setupTestEnv = () => {
   process.env.NODE_ENV = 'test'
   process.env.VITE_API_BASE_URL = ServiceURLs.BACKEND_LOCAL
-  process.env.VITE_WS_URL = 'ws://localhost:8001/ws'
+  process.env.VITE_WS_URL = ServiceURLs.WEBSOCKET_LOCAL
 }
 
 // Mock window properties commonly used in components
@@ -120,7 +120,8 @@ export const setupFetchMock = (responses: Record<string, any> = {}) => {
     }
 
     // Default timeout simulation for backend connectivity issues
-    if (urlString.includes('localhost:8001')) {
+    // Use NetworkConstants to check for backend host instead of hardcoded value
+    if (urlString.includes(`${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.BACKEND_PORT}`)) {
       return Promise.reject(new Error('Request timeout after 30000ms'))
     }
 

@@ -18,9 +18,9 @@ export const TEST_CONFIG = {
     retryDelay: 1000,
   },
 
-  // WebSocket Configuration  
+  // WebSocket Configuration
   websocket: {
-    url: process.env.VITE_WS_URL || 'ws://localhost:8001/ws',
+    url: process.env.VITE_WS_URL || ServiceURLs.WEBSOCKET_LOCAL,
     reconnectAttempts: 5,
     reconnectDelay: 2000,
   },
@@ -303,10 +303,11 @@ export const resetTestConfig = () => {
 
 // Utility to simulate real backend errors we see in the logs
 export const simulateRealBackendErrors = () => {
+  const wsUrl = TEST_CONFIG.websocket.url
   const errors = [
     'Request timeout after 30000ms',
     'TypeError: Failed to fetch',
-    'WebSocket connection to \'ws://localhost:8001/ws\' failed',
+    `WebSocket connection to '${wsUrl}' failed`,
     'Error in connection establishment: net::ERR_CONNECTION_REFUSED',
   ]
 
