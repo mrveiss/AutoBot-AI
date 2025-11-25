@@ -15,6 +15,7 @@ import aiohttp
 from src.agents.classification_agent import ClassificationResult
 from src.autobot_types import TaskComplexity
 from src.unified_config_manager import config as global_config_manager
+from src.utils.http_client import get_http_client
 from src.utils.redis_client import get_redis_client
 from src.workflow_classifier import WorkflowClassifier
 
@@ -162,25 +163,26 @@ Respond with valid JSON:
                 prompt = self.classification_prompt.format(user_message=user_message)
 
                 # Call Ollama API with async HTTP
+                http_client = get_http_client()
                 timeout = aiohttp.ClientTimeout(
                     total=10
                 )  # Fast timeout for lightweight models
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.post(
-                        f"{self.ollama_host}/api/generate",
-                        json={
-                            "model": model,
-                            "prompt": prompt,
-                            "stream": True,
-                            "options": {
-                                "temperature": (
-                                    0.3
-                                ),  # Low temperature for consistent classification
-                                "top_p": 0.9,
-                                "num_predict": 200,  # Limit response length
-                            },
+                async with await http_client.post(
+                    f"{self.ollama_host}/api/generate",
+                    json={
+                        "model": model,
+                        "prompt": prompt,
+                        "stream": True,
+                        "options": {
+                            "temperature": (
+                                0.3
+                            ),  # Low temperature for consistent classification
+                            "top_p": 0.9,
+                            "num_predict": 200,  # Limit response length
                         },
-                    ) as response:
+                    },
+                    timeout=timeout,
+                ) as response:
                         if response.status == 200:
                             # Handle streaming response
                             full_response = ""
@@ -216,14 +218,14 @@ Respond with valid JSON:
     async def _get_available_models(self) -> List[str]:
         """Get list of available Ollama models."""
         try:
+            http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=5)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(f"{self.ollama_host}/api/tags") as response:
-                    if response.status == 200:
-                        models_data = await response.json()
-                        return [
-                            model["name"] for model in models_data.get("models", [])
-                        ]
+            async with await http_client.get(
+                f"{self.ollama_host}/api/tags", timeout=timeout
+            ) as response:
+                if response.status == 200:
+                    models_data = await response.json()
+                    return [model["name"] for model in models_data.get("models", [])]
         except Exception as e:
             logger.warning(f"Failed to get available models: {e}")
         return []

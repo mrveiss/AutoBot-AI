@@ -16,10 +16,11 @@ Usage:
 import time
 from typing import Dict
 
-import httpx
+import aiohttp
 import structlog
 
 from backend.security.service_auth import ServiceAuthManager
+from src.utils.http_client import get_http_client
 
 logger = structlog.get_logger()
 
@@ -45,10 +46,8 @@ class ServiceHTTPClient:
         self.service_key = service_key
         self.timeout = timeout
 
-        # Create async HTTP client with timeout configuration
-        self.client = httpx.AsyncClient(
-            timeout=httpx.Timeout(timeout), follow_redirects=True
-        )
+        # Use HTTPClient singleton
+        self.http_client = get_http_client()
 
         logger.info(
             "Service HTTP client initialized", service_id=service_id, timeout=timeout
@@ -87,16 +86,16 @@ class ServiceHTTPClient:
             "X-Service-Timestamp": str(timestamp),
         }
 
-    async def get(self, url: str, **kwargs) -> httpx.Response:
+    async def get(self, url: str, **kwargs):
         """
         Perform authenticated GET request.
 
         Args:
             url: Request URL
-            **kwargs: Additional arguments passed to httpx.get()
+            **kwargs: Additional arguments passed to aiohttp.get()
 
         Returns:
-            HTTP response object
+            HTTP response object (async context manager)
         """
         headers = self._sign_request("GET", url)
 
@@ -105,20 +104,24 @@ class ServiceHTTPClient:
             headers.update(kwargs["headers"])
         kwargs["headers"] = headers
 
+        # Set timeout
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = aiohttp.ClientTimeout(total=self.timeout)
+
         logger.debug("Service GET request", service_id=self.service_id, url=url)
 
-        return await self.client.get(url, **kwargs)
+        return await self.http_client.get(url, **kwargs)
 
-    async def post(self, url: str, **kwargs) -> httpx.Response:
+    async def post(self, url: str, **kwargs):
         """
         Perform authenticated POST request.
 
         Args:
             url: Request URL
-            **kwargs: Additional arguments passed to httpx.post()
+            **kwargs: Additional arguments passed to aiohttp.post()
 
         Returns:
-            HTTP response object
+            HTTP response object (async context manager)
         """
         headers = self._sign_request("POST", url)
 
@@ -127,20 +130,24 @@ class ServiceHTTPClient:
             headers.update(kwargs["headers"])
         kwargs["headers"] = headers
 
+        # Set timeout
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = aiohttp.ClientTimeout(total=self.timeout)
+
         logger.debug("Service POST request", service_id=self.service_id, url=url)
 
-        return await self.client.post(url, **kwargs)
+        return await self.http_client.post(url, **kwargs)
 
-    async def put(self, url: str, **kwargs) -> httpx.Response:
+    async def put(self, url: str, **kwargs):
         """
         Perform authenticated PUT request.
 
         Args:
             url: Request URL
-            **kwargs: Additional arguments passed to httpx.put()
+            **kwargs: Additional arguments passed to aiohttp.put()
 
         Returns:
-            HTTP response object
+            HTTP response object (async context manager)
         """
         headers = self._sign_request("PUT", url)
 
@@ -148,20 +155,23 @@ class ServiceHTTPClient:
             headers.update(kwargs["headers"])
         kwargs["headers"] = headers
 
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = aiohttp.ClientTimeout(total=self.timeout)
+
         logger.debug("Service PUT request", service_id=self.service_id, url=url)
 
-        return await self.client.put(url, **kwargs)
+        return await self.http_client.put(url, **kwargs)
 
-    async def delete(self, url: str, **kwargs) -> httpx.Response:
+    async def delete(self, url: str, **kwargs):
         """
         Perform authenticated DELETE request.
 
         Args:
             url: Request URL
-            **kwargs: Additional arguments passed to httpx.delete()
+            **kwargs: Additional arguments passed to aiohttp.delete()
 
         Returns:
-            HTTP response object
+            HTTP response object (async context manager)
         """
         headers = self._sign_request("DELETE", url)
 
@@ -169,20 +179,23 @@ class ServiceHTTPClient:
             headers.update(kwargs["headers"])
         kwargs["headers"] = headers
 
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = aiohttp.ClientTimeout(total=self.timeout)
+
         logger.debug("Service DELETE request", service_id=self.service_id, url=url)
 
-        return await self.client.delete(url, **kwargs)
+        return await self.http_client.delete(url, **kwargs)
 
-    async def patch(self, url: str, **kwargs) -> httpx.Response:
+    async def patch(self, url: str, **kwargs):
         """
         Perform authenticated PATCH request.
 
         Args:
             url: Request URL
-            **kwargs: Additional arguments passed to httpx.patch()
+            **kwargs: Additional arguments passed to aiohttp.patch()
 
         Returns:
-            HTTP response object
+            HTTP response object (async context manager)
         """
         headers = self._sign_request("PATCH", url)
 
@@ -190,13 +203,16 @@ class ServiceHTTPClient:
             headers.update(kwargs["headers"])
         kwargs["headers"] = headers
 
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = aiohttp.ClientTimeout(total=self.timeout)
+
         logger.debug("Service PATCH request", service_id=self.service_id, url=url)
 
-        return await self.client.patch(url, **kwargs)
+        return await self.http_client.patch(url, **kwargs)
 
     async def close(self):
         """Close the HTTP client and cleanup resources."""
-        await self.client.aclose()
+        # HTTPClient singleton doesn't need to be closed per instance
         logger.info("Service HTTP client closed", service_id=self.service_id)
 
     async def __aenter__(self):

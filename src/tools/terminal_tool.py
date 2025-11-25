@@ -17,6 +17,7 @@ Security Integration:
 import logging
 from typing import Any, Dict, Optional
 
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -335,8 +336,7 @@ class TerminalTool:
             Command history with timestamps and risk levels
         """
         try:
-            # Import httpx for API call
-            import httpx
+            import aiohttp
 
             from src.constants.network_constants import NetworkConstants
 
@@ -346,55 +346,58 @@ class TerminalTool:
 
             backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                # List all terminal sessions
-                response = await client.get(f"{backend_url}/api/terminal/sessions")
+            http_client = get_http_client()
 
-                if response.status_code != 200:
+            # List all terminal sessions
+            async with await http_client.get(
+                f"{backend_url}/api/terminal/sessions",
+                timeout=aiohttp.ClientTimeout(total=5.0),
+            ) as response:
+                if response.status != 200:
                     return {
                         "status": "error",
                         "error": "Failed to list terminal sessions",
                     }
 
-                sessions_data = response.json()
+                sessions_data = await response.json()
                 sessions = sessions_data.get("sessions", [])
 
-                # Find user's active terminal session
-                # User sessions have user_id "default" and are not agent sessions
-                user_sessions = [
-                    s
-                    for s in sessions
-                    if s.get("is_active") and s.get("user_id") == "default"
-                ]
+            # Find user's active terminal session
+            # User sessions have user_id "default" and are not agent sessions
+            user_sessions = [
+                s
+                for s in sessions
+                if s.get("is_active") and s.get("user_id") == "default"
+            ]
 
-                if not user_sessions:
-                    return {
-                        "status": "success",
-                        "history": [],
-                        "message": "No active user terminal session found",
-                    }
+            if not user_sessions:
+                return {
+                    "status": "success",
+                    "history": [],
+                    "message": "No active user terminal session found",
+                }
 
-                # Get history from first active user session
-                user_session_id = user_sessions[0]["session_id"]
+            # Get history from first active user session
+            user_session_id = user_sessions[0]["session_id"]
 
-                history_response = await client.get(
-                    f"{backend_url}/api/terminal/sessions/{user_session_id}/history"
-                )
-
-                if history_response.status_code != 200:
+            async with await http_client.get(
+                f"{backend_url}/api/terminal/sessions/{user_session_id}/history",
+                timeout=aiohttp.ClientTimeout(total=5.0),
+            ) as history_response:
+                if history_response.status != 200:
                     return {
                         "status": "error",
                         "error": "Failed to retrieve command history",
                     }
 
-                history_data = history_response.json()
+                history_data = await history_response.json()
 
-                return {
-                    "status": "success",
-                    "session_id": user_session_id,
-                    "history": history_data.get("history", []),
-                    "total_commands": history_data.get("total_commands", 0),
-                }
+            return {
+                "status": "success",
+                "session_id": user_session_id,
+                "history": history_data.get("history", []),
+                "total_commands": history_data.get("total_commands", 0),
+            }
 
         except Exception as e:
             logger.error(f"Error getting user command history: {e}", exc_info=True)
@@ -478,7 +481,7 @@ class TerminalTool:
             >>>     self.active_sessions[conv_id] = session_id
         """
         try:
-            import httpx
+            import aiohttp
 
             from src.constants.network_constants import NetworkConstants
 
@@ -489,14 +492,14 @@ class TerminalTool:
                 f"{NetworkConstants.BACKEND_PORT}"
             )
 
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(
-                    f"{backend_url}/api/agent-terminal/sessions",
-                    params={"conversation_id": conversation_id},
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
+            http_client = get_http_client()
+            async with await http_client.get(
+                f"{backend_url}/api/agent-terminal/sessions",
+                params={"conversation_id": conversation_id},
+                timeout=aiohttp.ClientTimeout(total=5.0),
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
                     sessions = data.get("sessions", [])
 
                     if sessions and len(sessions) > 0:
@@ -530,78 +533,78 @@ class TerminalTool:
             session_id: PTY session ID to restore history to
         """
         try:
-            import httpx
+            import aiohttp
 
             from src.constants.network_constants import NetworkConstants
 
             backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                # Fetch chat messages for this conversation
-                response = await client.get(
-                    f"{backend_url}/api/chats/{conversation_id}/messages"
-                )
-
-                if response.status_code != 200:
+            http_client = get_http_client()
+            async with await http_client.get(
+                f"{backend_url}/api/chats/{conversation_id}/messages",
+                timeout=aiohttp.ClientTimeout(total=10.0),
+            ) as response:
+                if response.status != 200:
                     logger.warning(
-                        f"Failed to fetch chat history for restoration: {response.status_code}"
+                        f"Failed to fetch chat history for restoration: {response.status}"
                     )
                     return
 
-                messages = response.json().get("messages", [])
+                data = await response.json()
+                messages = data.get("messages", [])
 
-                # Filter for command-related messages
-                command_messages = [
-                    msg
-                    for msg in messages
-                    if msg.get("metadata", {}).get("type") == "command"
-                    or "command" in msg.get("content", "").lower()[:50]
-                ]
+            # Filter for command-related messages
+            command_messages = [
+                msg
+                for msg in messages
+                if msg.get("metadata", {}).get("type") == "command"
+                or "command" in msg.get("content", "").lower()[:50]
+            ]
 
-                if not command_messages:
-                    logger.info(f"No command history to restore for {conversation_id}")
-                    return
+            if not command_messages:
+                logger.info(f"No command history to restore for {conversation_id}")
+                return
 
-                # Write restoration header to terminal
-                session = self.agent_terminal_service.sessions.get(session_id)
-                if session and session.pty_session_id:
-                    header = (
-                        "\033[1;36m"  # Cyan bold
-                        "═══════════════════════════════════════════════════════════════\n"
-                        "  SESSION RESTORED - Command History Replay\n"
-                        f"  Conversation: {conversation_id[:16]}...\n"
-                        f"  Commands: {len(command_messages)} entries\n"
-                        "═══════════════════════════════════════════════════════════════\n"
-                        "\033[0m"  # Reset
-                    )
-                    self.agent_terminal_service._write_to_pty(session, header)
-
-                    # Replay commands and outputs
-                    for msg in command_messages[-20:]:  # Last 20 commands
-                        content = msg.get("content", "")
-                        timestamp = msg.get("timestamp", "")
-
-                        # Format and write to terminal
-                        history_entry = (
-                            f"\033[90m[{timestamp}]\033[0m "  # Gray timestamp
-                            f"{content}\n"
-                        )
-                        self.agent_terminal_service._write_to_pty(
-                            session, history_entry
-                        )
-
-                    footer = (
-                        "\033[1;36m"
-                        "═══════════════════════════════════════════════════════════════\n"
-                        "  History restoration complete. Terminal ready.\n"
-                        "═══════════════════════════════════════════════════════════════\n"
-                        "\033[0m"
-                    )
-                    self.agent_terminal_service._write_to_pty(session, footer)
-
-                logger.info(
-                    f"Restored {len(command_messages)} command entries to terminal {session_id}"
+            # Write restoration header to terminal
+            session = self.agent_terminal_service.sessions.get(session_id)
+            if session and session.pty_session_id:
+                header = (
+                    "\033[1;36m"  # Cyan bold
+                    "═══════════════════════════════════════════════════════════════\n"
+                    "  SESSION RESTORED - Command History Replay\n"
+                    f"  Conversation: {conversation_id[:16]}...\n"
+                    f"  Commands: {len(command_messages)} entries\n"
+                    "═══════════════════════════════════════════════════════════════\n"
+                    "\033[0m"  # Reset
                 )
+                self.agent_terminal_service._write_to_pty(session, header)
+
+                # Replay commands and outputs
+                for msg in command_messages[-20:]:  # Last 20 commands
+                    content = msg.get("content", "")
+                    timestamp = msg.get("timestamp", "")
+
+                    # Format and write to terminal
+                    history_entry = (
+                        f"\033[90m[{timestamp}]\033[0m "  # Gray timestamp
+                        f"{content}\n"
+                    )
+                    self.agent_terminal_service._write_to_pty(
+                        session, history_entry
+                    )
+
+                footer = (
+                    "\033[1;36m"
+                    "═══════════════════════════════════════════════════════════════\n"
+                    "  History restoration complete. Terminal ready.\n"
+                    "═══════════════════════════════════════════════════════════════\n"
+                    "\033[0m"
+                )
+                self.agent_terminal_service._write_to_pty(session, footer)
+
+            logger.info(
+                f"Restored {len(command_messages)} command entries to terminal {session_id}"
+            )
 
         except Exception as e:
             logger.error(f"Error restoring terminal history: {e}", exc_info=True)

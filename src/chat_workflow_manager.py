@@ -33,6 +33,7 @@ from backend.conversation_context import (
     ConversationContext,
     ConversationContextAnalyzer,
 )
+from src.utils.http_client import get_http_client
 from backend.conversation_safety import (
     ConversationSafetyGuards,
     SafetyCheckResult,
@@ -770,26 +771,28 @@ Explain what it means and answer their original question."""
 
         interpretation = ""
 
-        async with httpx.AsyncClient(timeout=60.0) as interp_client:
-            if streaming:
-                interp_response = await interp_client.post(
-                    f"{ollama_endpoint}/api/generate",
-                    json={
-                        "model": selected_model,
-                        "prompt": interpretation_prompt,
-                        "stream": True,
-                        "options": {
-                            "temperature": 0.7,
-                            "top_p": 0.9,
-                            "num_ctx": 2048,
-                        },
+        http_client = get_http_client()
+        if streaming:
+            import aiohttp
+            async with await http_client.post(
+                f"{ollama_endpoint}/api/generate",
+                json={
+                    "model": selected_model,
+                    "prompt": interpretation_prompt,
+                    "stream": True,
+                    "options": {
+                        "temperature": 0.7,
+                        "top_p": 0.9,
+                        "num_ctx": 2048,
                     },
-                )
-
-                async for line in interp_response.aiter_lines():
-                    if line:
+                },
+                timeout=aiohttp.ClientTimeout(total=60.0),
+            ) as interp_response:
+                async for line in interp_response.content:
+                    line_str = line.decode("utf-8").strip()
+                    if line_str:
                         try:
-                            data = json.loads(line)
+                            data = json.loads(line_str)
                             chunk = data.get("response", "")
                             if chunk:
                                 interpretation += chunk
@@ -805,24 +808,21 @@ Explain what it means and answer their original question."""
                                 break
                         except json.JSONDecodeError:
                             continue
-            else:
-                interp_response = await interp_client.post(
-                    f"{ollama_endpoint}/api/generate",
-                    json={
-                        "model": selected_model,
-                        "prompt": interpretation_prompt,
-                        "stream": False,
-                        "options": {
-                            "temperature": 0.7,
-                            "top_p": 0.9,
-                            "num_ctx": 2048,
-                        },
+        else:
+            response_data = await http_client.post_json(
+                f"{ollama_endpoint}/api/generate",
+                json_data={
+                    "model": selected_model,
+                    "prompt": interpretation_prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.7,
+                        "top_p": 0.9,
+                        "num_ctx": 2048,
                     },
-                )
-
-                if interp_response.status_code == 200:
-                    interp_data = interp_response.json()
-                    interpretation = interp_data.get("response", "")
+                },
+            )
+            interpretation = response_data.get("response", "")
 
         # For non-streaming, yield the complete interpretation at once
         if not streaming and interpretation:
@@ -1474,77 +1474,78 @@ Explain what it means and answer their original question."""
 
             # Stage 3: Stream LLM response and handle tool calls
             try:
-                import httpx
+                import aiohttp
 
-                async with httpx.AsyncClient(timeout=60.0) as client:
-                    async with client.stream(
-                        "POST",
-                        ollama_endpoint,
-                        json={
-                            "model": selected_model,
-                            "prompt": full_prompt,
-                            "stream": True,
-                            "options": {
-                                "temperature": 0.7,
-                                "top_p": 0.9,
-                                "num_ctx": 2048,
-                            },
+                http_client = get_http_client()
+                async with await http_client.post(
+                    ollama_endpoint,
+                    json={
+                        "model": selected_model,
+                        "prompt": full_prompt,
+                        "stream": True,
+                        "options": {
+                            "temperature": 0.7,
+                            "top_p": 0.9,
+                            "num_ctx": 2048,
                         },
-                    ) as response:
-                        logger.info(
-                            f"[ChatWorkflowManager] Ollama response status: {response.status_code}"
-                        )
-                        if response.status_code == 200:
-                            llm_response = ""
+                    },
+                    timeout=aiohttp.ClientTimeout(total=60.0),
+                ) as response:
+                    logger.info(
+                        f"[ChatWorkflowManager] Ollama response status: {response.status}"
+                    )
+                    if response.status == 200:
+                        llm_response = ""
 
-                            # Stream response chunks
-                            async for line in response.aiter_lines():
-                                if line:
-                                    try:
-                                        chunk_data = json.loads(line)
-                                        chunk_text = chunk_data.get("response", "")
+                        # Stream response chunks
+                        async for line in response.content:
+                            line_str = line.decode("utf-8").strip()
+                            if line_str:
+                                try:
+                                    chunk_data = json.loads(line_str)
+                                    chunk_text = chunk_data.get("response", "")
 
-                                        if chunk_text:
-                                            # Normalize TOOL_CALL spacing
-                                            chunk_text = re.sub(
-                                                r"<TOOL_\s+CALL",
-                                                "<TOOL_CALL",
-                                                chunk_text,
-                                            ),
-                                            chunk_text = re.sub(
-                                                r"</TOOL_\s+CALL>",
-                                                "</TOOL_CALL>",
-                                                chunk_text,
-                                            )
-
-                                            llm_response += chunk_text
-
-                                            chunk_msg = WorkflowMessage(
-                                                type="response",
-                                                content=chunk_text,
-                                                metadata={
-                                                    "message_type": (
-                                                        "llm_response_chunk"
-                                                    ),
-                                                    "model": selected_model,
-                                                    "streaming": True,
-                                                    "terminal_session_id": (
-                                                        terminal_session_id
-                                                    ),
-                                                },
-                                            )
-                                            # Don't collect streaming chunks -
-                                            # only collect complete messages
-                                            yield chunk_msg
-
-                                        if chunk_data.get("done", False):
-                                            break
-
-                                    except json.JSONDecodeError as e:
-                                        logger.error(
-                                            f"Failed to parse stream chunk: {e}"
+                                    if chunk_text:
+                                        # Normalize TOOL_CALL spacing
+                                        chunk_text = re.sub(
+                                            r"<TOOL_\s+CALL",
+                                            "<TOOL_CALL",
+                                            chunk_text,
                                         )
-                                        continue
+                                        chunk_text = re.sub(
+                                            r"</TOOL_\s+CALL>",
+                                            "</TOOL_CALL>",
+                                            chunk_text,
+                                        )
+
+                                        llm_response += chunk_text
+
+                                        chunk_msg = WorkflowMessage(
+                                            type="response",
+                                            content=chunk_text,
+                                            metadata={
+                                                "message_type": (
+                                                    "llm_response_chunk"
+                                                ),
+                                                "model": selected_model,
+                                                "streaming": True,
+                                                "terminal_session_id": (
+                                                    terminal_session_id
+                                                ),
+                                            },
+                                        )
+                                        # Don't collect streaming chunks -
+                                        # only collect complete messages
+                                        yield chunk_msg
+
+                                    if chunk_data.get("done", False):
+                                        break
+
+                                except json.JSONDecodeError as e:
+                                    logger.error(
+                                        f"Failed to parse stream chunk: {e}"
+                                    )
+                                    continue
 
                             logger.info(
                                 f"[ChatWorkflowManager] Full LLM response length: "
@@ -1642,19 +1643,19 @@ Explain what it means and answer their original question."""
                                     f"{persist_error}",
                                     exc_info=True,
                                 )
-                        else:
-                            logger.error(
-                                f"[ChatWorkflowManager] Ollama request failed: "
-                                f"{response.status_code}"
-                            )
+                    else:
+                        logger.error(
+                            f"[ChatWorkflowManager] Ollama request failed: "
+                            f"{response.status}"
+                        )
 
-                            error_msg = WorkflowMessage(
-                                type="error",
-                                content=f"LLM service error: {response.status_code}",
-                                metadata={"error": True},
-                            )
-                            workflow_messages.append(error_msg)
-                            yield error_msg
+                        error_msg = WorkflowMessage(
+                            type="error",
+                            content=f"LLM service error: {response.status}",
+                            metadata={"error": True},
+                        )
+                        workflow_messages.append(error_msg)
+                        yield error_msg
 
             except Exception as llm_error:
                 logger.error(

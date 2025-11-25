@@ -666,16 +666,16 @@ class SSOIntegrationFramework:
         try:
             headers = {"Authorization": f"Bearer {access_token}"}
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    provider.config["userinfo_endpoint"], headers=headers
-                ) as response:
+            http_client = get_http_client()
+            async with await http_client.get(
+                provider.config["userinfo_endpoint"], headers=headers
+            ) as response:
 
-                    if response.status == 200:
-                        return await response.json()
-                    else:
-                        logger.error(f"User info request failed: {response.status}")
-                        return None
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    logger.error(f"User info request failed: {response.status}")
+                    return None
 
         except Exception as e:
             logger.error(f"OAuth user info failed: {e}")
