@@ -10,8 +10,9 @@ Author: mrveiss
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
+from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -76,7 +77,7 @@ class ElementInteractionRequest(BaseModel):
 
     element_id: str = Field(..., description="ID of element to interact with")
     interaction_type: str = Field(..., description="Type of interaction to perform")
-    parameters: Optional[Dict[str, Any]] = Field(
+    parameters: Optional[Metadata] = Field(
         None, description="Additional interaction parameters"
     )
 
@@ -90,7 +91,7 @@ class UIElementResponse(BaseModel):
     center_point: List[int]
     confidence: float
     text_content: str
-    attributes: Dict[str, Any]
+    attributes: Metadata
     possible_interactions: List[str]
 
 
