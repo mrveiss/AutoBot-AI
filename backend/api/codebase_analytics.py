@@ -227,10 +227,13 @@ Code snippet (from {file_path}):
 Return ONLY valid JSON with this EXACT format:
 {{
   "hardcodes": [
-    {{"type": "api_key|ip|url|magic_number|config|path", "value": "actual value", "line": 0, "reason": "explanation", "severity": "high|medium|low"}}
+    {{"type": "api_key|ip|url|magic_number|config|path", "value": "val",
+      "line": 0, "reason": "explanation", "severity": "high|medium|low"}}
   ],
   "technical_debt": [
-    {{"type": "todo|deprecated|duplication|complexity|error_handling|workaround", "line": 0, "description": "what's wrong", "impact": "high|medium|low", "suggestion": "how to fix"}}
+    {{"type": "todo|deprecated|duplication|complexity|error_handling",
+      "line": 0, "description": "what's wrong", "impact": "high|medium|low",
+      "suggestion": "how to fix"}}
   ]
 }}
 
@@ -429,8 +432,9 @@ def analyze_javascript_vue_file(file_path: str) -> Dict[str, Any]:
 
         # Simple regex-based analysis for JS/Vue
         function_pattern = re.compile(
-            r"(?:function\s+(\w+)|(\w+)\s*[:=]\s*(?:async\s+)?function|\b(\w+)\s*\(.*?\)\s*\{|const\s+(\w+)\s*=\s*\(.*?\)\s*=>)"
-        ),
+            r"(?:function\s+(\w+)|(\w+)\s*[:=]\s*(?:async\s+)?function|"
+            r"\b(\w+)\s*\(.*?\)\s*\{|const\s+(\w+)\s*=\s*\(.*?\)\s*=>)"
+        )
         url_pattern = re.compile(r'[\'"`](https?://[^\'"` ]+)[\'"`]')
         api_pattern = re.compile(r'[\'"`](/api/[^\'"` ]+)[\'"`]')
         ip_pattern = re.compile(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b")
@@ -762,7 +766,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
                 + len(analysis_results["all_classes"])
                 + len(analysis_results["all_problems"])
                 + 1  # stats
-            ),
+            )
             items_prepared = 0
 
             await update_progress(
@@ -915,7 +919,7 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
             if batch_ids:
                 BATCH_SIZE = (
                     5000  # ChromaDB max batch size is ~5461, use 5000 for safety
-                ),
+                )
                 total_items = len(batch_ids)
                 items_stored = 0
 
@@ -940,15 +944,18 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
                     )
                     items_stored += len(batch_slice_ids)
 
+                    batch_num = i // BATCH_SIZE + 1
+                    total_batches = (total_items + BATCH_SIZE - 1) // BATCH_SIZE
                     await update_progress(
                         operation="Writing to ChromaDB",
                         current=items_stored,
                         total=total_items,
-                        current_file=f"Batch {i//BATCH_SIZE + 1}/{(total_items + BATCH_SIZE - 1) // BATCH_SIZE}"
+                        current_file=f"Batch {batch_num}/{total_batches}"
                     )
 
                     logger.info(
-                        f"[Task {task_id}] Stored batch {i//BATCH_SIZE + 1}: {len(batch_slice_ids)} items ({items_stored}/{total_items})"
+                        f"[Task {task_id}] Stored batch {batch_num}: "
+                        f"{len(batch_slice_ids)} items ({items_stored}/{total_items})"
                     )
 
                 logger.info(
@@ -960,11 +967,10 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
 
         # Mark task as completed
         indexing_tasks[task_id]["status"] = "completed"
+        total_files = analysis_results['stats']['total_files']
         indexing_tasks[task_id]["result"] = {
             "status": "success",
-            "message": (
-                f"Indexed {analysis_results['stats']['total_files']} files using {storage_type} storage"
-            ),
+            "message": f"Indexed {total_files} files using {storage_type} storage",
             "stats": analysis_results["stats"],
             "storage_type": storage_type,
             "timestamp": datetime.now().isoformat(),
@@ -1023,7 +1029,8 @@ async def index_codebase():
             "task_id": task_id,
             "status": "started",
             "message": (
-                "Indexing started in background. Poll /api/analytics/codebase/index/status/{task_id} for progress."
+                "Indexing started in background. Poll "
+                "/api/analytics/codebase/index/status/{task_id} for progress."
             ),
         }
     )
@@ -1496,7 +1503,8 @@ async def clear_codebase_cache():
         {
             "status": "success",
             "message": (
-                f"Cleared {len(keys_to_delete) if redis_client else deleted_count} cache entries from {storage_type}"
+                f"Cleared {len(keys_to_delete) if redis_client else deleted_count} "
+                f"cache entries from {storage_type}"
             ),
             "deleted_keys": len(keys_to_delete) if redis_client else deleted_count,
             "storage_type": storage_type,
