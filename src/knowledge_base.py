@@ -741,7 +741,8 @@ class KnowledgeBase:
             results = results[:similarity_top_k]
 
             logger.info(
-                f"ChromaDB direct search returned {len(results)} unique documents (deduplicated) for query: {query[:50]}..."
+                f"ChromaDB direct search returned {len(results)} unique documents "
+                f"(deduplicated) for query: {query[:50]}..."
             )
             return results
 
@@ -879,7 +880,8 @@ class KnowledgeBase:
         Args:
             content: The fact content to store (or text for V1 compatibility)
             metadata: Optional metadata dict with title, category, etc.
-            check_duplicates: If True, check for existing facts with same category+title (default: True)
+            check_duplicates: If True, check for existing facts with same
+                category+title (default: True)
 
         Returns:
             Dict with status, fact_id, and optional duplicate_of field
@@ -905,7 +907,8 @@ class KnowledgeBase:
 
                     if existing_fact:
                         logger.info(
-                            f"Duplicate fact detected by unique key: '{unique_key}', existing_fact_id={existing_fact['fact_id']}"
+                            f"Duplicate fact detected by unique key: "
+                            f"'{unique_key}', existing_fact_id={existing_fact['fact_id']}"
                         )
                         return {
                             "status": "duplicate",
@@ -945,7 +948,9 @@ class KnowledgeBase:
 
                         if metadata_str:
                             logger.info(
-                                f"Duplicate fact detected by category+title: category='{category}', title='{title}', existing_fact_id={existing_fact_id}"
+                                f"Duplicate fact detected by category+title: "
+                                f"category='{category}', title='{title}', "
+                                f"existing_fact_id={existing_fact_id}"
                             )
                             return {
                                 "status": "duplicate",
@@ -1002,7 +1007,8 @@ class KnowledgeBase:
                         f"category_title:{category_title_key}", fact_id
                     )
                     logger.debug(
-                        f"Stored category_title index: category_title:{category_title_key} → {fact_id}"
+                        f"Stored category_title index: "
+                        f"category_title:{category_title_key} → {fact_id}"
                     )
 
             # Store in vector index for semantic search - CRITICAL FOR SEARCHABILITY
@@ -1036,7 +1042,8 @@ class KnowledgeBase:
                         except Exception as index_error:
                             if "dimension" in str(index_error).lower():
                                 logger.error(
-                                    f"Vector index creation failed due to dimension mismatch: {index_error}"
+                                    f"Vector index creation failed due to "
+                                    f"dimension mismatch: {index_error}"
                                 )
                                 raise index_error
                             else:
@@ -1408,7 +1415,8 @@ class KnowledgeBase:
                     stats["chromadb_collection"] = self.chromadb_collection
                     stats["chromadb_path"] = self.chromadb_path
                     logger.debug(
-                        f"ChromaDB stats: {vector_count} vectors in collection '{self.chromadb_collection}'"
+                        f"ChromaDB stats: {vector_count} vectors "
+                        f"in collection '{self.chromadb_collection}'"
                     )
                 except Exception as e:
                     logger.warning(f"Could not get ChromaDB stats: {e}")
@@ -1675,7 +1683,8 @@ class KnowledgeBase:
                 fact_keys = fact_keys[:limit]
 
             logger.debug(
-                f"Retrieving {len(fact_keys)} facts (total={total_facts}, offset={offset}, limit={limit})"
+                f"Retrieving {len(fact_keys)} facts "
+                f"(total={total_facts}, offset={offset}, limit={limit})"
             )
 
             if not fact_keys:
@@ -2232,7 +2241,10 @@ class KnowledgeBase:
                 "message": (
                     f"Successfully processed {processed_count}/{total_files} documents"
                     if failed_count == 0
-                    else f"Processed {processed_count}/{total_files} documents with {failed_count} errors"
+                    else (
+                        f"Processed {processed_count}/{total_files} documents "
+                        f"with {failed_count} errors"
+                    )
                 ),
             }
 
@@ -2274,6 +2286,568 @@ class KnowledgeBase:
         from src.agents.kb_librarian_agent import KBLibrarianAgent
 
         return KBLibrarianAgent(knowledge_base=self)
+
+    # =========================================================================
+    # TAG MANAGEMENT METHODS (Issue #77)
+    # =========================================================================
+    #
+    # Redis Schema for Tags:
+    #   - fact:{fact_id} hash now includes "tags" field (JSON array)
+    #   - tag:{tag_name} → SET of fact_ids that have this tag
+    #   - tag:index:all → SET of all unique tag names
+    #
+    # This allows:
+    #   - O(1) tag lookup per fact
+    #   - O(1) reverse lookup: all facts with a given tag
+    #   - O(1) list all tags
+    # =========================================================================
+
+    async def add_tags_to_fact(
+        self, fact_id: str, tags: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Add tags to a knowledge base fact.
+
+        Args:
+            fact_id: The fact ID to add tags to
+            tags: List of tags to add (will be normalized to lowercase)
+
+        Returns:
+            Dict with success status, updated tags list, and added_count
+        """
+        self.ensure_initialized()
+
+        try:
+            if not self.aioredis_client:
+                return {
+                    "success": False,
+                    "message": "Redis client not initialized",
+                }
+
+            fact_key = f"fact:{fact_id}"
+
+            # Check if fact exists
+            exists = await self.aioredis_client.exists(fact_key)
+            if not exists:
+                return {
+                    "success": False,
+                    "message": f"Fact {fact_id} not found",
+                }
+
+            # Normalize tags to lowercase
+            normalized_tags = [t.lower().strip() for t in tags]
+
+            # Get existing tags with JSON size limit (Critical fix #3)
+            existing_tags_json = await self.aioredis_client.hget(fact_key, "tags")
+            existing_tags = []
+            if existing_tags_json:
+                # Decode bytes if needed
+                if isinstance(existing_tags_json, bytes):
+                    existing_tags_json = existing_tags_json.decode("utf-8")
+                # Size limit to prevent JSON bombs
+                if len(existing_tags_json) > 10000:
+                    logger.warning(f"Tags JSON too large for fact {fact_id}")
+                    existing_tags_json = "[]"
+                try:
+                    existing_tags = json.loads(existing_tags_json)
+                    if not isinstance(existing_tags, list):
+                        existing_tags = []
+                except json.JSONDecodeError:
+                    existing_tags = []
+
+            # Calculate new tags (avoiding duplicates)
+            existing_set = set(existing_tags)
+            new_tags = [t for t in normalized_tags if t not in existing_set]
+            updated_tags = list(existing_set.union(set(normalized_tags)))
+
+            # ATOMIC UPDATE (Critical fix #2): Use single pipeline for all operations
+            pipeline = self.aioredis_client.pipeline()
+            pipeline.hset(fact_key, "tags", json.dumps(updated_tags))
+            for tag in new_tags:
+                # Add fact to tag's set
+                pipeline.sadd(f"tag:{tag}", fact_id)
+                # Add tag to global index
+                pipeline.sadd("tag:index:all", tag)
+            await pipeline.execute()
+
+            logger.info(f"Added {len(new_tags)} tags to fact {fact_id}")
+            logger.debug(f"Tags added: {new_tags}")
+
+            return {
+                "success": True,
+                "tags": sorted(updated_tags),
+                "added_count": len(new_tags),
+                "message": f"Added {len(new_tags)} new tags",
+            }
+
+        except Exception as e:
+            logger.error(f"Error adding tags to fact {fact_id}: {e}")
+            return {
+                "success": False,
+                "message": f"Failed to add tags: {str(e)}",
+            }
+
+    async def remove_tags_from_fact(
+        self, fact_id: str, tags: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Remove tags from a knowledge base fact.
+
+        Args:
+            fact_id: The fact ID to remove tags from
+            tags: List of tags to remove
+
+        Returns:
+            Dict with success status, remaining tags list, and removed_count
+        """
+        self.ensure_initialized()
+
+        try:
+            if not self.aioredis_client:
+                return {
+                    "success": False,
+                    "message": "Redis client not initialized",
+                }
+
+            fact_key = f"fact:{fact_id}"
+
+            # Check if fact exists
+            exists = await self.aioredis_client.exists(fact_key)
+            if not exists:
+                return {
+                    "success": False,
+                    "message": f"Fact {fact_id} not found",
+                }
+
+            # Normalize tags to lowercase
+            normalized_tags = set(t.lower().strip() for t in tags)
+
+            # Get existing tags with JSON size limit (Critical fix #3)
+            existing_tags_json = await self.aioredis_client.hget(fact_key, "tags")
+            existing_tags = []
+            if existing_tags_json:
+                # Decode bytes if needed
+                if isinstance(existing_tags_json, bytes):
+                    existing_tags_json = existing_tags_json.decode("utf-8")
+                # Size limit to prevent JSON bombs
+                if len(existing_tags_json) > 10000:
+                    logger.warning(f"Tags JSON too large for fact {fact_id}")
+                    existing_tags_json = "[]"
+                try:
+                    existing_tags = json.loads(existing_tags_json)
+                    if not isinstance(existing_tags, list):
+                        existing_tags = []
+                except json.JSONDecodeError:
+                    existing_tags = []
+
+            # Calculate which tags to remove (only those that exist)
+            existing_set = set(existing_tags)
+            tags_to_remove = normalized_tags.intersection(existing_set)
+            remaining_tags = list(existing_set - normalized_tags)
+
+            # ATOMIC UPDATE: Use single pipeline for fact update and index removal
+            pipeline = self.aioredis_client.pipeline()
+            pipeline.hset(fact_key, "tags", json.dumps(remaining_tags))
+            for tag in tags_to_remove:
+                # Remove fact from tag's set
+                pipeline.srem(f"tag:{tag}", fact_id)
+            await pipeline.execute()
+
+            # ATOMIC CLEANUP (Critical fix #1): Use Lua script for safe tag cleanup
+            # This prevents race condition where another request adds the tag
+            # between SCARD check and DELETE
+            cleanup_script = """
+local tag_key = KEYS[1]
+local index_key = KEYS[2]
+local tag = ARGV[1]
+
+if redis.call('SCARD', tag_key) == 0 then
+    redis.call('DEL', tag_key)
+    redis.call('SREM', index_key, tag)
+    return 1
+end
+return 0
+"""
+            for tag in tags_to_remove:
+                await self.aioredis_client.eval(
+                    cleanup_script,
+                    2,  # number of keys
+                    f"tag:{tag}",
+                    "tag:index:all",
+                    tag
+                )
+
+            logger.info(f"Removed {len(tags_to_remove)} tags from fact {fact_id}")
+
+            return {
+                "success": True,
+                "tags": sorted(remaining_tags),
+                "removed_count": len(tags_to_remove),
+                "message": f"Removed {len(tags_to_remove)} tags",
+            }
+
+        except Exception as e:
+            logger.error(f"Error removing tags from fact {fact_id}: {e}")
+            return {
+                "success": False,
+                "message": f"Failed to remove tags: {str(e)}",
+            }
+
+    async def get_fact_tags(self, fact_id: str) -> Dict[str, Any]:
+        """
+        Get all tags for a specific fact.
+
+        Args:
+            fact_id: The fact ID to get tags for
+
+        Returns:
+            Dict with success status and tags list
+        """
+        self.ensure_initialized()
+
+        try:
+            if not self.aioredis_client:
+                return {
+                    "success": False,
+                    "message": "Redis client not initialized",
+                }
+
+            fact_key = f"fact:{fact_id}"
+
+            # Check if fact exists
+            exists = await self.aioredis_client.exists(fact_key)
+            if not exists:
+                return {
+                    "success": False,
+                    "message": f"Fact {fact_id} not found",
+                }
+
+            # Get tags
+            tags_json = await self.aioredis_client.hget(fact_key, "tags")
+            tags = []
+            if tags_json:
+                try:
+                    tags = json.loads(tags_json)
+                except json.JSONDecodeError:
+                    tags = []
+
+            return {
+                "success": True,
+                "tags": sorted(tags),
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting tags for fact {fact_id}: {e}")
+            return {
+                "success": False,
+                "message": f"Failed to get tags: {str(e)}",
+            }
+
+    async def search_facts_by_tags(
+        self,
+        tags: List[str],
+        match_all: bool = False,
+        limit: int = 50,
+        offset: int = 0,
+        category: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Search for facts by tags.
+
+        Args:
+            tags: List of tags to search for
+            match_all: If True, facts must have ALL tags. If False, ANY tag matches.
+            limit: Maximum number of results
+            offset: Pagination offset
+            category: Optional category filter
+
+        Returns:
+            Dict with facts list and total_count
+        """
+        self.ensure_initialized()
+
+        try:
+            if not self.aioredis_client:
+                return {
+                    "success": False,
+                    "facts": [],
+                    "total_count": 0,
+                    "message": "Redis client not initialized",
+                }
+
+            # Normalize tags
+            normalized_tags = [t.lower().strip() for t in tags]
+
+            # Get fact IDs for each tag using pipeline (Critical fix #4)
+            pipeline = self.aioredis_client.pipeline()
+            for tag in normalized_tags:
+                pipeline.smembers(f"tag:{tag}")
+            tag_results = await pipeline.execute()
+
+            tag_fact_sets = []
+            for fact_ids in tag_results:
+                if fact_ids:
+                    # Decode bytes to strings
+                    decoded_ids = {
+                        fid.decode("utf-8") if isinstance(fid, bytes) else fid
+                        for fid in fact_ids
+                    }
+                    tag_fact_sets.append(decoded_ids)
+                else:
+                    tag_fact_sets.append(set())
+
+            # Calculate matching fact IDs
+            if not tag_fact_sets:
+                matching_ids = set()
+            elif match_all:
+                # Intersection - facts must have ALL tags
+                matching_ids = tag_fact_sets[0]
+                for fact_set in tag_fact_sets[1:]:
+                    matching_ids = matching_ids.intersection(fact_set)
+            else:
+                # Union - facts with ANY tag
+                matching_ids = set()
+                for fact_set in tag_fact_sets:
+                    matching_ids = matching_ids.union(fact_set)
+
+            # Convert to list and get total count BEFORE pagination (Critical fix #9)
+            matching_ids_list = list(matching_ids)
+            total_count = len(matching_ids_list)
+
+            # Paginate at ID level BEFORE fetching data (performance optimization)
+            paginated_ids = matching_ids_list[offset:offset + limit]
+
+            if not paginated_ids:
+                return {
+                    "success": True,
+                    "facts": [],
+                    "total_count": total_count,
+                }
+
+            # BATCH FETCH using pipeline (Critical fix #4: ~1000x faster)
+            pipeline = self.aioredis_client.pipeline()
+            for fact_id in paginated_ids:
+                pipeline.hgetall(f"fact:{fact_id}")
+            fact_data_list = await pipeline.execute()
+
+            # Process results
+            facts = []
+            for fact_id, fact_data in zip(paginated_ids, fact_data_list):
+                if not fact_data:
+                    continue
+
+                # Decode fact data
+                decoded_data = {}
+                for k, v in fact_data.items():
+                    key = k.decode("utf-8") if isinstance(k, bytes) else k
+                    value = v.decode("utf-8") if isinstance(v, bytes) else v
+                    decoded_data[key] = value
+
+                # Parse metadata with size limit (Critical fix #3)
+                metadata = {}
+                if "metadata" in decoded_data:
+                    metadata_json = decoded_data["metadata"]
+                    if len(metadata_json) <= 50000:  # 50KB limit
+                        try:
+                            metadata = json.loads(metadata_json)
+                        except json.JSONDecodeError:
+                            pass
+
+                # Apply category filter if specified
+                if category and metadata.get("category") != category:
+                    total_count -= 1  # Adjust count for filtered items
+                    continue
+
+                # Parse tags with size limit
+                fact_tags = []
+                if "tags" in decoded_data:
+                    tags_json = decoded_data["tags"]
+                    if len(tags_json) <= 10000:
+                        try:
+                            fact_tags = json.loads(tags_json)
+                        except json.JSONDecodeError:
+                            pass
+
+                facts.append({
+                    "fact_id": fact_id,
+                    "content": decoded_data.get("content", ""),
+                    "metadata": metadata,
+                    "tags": fact_tags,
+                    "created_at": decoded_data.get("created_at"),
+                })
+
+            return {
+                "success": True,
+                "facts": facts,
+                "total_count": total_count,
+            }
+
+        except Exception as e:
+            logger.error(f"Error searching facts by tags: {e}")
+            return {
+                "success": False,
+                "facts": [],
+                "total_count": 0,
+                "message": f"Search failed: {str(e)}",
+            }
+
+    async def list_all_tags(
+        self, limit: int = 100, prefix: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        List all unique tags in the knowledge base with usage counts.
+
+        Args:
+            limit: Maximum number of tags to return
+            prefix: Optional prefix filter
+
+        Returns:
+            Dict with tags list (name + count) and total_count
+        """
+        self.ensure_initialized()
+
+        try:
+            if not self.aioredis_client:
+                return {
+                    "success": False,
+                    "tags": [],
+                    "total_count": 0,
+                    "message": "Redis client not initialized",
+                }
+
+            # Get all tags from global index
+            all_tags = await self.aioredis_client.smembers("tag:index:all")
+
+            if not all_tags:
+                return {
+                    "success": True,
+                    "tags": [],
+                    "total_count": 0,
+                }
+
+            # Decode and filter by prefix
+            tag_names = []
+            for tag in all_tags:
+                name = tag.decode("utf-8") if isinstance(tag, bytes) else tag
+                if prefix is None or name.startswith(prefix):
+                    tag_names.append(name)
+
+            # BATCH FETCH counts using pipeline (Critical fix #6)
+            # Process in chunks to prevent memory exhaustion
+            BATCH_SIZE = 100
+            tags_with_counts = []
+
+            for i in range(0, len(tag_names), BATCH_SIZE):
+                batch = tag_names[i:i + BATCH_SIZE]
+                pipeline = self.aioredis_client.pipeline()
+                for tag_name in batch:
+                    pipeline.scard(f"tag:{tag_name}")
+                counts = await pipeline.execute()
+
+                for tag_name, count in zip(batch, counts):
+                    tags_with_counts.append({
+                        "name": tag_name,
+                        "count": count,
+                    })
+
+            # Sort by count (descending), then name (ascending)
+            tags_with_counts.sort(key=lambda x: (-x["count"], x["name"]))
+
+            total_count = len(tags_with_counts)
+
+            # Apply limit
+            limited_tags = tags_with_counts[:limit]
+
+            return {
+                "success": True,
+                "tags": limited_tags,
+                "total_count": total_count,
+            }
+
+        except Exception as e:
+            logger.error(f"Error listing tags: {e}")
+            return {
+                "success": False,
+                "tags": [],
+                "total_count": 0,
+                "message": f"Failed to list tags: {str(e)}",
+            }
+
+    async def bulk_tag_facts(
+        self,
+        fact_ids: List[str],
+        tags: List[str],
+        operation: str = "add",
+    ) -> Dict[str, Any]:
+        """
+        Apply or remove tags from multiple facts at once.
+
+        Args:
+            fact_ids: List of fact IDs to tag
+            tags: List of tags to apply/remove
+            operation: 'add' or 'remove'
+
+        Returns:
+            Dict with status, processed/failed counts, and per-fact results
+        """
+        self.ensure_initialized()
+
+        # Deduplicate fact_ids (Recommendation #10)
+        unique_fact_ids = list(dict.fromkeys(fact_ids))  # Preserves order
+        if len(unique_fact_ids) < len(fact_ids):
+            logger.warning(
+                f"Removed {len(fact_ids) - len(unique_fact_ids)} duplicate fact_ids"
+            )
+
+        results = []
+        processed_count = 0
+        failed_count = 0
+
+        for fact_id in unique_fact_ids:
+            try:
+                if operation == "add":
+                    result = await self.add_tags_to_fact(fact_id, tags)
+                else:
+                    result = await self.remove_tags_from_fact(fact_id, tags)
+
+                if result.get("success"):
+                    processed_count += 1
+                    results.append({
+                        "fact_id": fact_id,
+                        "success": True,
+                        "tags": result.get("tags", []),
+                    })
+                else:
+                    failed_count += 1
+                    results.append({
+                        "fact_id": fact_id,
+                        "success": False,
+                        "error": result.get("message", "Unknown error"),
+                    })
+
+            except Exception as e:
+                failed_count += 1
+                results.append({
+                    "fact_id": fact_id,
+                    "success": False,
+                    "error": str(e),
+                })
+
+        status = "success" if failed_count == 0 else "partial_success"
+        if processed_count == 0:
+            status = "failed"
+
+        logger.info(
+            f"Bulk {operation} tags: {processed_count} processed, "
+            f"{failed_count} failed"
+        )
+
+        return {
+            "status": status,
+            "processed_count": processed_count,
+            "failed_count": failed_count,
+            "results": results,
+        }
 
     async def close(self):
         """Close all connections and cleanup resources"""
