@@ -979,8 +979,8 @@ class DecisionEngine:
                 confidence=0.9,
                 confidence_level=ConfidenceLevel.HIGH,
                 reasoning=(
-                    f"High risk factors detected: {[rf['risk_type'] for"
-                    f"rf in high_risk_factors]}"
+                    f"High risk factors detected: "
+                    f"{[rf['risk_type'] for rf in high_risk_factors]}"
                 ),
                 supporting_evidence=[
                     {"type": "risk_analysis", "high_risk_count": len(high_risk_factors)}
@@ -1386,8 +1386,8 @@ class ContextAwareDecisionSystem:
             task_id = self.memory_manager.create_task_record(
                 task_name=f"Decision: {decision.decision_type.value}",
                 description=(
-                    f"Contextual decision making: {decision.chosen_action.get('action',"
-                    f"'unknown')}"
+                    f"Contextual decision making: "
+                    f"{decision.chosen_action.get('action', 'unknown')}"
                 ),
                 priority=TaskPriority.MEDIUM,
                 agent_type="context_aware_decision_system",

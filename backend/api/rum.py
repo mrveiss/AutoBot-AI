@@ -97,7 +97,7 @@ rum_logger = setup_rum_logger()
 @router.post("/config")
 async def configure_rum(config: RumConfig):
     """Configure RUM monitoring settings"""
-    global rum_config
+    # Note: rum_config is modified in-place via .update(), no reassignment needed
     try:
         rum_config.update(config.dict())
 
@@ -215,7 +215,7 @@ async def disable_rum():
 @router.post("/clear")
 async def clear_rum_data():
     """Clear all RUM data"""
-    global rum_events, rum_sessions
+    # Note: rum_events/rum_sessions are modified in-place via .clear(), no reassignment needed
     try:
         events_cleared = len(rum_events)
         sessions_cleared = len(rum_sessions)
