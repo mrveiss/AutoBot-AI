@@ -306,26 +306,10 @@ class LLMInterface:
         self._initialize_prompts()
 
         # Initialize async components
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._http_client = get_http_client()  # Use singleton HTTP client
         self._models_cache: Optional[List[str]] = None
         self._models_cache_time: float = 0
         self._lock = asyncio.Lock()
-
-        # Setup session configuration - optimized for performance
-        self._connector = aiohttp.TCPConnector(
-            limit=self.settings.connection_pool_size,
-            limit_per_host=min(8, self.settings.connection_pool_size),
-            ttl_dns_cache=1800,  # 30 minutes for better caching
-            use_dns_cache=True,
-            keepalive_timeout=60,
-            enable_cleanup_closed=True,
-        )
-
-        self._timeout = aiohttp.ClientTimeout(
-            total=self.settings.connection_timeout,
-            connect=5.0,
-            sock_read=None,  # FIXED: No socket read timeout for streaming
-        )
 
         # Performance optimization - L1 in-memory cache
         self._memory_cache = {}
@@ -437,19 +421,9 @@ class LLMInterface:
 
     @asynccontextmanager
     async def _get_session(self) -> AsyncGenerator[aiohttp.ClientSession, None]:
-        """Get HTTP session with proper lifecycle management"""
-        if self._session is None or self._session.closed:
-            async with self._lock:
-                if self._session is None or self._session.closed:
-                    self._session = aiohttp.ClientSession(
-                        connector=self._connector,
-                        timeout=self._timeout,
-                        headers={
-                            "Content-Type": "application/json",
-                            "User-Agent": "AutoBot-Consolidated-LLM/1.0",
-                        },
-                    )
-        yield self._session
+        """Get HTTP session using singleton HTTPClient"""
+        session = await self._http_client.get_session()
+        yield session
 
     async def _generate_cache_key(self, messages: List[ChatMessage], **params) -> str:
         """Generate cache key with high-performance hashing (3-5x faster than MD5)"""
@@ -1303,9 +1277,8 @@ class LLMInterface:
         return response
 
     async def cleanup(self):
-        """Cleanup resources"""
-        if self._session and not self._session.closed:
-            await self._session.close()
+        """Cleanup resources - HTTP session managed by singleton HTTPClientManager"""
+        # HTTP session cleanup is handled centrally by HTTPClientManager singleton
 
         # Cleanup vLLM provider if initialized
         if self._vllm_provider is not None:

@@ -25,6 +25,7 @@ import yaml
 
 from src.constants.network_constants import NetworkConstants
 from src.constants.security_constants import SecurityConstants
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +142,7 @@ class DomainSecurityManager:
         self.domain_cache = {}
         self.threat_intelligence = set()
         self.last_threat_update = 0
-        self.session: Optional[aiohttp.ClientSession] = None
+        self._http_client = get_http_client()  # Use singleton HTTP client
 
         # Precompile regex patterns for performance
         self._compile_patterns()
@@ -170,21 +171,12 @@ class DomainSecurityManager:
             )
 
     async def __aenter__(self):
-        """Async context manager entry"""
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=30.0),
-            headers={
-                "User-Agent": (
-                    "AutoBot-Security/1.0 (+https://autobot.internal/security)"
-                )
-            },
-        )
+        """Async context manager entry - uses singleton HTTP client"""
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit"""
-        if self.session:
-            await self.session.close()
+        """Async context manager exit - cleanup handled by singleton HTTPClientManager"""
+        pass
 
     async def validate_domain_safety(self, url: str) -> Dict[str, Any]:
         """
@@ -451,9 +443,6 @@ class DomainSecurityManager:
         if current_time - self.last_threat_update < update_interval:
             return  # Too soon to update
 
-        if not self.session:
-            return  # No session available
-
         threat_feeds = self.config.config.get("domain_security", {}).get(
             "threat_feeds", []
         )
@@ -465,7 +454,7 @@ class DomainSecurityManager:
             try:
                 logger.info(f"Updating threat intelligence from {feed_config['name']}")
 
-                async with self.session.get(
+                async with await self._http_client.get(
                     feed_config["url"],
                     timeout=aiohttp.ClientTimeout(
                         total=feed_config.get("timeout", 10.0)

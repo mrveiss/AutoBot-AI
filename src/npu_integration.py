@@ -16,6 +16,7 @@ from typing import Any, Dict
 import aiohttp
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.http_client import get_http_client
 
 from .utils.service_registry import get_service_url
 
@@ -36,21 +37,16 @@ class NPUWorkerClient:
 
     def __init__(self, npu_endpoint: str = None):
         self.npu_endpoint = npu_endpoint or get_service_url("npu-worker")
-        self.session = None
+        self._http_client = get_http_client()
         self.available = False
         self._check_availability_task = None
-
-    async def _create_session(self):
-        """Create aiohttp session if not exists"""
-        if not self.session:
-            timeout = aiohttp.ClientTimeout(total=30)
-            self.session = aiohttp.ClientSession(timeout=timeout)
 
     async def check_health(self) -> Dict[str, Any]:
         """Check NPU worker health and capabilities"""
         try:
-            await self._create_session()
-            async with self.session.get(f"{self.npu_endpoint}/health") as response:
+            async with await self._http_client.get(
+                f"{self.npu_endpoint}/health"
+            ) as response:
                 if response.status == 200:
                     health_data = await response.json()
                     self.available = True
@@ -66,8 +62,9 @@ class NPUWorkerClient:
     async def get_available_models(self) -> Dict[str, Any]:
         """Get list of available models on NPU worker"""
         try:
-            await self._create_session()
-            async with self.session.get(f"{self.npu_endpoint}/models") as response:
+            async with await self._http_client.get(
+                f"{self.npu_endpoint}/models"
+            ) as response:
                 if response.status == 200:
                     return await response.json()
                 else:
@@ -79,9 +76,8 @@ class NPUWorkerClient:
     async def load_model(self, model_id: str, device: str = "CPU") -> Dict[str, Any]:
         """Load a model on the NPU worker"""
         try:
-            await self._create_session()
             payload = {"model_id": model_id, "device": device}
-            async with self.session.post(
+            async with await self._http_client.post(
                 f"{self.npu_endpoint}/models/load", json=payload
             ) as response:
                 return await response.json()
@@ -99,7 +95,6 @@ class NPUWorkerClient:
     ) -> Dict[str, Any]:
         """Run inference on NPU worker"""
         try:
-            await self._create_session()
             payload = {
                 "model_id": model_id,
                 "input_text": input_text,
@@ -108,7 +103,7 @@ class NPUWorkerClient:
                 "top_p": top_p,
             }
 
-            async with self.session.post(
+            async with await self._http_client.post(
                 f"{self.npu_endpoint}/inference", json=payload
             ) as response:
                 result = await response.json()
@@ -178,10 +173,9 @@ class NPUWorkerClient:
             return {"success": False, "error": str(e), "fallback": True}
 
     async def close(self):
-        """Close the aiohttp session"""
-        if self.session:
-            await self.session.close()
-            self.session = None
+        """No-op: HTTP client is managed by singleton HTTPClientManager"""
+        # Using HTTPClient singleton - session management is centralized
+        pass
 
 
 class NPUTaskQueue:
