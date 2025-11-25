@@ -9,11 +9,14 @@ Integrates Docker-based Playwright into the main AutoBot application
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 import aiohttp
 
+from backend.type_defs.common import Metadata
+
 from src.constants.network_constants import NetworkConstants, ServiceURLs
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +35,7 @@ class PlaywrightService:
     ):
         self.base_url = f"http://{container_host}:{container_port}"
         self.timeout = timeout
-        self._session: Optional[aiohttp.ClientSession] = None
+        self.http_client = get_http_client()
         self._healthy = False
 
     async def __aenter__(self):
@@ -46,31 +49,22 @@ class PlaywrightService:
 
     async def initialize(self):
         """Initialize the Playwright service connection"""
-        if self._session is None:
-            # Create HTTP session with proper timeout and error handling
-            timeout = aiohttp.ClientTimeout(total=self.timeout)
-            self._session = aiohttp.ClientSession(
-                timeout=timeout, headers={"Content-Type": "application/json"}
-            )
-
         # Check if container is healthy
         await self._health_check()
         logger.info(f"Playwright service initialized at {self.base_url}")
 
     async def cleanup(self):
         """Cleanup resources"""
-        if self._session:
-            await self._session.close()
-            self._session = None
+        # HTTPClient singleton doesn't need cleanup per instance
         logger.info("Playwright service cleaned up")
 
     async def _health_check(self) -> bool:
         """Check if Playwright container is healthy"""
         try:
-            if not self._session:
-                await self.initialize()
-
-            async with self._session.get(f"{self.base_url}/health") as response:
+            timeout = aiohttp.ClientTimeout(total=self.timeout)
+            async with await self.http_client.get(
+                f"{self.base_url}/health", timeout=timeout
+            ) as response:
                 if response.status == 200:
                     health_data = await response.json()
                     self._healthy = health_data.get("status") == "healthy"
@@ -94,7 +88,7 @@ class PlaywrightService:
 
     async def search_web(
         self, query: str, search_engine: str = "duckduckgo", max_results: int = 5
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Perform web search using embedded Playwright
 
@@ -116,8 +110,9 @@ class PlaywrightService:
                 "max_results": max_results,
             }
 
-            async with self._session.post(
-                f"{self.base_url}/search", json=payload
+            timeout = aiohttp.ClientTimeout(total=self.timeout)
+            async with await self.http_client.post(
+                f"{self.base_url}/search", json=payload, timeout=timeout
             ) as response:
                 if response.status == 200:
                     result = await response.json()
@@ -136,7 +131,7 @@ class PlaywrightService:
 
     async def test_frontend(
         self, frontend_url: str = ServiceURLs.FRONTEND_LOCAL
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Test frontend functionality using embedded Playwright
 
@@ -152,8 +147,9 @@ class PlaywrightService:
 
             payload = {"frontend_url": frontend_url}
 
-            async with self._session.post(
-                f"{self.base_url}/test-frontend", json=payload
+            timeout = aiohttp.ClientTimeout(total=self.timeout)
+            async with await self.http_client.post(
+                f"{self.base_url}/test-frontend", json=payload, timeout=timeout
             ) as response:
                 if response.status == 200:
                     result = await response.json()
@@ -187,7 +183,7 @@ class PlaywrightService:
         self,
         message: str = "what network scanning tools do we have available?",
         frontend_url: str = ServiceURLs.FRONTEND_LOCAL,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Send test message through frontend using embedded Playwright
 
@@ -204,8 +200,9 @@ class PlaywrightService:
 
             payload = {"message": message, "frontend_url": frontend_url}
 
-            async with self._session.post(
-                f"{self.base_url}/send-test-message", json=payload
+            timeout = aiohttp.ClientTimeout(total=self.timeout)
+            async with await self.http_client.post(
+                f"{self.base_url}/send-test-message", json=payload, timeout=timeout
             ) as response:
                 if response.status == 200:
                     result = await response.json()
@@ -226,7 +223,7 @@ class PlaywrightService:
 
     async def capture_screenshot(
         self, url: str, full_page: bool = True, wait_timeout: int = 5000
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Capture screenshot of webpage
 
@@ -246,8 +243,9 @@ class PlaywrightService:
             # For now, we can use the test-frontend endpoint which includes screenshots
             payload = {"frontend_url": url}
 
-            async with self._session.post(
-                f"{self.base_url}/test-frontend", json=payload
+            timeout = aiohttp.ClientTimeout(total=self.timeout)
+            async with await self.http_client.post(
+                f"{self.base_url}/test-frontend", json=payload, timeout=timeout
             ) as response:
                 if response.status == 200:
                     result = await response.json()
@@ -270,7 +268,7 @@ class PlaywrightService:
             logger.error(f"Screenshot error: {e}")
             return {"success": False, "error": str(e), "url": url}
 
-    async def get_service_status(self) -> Dict[str, Any]:
+    async def get_service_status(self) -> Metadata:
         """Get detailed service status"""
         try:
             await self._health_check()
@@ -291,7 +289,10 @@ class PlaywrightService:
 
             if self._healthy:
                 # Get additional health info from container
-                async with self._session.get(f"{self.base_url}/health") as response:
+                timeout = aiohttp.ClientTimeout(total=self.timeout)
+                async with await self.http_client.get(
+                    f"{self.base_url}/health", timeout=timeout
+                ) as response:
                     if response.status == 200:
                         container_health = await response.json()
                         status.update(
@@ -351,19 +352,19 @@ async def playwright_service():
 
 
 # Convenience functions for common operations
-async def search_web_embedded(query: str, **kwargs) -> Dict[str, Any]:
+async def search_web_embedded(query: str, **kwargs) -> Metadata:
     """Convenience function for web search"""
     async with playwright_service() as service:
         return await service.search_web(query, **kwargs)
 
 
-async def test_frontend_embedded(frontend_url: str = None) -> Dict[str, Any]:
+async def test_frontend_embedded(frontend_url: str = None) -> Metadata:
     """Convenience function for frontend testing"""
     async with playwright_service() as service:
         return await service.test_frontend(frontend_url or ServiceURLs.FRONTEND_LOCAL)
 
 
-async def send_test_message_embedded(message: str, **kwargs) -> Dict[str, Any]:
+async def send_test_message_embedded(message: str, **kwargs) -> Metadata:
     """Convenience function for sending test messages"""
     async with playwright_service() as service:
         return await service.send_test_message(message, **kwargs)

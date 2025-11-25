@@ -17,6 +17,7 @@ import aiohttp
 import psutil
 
 from src.unified_config_manager import UnifiedConfigManager
+from src.utils.http_client import get_http_client
 
 # Create singleton config instance
 config = UnifiedConfigManager()
@@ -851,67 +852,67 @@ class SystemValidator:
         ]
 
         try:
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as session:
-                for method, url, name in endpoints:
-                    start_time = time.time()
-                    try:
-                        if method == "GET":
-                            async with session.get(url) as response:
-                                response_time = (time.time() - start_time) * 1000
+            http_client = get_http_client()
+            for method, url, name in endpoints:
+                start_time = time.time()
+                try:
+                    if method == "GET":
+                        async with await http_client.get(
+                            url, timeout=aiohttp.ClientTimeout(total=10)
+                        ) as response:
+                            response_time = (time.time() - start_time) * 1000
 
-                                if response.status == 200:
-                                    data = await response.json()
-                                    severity = (
-                                        ValidationSeverity.SUCCESS
-                                        if response_time
-                                        < self.critical_thresholds["response_time_ms"]
-                                        else ValidationSeverity.WARNING
-                                    )
-                                    self._add_result(
-                                        component,
-                                        name,
-                                        severity,
-                                        True,
-                                        f"API endpoint responding: {response.status}",
-                                        {
-                                            "response_time_ms": response_time,
-                                            "status_code": response.status,
-                                            "response_size": len(str(data)),
-                                        },
-                                        response_time,
-                                    )
-                                else:
-                                    self._add_result(
-                                        component,
-                                        name,
-                                        ValidationSeverity.WARNING,
-                                        False,
-                                        f"API endpoint error: HTTP {response.status}",
-                                        {
-                                            "response_time_ms": response_time,
-                                            "status_code": response.status,
-                                        },
-                                    )
+                            if response.status == 200:
+                                data = await response.json()
+                                severity = (
+                                    ValidationSeverity.SUCCESS
+                                    if response_time
+                                    < self.critical_thresholds["response_time_ms"]
+                                    else ValidationSeverity.WARNING
+                                )
+                                self._add_result(
+                                    component,
+                                    name,
+                                    severity,
+                                    True,
+                                    f"API endpoint responding: {response.status}",
+                                    {
+                                        "response_time_ms": response_time,
+                                        "status_code": response.status,
+                                        "response_size": len(str(data)),
+                                    },
+                                    response_time,
+                                )
+                            else:
+                                self._add_result(
+                                    component,
+                                    name,
+                                    ValidationSeverity.WARNING,
+                                    False,
+                                    f"API endpoint error: HTTP {response.status}",
+                                    {
+                                        "response_time_ms": response_time,
+                                        "status_code": response.status,
+                                    },
+                                )
 
-                    except asyncio.TimeoutError:
-                        self._add_result(
-                            component,
-                            name,
-                            ValidationSeverity.CRITICAL,
-                            False,
-                            "API endpoint timeout",
-                            {"timeout_seconds": 10},
-                        )
-                    except Exception as e:
-                        self._add_result(
-                            component,
-                            name,
-                            ValidationSeverity.CRITICAL,
-                            False,
-                            f"API endpoint error: {str(e)}",
-                        )
+                except asyncio.TimeoutError:
+                    self._add_result(
+                        component,
+                        name,
+                        ValidationSeverity.CRITICAL,
+                        False,
+                        "API endpoint timeout",
+                        {"timeout_seconds": 10},
+                    )
+                except Exception as e:
+                    self._add_result(
+                        component,
+                        name,
+                        ValidationSeverity.CRITICAL,
+                        False,
+                        f"API endpoint error: {str(e)}",
+                    )
 
         except Exception as e:
             self._add_result(

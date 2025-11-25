@@ -17,6 +17,7 @@ import yaml
 from cachetools import TTLCache
 
 from src.constants.path_constants import PATH
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -113,34 +114,34 @@ class DomainReputationService:
 
             logger.info(f"Updating threat feed: {feed_name}")
 
+            http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=config.get("timeout", 10))
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(config["url"]) as response:
-                    if response.status == 200:
-                        content = await response.text()
+            async with await http_client.get(config["url"], timeout=timeout) as response:
+                if response.status == 200:
+                    content = await response.text()
 
-                        # Parse based on format
-                        if config["format"] == "text":
-                            domains = set(
-                                line.strip()
-                                for line in content.split("\n")
-                                if line.strip() and not line.startswith("#")
-                            )
-                        elif config["format"] == "csv":
-                            # Parse CSV format (implement based on specific feed structure)
-                            domains = self._parse_csv_feed(content)
-                        else:
-                            logger.warning(f"Unknown feed format: {config['format']}")
-                            return
-
-                        feed_info["data"] = domains
-                        feed_info["last_update"] = time.time()
-
-                        logger.info(f"Updated {feed_name}: {len(domains)} entries")
-                    else:
-                        logger.error(
-                            f"Failed to update {feed_name}: HTTP {response.status}"
+                    # Parse based on format
+                    if config["format"] == "text":
+                        domains = set(
+                            line.strip()
+                            for line in content.split("\n")
+                            if line.strip() and not line.startswith("#")
                         )
+                    elif config["format"] == "csv":
+                        # Parse CSV format (implement based on specific feed structure)
+                        domains = self._parse_csv_feed(content)
+                    else:
+                        logger.warning(f"Unknown feed format: {config['format']}")
+                        return
+
+                    feed_info["data"] = domains
+                    feed_info["last_update"] = time.time()
+
+                    logger.info(f"Updated {feed_name}: {len(domains)} entries")
+                else:
+                    logger.error(
+                        f"Failed to update {feed_name}: HTTP {response.status}"
+                    )
 
         except Exception as e:
             logger.error(f"Error updating threat feed {feed_name}: {e}")
@@ -360,31 +361,31 @@ class DomainReputationService:
             url = "https://www.virustotal.com/vtapi/v2/domain/report"
             params = {"apikey": api_key, "domain": domain}
 
+            http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=config.get("timeout", 5.0))
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url, params=params) as response:
-                    if response.status == 200:
-                        data = await response.json()
+            async with await http_client.get(url, params=params, timeout=timeout) as response:
+                if response.status == 200:
+                    data = await response.json()
 
-                        # Parse VirusTotal response
-                        positives = data.get("positives", 0)
-                        total = data.get("total", 0)
+                    # Parse VirusTotal response
+                    positives = data.get("positives", 0)
+                    total = data.get("total", 0)
 
-                        return {
-                            "service": "virustotal",
-                            "positives": positives,
-                            "total": total,
-                            "malicious": positives > 0,
-                            "suspicious": (
-                                positives > total * 0.1 if total > 0 else False
-                            ),
-                            "reputation_score": (
-                                max(0, 1 - (positives / total)) if total > 0 else 1.0
-                            ),
-                            "raw_response": data,
-                        }
-                    else:
-                        logger.error(f"VirusTotal API error: HTTP {response.status}")
+                    return {
+                        "service": "virustotal",
+                        "positives": positives,
+                        "total": total,
+                        "malicious": positives > 0,
+                        "suspicious": (
+                            positives > total * 0.1 if total > 0 else False
+                        ),
+                        "reputation_score": (
+                            max(0, 1 - (positives / total)) if total > 0 else 1.0
+                        ),
+                        "raw_response": data,
+                    }
+                else:
+                    logger.error(f"VirusTotal API error: HTTP {response.status}")
 
         except Exception as e:
             logger.error(f"VirusTotal check failed for {domain}: {e}")
@@ -402,28 +403,28 @@ class DomainReputationService:
 
             url = f"http://api.urlvoid.com/1000/{api_key}/host/{domain}/"
 
+            http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=config.get("timeout", 5.0))
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        # URLVoid returns XML, parse accordingly
-                        content = await response.text()
-                        # Basic parsing - in production, use proper XML parser
+            async with await http_client.get(url, timeout=timeout) as response:
+                if response.status == 200:
+                    # URLVoid returns XML, parse accordingly
+                    content = await response.text()
+                    # Basic parsing - in production, use proper XML parser
 
-                        malicious = "blacklisted" in content.lower()
-                        suspicious = "suspicious" in content.lower()
+                    malicious = "blacklisted" in content.lower()
+                    suspicious = "suspicious" in content.lower()
 
-                        return {
-                            "service": "urlvoid",
-                            "malicious": malicious,
-                            "suspicious": suspicious,
-                            "reputation_score": (
-                                0.0 if malicious else 0.5 if suspicious else 1.0
-                            ),
-                            "raw_response": content[:500],  # Truncated for storage
-                        }
-                    else:
-                        logger.error(f"URLVoid API error: HTTP {response.status}")
+                    return {
+                        "service": "urlvoid",
+                        "malicious": malicious,
+                        "suspicious": suspicious,
+                        "reputation_score": (
+                            0.0 if malicious else 0.5 if suspicious else 1.0
+                        ),
+                        "raw_response": content[:500],  # Truncated for storage
+                    }
+                else:
+                    logger.error(f"URLVoid API error: HTTP {response.status}")
 
         except Exception as e:
             logger.error(f"URLVoid check failed for {domain}: {e}")

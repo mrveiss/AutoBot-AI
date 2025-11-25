@@ -18,6 +18,7 @@ import aiohttp
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 from src.unified_config_manager import config
+from src.utils.http_client import get_http_client
 
 from ..utils.service_registry import get_service_url
 
@@ -68,26 +69,13 @@ class ContainerizedLibrarianAssistant:
             ],
         )
 
-        # HTTP session for requests to Playwright service
-        self.session = None
-
-    async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create HTTP session."""
-        if self.session is None or self.session.closed:
-            timeout = aiohttp.ClientTimeout(total=30)
-            self.session = aiohttp.ClientSession(timeout=timeout)
-        return self.session
-
-    async def _close_session(self):
-        """Close HTTP session."""
-        if self.session and not self.session.closed:
-            await self.session.close()
+        # Use HTTP client singleton for requests to Playwright service
+        self.http_client = get_http_client()
 
     async def _check_playwright_service(self) -> bool:
         """Check if Playwright service is available."""
         try:
-            session = await self._get_session()
-            async with session.get(f"{self.playwright_service_url}/health") as response:
+            async with await self.http_client.get(f"{self.playwright_service_url}/health") as response:
                 if response.status == 200:
                     logger.info("Playwright service is healthy")
                     return True
@@ -120,14 +108,13 @@ class ContainerizedLibrarianAssistant:
             return []
 
         try:
-            session = await self._get_session()
             payload = {"query": query, "search_engine": search_engine}
 
             logger.info(
                 f"Searching with {search_engine} via Playwright service: {query}"
             )
 
-            async with session.post(
+            async with await self.http_client.post(
                 f"{self.playwright_service_url}/search", json=payload
             ) as response:
                 if response.status != 200:
@@ -163,12 +150,11 @@ class ContainerizedLibrarianAssistant:
             return None
 
         try:
-            session = await self._get_session()
             payload = {"url": url}
 
             logger.info(f"Extracting content via Playwright service: {url}")
 
-            async with session.post(
+            async with await self.http_client.post(
                 f"{self.playwright_service_url}/extract", json=payload
             ) as response:
                 if response.status != 200:
@@ -450,9 +436,6 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
         except Exception as e:
             logger.error(f"Error during research: {e}")
             research_results["error"] = str(e)
-        finally:
-            # Clean up HTTP session
-            await self._close_session()
 
         return research_results
 

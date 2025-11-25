@@ -12,12 +12,15 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 from urllib.parse import urljoin
+
+from backend.type_defs.common import Metadata
 
 import aiohttp
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +71,7 @@ class AIStackClient:
                 )
             base_url = f"http://{host}:{port}"
         self.base_url = base_url.rstrip("/")
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.http_client = get_http_client()
 
         # Get timeout, retry, and connection configuration from config
         timeout_seconds = ai_stack_config.get("timeout", 60)
@@ -103,50 +106,22 @@ class AIStackClient:
 
     async def connect(self):
         """Initialize HTTP session for AI Stack communication."""
-        if self.session is None or self.session.closed:
-            # Get connector configuration
-            from src.unified_config_manager import unified_config_manager
-
-            services_config = unified_config_manager.get_distributed_services_config()
-            ai_stack_config = services_config.get("ai_stack", {})
-            system_config = unified_config_manager.get_config_section("system") or {}
-
-            # Get connection pool limits from config
-            connection_limit = ai_stack_config.get("connection_limit", 100)
-            connection_limit_per_host = ai_stack_config.get(
-                "connection_limit_per_host", 20
-            )
-
-            # Get User-Agent from config
-            version = system_config.get("version", "1.0")
-            user_agent = f"AutoBot-Backend/{version}"
-
-            connector = aiohttp.TCPConnector(
-                limit=connection_limit,
-                limit_per_host=connection_limit_per_host,
-                enable_cleanup_closed=True,
-            )
-            self.session = aiohttp.ClientSession(
-                connector=connector,
-                timeout=self.timeout,
-                headers={"Content-Type": "application/json", "User-Agent": user_agent},
-            )
-            logger.info(f"AI Stack client connected to {self.base_url}")
+        # HTTPClient singleton is already initialized
+        logger.info(f"AI Stack client connected to {self.base_url}")
 
     async def close(self):
         """Close the HTTP session."""
-        if self.session and not self.session.closed:
-            await self.session.close()
-            logger.info("AI Stack client session closed")
+        # HTTPClient singleton doesn't need to be closed per instance
+        logger.info("AI Stack client session closed")
 
     async def _make_request(
         self,
         method: str,
         endpoint: str,
-        data: Optional[Dict[str, Any]] = None,
-        params: Optional[Dict[str, Any]] = None,
+        data: Optional[Metadata] = None,
+        params: Optional[Metadata] = None,
         headers: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Make HTTP request to AI Stack with retry logic.
 
@@ -163,9 +138,6 @@ class AIStackClient:
         Raises:
             AIStackError: If request fails after retries
         """
-        if not self.session or self.session.closed:
-            await self.connect()
-
         url = urljoin(self.base_url, endpoint)
         request_headers = headers or {}
 
@@ -175,12 +147,13 @@ class AIStackClient:
                     f"AI Stack request: {method} {url} (attempt {attempt + 1})"
                 )
 
-                async with self.session.request(
+                async with await self.http_client.request(
                     method=method,
                     url=url,
                     json=data,
                     params=params,
                     headers=request_headers,
+                    timeout=self.timeout,
                 ) as response:
                     response_text = await response.text()
 
@@ -224,7 +197,7 @@ class AIStackClient:
 
         raise AIStackError("All retry attempts failed")
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> Metadata:
         """Check AI Stack health status."""
         try:
             response = await self._make_request("GET", "/api/health")
@@ -240,7 +213,7 @@ class AIStackClient:
                 "timestamp": datetime.utcnow().isoformat(),
             }
 
-    async def list_available_agents(self) -> Dict[str, Any]:
+    async def list_available_agents(self) -> Metadata:
         """Get list of available AI agents."""
         try:
             response = await self._make_request("GET", "/api/agents")
@@ -263,7 +236,7 @@ class AIStackClient:
         documents: Optional[List[Dict]] = None,
         context: Optional[str] = None,
         max_results: int = 10,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Perform RAG query using advanced document synthesis.
 
@@ -293,7 +266,7 @@ class AIStackClient:
 
     async def reformulate_query(
         self, query: str, context: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Reformulate query for better retrieval results.
 
@@ -313,7 +286,7 @@ class AIStackClient:
             "POST", self.agent_endpoints["rag"], data=payload
         )
 
-    async def analyze_documents(self, documents: List[Dict]) -> Dict[str, Any]:
+    async def analyze_documents(self, documents: List[Dict]) -> Metadata:
         """
         Analyze and synthesize multiple documents.
 
@@ -338,7 +311,7 @@ class AIStackClient:
         message: str,
         context: Optional[str] = None,
         chat_history: Optional[List[Dict]] = None,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Process chat message with intelligent conversation handling.
 
@@ -367,7 +340,7 @@ class AIStackClient:
 
     async def search_knowledge_enhanced(
         self, query: str, search_type: str = "comprehensive", max_results: int = 10
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Enhanced knowledge base search using KB Librarian.
 
@@ -395,7 +368,7 @@ class AIStackClient:
         content: str,
         content_type: str = "text",
         extraction_mode: str = "comprehensive",
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Extract structured knowledge from content.
 
@@ -423,7 +396,7 @@ class AIStackClient:
         query: str,
         knowledge_types: Optional[List[str]] = None,
         confidence_threshold: float = 0.7,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Retrieve knowledge with advanced filtering.
 
@@ -457,7 +430,7 @@ class AIStackClient:
         query: str,
         research_depth: str = "comprehensive",
         sources: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Perform comprehensive research query.
 
@@ -484,7 +457,7 @@ class AIStackClient:
 
     async def web_research(
         self, query: str, max_pages: int = 10, include_analysis: bool = True
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Perform web research with analysis.
 
@@ -513,7 +486,7 @@ class AIStackClient:
 
     async def search_code(
         self, query: str, search_scope: str = "codebase", include_npu: bool = True
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Search codebase using NPU acceleration.
 
@@ -538,7 +511,7 @@ class AIStackClient:
 
     async def analyze_development_speedup(
         self, code_path: Optional[str] = None, analysis_type: str = "comprehensive"
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Analyze codebase for development speedup opportunities.
 
@@ -564,7 +537,7 @@ class AIStackClient:
 
     async def classify_content(
         self, content: str, classification_types: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Classify content using AI classification agent.
 
@@ -590,7 +563,7 @@ class AIStackClient:
 
     async def get_system_knowledge(
         self, knowledge_category: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Get system-wide knowledge insights.
 
@@ -610,8 +583,8 @@ class AIStackClient:
         )
 
     async def update_system_knowledge(
-        self, knowledge_update: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, knowledge_update: Metadata
+    ) -> Metadata:
         """
         Update system-wide knowledge.
 
