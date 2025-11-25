@@ -72,12 +72,12 @@ class SecretModel(BaseModel):
 class SecretCreateRequest(BaseModel):
     """Request model for creating secrets"""
 
-    name: str
+    name: str = Field(..., min_length=1, max_length=256)
     type: SecretType
     scope: SecretScope
-    value: str
-    chat_id: Optional[str] = None
-    description: Optional[str] = ""
+    value: str = Field(..., min_length=1, max_length=65536)  # 64KB max
+    chat_id: Optional[str] = Field(None, max_length=128)
+    description: Optional[str] = Field("", max_length=1024)
     tags: List[str] = Field(default_factory=list)
     expires_at: Optional[datetime] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -86,8 +86,8 @@ class SecretCreateRequest(BaseModel):
 class SecretUpdateRequest(BaseModel):
     """Request model for updating secrets"""
 
-    name: Optional[str] = None
-    description: Optional[str] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=256)
+    description: Optional[str] = Field(None, max_length=1024)
     tags: Optional[List[str]] = None
     expires_at: Optional[datetime] = None
     metadata: Optional[Dict[str, Any]] = None
@@ -542,7 +542,7 @@ async def get_secrets_status():
             "service": "secrets_manager",
             "total_secrets": len(secrets),
             "storage_backend": "file",
-            "encryption_enabled": False,
+            "encryption_enabled": True,  # Fernet symmetric encryption is used
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
