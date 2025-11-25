@@ -12,6 +12,8 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional, Union
 
+from backend.type_defs.common import Metadata
+
 import torch
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -50,7 +52,7 @@ class CrossModalSearchRequest(BaseModel):
 class TextProcessingRequest(BaseModel):
     text: str = Field(..., description="Text content to process")
     intent: str = Field(default="analysis", description="Processing intent")
-    metadata: Optional[Dict[str, Any]] = Field(default=None)
+    metadata: Optional[Metadata] = Field(default=None)
 
 
 class EmbeddingRequest(BaseModel):

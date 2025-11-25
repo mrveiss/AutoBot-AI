@@ -11,6 +11,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Dict, List
 
+from backend.type_defs.common import Metadata
+
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
@@ -106,7 +108,7 @@ class GoalRequest(BaseModel):
     """Request model for natural language goals."""
 
     goal: str
-    context: Dict[str, Any] = {}
+    context: Metadata = {}
 
 
 class GoalResponse(BaseModel):
@@ -115,7 +117,7 @@ class GoalResponse(BaseModel):
     success: bool
     result: str
     execution_time: float
-    metadata: Dict[str, Any] = {}
+    metadata: Metadata = {}
 
 
 class SystemInfoResponse(BaseModel):

@@ -12,6 +12,8 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+from backend.type_defs.common import Metadata
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 
@@ -33,7 +35,7 @@ class WorkflowApprovalRequest(BaseModel):
     step_id: str
     step_description: str
     required_action: str
-    context: Dict[str, Any]
+    context: Metadata
     timeout_seconds: int = 300
 
 
