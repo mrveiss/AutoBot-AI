@@ -284,13 +284,6 @@ class ConfigService:
             raise
 
     @staticmethod
-    def clear_cache():
-        """Clear the configuration cache to force refresh on next access"""
-        ConfigService._cached_config = None
-        ConfigService._cache_timestamp = None
-        logger.debug("Configuration cache cleared")
-
-    @staticmethod
     def get_llm_config() -> Dict[str, Any]:
         """Get current LLM configuration using unified config system"""
         try:

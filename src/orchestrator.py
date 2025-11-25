@@ -82,10 +82,8 @@ try:
     WORKFLOW_TYPES_AVAILABLE = True
 except ImportError:
     WORKFLOW_TYPES_AVAILABLE = False
-    # Define minimal fallback types
-    from dataclasses import dataclass
-    from enum import Enum
 
+    # Define minimal fallback types (dataclass and Enum already imported above)
     class WorkflowStatus(Enum):
         SCHEDULED = "scheduled"
         RUNNING = "running"

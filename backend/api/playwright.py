@@ -19,13 +19,13 @@ from backend.services.playwright_service import (
     send_test_message_embedded,
     test_frontend_embedded,
 )
+from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import UnifiedConfigManager
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.http_client import get_http_client
 
 # Create singleton config instance
 config = UnifiedConfigManager()
-from src.constants.network_constants import NetworkConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.http_client import get_http_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
