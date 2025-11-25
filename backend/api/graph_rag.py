@@ -25,6 +25,8 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
+from backend.type_defs.common import Metadata
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
@@ -78,8 +80,8 @@ class GraphRAGSearchResponse(BaseModel):
     """Response model for graph-aware RAG search."""
 
     success: bool = Field(..., description="Whether the search succeeded")
-    results: List[Dict[str, Any]] = Field(..., description="Search results")
-    metrics: Dict[str, Any] = Field(..., description="Performance metrics")
+    results: List[Metadata] = Field(..., description="Search results")
+    metrics: Metadata = Field(..., description="Performance metrics")
     request_id: str = Field(..., description="Unique request identifier")
 
 

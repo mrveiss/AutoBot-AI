@@ -9,6 +9,8 @@ Provides REST endpoints for hot reloading chat workflow modules during developme
 import logging
 from typing import Any, Dict
 
+from backend.type_defs.common import Metadata
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -32,7 +34,7 @@ class ReloadResponse(BaseModel):
 
     success: bool
     message: str
-    results: Dict[str, Any] = {}
+    results: Metadata = {}
     reloaded_modules: list = []
     errors: list = []
 

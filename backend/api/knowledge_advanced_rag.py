@@ -10,7 +10,9 @@ with cross-encoder reranking for improved relevance scoring.
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -48,7 +50,7 @@ class RerankRequest(BaseModel):
     query: str = Field(
         ..., min_length=1, max_length=1000, description="Original search query"
     )
-    results: List[Dict[str, Any]] = Field(..., description="Search results to rerank")
+    results: List[Metadata] = Field(..., description="Search results to rerank")
 
 
 class RAGConfigUpdate(BaseModel):
