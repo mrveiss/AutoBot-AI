@@ -14,9 +14,11 @@ import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import psutil
+
+from backend.type_defs.common import Metadata
 import redis
 import requests
 from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -70,13 +72,13 @@ class AnalyticsOverview(BaseModel):
     """Comprehensive analytics dashboard overview model"""
 
     timestamp: str
-    system_health: Dict[str, Any]
-    performance_metrics: Dict[str, Any]
-    communication_patterns: Dict[str, Any]
-    code_analysis_status: Dict[str, Any]
-    usage_statistics: Dict[str, Any]
-    realtime_metrics: Dict[str, Any]
-    trends: Dict[str, Any]
+    system_health: Metadata
+    performance_metrics: Metadata
+    communication_patterns: Metadata
+    code_analysis_status: Metadata
+    usage_statistics: Metadata
+    realtime_metrics: Metadata
+    trends: Metadata
 
 
 class CommunicationPattern(BaseModel):
@@ -105,8 +107,8 @@ class PerformanceMetrics(BaseModel):
 
     response_times: List[float]
     throughput: float
-    error_rates: Dict[str, float]
-    resource_utilization: Dict[str, float]
+    error_rates: Metadata
+    resource_utilization: Metadata
     bottlenecks: List[str]
 
 
@@ -115,7 +117,7 @@ class RealTimeEvent(BaseModel):
 
     event_type: str
     timestamp: str
-    data: Dict[str, Any]
+    data: Metadata
     severity: str = "info"
 
 
