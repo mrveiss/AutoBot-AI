@@ -7,8 +7,9 @@ Issue #54 - Advanced Wake Word Detection Optimization
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import List
 
+from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -37,7 +38,7 @@ class WakeWordCheckResponse(BaseModel):
     wake_word: str = ""
     confidence: float = 0.0
     timestamp: float = 0.0
-    metadata: Dict[str, Any] = {}
+    metadata: Metadata = {}
 
 
 class WakeWordConfigRequest(BaseModel):
