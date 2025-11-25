@@ -1069,7 +1069,8 @@ class KnowledgeBase:
                         if matches > 0:
                             # Calculate score based on match ratio
                             score = matches / len(query_terms)
-                            fact_id = key.decode("utf-8").replace("fact:", "") if isinstance(key, bytes) else key.replace("fact:", "")
+                            fact_id = key.decode(
+                                "utf-8").replace("fact:", "") if isinstance(key, bytes) else key.replace("fact:", "")
 
                             try:
                                 metadata = json.loads(decoded.get("metadata", "{}"))
@@ -1138,14 +1139,16 @@ class KnowledgeBase:
 
             # Process semantic results
             for rank, result in enumerate(semantic_results):
-                fact_id = result.get("metadata", {}).get("fact_id") or result.get("node_id", f"sem_{rank}")
+                fact_id = result.get("metadata", {}).get(
+                    "fact_id") or result.get("node_id", f"sem_{rank}")
                 rrf_scores[fact_id] = rrf_scores.get(fact_id, 0) + (1 / (k + rank + 1))
                 if fact_id not in result_map:
                     result_map[fact_id] = result
 
             # Process keyword results
             for rank, result in enumerate(keyword_results):
-                fact_id = result.get("metadata", {}).get("fact_id") or result.get("node_id", f"kw_{rank}")
+                fact_id = result.get("metadata", {}).get(
+                    "fact_id") or result.get("node_id", f"kw_{rank}")
                 rrf_scores[fact_id] = rrf_scores.get(fact_id, 0) + (1 / (k + rank + 1))
                 if fact_id not in result_map:
                     result_map[fact_id] = result

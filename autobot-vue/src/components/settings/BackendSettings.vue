@@ -1246,6 +1246,7 @@ const testConnection = async () => {
     }
   } catch (error) {
     const err = error as Error
+    console.error('[BackendSettings] Connection test failed:', err)
     connectionStatus.status = 'disconnected'
     connectionStatus.message = `Connection error: ${err.message}`
     connectionStatus.responseTime = null
@@ -1354,6 +1355,7 @@ const testGPU = async () => {
     }
   } catch (error) {
     const err = error as Error
+    console.error('[BackendSettings] GPU test failed:', err)
     hardwareStatus.gpu.status = 'error'
     hardwareStatus.gpu.message = `GPU test failed: ${err.message}`
   } finally {
@@ -1386,6 +1388,7 @@ const testNPU = async () => {
     }
   } catch (error) {
     const err = error as Error
+    console.error('[BackendSettings] NPU test failed:', err)
     hardwareStatus.npu.status = 'error'
     hardwareStatus.npu.message = `NPU test failed: ${err.message}`
   } finally {
@@ -1431,6 +1434,7 @@ const refreshMemoryStatus = async () => {
     }
   } catch (error) {
     const err = error as Error
+    console.error('[BackendSettings] Memory status check failed:', err)
     hardwareStatus.memory.status = 'error'
     hardwareStatus.memory.message = `Failed to get memory status: ${err.message}`
   }

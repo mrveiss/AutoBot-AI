@@ -649,7 +649,9 @@ def load_optional_routers():
         optional_routers.append(
             (
                 codebase_analytics_router,
-                "/analytics",  # FIXED: Changed from /codebase-analytics to /analytics (router has /codebase prefix)
+                # FIXED: Changed from /codebase-analytics to /analytics (router has
+                # /codebase prefix)
+                "/analytics",
                 ["codebase-analytics"],
                 "codebase_analytics",
             )
