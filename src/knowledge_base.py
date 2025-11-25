@@ -3321,6 +3321,892 @@ return 0
             "results": results,
         }
 
+    # ===== BULK OPERATIONS (Issue #79) =====
+
+    @error_boundary(component="knowledge_base", function="export_facts")
+    async def export_facts(
+        self,
+        format: str = "json",
+        categories: Optional[List[str]] = None,
+        tags: Optional[List[str]] = None,
+        fact_ids: Optional[List[str]] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        include_metadata: bool = True,
+        include_tags: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Export facts from the knowledge base.
+
+        Issue #79: Bulk Operations - Export functionality
+
+        Args:
+            format: Export format ("json", "csv", "markdown")
+            categories: Filter by categories
+            tags: Filter by tags
+            fact_ids: Specific fact IDs to export
+            date_from: ISO date string for date range start
+            date_to: ISO date string for date range end
+            include_metadata: Include metadata in export
+            include_tags: Include tags in export
+
+        Returns:
+            Dict with export data and metadata
+        """
+        self.ensure_initialized()
+
+        try:
+            # Collect facts to export
+            facts_to_export = []
+
+            if fact_ids:
+                # Export specific facts
+                for fact_id in fact_ids:
+                    fact_data = await self._get_fact_data(fact_id)
+                    if fact_data:
+                        facts_to_export.append(fact_data)
+            else:
+                # Scan and filter facts
+                cursor = b"0"
+                scanned = 0
+                max_scan = 50000
+
+                while scanned < max_scan:
+                    cursor, keys = await self.aioredis_client.scan(
+                        cursor=cursor, match="fact:*", count=100
+                    )
+                    scanned += len(keys)
+
+                    if keys:
+                        pipeline = self.aioredis_client.pipeline()
+                        for key in keys:
+                            pipeline.hgetall(key)
+                        facts_data = await pipeline.execute()
+
+                        for key, data in zip(keys, facts_data):
+                            if not data:
+                                continue
+
+                            fact = self._decode_fact_data(key, data)
+                            if fact and self._matches_filters(
+                                fact, categories, tags, date_from, date_to
+                            ):
+                                facts_to_export.append(fact)
+
+                    if cursor == b"0":
+                        break
+
+            # Add tags if requested
+            if include_tags:
+                for fact in facts_to_export:
+                    fact_id = fact.get("fact_id")
+                    if fact_id:
+                        tags_result = await self.get_fact_tags(fact_id)
+                        fact["tags"] = tags_result.get("tags", [])
+
+            # Format output
+            if format == "json":
+                export_data = self._format_export_json(facts_to_export, include_metadata)
+            elif format == "csv":
+                export_data = self._format_export_csv(facts_to_export, include_metadata)
+            elif format == "markdown":
+                export_data = self._format_export_markdown(facts_to_export, include_metadata)
+            else:
+                return {"success": False, "error": f"Unsupported format: {format}"}
+
+            return {
+                "success": True,
+                "format": format,
+                "total_facts": len(facts_to_export),
+                "data": export_data,
+                "exported_at": datetime.utcnow().isoformat(),
+            }
+
+        except Exception as e:
+            logger.error(f"Export failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def _get_fact_data(self, fact_id: str) -> Optional[Dict[str, Any]]:
+        """Get fact data by ID."""
+        try:
+            data = await self.aioredis_client.hgetall(f"fact:{fact_id}")
+            if data:
+                return self._decode_fact_data(f"fact:{fact_id}".encode(), data)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get fact {fact_id}: {e}")
+            return None
+
+    def _decode_fact_data(self, key: bytes, data: Dict) -> Dict[str, Any]:
+        """Decode fact data from Redis."""
+        decoded = {}
+        for k, v in data.items():
+            dk = k.decode("utf-8") if isinstance(k, bytes) else k
+            dv = v.decode("utf-8") if isinstance(v, bytes) else v
+            decoded[dk] = dv
+
+        # Extract fact_id from key
+        key_str = key.decode("utf-8") if isinstance(key, bytes) else key
+        fact_id = key_str.replace("fact:", "")
+
+        # Parse metadata
+        try:
+            metadata = json.loads(decoded.get("metadata", "{}"))
+        except json.JSONDecodeError:
+            metadata = {}
+
+        return {
+            "fact_id": fact_id,
+            "content": decoded.get("content", ""),
+            "created_at": decoded.get("created_at", ""),
+            "updated_at": decoded.get("updated_at", ""),
+            "metadata": metadata,
+        }
+
+    def _matches_filters(
+        self,
+        fact: Dict[str, Any],
+        categories: Optional[List[str]],
+        tags: Optional[List[str]],
+        date_from: Optional[str],
+        date_to: Optional[str],
+    ) -> bool:
+        """Check if fact matches all specified filters."""
+        metadata = fact.get("metadata", {})
+
+        # Category filter
+        if categories:
+            fact_category = metadata.get("category", "")
+            if fact_category not in categories:
+                return False
+
+        # Date filters
+        created_at = fact.get("created_at", "")
+        if date_from and created_at:
+            if created_at < date_from:
+                return False
+        if date_to and created_at:
+            if created_at > date_to:
+                return False
+
+        # Tag filter (requires tags to be loaded separately)
+        # This is handled in the main export function after loading tags
+
+        return True
+
+    def _format_export_json(
+        self, facts: List[Dict[str, Any]], include_metadata: bool
+    ) -> str:
+        """Format facts as JSON."""
+        if not include_metadata:
+            facts = [
+                {"fact_id": f["fact_id"], "content": f["content"], "tags": f.get("tags", [])}
+                for f in facts
+            ]
+        return json.dumps(facts, indent=2, ensure_ascii=False)
+
+    def _format_export_csv(
+        self, facts: List[Dict[str, Any]], include_metadata: bool
+    ) -> str:
+        """Format facts as CSV."""
+        import csv
+        import io
+
+        output = io.StringIO()
+        if include_metadata:
+            fieldnames = ["fact_id", "content", "category", "title", "tags", "created_at"]
+        else:
+            fieldnames = ["fact_id", "content", "tags"]
+
+        writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+
+        for fact in facts:
+            row = {
+                "fact_id": fact.get("fact_id", ""),
+                "content": fact.get("content", ""),
+                "tags": ",".join(fact.get("tags", [])),
+            }
+            if include_metadata:
+                metadata = fact.get("metadata", {})
+                row["category"] = metadata.get("category", "")
+                row["title"] = metadata.get("title", "")
+                row["created_at"] = fact.get("created_at", "")
+            writer.writerow(row)
+
+        return output.getvalue()
+
+    def _format_export_markdown(
+        self, facts: List[Dict[str, Any]], include_metadata: bool
+    ) -> str:
+        """Format facts as Markdown."""
+        lines = ["# Knowledge Base Export", ""]
+        lines.append(f"Exported: {datetime.utcnow().isoformat()}")
+        lines.append(f"Total facts: {len(facts)}")
+        lines.append("")
+
+        for i, fact in enumerate(facts, 1):
+            metadata = fact.get("metadata", {})
+            title = metadata.get("title", f"Fact {i}")
+            lines.append(f"## {title}")
+            lines.append("")
+
+            if include_metadata:
+                lines.append(f"**ID**: `{fact.get('fact_id', '')}`")
+                lines.append(f"**Category**: {metadata.get('category', 'N/A')}")
+                if fact.get("tags"):
+                    lines.append(f"**Tags**: {', '.join(fact['tags'])}")
+                lines.append(f"**Created**: {fact.get('created_at', 'N/A')}")
+                lines.append("")
+
+            lines.append(fact.get("content", ""))
+            lines.append("")
+            lines.append("---")
+            lines.append("")
+
+        return "\n".join(lines)
+
+    @error_boundary(component="knowledge_base", function="import_facts")
+    async def import_facts(
+        self,
+        data: str,
+        format: str = "json",
+        validate_only: bool = False,
+        skip_duplicates: bool = True,
+        overwrite_existing: bool = False,
+        default_category: str = "imported",
+    ) -> Dict[str, Any]:
+        """
+        Import facts into the knowledge base.
+
+        Issue #79: Bulk Operations - Import functionality
+
+        Args:
+            data: Import data string
+            format: Data format ("json", "csv", "markdown")
+            validate_only: Only validate without importing
+            skip_duplicates: Skip facts that already exist
+            overwrite_existing: Overwrite existing facts with same ID
+            default_category: Default category for imported facts
+
+        Returns:
+            Dict with import results
+        """
+        self.ensure_initialized()
+
+        try:
+            # Parse input data
+            if format == "json":
+                facts = self._parse_import_json(data)
+            elif format == "csv":
+                facts = self._parse_import_csv(data, default_category)
+            else:
+                return {"success": False, "error": f"Unsupported format: {format}"}
+
+            # Validate facts
+            validation_errors = []
+            valid_facts = []
+
+            for i, fact in enumerate(facts):
+                errors = self._validate_import_fact(fact)
+                if errors:
+                    validation_errors.append({"index": i, "errors": errors})
+                else:
+                    valid_facts.append(fact)
+
+            if validate_only:
+                return {
+                    "success": True,
+                    "validation_only": True,
+                    "total_facts": len(facts),
+                    "valid_facts": len(valid_facts),
+                    "invalid_facts": len(validation_errors),
+                    "errors": validation_errors,
+                }
+
+            # Import valid facts
+            imported = 0
+            skipped = 0
+            overwritten = 0
+            import_errors = []
+
+            for fact in valid_facts:
+                try:
+                    fact_id = fact.get("fact_id") or str(uuid.uuid4())
+
+                    # Check if exists
+                    exists = await self.aioredis_client.exists(f"fact:{fact_id}")
+
+                    if exists:
+                        if skip_duplicates and not overwrite_existing:
+                            skipped += 1
+                            continue
+                        elif overwrite_existing:
+                            overwritten += 1
+                        else:
+                            skipped += 1
+                            continue
+
+                    # Import the fact
+                    metadata = fact.get("metadata", {})
+                    if "category" not in metadata:
+                        metadata["category"] = default_category
+
+                    await self._store_fact(
+                        fact_id=fact_id,
+                        content=fact.get("content", ""),
+                        metadata=metadata,
+                    )
+
+                    # Import tags if present
+                    if fact.get("tags"):
+                        await self.add_tags_to_fact(fact_id, fact["tags"])
+
+                    imported += 1
+
+                except Exception as e:
+                    import_errors.append({
+                        "fact_id": fact.get("fact_id", "unknown"),
+                        "error": str(e)
+                    })
+
+            return {
+                "success": True,
+                "total_facts": len(facts),
+                "imported": imported,
+                "skipped": skipped,
+                "overwritten": overwritten,
+                "errors": import_errors,
+                "validation_errors": validation_errors,
+            }
+
+        except Exception as e:
+            logger.error(f"Import failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    def _parse_import_json(self, data: str) -> List[Dict[str, Any]]:
+        """Parse JSON import data."""
+        parsed = json.loads(data)
+        if isinstance(parsed, list):
+            return parsed
+        elif isinstance(parsed, dict) and "facts" in parsed:
+            return parsed["facts"]
+        else:
+            return [parsed]
+
+    def _parse_import_csv(self, data: str, default_category: str) -> List[Dict[str, Any]]:
+        """Parse CSV import data."""
+        import csv
+        import io
+
+        reader = csv.DictReader(io.StringIO(data))
+        facts = []
+
+        for row in reader:
+            fact = {
+                "fact_id": row.get("fact_id", str(uuid.uuid4())),
+                "content": row.get("content", ""),
+                "metadata": {
+                    "category": row.get("category", default_category),
+                    "title": row.get("title", ""),
+                },
+            }
+            if row.get("tags"):
+                fact["tags"] = [t.strip() for t in row["tags"].split(",") if t.strip()]
+            facts.append(fact)
+
+        return facts
+
+    def _validate_import_fact(self, fact: Dict[str, Any]) -> List[str]:
+        """Validate a fact for import."""
+        errors = []
+
+        if not fact.get("content"):
+            errors.append("Missing content")
+
+        content = fact.get("content", "")
+        if len(content) > 1000000:
+            errors.append("Content too large (max 1MB)")
+
+        if fact.get("fact_id"):
+            if not re.match(r"^[a-zA-Z0-9_-]+$", fact["fact_id"]):
+                errors.append("Invalid fact_id format")
+
+        return errors
+
+    async def _store_fact(
+        self, fact_id: str, content: str, metadata: Dict[str, Any]
+    ) -> None:
+        """Store a fact in Redis."""
+        now = datetime.utcnow().isoformat()
+        await self.aioredis_client.hset(
+            f"fact:{fact_id}",
+            mapping={
+                "content": content,
+                "metadata": json.dumps(metadata),
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+
+    @error_boundary(component="knowledge_base", function="find_duplicates")
+    async def find_duplicates(
+        self,
+        similarity_threshold: float = 0.95,
+        category: Optional[str] = None,
+        max_comparisons: int = 10000,
+    ) -> Dict[str, Any]:
+        """
+        Find duplicate or near-duplicate facts.
+
+        Issue #79: Bulk Operations - Deduplication
+
+        Args:
+            similarity_threshold: Similarity threshold (0.5-1.0)
+            category: Limit to specific category
+            max_comparisons: Maximum comparisons to prevent timeout
+
+        Returns:
+            Dict with duplicate pairs and statistics
+        """
+        self.ensure_initialized()
+
+        try:
+            # Collect facts for comparison
+            facts = []
+            cursor = b"0"
+            scanned = 0
+
+            while scanned < 10000:
+                cursor, keys = await self.aioredis_client.scan(
+                    cursor=cursor, match="fact:*", count=100
+                )
+                scanned += len(keys)
+
+                if keys:
+                    pipeline = self.aioredis_client.pipeline()
+                    for key in keys:
+                        pipeline.hgetall(key)
+                    facts_data = await pipeline.execute()
+
+                    for key, data in zip(keys, facts_data):
+                        if not data:
+                            continue
+
+                        fact = self._decode_fact_data(key, data)
+
+                        # Category filter
+                        if category:
+                            metadata = fact.get("metadata", {})
+                            if metadata.get("category") != category:
+                                continue
+
+                        facts.append(fact)
+
+                if cursor == b"0":
+                    break
+
+            # Find duplicates using content hashing first (exact matches)
+            exact_duplicates = []
+            content_hashes: Dict[str, List[str]] = {}
+
+            for fact in facts:
+                content = fact.get("content", "").strip().lower()
+                content_hash = hashlib.md5(content.encode()).hexdigest()
+
+                if content_hash in content_hashes:
+                    for existing_id in content_hashes[content_hash]:
+                        exact_duplicates.append({
+                            "fact_id_1": existing_id,
+                            "fact_id_2": fact["fact_id"],
+                            "similarity": 1.0,
+                            "type": "exact",
+                        })
+                    content_hashes[content_hash].append(fact["fact_id"])
+                else:
+                    content_hashes[content_hash] = [fact["fact_id"]]
+
+            # Find near-duplicates using embedding similarity (if threshold < 1.0)
+            near_duplicates = []
+
+            if similarity_threshold < 1.0 and len(facts) > 1:
+                # Use vector similarity for near-duplicate detection
+                comparisons = 0
+                fact_embeddings = {}
+
+                for i, fact1 in enumerate(facts):
+                    if comparisons >= max_comparisons:
+                        break
+
+                    # Get or compute embedding for fact1
+                    if fact1["fact_id"] not in fact_embeddings:
+                        emb = await self._get_fact_embedding(fact1["fact_id"])
+                        if emb:
+                            fact_embeddings[fact1["fact_id"]] = emb
+
+                    if fact1["fact_id"] not in fact_embeddings:
+                        continue
+
+                    for fact2 in facts[i + 1:]:
+                        if comparisons >= max_comparisons:
+                            break
+
+                        # Skip if already found as exact duplicate
+                        is_exact = any(
+                            (d["fact_id_1"] == fact1["fact_id"] and d["fact_id_2"] == fact2["fact_id"]) or
+                            (d["fact_id_1"] == fact2["fact_id"] and d["fact_id_2"] == fact1["fact_id"])
+                            for d in exact_duplicates
+                        )
+                        if is_exact:
+                            continue
+
+                        # Get or compute embedding for fact2
+                        if fact2["fact_id"] not in fact_embeddings:
+                            emb = await self._get_fact_embedding(fact2["fact_id"])
+                            if emb:
+                                fact_embeddings[fact2["fact_id"]] = emb
+
+                        if fact2["fact_id"] not in fact_embeddings:
+                            continue
+
+                        # Calculate cosine similarity
+                        similarity = self._cosine_similarity(
+                            fact_embeddings[fact1["fact_id"]],
+                            fact_embeddings[fact2["fact_id"]]
+                        )
+
+                        if similarity >= similarity_threshold:
+                            near_duplicates.append({
+                                "fact_id_1": fact1["fact_id"],
+                                "fact_id_2": fact2["fact_id"],
+                                "similarity": round(similarity, 4),
+                                "type": "near",
+                            })
+
+                        comparisons += 1
+
+            all_duplicates = exact_duplicates + near_duplicates
+
+            return {
+                "success": True,
+                "total_facts_scanned": len(facts),
+                "exact_duplicates": len(exact_duplicates),
+                "near_duplicates": len(near_duplicates),
+                "total_duplicates": len(all_duplicates),
+                "duplicates": all_duplicates,
+                "similarity_threshold": similarity_threshold,
+            }
+
+        except Exception as e:
+            logger.error(f"Find duplicates failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def _get_fact_embedding(self, fact_id: str) -> Optional[List[float]]:
+        """Get embedding vector for a fact."""
+        try:
+            # Try to get from Redis first
+            vector_key = f"llama_index/vector_{fact_id}"
+            vector_data = await self.aioredis_client.get(vector_key)
+
+            if vector_data:
+                return json.loads(vector_data)
+
+            # If not cached, get content and compute embedding
+            fact_data = await self._get_fact_data(fact_id)
+            if not fact_data:
+                return None
+
+            content = fact_data.get("content", "")
+            if not content:
+                return None
+
+            # Use embedding model
+            from llama_index.core import Settings
+            embedding = await asyncio.to_thread(
+                Settings.embed_model.get_text_embedding, content[:2000]
+            )
+            return embedding
+
+        except Exception as e:
+            logger.error(f"Failed to get embedding for {fact_id}: {e}")
+            return None
+
+    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+        """Calculate cosine similarity between two vectors."""
+        import math
+
+        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        norm1 = math.sqrt(sum(a * a for a in vec1))
+        norm2 = math.sqrt(sum(b * b for b in vec2))
+
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+
+        return dot_product / (norm1 * norm2)
+
+    @error_boundary(component="knowledge_base", function="bulk_delete")
+    async def bulk_delete(
+        self, fact_ids: List[str], confirm: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Delete multiple facts at once.
+
+        Issue #79: Bulk Operations - Bulk delete
+
+        Args:
+            fact_ids: List of fact IDs to delete
+            confirm: Must be True to actually delete
+
+        Returns:
+            Dict with deletion results
+        """
+        self.ensure_initialized()
+
+        if not confirm:
+            return {
+                "success": False,
+                "error": "Confirmation required. Set confirm=True to delete.",
+                "facts_to_delete": len(fact_ids),
+            }
+
+        try:
+            deleted = 0
+            not_found = 0
+            errors = []
+
+            for fact_id in fact_ids:
+                try:
+                    # Check if exists
+                    exists = await self.aioredis_client.exists(f"fact:{fact_id}")
+                    if not exists:
+                        not_found += 1
+                        continue
+
+                    # Get tags before deletion
+                    tags_result = await self.get_fact_tags(fact_id)
+                    tags = tags_result.get("tags", [])
+
+                    # Remove from tag indexes
+                    if tags:
+                        pipeline = self.aioredis_client.pipeline()
+                        for tag in tags:
+                            pipeline.srem(f"tag:{tag}", fact_id)
+                        await pipeline.execute()
+
+                    # Delete the fact
+                    await self.aioredis_client.delete(f"fact:{fact_id}")
+                    deleted += 1
+
+                except Exception as e:
+                    errors.append({"fact_id": fact_id, "error": str(e)})
+
+            return {
+                "success": True,
+                "deleted": deleted,
+                "not_found": not_found,
+                "errors": errors,
+            }
+
+        except Exception as e:
+            logger.error(f"Bulk delete failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    @error_boundary(component="knowledge_base", function="bulk_update_category")
+    async def bulk_update_category(
+        self, fact_ids: List[str], new_category: str
+    ) -> Dict[str, Any]:
+        """
+        Update category for multiple facts.
+
+        Issue #79: Bulk Operations - Bulk category update
+
+        Args:
+            fact_ids: List of fact IDs to update
+            new_category: New category to assign
+
+        Returns:
+            Dict with update results
+        """
+        self.ensure_initialized()
+
+        try:
+            updated = 0
+            not_found = 0
+            errors = []
+
+            for fact_id in fact_ids:
+                try:
+                    # Get current fact data
+                    fact_data = await self._get_fact_data(fact_id)
+                    if not fact_data:
+                        not_found += 1
+                        continue
+
+                    # Update metadata
+                    metadata = fact_data.get("metadata", {})
+                    metadata["category"] = new_category
+
+                    # Store updated metadata
+                    await self.aioredis_client.hset(
+                        f"fact:{fact_id}",
+                        "metadata",
+                        json.dumps(metadata),
+                    )
+                    await self.aioredis_client.hset(
+                        f"fact:{fact_id}",
+                        "updated_at",
+                        datetime.utcnow().isoformat(),
+                    )
+
+                    updated += 1
+
+                except Exception as e:
+                    errors.append({"fact_id": fact_id, "error": str(e)})
+
+            return {
+                "success": True,
+                "updated": updated,
+                "not_found": not_found,
+                "errors": errors,
+            }
+
+        except Exception as e:
+            logger.error(f"Bulk category update failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    @error_boundary(component="knowledge_base", function="cleanup")
+    async def cleanup(
+        self,
+        remove_empty: bool = True,
+        remove_orphaned_tags: bool = True,
+        fix_metadata: bool = True,
+        dry_run: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Clean up the knowledge base.
+
+        Issue #79: Bulk Operations - Cleanup
+
+        Args:
+            remove_empty: Remove facts with empty content
+            remove_orphaned_tags: Remove tags with no associated facts
+            fix_metadata: Fix malformed metadata JSON
+            dry_run: Only report issues without fixing
+
+        Returns:
+            Dict with cleanup results
+        """
+        self.ensure_initialized()
+
+        try:
+            issues_found = {
+                "empty_facts": [],
+                "orphaned_tags": [],
+                "malformed_metadata": [],
+            }
+            fixes_applied = {
+                "empty_facts_removed": 0,
+                "orphaned_tags_removed": 0,
+                "metadata_fixed": 0,
+            }
+
+            # Find empty facts
+            if remove_empty:
+                cursor = b"0"
+                while True:
+                    cursor, keys = await self.aioredis_client.scan(
+                        cursor=cursor, match="fact:*", count=100
+                    )
+
+                    if keys:
+                        pipeline = self.aioredis_client.pipeline()
+                        for key in keys:
+                            pipeline.hget(key, "content")
+                        contents = await pipeline.execute()
+
+                        for key, content in zip(keys, contents):
+                            if not content or (
+                                isinstance(content, bytes) and not content.strip()
+                            ):
+                                fact_id = key.decode().replace("fact:", "")
+                                issues_found["empty_facts"].append(fact_id)
+
+                                if not dry_run:
+                                    await self.aioredis_client.delete(key)
+                                    fixes_applied["empty_facts_removed"] += 1
+
+                    if cursor == b"0":
+                        break
+
+            # Find orphaned tags
+            if remove_orphaned_tags:
+                all_tags = await self.aioredis_client.smembers("tag:index:all")
+                if all_tags:
+                    for tag_bytes in all_tags:
+                        tag = tag_bytes.decode() if isinstance(tag_bytes, bytes) else tag_bytes
+                        member_count = await self.aioredis_client.scard(f"tag:{tag}")
+
+                        if member_count == 0:
+                            issues_found["orphaned_tags"].append(tag)
+
+                            if not dry_run:
+                                await self.aioredis_client.delete(f"tag:{tag}")
+                                await self.aioredis_client.srem("tag:index:all", tag)
+                                fixes_applied["orphaned_tags_removed"] += 1
+
+            # Fix malformed metadata
+            if fix_metadata:
+                cursor = b"0"
+                while True:
+                    cursor, keys = await self.aioredis_client.scan(
+                        cursor=cursor, match="fact:*", count=100
+                    )
+
+                    if keys:
+                        pipeline = self.aioredis_client.pipeline()
+                        for key in keys:
+                            pipeline.hget(key, "metadata")
+                        metadata_list = await pipeline.execute()
+
+                        for key, metadata_raw in zip(keys, metadata_list):
+                            if metadata_raw:
+                                try:
+                                    metadata_str = (
+                                        metadata_raw.decode()
+                                        if isinstance(metadata_raw, bytes)
+                                        else metadata_raw
+                                    )
+                                    json.loads(metadata_str)
+                                except json.JSONDecodeError:
+                                    fact_id = key.decode().replace("fact:", "")
+                                    issues_found["malformed_metadata"].append(fact_id)
+
+                                    if not dry_run:
+                                        # Replace with empty metadata
+                                        await self.aioredis_client.hset(
+                                            key, "metadata", "{}"
+                                        )
+                                        fixes_applied["metadata_fixed"] += 1
+
+                    if cursor == b"0":
+                        break
+
+            return {
+                "success": True,
+                "dry_run": dry_run,
+                "issues_found": {
+                    "empty_facts": len(issues_found["empty_facts"]),
+                    "orphaned_tags": len(issues_found["orphaned_tags"]),
+                    "malformed_metadata": len(issues_found["malformed_metadata"]),
+                },
+                "issues_details": issues_found if dry_run else {},
+                "fixes_applied": fixes_applied if not dry_run else {},
+            }
+
+        except Exception as e:
+            logger.error(f"Cleanup failed: {e}")
+            return {"success": False, "error": str(e)}
+
     async def close(self):
         """Close all connections and cleanup resources"""
         try:
