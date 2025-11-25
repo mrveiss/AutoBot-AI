@@ -86,6 +86,62 @@ class SearchRequest(BaseModel):
         return v
 
 
+class EnhancedSearchRequest(BaseModel):
+    """Enhanced search request with tag filtering and hybrid mode (Issue #78)"""
+
+    query: str = Field(..., min_length=1, max_length=1000, description="Search query")
+    limit: int = Field(default=10, ge=1, le=100, description="Max results to return")
+    offset: int = Field(default=0, ge=0, description="Pagination offset")
+    category: Optional[str] = Field(default=None, max_length=100)
+    tags: Optional[List[str]] = Field(
+        default=None,
+        max_items=10,
+        description="Filter results by tags (facts must have ALL specified tags)",
+    )
+    tags_match_any: bool = Field(
+        default=False,
+        description="If True, match facts with ANY tag. If False (default), match ALL tags.",
+    )
+    mode: str = Field(
+        default="hybrid",
+        description="Search mode: 'semantic' (vector only), 'keyword' (text only), 'hybrid' (both)",
+    )
+    enable_reranking: bool = Field(
+        default=False,
+        description="Enable cross-encoder reranking for better relevance",
+    )
+    min_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Minimum similarity score threshold (0.0-1.0)",
+    )
+
+    @validator("category")
+    def validate_category(cls, v):
+        """Validate category format"""
+        if v and not re.match(r"^[a-zA-Z0-9_-]+$", v):
+            raise ValueError("Invalid category format")
+        return v
+
+    @validator("tags", each_item=True)
+    def validate_tag_item(cls, v):
+        """Validate each tag"""
+        if v:
+            v = v.lower().strip()
+            if not re.match(r"^[a-z0-9_-]+$", v):
+                raise ValueError(f"Invalid tag format: {v}")
+        return v
+
+    @validator("mode")
+    def validate_mode(cls, v):
+        """Validate search mode"""
+        valid_modes = ("semantic", "keyword", "hybrid", "auto")
+        if v not in valid_modes:
+            raise ValueError(f"Invalid mode: {v}. Must be one of {valid_modes}")
+        return v
+
+
 class PaginationRequest(BaseModel):
     """Request model for pagination"""
 
@@ -945,6 +1001,99 @@ async def search_knowledge(request: dict, req: Request):
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="enhanced_search",
+    error_code_prefix="KB",
+)
+@router.post("/enhanced_search")
+async def enhanced_search(request: EnhancedSearchRequest, req: Request):
+    """
+    Enhanced search with tag filtering, hybrid mode, and query preprocessing.
+
+    Issue #78: Search Quality Improvements
+
+    Features:
+    - Hybrid search mode (semantic + keyword with RRF)
+    - Tag-based filtering (match all or any)
+    - Query preprocessing (abbreviation expansion)
+    - Minimum score threshold
+    - Optional cross-encoder reranking
+    - Pagination support
+
+    Request body:
+    - query: Search query string
+    - limit: Maximum results (default: 10, max: 100)
+    - offset: Pagination offset (default: 0)
+    - category: Optional category filter
+    - tags: Optional list of tags to filter by
+    - tags_match_any: If True, match ANY tag. If False, match ALL (default: False)
+    - mode: "semantic", "keyword", or "hybrid" (default: "hybrid")
+    - enable_reranking: Enable cross-encoder reranking (default: False)
+    - min_score: Minimum similarity score 0.0-1.0 (default: 0.0)
+
+    Returns:
+    - success: Boolean status
+    - results: List of search results
+    - total_count: Total matching results (before pagination)
+    - query_processed: The preprocessed query used
+    - mode: Search mode used
+    - tags_applied: Tags used for filtering
+    - min_score_applied: Minimum score threshold used
+    - reranking_applied: Whether reranking was applied
+    """
+    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+    if kb_to_use is None:
+        return {
+            "success": False,
+            "results": [],
+            "total_count": 0,
+            "message": "Knowledge base not initialized - please check logs for errors",
+        }
+
+    # Check if knowledge base supports enhanced_search
+    if not hasattr(kb_to_use, "enhanced_search"):
+        # Fallback to regular search with limited functionality
+        logger.warning("KB implementation does not support enhanced_search, using fallback")
+        results = await kb_to_use.search(
+            query=request.query,
+            top_k=request.limit,
+            mode=request.mode if request.mode in ["vector", "text", "auto"] else "auto",
+        )
+        return {
+            "success": True,
+            "results": results,
+            "total_count": len(results),
+            "query_processed": request.query,
+            "mode": request.mode,
+            "tags_applied": [],
+            "min_score_applied": 0.0,
+            "reranking_applied": False,
+            "message": "Using fallback search - enhanced features not available",
+        }
+
+    logger.info(
+        f"Enhanced search: '{request.query}' (limit={request.limit}, offset={request.offset}, "
+        f"mode={request.mode}, tags={request.tags}, min_score={request.min_score})"
+    )
+
+    # Call enhanced_search method
+    result = await kb_to_use.enhanced_search(
+        query=request.query,
+        limit=request.limit,
+        offset=request.offset,
+        category=request.category,
+        tags=request.tags,
+        tags_match_any=request.tags_match_any,
+        mode=request.mode,
+        enable_reranking=request.enable_reranking,
+        min_score=request.min_score,
+    )
+
+    return result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="rag_enhanced_search",
     error_code_prefix="KNOWLEDGE",
 )
@@ -1255,8 +1404,13 @@ async def get_knowledge_health(req: Request):
     if RAG_AVAILABLE:
         try:
             rag_agent = get_rag_agent()
-            # Simple test to verify RAG agent works
-            rag_status = "healthy"
+            # Verify RAG agent is properly initialized by checking key attributes
+            if hasattr(rag_agent, "is_rag_appropriate") and callable(
+                rag_agent.is_rag_appropriate
+            ):
+                rag_status = "healthy"
+            else:
+                rag_status = "unhealthy: missing required methods"
         except Exception as e:
             rag_status = f"error: {str(e)}"
 
