@@ -30,7 +30,9 @@ Performance:
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
+
+from backend.types.common import Metadata
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
@@ -63,7 +65,7 @@ class EntityCreateRequest(BaseModel):
     observations: List[str] = Field(
         ..., min_items=1, description="List of observation strings"
     )
-    metadata: Optional[Dict[str, Any]] = Field(
+    metadata: Optional[Metadata] = Field(
         default_factory=dict, description="Additional metadata"
     )
     tags: Optional[List[str]] = Field(
@@ -109,7 +111,7 @@ class RelationCreateRequest(BaseModel):
     strength: float = Field(
         default=1.0, ge=0.0, le=1.0, description="Relationship strength (0.0-1.0)"
     )
-    metadata: Optional[Dict[str, Any]] = Field(
+    metadata: Optional[Metadata] = Field(
         default_factory=dict, description="Additional metadata"
     )
 
@@ -140,7 +142,7 @@ class EntityResponse(BaseModel):
     created_at: int
     updated_at: int
     observations: List[str]
-    metadata: Dict[str, Any]
+    metadata: Metadata
 
 
 class RelationResponse(BaseModel):
@@ -149,7 +151,7 @@ class RelationResponse(BaseModel):
     to: str
     type: str
     created_at: int
-    metadata: Dict[str, Any]
+    metadata: Metadata
 
 
 class GraphNodeResponse(BaseModel):
@@ -165,7 +167,7 @@ class SearchResponse(BaseModel):
     entities: List[EntityResponse]
     total_count: int
     query: str
-    filters: Dict[str, Any]
+    filters: Metadata
 
 
 # ====================================================================

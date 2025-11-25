@@ -20,7 +20,9 @@ import os
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
+
+from backend.types.common import Metadata
 
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, HTTPException, Query
@@ -66,7 +68,7 @@ class SecretModel(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     expires_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Metadata = Field(default_factory=dict)
 
 
 class SecretCreateRequest(BaseModel):
@@ -80,7 +82,7 @@ class SecretCreateRequest(BaseModel):
     description: Optional[str] = Field("", max_length=1024)
     tags: List[str] = Field(default_factory=list)
     expires_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Metadata = Field(default_factory=dict)
 
 
 class SecretUpdateRequest(BaseModel):
@@ -90,7 +92,7 @@ class SecretUpdateRequest(BaseModel):
     description: Optional[str] = Field(None, max_length=1024)
     tags: Optional[List[str]] = None
     expires_at: Optional[datetime] = None
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Metadata] = None
 
 
 class SecretTransferRequest(BaseModel):
@@ -323,7 +325,7 @@ class SecretsManager:
 
     def transfer_secrets(
         self, request: SecretTransferRequest, chat_id: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """Transfer secrets between scopes"""
         secrets = self._load_secrets()
         transferred = []
@@ -384,7 +386,7 @@ class SecretsManager:
             "total_requested": len(request.secret_ids),
         }
 
-    def cleanup_chat_secrets(self, chat_id: str) -> Dict[str, Any]:
+    def cleanup_chat_secrets(self, chat_id: str) -> Metadata:
         """Clean up secrets when a chat is deleted"""
         secrets = self._load_secrets()
         chat_secrets = []
@@ -412,7 +414,7 @@ class SecretsManager:
 
     def delete_chat_secrets(
         self, chat_id: str, secret_ids: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """Delete specific or all secrets for a chat"""
         secrets = self._load_secrets()
         deleted = []
