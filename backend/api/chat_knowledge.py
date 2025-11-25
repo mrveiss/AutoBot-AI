@@ -14,8 +14,9 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
+from backend.type_defs.common import Metadata
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
@@ -86,10 +87,10 @@ class ChatKnowledgeContext:
     summary: Optional[str] = None
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
-    temporary_knowledge: List[Dict[str, Any]] = field(default_factory=list)
+    temporary_knowledge: List[Metadata] = field(default_factory=list)
     persistent_knowledge_ids: List[str] = field(default_factory=list)
-    file_associations: List[Dict[str, Any]] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    file_associations: List[Metadata] = field(default_factory=list)
+    metadata: Metadata = field(default_factory=dict)
 
 
 @dataclass
@@ -102,7 +103,7 @@ class ChatFileAssociation:
     file_name: str
     association_type: FileAssociationType
     created_at: datetime = field(default_factory=datetime.now)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Metadata = field(default_factory=dict)
     content_hash: Optional[str] = None
     size_bytes: Optional[int] = None
 
