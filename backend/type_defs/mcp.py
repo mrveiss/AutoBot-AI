@@ -11,7 +11,7 @@ from typing import Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
-from backend.types.common import JSONValue, Metadata
+from backend.type_defs.common import JSONValue, Metadata
 
 # MCP-specific type aliases
 MCPToolName = str

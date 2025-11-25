@@ -32,7 +32,7 @@ import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from backend.types.common import Metadata
+from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse

@@ -11,7 +11,7 @@ from typing import Generic, List, Optional, TypeVar, Union
 
 from pydantic import BaseModel, Field
 
-from backend.types.common import Metadata, MetricsDict, TimestampStr
+from backend.type_defs.common import Metadata, MetricsDict, TimestampStr
 
 # Generic type variable for response data
 T = TypeVar("T")

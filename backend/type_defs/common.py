@@ -7,20 +7,22 @@ Common Type Definitions for AutoBot
 Provides reusable type definitions to replace generic Dict[str, Any] patterns.
 """
 
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 # Type alias for timestamp strings (ISO 8601 format)
 TimestampStr = str
 
 # JSON-compatible types
+# Note: Using Any to avoid Pydantic recursive type alias issues
+
 JSONPrimitive = Union[str, int, float, bool, None]
-JSONArray = List["JSONValue"]
-JSONObject = Dict[str, "JSONValue"]
-JSONValue = Union[JSONPrimitive, JSONArray, JSONObject]
+JSONValue = Any  # Simplified to avoid recursion - represents any JSON-serializable value
+JSONArray = List[Any]
+JSONObject = Dict[str, Any]
 
 # Metadata type - used for generic key-value metadata storage
 # More specific than Dict[str, Any] as values must be JSON-serializable
-Metadata = Dict[str, JSONValue]
+Metadata = Dict[str, Any]
 
 # Metrics dictionary - numeric values with string keys
 MetricsDict = Dict[str, Union[int, float]]

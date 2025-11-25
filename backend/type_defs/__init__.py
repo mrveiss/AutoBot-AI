@@ -8,13 +8,13 @@ Provides strongly-typed definitions to replace generic Any types throughout the 
 This module helps ensure type safety, better IDE support, and clearer documentation.
 """
 
-from backend.types.api import (
+from backend.type_defs.api import (
     APIErrorResponse,
     APIResponse,
     APISuccessResponse,
     PaginatedResponse,
 )
-from backend.types.common import (
+from backend.type_defs.common import (
     JSONArray,
     JSONObject,
     JSONPrimitive,
@@ -23,7 +23,7 @@ from backend.types.common import (
     MetricsDict,
     TimestampStr,
 )
-from backend.types.mcp import (
+from backend.type_defs.mcp import (
     MCPErrorResponse,
     MCPInputSchema,
     MCPSuccessResponse,
