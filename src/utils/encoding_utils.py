@@ -292,7 +292,8 @@ def is_terminal_prompt(text: str) -> bool:
 
     # If we have substantial non-prompt lines, this is command output (not just a prompt)
     has_command_output = (
-        len(non_prompt_lines) > 0 and sum(len(l) for l in non_prompt_lines) > 20
+        len(non_prompt_lines) > 0
+        and sum(len(line) for line in non_prompt_lines) > 20
     )
 
     # It's a prompt if:

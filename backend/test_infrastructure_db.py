@@ -162,7 +162,7 @@ def test_credential_encryption(db: InfrastructureDB, host: InfraHost):
 
     assert credential.id is not None
     assert credential.credential_type == "ssh_key"
-    assert credential.is_active == True
+    assert credential.is_active is True
     print("✅ Stored encrypted SSH key credential")
 
     # Retrieve and decrypt

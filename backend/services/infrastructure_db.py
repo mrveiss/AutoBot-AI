@@ -404,7 +404,7 @@ class InfrastructureDB:
                 .filter(
                     InfraCredential.host_id == host_id,
                     InfraCredential.credential_type == credential_type,
-                    InfraCredential.is_active == True,
+                    InfraCredential.is_active.is_(True),
                 )
                 .first()
             )
@@ -434,7 +434,7 @@ class InfrastructureDB:
         """
         with self.SessionLocal() as session:
             query = session.query(InfraCredential).filter(
-                InfraCredential.host_id == host_id, InfraCredential.is_active == True
+                InfraCredential.host_id == host_id, InfraCredential.is_active.is_(True)
             )
 
             if credential_type:
@@ -665,7 +665,7 @@ class InfrastructureDB:
                 "deployments_by_status": {},
                 "active_credentials": (
                     session.query(InfraCredential)
-                    .filter(InfraCredential.is_active == True)
+                    .filter(InfraCredential.is_active.is_(True))
                     .count()
                 ),
             }
