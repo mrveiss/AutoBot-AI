@@ -962,8 +962,8 @@ class AgentTerminalService:
             # Step 3: Check if process is still running
             if pty.is_alive():
                 logger.warning(
-                    f"[CANCEL] Process still running after SIGINT, "
-                    f"attempting forceful termination (SIGKILL)"
+                    "[CANCEL] Process still running after SIGINT, "
+                    "attempting forceful termination (SIGKILL)"
                 )
                 try:
                     # Close the PTY session forcefully
@@ -973,7 +973,7 @@ class AgentTerminalService:
                     logger.error(f"[CANCEL] Failed to forcefully close PTY: {sigkill_error}")
                     return False
             else:
-                logger.info(f"[CANCEL] Process terminated gracefully after SIGINT")
+                logger.info("[CANCEL] Process terminated gracefully after SIGINT")
 
             # Step 4: Clean up session state
             if session.running_command_task and not session.running_command_task.done():
@@ -999,7 +999,7 @@ class AgentTerminalService:
                             "pty_session_id": session.pty_session_id,
                         },
                     )
-                    logger.info(f"[CANCEL] Logged cancellation to chat history")
+                    logger.info("[CANCEL] Logged cancellation to chat history")
                 except Exception as log_error:
                     logger.warning(f"[CANCEL] Failed to log cancellation to chat: {log_error}")
 
@@ -1218,9 +1218,9 @@ class AgentTerminalService:
         # Cancel the command to clean up resources
         cancelled = await self.cancel_command(session, reason="timeout")
         if cancelled:
-            logger.info(f"[PTY_EXEC] Successfully cancelled command after timeout")
+            logger.info("[PTY_EXEC] Successfully cancelled command after timeout")
         else:
-            logger.error(f"[PTY_EXEC] Failed to cancel command after timeout - may have orphaned process")
+            logger.error("[PTY_EXEC] Failed to cancel command after timeout - may have orphaned process")
 
         return last_output
 
