@@ -16,6 +16,7 @@ from typing import Tuple
 import aiohttp
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -83,34 +84,15 @@ class LLMStreamingInterface:
     """
 
     def __init__(self):
-        self.session = None
-
-    async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create HTTP session"""
-        if self.session is None or self.session.closed:
-            # Connection pooling settings for better performance
-            connector = aiohttp.TCPConnector(
-                limit=100,  # Connection pool size
-                limit_per_host=10,  # Max connections per host
-                keepalive_timeout=30,  # Keep connections alive
-                enable_cleanup_closed=True,
-            )
-
-            timeout = aiohttp.ClientTimeout(total=None)  # No overall timeout
-
-            self.session = aiohttp.ClientSession(connector=connector, timeout=timeout)
-
-        return self.session
+        self._http_client = get_http_client()  # Use singleton HTTP client
 
     async def stream_ollama_request(self, url: str, data: dict) -> Tuple[str, bool]:
         """
         Make streaming request to Ollama with natural completion detection
         Returns: (response_content, success)
         """
-        session = await self._get_session()
-
         try:
-            async with session.post(url, json=data) as response:
+            async with await self._http_client.post(url, json=data) as response:
                 if response.status == 200:
                     processor = LLMStreamProcessor(response)
                     content, success = await processor.process_ollama_stream()
@@ -133,9 +115,8 @@ class LLMStreamingInterface:
             return f"Error: {str(e)}", False
 
     async def cleanup(self):
-        """Clean up HTTP session"""
-        if self.session and not self.session.closed:
-            await self.session.close()
+        """No-op: HTTP session is managed by singleton HTTPClientManager"""
+        pass
 
 
 # Global LLM streaming interface instance

@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, Optional
 import aiohttp
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -108,9 +109,9 @@ class OllamaConnectionPool:
                 f"[{request_id}] Acquired connection (waited {wait_time:.2f}s)"
             )
 
-            # Create HTTP session with appropriate timeout
-            timeout = aiohttp.ClientTimeout(total=self.config.connection_timeout)
-            session = aiohttp.ClientSession(timeout=timeout)
+            # Use singleton HTTP client for efficient connection pooling
+            http_client = get_http_client()
+            session = await http_client.get_session()
 
             execution_start = time.time()
 
@@ -142,8 +143,7 @@ class OllamaConnectionPool:
                 logger.error(f"[{request_id}] Connection failed: {e}")
                 raise
 
-            finally:
-                await session.close()
+            # Session cleanup is handled by singleton HTTPClientManager
 
         except asyncio.TimeoutError:
             self.connection_stats["queued"] -= 1

@@ -20,6 +20,7 @@ from typing import Dict, List, Optional, Tuple
 import aiohttp
 
 from src.constants.network_constants import NetworkConstants, ServiceURLs
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ class ServiceDiscovery:
         self.health_check_interval = 30  # seconds
         self.circuit_breaker_threshold = 5  # consecutive failures
         self._health_check_task: Optional[asyncio.Task] = None
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._http_client = get_http_client()  # Use singleton HTTP client
 
         # Service definitions for AutoBot's 6-VM architecture
         self._init_default_services()
@@ -242,11 +243,7 @@ class ServiceDiscovery:
         if self._health_check_task and not self._health_check_task.done():
             return  # Already running
 
-        # Create persistent HTTP session
-        timeout = aiohttp.ClientTimeout(total=30)
-        connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
-        self._session = aiohttp.ClientSession(timeout=timeout, connector=connector)
-
+        # HTTP client singleton handles session management
         self._health_check_task = asyncio.create_task(self._health_monitor_loop())
         logger.info("Started continuous health monitoring for all services")
 
@@ -259,10 +256,7 @@ class ServiceDiscovery:
             except asyncio.CancelledError:
                 pass
 
-        if self._session:
-            await self._session.close()
-            self._session = None
-
+        # Session cleanup is handled by singleton HTTPClientManager
         logger.info("Stopped health monitoring")
 
     async def _health_monitor_loop(self):
@@ -355,11 +349,8 @@ class ServiceDiscovery:
 
     async def _check_http_service(self, service: ServiceEndpoint) -> ServiceStatus:
         """Check HTTP-based service health"""
-        if not self._session:
-            raise Exception("HTTP session not initialized")
-
         try:
-            async with self._session.get(
+            async with await self._http_client.get(
                 service.health_url, timeout=aiohttp.ClientTimeout(total=service.timeout)
             ) as response:
 
