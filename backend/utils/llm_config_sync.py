@@ -277,8 +277,6 @@ async def sync_llm_config_async() -> Dict[str, Any]:
 
 if __name__ == "__main__":
     # Direct execution for testing/debugging
-    import asyncio
-
     async def main():
         result = await sync_llm_configuration()
         print("Synchronization result:")

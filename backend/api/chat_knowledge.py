@@ -799,6 +799,4 @@ if __name__ == "__main__":
 
         print("Demo completed!")
 
-    import asyncio
-
     asyncio.run(demo())
