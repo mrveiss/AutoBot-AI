@@ -9,11 +9,10 @@ Provides login, logout, and session management functionality
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, validator
 
 from src.auth_middleware import auth_middleware
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()

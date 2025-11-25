@@ -11,7 +11,6 @@ segmentation.
 
 import os
 
-from src.constants.network_constants import NetworkConstants
 
 # CRITICAL FIX: Force tf-keras usage before importing transformers/sentence-transformers
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
@@ -249,7 +248,6 @@ class AutoBotSemanticChunker:
             )
             # Fallback to a more basic model with safer loading
             try:
-                import torch
                 from sentence_transformers import SentenceTransformer
 
                 # Use CPU only for fallback to avoid device/tensor issues

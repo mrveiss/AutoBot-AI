@@ -123,7 +123,6 @@ from pydantic import BaseModel
 
 from backend.services.simple_pty import simple_pty_manager
 from src.chat_history_manager import ChatHistoryManager
-from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 

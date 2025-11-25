@@ -22,7 +22,7 @@ Usage:
 
 import os
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Optional
 
 
 @dataclass(frozen=True)

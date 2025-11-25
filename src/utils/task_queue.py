@@ -19,7 +19,6 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 
 try:
     from src.utils.redis_client import get_redis_client
@@ -39,7 +38,6 @@ ErrorCategory = None
 # except ImportError:
 def log_performance_metric(*args, **kwargs):
     """Temporary implementation until logging_config module is created"""
-    pass
 
 
 class TaskStatus(Enum):

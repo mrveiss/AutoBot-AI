@@ -10,7 +10,6 @@ import logging
 import time
 from typing import Dict, Optional
 
-from src.constants.network_constants import NetworkConstants
 
 from .base import ProviderHealthResult, ProviderStatus
 from .providers import AnthropicHealth, GoogleHealth, OllamaHealth, OpenAIHealth

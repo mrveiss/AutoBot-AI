@@ -20,40 +20,29 @@ import asyncio
 import hashlib
 import json
 import logging
-import os
-import tempfile
 import time
 import uuid
 from collections import OrderedDict
 from datetime import datetime
-from io import BytesIO
 from pathlib import Path
-from typing import Any, AsyncGenerator, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
-import aiofiles
 import aioredis
 import redis  # Needed for type hints (Optional[redis.Redis])
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from llama_index.core import Document, Settings, VectorStoreIndex
-from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
 from llama_index.vector_stores.chroma import ChromaVectorStore
-from pypdf import PdfReader
 
-from src.circuit_breaker import circuit_breaker_async
 from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import UnifiedConfigManager
 from src.utils.chromadb_client import get_chromadb_client as create_chromadb_client
 from src.utils.error_boundaries import (
-    ErrorCategory,
-    ErrorContext,
     error_boundary,
     get_error_boundary_manager,
 )
 from src.utils.knowledge_base_timeouts import kb_timeouts
-from src.utils.redis_client import redis_db_manager
 
 # Create singleton config instance
 config = UnifiedConfigManager()

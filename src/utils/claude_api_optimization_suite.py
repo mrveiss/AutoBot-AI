@@ -17,22 +17,20 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 
 from ..monitoring.claude_api_monitor import ClaudeAPIMonitor
 
 # Import all optimization components
 from .conversation_rate_limiter import ConversationRateLimiter, RateLimitExceededError
-from .graceful_degradation import FallbackResponse, GracefulDegradationManager
-from .payload_optimizer import OptimizationResult, PayloadOptimizer
+from .graceful_degradation import GracefulDegradationManager
+from .payload_optimizer import PayloadOptimizer
 from .request_batcher import BatchableRequest, IntelligentRequestBatcher
-from .todowrite_optimizer import TodoWriteOptimizer, get_todowrite_optimizer
-from .tool_pattern_analyzer import ToolPatternAnalyzer, get_tool_pattern_analyzer
+from .todowrite_optimizer import get_todowrite_optimizer
+from .tool_pattern_analyzer import get_tool_pattern_analyzer
 
 logger = logging.getLogger(__name__)
 

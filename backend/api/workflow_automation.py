@@ -21,7 +21,6 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from backend.api.terminal import ConsolidatedTerminalWebSocket
-from src.constants.network_constants import NetworkConstants
 from src.enhanced_orchestrator import EnhancedOrchestrator
 from src.monitoring.prometheus_metrics import get_metrics_manager
 

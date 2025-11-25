@@ -7,7 +7,6 @@ Eliminates complex timeout logic and uses natural stream completion detection
 Intelligent streaming with simplified error handling
 """
 
-import asyncio
 import json
 import logging
 import time
@@ -15,7 +14,6 @@ from typing import Tuple
 
 import aiohttp
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
@@ -116,7 +114,6 @@ class LLMStreamingInterface:
 
     async def cleanup(self):
         """No-op: HTTP session is managed by singleton HTTPClientManager"""
-        pass
 
 
 # Global LLM streaming interface instance

@@ -10,7 +10,6 @@ and debugging across the AutoBot platform.
 
 from typing import Any, Dict, Optional
 
-from src.constants.network_constants import NetworkConstants
 
 
 class AutoBotError(Exception):
@@ -50,13 +49,11 @@ class LLMError(AutoBotError):
 class LLMConnectionError(LLMError):
     """Raised when unable to connect to LLM service."""
 
-    pass
 
 
 class LLMTimeoutError(LLMError):
     """Raised when LLM request times out."""
 
-    pass
 
 
 class LLMResponseError(LLMError):
@@ -90,13 +87,11 @@ class WorkflowError(AutoBotError):
 class WorkflowExecutionError(WorkflowError):
     """Raised when workflow execution fails."""
 
-    pass
 
 
 class WorkflowValidationError(WorkflowError):
     """Raised when workflow validation fails."""
 
-    pass
 
 
 class ValidationError(AutoBotError):
@@ -123,7 +118,6 @@ class ValidationError(AutoBotError):
 class KnowledgeBaseError(AutoBotError):
     """Base class for knowledge base errors."""
 
-    pass
 
 
 class DatabaseError(KnowledgeBaseError):
@@ -139,7 +133,6 @@ class DatabaseError(KnowledgeBaseError):
 class VectorStoreError(KnowledgeBaseError):
     """Raised when vector store operations fail."""
 
-    pass
 
 
 class AgentError(AutoBotError):
@@ -155,13 +148,11 @@ class AgentError(AutoBotError):
 class AgentExecutionError(AgentError):
     """Raised when agent execution fails."""
 
-    pass
 
 
 class AgentTimeoutError(AgentError):
     """Raised when agent execution times out."""
 
-    pass
 
 
 class SecurityError(AutoBotError):
@@ -176,25 +167,21 @@ class SecurityError(AutoBotError):
 class AuthenticationError(SecurityError):
     """Raised when authentication fails."""
 
-    pass
 
 
 class AuthorizationError(SecurityError):
     """Raised when authorization fails."""
 
-    pass
 
 
 class EncryptionError(SecurityError):
     """Raised when encryption/decryption operations fail."""
 
-    pass
 
 
 class ResourceError(AutoBotError):
     """Base class for resource-related errors."""
 
-    pass
 
 
 class ResourceNotFoundError(ResourceError):
@@ -243,7 +230,6 @@ class IntegrationError(AutoBotError):
 class WebSocketError(AutoBotError):
     """Base class for WebSocket-related errors."""
 
-    pass
 
 
 class InternalError(AutoBotError):

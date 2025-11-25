@@ -13,7 +13,6 @@ Defines the 3 main categories for AutoBot's knowledge base:
 from enum import Enum
 from typing import Dict, List
 
-from src.constants.network_constants import NetworkConstants
 
 
 class KnowledgeCategory(str, Enum):

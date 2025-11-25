@@ -71,7 +71,7 @@ return error_response(
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse

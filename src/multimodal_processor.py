@@ -7,11 +7,9 @@ This module provides backward compatibility while redirecting to the unified pro
 """
 
 import logging
-import time
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict
 
 # Import from unified processor for consistency
-from src.constants.network_constants import NetworkConstants
 from src.unified_multimodal_processor import (
     ConfidenceLevel,
     ModalityType,

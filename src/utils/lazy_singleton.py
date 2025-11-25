@@ -393,7 +393,6 @@ class SingletonStorage:
         >>> assert manager is same_manager
     """
 
-    pass
 
 
 # Global storage for module-level singletons (use sparingly)

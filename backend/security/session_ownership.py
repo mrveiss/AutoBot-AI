@@ -20,7 +20,6 @@ from typing import Dict, Optional
 from fastapi import HTTPException, Request
 
 from src.auth_middleware import auth_middleware
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +153,7 @@ class SessionOwnershipValidator:
         enforcement_mode = "disabled"  # Default to disabled (safe)
         if self.feature_flags:
             try:
-                from backend.services.feature_flags import EnforcementMode
+                pass
 
                 mode_enum = await self.feature_flags.get_enforcement_mode()
                 enforcement_mode = mode_enum.value

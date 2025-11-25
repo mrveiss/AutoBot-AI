@@ -6,18 +6,15 @@
 System Validation API endpoints for AutoBot optimization suite
 """
 
-import asyncio
 import logging
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.catalog_http_exceptions import (
     raise_not_found_error,
     raise_server_error,
-    raise_service_unavailable,
 )
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.system_validator import get_system_validator

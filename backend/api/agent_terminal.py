@@ -226,7 +226,7 @@ See Also:
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -238,7 +238,6 @@ from backend.services.agent_terminal_service import (
     AgentTerminalService,
 )
 from backend.services.command_execution_queue import get_command_queue
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

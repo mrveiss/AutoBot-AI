@@ -7,11 +7,9 @@ Exposes VNC observation capabilities as MCP tools for AutoBot's LLM agents
 Integrates with backend VNC proxy for browser and desktop observation
 """
 
-import asyncio
-import json
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 from fastapi import APIRouter, HTTPException

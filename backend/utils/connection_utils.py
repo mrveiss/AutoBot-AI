@@ -6,7 +6,6 @@ Shared utilities for testing connections to various services.
 Eliminates duplication across system.py, llm.py, and redis.py
 """
 
-import asyncio
 import logging
 import os
 import time

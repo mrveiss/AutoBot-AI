@@ -14,9 +14,8 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 from src.enhanced_memory_manager import EnhancedMemoryManager, TaskPriority
 from src.task_execution_tracker import task_tracker
 from src.utils.service_registry import get_service_url
@@ -109,22 +108,18 @@ class BaseAIProvider(ABC):
     @abstractmethod
     async def generate_text(self, request: AIRequest) -> AIResponse:
         """Generate text response"""
-        pass
 
     @abstractmethod
     async def analyze_image(self, request: AIRequest) -> AIResponse:
         """Analyze image with text prompt"""
-        pass
 
     @abstractmethod
     async def multimodal_chat(self, request: AIRequest) -> AIResponse:
         """Multi-modal chat interaction"""
-        pass
 
     @abstractmethod
     def _initialize_client(self):
         """Initialize the client for this provider"""
-        pass
 
     async def _check_rate_limit(self):
         """Check and enforce rate limits"""

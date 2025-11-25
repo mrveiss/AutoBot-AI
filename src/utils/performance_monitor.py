@@ -8,20 +8,17 @@ and real-time system optimization for Intel Ultra 9 185H + RTX 4070 hardware.
 """
 
 import asyncio
-import gc
 import json
 import logging
 import os
 import subprocess
-import threading
 import time
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from functools import wraps
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
-import aiofiles
 import aiohttp
 import psutil
 
@@ -33,7 +30,6 @@ from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 
 # Import existing monitoring infrastructure
-from src.utils.system_metrics import SystemMetric, get_metrics_collector
 
 logger = logging.getLogger(__name__)
 

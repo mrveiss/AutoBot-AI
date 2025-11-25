@@ -12,7 +12,6 @@ import json
 import logging
 import os
 import sqlite3
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
@@ -20,8 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from scripts.phase_validation_system import PhaseValidator
-from src.constants.network_constants import NetworkConstants
-from src.phase_progression_manager import PhasePromotionStatus, get_progression_manager
+from src.phase_progression_manager import get_progression_manager
 from src.project_state_manager import ProjectStateManager
 from src.utils.redis_client import get_redis_client
 

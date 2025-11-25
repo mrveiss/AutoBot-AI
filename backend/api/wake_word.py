@@ -13,7 +13,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.services.wake_word_service import (
-    WakeWordEvent,
     get_wake_word_detector,
 )
 from src.utils.error_boundaries import ErrorCategory, with_error_handling

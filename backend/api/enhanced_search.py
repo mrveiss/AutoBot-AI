@@ -7,20 +7,16 @@ Enhanced Search API with NPU Acceleration
 Provides NPU-accelerated semantic search endpoints for AutoBot
 """
 
-import asyncio
-import json
-import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from src.ai_hardware_accelerator import HardwareDevice
-from src.constants.network_constants import NetworkConstants
 
 # Import NPU semantic search components
-from src.npu_semantic_search import SearchMetrics, SearchResult, get_npu_search_engine
+from src.npu_semantic_search import get_npu_search_engine
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.logging_manager import get_llm_logger
 

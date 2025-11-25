@@ -14,7 +14,6 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.constants.network_constants import NetworkConstants
 from src.enhanced_project_state_tracker import (
     StateChangeType,
     TrackingMetric,

@@ -7,9 +7,7 @@ Provides behavioral anomaly detection, ML-based threat detection, and enhanced s
 """
 
 import asyncio
-import json
 import logging
-import math
 import pickle
 import time
 from collections import defaultdict, deque
@@ -17,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import numpy as np
 import yaml
@@ -25,7 +23,6 @@ from sklearn.cluster import DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
-from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)

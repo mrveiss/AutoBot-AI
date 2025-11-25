@@ -11,11 +11,9 @@ malicious queries, and dangerous content processing.
 import html
 import logging
 import re
-import urllib.parse
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +21,6 @@ logger = logging.getLogger(__name__)
 class InputValidationError(Exception):
     """Exception raised when input validation fails"""
 
-    pass
 
 
 class WebResearchInputValidator:

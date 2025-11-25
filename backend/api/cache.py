@@ -12,8 +12,6 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 
-from src.constants.network_constants import NetworkConstants
-from src.unified_config_manager import config as global_config_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_client import get_redis_client
 

@@ -20,12 +20,10 @@ INSTALLATION:
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-from src.constants.network_constants import NetworkConstants
 from src.enhanced_security_layer import EnhancedSecurityLayer
 from src.security.prompt_injection_detector import (
-    InjectionRisk,
     get_prompt_injection_detector,
 )
 from src.security.secure_llm_command_parser import get_secure_llm_parser

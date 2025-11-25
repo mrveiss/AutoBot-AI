@@ -7,7 +7,6 @@ from fastapi import APIRouter, HTTPException
 
 from backend.services.config_service import ConfigService
 from backend.utils.connection_utils import ConnectionTester
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()

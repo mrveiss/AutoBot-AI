@@ -9,8 +9,7 @@ This adapter resolves API differences between KnowledgeBase implementations,
 providing a consistent interface for the RAG service layer.
 """
 
-import logging
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Protocol
 
 from src.utils.logging_manager import get_llm_logger
 

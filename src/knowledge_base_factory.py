@@ -26,11 +26,9 @@ Usage:
 
 import asyncio
 import logging
-import threading
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
-from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import UnifiedConfigManager
 
 if TYPE_CHECKING:

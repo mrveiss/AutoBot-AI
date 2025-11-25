@@ -14,11 +14,10 @@ import logging
 import time
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from src.utils.error_boundaries import ErrorCategory
-from src.utils.error_catalog import ErrorDefinition, get_error
 
 logger = logging.getLogger(__name__)
 

@@ -17,9 +17,8 @@ import logging
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

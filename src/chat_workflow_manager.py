@@ -20,7 +20,6 @@ Key Features:
 import asyncio
 import json
 import logging
-import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -46,19 +45,11 @@ from backend.intent_classifier import (
     IntentClassification,
     IntentClassifier,
 )
-from src.async_chat_workflow import AsyncChatWorkflow, MessageType, WorkflowMessage
+from src.async_chat_workflow import AsyncChatWorkflow, WorkflowMessage
 
 # Import intent detection functions - Phase 2 Refactoring
-from src.chat_intent_detector import (
-    detect_exit_intent,
-    detect_user_intent,
-    select_context_prompt,
-)
-from src.constants.network_constants import NetworkConstants
 from src.prompt_manager import get_prompt
 from src.utils.error_boundaries import (
-    ErrorCategory,
-    ErrorContext,
     error_boundary,
     get_error_boundary_manager,
 )
@@ -639,7 +630,6 @@ class ChatWorkflowManager:
         Returns:
             Dictionary with 'endpoint', 'model', and 'prompt' keys
         """
-        import httpx
 
         # Get Ollama endpoint from config
         try:

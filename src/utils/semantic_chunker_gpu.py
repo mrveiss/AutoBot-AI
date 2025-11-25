@@ -15,7 +15,6 @@ Optimizations implemented:
 
 import os
 
-from src.constants.network_constants import NetworkConstants
 
 # CRITICAL FIX: Force tf-keras usage before importing transformers/sentence-transformers
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
@@ -39,7 +38,6 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-import psutil
 
 # Import centralized logging
 from src.utils.logging_manager import get_llm_logger

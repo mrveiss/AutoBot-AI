@@ -15,7 +15,7 @@ This shim is now a stable part of the architecture after completing
 the config consolidation (Issue #63).
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from src.constants.network_constants import NetworkConstants
 

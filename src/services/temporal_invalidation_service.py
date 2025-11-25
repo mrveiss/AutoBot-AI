@@ -15,7 +15,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.constants.network_constants import NetworkConstants
 from src.models.atomic_fact import AtomicFact, FactType, TemporalType
 from src.services.fact_extraction_service import FactExtractionService
 from src.unified_config_manager import config_manager

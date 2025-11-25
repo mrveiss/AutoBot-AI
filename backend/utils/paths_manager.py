@@ -7,11 +7,9 @@ Ensures all log/data writes use consistent, configurable paths.
 """
 
 import logging
-import os
 from pathlib import Path
 from typing import Any, Dict
 
-from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import unified_config_manager
 
 logger = logging.getLogger(__name__)

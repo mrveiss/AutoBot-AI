@@ -9,16 +9,12 @@ Optimizes GPU utilization for multi-modal AI workloads and provides acceleration
 import asyncio
 import json
 import logging
-import os
 import subprocess
 import time
 from dataclasses import asdict, dataclass
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
-import psutil
 
-from src.constants.network_constants import NetworkConstants
 
 # Import monitoring components
 from src.utils.performance_monitor import phase9_monitor

@@ -21,7 +21,6 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 
 # Add project root to path for imports
 sys.path.insert(
@@ -184,19 +183,16 @@ class CommunicationChannel(ABC):
     @abstractmethod
     async def send(self, message: StandardMessage) -> bool:
         """Send a message through the channel"""
-        pass
 
     @abstractmethod
     async def receive(
         self, timeout: Optional[float] = None
     ) -> Optional[StandardMessage]:
         """Receive a message from the channel"""
-        pass
 
     @abstractmethod
     async def close(self):
         """Close the communication channel"""
-        pass
 
 
 class RedisCommunicationChannel(CommunicationChannel):

@@ -8,11 +8,9 @@ This creates a completely new knowledge base instance for testing the fixes
 
 import asyncio
 import logging
-import os
 
 from fastapi import APIRouter, Request
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()

@@ -7,7 +7,6 @@ Monitoring Alerts API endpoints
 Provides REST API for managing alerts and notifications
 """
 
-import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -15,15 +14,12 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.monitoring_alerts import (
     Alert,
     AlertRule,
     AlertSeverity,
     AlertStatus,
-    LogNotificationChannel,
-    RedisNotificationChannel,
     get_alerts_manager,
 )
 

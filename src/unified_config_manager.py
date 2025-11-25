@@ -26,13 +26,13 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional
 
 import aiofiles
 import yaml
-from pydantic import Field, validator
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -1473,6 +1473,7 @@ unified_config_manager = UnifiedConfigManager()
 config_manager = unified_config_manager  # For utils/config_manager.py imports
 global_config_manager = unified_config_manager  # For src/config.py imports
 config = unified_config_manager  # General usage
+cfg = unified_config_manager  # Short alias for ai_hardware_accelerator.py
 
 
 # Legacy class wrapper for compatibility

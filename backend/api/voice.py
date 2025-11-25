@@ -6,7 +6,6 @@ import logging
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import JSONResponse
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()

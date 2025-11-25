@@ -8,16 +8,14 @@ performance requirements, and system resources.
 """
 
 import asyncio
-import json
 import logging
 import os
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-import aiohttp
 import psutil
 import yaml
 
@@ -25,7 +23,6 @@ from src.unified_config_manager import UnifiedConfigManager
 
 # Create singleton config instance
 config = UnifiedConfigManager()
-from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 from src.utils.redis_client import get_redis_client
 

@@ -13,9 +13,8 @@ import select
 import signal
 import subprocess
 import threading
-from typing import Callable, Optional
+from typing import Optional
 
-from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)

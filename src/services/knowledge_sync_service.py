@@ -15,19 +15,16 @@ Features:
 """
 
 import asyncio
-import json
-import logging
 import time
 from dataclasses import asdict
-from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from datetime import datetime
+from typing import Any, Dict
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import JSONResponse
 
 from src.advanced_rag_optimizer import get_rag_optimizer
-from src.constants.network_constants import NetworkConstants
-from src.knowledge_sync_incremental import IncrementalKnowledgeSync, SyncMetrics
+from src.knowledge_sync_incremental import IncrementalKnowledgeSync
 from src.utils.catalog_http_exceptions import raise_kb_error
 from src.utils.logging_manager import get_llm_logger
 

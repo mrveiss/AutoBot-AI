@@ -6,7 +6,6 @@ import asyncio
 import logging
 from typing import Any, Dict, Optional, Tuple
 
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,6 @@ class GUIController:
             "Initializing Dummy GUIController for Linux environment. "
             "GUI automation features will be skipped."
         )
-        pass
 
     async def _screenshot(
         self, region: Optional[Tuple[int, int, int, int]] = None

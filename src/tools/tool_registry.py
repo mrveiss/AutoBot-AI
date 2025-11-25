@@ -14,7 +14,6 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 
 if TYPE_CHECKING:
     from src.knowledge_base import KnowledgeBase

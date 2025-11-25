@@ -13,7 +13,7 @@ Pattern: Always validate KB exists before use, provide clear error messages.
 
 import logging
 from functools import wraps
-from typing import Callable, Optional
+from typing import Callable
 
 from fastapi import HTTPException, Request
 

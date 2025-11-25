@@ -13,7 +13,7 @@ Created: 2025-10-31
 import json
 import subprocess
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any, List, Union
 
 import aiofiles
 

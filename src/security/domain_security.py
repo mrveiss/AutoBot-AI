@@ -10,20 +10,18 @@ integration to ensure safe web research operations.
 
 import asyncio
 import ipaddress
-import json
 import logging
 import os
 import re
 import socket
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, Optional, Set
 from urllib.parse import urlparse
 
 import aiohttp
 import yaml
 
-from src.constants.network_constants import NetworkConstants
 from src.constants.security_constants import SecurityConstants
 from src.utils.http_client import get_http_client
 
@@ -176,7 +174,6 @@ class DomainSecurityManager:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit - cleanup handled by singleton HTTPClientManager"""
-        pass
 
     async def validate_domain_safety(self, url: str) -> Dict[str, Any]:
         """

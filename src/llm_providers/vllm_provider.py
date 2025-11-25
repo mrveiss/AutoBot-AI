@@ -9,9 +9,8 @@ High-performance inference for HuggingFace models using vLLM
 import asyncio
 import logging
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 
 try:
     from vllm import LLM, SamplingParams

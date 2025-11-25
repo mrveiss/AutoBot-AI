@@ -8,7 +8,6 @@ Single source of truth for all Redis key patterns
 
 from dataclasses import dataclass
 
-from src.constants.network_constants import NetworkConstants
 
 
 @dataclass(frozen=True)

@@ -12,7 +12,6 @@ import aiohttp
 
 # Import unified configuration
 from src.config_helper import cfg
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

@@ -24,14 +24,12 @@ Architecture:
 import asyncio
 import logging
 import threading
-import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 from src.event_manager import event_manager
 from src.npu_integration import NPUWorkerClient
 
@@ -201,7 +199,6 @@ class LoadBalancingStrategy(ABC):
         Returns:
             Selected worker or None if no worker available
         """
-        pass
 
 
 class RoundRobinStrategy(LoadBalancingStrategy):

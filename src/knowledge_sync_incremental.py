@@ -22,15 +22,13 @@ import json
 import os
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import aiofiles
 
-from src.constants.network_constants import NetworkConstants
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -38,7 +36,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.knowledge_base import KnowledgeBase
 from src.utils.logging_manager import get_llm_logger
 from src.utils.semantic_chunker_gpu import (
-    SemanticChunk,
     get_gpu_semantic_chunker,
 )
 

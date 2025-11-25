@@ -15,9 +15,9 @@ import time
 import traceback
 from contextlib import asynccontextmanager
 from enum import Enum
-from typing import Dict, List, Optional, Union
+from typing import List, Union
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -64,12 +64,10 @@ from src.api_registry import APIRegistry
 # Import authentication and security middleware
 from src.auth_middleware import AuthenticationMiddleware
 from src.chat_workflow_manager import ChatWorkflowManager
-from src.constants.network_constants import NetworkConstants
 
 # REFACTORED: Removed deprecated RedisPoolManager import
 # from src.redis_pool_manager import RedisPoolManager
 # Redis connections now managed centrally via src.utils.redis_client::get_redis_client()
-from src.security_layer import SecurityLayer
 from src.utils.background_llm_sync import background_llm_sync
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.logging_manager import get_logger

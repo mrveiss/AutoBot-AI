@@ -15,11 +15,10 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 import aiofiles
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.catalog_http_exceptions import (
     raise_not_found_error,
     raise_server_error,

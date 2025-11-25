@@ -8,13 +8,11 @@ Provides endpoints for LLM agents to access system context and capabilities
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.constants.network_constants import NetworkConstants
 from src.llm_self_awareness import get_llm_self_awareness
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 

@@ -11,7 +11,6 @@ import logging
 
 from fastapi import APIRouter
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()

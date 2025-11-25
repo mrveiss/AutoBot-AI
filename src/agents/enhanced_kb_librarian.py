@@ -12,7 +12,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from src.agents.web_research_assistant import WebResearchAssistant
-from src.constants.network_constants import NetworkConstants
 from src.event_manager import event_manager
 from src.knowledge_base import KnowledgeBase
 

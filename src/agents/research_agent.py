@@ -10,9 +10,8 @@ Provides web research capabilities for multi-agent workflows
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-import aiohttp
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 

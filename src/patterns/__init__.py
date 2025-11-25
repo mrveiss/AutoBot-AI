@@ -8,8 +8,6 @@ Centralized pattern management for AutoBot including conversation patterns,
 command patterns, security patterns, and more.
 """
 
-from src.constants.network_constants import NetworkConstants
-
 from .conversation_patterns import (
     ConversationPatterns,
     ConversationType,

@@ -17,15 +17,13 @@ import socket
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 
-from backend.models.infrastructure import InfraHost, InfraRole
 from backend.schemas.infrastructure import (
     DeploymentCreate,
     DeploymentDetailResponse,
     DeploymentResponse,
-    HostCreate,
     HostDetailResponse,
     HostResponse,
     HostStatusResponse,

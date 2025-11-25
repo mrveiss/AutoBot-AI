@@ -10,7 +10,6 @@ handling task logs, execution history, agent state, configuration changes,
 and knowledge base integration with optional embedding storage.
 """
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -21,9 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-import aiosqlite
 
-from src.constants.network_constants import NetworkConstants
 
 # Import the centralized ConfigManager
 from src.unified_config_manager import config as global_config_manager

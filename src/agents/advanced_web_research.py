@@ -15,7 +15,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-from src.constants.network_constants import NetworkConstants
 from src.constants.security_constants import SecurityConstants
 
 try:
@@ -32,7 +31,7 @@ except ImportError:
     logging.warning("Playwright not available. Install with: pip install playwright")
 
 try:
-    import aiohttp
+    pass
 
     from src.utils.http_client import get_http_client
 

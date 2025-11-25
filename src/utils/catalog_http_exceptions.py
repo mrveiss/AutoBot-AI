@@ -13,7 +13,7 @@ from typing import Optional
 
 from fastapi import HTTPException
 
-from src.utils.error_catalog import ErrorDefinition, get_error
+from src.utils.error_catalog import get_error
 
 logger = logging.getLogger(__name__)
 

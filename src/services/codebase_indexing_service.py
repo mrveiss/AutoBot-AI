@@ -18,17 +18,13 @@ Features:
 """
 
 import asyncio
-import json
 import logging
-import mimetypes
-import os
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 from src.knowledge_base_factory import get_knowledge_base
 

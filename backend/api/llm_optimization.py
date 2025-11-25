@@ -6,19 +6,17 @@ LLM Model Optimization API Endpoints
 Provides intelligent model selection, performance tracking, and optimization suggestions.
 """
 
-import asyncio
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import UnifiedConfigManager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.model_optimizer import TaskComplexity, TaskRequest, get_model_optimizer
+from src.utils.model_optimizer import TaskRequest, get_model_optimizer
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -13,7 +13,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 from src.enhanced_project_state_tracker import get_state_tracker
 from src.phase_progression_manager import get_progression_manager
 from src.project_state_manager import get_project_state_manager

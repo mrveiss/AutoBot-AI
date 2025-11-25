@@ -21,7 +21,6 @@ from typing import Any, Dict, List, Optional, Union
 
 import aiofiles
 
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

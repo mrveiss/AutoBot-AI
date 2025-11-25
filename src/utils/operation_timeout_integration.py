@@ -16,23 +16,19 @@ framework and existing AutoBot components, including:
 """
 
 import asyncio
-import json
 import logging
-from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
 import redis.asyncio as redis
 from fastapi import (
     APIRouter,
     BackgroundTasks,
-    HTTPException,
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.constants.network_constants import NetworkConstants, ServiceURLs
+from src.constants.network_constants import ServiceURLs
 from src.utils.catalog_http_exceptions import (
     raise_not_found_error,
     raise_server_error,

@@ -10,11 +10,10 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 
 from ..utils.service_registry import get_service_url
@@ -218,7 +217,6 @@ class AgentClient:
 
     async def cleanup(self):
         """Cleanup resources - HTTP session managed by singleton HTTPClientManager"""
-        pass
 
     async def register_local_agent(self, agent: BaseAgent):
         """Register a local agent"""

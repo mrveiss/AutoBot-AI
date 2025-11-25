@@ -8,11 +8,9 @@ Provides singleton-like behavior with app.state integration for optimal performa
 """
 
 import logging
-from typing import Optional
 
 from fastapi import Request
 
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, Optional
 
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +118,7 @@ class ResourceMonitor:
 
         # Quick LLM check
         try:
-            from src.llm_interface import LLMInterface
+            pass
 
             # Just check if interface can be created (no actual request)
             self.llm_available = (

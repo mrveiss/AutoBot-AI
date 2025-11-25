@@ -33,7 +33,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)

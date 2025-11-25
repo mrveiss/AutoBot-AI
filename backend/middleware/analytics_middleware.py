@@ -9,13 +9,11 @@ Automatically tracks API calls for pattern analysis and performance monitoring
 import asyncio
 import logging
 import time
-from datetime import datetime
 from typing import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
