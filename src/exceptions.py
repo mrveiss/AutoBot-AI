@@ -11,7 +11,6 @@ and debugging across the AutoBot platform.
 from typing import Any, Dict, Optional
 
 
-
 class AutoBotError(Exception):
     """Base exception class for all AutoBot-specific errors."""
 
@@ -50,10 +49,8 @@ class LLMConnectionError(LLMError):
     """Raised when unable to connect to LLM service."""
 
 
-
 class LLMTimeoutError(LLMError):
     """Raised when LLM request times out."""
-
 
 
 class LLMResponseError(LLMError):
@@ -88,10 +85,8 @@ class WorkflowExecutionError(WorkflowError):
     """Raised when workflow execution fails."""
 
 
-
 class WorkflowValidationError(WorkflowError):
     """Raised when workflow validation fails."""
-
 
 
 class ValidationError(AutoBotError):
@@ -119,7 +114,6 @@ class KnowledgeBaseError(AutoBotError):
     """Base class for knowledge base errors."""
 
 
-
 class DatabaseError(KnowledgeBaseError):
     """Raised when database operations fail."""
 
@@ -132,7 +126,6 @@ class DatabaseError(KnowledgeBaseError):
 
 class VectorStoreError(KnowledgeBaseError):
     """Raised when vector store operations fail."""
-
 
 
 class AgentError(AutoBotError):
@@ -149,10 +142,8 @@ class AgentExecutionError(AgentError):
     """Raised when agent execution fails."""
 
 
-
 class AgentTimeoutError(AgentError):
     """Raised when agent execution times out."""
-
 
 
 class SecurityError(AutoBotError):
@@ -168,20 +159,16 @@ class AuthenticationError(SecurityError):
     """Raised when authentication fails."""
 
 
-
 class AuthorizationError(SecurityError):
     """Raised when authorization fails."""
-
 
 
 class EncryptionError(SecurityError):
     """Raised when encryption/decryption operations fail."""
 
 
-
 class ResourceError(AutoBotError):
     """Base class for resource-related errors."""
-
 
 
 class ResourceNotFoundError(ResourceError):
@@ -229,7 +216,6 @@ class IntegrationError(AutoBotError):
 
 class WebSocketError(AutoBotError):
     """Base class for WebSocket-related errors."""
-
 
 
 class InternalError(AutoBotError):

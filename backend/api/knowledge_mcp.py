@@ -496,7 +496,6 @@ async def mcp_langchain_qa_chain(request: Dict[str, Any]):
             else:
                 answer = f"Based on the search results: {search_results[0].get('content', '')[:500]}..."
 
-
         return {
             "success": True,
             "answer": answer,

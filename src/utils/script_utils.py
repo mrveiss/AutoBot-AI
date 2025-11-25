@@ -12,7 +12,6 @@ from datetime import datetime
 from typing import Optional
 
 
-
 class ScriptFormatter:
     """Common formatting utilities for AutoBot scripts"""
 

@@ -50,7 +50,6 @@ class InputTimeoutError(Exception):
     """Raised when input operation times out."""
 
 
-
 class TerminalInputHandler:
     """
     Handles terminal input in a way that's compatible with both interactive

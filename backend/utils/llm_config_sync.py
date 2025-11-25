@@ -98,7 +98,6 @@ class LLMConfigurationSynchronizer:
                     f"'{common_model}'"
                 )
 
-
             # Perform synchronization if needed
             if sync_needed and common_model:
                 logger.info(f"SYNC NEEDED: {sync_reason}")

@@ -215,7 +215,6 @@ Focus on practical assessment that helps improve agent performance and user expe
                 f"Overall: {judgment.overall_score:.2f}"
             )
 
-
             return is_good, judgment.overall_score, summary
 
         except Exception as e:

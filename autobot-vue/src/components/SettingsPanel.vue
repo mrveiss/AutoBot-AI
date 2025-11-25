@@ -145,6 +145,10 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import axios from 'axios'
 
+// Import error handling composables
+import { useAsyncHandler } from '../composables/useErrorHandler'
+import { useToast } from '../composables/useToast'
+
 // Import sub-components
 import ErrorBoundary from './ErrorBoundary.vue'
 import SettingsTabNavigation from './settings/SettingsTabNavigation.vue'
@@ -214,6 +218,14 @@ const activeBackendSubTab = ref('agents')
 const cacheConfig = reactive<CacheConfig>(createDefaultCacheConfig())
 const cacheActivity = ref<CacheActivityItem[]>([])
 const cacheStats = ref<CacheStats | null>(null)
+
+// Toast notifications
+const { showToast } = useToast()
+
+// Notification helper for useAsyncHandler
+const notify = (message: string, type: 'success' | 'error' | 'info') => {
+  showToast(message, type, type === 'error' ? 5000 : 3000)
+}
 
 // Helper functions
 const markAsChanged = () => {
@@ -388,54 +400,77 @@ const getCurrentLLMDisplay = (): string => {
 // Add guard to prevent infinite loading loops
 let isLoadingSettings = false
 
-// Load settings on mount
+// Load settings on mount with error handling
 const loadSettings = async () => {
   // Prevent concurrent loading calls that cause infinite loops
   if (isLoadingSettings) {
     return
   }
 
-  try {
-    isLoadingSettings = true
-    settingsLoadingStatus.value = 'loading'
-    const response = await axios.get('/api/settings')
-    // Merge response data with default structure to ensure all sections exist
-    settings.value = {
-      ...getDefaultSettings(),
-      ...response.data
-    }
-    isSettingsLoaded.value = true
-    settingsLoadingStatus.value = 'loaded'
-    hasUnsavedChanges.value = false
-  } catch (error) {
-    console.error('Failed to load settings:', error)
-    settingsLoadingStatus.value = 'offline'
-    // Load from cache if available
-    const cachedSettings = cacheService.get('settings')
-    if (cachedSettings) {
-      settings.value = {
-        ...getDefaultSettings(),
-        ...cachedSettings
+  isLoadingSettings = true
+  settingsLoadingStatus.value = 'loading'
+
+  const { execute: fetchSettings } = useAsyncHandler(
+    async () => axios.get('/api/settings'),
+    {
+      errorMessage: 'Failed to load settings',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: (response) => {
+        settings.value = {
+          ...getDefaultSettings(),
+          ...response.data
+        }
+        isSettingsLoaded.value = true
+        settingsLoadingStatus.value = 'loaded'
+        hasUnsavedChanges.value = false
+      },
+      onError: () => {
+        settingsLoadingStatus.value = 'offline'
+        // Load from cache if available
+        const cachedSettings = cacheService.get('settings')
+        if (cachedSettings) {
+          settings.value = {
+            ...getDefaultSettings(),
+            ...cachedSettings
+          }
+          isSettingsLoaded.value = true
+          notify('Using cached settings (backend offline)', 'info')
+        }
+      },
+      onFinally: () => {
+        isLoadingSettings = false
       }
-      isSettingsLoaded.value = true
     }
-  } finally {
-    isLoadingSettings = false
-  }
+  )
+
+  await fetchSettings()
 }
 
 const saveSettings = async () => {
-  try {
-    isSaving.value = true
-    await axios.post('/api/settings', settings.value)
-    hasUnsavedChanges.value = false
-    // Cache the settings
-    cacheService.set('settings', settings.value, 3600)
-  } catch (error) {
-    console.error('Failed to save settings:', error)
-  } finally {
-    isSaving.value = false
-  }
+  isSaving.value = true
+
+  const { execute: postSettings } = useAsyncHandler(
+    async () => axios.post('/api/settings', settings.value),
+    {
+      errorMessage: 'Failed to save settings',
+      successMessage: 'Settings saved successfully',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: () => {
+        hasUnsavedChanges.value = false
+        // Cache the settings
+        cacheService.set('settings', settings.value, 3600)
+      },
+      onFinally: () => {
+        isSaving.value = false
+      }
+    }
+  )
+
+  await postSettings()
 }
 
 const discardChanges = () => {
@@ -448,30 +483,48 @@ const discardChanges = () => {
 
 // Cache management functions with proper error handling
 const checkCacheApiAvailability = async () => {
-  try {
-    // Test if cache API is available by checking a simple endpoint
-    await axios.get('/api/cache/stats', { timeout: 3000 })
-    cacheApiAvailable.value = true
-  } catch (error) {
-    cacheApiAvailable.value = false
-  }
+  const { execute: checkCache } = useAsyncHandler(
+    async () => axios.get('/api/cache/stats', { timeout: 3000 }),
+    {
+      logErrors: false, // Silent check - don't log errors for availability check
+      onSuccess: () => {
+        cacheApiAvailable.value = true
+      },
+      onError: () => {
+        cacheApiAvailable.value = false
+      }
+    }
+  )
+
+  await checkCache()
 }
 
 const saveCacheConfig = async () => {
   if (!cacheApiAvailable.value) {
-    console.warn('Cache API not available, cannot save cache config')
+    notify('Cache API not available', 'error')
     return
   }
 
-  try {
-    isSaving.value = true
-    await axios.post('/api/cache/config', cacheConfig)
-    markAsChanged()
-  } catch (error) {
-    console.error('Failed to save cache config:', error)
-  } finally {
-    isSaving.value = false
-  }
+  isSaving.value = true
+
+  const { execute: postCacheConfig } = useAsyncHandler(
+    async () => axios.post('/api/cache/config', cacheConfig),
+    {
+      errorMessage: 'Failed to save cache configuration',
+      successMessage: 'Cache configuration saved',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: () => {
+        markAsChanged()
+      },
+      onFinally: () => {
+        isSaving.value = false
+      }
+    }
+  )
+
+  await postCacheConfig()
 }
 
 const refreshCacheActivity = async () => {
@@ -506,87 +559,141 @@ const refreshCacheStats = async () => {
     return
   }
 
-  try {
-    const response = await axios.get('/api/cache/stats')
-    cacheStats.value = response.data
-  } catch (error) {
-    console.error('Failed to refresh cache stats:', error)
-    cacheStats.value = {
-      status: 'error',
-      message: 'Failed to load cache statistics'
-    } as CacheStats
-  }
+  const { execute: getCacheStats } = useAsyncHandler(
+    async () => axios.get('/api/cache/stats'),
+    {
+      errorMessage: 'Failed to refresh cache statistics',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: (response) => {
+        cacheStats.value = response.data
+      },
+      onError: () => {
+        cacheStats.value = {
+          status: 'error',
+          message: 'Failed to load cache statistics'
+        } as CacheStats
+      }
+    }
+  )
+
+  await getCacheStats()
 }
 
 const clearCache = async (type: string) => {
   if (!cacheApiAvailable.value) {
-    console.warn('Cache API not available, cannot clear cache')
+    notify('Cache API not available', 'error')
     return
   }
 
-  try {
-    isClearing.value = true
-    await axios.post(`/api/cache/clear/${type}`)
-    await refreshCacheStats()
-  } catch (error) {
-    console.error('Failed to clear cache:', error)
-  } finally {
-    isClearing.value = false
-  }
+  isClearing.value = true
+
+  const { execute: postClearCache } = useAsyncHandler(
+    async () => axios.post(`/api/cache/clear/${type}`),
+    {
+      errorMessage: `Failed to clear ${type} cache`,
+      successMessage: `${type} cache cleared successfully`,
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: async () => {
+        await refreshCacheStats()
+      },
+      onFinally: () => {
+        isClearing.value = false
+      }
+    }
+  )
+
+  await postClearCache()
 }
 
 const clearRedisCache = async (database: string) => {
   if (!cacheApiAvailable.value) {
-    console.warn('Cache API not available, cannot clear Redis cache')
+    notify('Cache API not available', 'error')
     return
   }
 
-  try {
-    isClearing.value = true
-    await axios.post(`/api/cache/redis/clear/${database}`)
-    await refreshCacheStats()
-    await refreshCacheActivity()
-  } catch (error) {
-    console.error('Failed to clear Redis cache:', error)
-  } finally {
-    isClearing.value = false
-  }
+  isClearing.value = true
+
+  const { execute: postClearRedis } = useAsyncHandler(
+    async () => axios.post(`/api/cache/redis/clear/${database}`),
+    {
+      errorMessage: `Failed to clear Redis ${database} database`,
+      successMessage: `Redis ${database} database cleared`,
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: async () => {
+        await refreshCacheStats()
+        await refreshCacheActivity()
+      },
+      onFinally: () => {
+        isClearing.value = false
+      }
+    }
+  )
+
+  await postClearRedis()
 }
 
 const clearCacheType = async (cacheType: string) => {
   if (!cacheApiAvailable.value) {
-    console.warn('Cache API not available, cannot clear cache type')
+    notify('Cache API not available', 'error')
     return
   }
 
-  try {
-    isClearing.value = true
-    await axios.post(`/api/cache/clear/${cacheType}`)
-    await refreshCacheStats()
-    await refreshCacheActivity()
-  } catch (error) {
-    console.error('Failed to clear cache type:', error)
-  } finally {
-    isClearing.value = false
-  }
+  isClearing.value = true
+
+  const { execute: postClearCacheType } = useAsyncHandler(
+    async () => axios.post(`/api/cache/clear/${cacheType}`),
+    {
+      errorMessage: `Failed to clear ${cacheType} cache`,
+      successMessage: `${cacheType} cache cleared`,
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: async () => {
+        await refreshCacheStats()
+        await refreshCacheActivity()
+      },
+      onFinally: () => {
+        isClearing.value = false
+      }
+    }
+  )
+
+  await postClearCacheType()
 }
 
 const warmupCaches = async () => {
   if (!cacheApiAvailable.value) {
-    console.warn('Cache API not available, cannot warm up caches')
+    notify('Cache API not available', 'error')
     return
   }
 
-  try {
-    isClearing.value = true
-    await axios.post('/api/cache/warmup')
-    await refreshCacheStats()
-    await refreshCacheActivity()
-  } catch (error) {
-    console.error('Failed to warm up caches:', error)
-  } finally {
-    isClearing.value = false
-  }
+  isClearing.value = true
+
+  const { execute: postWarmup } = useAsyncHandler(
+    async () => axios.post('/api/cache/warmup'),
+    {
+      errorMessage: 'Failed to warm up caches',
+      successMessage: 'Cache warmup completed',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: async () => {
+        await refreshCacheStats()
+        await refreshCacheActivity()
+      },
+      onFinally: () => {
+        isClearing.value = false
+      }
+    }
+  )
+
+  await postWarmup()
 }
 
 // Prompt management functions
@@ -626,70 +733,113 @@ const clearSelectedPrompt = () => {
 }
 
 const loadPrompts = async () => {
-  try {
-    const response = await axios.get('/api/prompts')
-    if (!settings.value.prompts) {
-      settings.value.prompts = {
-        list: [],
-        selectedPrompt: null,
-        editedContent: ''
-      } as PromptsSettingsType
+  const { execute: getPrompts } = useAsyncHandler(
+    async () => axios.get('/api/prompts'),
+    {
+      errorMessage: 'Failed to load prompts',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: (response) => {
+        if (!settings.value.prompts) {
+          settings.value.prompts = {
+            list: [],
+            selectedPrompt: null,
+            editedContent: ''
+          } as PromptsSettingsType
+        }
+        settings.value.prompts.list = response.data
+      }
     }
-    settings.value.prompts.list = response.data
-  } catch (error) {
-    console.error('Failed to load prompts:', error)
-  }
+  )
+
+  await getPrompts()
 }
 
 const savePrompt = async () => {
-  try {
-    const prompt = settings.value.prompts?.selectedPrompt
-    if (prompt && settings.value.prompts) {
-      await axios.put(`/api/prompts/${prompt.id}`, {
-        content: settings.value.prompts.editedContent
-      })
-      clearSelectedPrompt()
-      await loadPrompts()
-    }
-  } catch (error) {
-    console.error('Failed to save prompt:', error)
+  const prompt = settings.value.prompts?.selectedPrompt
+  if (!prompt || !settings.value.prompts) {
+    return
   }
+
+  const { execute: putPrompt } = useAsyncHandler(
+    async () => axios.put(`/api/prompts/${prompt.id}`, {
+      content: settings.value.prompts!.editedContent
+    }),
+    {
+      errorMessage: 'Failed to save prompt',
+      successMessage: 'Prompt saved successfully',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: async () => {
+        clearSelectedPrompt()
+        await loadPrompts()
+      }
+    }
+  )
+
+  await putPrompt()
 }
 
 const revertPromptToDefault = async (promptId: string) => {
-  try {
-    await axios.post(`/api/prompts/${promptId}/revert`)
-    clearSelectedPrompt()
-    await loadPrompts()
-  } catch (error) {
-    console.error('Failed to revert prompt:', error)
-  }
+  const { execute: postRevert } = useAsyncHandler(
+    async () => axios.post(`/api/prompts/${promptId}/revert`),
+    {
+      errorMessage: 'Failed to revert prompt to default',
+      successMessage: 'Prompt reverted to default',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: async () => {
+        clearSelectedPrompt()
+        await loadPrompts()
+      }
+    }
+  )
+
+  await postRevert()
 }
 
 // Load health status with corrected endpoint
 const loadHealthStatus = async () => {
-  try {
-    // Try the correct detailed health endpoint first
-    const response = await axios.get('/api/system/health/detailed')
-    healthStatus.value = response.data
-  } catch (error) {
-    console.error('Failed to load detailed health status:', error)
+  // Try detailed health endpoint first
+  const { execute: getDetailedHealth } = useAsyncHandler(
+    async () => axios.get('/api/system/health/detailed'),
+    {
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: (response) => {
+        healthStatus.value = response.data
+      },
+      onError: async () => {
+        // Fallback to basic health endpoint
+        const { execute: getBasicHealth } = useAsyncHandler(
+          async () => axios.get('/api/system/health'),
+          {
+            logErrors: true,
+            errorPrefix: '[SettingsPanel]',
+            onSuccess: (fallbackResponse) => {
+              healthStatus.value = {
+                basic_health: fallbackResponse.data,
+                detailed_available: false
+              } as HealthStatus
+            },
+            onError: () => {
+              healthStatus.value = {
+                status: 'unavailable',
+                message: 'Health endpoints not available'
+              } as HealthStatus
+            }
+          }
+        )
 
-    // Fallback to basic health endpoint
-    try {
-      const fallbackResponse = await axios.get('/api/system/health')
-      healthStatus.value = {
-        basic_health: fallbackResponse.data,
-        detailed_available: false
-      } as HealthStatus
-    } catch (fallbackError) {
-      console.error('Failed to load any health status:', fallbackError)
-      healthStatus.value = {
-        status: 'unavailable',
-        message: 'Health endpoints not available'
-      } as HealthStatus
+        await getBasicHealth()
+      }
     }
-  }
+  )
+
+  await getDetailedHealth()
 }
 
 onMounted(async () => {

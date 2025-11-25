@@ -7,7 +7,6 @@ from datetime import datetime
 from typing import Any, Dict
 
 
-
 def strip_ansi_codes(text: str) -> str:
     """Removes ANSI escape codes from a string."""
     ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")

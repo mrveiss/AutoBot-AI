@@ -255,7 +255,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
-import { useToast } from '@/composables/useToast.js';
+import { useToast } from '@/composables/useToast';
 import { apiService } from '@/services/api.js';
 import { formatDateTime as formatDate } from '@/utils/formatHelpers';
 import BaseButton from '@/components/base/BaseButton.vue';

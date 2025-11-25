@@ -1265,7 +1265,6 @@ class AgentTerminalService:
             Dict with status, stdout, stderr, return_code
         """
 
-
         logger.info(f"[PTY_EXEC] Executing in PTY: {command}")
 
         # Write command to PTY (shell will execute it)
@@ -1883,7 +1882,7 @@ class AgentTerminalService:
                         )
                         logger.info(
                             f"[INTERPRETATION] LLM interpretation complete, "
-                        f"length: {len(interpretation)}"
+                            f"length: {len(interpretation)}"
                         )
                     except Exception as e:
                         logger.error(

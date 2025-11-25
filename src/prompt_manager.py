@@ -599,7 +599,6 @@ def get_optimized_prompt(
             f"{datetime.now().strftime('%Y-%m-%d')}"
         )
 
-
     # Combine: static prefix + dynamic suffix
     # This ordering is CRITICAL for vLLM prefix caching
     return f"{base_prompt}\n\n{dynamic_context}"

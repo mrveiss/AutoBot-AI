@@ -103,7 +103,6 @@ class KBLibrarianAgent:
                 f"for this question.\n\nAnswer:"
             )
 
-
         # Generate response using LLM
         try:
             response = await self.llm.generate_response(prompt)

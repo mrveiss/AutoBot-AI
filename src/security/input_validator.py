@@ -22,7 +22,6 @@ class InputValidationError(Exception):
     """Exception raised when input validation fails"""
 
 
-
 class WebResearchInputValidator:
     """Validates and sanitizes inputs for web research operations"""
 

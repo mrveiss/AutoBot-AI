@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 
-
 class CommonUtils:
     """Common utility functions used across the codebase"""
 

@@ -257,10 +257,8 @@ class HTTPDeleteRequest(HTTPRequestBase):
     """DELETE request model"""
 
 
-
 class HTTPHeadRequest(HTTPRequestBase):
     """HEAD request model"""
-
 
 
 # MCP Tool Definitions

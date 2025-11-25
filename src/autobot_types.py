@@ -8,7 +8,6 @@ Shared type definitions for AutoBot
 from enum import Enum
 
 
-
 class TaskComplexity(Enum):
     SIMPLE = "simple"  # Regular conversation with Knowledge Base integration
     COMPLEX = "complex"  # Requires tools, research, or system actions

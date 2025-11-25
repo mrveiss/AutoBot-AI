@@ -8,7 +8,6 @@ import subprocess
 import pyautogui
 
 
-
 class GUIController:
     def __init__(self):
         """Initialize the GUIController with safety settings and virtual

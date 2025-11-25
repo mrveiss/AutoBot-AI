@@ -11,7 +11,6 @@ from enum import Enum
 from typing import Optional
 
 
-
 class ProviderStatus(str, Enum):
     """Provider health status enumeration"""
 

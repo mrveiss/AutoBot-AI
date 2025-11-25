@@ -75,7 +75,6 @@ async def batch_load(batch_request: BatchRequest):
     """
     import time
 
-
     from backend.fast_app_factory_fix import app
 
     responses = {}
