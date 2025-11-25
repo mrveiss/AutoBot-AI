@@ -9,6 +9,7 @@ import {
 } from '../../test/utils/test-utils'
 import { createMockApiService } from '../../test/mocks/api-client-mock'
 import { webSocketTestUtil } from '../../test/mocks/websocket-mock'
+import { ServiceURLs } from '@/constants/network'
 
 // Mock dependencies
 vi.mock('@/utils/ApiClient', () => ({
@@ -127,7 +128,7 @@ describe('ComponentName', () => {
     it('handles incoming WebSocket messages', async () => {
       renderComponent(ComponentName)
 
-      const ws = webSocketTestUtil.connect('ws://localhost:8001/ws')
+      const ws = webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
       webSocketTestUtil.simulateMessage('data_update', { value: 'Updated!' })
 
       await waitFor(() => {
@@ -138,7 +139,7 @@ describe('ComponentName', () => {
     it('handles WebSocket connection errors', async () => {
       renderComponent(ComponentName)
 
-      const ws = webSocketTestUtil.connect('ws://localhost:8001/ws')
+      const ws = webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
       webSocketTestUtil.simulateError('Connection failed')
 
       // Should handle error gracefully

@@ -97,7 +97,11 @@ export const ServiceURLs = Object.freeze({
   AI_STACK_SERVICE: `${DEFAULT_CONFIG.network.ai_stack.protocol}://${NetworkConstants.AI_STACK_VM_IP}:${NetworkConstants.AI_STACK_PORT}`,
 
   // NPU Worker service
-  NPU_WORKER_SERVICE: `${DEFAULT_CONFIG.network.npu_worker.protocol}://${NetworkConstants.NPU_WORKER_VM_IP}:${NetworkConstants.NPU_WORKER_PORT}`
+  NPU_WORKER_SERVICE: `${DEFAULT_CONFIG.network.npu_worker.protocol}://${NetworkConstants.NPU_WORKER_VM_IP}:${NetworkConstants.NPU_WORKER_PORT}`,
+
+  // WebSocket URLs
+  WEBSOCKET_API: `ws://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}/ws`,
+  WEBSOCKET_LOCAL: `ws://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.BACKEND_PORT}/ws`
 })
 
 /**

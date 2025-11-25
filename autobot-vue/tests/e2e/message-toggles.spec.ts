@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { TEST_CONFIG } from './config';
 
 test.describe('Message Display Toggles', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to the chat interface
-    await page.goto('http://localhost:5173');
+    await page.goto(TEST_CONFIG.FRONTEND_URL);
 
     // Wait for the chat interface to load
     await page.waitForSelector('.chat-interface', { timeout: 10000 });

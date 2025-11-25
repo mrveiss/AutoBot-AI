@@ -10,6 +10,7 @@ import {
 } from '../../test/utils/test-utils'
 import { createMockApiService } from '../../test/mocks/api-client-mock'
 import { webSocketTestUtil, WebSocketMessageType } from '../../test/mocks/websocket-mock'
+import { ServiceURLs } from '@/constants/network'
 
 // Mock dependencies
 vi.mock('@/utils/ApiClient', () => ({
@@ -285,7 +286,7 @@ describe('ChatInterface', () => {
       renderComponent(ChatInterface)
 
       // Simulate WebSocket connection
-      const ws = webSocketTestUtil.connect('ws://localhost:8001/ws')
+      const ws = webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
 
       // Simulate incoming chat message
       webSocketTestUtil.simulateChatMessage('Hello from WebSocket!', 'assistant')
@@ -298,7 +299,7 @@ describe('ChatInterface', () => {
     it('handles WebSocket connection errors', async () => {
       renderComponent(ChatInterface)
 
-      const ws = webSocketTestUtil.connect('ws://localhost:8001/ws')
+      const ws = webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
       webSocketTestUtil.simulateError('Connection failed')
 
       // Should handle error gracefully
@@ -308,7 +309,7 @@ describe('ChatInterface', () => {
     it('handles workflow notifications via WebSocket', async () => {
       renderComponent(ChatInterface)
 
-      webSocketTestUtil.connect('ws://localhost:8001/ws')
+      webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
       webSocketTestUtil.simulateWorkflowUpdate('workflow-123', 'running', 2)
 
       // Should display workflow notification or update
