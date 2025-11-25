@@ -40,6 +40,8 @@ import aiohttp
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from backend.type_defs.common import Metadata
+
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.http_client import get_http_client
@@ -72,9 +74,9 @@ class MCPToolCache:
 
     def __init__(self, ttl_seconds: int = 60):
         self.ttl = timedelta(seconds=ttl_seconds)
-        self._tools_cache: Optional[Dict[str, Any]] = None
+        self._tools_cache: Optional[Metadata] = None
         self._tools_updated: Optional[datetime] = None
-        self._bridges_cache: Optional[Dict[str, Any]] = None
+        self._bridges_cache: Optional[Metadata] = None
         self._bridges_updated: Optional[datetime] = None
         self._stats = {
             "cache_hits": 0,
@@ -82,7 +84,7 @@ class MCPToolCache:
             "invalidations": 0,
         }
 
-    def get_tools(self) -> Optional[Dict[str, Any]]:
+    def get_tools(self) -> Optional[Metadata]:
         """Get cached tools if still valid"""
         if not CACHE_ENABLED:
             return None
@@ -101,7 +103,7 @@ class MCPToolCache:
         self._stats["cache_hits"] += 1
         return self._tools_cache
 
-    def set_tools(self, data: Dict[str, Any]) -> None:
+    def set_tools(self, data: Metadata) -> None:
         """Update tools cache"""
         if not CACHE_ENABLED:
             return
@@ -110,7 +112,7 @@ class MCPToolCache:
         self._tools_updated = datetime.now()
         logger.info(f"MCP tools cache updated (TTL: {self.ttl.seconds}s)")
 
-    def get_bridges(self) -> Optional[Dict[str, Any]]:
+    def get_bridges(self) -> Optional[Metadata]:
         """Get cached bridges if still valid"""
         if not CACHE_ENABLED:
             return None
@@ -129,7 +131,7 @@ class MCPToolCache:
         self._stats["cache_hits"] += 1
         return self._bridges_cache
 
-    def set_bridges(self, data: Dict[str, Any]) -> None:
+    def set_bridges(self, data: Metadata) -> None:
         """Update bridges cache"""
         if not CACHE_ENABLED:
             return
@@ -147,7 +149,7 @@ class MCPToolCache:
         self._stats["invalidations"] += 1
         logger.info("MCP Registry cache invalidated")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> Metadata:
         """Get cache statistics"""
         total_requests = self._stats["cache_hits"] + self._stats["cache_misses"]
         hit_rate = (
@@ -192,7 +194,7 @@ class MCPToolInfo(BaseModel):
 
     name: str
     description: str
-    input_schema: Dict[str, Any]
+    input_schema: Metadata
     bridge: str  # Which MCP bridge provides this tool
     endpoint: str  # Full endpoint URL
 
@@ -292,7 +294,7 @@ MCP_BRIDGES = [
 # ============================================================================
 
 
-async def _fetch_tools_from_bridges() -> Dict[str, Any]:
+async def _fetch_tools_from_bridges() -> Metadata:
     """
     Fetch tools from all MCP bridges (internal helper).
 
@@ -346,7 +348,7 @@ async def _fetch_tools_from_bridges() -> Dict[str, Any]:
     }
 
 
-async def _fetch_bridges_info() -> Dict[str, Any]:
+async def _fetch_bridges_info() -> Metadata:
     """
     Fetch bridge information from all MCP bridges (internal helper).
 
@@ -409,7 +411,7 @@ async def _fetch_bridges_info() -> Dict[str, Any]:
     error_code_prefix="MCP_REGISTRY",
 )
 @router.get("/tools")
-async def list_all_mcp_tools() -> Dict[str, Any]:
+async def list_all_mcp_tools() -> Metadata:
     """
     List all available MCP tools from all bridges (with caching)
 
