@@ -1169,16 +1169,44 @@ Explain what it means and answer their original question."""
         """
         Persist conversation to Redis cache and file storage.
 
+        Handles deduplication: if the last entry has the same user message,
+        appends the new response to avoid duplicate entries (Issue #177).
+
         Args:
             session_id: Session identifier
             session: Workflow session object
             message: User message
             llm_response: LLM response
         """
-        # Store complete exchange in conversation history
-        session.conversation_history.append(
-            {"user": message, "assistant": llm_response}
-        )
+        # DEDUPLICATION FIX (Issue #177): Check if last entry has same user message
+        # This prevents duplicate entries when both terminal service and chat flow persist
+        if session.conversation_history:
+            last_entry = session.conversation_history[-1]
+            if last_entry.get("user") == message:
+                # Same user message - append new response to existing assistant response
+                existing_response = last_entry.get("assistant", "")
+                # Only append if the new response is different and not already included
+                if llm_response not in existing_response:
+                    last_entry["assistant"] = f"{existing_response}\n\n{llm_response}"
+                    logger.debug(
+                        f"[_persist_conversation] Appended to existing entry for session "
+                        f"{session_id} (deduplication)"
+                    )
+                else:
+                    logger.debug(
+                        f"[_persist_conversation] Skipped duplicate response for session "
+                        f"{session_id}"
+                    )
+            else:
+                # Different user message - append as new entry
+                session.conversation_history.append(
+                    {"user": message, "assistant": llm_response}
+                )
+        else:
+            # Empty history - append as new entry
+            session.conversation_history.append(
+                {"user": message, "assistant": llm_response}
+            )
 
         # Keep history manageable (max 10 exchanges)
         if len(session.conversation_history) > 10:
