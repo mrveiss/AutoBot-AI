@@ -168,7 +168,8 @@ class PerformanceOptimizedDiagnostics:
                 )
 
                 print(
-                    f"Permission request sent for task {task_id} (attempt {attempt + 1}/{self.permission_retry_attempts})"
+                    f"Permission request sent for task {task_id} "
+                    f"(attempt {attempt + 1}/{self.permission_retry_attempts})"
                 )
                 print(
                     f"Waiting up to {self.max_user_permission_timeout}s for response..."
@@ -199,8 +200,10 @@ class PerformanceOptimizedDiagnostics:
                             {
                                 "level": "WARNING",
                                 "message": (
-                                    f"Permission request timeout (attempt {attempt + 1}). "
-                                    f"Retrying... ({self.permission_retry_attempts - attempt - 1} attempts remaining)"
+                                    f"Permission request timeout "
+                                    f"(attempt {attempt + 1}). Retrying... "
+                                    f"({self.permission_retry_attempts - attempt - 1} "
+                                    f"attempts remaining)"
                                 ),
                             },
                         )
@@ -297,7 +300,8 @@ class PerformanceOptimizedDiagnostics:
                         "type": "memory",
                         "severity": "high",
                         "message": (
-                            f"Memory usage at {memory_info.get('used_percent', 0)}% - approaching limit"
+                            f"Memory usage at {memory_info.get('used_percent', 0)}% "
+                            f"- approaching limit"
                         ),
                     }
                 )
@@ -312,7 +316,8 @@ class PerformanceOptimizedDiagnostics:
                             "type": "gpu",
                             "severity": "medium",
                             "message": (
-                                f"GPU utilization low at {gpu_util}% - AI workloads may not be GPU-accelerated"
+                                f"GPU utilization low at {gpu_util}% - "
+                                f"AI workloads may not be GPU-accelerated"
                             ),
                         }
                     )
@@ -355,7 +360,8 @@ class PerformanceOptimizedDiagnostics:
                         "category": "memory",
                         "priority": "high",
                         "recommendation": (
-                            "Consider implementing more aggressive memory cleanup in chat history and conversation managers"
+                            "Consider implementing more aggressive memory "
+                            "cleanup in chat history and conversation managers"
                         ),
                         "action": "Add memory limits and periodic cleanup routines",
                     }
@@ -370,7 +376,8 @@ class PerformanceOptimizedDiagnostics:
                         "category": "gpu",
                         "priority": "medium",
                         "recommendation": (
-                            "GPU underutilized - verify semantic chunking and AI workloads are GPU-accelerated"
+                            "GPU underutilized - verify semantic chunking "
+                            "and AI workloads are GPU-accelerated"
                         ),
                         "action": (
                             "Check CUDA availability and batch sizes in AI processing"
@@ -386,7 +393,8 @@ class PerformanceOptimizedDiagnostics:
                         "category": "cpu",
                         "priority": "low",
                         "recommendation": (
-                            f"High-core system ({cpu_cores} cores) - ensure parallel processing is optimized"
+                            f"High-core system ({cpu_cores} cores) - ensure "
+                            f"parallel processing is optimized"
                         ),
                         "action": (
                             "Verify thread pool sizes and async concurrency limits"

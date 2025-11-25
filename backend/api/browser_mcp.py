@@ -37,6 +37,7 @@ from pydantic import BaseModel, Field
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["browser_mcp", "mcp"])
@@ -450,27 +451,27 @@ async def send_to_browser_vm(action: str, params: Dict[str, Any]) -> Dict[str, A
     running on the Browser VM (NetworkConstants.BROWSER_VM_IP)
     """
     try:
-        async with aiohttp.ClientSession() as session:
-            payload = {"action": action, "params": params}
-            async with session.post(
-                f"{BROWSER_VM_URL}/automation",
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=60),
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise HTTPException(
-                        status_code=502,
-                        detail=f"Browser VM error: {response.status} - {error_text}",
-                    )
-                try:
-                    return await response.json()
-                except json.JSONDecodeError as e:
-                    logger.error(f"Invalid JSON response from Browser VM: {e}")
-                    raise HTTPException(
-                        status_code=502,
-                        detail="Invalid JSON response from Browser VM",
-                    )
+        http_client = get_http_client()
+        payload = {"action": action, "params": params}
+        async with await http_client.post(
+            f"{BROWSER_VM_URL}/automation",
+            json=payload,
+            timeout=aiohttp.ClientTimeout(total=60),
+        ) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Browser VM error: {response.status} - {error_text}",
+                )
+            try:
+                return await response.json()
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON response from Browser VM: {e}")
+                raise HTTPException(
+                    status_code=502,
+                    detail="Invalid JSON response from Browser VM",
+                )
     except asyncio.TimeoutError:
         logger.error("Browser VM request timed out after 60 seconds")
         raise HTTPException(
@@ -789,15 +790,15 @@ async def get_browser_mcp_status() -> Dict[str, Any]:
     # Check Browser VM connectivity
     vm_status = "unavailable"
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{BROWSER_VM_URL}/health",
-                timeout=aiohttp.ClientTimeout(total=5),
-            ) as response:
-                if response.status == 200:
-                    vm_status = "healthy"
-                else:
-                    vm_status = "degraded"
+        http_client = get_http_client()
+        async with await http_client.get(
+            f"{BROWSER_VM_URL}/health",
+            timeout=aiohttp.ClientTimeout(total=5),
+        ) as response:
+            if response.status == 200:
+                vm_status = "healthy"
+            else:
+                vm_status = "degraded"
     except Exception:
         vm_status = "unavailable"
 

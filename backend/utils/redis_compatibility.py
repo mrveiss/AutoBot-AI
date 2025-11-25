@@ -127,7 +127,6 @@ class RedisCompatibilityWrapper:
 
     async def alrange(self, name: str, start: int, end: int) -> list:
         """Async get list range"""
-        db = await self._get_async_db()
         async_db = await self._get_async_db()
         # Use the underlying Redis client for operations not wrapped
         return await async_db._redis.lrange(name, start, end)

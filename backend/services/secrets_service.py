@@ -200,7 +200,7 @@ class SecretsService:
                 "expires_at": expires_at,
             }
 
-        except sqlite3.IntegrityError as e:
+        except sqlite3.IntegrityError:
             conn.rollback()
             raise ValueError(
                 f"Secret with name '{name}' already exists in scope '{scope}' for chat '{chat_id}'"

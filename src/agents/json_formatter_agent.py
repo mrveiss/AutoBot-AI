@@ -68,7 +68,6 @@ class JSONFormatterAgent:
             JSONParseResult with parsed data and metadata
         """
         self.parse_attempts += 1
-        warnings = []
 
         if not response or not response.strip():
             return JSONParseResult(

@@ -94,46 +94,62 @@ class ClassificationAgent(StandardizedAgent):
 
     def _initialize_classification_prompt(self):
         """Initialize the classification prompt template"""
+        # noqa: E501 - Prompt content must remain human-readable
         self.classification_prompt = """
-You are an intelligent classification agent for AutoBot, a multi-agent workflow orchestration system.
+You are an intelligent classification agent for AutoBot, a multi-agent
+workflow orchestration system.
 
-Your task is to analyze user requests and determine the appropriate workflow complexity.
+Your task is to analyze user requests and determine the appropriate
+workflow complexity.
 
 WORKFLOW COMPLEXITY LEVELS:
 
-1. SIMPLE: Regular conversational requests that can be answered using Knowledge Base + LLM
-   - Examples: "Hello", "What is Docker?", "Tell me about Python", "How does AutoBot work?", "Define machine learning"
-   - Characteristics: Conversations, questions, definitions, explanations, greetings
+1. SIMPLE: Regular conversational requests that can be answered using
+   Knowledge Base + LLM
+   - Examples: "Hello", "What is Docker?", "Tell me about Python",
+     "How does AutoBot work?", "Define machine learning"
+   - Characteristics: Conversations, questions, definitions, greetings
    - Processing: Knowledge Base search + LLM response with source attribution
-   - Note: ALL responses should include Knowledge Base context to prevent hallucination
+   - Note: ALL responses should include Knowledge Base context
 
-2. COMPLEX: Requests requiring external tools, system actions, or research beyond Knowledge Base
-   - Examples: "Install Docker", "Scan network", "Search the web for latest trends", "Configure nginx", "Run system diagnostics", "What's new on tvnet.lv", "Check latest news from CNN.com", "Get current weather from weather.com"
-   - Characteristics: Tool usage, system commands, external research, file operations, security scans, live/current information from websites
-   - Processing: Knowledge Base + Tools + External Research + Multi-agent coordination
-   - **IMPORTANT**: Any request for current/live/latest information from specific websites requires COMPLEX classification for web browsing
+2. COMPLEX: Requests requiring external tools, system actions, or research
+   beyond Knowledge Base
+   - Examples: "Install Docker", "Scan network", "Search the web",
+     "Configure nginx", "Run diagnostics", "What's new on tvnet.lv"
+   - Characteristics: Tool usage, system commands, external research,
+     file operations, security scans, live information from websites
+   - Processing: Knowledge Base + Tools + External Research +
+     Multi-agent coordination
+   - **IMPORTANT**: Requests for current/live information from specific
+     websites requires COMPLEX classification for web browsing
 
 IMPORTANT NOTES:
-- Simple conversations can dynamically upgrade to Complex if user requests actions/tools
-- ALWAYS use Knowledge Base first to ground responses and prevent hallucination
+- Simple conversations can dynamically upgrade to Complex if user
+  requests actions/tools
+- ALWAYS use Knowledge Base first to ground responses and prevent
+  hallucination
 - Source attribution is required for all responses regardless of complexity
 
 USER REQUEST: "{user_message}"
 
 CONTEXT ANALYSIS:
 - Intent: What does the user want to accomplish?
-- Tools Needed: Does this require system commands, external APIs, or file operations?
+- Tools Needed: Does this require system commands, external APIs,
+  or file operations?
 - Scope: Conversational or actionable?
-- Knowledge Base Relevance: Can this be answered from existing AutoBot knowledge?
-- **Web Browsing**: Does this request need current/live information from a specific website? (If yes, classify as COMPLEX)
-- **Temporal Context**: Is the user asking for "latest", "new", "current", or "what's happening" information?
+- Knowledge Base Relevance: Can this be answered from existing
+  AutoBot knowledge?
+- **Web Browsing**: Does this request need current/live information
+  from a specific website? (If yes, classify as COMPLEX)
+- **Temporal Context**: Is the user asking for "latest", "new",
+  "current", or "what's happening" information?
 
 Please provide your analysis in the following JSON format:
 {{
     "complexity": "simple|complex",
     "confidence": 0.95,
     "reasoning": "Clear explanation of why you classified it this way",
-    "domain": "Primary domain (conversation, security, networking, development, etc.)",
+    "domain": "Primary domain (conversation, security, networking, etc.)",
     "intent": "What the user wants to accomplish",
     "scope": "single|multi-step",
     "risk_level": "low|medium|high",
@@ -145,7 +161,8 @@ Please provide your analysis in the following JSON format:
     "source_attribution_needed": true
 }}
 
-Be thorough in your analysis and reasoning. Consider the implications and requirements of the request.
+Be thorough in your analysis and reasoning. Consider the implications
+and requirements of the request.
 """
 
     async def classify_request(self, user_message: str) -> ClassificationResult:
@@ -421,9 +438,9 @@ if __name__ == "__main__":
             print("📊 Classification History:")
             for entry in history:
                 print(f"   Message: {entry['user_message']}")
-                print(
-                    f"   Classification: {entry['classification']} (confidence: {entry['confidence']})"
-                )
+                classification = entry['classification']
+                confidence = entry['confidence']
+                print(f"   Classification: {classification} (confidence: {confidence})")
                 print(f"   Reasoning: {entry['reasoning']}")
                 print()
 

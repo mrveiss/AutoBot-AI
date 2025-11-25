@@ -114,13 +114,6 @@ class CaptchaSolver:
         for attempt in range(self.timeout // 5):
             await asyncio.sleep(5)
 
-            result_params = {
-                "key": self.api_key,
-                "action": "get",
-                "id": captcha_id,
-                "json": 1,
-            }
-
             # Use HTTP client for result polling
             result = await http_client.get_json(
                 f"{result_url}?key={self.api_key}&action=get&id={captcha_id}&json=1"

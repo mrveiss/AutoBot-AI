@@ -422,15 +422,9 @@ async def mcp_vector_similarity_search(request: Dict[str, Any]):
 
         # Use the vector store directly for similarity search
         if hasattr(kb, "vector_store") and kb.vector_store:
-            # Generate embedding for query
-            query_embedding = await asyncio.to_thread(
-                kb.embed_model.get_text_embedding, query
-            )
-
-            # Perform vector search in Redis
+            # Perform vector search using knowledge base
+            # Note: kb.search() handles embedding generation internally
             results = []
-            # This would typically use Redis vector search commands
-            # For now, use the knowledge base search
             search_results = await kb.search(query, top_k)
 
             for result in search_results:

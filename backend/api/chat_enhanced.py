@@ -426,11 +426,8 @@ async def stream_enhanced_chat(
 
             if message.use_ai_stack:
                 try:
-                    # Get AI Stack client
-                    ai_client = await get_ai_stack_client()
-
                     # For streaming, we'll process and send response in chunks
-                    # This is a simplified streaming implementation
+                    # Note: process_enhanced_chat_message handles AI client internally
                     response_data = await process_enhanced_chat_message(
                         message, chat_history_manager, None, {}, request_id, preferences
                     )

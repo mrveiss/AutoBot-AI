@@ -100,8 +100,9 @@ rum_logger = setup_rum_logger()
 @router.post("/config")
 async def configure_rum(config: RumConfig):
     """Configure RUM monitoring settings"""
+    global rum_config
     try:
-        rum_config = config.dict()
+        rum_config.update(config.dict())
 
         # Reinitialize logger with new settings
         global rum_logger
@@ -173,7 +174,8 @@ async def log_rum_event(event: RumEvent):
 
         # Keep only last 10000 events in memory to prevent memory leaks
         if len(rum_events) > 10000:
-            rum_events = rum_events[-5000:]  # Keep last 5000 events
+            # Use slice assignment to modify global list in-place
+            rum_events[:] = rum_events[-5000:]  # Keep last 5000 events
 
         return {
             "status": "success",
@@ -216,13 +218,14 @@ async def disable_rum():
 @router.post("/clear")
 async def clear_rum_data():
     """Clear all RUM data"""
-
+    global rum_events, rum_sessions
     try:
         events_cleared = len(rum_events)
         sessions_cleared = len(rum_sessions)
 
-        rum_events = []
-        rum_sessions = {}
+        # Use .clear() to modify globals in-place
+        rum_events.clear()
+        rum_sessions.clear()
 
         rum_logger.info(
             f"RUM data cleared: {events_cleared} events, {sessions_cleared} sessions"

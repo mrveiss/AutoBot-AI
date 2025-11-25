@@ -279,11 +279,11 @@ def main():
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # Status command
-    status_parser = subparsers.add_parser("status", help="Show registry status")
+    # Status command (no arguments needed)
+    subparsers.add_parser("status", help="Show registry status")
 
-    # Health command
-    health_parser = subparsers.add_parser("health", help="Check service health")
+    # Health command (no arguments needed)
+    subparsers.add_parser("health", help="Check service health")
 
     # URL command
     url_parser = subparsers.add_parser("url", help="Get service URL")
@@ -302,8 +302,8 @@ def main():
     test_all_parser = subparsers.add_parser("test-all", help="Test all services")
     test_all_parser.add_argument("--json", action="store_true", help="JSON output")
 
-    # Deploy info command
-    deploy_parser = subparsers.add_parser("deploy", help="Show deployment info")
+    # Deploy info command (no arguments needed)
+    subparsers.add_parser("deploy", help="Show deployment info")
 
     args = parser.parse_args()
 

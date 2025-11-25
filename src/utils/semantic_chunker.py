@@ -127,7 +127,8 @@ class AutoBotSemanticChunker:
                     try:
                         if attempt > 0:
                             logger.info(
-                                f"Model loading attempt {attempt + 1}/{max_retries} after {retry_delay}s delay..."
+                                f"Model loading attempt {attempt + 1}/{max_retries} "
+                                f"after {retry_delay}s delay..."
                             )
                             time.sleep(retry_delay)
                             retry_delay *= 2  # Exponential backoff
@@ -147,12 +148,14 @@ class AutoBotSemanticChunker:
                         ):
                             if attempt < max_retries - 1:
                                 logger.warning(
-                                    f"HuggingFace rate limit hit (attempt {attempt + 1}), retrying in {retry_delay}s..."
+                                    f"HuggingFace rate limit hit (attempt {attempt + 1}), "
+                                    f"retrying in {retry_delay}s..."
                                 )
                                 continue
                             else:
                                 logger.error(
-                                    f"Max retries exceeded for HuggingFace rate limiting: {load_error}"
+                                    f"Max retries exceeded for HuggingFace rate limiting: "
+                                    f"{load_error}"
                                 )
                                 raise
                         else:
@@ -164,7 +167,8 @@ class AutoBotSemanticChunker:
                     # Log device and model info
                     actual_device = next(model.parameters()).device
                     logger.info(
-                        f"Embedding model '{self.embedding_model_name}' loaded on device: {actual_device}"
+                        f"Embedding model '{self.embedding_model_name}' loaded "
+                        f"on device: {actual_device}"
                     )
 
                     # Enable mixed precision for GPU if available (with proper error handling)
@@ -204,7 +208,8 @@ class AutoBotSemanticChunker:
                                     model = model.to(device, dtype=torch.float32)
                             else:
                                 logger.warning(
-                                    "Model parameters not properly loaded, skipping precision conversion"
+                                    "Model parameters not properly loaded, "
+                                    "skipping precision conversion"
                                 )
                         except Exception as precision_error:
                             logger.warning(
@@ -215,7 +220,8 @@ class AutoBotSemanticChunker:
 
                 except Exception as model_load_error:
                     logger.warning(
-                        f"Failed to load model '{self.embedding_model_name}' on {device}: {model_load_error}"
+                        f"Failed to load model '{self.embedding_model_name}' "
+                        f"on {device}: {model_load_error}"
                     )
                     # Fallback to CPU with basic loading
                     if device != "cpu":
@@ -465,7 +471,8 @@ class AutoBotSemanticChunker:
                     batch_size = min(50, len(sentences))
 
             logger.info(
-                f"Processing {len(sentences)} sentences with {max_workers} workers, batch_size={batch_size}, CPU load={cpu_load}%"
+                f"Processing {len(sentences)} sentences with {max_workers} workers, "
+                f"batch_size={batch_size}, CPU load={cpu_load}%"
             )
 
             # Process in batches to avoid blocking
@@ -531,7 +538,8 @@ class AutoBotSemanticChunker:
             if loop.is_running():
                 # If we're in an async context, we shouldn't use this sync method
                 logger.warning(
-                    "Using sync embedding method in async context. Use _compute_sentence_embeddings_async instead."
+                    "Using sync embedding method in async context. "
+                    "Use _compute_sentence_embeddings_async instead."
                 )
                 logger.warning(
                     "WARNING: Model initialization may block event loop - use async method instead"

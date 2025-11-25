@@ -130,9 +130,11 @@ async def vision_health_check():
     """Health check for computer vision service"""
     try:
         analyzer = get_screen_analyzer()
+        # Verify analyzer is properly initialized
+        analyzer_ready = analyzer is not None
         return VisionHealthResponse(
-            status="healthy",
-            analyzer_ready=True,
+            status="healthy" if analyzer_ready else "degraded",
+            analyzer_ready=analyzer_ready,
             capabilities=[
                 "screen_capture",
                 "element_detection",

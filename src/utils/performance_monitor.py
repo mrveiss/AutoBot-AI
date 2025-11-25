@@ -959,7 +959,9 @@ class Phase9PerformanceMonitor:
                             "category": "gpu",
                             "severity": "warning",
                             "message": (
-                                f"GPU utilization below target: {gpu['utilization_percent']:.1f}% < {self.performance_baselines['gpu_utilization_target']}%"
+                                f"GPU utilization below target: "
+                                f"{gpu['utilization_percent']:.1f}% < "
+                                f"{self.performance_baselines['gpu_utilization_target']}%"
                             ),
                             "recommendation": "Verify AI workloads are GPU-accelerated",
                             "timestamp": time.time(),
@@ -992,7 +994,9 @@ class Phase9PerformanceMonitor:
                             "category": "npu",
                             "severity": "warning",
                             "message": (
-                                f"NPU acceleration ratio below target: {npu['acceleration_ratio']:.1f}x < {self.performance_baselines['npu_acceleration_target']}x"
+                                f"NPU acceleration ratio below target: "
+                                f"{npu['acceleration_ratio']:.1f}x < "
+                                f"{self.performance_baselines['npu_acceleration_target']}x"
                             ),
                             "recommendation": (
                                 "Optimize NPU utilization or check driver status"
@@ -1032,7 +1036,8 @@ class Phase9PerformanceMonitor:
                             "category": "cpu",
                             "severity": "warning",
                             "message": (
-                                f"High CPU load: {system['cpu_load_1m']:.1f} on {system['cpu_cores_logical']}-core system"
+                                f"High CPU load: {system['cpu_load_1m']:.1f} "
+                                f"on {system['cpu_cores_logical']}-core system"
                             ),
                             "recommendation": "Check for CPU-intensive processes",
                             "timestamp": time.time(),
@@ -1066,7 +1071,8 @@ class Phase9PerformanceMonitor:
                                 "category": "performance",
                                 "severity": "warning",
                                 "message": (
-                                    f"{service['service_name']} slow response: {service['response_time_ms']:.0f}ms"
+                                    f"{service['service_name']} slow response: "
+                                    f"{service['response_time_ms']:.0f}ms"
                                 ),
                                 "recommendation": (
                                     "Investigate service performance bottlenecks"
@@ -1110,9 +1116,9 @@ class Phase9PerformanceMonitor:
             # System summary
             if metrics.get("system"):
                 system = metrics["system"]
-                summary_parts.append(
-                    f"CPU: {system['cpu_usage_percent']:.0f}%, MEM: {system['memory_usage_percent']:.0f}%"
-                )
+                cpu_pct = system['cpu_usage_percent']
+                mem_pct = system['memory_usage_percent']
+                summary_parts.append(f"CPU: {cpu_pct:.0f}%, MEM: {mem_pct:.0f}%")
                 summary_parts.append(f"Load: {system['cpu_load_1m']:.1f}")
 
             # Service summary
@@ -1321,7 +1327,8 @@ class Phase9PerformanceMonitor:
                             "priority": "high",
                             "recommendation": "High memory usage detected",
                             "action": (
-                                "Enable aggressive cleanup in chat history and conversation managers"
+                                "Enable aggressive cleanup in chat history "
+                                "and conversation managers"
                             ),
                             "expected_improvement": (
                                 "Prevent system slowdown and swapping"
@@ -1428,7 +1435,8 @@ def monitor_performance(category: str = "general"):
             except Exception as e:
                 execution_time = time.time() - start_time
                 logger.error(
-                    f"PERFORMANCE [{category}]: {func.__name__} failed after {execution_time:.3f}s: {e}"
+                    f"PERFORMANCE [{category}]: {func.__name__} failed "
+                    f"after {execution_time:.3f}s: {e}"
                 )
                 raise
 
@@ -1441,14 +1449,16 @@ def monitor_performance(category: str = "general"):
 
                 # Log performance
                 logger.info(
-                    f"PERFORMANCE [{category}]: {func.__name__} executed in {execution_time:.3f}s"
+                    f"PERFORMANCE [{category}]: {func.__name__} "
+                    f"executed in {execution_time:.3f}s"
                 )
 
                 return result
             except Exception as e:
                 execution_time = time.time() - start_time
                 logger.error(
-                    f"PERFORMANCE [{category}]: {func.__name__} failed after {execution_time:.3f}s: {e}"
+                    f"PERFORMANCE [{category}]: {func.__name__} failed "
+                    f"after {execution_time:.3f}s: {e}"
                 )
                 raise
 

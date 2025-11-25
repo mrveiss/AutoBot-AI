@@ -197,9 +197,18 @@ class AsyncEnhancedMemoryManager:
                     "CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at)",
                     "CREATE INDEX IF NOT EXISTS idx_tasks_agent ON tasks(assigned_agent)",
                     "CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)",
-                    "CREATE INDEX IF NOT EXISTS idx_execution_task ON execution_records(task_id)",
-                    "CREATE INDEX IF NOT EXISTS idx_execution_timestamp ON execution_records(timestamp)",
-                    "CREATE INDEX IF NOT EXISTS idx_execution_success ON execution_records(success)",
+                    (
+                        "CREATE INDEX IF NOT EXISTS idx_execution_task "
+                        "ON execution_records(task_id)"
+                    ),
+                    (
+                        "CREATE INDEX IF NOT EXISTS idx_execution_timestamp "
+                        "ON execution_records(timestamp)"
+                    ),
+                    (
+                        "CREATE INDEX IF NOT EXISTS idx_execution_success "
+                        "ON execution_records(success)"
+                    ),
                     "CREATE INDEX IF NOT EXISTS idx_memory_category ON memory_entries(category)",
                     "CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_entries(timestamp)",
                     "CREATE INDEX IF NOT EXISTS idx_memory_hash ON memory_entries(content_hash)",
@@ -219,15 +228,18 @@ class AsyncEnhancedMemoryManager:
 
         # Generate task ID if not provided
         if not hasattr(task, "task_id") or not task.task_id:
-            task.task_id = f"task_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hashlib.md5(task.description.encode()).hexdigest()[:8]}"
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            desc_hash = hashlib.md5(task.description.encode()).hexdigest()[:8]
+            task.task_id = f"task_{timestamp}_{desc_hash}"
 
         async with aiosqlite.connect(self.db_path) as conn:
             await conn.execute(
                 """
                 INSERT OR REPLACE INTO tasks
-                (task_id, description, status, priority, created_at, updated_at, completed_at,
-                 assigned_agent, parent_task_id, tags, metadata, execution_log,
-                 estimated_duration_minutes, actual_duration_minutes, dependencies, markdown_reference)
+                (task_id, description, status, priority, created_at, updated_at,
+                 completed_at, assigned_agent, parent_task_id, tags, metadata,
+                 execution_log, estimated_duration_minutes, actual_duration_minutes,
+                 dependencies, markdown_reference)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
@@ -310,13 +322,17 @@ class AsyncEnhancedMemoryManager:
         await self._init_database()
 
         if not record.record_id:
-            record.record_id = f"exec_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hashlib.md5(f'{record.task_id}_{record.action}'.encode()).hexdigest()[:8]}"
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            hash_input = f'{record.task_id}_{record.action}'.encode()
+            record_hash = hashlib.md5(hash_input).hexdigest()[:8]
+            record.record_id = f"exec_{timestamp}_{record_hash}"
 
         async with aiosqlite.connect(self.db_path) as conn:
             await conn.execute(
                 """
                 INSERT INTO execution_records
-                (record_id, task_id, timestamp, action, result, duration_ms, success, error_message, agent_context)
+                (record_id, task_id, timestamp, action, result, duration_ms,
+                 success, error_message, agent_context)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
@@ -376,7 +392,8 @@ class AsyncEnhancedMemoryManager:
 
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
-                "SELECT * FROM tasks WHERE status = ? ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?",
+                "SELECT * FROM tasks WHERE status = ? "
+                "ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?",
                 (status.value, limit, offset),
             ),
             rows = await cursor.fetchall()

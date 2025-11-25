@@ -382,12 +382,8 @@ class ThreatDetectionEngine:
         self.stats["total_events_processed"] += 1
         self.recent_events.append(event)
 
-        # Extract event details
+        # Extract user_id for behavior tracking
         user_id = event.get("user_id", "unknown")
-        action = event.get("action", "")
-        resource = event.get("resource", "")
-        source_ip = event.get("source_ip", "")
-        timestamp = event.get("timestamp", datetime.utcnow().isoformat())
 
         # Run all detection methods
         detected_threats = []

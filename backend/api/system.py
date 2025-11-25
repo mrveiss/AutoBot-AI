@@ -43,7 +43,6 @@ async def get_frontend_config():
     # Get configuration from the config manager
     ollama_url = config.get_service_url("ollama")
     redis_config = config.get_redis_config()
-    backend_config = config.get("backend", {})
 
     # Build frontend configuration
     frontend_config = {

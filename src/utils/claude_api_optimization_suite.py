@@ -489,10 +489,8 @@ class ClaudeAPIOptimizationSuite:
                 await asyncio.sleep(self.config.pattern_analysis_interval)
 
                 if self.pattern_analyzer:
-                    # Trigger pattern analysis
-                    analysis_results = self.pattern_analyzer.get_analysis_results(
-                        force_refresh=True
-                    )
+                    # Trigger pattern analysis (force refresh)
+                    self.pattern_analyzer.get_analysis_results(force_refresh=True)
 
                     # Check for critical inefficiencies
                     recommendations = (
@@ -524,9 +522,6 @@ class ClaudeAPIOptimizationSuite:
         while self.is_active:
             try:
                 await asyncio.sleep(60)  # Check every minute
-
-                # Get API usage statistics
-                usage_stats = self.api_monitor.get_usage_statistics()
 
                 # Check for approaching rate limits
                 rate_limit_risk = self.api_monitor.predict_rate_limit_risk()

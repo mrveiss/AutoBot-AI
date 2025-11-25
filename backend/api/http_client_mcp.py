@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["http_client_mcp", "mcp"])
@@ -498,83 +499,84 @@ async def execute_http_request(
         if "User-Agent" not in request_headers:
             request_headers["User-Agent"] = "AutoBot-HTTP-Client/1.0"
 
-        # Execute request
-        async with aiohttp.ClientSession() as session:
-            request_kwargs = {
-                "url": url,
-                "headers": request_headers,
-                "timeout": aiohttp.ClientTimeout(total=timeout),
-                "ssl": True,  # Enforce SSL verification
-            }
+        # Execute request using singleton HTTP client
+        http_client = get_http_client()
+        session = await http_client.get_session()
+        request_kwargs = {
+            "url": url,
+            "headers": request_headers,
+            "timeout": aiohttp.ClientTimeout(total=timeout),
+            "ssl": True,  # Enforce SSL verification
+        }
 
-            # Add method-specific parameters
-            if params:
-                request_kwargs["params"] = params
-            if json_body:
-                request_kwargs["json"] = json_body
-            if form_data:
-                request_kwargs["data"] = form_data
+        # Add method-specific parameters
+        if params:
+            request_kwargs["params"] = params
+        if json_body:
+            request_kwargs["json"] = json_body
+        if form_data:
+            request_kwargs["data"] = form_data
 
-            # Execute the request
-            async with session.request(method, **request_kwargs) as response:
-                # Check response size before reading (if Content-Length provided)
-                content_length = response.headers.get("Content-Length")
-                if content_length and int(content_length) > MAX_RESPONSE_SIZE:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=(
-                            f"Response too large: {content_length} bytes (max:"
-                            f"{MAX_RESPONSE_SIZE})"
-                        )
+        # Execute the request
+        async with session.request(method, **request_kwargs) as response:
+            # Check response size before reading (if Content-Length provided)
+            content_length = response.headers.get("Content-Length")
+            if content_length and int(content_length) > MAX_RESPONSE_SIZE:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        f"Response too large: {content_length} bytes (max:"
+                        f"{MAX_RESPONSE_SIZE})"
                     )
+                )
 
-                # Read response body with size limit enforcement
-                # Handles chunked transfer encoding (no Content-Length)
-                if method.upper() == "HEAD":
-                    body = None
-                else:
-                    # Read in chunks to prevent memory exhaustion
-                    chunks = []
-                    total_size = 0
-                    chunk_size = 8192  # 8KB chunks
+            # Read response body with size limit enforcement
+            # Handles chunked transfer encoding (no Content-Length)
+            if method.upper() == "HEAD":
+                body = None
+            else:
+                # Read in chunks to prevent memory exhaustion
+                chunks = []
+                total_size = 0
+                chunk_size = 8192  # 8KB chunks
 
-                    async for chunk in response.content.iter_chunked(chunk_size):
-                        total_size += len(chunk)
-                        if total_size > MAX_RESPONSE_SIZE:
-                            raise HTTPException(
-                                status_code=413,
-                                detail=(
-                                    f"Response exceeded size limit during streaming:"
-                                    f"{total_size} bytes (max: {MAX_RESPONSE_SIZE})"
-                                )
+                async for chunk in response.content.iter_chunked(chunk_size):
+                    total_size += len(chunk)
+                    if total_size > MAX_RESPONSE_SIZE:
+                        raise HTTPException(
+                            status_code=413,
+                            detail=(
+                                f"Response exceeded size limit during streaming:"
+                                f"{total_size} bytes (max: {MAX_RESPONSE_SIZE})"
                             )
-                        chunks.append(chunk)
+                        )
+                    chunks.append(chunk)
 
-                    # Decode response body
-                    body_bytes = b"".join(chunks)
-                    try:
-                        body = body_bytes.decode("utf-8")
-                    except UnicodeDecodeError:
-                        body = body_bytes.decode("latin-1")
+                # Decode response body
+                body_bytes = b"".join(chunks)
+                try:
+                    body = body_bytes.decode("utf-8")
+                except UnicodeDecodeError:
+                    body = body_bytes.decode("latin-1")
 
-                # Try to parse as JSON if applicable
-                json_response = None
-                if body:
-                    try:
-                        json_response = json.loads(body)
-                    except json.JSONDecodeError:
-                        pass  # Keep as text
+            # Try to parse as JSON if applicable
+            json_response = None
+            if body:
+                try:
+                    json_response = json.loads(body)
+                except json.JSONDecodeError:
+                    pass  # Keep as text
 
-                return {
-                    "success": True,
-                    "status_code": response.status,
-                    "headers": dict(response.headers),
-                    "body": json_response if json_response else body,
-                    "is_json": json_response is not None,
-                    "url": str(response.url),
-                    "method": method,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
+            return {
+                "success": True,
+                "status_code": response.status,
+                "headers": dict(response.headers),
+                "body": json_response if json_response else body,
+                "is_json": json_response is not None,
+                "url": str(response.url),
+                "method": method,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
 
     except asyncio.TimeoutError:
         logger.error(f"HTTP request timed out after {timeout} seconds: {url}")

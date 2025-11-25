@@ -32,6 +32,7 @@ from cryptography.hazmat.primitives.serialization import (
 
 from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -643,21 +644,21 @@ class SSOIntegrationFramework:
                 "client_secret": provider.config["client_secret"],
             }
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    provider.config["token_endpoint"],
-                    data=token_data,
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                ) as response:
+            http_client = get_http_client()
+            async with await http_client.post(
+                provider.config["token_endpoint"],
+                data=token_data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            ) as response:
 
-                    if response.status == 200:
-                        return await response.json()
-                    else:
-                        error_text = await response.text()
-                        logger.error(
-                            f"Token exchange failed: {response.status} - {error_text}"
-                        )
-                        return {"error": "Token exchange failed"}
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    error_text = await response.text()
+                    logger.error(
+                        f"Token exchange failed: {response.status} - {error_text}"
+                    )
+                    return {"error": "Token exchange failed"}
 
         except Exception as e:
             logger.error(f"OAuth code exchange failed: {e}")

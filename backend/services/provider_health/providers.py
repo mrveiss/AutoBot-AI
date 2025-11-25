@@ -13,6 +13,7 @@ from typing import Optional
 import aiohttp
 
 from src.constants.network_constants import NetworkConstants
+from src.utils.http_client import get_http_client
 
 from .base import BaseProviderHealth, ProviderHealthResult, ProviderStatus
 
@@ -43,41 +44,41 @@ class OllamaHealth(BaseProviderHealth):
             # Check /api/tags endpoint for available models
             tags_url = f"{self.ollama_host}/api/tags"
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    tags_url, timeout=aiohttp.ClientTimeout(total=timeout)
-                ) as response:
-                    response_time = time.time() - start_time
+            http_client = get_http_client()
+            async with await http_client.get(
+                tags_url, timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as response:
+                response_time = time.time() - start_time
 
-                    if response.status == 200:
-                        data = await response.json()
-                        models = data.get("models", [])
-                        model_count = len(models)
+                if response.status == 200:
+                    data = await response.json()
+                    models = data.get("models", [])
+                    model_count = len(models)
 
-                        return self._create_result(
-                            status=ProviderStatus.HEALTHY,
-                            available=True,
-                            message=f"Ollama connected with {model_count} models available",
-                            response_time=response_time,
-                            details={
-                                "endpoint": self.ollama_host,
-                                "model_count": model_count,
-                                "models": [
-                                    m.get("name") for m in models[:5]
-                                ],  # First 5 models
-                            },
-                        )
-                    else:
-                        return self._create_result(
-                            status=ProviderStatus.UNAVAILABLE,
-                            available=False,
-                            message=f"Ollama returned status {response.status}",
-                            response_time=response_time,
-                            details={
-                                "endpoint": self.ollama_host,
-                                "status_code": response.status,
-                            },
-                        )
+                    return self._create_result(
+                        status=ProviderStatus.HEALTHY,
+                        available=True,
+                        message=f"Ollama connected with {model_count} models available",
+                        response_time=response_time,
+                        details={
+                            "endpoint": self.ollama_host,
+                            "model_count": model_count,
+                            "models": [
+                                m.get("name") for m in models[:5]
+                            ],  # First 5 models
+                        },
+                    )
+                else:
+                    return self._create_result(
+                        status=ProviderStatus.UNAVAILABLE,
+                        available=False,
+                        message=f"Ollama returned status {response.status}",
+                        response_time=response_time,
+                        details={
+                            "endpoint": self.ollama_host,
+                            "status_code": response.status,
+                        },
+                    )
 
         except aiohttp.ClientError as e:
             response_time = time.time() - start_time
@@ -131,63 +132,63 @@ class OpenAIHealth(BaseProviderHealth):
                 "Content-Type": "application/json",
             }
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    models_url,
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=timeout),
-                ) as response:
-                    response_time = time.time() - start_time
+            http_client = get_http_client()
+            async with await http_client.get(
+                models_url,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as response:
+                response_time = time.time() - start_time
 
-                    if response.status == 200:
-                        data = await response.json()
-                        models = data.get("data", [])
-                        model_count = len(models)
+                if response.status == 200:
+                    data = await response.json()
+                    models = data.get("data", [])
+                    model_count = len(models)
 
-                        return self._create_result(
-                            status=ProviderStatus.HEALTHY,
-                            available=True,
-                            message=f"OpenAI connected with {model_count} models available",
-                            response_time=response_time,
-                            details={
-                                "api_key_set": True,
-                                "model_count": model_count,
-                                "models": [
-                                    m.get("id") for m in models[:5]
-                                ],  # First 5 models
-                            },
-                        )
-                    elif response.status == 401:
-                        return self._create_result(
-                            status=ProviderStatus.UNAVAILABLE,
-                            available=False,
-                            message="OpenAI API key is invalid",
-                            response_time=response_time,
-                            details={"api_key_set": True, "status_code": 401},
-                        )
-                    elif response.status == 429:
-                        return self._create_result(
-                            status=ProviderStatus.DEGRADED,
-                            available=False,
-                            message="OpenAI rate limit exceeded",
-                            response_time=response_time,
-                            details={
-                                "api_key_set": True,
-                                "status_code": 429,
-                                "rate_limited": True,
-                            },
-                        )
-                    else:
-                        return self._create_result(
-                            status=ProviderStatus.UNAVAILABLE,
-                            available=False,
-                            message=f"OpenAI returned status {response.status}",
-                            response_time=response_time,
-                            details={
-                                "api_key_set": True,
-                                "status_code": response.status,
-                            },
-                        )
+                    return self._create_result(
+                        status=ProviderStatus.HEALTHY,
+                        available=True,
+                        message=f"OpenAI connected with {model_count} models available",
+                        response_time=response_time,
+                        details={
+                            "api_key_set": True,
+                            "model_count": model_count,
+                            "models": [
+                                m.get("id") for m in models[:5]
+                            ],  # First 5 models
+                        },
+                    )
+                elif response.status == 401:
+                    return self._create_result(
+                        status=ProviderStatus.UNAVAILABLE,
+                        available=False,
+                        message="OpenAI API key is invalid",
+                        response_time=response_time,
+                        details={"api_key_set": True, "status_code": 401},
+                    )
+                elif response.status == 429:
+                    return self._create_result(
+                        status=ProviderStatus.DEGRADED,
+                        available=False,
+                        message="OpenAI rate limit exceeded",
+                        response_time=response_time,
+                        details={
+                            "api_key_set": True,
+                            "status_code": 429,
+                            "rate_limited": True,
+                        },
+                    )
+                else:
+                    return self._create_result(
+                        status=ProviderStatus.UNAVAILABLE,
+                        available=False,
+                        message=f"OpenAI returned status {response.status}",
+                        response_time=response_time,
+                        details={
+                            "api_key_set": True,
+                            "status_code": response.status,
+                        },
+                    )
 
         except aiohttp.ClientError as e:
             response_time = time.time() - start_time
@@ -250,57 +251,57 @@ class AnthropicHealth(BaseProviderHealth):
                 "messages": [{"role": "user", "content": "test"}],
             }
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    count_tokens_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=timeout),
-                ) as response:
-                    response_time = time.time() - start_time
+            http_client = get_http_client()
+            async with await http_client.post(
+                count_tokens_url,
+                headers=headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as response:
+                response_time = time.time() - start_time
 
-                    if response.status == 200:
-                        return self._create_result(
-                            status=ProviderStatus.HEALTHY,
-                            available=True,
-                            message="Anthropic connected successfully",
-                            response_time=response_time,
-                            details={
-                                "api_key_set": True,
-                                "validation_method": "count_tokens",
-                            },
-                        )
-                    elif response.status == 401:
-                        return self._create_result(
-                            status=ProviderStatus.UNAVAILABLE,
-                            available=False,
-                            message="Anthropic API key is invalid",
-                            response_time=response_time,
-                            details={"api_key_set": True, "status_code": 401},
-                        )
-                    elif response.status == 429:
-                        return self._create_result(
-                            status=ProviderStatus.DEGRADED,
-                            available=False,
-                            message="Anthropic rate limit exceeded",
-                            response_time=response_time,
-                            details={
-                                "api_key_set": True,
-                                "status_code": 429,
-                                "rate_limited": True,
-                            },
-                        )
-                    else:
-                        return self._create_result(
-                            status=ProviderStatus.UNAVAILABLE,
-                            available=False,
-                            message=f"Anthropic returned status {response.status}",
-                            response_time=response_time,
-                            details={
-                                "api_key_set": True,
-                                "status_code": response.status,
-                            },
-                        )
+                if response.status == 200:
+                    return self._create_result(
+                        status=ProviderStatus.HEALTHY,
+                        available=True,
+                        message="Anthropic connected successfully",
+                        response_time=response_time,
+                        details={
+                            "api_key_set": True,
+                            "validation_method": "count_tokens",
+                        },
+                    )
+                elif response.status == 401:
+                    return self._create_result(
+                        status=ProviderStatus.UNAVAILABLE,
+                        available=False,
+                        message="Anthropic API key is invalid",
+                        response_time=response_time,
+                        details={"api_key_set": True, "status_code": 401},
+                    )
+                elif response.status == 429:
+                    return self._create_result(
+                        status=ProviderStatus.DEGRADED,
+                        available=False,
+                        message="Anthropic rate limit exceeded",
+                        response_time=response_time,
+                        details={
+                            "api_key_set": True,
+                            "status_code": 429,
+                            "rate_limited": True,
+                        },
+                    )
+                else:
+                    return self._create_result(
+                        status=ProviderStatus.UNAVAILABLE,
+                        available=False,
+                        message=f"Anthropic returned status {response.status}",
+                        response_time=response_time,
+                        details={
+                            "api_key_set": True,
+                            "status_code": response.status,
+                        },
+                    )
 
         except aiohttp.ClientError as e:
             response_time = time.time() - start_time
@@ -355,66 +356,66 @@ class GoogleHealth(BaseProviderHealth):
                 "X-Goog-Api-Key": self.api_key,
             }
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    models_url,
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=timeout),
-                ) as response:
-                    response_time = time.time() - start_time
+            http_client = get_http_client()
+            async with await http_client.get(
+                models_url,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as response:
+                response_time = time.time() - start_time
 
-                    if response.status == 200:
-                        data = await response.json()
-                        models = data.get("models", [])
-                        model_count = len(models)
+                if response.status == 200:
+                    data = await response.json()
+                    models = data.get("models", [])
+                    model_count = len(models)
 
-                        return self._create_result(
-                            status=ProviderStatus.HEALTHY,
-                            available=True,
-                            message=f"Google Gemini connected with {model_count} models available",
-                            response_time=response_time,
-                            details={
-                                "api_key_set": True,
-                                "model_count": model_count,
-                                "models": [
-                                    m.get("name") for m in models[:5]
-                                ],  # First 5 models
-                            },
-                        )
-                    elif response.status == 403 or response.status == 401:
-                        return self._create_result(
-                            status=ProviderStatus.UNAVAILABLE,
-                            available=False,
-                            message="Google API key is invalid",
-                            response_time=response_time,
-                            details={
-                                "api_key_set": True,
-                                "status_code": response.status,
-                            },
-                        )
-                    elif response.status == 429:
-                        return self._create_result(
-                            status=ProviderStatus.DEGRADED,
-                            available=False,
-                            message="Google rate limit exceeded",
-                            response_time=response_time,
-                            details={
-                                "api_key_set": True,
-                                "status_code": 429,
-                                "rate_limited": True,
-                            },
-                        )
-                    else:
-                        return self._create_result(
-                            status=ProviderStatus.UNAVAILABLE,
-                            available=False,
-                            message=f"Google returned status {response.status}",
-                            response_time=response_time,
-                            details={
-                                "api_key_set": True,
-                                "status_code": response.status,
-                            },
-                        )
+                    return self._create_result(
+                        status=ProviderStatus.HEALTHY,
+                        available=True,
+                        message=f"Google Gemini connected with {model_count} models available",
+                        response_time=response_time,
+                        details={
+                            "api_key_set": True,
+                            "model_count": model_count,
+                            "models": [
+                                m.get("name") for m in models[:5]
+                            ],  # First 5 models
+                        },
+                    )
+                elif response.status == 403 or response.status == 401:
+                    return self._create_result(
+                        status=ProviderStatus.UNAVAILABLE,
+                        available=False,
+                        message="Google API key is invalid",
+                        response_time=response_time,
+                        details={
+                            "api_key_set": True,
+                            "status_code": response.status,
+                        },
+                    )
+                elif response.status == 429:
+                    return self._create_result(
+                        status=ProviderStatus.DEGRADED,
+                        available=False,
+                        message="Google rate limit exceeded",
+                        response_time=response_time,
+                        details={
+                            "api_key_set": True,
+                            "status_code": 429,
+                            "rate_limited": True,
+                        },
+                    )
+                else:
+                    return self._create_result(
+                        status=ProviderStatus.UNAVAILABLE,
+                        available=False,
+                        message=f"Google returned status {response.status}",
+                        response_time=response_time,
+                        details={
+                            "api_key_set": True,
+                            "status_code": response.status,
+                        },
+                    )
 
         except aiohttp.ClientError as e:
             response_time = time.time() - start_time

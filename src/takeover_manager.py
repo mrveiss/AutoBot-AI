@@ -511,7 +511,6 @@ class TakeoverManager:
     async def _expire_request(self, request_id: str):
         """Handle expired takeover request"""
         if request_id in self.pending_requests:
-            request = self.pending_requests[request_id]
             del self.pending_requests[request_id]
 
             # Complete the associated task as failed

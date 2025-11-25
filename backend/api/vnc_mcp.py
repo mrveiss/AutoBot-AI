@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["vnc_mcp", "mcp", "vnc"])
@@ -149,23 +150,23 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Dict[str, Any]:
     backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:8001"
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{backend_url}/api/vnc-proxy/{vnc_type}/status",
-                timeout=aiohttp.ClientTimeout(total=5),
-            ) as response:
-                status_data = await response.json()
+        http_client = get_http_client()
+        async with await http_client.get(
+            f"{backend_url}/api/vnc-proxy/{vnc_type}/status",
+            timeout=aiohttp.ClientTimeout(total=5),
+        ) as response:
+            status_data = await response.json()
 
-                return {
-                    "success": True,
-                    "vnc_type": vnc_type,
-                    "accessible": status_data.get("accessible", False),
-                    "endpoint": status_data.get("endpoint"),
-                    "status_code": response.status,
-                    "message": (
-                        f"VNC {vnc_type} is {'accessible' if status_data.get('accessible') else 'not accessible'}"
-                    ),
-                }
+            return {
+                "success": True,
+                "vnc_type": vnc_type,
+                "accessible": status_data.get("accessible", False),
+                "endpoint": status_data.get("endpoint"),
+                "status_code": response.status,
+                "message": (
+                    f"VNC {vnc_type} is {'accessible' if status_data.get('accessible') else 'not accessible'}"
+                ),
+            }
     except Exception as e:
         logger.error(f"Failed to check VNC status for {vnc_type}: {e}")
         return {
@@ -248,44 +249,43 @@ async def get_browser_vnc_context_mcp() -> Dict[str, Any]:
         "vnc_state": {},
     }
 
-    # Get Playwright state
+    # Get Playwright state using singleton HTTP client
+    http_client = get_http_client()
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{browser_vm_url}/health", timeout=aiohttp.ClientTimeout(total=3)
-            ) as response:
-                if response.status == 200:
-                    playwright_data = await response.json()
-                    context["playwright_state"] = {
-                        "healthy": playwright_data.get("status") == "healthy",
-                        "browser_connected": playwright_data.get(
-                            "browser_connected", False
-                        ),
-                    }
+        async with await http_client.get(
+            f"{browser_vm_url}/health", timeout=aiohttp.ClientTimeout(total=3)
+        ) as response:
+            if response.status == 200:
+                playwright_data = await response.json()
+                context["playwright_state"] = {
+                    "healthy": playwright_data.get("status") == "healthy",
+                    "browser_connected": playwright_data.get(
+                        "browser_connected", False
+                    ),
+                }
     except Exception as e:
         logger.warning(f"Failed to get Playwright state: {e}")
         context["playwright_state"] = {"error": str(e)}
 
-    # Get VNC state
+    # Get VNC state using singleton HTTP client
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{backend_url}/api/vnc-proxy/browser/status",
-                timeout=aiohttp.ClientTimeout(total=3),
-            ) as response:
-                if response.status == 200:
-                    vnc_data = await response.json()
-                    context["vnc_state"] = {
-                        "accessible": vnc_data.get("accessible", False),
-                        "endpoint": vnc_data.get("endpoint"),
-                    }
+        async with await http_client.get(
+            f"{backend_url}/api/vnc-proxy/browser/status",
+            timeout=aiohttp.ClientTimeout(total=3),
+        ) as response:
+            if response.status == 200:
+                vnc_data = await response.json()
+                context["vnc_state"] = {
+                    "accessible": vnc_data.get("accessible", False),
+                    "endpoint": vnc_data.get("endpoint"),
+                }
 
-                    # Include recent observations
-                    cache = vnc_observations.get("browser", {})
-                    recent = cache.get("recent_activity", [])[
-                        -5:
-                    ]  # Last 5 observations
-                    context["vnc_state"]["recent_observations"] = recent
+                # Include recent observations
+                cache = vnc_observations.get("browser", {})
+                recent = cache.get("recent_activity", [])[
+                    -5:
+                ]  # Last 5 observations
+                context["vnc_state"]["recent_observations"] = recent
     except Exception as e:
         logger.warning(f"Failed to get VNC state: {e}")
         context["vnc_state"] = {"error": str(e)}

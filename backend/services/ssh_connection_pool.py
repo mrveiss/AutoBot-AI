@@ -371,9 +371,7 @@ class SSHConnectionPool:
                 return False
 
             # Execute simple command
-            stdin, stdout, stderr = conn.client.exec_command(
-                "echo health_check", timeout=5
-            ),
+            _, stdout, _ = conn.client.exec_command("echo health_check", timeout=5)
             output = stdout.read().decode().strip()
 
             if output == "health_check":

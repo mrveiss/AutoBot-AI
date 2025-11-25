@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 # Import unified configuration system - NO HARDCODED VALUES
 from src.unified_config_manager import UnifiedConfigManager
+from src.utils.http_client import get_http_client
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Create singleton config instance
@@ -59,6 +60,7 @@ class ServiceMonitor:
 
     def __init__(self):
         self.redis_client = None
+        self._http_client = get_http_client()  # Use singleton HTTP client
         self._initialize_clients()
 
     def _initialize_clients(self):
@@ -89,33 +91,32 @@ class ServiceMonitor:
                 total=config.get_timeout("http", "standard"),
                 connect=config.get_timeout("tcp", "connect"),
             )
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                backend_url = config.get_service_url("backend", "/api/health")
-                async with session.get(backend_url) as response:
-                    response_time = int((time.time() - start_time) * 1000)
+            backend_url = config.get_service_url("backend", "/api/health")
+            async with await self._http_client.get(backend_url, timeout=timeout) as response:
+                response_time = int((time.time() - start_time) * 1000)
 
-                    if response.status == 200:
-                        data = await response.json()
-                        return ServiceStatus(
-                            name="Backend API",
-                            status="online",
-                            message=f"Mode: {data.get('mode', 'unknown')}",
-                            response_time=response_time,
-                            last_check=datetime.now(),
-                            icon="fas fa-server",
-                            category="core",
-                            details=data,
-                        )
-                    else:
-                        return ServiceStatus(
-                            name="Backend API",
-                            status="warning",
-                            message=f"HTTP {response.status}",
-                            response_time=response_time,
-                            last_check=datetime.now(),
-                            icon="fas fa-server",
-                            category="core",
-                        )
+                if response.status == 200:
+                    data = await response.json()
+                    return ServiceStatus(
+                        name="Backend API",
+                        status="online",
+                        message=f"Mode: {data.get('mode', 'unknown')}",
+                        response_time=response_time,
+                        last_check=datetime.now(),
+                        icon="fas fa-server",
+                        category="core",
+                        details=data,
+                    )
+                else:
+                    return ServiceStatus(
+                        name="Backend API",
+                        status="warning",
+                        message=f"HTTP {response.status}",
+                        response_time=response_time,
+                        last_check=datetime.now(),
+                        icon="fas fa-server",
+                        category="core",
+                    )
         except Exception as e:
             return ServiceStatus(
                 name="Backend API",
@@ -208,39 +209,38 @@ class ServiceMonitor:
                     total=config.get_timeout("http", "long"),
                     connect=config.get_timeout("tcp", "connect"),
                 )
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    llm_url = config.get_service_url(
-                        "backend", "/api/llm/status/comprehensive"
-                    )
-                    async with session.get(llm_url) as response:
-                        response_time = int((time.time() - start_time) * 1000)
+                llm_url = config.get_service_url(
+                    "backend", "/api/llm/status/comprehensive"
+                )
+                async with await self._http_client.get(llm_url, timeout=timeout) as response:
+                    response_time = int((time.time() - start_time) * 1000)
 
-                        if response.status == 200:
-                            data = await response.json()
+                    if response.status == 200:
+                        data = await response.json()
 
-                            services.append(
-                                ServiceStatus(
-                                    name="LLM Manager",
-                                    status="online",
-                                    message=f"Response: {response_time}ms",
-                                    response_time=response_time,
-                                    last_check=datetime.now(),
-                                    icon="fas fa-brain",
-                                    category="ai",
-                                    details=data,
-                                )
+                        services.append(
+                            ServiceStatus(
+                                name="LLM Manager",
+                                status="online",
+                                message=f"Response: {response_time}ms",
+                                response_time=response_time,
+                                last_check=datetime.now(),
+                                icon="fas fa-brain",
+                                category="ai",
+                                details=data,
                             )
-                        else:
-                            services.append(
-                                ServiceStatus(
-                                    name="LLM Manager",
-                                    status="warning",
-                                    message=f"HTTP {response.status}",
-                                    last_check=datetime.now(),
-                                    icon="fas fa-brain",
-                                    category="ai",
-                                )
+                        )
+                    else:
+                        services.append(
+                            ServiceStatus(
+                                name="LLM Manager",
+                                status="warning",
+                                message=f"HTTP {response.status}",
+                                last_check=datetime.now(),
+                                icon="fas fa-brain",
+                                category="ai",
                             )
+                        )
             except Exception as e:
                 services.append(
                     ServiceStatus(
@@ -283,33 +283,32 @@ class ServiceMonitor:
                 total=config.get_timeout("knowledge_base", "search"),
                 connect=config.get_timeout("tcp", "connect"),
             )
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(kb_url) as response:
-                    response_time = int((time.time() - start_time) * 1000)
+            async with await self._http_client.get(kb_url, timeout=timeout) as response:
+                response_time = int((time.time() - start_time) * 1000)
 
-                    if response.status == 200:
-                        data = await response.json()
-                        total_docs = data.get("total_documents", 0)
+                if response.status == 200:
+                    data = await response.json()
+                    total_docs = data.get("total_documents", 0)
 
-                        return ServiceStatus(
-                            name="Knowledge Base",
-                            status="online",
-                            message=f"{total_docs} documents indexed",
-                            response_time=response_time,
-                            last_check=datetime.now(),
-                            icon="fas fa-database",
-                            category="knowledge",
-                            details=data,
-                        )
-                    else:
-                        return ServiceStatus(
-                            name="Knowledge Base",
-                            status="warning",
-                            message=f"HTTP {response.status}",
-                            last_check=datetime.now(),
-                            icon="fas fa-database",
-                            category="knowledge",
-                        )
+                    return ServiceStatus(
+                        name="Knowledge Base",
+                        status="online",
+                        message=f"{total_docs} documents indexed",
+                        response_time=response_time,
+                        last_check=datetime.now(),
+                        icon="fas fa-database",
+                        category="knowledge",
+                        details=data,
+                    )
+                else:
+                    return ServiceStatus(
+                        name="Knowledge Base",
+                        status="warning",
+                        message=f"HTTP {response.status}",
+                        last_check=datetime.now(),
+                        icon="fas fa-database",
+                        category="knowledge",
+                    )
         except Exception as e:
             return ServiceStatus(
                 name="Knowledge Base",
@@ -864,22 +863,22 @@ async def get_all_services():
             services["redis"]["status"] = "offline"
             services["redis"]["health"] = "❌"
 
-        # Quick Ollama check
+        # Quick Ollama check using singleton HTTP client
         try:
             import aiohttp
 
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=2)
-            ) as session:
-                async with session.get(
-                    f"{ServiceURLs.OLLAMA_LOCAL}/api/version"
-                ) as response:
-                    if response.status == 200:
-                        services["ollama"]["status"] = "online"
-                        services["ollama"]["health"] = "✅"
-                    else:
-                        services["ollama"]["status"] = "error"
-                        services["ollama"]["health"] = "⚠️"
+            http_client = get_http_client()
+            timeout = aiohttp.ClientTimeout(total=2)
+            async with await http_client.get(
+                f"{ServiceURLs.OLLAMA_LOCAL}/api/version",
+                timeout=timeout
+            ) as response:
+                if response.status == 200:
+                    services["ollama"]["status"] = "online"
+                    services["ollama"]["health"] = "✅"
+                else:
+                    services["ollama"]["status"] = "error"
+                    services["ollama"]["health"] = "⚠️"
         except Exception:
             services["ollama"]["status"] = "offline"
             services["ollama"]["health"] = "❌"

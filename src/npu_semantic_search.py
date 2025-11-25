@@ -364,15 +364,7 @@ class NPUSemanticSearch:
     ) -> List[SearchResult]:
         """Perform vector similarity search using the knowledge base."""
         try:
-            # Convert to list for LlamaIndex compatibility
-            query_embedding_list = query_embedding.tolist()
-
-            # Use LlamaIndex retriever for vector search
-            retriever = self.knowledge_base.vector_index.as_retriever(
-                similarity_top_k=top_k, vector_store_query_mode="default"
-            )
-
-            # Perform retrieval using the embedding
+            # Perform retrieval using query engine
             # Note: LlamaIndex typically handles embedding internally,
             # but we can use the query engine approach
             query_engine = self.knowledge_base.vector_index.as_query_engine(

@@ -902,7 +902,7 @@ class ModernAIIntegration:
         if screen_context:
             context_info = f"\nScreen context: {json.dumps(screen_context, indent=2)}"
 
-        prompt = """
+        prompt = f"""
         Generate Python code to automate the following task: {task_description}
         {context_info}
 
@@ -939,24 +939,24 @@ class ModernAIIntegration:
         if context:
             context_info = f"\nContext: {json.dumps(context, indent=2)}"
 
-        prompt = """
+        prompt = f"""
         Convert this user command into structured actions: "{user_command}"
         {context_info}
 
         Return a JSON structure with this format:
-        {{
+        {{{{
             "intent": "primary intent of the command",
             "actions": [
-                {{
+                {{{{
                     "type": "action_type",
                     "target": "target_element_or_location",
-                    "parameters": {{}},
+                    "parameters": {{{{}}}},
                     "description": "human readable description"
-                }}
+                }}}}
             ],
             "prerequisites": ["any conditions that must be met first"],
             "expected_outcome": "what should happen after successful execution"
-        }}
+        }}}}
         """
 
         response = await self.process_with_ai(

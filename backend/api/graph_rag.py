@@ -335,6 +335,7 @@ async def graph_rag_health(
             content={
                 "status": overall_status,
                 "components": components,
+                "metrics": service_metrics,
                 "timestamp": datetime.utcnow().isoformat(),
             },
             media_type="application/json; charset=utf-8",

@@ -42,6 +42,7 @@ from pydantic import BaseModel, Field
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["mcp", "registry"])
@@ -301,36 +302,36 @@ async def _fetch_tools_from_bridges() -> Dict[str, Any]:
     all_tools = []
     bridge_count = 0
 
+    http_client = get_http_client()
     for bridge_name, bridge_desc, endpoint, features in MCP_BRIDGES:
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{backend_url}{endpoint}",
-                    timeout=aiohttp.ClientTimeout(total=3),
-                ) as response:
-                    if response.status == 200:
-                        tools = await response.json()
-                        bridge_count += 1
+            async with await http_client.get(
+                f"{backend_url}{endpoint}",
+                timeout=aiohttp.ClientTimeout(total=3),
+            ) as response:
+                if response.status == 200:
+                    tools = await response.json()
+                    bridge_count += 1
 
-                        # Add bridge info to each tool
-                        for tool in tools:
-                            all_tools.append(
-                                {
-                                    "name": tool["name"],
-                                    "description": tool["description"],
-                                    "input_schema": tool["input_schema"],
-                                    "bridge": bridge_name,
-                                    "bridge_description": bridge_desc,
-                                    "endpoint": (
-                                        f"{endpoint.replace('/tools', '')}/{tool['name']}"
-                                    ),
-                                    "features": features,
-                                }
-                            )
-                    else:
-                        logger.warning(
-                            f"MCP bridge {bridge_name} returned status {response.status}"
+                    # Add bridge info to each tool
+                    for tool in tools:
+                        all_tools.append(
+                            {
+                                "name": tool["name"],
+                                "description": tool["description"],
+                                "input_schema": tool["input_schema"],
+                                "bridge": bridge_name,
+                                "bridge_description": bridge_desc,
+                                "endpoint": (
+                                    f"{endpoint.replace('/tools', '')}/{tool['name']}"
+                                ),
+                                "features": features,
+                            }
                         )
+                else:
+                    logger.warning(
+                        f"MCP bridge {bridge_name} returned status {response.status}"
+                    )
         except Exception as e:
             logger.error(f"Failed to fetch tools from {bridge_name}: {e}")
 
@@ -365,18 +366,18 @@ async def _fetch_bridges_info() -> Dict[str, Any]:
         }
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{backend_url}{endpoint}",
-                    timeout=aiohttp.ClientTimeout(total=3),
-                ) as response:
-                    if response.status == 200:
-                        tools = await response.json()
-                        bridge_info["status"] = "healthy"
-                        bridge_info["tool_count"] = len(tools)
-                    else:
-                        bridge_info["status"] = "degraded"
-                        bridge_info["error"] = f"HTTP {response.status}"
+            http_client = get_http_client()
+            async with await http_client.get(
+                f"{backend_url}{endpoint}",
+                timeout=aiohttp.ClientTimeout(total=3),
+            ) as response:
+                if response.status == 200:
+                    tools = await response.json()
+                    bridge_info["status"] = "healthy"
+                    bridge_info["tool_count"] = len(tools)
+                else:
+                    bridge_info["status"] = "degraded"
+                    bridge_info["error"] = f"HTTP {response.status}"
         except Exception as e:
             bridge_info["status"] = "unavailable"
             bridge_info["error"] = str(e)
@@ -582,40 +583,40 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Dict[str, An
 
     try:
         # Fetch all tools from the bridge
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{backend_url}{endpoint}",
-                timeout=aiohttp.ClientTimeout(total=3),
-            ) as response:
-                if response.status != 200:
-                    raise HTTPException(
-                        status_code=502,
-                        detail=f"MCP bridge returned status {response.status}",
-                    )
-
-                tools = await response.json()
-
-                # Find the specific tool
-                tool = next(
-                    (t for t in tools if t["name"] == tool_name),
-                    None,
+        http_client = get_http_client()
+        async with await http_client.get(
+            f"{backend_url}{endpoint}",
+            timeout=aiohttp.ClientTimeout(total=3),
+        ) as response:
+            if response.status != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"MCP bridge returned status {response.status}",
                 )
 
-                if not tool:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"Tool '{tool_name}' not found in bridge '{bridge_name}'",
-                    )
+            tools = await response.json()
 
-                return {
-                    "status": "success",
-                    "tool": {
-                        **tool,
-                        "bridge": bridge_name,
-                        "bridge_description": bridge_desc,
-                        "endpoint": f"{endpoint.replace('/tools', '')}/{tool_name}",
-                    },
-                }
+            # Find the specific tool
+            tool = next(
+                (t for t in tools if t["name"] == tool_name),
+                None,
+            )
+
+            if not tool:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Tool '{tool_name}' not found in bridge '{bridge_name}'",
+                )
+
+            return {
+                "status": "success",
+                "tool": {
+                    **tool,
+                    "bridge": bridge_name,
+                    "bridge_description": bridge_desc,
+                    "endpoint": f"{endpoint.replace('/tools', '')}/{tool_name}",
+                },
+            }
 
     except HTTPException:
         raise
@@ -654,21 +655,21 @@ async def get_mcp_registry_health() -> Dict[str, Any]:
         }
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{backend_url}{endpoint}",
-                    timeout=aiohttp.ClientTimeout(total=3),
-                ) as response:
-                    response_time = (datetime.now() - start_time).total_seconds() * 1000
-                    check["response_time_ms"] = round(response_time, 2)
+            http_client = get_http_client()
+            async with await http_client.get(
+                f"{backend_url}{endpoint}",
+                timeout=aiohttp.ClientTimeout(total=3),
+            ) as response:
+                response_time = (datetime.now() - start_time).total_seconds() * 1000
+                check["response_time_ms"] = round(response_time, 2)
 
-                    if response.status == 200:
-                        tools = await response.json()
-                        check["status"] = "healthy"
-                        check["tool_count"] = len(tools)
-                    else:
-                        check["status"] = "degraded"
-                        check["error"] = f"HTTP {response.status}"
+                if response.status == 200:
+                    tools = await response.json()
+                    check["status"] = "healthy"
+                    check["tool_count"] = len(tools)
+                else:
+                    check["status"] = "degraded"
+                    check["error"] = f"HTTP {response.status}"
         except Exception as e:
             check["status"] = "unavailable"
             check["error"] = str(e)

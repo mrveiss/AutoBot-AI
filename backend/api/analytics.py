@@ -406,6 +406,7 @@ class AnalyticsController:
 
             metrics["api_performance"] = api_performance
             metrics["advanced_metrics"] = summary
+            metrics["detailed_metrics"] = current_metrics
 
             # Hardware performance from existing monitor
             gpu_status = hardware_monitor.get_gpu_status()
@@ -1583,10 +1584,10 @@ async def get_phase9_dashboard_data():
     # Calculate overall health score
     cpu_health = 100 - performance_data.get("system_performance", {}).get(
         "cpu_percent", 0
-    ),
+    )
     memory_health = 100 - performance_data.get("system_performance", {}).get(
         "memory_percent", 0
-    ),
+    )
     gpu_health = 100 - performance_data.get("hardware_performance", {}).get(
         "gpu_utilization", 0
     )
@@ -1633,6 +1634,7 @@ async def get_phase9_dashboard_data():
                 > datetime.now() - timedelta(minutes=5)
             ]
         ),
+        "system_health": system_health,
     }
 
     return dashboard_data

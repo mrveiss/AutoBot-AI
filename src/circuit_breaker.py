@@ -305,7 +305,7 @@ class CircuitBreaker:
             self._record_success(duration)
             return result
 
-        except asyncio.TimeoutError as e:
+        except asyncio.TimeoutError:
             duration = time.time() - start_time
             timeout_error = TimeoutError(
                 f"Call to {self.name} timed out after {self.config.timeout}s"

@@ -229,7 +229,6 @@ async def process_llm_stream(
     accumulated_content = ""
     chunk_count = 0
     completion_signal = None
-    error_message = None
 
     logger.info(f"🔄 Starting {provider} stream processing (max_chunks: {max_chunks})")
 
@@ -256,7 +255,6 @@ async def process_llm_stream(
             # Check for error conditions
             error = processor.detect_error_condition(chunk_data)
             if error:
-                error_message = error
                 completion_signal = StreamCompletionSignal.ERROR_CONDITION
                 logger.error(f"❌ Stream error detected: {error}")
                 break
@@ -287,7 +285,6 @@ async def process_llm_stream(
                 await asyncio.sleep(0)
 
     except Exception as e:
-        error_message = str(e)
         completion_signal = StreamCompletionSignal.ERROR_CONDITION
         logger.error(f"❌ Stream processing error: {e}")
 

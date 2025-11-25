@@ -317,7 +317,6 @@ class TemporalKnowledgeManager:
     async def schedule_smart_refresh(self) -> List[str]:
         """Schedule smart refresh for content that's about to expire."""
         refresh_candidates = []
-        current_time = time.time()
 
         for content_id, meta in self.temporal_metadata.items():
             status = meta.get_freshness_status()
@@ -342,8 +341,6 @@ class TemporalKnowledgeManager:
 
     async def get_temporal_analytics(self) -> Dict[str, Any]:
         """Get temporal analytics and insights."""
-        current_time = time.time()
-
         # Status distribution
         status_distribution = {status.value: 0 for status in FreshnessStatus}
         priority_distribution = {priority.value: 0 for priority in KnowledgePriority}

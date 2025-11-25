@@ -135,7 +135,7 @@ def reindex_knowledge_base(self) -> Dict[str, Any]:
 
         try:
             kb = KnowledgeBase()
-            result = loop.run_until_complete(kb.initialize())
+            loop.run_until_complete(kb.initialize())
 
             # Get updated stats
             stats = loop.run_until_complete(kb.get_stats())

@@ -489,7 +489,11 @@ async def list_chats(request: Request):
     # Get sessions directly - decorator handles all errors
     # CRITICAL FIX: Remove await - list_sessions_fast is synchronous
     sessions = chat_history_manager.list_sessions_fast()
-    return JSONResponse(status_code=200, content=sessions)
+    return create_success_response(
+        data=sessions,
+        message="Chat sessions retrieved successfully",
+        request_id=request_id,
+    )
 
 
 @with_error_handling(
@@ -682,9 +686,10 @@ async def list_sessions(request: Request):
     # Use fast mode for listing (no decryption)
     sessions = chat_history_manager.list_sessions_fast()
 
-    return JSONResponse(
-        status_code=200,
-        content={"success": True, "sessions": sessions, "count": len(sessions)},
+    return create_success_response(
+        data={"sessions": sessions, "count": len(sessions)},
+        message="Sessions retrieved successfully",
+        request_id=request_id,
     )
 
 
@@ -944,7 +949,8 @@ async def delete_session(
             }
     else:
         logger.warning(
-            f"ConversationFileManager not available, skipping file handling for session {session_id}"
+            f"ConversationFileManager not available, "
+            f"skipping file handling for session {session_id}"
         )
 
     # CRITICAL FIX: Clean up associated terminal sessions BEFORE deleting chat session
@@ -967,7 +973,8 @@ async def delete_session(
                 if terminal_session.pending_approval is not None:
                     terminal_cleanup_result["pending_approvals_cleared"] += 1
                     logger.info(
-                        f"Clearing pending approval for terminal session {terminal_session.session_id} "
+                        f"Clearing pending approval for terminal session "
+                        f"{terminal_session.session_id} "
                         f"(command: {terminal_session.pending_approval.get('command')})"
                     )
 
@@ -977,20 +984,23 @@ async def delete_session(
 
             if terminal_cleanup_result["terminal_sessions_closed"] > 0:
                 logger.info(
-                    f"Cleaned up {terminal_cleanup_result['terminal_sessions_closed']} terminal session(s) "
-                    f"for chat session {session_id}, cleared {terminal_cleanup_result['pending_approvals_cleared']} "
+                    f"Cleaned up {terminal_cleanup_result['terminal_sessions_closed']} "
+                    f"terminal session(s) for chat session {session_id}, "
+                    f"cleared {terminal_cleanup_result['pending_approvals_cleared']} "
                     f"pending approval(s)"
                 )
         except Exception as terminal_cleanup_error:
             logger.error(
-                f"Failed to cleanup terminal sessions for chat {session_id}: {terminal_cleanup_error}",
+                f"Failed to cleanup terminal sessions for chat {session_id}: "
+                f"{terminal_cleanup_error}",
                 exc_info=True,
             )
             # Don't fail the chat deletion if terminal cleanup fails
             terminal_cleanup_result["error"] = str(terminal_cleanup_error)
     else:
         logger.warning(
-            f"AgentTerminalService not available, skipping terminal session cleanup for session {session_id}"
+            f"AgentTerminalService not available, "
+            f"skipping terminal session cleanup for session {session_id}"
         )
 
     # Delete session from chat history (synchronous method)
@@ -1238,13 +1248,16 @@ async def send_chat_message_by_id(
             )
 
             # Send initial acknowledgment
-            yield f"data: {json.dumps({'type': 'start', 'session_id': chat_id, 'request_id': request_id})}\n\n"
+            start_evt = {'type': 'start', 'session_id': chat_id, 'request_id': request_id}
+            yield f"data: {json.dumps(start_evt)}\n\n"
             print(f"[STREAM {request_id}] Sent start event", flush=True)
             logger.debug(f"[{request_id}] Sent start event")
 
             # Process message and stream workflow messages as they arrive
+            msg_preview = message[:50]
             print(
-                f"[STREAM {request_id}] Calling chat_workflow_manager.process_message_stream() with message: {message[:50]}...",
+                f"[STREAM {request_id}] Calling chat_workflow_manager."
+                f"process_message_stream() with message: {msg_preview}...",
                 flush=True,
             )
             logger.debug(
@@ -1520,7 +1533,12 @@ async def send_direct_chat_response(
     async def generate_stream():
         try:
             # Send start event
-            yield f"data: {json.dumps({'type': 'start', 'session_id': chat_id, 'request_id': request_id})}\n\n"
+            start_evt = {
+                'type': 'start',
+                'session_id': chat_id,
+                'request_id': request_id
+            }
+            yield f"data: {json.dumps(start_evt)}\n\n"
 
             # Process the approval/denial message through workflow
             async for msg in chat_workflow_manager.process_message_stream(

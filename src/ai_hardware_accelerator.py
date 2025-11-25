@@ -268,8 +268,6 @@ class AIHardwareAccelerator:
 
     async def _update_npu_metrics(self, health_data: Dict[str, Any]):
         """Update NPU metrics from health data."""
-        stats = health_data.get("stats", {})
-
         # Estimate NPU utilization from loaded models and task count
         loaded_models = len(health_data.get("loaded_models", []))
         utilization = min(loaded_models * 25.0, 100.0)  # Rough estimation

@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.command_utils import execute_shell_command
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -306,40 +307,38 @@ class SecurityScannerAgent:
             results = {"url": target, "findings": []}
 
             # Check robots.txt
-            import aiohttp
+            http_client = get_http_client()
+            try:
+                async with await http_client.get(f"{target}/robots.txt") as response:
+                    if response.status == 200:
+                        results["findings"].append(
+                            {
+                                "type": "info",
+                                "path": "/robots.txt",
+                                "message": "Robots.txt file found",
+                            }
+                        )
+            except Exception:
+                pass
 
-            async with aiohttp.ClientSession() as session:
+            # Check common admin paths
+            admin_paths = ["/admin", "/login", "/wp-admin", "/.git", "/.env"]
+            for path in admin_paths:
                 try:
-                    async with session.get(f"{target}/robots.txt") as response:
-                        if response.status == 200:
+                    async with await http_client.get(f"{target}{path}") as response:
+                        if response.status in [200, 301, 302]:
                             results["findings"].append(
                                 {
-                                    "type": "info",
-                                    "path": "/robots.txt",
-                                    "message": "Robots.txt file found",
+                                    "type": "warning",
+                                    "path": path,
+                                    "status": response.status,
+                                    "message": (
+                                        "Potentially sensitive path accessible"
+                                    ),
                                 }
                             )
                 except Exception:
                     pass
-
-                # Check common admin paths
-                admin_paths = ["/admin", "/login", "/wp-admin", "/.git", "/.env"]
-                for path in admin_paths:
-                    try:
-                        async with session.get(f"{target}{path}") as response:
-                            if response.status in [200, 301, 302]:
-                                results["findings"].append(
-                                    {
-                                        "type": "warning",
-                                        "path": path,
-                                        "status": response.status,
-                                        "message": (
-                                            "Potentially sensitive path accessible"
-                                        ),
-                                    }
-                                )
-                    except Exception:
-                        pass
 
             return {
                 "status": "success",

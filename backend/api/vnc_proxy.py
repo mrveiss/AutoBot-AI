@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse, Response
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.http_client import get_http_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -47,14 +48,15 @@ async def record_observation(
             "data": data,
         }
 
-        # Post to VNC MCP bridge (non-blocking)
+        # Post to VNC MCP bridge (non-blocking) using singleton HTTP client
         backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:8001"
-        async with aiohttp.ClientSession() as session:
-            await session.post(
-                f"{backend_url}/api/vnc/observations/{vnc_type}",
-                json=observation,
-                timeout=aiohttp.ClientTimeout(total=1),
-            )
+        http_client = get_http_client()
+        async with await http_client.post(
+            f"{backend_url}/api/vnc/observations/{vnc_type}",
+            json=observation,
+            timeout=aiohttp.ClientTimeout(total=1),
+        ):
+            pass  # Just fire and forget, we don't need the response
     except Exception as e:
         # Don't fail the proxy if observation recording fails
         logger.debug(f"Failed to record observation for {vnc_type}: {e}")
@@ -79,24 +81,24 @@ async def get_vnc_client(vnc_type: str):
     endpoint = VNC_ENDPOINTS[vnc_type]
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{endpoint}/vnc.html") as response:
-                if response.status == 200:
-                    content = await response.read()
-                    return Response(
-                        content=content,
-                        media_type="text/html; charset=utf-8",
-                        headers={
-                            "Cache-Control": "no-cache, no-store, must-revalidate",
-                            "Pragma": "no-cache",
-                            "Expires": "0",
-                        },
-                    )
-                else:
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail=f"VNC server returned {response.status}",
-                    )
+        http_client = get_http_client()
+        async with await http_client.get(f"{endpoint}/vnc.html") as response:
+            if response.status == 200:
+                content = await response.read()
+                return Response(
+                    content=content,
+                    media_type="text/html; charset=utf-8",
+                    headers={
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
+                        "Pragma": "no-cache",
+                        "Expires": "0",
+                    },
+                )
+            else:
+                raise HTTPException(
+                    status_code=response.status,
+                    detail=f"VNC server returned {response.status}",
+                )
     except aiohttp.ClientError as e:
         logger.error(f"Failed to fetch vnc.html from {endpoint}: {e}")
         raise HTTPException(status_code=503, detail=f"VNC server unavailable: {str(e)}")
@@ -122,28 +124,28 @@ async def proxy_vnc_assets(vnc_type: str, path: str):
     endpoint = VNC_ENDPOINTS[vnc_type]
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{endpoint}/{path}") as response:
-                if response.status == 200:
-                    content = await response.read()
+        http_client = get_http_client()
+        async with await http_client.get(f"{endpoint}/{path}") as response:
+            if response.status == 200:
+                content = await response.read()
 
-                    # Determine content type
-                    content_type = response.headers.get(
-                        "Content-Type", "application/octet-stream"
-                    )
+                # Determine content type
+                content_type = response.headers.get(
+                    "Content-Type", "application/octet-stream"
+                )
 
-                    return Response(
-                        content=content,
-                        media_type=content_type,
-                        headers={
-                            "Cache-Control": "public, max-age=3600",
-                        },
-                    )
-                else:
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail=f"Asset not found: {path}",
-                    )
+                return Response(
+                    content=content,
+                    media_type=content_type,
+                    headers={
+                        "Cache-Control": "public, max-age=3600",
+                    },
+                )
+            else:
+                raise HTTPException(
+                    status_code=response.status,
+                    detail=f"Asset not found: {path}",
+                )
     except aiohttp.ClientError as e:
         logger.error(f"Failed to fetch asset {path} from {endpoint}: {e}")
         raise HTTPException(status_code=503, detail=f"VNC server unavailable: {str(e)}")
@@ -176,8 +178,9 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     )
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.ws_connect(ws_url) as vnc_ws:
+        http_client = get_http_client()
+        session = await http_client.get_session()
+        async with session.ws_connect(ws_url) as vnc_ws:
 
                 async def forward_to_vnc():
                     """Forward messages from frontend to VNC server"""
@@ -264,17 +267,17 @@ async def get_vnc_status(vnc_type: str):
     endpoint = VNC_ENDPOINTS[vnc_type]
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{endpoint}/vnc.html", timeout=aiohttp.ClientTimeout(total=5)
-            ) as response:
-                accessible = response.status == 200
-                return {
-                    "vnc_type": vnc_type,
-                    "endpoint": endpoint,
-                    "accessible": accessible,
-                    "status": response.status,
-                }
+        http_client = get_http_client()
+        async with await http_client.get(
+            f"{endpoint}/vnc.html", timeout=aiohttp.ClientTimeout(total=5)
+        ) as response:
+            accessible = response.status == 200
+            return {
+                "vnc_type": vnc_type,
+                "endpoint": endpoint,
+                "accessible": accessible,
+                "status": response.status,
+            }
     except Exception as e:
         logger.error(f"Failed to check VNC status for {vnc_type}: {e}")
         return {

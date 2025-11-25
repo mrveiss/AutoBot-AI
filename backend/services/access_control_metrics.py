@@ -374,11 +374,9 @@ class AccessControlMetrics:
         """
         try:
             redis = await self._get_redis()
-
-            cutoff_date = datetime.now() - timedelta(days=self.retention_days)
             deleted_count = 0
 
-            # Clean up daily keys older than retention
+            # Clean up daily keys older than retention period
             for days_back in range(self.retention_days, 365):  # Check up to 1 year back
                 date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
 

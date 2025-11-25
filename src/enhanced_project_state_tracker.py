@@ -658,9 +658,8 @@ class EnhancedProjectStateTracker:
             if not self.redis_client:
                 return 0.0
 
-            # Get error count from last hour
+            # Get error count from current hour
             current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
-            hour_ago = current_hour - timedelta(hours=1)
 
             error_key = f"{self.REDIS_KEYS['error_count']}:{current_hour.timestamp()}"
             error_count = await self._get_redis_metric(error_key, 0)

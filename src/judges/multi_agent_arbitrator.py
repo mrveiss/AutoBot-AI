@@ -258,25 +258,29 @@ class MultiAgentArbitrator(BaseLLMJudge):
                 responses, agent_types, context
             )
 
-        prompt = """
+        user_request_json = json.dumps(user_request, indent=2)
+        arbitration_context_json = json.dumps(arbitration_context, indent=2)
+
+        prompt = f"""
 Please arbitrate between multiple agent responses to determine the best response for the user:
 
 USER REQUEST:
-{json.dumps(user_request, indent=2)}
+{user_request_json}
 
 AGENT RESPONSES TO EVALUATE:
 """
 
         for i, (response, agent_type) in enumerate(zip(responses, agent_types)):
-            prompt += """
+            response_json = json.dumps(response, indent=2)
+            prompt += f"""
 RESPONSE {i+1} - {agent_type.upper()} AGENT:
-{json.dumps(response, indent=2)}
+{response_json}
 
 """
 
-        prompt += """
+        prompt += f"""
 ARBITRATION CONTEXT:
-{json.dumps(arbitration_context, indent=2)}
+{arbitration_context_json}
 
 ARBITRATION CRITERIA:
 Please evaluate and compare these responses on the following dimensions (score 0.0 to 1.0):
@@ -352,9 +356,10 @@ AGENT RESPONSES:
 """
 
         for i, (response, agent_type) in enumerate(zip(responses, agent_types)):
-            prompt += """
+            response_json = json.dumps(response, indent=2)
+            prompt += f"""
 RESPONSE {i+1} - {agent_type.upper()} AGENT:
-{json.dumps(response, indent=2)}
+{response_json}
 
 """
 

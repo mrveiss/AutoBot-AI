@@ -569,14 +569,13 @@ class IntelligentAgent:
             str: System prompt for LLM
         """
         os_info = self.state.os_info
+        distro_value = os_info.distro.value if os_info.distro else "N/A"
 
-        system_prompt = """You are an intelligent system administrator assistant.
+        system_prompt = f"""You are an intelligent system administrator assistant.
 
 SYSTEM INFORMATION:
 - OS: {os_info.os_type.value}
-- Distribution: {
-            os_info.distro.value if os_info.distro else 'N/A'
-        }
+- Distribution: {distro_value}
 - Version: {os_info.version}
 - Architecture: {os_info.architecture}
 - User: {os_info.user}

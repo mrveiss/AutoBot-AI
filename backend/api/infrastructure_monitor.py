@@ -24,6 +24,7 @@ from src.constants.network_constants import NetworkConstants
 # Import unified configuration system - NO HARDCODED VALUES
 from src.unified_config_manager import UnifiedConfigManager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -122,6 +123,7 @@ class InfrastructureMonitor:
 
     def __init__(self):
         self.redis_client = None
+        self._http_client = get_http_client()  # Use singleton HTTP client
         self._initialize_clients()
 
     def _initialize_clients(self):
@@ -155,25 +157,24 @@ class InfrastructureMonitor:
             connect_timeout = config.get_timeout("http", "connect")
             timeout_obj = aiohttp.ClientTimeout(total=timeout, connect=connect_timeout)
 
-            async with aiohttp.ClientSession(timeout=timeout_obj) as session:
-                async with session.get(url) as response:
-                    response_time = int((time.time() - start_time) * 1000)
+            async with await self._http_client.get(url, timeout=timeout_obj) as response:
+                response_time = int((time.time() - start_time) * 1000)
 
-                    if response.status == 200:
-                        return ServiceInfo(
-                            name=name,
-                            status="online",
-                            response_time=f"{response_time}ms",
-                            last_check=datetime.now(),
-                        )
-                    else:
-                        return ServiceInfo(
-                            name=name,
-                            status="warning",
-                            response_time=f"{response_time}ms",
-                            error=f"HTTP {response.status}",
-                            last_check=datetime.now(),
-                        )
+                if response.status == 200:
+                    return ServiceInfo(
+                        name=name,
+                        status="online",
+                        response_time=f"{response_time}ms",
+                        last_check=datetime.now(),
+                    )
+                else:
+                    return ServiceInfo(
+                        name=name,
+                        status="warning",
+                        response_time=f"{response_time}ms",
+                        error=f"HTTP {response.status}",
+                        last_check=datetime.now(),
+                    )
         except asyncio.TimeoutError:
             return ServiceInfo(
                 name=name,
@@ -374,12 +375,7 @@ class InfrastructureMonitor:
 
         host_hash = int(hashlib.md5(host.encode()).hexdigest()[:8], 16)
 
-        # Use hash to generate consistent but varied stats for each machine
-        base_cpu = (host_hash % 40) + 20  # 20-60% CPU
-        base_memory = (host_hash % 50) + 30  # 30-80% Memory
-        base_disk = (host_hash % 60) + 20  # 20-80% Disk
-
-        # Machine-specific adjustments based on role - use config for host mapping
+        # Machine-specific stats based on role - use config for host mapping
         npu_worker_host = config.get_host("npu_worker")
         if host == npu_worker_host:  # NPU Worker - higher CPU, moderate memory
             cpu_load_1m = round(2.1 + (host_hash % 100) / 100, 1)
@@ -544,11 +540,17 @@ class InfrastructureMonitor:
             try:
                 self.redis_client.ping()
                 services.database.append(
-                    ServiceInfo(name="Redis", status="online", response_time="3ms")
+                    ServiceInfo(
+                        name=f"Redis ({redis_host})", status="online", response_time="3ms"
+                    )
                 )
             except Exception:
                 services.database.append(
-                    ServiceInfo(name="Redis", status="error", error="Connection failed")
+                    ServiceInfo(
+                        name=f"Redis ({redis_host})",
+                        status="error",
+                        error="Connection failed",
+                    )
                 )
 
         # SQLite (always available)

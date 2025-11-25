@@ -164,7 +164,8 @@ class ChatHistoryManager:
                 )
             else:
                 logger.warning(
-                    "⚠️ Memory Graph initialization returned False - conversation entity tracking disabled"
+                    "⚠️ Memory Graph initialization returned False - "
+                    "conversation entity tracking disabled"
                 )
                 self.memory_graph = None
 
@@ -304,9 +305,8 @@ class ChatHistoryManager:
         if not user_messages:
             return "No user messages"
 
-        # Get first and last user messages for context
+        # Get first user message for context
         first_msg = user_messages[0][:100] if user_messages else ""
-        last_msg = user_messages[-1][:100] if len(user_messages) > 1 else ""
 
         if len(user_messages) == 1:
             return f"Single exchange: {first_msg}..."
@@ -646,7 +646,8 @@ class ChatHistoryManager:
 
         Args:
             session_id (str): The session identifier.
-            limit (Optional[int]): Maximum number of messages to return. If None, uses model-aware default.
+            limit (Optional[int]): Maximum number of messages to return.
+                If None, uses model-aware default.
             model_name (Optional[str]): LLM model name for context-aware limiting.
 
         Returns:
@@ -920,7 +921,8 @@ class ChatHistoryManager:
                     return True
 
             logging.warning(
-                f"No message found matching metadata filter in session {session_id}: {metadata_filter}"
+                f"No message found matching metadata filter in session "
+                f"{session_id}: {metadata_filter}"
             )
             return False
 
@@ -1178,18 +1180,21 @@ class ChatHistoryManager:
                             )
 
                             logging.info(
-                                f"Auto-created chat session for orphaned terminal file: {session_id} (from {filename})"
+                                f"Auto-created chat session for orphaned terminal "
+                                f"file: {session_id} (from {filename})"
                             )
 
                     except Exception as create_err:
                         logging.error(
-                            f"Failed to auto-create chat session for orphaned {filename}: {create_err}"
+                            f"Failed to auto-create chat session for orphaned "
+                            f"{filename}: {create_err}"
                         )
                         continue
 
             if orphaned_sessions_created > 0:
                 logging.info(
-                    f"✅ Auto-created {orphaned_sessions_created} chat sessions for orphaned terminal files"
+                    f"✅ Auto-created {orphaned_sessions_created} chat sessions "
+                    f"for orphaned terminal files"
                 )
 
             # Sort by last modified time (most recent first)

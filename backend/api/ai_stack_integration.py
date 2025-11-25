@@ -541,9 +541,8 @@ async def multi_agent_query(
     results = {}
 
     if coordination_mode == "parallel":
-        # Run agents in parallel
-        agent_tasks = {}
-
+        # Note: Currently runs sequentially with error handling per agent
+        # True parallel execution would use asyncio.gather() with agent_tasks
         if "rag" in agents:
             try:
                 rag_result = await ai_client.rag_query(query=query, max_results=5)

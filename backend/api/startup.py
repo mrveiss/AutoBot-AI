@@ -83,7 +83,8 @@ def add_startup_message(
 
     # Broadcast to connected WebSocket clients (only if event loop is running)
     try:
-        loop = asyncio.get_running_loop()
+        # Check if event loop is running - get_running_loop raises RuntimeError if not
+        asyncio.get_running_loop()
         asyncio.create_task(broadcast_startup_message(msg))
     except RuntimeError:
         # No running event loop - this is expected during module import
