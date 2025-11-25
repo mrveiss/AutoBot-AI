@@ -23,7 +23,6 @@ from dataclasses import dataclass
 from typing import Dict, List, Union
 
 
-
 @dataclass
 class CommandPattern:
     """Represents a whitelisted command pattern with validation rules."""

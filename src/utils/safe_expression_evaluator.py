@@ -10,7 +10,6 @@ import operator as op
 from typing import Any, Dict
 
 
-
 class SafeExpressionEvaluator:
     """Safely evaluate mathematical and logical expressions without eval()"""
 

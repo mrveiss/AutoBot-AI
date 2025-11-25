@@ -16,7 +16,6 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 
-
 def generate_request_id() -> str:
     """
     Generate a unique request ID for tracking.

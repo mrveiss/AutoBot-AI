@@ -21,7 +21,6 @@ from dataclasses import dataclass
 from typing import Union
 
 
-
 @dataclass
 class TimeoutConfiguration:
     """Unified timeout configuration for AutoBot"""

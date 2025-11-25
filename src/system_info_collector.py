@@ -7,7 +7,6 @@ import platform
 import subprocess
 
 
-
 def get_os_info():
     info = {
         "system": platform.system(),

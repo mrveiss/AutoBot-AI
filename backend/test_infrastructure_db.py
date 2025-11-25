@@ -152,7 +152,6 @@ def test_credential_encryption(db: InfrastructureDB, host: InfraHost):
         "KEY-----"
     )
 
-
     credential = db.store_ssh_credential(
         host_id=host.id,
         credential_type="ssh_key",

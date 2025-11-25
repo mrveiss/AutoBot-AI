@@ -13,7 +13,6 @@ from enum import Enum
 from typing import Dict, List, Pattern
 
 
-
 class ConversationType(Enum):
     """Types of conversational messages."""
 

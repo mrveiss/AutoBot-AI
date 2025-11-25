@@ -42,6 +42,8 @@ from src.utils.advanced_cache_manager import (
 )
 
 # Legacy class wrapper (for direct instantiation compatibility)
+
+
 def KnowledgeCache():
     """Legacy wrapper for backward compatibility."""
     return get_knowledge_cache()

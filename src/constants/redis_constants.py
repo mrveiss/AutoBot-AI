@@ -9,7 +9,6 @@ Single source of truth for all Redis key patterns
 from dataclasses import dataclass
 
 
-
 @dataclass(frozen=True)
 class RedisKeyConstants:
     """Centralized Redis key patterns - NO HARDCODED KEYS"""

@@ -420,7 +420,6 @@ class InfrastructureMonitor:
             f"{uptime_hours} hour{'s' if uptime_hours != 1 else ''}"
         )
 
-
         # Process count based on machine type
         if "23" in host:  # Redis
             processes = 45 + (host_hash % 20)

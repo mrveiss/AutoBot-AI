@@ -394,7 +394,6 @@ class SingletonStorage:
     """
 
 
-
 # Global storage for module-level singletons (use sparingly)
 _global_singleton_storage = SingletonStorage()
 
