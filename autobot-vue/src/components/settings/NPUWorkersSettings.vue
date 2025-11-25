@@ -374,10 +374,19 @@ import axios from 'axios'
 import { NetworkConstants } from '@/constants/network'
 import { useModal } from '@/composables/useModal'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { useToast } from '@/composables/useToast'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+
+// Toast notifications
+const { showToast } = useToast()
+
+// Notification helper for error handling
+const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+  showToast(message, type, type === 'error' ? 5000 : 3000)
+}
 
 // ===== TYPE DEFINITIONS =====
 
@@ -611,8 +620,9 @@ const loadWorkers = async () => {
       }
     })
   } catch (error) {
-    console.error('Failed to load NPU workers:', error)
+    console.error('[NPUWorkersSettings] Failed to load NPU workers:', error)
     workerFormError.value = 'Failed to load workers. Please try again.'
+    notify('Failed to load NPU workers', 'error')
   } finally {
     isLoading.value = false
   }
@@ -623,7 +633,8 @@ const loadLoadBalancingConfig = async () => {
     const response = await axios.get('/api/npu/load-balancing')
     loadBalancingConfig.value = response.data
   } catch (error) {
-    console.error('Failed to load load balancing config:', error)
+    console.error('[NPUWorkersSettings] Failed to load load balancing config:', error)
+    notify('Failed to load load balancing config', 'error')
   }
 }
 
@@ -631,8 +642,10 @@ const handleConfigChange = async () => {
   try {
     await axios.put('/api/npu/load-balancing', loadBalancingConfig.value)
     emit('change')
+    notify('Load balancing config updated', 'success')
   } catch (error) {
-    console.error('Failed to update load balancing config:', error)
+    console.error('[NPUWorkersSettings] Failed to update load balancing config:', error)
+    notify('Failed to update load balancing config', 'error')
   }
 }
 
@@ -685,16 +698,18 @@ const saveWorker = async () => {
     if (showEditWorkerDialog.value && editingWorker.value) {
       // Update existing worker
       await axios.put(`/api/npu/workers/${editingWorker.value.id}`, workerPayload)
+      notify(`Worker "${workerForm.value.name}" updated`, 'success')
     } else {
       // Add new worker
       await axios.post('/api/npu/workers', workerPayload)
+      notify(`Worker "${workerForm.value.name}" added`, 'success')
     }
 
     emit('change')
     closeWorkerDialog()
     await loadWorkers()
   } catch (error: unknown) {
-    console.error('Failed to save worker:', error)
+    console.error('[NPUWorkersSettings] Failed to save worker:', error)
 
     // Extract error message from response
     const axiosError = error as { response?: { data?: { detail?: string; message?: string } }; message?: string }
@@ -704,6 +719,7 @@ const saveWorker = async () => {
                         'Failed to save worker'
 
     workerFormError.value = errorMessage
+    notify(errorMessage, 'error')
   } finally {
     isSavingWorker.value = false
     operationInProgress.value = false
@@ -723,9 +739,11 @@ const deleteWorker = async () => {
   if (!workerToDelete.value) return
 
   if (operationInProgress.value) {
-    console.warn('Operation already in progress')
+    console.warn('[NPUWorkersSettings] Operation already in progress')
     return
   }
+
+  const workerName = workerToDelete.value.name
 
   try {
     operationInProgress.value = true
@@ -734,15 +752,17 @@ const deleteWorker = async () => {
     emit('change')
     showDeleteDialog.value = false
     workerToDelete.value = null
+    notify(`Worker "${workerName}" deleted`, 'success')
     await loadWorkers()
   } catch (error) {
-    console.error('Failed to delete worker:', error)
+    console.error('[NPUWorkersSettings] Failed to delete worker:', error)
     const axiosError = error as { response?: { data?: { detail?: string; message?: string } }; message?: string }
     const errorMessage = axiosError.response?.data?.detail ||
                         axiosError.response?.data?.message ||
                         axiosError.message ||
                         'Failed to delete worker'
     workerFormError.value = errorMessage
+    notify(errorMessage, 'error')
   } finally {
     isDeletingWorker.value = false
     operationInProgress.value = false
@@ -755,11 +775,14 @@ const testWorker = async (worker: NPUWorker) => {
     const response = await axios.post(`/api/npu/workers/${worker.id}/test`)
 
     if (response.data.success) {
+      notify(`Worker "${worker.name}" connection OK`, 'success')
     } else {
-      console.error(`Worker ${worker.name} test failed:`, response.data)
+      console.error(`[NPUWorkersSettings] Worker ${worker.name} test failed:`, response.data)
+      notify(`Worker "${worker.name}" test failed`, 'warning')
     }
   } catch (error) {
-    console.error(`Failed to test worker ${worker.name}:`, error)
+    console.error(`[NPUWorkersSettings] Failed to test worker ${worker.name}:`, error)
+    notify(`Failed to test worker "${worker.name}"`, 'error')
   } finally {
     isTestingWorker.value[worker.id] = false
   }
@@ -771,7 +794,8 @@ const viewWorkerMetrics = async (worker: NPUWorker) => {
     selectedWorkerMetrics.value = { ...worker, performance_metrics: response.data }
     openMetricsDialog()
   } catch (error) {
-    console.error('Failed to load worker metrics:', error)
+    console.error('[NPUWorkersSettings] Failed to load worker metrics:', error)
+    notify(`Failed to load metrics for "${worker.name}"`, 'error')
   }
 }
 

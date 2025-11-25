@@ -123,6 +123,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
+import { useToast } from '@/composables/useToast'
 import ApiClient from '@/utils/ApiClient.js'
 import batchApiService from '@/services/BatchApiService'
 // MIGRATED: Using AppConfig.js for better configuration management
@@ -146,6 +147,12 @@ import WorkflowProgressWidget from '@/components/WorkflowProgressWidget.vue'
 const store = useChatStore()
 const controller = useChatController()
 const appStore = useAppStore()
+
+// Toast notifications
+const { showToast } = useToast()
+const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+  showToast(message, type, type === 'error' ? 5000 : 3000)
+}
 
 // Dialog states
 const showKnowledgeDialog = ref(false)
@@ -195,13 +202,15 @@ const loadNovncUrl = async () => {
 
     if (response.ok) {
       const result = await response.json()
-      console.log('VNC status:', result.status, '-', result.message)
+      console.log('[ChatInterface] VNC status:', result.status, '-', result.message)
     } else {
-      console.warn('VNC ensure-running check failed:', response.status)
+      console.warn('[ChatInterface] VNC ensure-running check failed:', response.status)
+      notify('VNC server check failed - desktop may not be available', 'warning')
     }
   } catch (error) {
-    console.warn('Failed to check VNC status:', error)
-    // Continue anyway - VNC might be running
+    console.warn('[ChatInterface] Failed to check VNC status:', error)
+    // Continue anyway - VNC might be running, but notify user
+    notify('Could not verify VNC server status', 'warning')
   }
 
   // CRITICAL FIX: Use frontend proxy route for Desktop VNC (not Playwright VNC)
@@ -435,9 +444,14 @@ const onCommandCommented = async (commentData: any) => {
         })
       })
 
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`)
+      }
+
       const result = await response.json()
 
       console.log('[ChatInterface] Command denied with user feedback/alternative approach')
+      notify('Feedback sent to agent', 'success')
     }
 
     // Close the dialog
@@ -447,6 +461,7 @@ const onCommandCommented = async (commentData: any) => {
     // The agent will receive the denial + feedback and can propose an alternative
   } catch (error) {
     console.error('[ChatInterface] Error sending command comment/denial:', error)
+    notify('Failed to send feedback to agent', 'error')
   }
 }
 

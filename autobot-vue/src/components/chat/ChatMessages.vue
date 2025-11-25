@@ -444,6 +444,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import appConfig from '@/config/AppConfig.js'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
+import { useToast } from '@/composables/useToast'
 
 // Disable automatic attribute inheritance
 defineOptions({
@@ -464,6 +465,12 @@ const emit = defineEmits<{
 const store = useChatStore()
 const controller = useChatController()
 const { displaySettings } = useDisplaySettings()
+
+// Toast notifications
+const { showToast } = useToast()
+const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+  showToast(message, type, type === 'error' ? 5000 : 3000)
+}
 
 // Refs
 const messagesContainer = ref<HTMLElement>()
@@ -796,7 +803,7 @@ const pollCommandState = async (command_id: string, callback: (result: any) => v
       const response = await fetch(backendUrl)
 
       if (!response.ok) {
-        console.error('[POLL] Failed to get command state:', response.status)
+        console.error('[ChatMessages][POLL] Failed to get command state:', response.status)
         if (attempt < maxAttempts) {
           attempt++
           setTimeout(poll, 500)
@@ -807,11 +814,11 @@ const pollCommandState = async (command_id: string, callback: (result: any) => v
       }
 
       const command = await response.json()
-      console.log(`[POLL] Command state (attempt ${attempt + 1}):`, command.state)
+      console.log(`[ChatMessages][POLL] Command state (attempt ${attempt + 1}):`, command.state)
 
       // Check if command is finished
       if (command.state === 'completed' || command.state === 'failed' || command.state === 'denied') {
-        console.log('[POLL] ✅ Command finished:', {
+        console.log('[ChatMessages][POLL] ✅ Command finished:', {
           state: command.state,
           output_length: command.output?.length || 0,
           return_code: command.return_code
@@ -831,11 +838,11 @@ const pollCommandState = async (command_id: string, callback: (result: any) => v
         attempt++
         setTimeout(poll, 500)  // Poll every 500ms
       } else {
-        console.error('[POLL] ⏱️ Polling timed out after 50 seconds')
+        console.error('[ChatMessages][POLL] ⏱️ Polling timed out after 50 seconds')
         callback({ state: 'timeout', error: 'Polling timeout' })
       }
     } catch (error) {
-      console.error('[POLL] Error:', error)
+      console.error('[ChatMessages][POLL] Error:', error)
       if (attempt < maxAttempts) {
         attempt++
         setTimeout(poll, 500)
@@ -846,7 +853,7 @@ const pollCommandState = async (command_id: string, callback: (result: any) => v
   }
 
   // Start polling
-  console.log('[POLL] 🚀 Starting command state polling for:', command_id)
+  console.log('[ChatMessages][POLL] 🚀 Starting command state polling for:', command_id)
   poll()
 }
 
@@ -887,7 +894,8 @@ const approveCommand = async (terminal_session_id: string, approved: boolean, co
     console.log('Approval response:', result)
 
     if (result.status === 'approved' || result.status === 'denied') {
-      console.log(`Command ${approved ? 'approved' : 'denied'} successfully`)
+      console.log(`[ChatMessages] Command ${approved ? 'approved' : 'denied'} successfully`)
+      notify(`Command ${approved ? 'approved' : 'denied'}`, approved ? 'success' : 'warning')
 
       // Update the message metadata to reflect approval status
       const targetMessage = store.currentMessages.find(
@@ -905,37 +913,42 @@ const approveCommand = async (terminal_session_id: string, approved: boolean, co
 
       // START POLLING: If approved and we have command_id, poll for completion
       if (result.status === 'approved' && approved && command_id) {
-        console.log('[POLL] Starting polling for approved command:', command_id)
+        console.log('[ChatMessages][POLL] Starting polling for approved command:', command_id)
 
         pollCommandState(command_id, (pollResult) => {
-          console.log('[POLL] 🎯 Command execution complete:', pollResult)
+          console.log('[ChatMessages][POLL] 🎯 Command execution complete:', pollResult)
 
           if (pollResult.state === 'completed') {
-            console.log('[POLL] ✅ Command completed successfully')
-            console.log('[POLL] Output:', pollResult.output)
+            console.log('[ChatMessages][POLL] ✅ Command completed successfully')
+            console.log('[ChatMessages][POLL] Output:', pollResult.output)
             // Note: Backend already handles LLM interpretation and sends it to chat
             // The output will appear naturally through the WebSocket/streaming flow
           } else if (pollResult.state === 'failed') {
-            console.error('[POLL] ❌ Command failed:', pollResult.stderr)
+            console.error('[ChatMessages][POLL] ❌ Command failed:', pollResult.stderr)
+            notify('Command execution failed', 'error')
           } else if (pollResult.state === 'timeout') {
-            console.warn('[POLL] ⏱️ Polling timed out')
+            console.warn('[ChatMessages][POLL] ⏱️ Polling timed out')
+            notify('Command execution timed out', 'warning')
           } else if (pollResult.state === 'error') {
-            console.error('[POLL] ❌ Polling error:', pollResult.error)
+            console.error('[ChatMessages][POLL] ❌ Polling error:', pollResult.error)
+            notify('Command polling error', 'error')
           }
         })
       } else if (!command_id && approved) {
-        console.warn('[POLL] ⚠️ No command_id available for polling (legacy approval flow)')
+        console.warn('[ChatMessages][POLL] ⚠️ No command_id available for polling (legacy approval flow)')
       }
 
       // Reset auto-approve checkbox after submission
       autoApproveFuture.value = false
     } else if (result.status === 'error') {
-      console.error('Approval error:', result.error)
+      console.error('[ChatMessages] Approval error:', result.error)
+      notify(`Approval failed: ${result.error}`, 'error')
     }
 
     processingApproval.value = false
   } catch (error) {
-    console.error('Error sending approval:', error)
+    console.error('[ChatMessages] Error sending approval:', error)
+    notify('Failed to process command approval', 'error')
     processingApproval.value = false
   }
 }

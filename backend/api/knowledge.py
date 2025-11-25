@@ -4839,7 +4839,8 @@ async def export_knowledge(request: ExportRequest, req: Request):
     date_from = filters.date_from if filters else None
     date_to = filters.date_to if filters else None
 
-    logger.info(f"Export request: format={request.format.value}, include_metadata={request.include_metadata}")
+    logger.info(
+        f"Export request: format={request.format.value}, include_metadata={request.include_metadata}")
 
     result = await kb.export_facts(
         format=request.format.value,

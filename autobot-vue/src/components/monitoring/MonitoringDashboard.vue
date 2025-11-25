@@ -442,6 +442,9 @@ export default {
       try {
         // Check monitoring status
         const statusResponse = await fetch('/api/monitoring/status')
+        if (!statusResponse.ok) {
+          throw new Error(`Status check failed: HTTP ${statusResponse.status}`)
+        }
         const status = await statusResponse.json()
         this.monitoringActive = status.active
         
@@ -454,7 +457,7 @@ export default {
         })
         
       } catch (error) {
-        console.error('Failed to initialize dashboard:', error)
+        console.error('[MonitoringDashboard] Failed to initialize dashboard:', error)
         this.$toast.error('Failed to initialize performance monitoring dashboard')
       } finally {
         this.loading = false
@@ -465,16 +468,22 @@ export default {
       try {
         // Get dashboard data
         const dashboardResponse = await fetch('/api/monitoring/dashboard/overview')
+        if (!dashboardResponse.ok) {
+          throw new Error(`Dashboard fetch failed: HTTP ${dashboardResponse.status}`)
+        }
         this.dashboardData = await dashboardResponse.json()
-        
+
         // Extract metrics (map backend field names to frontend)
         this.gpuMetrics = this.dashboardData.gpu_status
         this.npuMetrics = this.dashboardData.npu_status
         this.systemMetrics = this.dashboardData.system_resources
         this.services = Object.values(this.dashboardData.services_status || {})
-        
+
         // Get alerts
         const alertsResponse = await fetch('/api/monitoring/alerts/check')
+        if (!alertsResponse.ok) {
+          console.warn('[MonitoringDashboard] Alerts check failed:', alertsResponse.status)
+        }
         const alertsData = await alertsResponse.json()
         this.allAlerts = alertsData.alerts || []
         
@@ -482,7 +491,7 @@ export default {
         await this.refreshRecommendations()
         
       } catch (error) {
-        console.error('Failed to refresh dashboard:', error)
+        console.error('[MonitoringDashboard] Failed to refresh dashboard:', error)
         this.$toast.error('Failed to refresh dashboard data')
       }
     },
@@ -490,9 +499,13 @@ export default {
     async refreshRecommendations() {
       try {
         const response = await fetch('/api/monitoring/optimization/recommendations')
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
         this.recommendations = await response.json()
       } catch (error) {
-        console.error('Failed to get recommendations:', error)
+        console.error('[MonitoringDashboard] Failed to get recommendations:', error)
+        this.$toast.warning('Failed to load optimization recommendations')
       }
     },
     
@@ -517,7 +530,7 @@ export default {
           throw new Error('Failed to toggle monitoring')
         }
       } catch (error) {
-        console.error('Failed to toggle monitoring:', error)
+        console.error('[MonitoringDashboard] Failed to toggle monitoring:', error)
         this.$toast.error('Failed to toggle monitoring')
       } finally {
         this.loading = false
@@ -552,7 +565,7 @@ export default {
           const message = JSON.parse(event.data)
           this.handleWebSocketMessage(message)
         } catch (error) {
-          console.error('Failed to parse WebSocket message:', error)
+          console.error('[MonitoringDashboard] Failed to parse WebSocket message:', error)
         }
       }
       
@@ -568,7 +581,7 @@ export default {
       }
       
       this.websocket.onerror = (error) => {
-        console.error('WebSocket error:', error)
+        console.error('[MonitoringDashboard] WebSocket error:', error)
         this.connectionStatus = 'disconnected'
       }
     },
@@ -801,7 +814,7 @@ export default {
     
     async updateChartWithHistoricalData(category, timeRange, chart) {
       if (!chart) return
-      
+
       try {
         const response = await fetch('/api/monitoring/metrics/query', {
           method: 'POST',
@@ -815,7 +828,10 @@ export default {
             include_alerts: false
           })
         })
-        
+
+        if (!response.ok) {
+          throw new Error(`Metrics query failed: HTTP ${response.status}`)
+        }
         const data = await response.json()
         const metrics = data.metrics[category] || []
         
@@ -835,9 +851,10 @@ export default {
         }
         
         chart.update('none')
-        
+
       } catch (error) {
-        console.error(`Failed to update ${category} chart:`, error)
+        console.error(`[MonitoringDashboard] Failed to update ${category} chart:`, error)
+        this.$toast.warning(`Failed to update ${category} chart data`)
       }
     },
     

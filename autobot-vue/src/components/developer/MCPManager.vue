@@ -300,6 +300,7 @@
 <script>
 import { ref, computed, onMounted } from 'vue';
 import AppConfig from '@/config/AppConfig';
+import { useToast } from '@/composables/useToast';
 
 export default {
   name: 'MCPManager',
@@ -314,6 +315,12 @@ export default {
     const toolFilter = ref('');
     const expandedTools = ref(new Set());
     const lastUpdated = ref(null);
+
+    // Toast notifications
+    const { showToast } = useToast();
+    const notify = (message, type = 'info') => {
+      showToast(message, type, type === 'error' ? 5000 : 3000);
+    };
 
     const tabs = [
       { id: 'bridges', label: 'MCP Bridges', icon: 'fas fa-layer-group' },
@@ -381,10 +388,14 @@ export default {
       try {
         const url = await AppConfig.getServiceUrl('backend');
         const response = await fetch(`${url}/api/mcp/bridges`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
         const data = await response.json();
         bridges.value = data.bridges || [];
       } catch (error) {
-        console.error('Failed to fetch MCP bridges:', error);
+        console.error('[MCPManager] Failed to fetch MCP bridges:', error);
+        notify('Failed to load MCP bridges', 'error');
       }
     };
 
@@ -392,10 +403,14 @@ export default {
       try {
         const url = await AppConfig.getServiceUrl('backend');
         const response = await fetch(`${url}/api/mcp/tools`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
         const data = await response.json();
         tools.value = data.tools || [];
       } catch (error) {
-        console.error('Failed to fetch MCP tools:', error);
+        console.error('[MCPManager] Failed to fetch MCP tools:', error);
+        notify('Failed to load MCP tools', 'error');
       }
     };
 
@@ -403,10 +418,14 @@ export default {
       try {
         const url = await AppConfig.getServiceUrl('backend');
         const response = await fetch(`${url}/api/mcp/health`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
         const data = await response.json();
         healthData.value = data;
       } catch (error) {
-        console.error('Failed to fetch MCP health:', error);
+        console.error('[MCPManager] Failed to fetch MCP health:', error);
+        notify('Failed to load MCP health status', 'warning');
       }
     };
 
@@ -414,10 +433,14 @@ export default {
       try {
         const url = await AppConfig.getServiceUrl('backend');
         const response = await fetch(`${url}/api/mcp/stats`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
         const data = await response.json();
         stats.value = data.overview || {};
       } catch (error) {
-        console.error('Failed to fetch MCP stats:', error);
+        console.error('[MCPManager] Failed to fetch MCP stats:', error);
+        notify('Failed to load MCP statistics', 'warning');
       }
     };
 

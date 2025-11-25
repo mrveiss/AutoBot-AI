@@ -946,9 +946,11 @@ class UnifiedConfigManager:
 
         origins = [
             # Localhost variants for development
-            f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.FRONTEND_PORT}",  # Vite dev server default
+            # Vite dev server default
+            f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.FRONTEND_PORT}",
             f"http://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.FRONTEND_PORT}",
-            f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BROWSER_SERVICE_PORT}",  # Browser/other dev tools
+            # Browser/other dev tools
+            f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BROWSER_SERVICE_PORT}",
             f"http://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}",
             # Frontend service
             f"http://{frontend_host}:{frontend_port}",

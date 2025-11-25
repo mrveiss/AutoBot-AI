@@ -277,8 +277,12 @@ export default {
 
         addLogEntry('Stats refreshed successfully', 'success');
       }).catch(error => {
-        console.error('Failed to fetch stats:', error);
+        console.error('[SystemKnowledgeManager] Failed to fetch stats:', error);
         addLogEntry('Failed to fetch stats', 'error');
+        lastResult.value = {
+          status: 'error',
+          message: 'Failed to fetch knowledge base statistics'
+        };
       });
     };
 
