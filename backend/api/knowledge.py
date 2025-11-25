@@ -1017,7 +1017,10 @@ async def rag_enhanced_search(request: dict, req: Request):
 )
 @router.post("/similarity_search")
 async def similarity_search(request: dict, req: Request):
-    """Perform similarity search with optional RAG enhancement - FIXED parameter mismatch between KnowledgeBase and KnowledgeBaseV2"""
+    """
+    Perform similarity search with optional RAG enhancement.
+    FIXED parameter mismatch between KnowledgeBase and KnowledgeBaseV2.
+    """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
@@ -1033,7 +1036,8 @@ async def similarity_search(request: dict, req: Request):
     use_rag = request.get("use_rag", False)
 
     logger.info(
-        f"Similarity search request: '{query}' (top_k={top_k}, threshold={threshold}, use_rag={use_rag})"
+        f"Similarity search request: '{query}' "
+        f"(top_k={top_k}, threshold={threshold}, use_rag={use_rag})"
     )
 
     # FIXED: Check which knowledge base implementation we're using and call with correct parameters
@@ -1840,12 +1844,16 @@ Type: Documentation
         config_info = f"""AutoBot System Configuration
 
 Network Layout:
-- Main Machine (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API (port {NetworkConstants.BACKEND_PORT}) + NPU Worker (port 8082) + Desktop/Terminal VNC (port 6080)
-- VM1 Frontend: {NetworkConstants.FRONTEND_VM_IP}:5173 - Web interface (SINGLE FRONTEND SERVER)
+- Main Machine (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API
+  (port {NetworkConstants.BACKEND_PORT}) + NPU Worker (port 8082) +
+  Desktop/Terminal VNC (port 6080)
+- VM1 Frontend: {NetworkConstants.FRONTEND_VM_IP}:5173 - Web interface
+  (SINGLE FRONTEND SERVER)
 - VM2 NPU Worker: {NetworkConstants.NPU_WORKER_VM_IP}:8081 - Secondary NPU worker (Linux)
 - VM3 Redis: {NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT} - Data layer
 - VM4 AI Stack: {NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT} - AI processing
-- VM5 Browser: {NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT} - Web automation (Playwright)
+- VM5 Browser: {NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT} -
+  Web automation (Playwright)
 
 Key Commands:
 - Setup: bash setup.sh [--full|--minimal|--distributed]
@@ -1892,14 +1900,16 @@ Type: System Configuration
         logger.error(f"Error adding AutoBot configuration: {e}")
 
     logger.info(
-        f"AutoBot documentation population completed. Added {items_added} documents ({items_skipped} skipped, {items_failed} failed)."
+        f"AutoBot documentation population completed. Added {items_added} documents "
+        f"({items_skipped} skipped, {items_failed} failed)."
     )
 
     mode = "Force reindex" if force_reindex else "Incremental update"
     return {
         "status": "success",
         "message": (
-            f"{mode}: Successfully imported {items_added} AutoBot documents ({items_skipped} skipped, {items_failed} failed)"
+            f"{mode}: Successfully imported {items_added} AutoBot documents "
+            f"({items_skipped} skipped, {items_failed} failed)"
         ),
         "items_added": items_added,
         "items_skipped": items_skipped,
@@ -2518,7 +2528,8 @@ async def get_facts_by_category(
         )
 
     logger.info(
-        f"Cache MISS for facts_by_category - scanning all facts (category={category}, limit={limit})"
+        f"Cache MISS for facts_by_category - scanning all facts "
+        f"(category={category}, limit={limit})"
     )
 
     # Get all fact keys from Redis
@@ -2728,7 +2739,8 @@ async def vectorize_existing_facts(
         }
 
     logger.info(
-        f"Starting batched vectorization of {len(fact_keys)} facts (batch_size={batch_size}, delay={batch_delay}s)"
+        f"Starting batched vectorization of {len(fact_keys)} facts "
+        f"(batch_size={batch_size}, delay={batch_delay}s)"
     )
 
     success_count = 0
@@ -2815,7 +2827,8 @@ async def vectorize_existing_facts(
     return {
         "status": "success",
         "message": (
-            f"Vectorization complete: {success_count} successful, {failed_count} failed, {skipped_count} skipped"
+            f"Vectorization complete: {success_count} successful, "
+            f"{failed_count} failed, {skipped_count} skipped"
         ),
         "processed": len(fact_keys),
         "success": success_count,
@@ -3604,7 +3617,8 @@ async def scan_host_changes(req: Request, request_data: ScanHostChangesRequest):
         # Add vectorization results to response
         result["vectorization"] = vectorization_results
         logger.info(
-            f"Vectorization completed: {vectorization_results['successful']}/{vectorization_results['attempted']} successful"
+            f"Vectorization completed: "
+            f"{vectorization_results['successful']}/{vectorization_results['attempted']} successful"
         )
 
     return result
@@ -3900,8 +3914,10 @@ async def update_fact(
             detail="Update operation not supported by current knowledge base implementation",
         )
 
+    content_status = 'provided' if request.content else 'unchanged'
+    metadata_status = 'provided' if request.metadata else 'unchanged'
     logger.info(
-        f"Updating fact {fact_id}: content={'provided' if request.content else 'unchanged'}, metadata={'provided' if request.metadata else 'unchanged'}"
+        f"Updating fact {fact_id}: content={content_status}, metadata={metadata_status}"
     )
 
     # Call update_fact method
