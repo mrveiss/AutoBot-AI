@@ -818,7 +818,8 @@ async def delete_session(
     Args:
         session_id: Chat session ID to delete
         file_action: How to handle conversation files ("delete", "transfer_kb", "transfer_shared")
-        file_options: JSON string with transfer options (e.g., '{"target_path": "archive/", "tags": ["archived"]}')
+        file_options: JSON string with transfer options
+            (e.g., '{"target_path": "archive/", "tags": ["archived"]}')
 
     Returns:
         Success response with deletion details
@@ -909,7 +910,8 @@ async def delete_session(
                     "files_failed": transfer_result.get("total_failed", 0),
                 }
                 logger.info(
-                    f"Transferred {transfer_result.get('total_transferred', 0)} files to KB for session {session_id}"
+                    f"Transferred {transfer_result.get('total_transferred', 0)} files "
+                    f"to KB for session {session_id}"
                 )
 
             elif file_action == "transfer_shared":
@@ -929,7 +931,8 @@ async def delete_session(
                     "files_failed": transfer_result.get("total_failed", 0),
                 }
                 logger.info(
-                    f"Transferred {transfer_result.get('total_transferred', 0)} files to shared storage for session {session_id}"
+                    f"Transferred {transfer_result.get('total_transferred', 0)} files "
+                    f"to shared storage for session {session_id}"
                 )
 
         except Exception as file_error:
