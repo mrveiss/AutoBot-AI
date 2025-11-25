@@ -12,7 +12,6 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 

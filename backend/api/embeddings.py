@@ -10,14 +10,13 @@ Handles vector storage configuration and embedding model selection.
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from backend.services.config_service import ConfigService
-from src.constants.network_constants import NetworkConstants, ServiceURLs
 from src.unified_config_manager import unified_config_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 

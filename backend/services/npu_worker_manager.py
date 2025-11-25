@@ -8,9 +8,8 @@ Manages NPU worker registration, health monitoring, and state tracking.
 """
 
 import asyncio
-import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -26,7 +25,6 @@ from backend.models.npu_models import (
     WorkerStatus,
     WorkerTestResult,
 )
-from src.constants.network_constants import NetworkConstants
 from src.event_manager import event_manager
 from src.npu_integration import NPUWorkerClient
 

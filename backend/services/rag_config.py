@@ -9,8 +9,7 @@ Loads configuration from config/complete.yaml under knowledge.rag section.
 All reranking parameters are configurable without code changes.
 """
 
-import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from src.utils.logging_manager import get_llm_logger

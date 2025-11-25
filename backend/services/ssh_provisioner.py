@@ -8,10 +8,9 @@ Provisions SSH keys on remote hosts using password authentication,
 enabling passwordless SSH access for future operations.
 """
 
-import hashlib
 import logging
 from io import StringIO
-from typing import Optional, Tuple
+from typing import Tuple
 
 import paramiko
 from cryptography.hazmat.backends import default_backend

@@ -18,7 +18,6 @@ import numpy as np
 import torch
 from PIL import Image
 
-from src.constants.network_constants import NetworkConstants
 from src.enhanced_memory_manager_async import (
     TaskPriority,
     get_async_enhanced_memory_manager,
@@ -48,7 +47,6 @@ try:
     import librosa
     from transformers import (
         Wav2Vec2ForCTC,
-        Wav2Vec2Model,
         Wav2Vec2Processor,
         WhisperForConditionalGeneration,
         WhisperProcessor,
@@ -65,7 +63,6 @@ except ImportError:
 # Import torch modules for attention fusion
 try:
     import torch.nn as nn
-    import torch.nn.functional as F
 
     TORCH_NN_AVAILABLE = True
 except ImportError:
@@ -191,7 +188,7 @@ class VisionProcessor(BaseModalProcessor):
 
                 # Check if accelerate is available for device_map
                 try:
-                    import accelerate
+                    pass
 
                     accelerate_available = True
                 except ImportError:

@@ -16,7 +16,6 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from src.constants.model_constants import ModelConstants
-from src.constants.network_constants import NetworkConstants
 
 # Conditional imports for optional dependencies
 try:
@@ -142,17 +141,14 @@ class LLMProvider(ABC):
     @abstractmethod
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
         """Execute a chat completion request."""
-        pass
 
     @abstractmethod
     async def is_available(self) -> bool:
         """Check if the provider is available."""
-        pass
 
     @abstractmethod
     def get_available_models(self) -> List[str]:
         """Get list of available models."""
-        pass
 
     def get_stats(self) -> Dict[str, Any]:
         """Get provider statistics."""

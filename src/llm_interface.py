@@ -14,7 +14,6 @@ comprehensive interface that integrates the best features from:
 """
 
 import asyncio
-import json
 import os
 import re
 import time
@@ -22,22 +21,13 @@ import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
-import aiofiles
 import aiohttp
-import requests
 import xxhash
 from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 # Import unified configuration and dependencies
 from src.circuit_breaker import circuit_breaker_async
@@ -48,14 +38,11 @@ from src.constants.network_constants import NetworkConstants
 from src.retry_mechanism import retry_network_operation
 from src.unified_config_manager import UnifiedConfigManager
 from src.utils.error_boundaries import (
-    ErrorCategory,
-    ErrorContext,
     error_boundary,
     get_error_boundary_manager,
 )
 from src.utils.http_client import get_http_client
 
-from .utils.async_stream_processor import StreamCompletionSignal, StreamProcessor
 
 # Create singleton config instance
 config = UnifiedConfigManager()

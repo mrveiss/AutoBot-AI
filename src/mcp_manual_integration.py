@@ -12,11 +12,8 @@ import asyncio
 import logging
 import os
 import re
-import subprocess
-import tempfile
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)

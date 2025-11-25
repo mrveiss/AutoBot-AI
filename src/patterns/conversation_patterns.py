@@ -12,7 +12,6 @@ import re
 from enum import Enum
 from typing import Dict, List, Pattern
 
-from src.constants.network_constants import NetworkConstants
 
 
 class ConversationType(Enum):

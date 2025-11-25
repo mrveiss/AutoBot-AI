@@ -8,11 +8,9 @@ Provider-specific health check implementations
 import logging
 import os
 import time
-from typing import Optional
 
 import aiohttp
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 
 from .base import BaseProviderHealth, ProviderHealthResult, ProviderStatus

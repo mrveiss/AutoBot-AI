@@ -11,15 +11,13 @@ ROOT CAUSE FIX: Replaces DNS resolution delays with cached service endpoints
 """
 
 import asyncio
-import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 import aiohttp
 
-from src.constants.network_constants import NetworkConstants, ServiceURLs
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)

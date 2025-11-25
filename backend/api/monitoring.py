@@ -11,14 +11,11 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
-import aiofiles
 from fastapi import (
     APIRouter,
     BackgroundTasks,
-    HTTPException,
     Query,
     Response,
     WebSocket,
@@ -28,7 +25,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 # Import AutoBot monitoring system
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.performance_monitor import (
     add_phase9_alert_callback,

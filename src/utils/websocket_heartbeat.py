@@ -16,7 +16,6 @@ from typing import Any, Callable, Dict, Optional, Set
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

@@ -13,9 +13,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict
 
-import aiohttp
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 
 from .utils.service_registry import get_service_url
@@ -175,7 +173,6 @@ class NPUWorkerClient:
     async def close(self):
         """No-op: HTTP client is managed by singleton HTTPClientManager"""
         # Using HTTPClient singleton - session management is centralized
-        pass
 
 
 class NPUTaskQueue:

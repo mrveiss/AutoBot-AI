@@ -15,10 +15,9 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Set
 
-from watchdog.events import FileModifiedEvent, FileSystemEventHandler
+from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

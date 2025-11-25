@@ -23,7 +23,6 @@ Issue #49 - Additional MCP Bridges (Browser, HTTP, Database, Git)
 """
 
 import asyncio
-import json
 import logging
 import re
 import sqlite3

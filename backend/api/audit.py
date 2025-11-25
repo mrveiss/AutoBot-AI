@@ -23,9 +23,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from backend.services.audit_logger import AuditEntry, AuditResult, get_audit_logger
+from backend.services.audit_logger import AuditResult, get_audit_logger
 from src.auth_middleware import auth_middleware
-from src.constants.network_constants import NetworkConstants
 from src.utils.catalog_http_exceptions import (
     raise_auth_error,
     raise_server_error,

@@ -18,8 +18,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import yaml
 
-from src.constants.network_constants import NetworkConstants
-from src.intelligence.os_detector import OSType, get_os_detector
+from src.intelligence.os_detector import get_os_detector
 
 logger = logging.getLogger(__name__)
 

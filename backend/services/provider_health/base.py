@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from src.constants.network_constants import NetworkConstants
 
 
 class ProviderStatus(str, Enum):
@@ -84,7 +83,6 @@ class BaseProviderHealth(ABC):
         Returns:
             ProviderHealthResult with health status information
         """
-        pass
 
     def _create_result(
         self,

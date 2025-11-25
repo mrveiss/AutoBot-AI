@@ -22,7 +22,6 @@ from src.agents.npu_code_search_agent import (
     index_project,
     search_codebase,
 )
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_client import get_redis_client
 

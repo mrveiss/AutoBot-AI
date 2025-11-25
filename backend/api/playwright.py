@@ -7,7 +7,6 @@ Provides native API access to containerized Playwright functionality
 """
 
 import logging
-from typing import Optional
 
 import aiohttp
 from fastapi import APIRouter, BackgroundTasks, HTTPException

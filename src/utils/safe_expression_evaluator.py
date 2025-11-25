@@ -9,7 +9,6 @@ import ast
 import operator as op
 from typing import Any, Dict
 
-from src.constants.network_constants import NetworkConstants
 
 
 class SafeExpressionEvaluator:

@@ -10,16 +10,13 @@ import ast
 import asyncio
 import json
 import logging
-import os
 import re
-import time
 import uuid
-from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -162,7 +159,7 @@ class InMemoryStorage:
         return self.data.get(key, set())
 
     def scan_iter(self, match: str):
-        import fnmatch
+        pass
 
         pattern = match.replace("*", ".*")
         for key in self.data.keys():

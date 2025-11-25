@@ -20,7 +20,6 @@ from pydantic import BaseModel, Field
 from backend.dependencies import get_knowledge_base
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

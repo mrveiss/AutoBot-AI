@@ -8,20 +8,18 @@ Handles chat-specific file associations, knowledge context, and compilation
 """
 
 import asyncio
-import json
 import logging
 import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from src.chat_history_manager import ChatHistoryManager
-from src.constants.network_constants import NetworkConstants
 
 # Import existing components
 from src.knowledge_base import KnowledgeBase

@@ -27,7 +27,6 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from weakref import WeakValueDictionary
 
-from src.constants.network_constants import NetworkConstants
 
 # Add project root to path for imports
 sys.path.insert(
@@ -210,12 +209,10 @@ class ErrorRecoveryHandler(ABC):
     @abstractmethod
     def can_handle(self, error: Exception, context: ErrorContext) -> bool:
         """Check if this handler can handle the given error"""
-        pass
 
     @abstractmethod
     async def handle(self, error: Exception, context: ErrorContext) -> Any:
         """Handle the error and return a recovery value or re-raise"""
-        pass
 
 
 class RetryRecoveryHandler(ErrorRecoveryHandler):

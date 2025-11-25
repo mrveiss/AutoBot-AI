@@ -30,19 +30,16 @@ logger = logging.getLogger(__name__)
 class RedisServiceException(Exception):
     """Base exception for Redis Stack service operations"""
 
-    pass
 
 
 class RedisConnectionError(RedisServiceException):
     """Raised when cannot connect to Redis VM"""
 
-    pass
 
 
 class RedisPermissionError(RedisServiceException):
     """Raised when user lacks permissions for operation"""
 
-    pass
 
 
 @dataclass

@@ -9,13 +9,11 @@ Intelligent routing and optimization for NPU/GPU/CPU semantic processing
 
 import asyncio
 import io
-import json
-import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
 import numpy as np
@@ -23,7 +21,6 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
-from src.constants.network_constants import NetworkConstants
 
 # Import centralized components
 from src.unified_config_manager import cfg

@@ -41,9 +41,6 @@ from typing import (
 
 from typing_extensions import NotRequired, TypedDict
 
-# Standard typing imports
-from src.constants.network_constants import NetworkConstants
-
 # Common type aliases
 StrDict = Dict[str, Any]
 StrList = List[str]

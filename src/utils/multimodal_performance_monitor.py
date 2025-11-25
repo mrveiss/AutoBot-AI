@@ -7,17 +7,15 @@ Multi-Modal Performance Monitor
 GPU memory management, batch processing optimization, and performance monitoring for RTX 4070
 """
 
-import asyncio
 import logging
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 import numpy as np
 import psutil
 
-from src.constants.network_constants import NetworkConstants
 
 try:
     import torch

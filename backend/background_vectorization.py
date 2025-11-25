@@ -10,10 +10,9 @@ Uses FastAPI background tasks and periodic checks.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

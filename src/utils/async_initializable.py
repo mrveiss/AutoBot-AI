@@ -119,8 +119,8 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Dict, Optional
+from dataclasses import dataclass
+from typing import Optional
 
 from src.utils.error_boundaries import error_boundary
 
@@ -214,7 +214,6 @@ class AsyncInitializable(ABC):
         Raises:
             Exception: Exceptions are caught and logged by base class
         """
-        pass
 
     async def _cleanup_impl(self):
         """
@@ -223,7 +222,6 @@ class AsyncInitializable(ABC):
         Override this method if your component needs to clean up
         partially initialized resources when initialization fails.
         """
-        pass
 
     @error_boundary(component="async_initializable", function="initialize")
     async def initialize(self) -> bool:
@@ -392,11 +390,9 @@ class SyncInitializable(ABC):
         Returns:
             bool: True if initialization successful, False otherwise
         """
-        pass
 
     def _cleanup_impl(self):
         """Optional: Cleanup resources on initialization failure"""
-        pass
 
     def initialize(self) -> bool:
         """

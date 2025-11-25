@@ -9,22 +9,18 @@ Provides unified interface for agents running locally or in containers
 import asyncio
 import json
 import logging
-import time
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 # Import communication protocol
-from src.constants.network_constants import NetworkConstants
 from src.protocols.agent_communication import (
-    AgentCommunicationManager,
     AgentIdentity,
     MessageHeader,
     MessagePayload,
-    MessagePriority,
     MessageType,
     StandardMessage,
     get_communication_manager,
@@ -153,7 +149,6 @@ class BaseAgent(ABC):
         Main request processing method.
         Must be implemented by all agents.
         """
-        pass
 
     @abstractmethod
     def get_capabilities(self) -> List[str]:
@@ -161,7 +156,6 @@ class BaseAgent(ABC):
         Return list of capabilities this agent supports.
         Used for request routing and service discovery.
         """
-        pass
 
     async def health_check(self) -> AgentHealth:
         """

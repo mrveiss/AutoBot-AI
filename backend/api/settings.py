@@ -3,10 +3,9 @@
 # Author: mrveiss
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from backend.services.config_service import ConfigService
-from src.constants.network_constants import NetworkConstants
 from src.utils.catalog_http_exceptions import raise_server_error
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 

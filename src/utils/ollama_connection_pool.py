@@ -15,9 +15,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
-import aiohttp
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)

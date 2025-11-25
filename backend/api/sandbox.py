@@ -10,7 +10,7 @@ API endpoints for executing commands in the secure Docker sandbox environment.
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -19,7 +19,6 @@ from src.secure_sandbox_executor import (
     SandboxConfig,
     SandboxExecutionMode,
     SandboxSecurityLevel,
-    execute_in_sandbox,
     get_secure_sandbox,
 )
 from src.utils.error_boundaries import ErrorCategory, with_error_handling

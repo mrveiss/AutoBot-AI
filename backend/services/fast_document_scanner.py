@@ -7,15 +7,12 @@ Uses file metadata instead of content reading for 100x speed improvement
 """
 
 import gzip
-import json
 import logging
 import os
 import subprocess
 import time
 from dataclasses import asdict, dataclass
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 

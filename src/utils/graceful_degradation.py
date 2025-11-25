@@ -10,15 +10,13 @@ import asyncio
 import hashlib
 import json
 import logging
-import pickle
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -76,19 +74,16 @@ class FallbackStrategy(ABC):
     @abstractmethod
     async def can_handle(self, request: str, context: Dict[str, Any]) -> bool:
         """Check if this strategy can handle the request"""
-        pass
 
     @abstractmethod
     async def generate_response(
         self, request: str, context: Dict[str, Any]
     ) -> FallbackResponse:
         """Generate a fallback response"""
-        pass
 
     @abstractmethod
     def get_strategy_name(self) -> str:
         """Get the name of this strategy"""
-        pass
 
 
 class CachedResponseStrategy(FallbackStrategy):

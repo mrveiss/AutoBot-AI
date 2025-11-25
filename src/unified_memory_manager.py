@@ -32,9 +32,8 @@ import gc
 import hashlib
 import json
 import logging
-import os
 from collections import OrderedDict
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
@@ -50,9 +49,6 @@ except ImportError:
     PSUTIL_AVAILABLE = False
     logging.warning("psutil not available - memory monitoring disabled")
 
-from src.constants.network_constants import NetworkConstants
-from src.utils.common import PathUtils
-from src.utils.database_pool import get_connection_pool
 
 logger = logging.getLogger(__name__)
 

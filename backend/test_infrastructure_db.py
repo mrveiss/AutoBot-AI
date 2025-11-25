@@ -7,7 +7,6 @@ Test Suite for Infrastructure Database Foundation
 Comprehensive tests for SQLAlchemy models and InfrastructureDB service layer.
 """
 
-import asyncio
 import os
 import sys
 from pathlib import Path
@@ -16,10 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from backend.models.infrastructure import (
-    InfraCredential,
-    InfraDeployment,
     InfraHost,
-    InfraRole,
 )
 from backend.services.infrastructure_db import InfrastructureDB
 from src.constants.network_constants import NetworkConstants

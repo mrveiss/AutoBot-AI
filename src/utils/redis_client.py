@@ -71,7 +71,6 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from threading import Lock
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 from weakref import WeakSet
@@ -81,14 +80,8 @@ import redis.asyncio as async_redis
 import yaml
 from redis.backoff import ExponentialBackoff
 from redis.connection import ConnectionPool
-from redis.exceptions import ConnectionError, RedisError, ResponseError, TimeoutError
+from redis.exceptions import ConnectionError, ResponseError
 from redis.retry import Retry
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 from src.constants.network_constants import NetworkConstants
 from src.monitoring.prometheus_metrics import get_metrics_manager

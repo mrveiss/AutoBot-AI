@@ -49,7 +49,6 @@ def _get_config_default(key: str, fallback: str) -> str:
 class InputTimeoutError(Exception):
     """Raised when input operation times out."""
 
-    pass
 
 
 class TerminalInputHandler:

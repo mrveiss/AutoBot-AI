@@ -13,10 +13,8 @@ Integrated with the existing AutoBot backend architecture.
 
 import asyncio
 import logging
-import os
 import sys
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import (
     APIRouter,
@@ -29,7 +27,6 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -39,16 +36,12 @@ sys.path.append(str(PATH.PROJECT_ROOT))
 # Import our long-running operations framework
 try:
     from src.utils.long_running_operations_framework import (
-        OperationPriority,
         OperationStatus,
         OperationType,
     )
     from src.utils.operation_timeout_integration import (
         CreateOperationRequest,
-        OperationListResponse,
         OperationMigrator,
-        OperationResponse,
-        ProgressUpdateRequest,
         operation_integration_manager,
     )
 except ImportError as e:

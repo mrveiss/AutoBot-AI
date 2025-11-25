@@ -9,7 +9,6 @@ session ownership validation, authentication, and authorization.
 """
 
 import logging
-import mimetypes
 import secrets
 from datetime import datetime
 from enum import Enum
@@ -22,7 +21,6 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from src.auth_middleware import auth_middleware
-from src.constants.network_constants import NetworkConstants
 from src.security_layer import SecurityLayer
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 

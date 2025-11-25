@@ -11,7 +11,6 @@ import sys
 from datetime import datetime
 from typing import Optional
 
-from src.constants.network_constants import NetworkConstants
 
 
 class ScriptFormatter:

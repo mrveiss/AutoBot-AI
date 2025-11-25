@@ -7,25 +7,18 @@ Multi-Modal AI Processing API Endpoints
 Provides REST API access to GPU-accelerated multi-modal AI capabilities
 """
 
-import asyncio
-import base64
-import io
 import logging
 import time
 import uuid
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-import numpy as np
 import torch
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from src.ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
 
 # Import AutoBot multi-modal components
-from src.constants.network_constants import NetworkConstants
 from src.npu_semantic_search import get_npu_search_engine
 from src.unified_multimodal_processor import (
     ModalityType,

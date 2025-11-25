@@ -11,7 +11,6 @@ import asyncio
 import logging
 from typing import Any, Dict, List
 
-from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface

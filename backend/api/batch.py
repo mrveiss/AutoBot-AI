@@ -15,7 +15,6 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -76,7 +75,6 @@ async def batch_load(batch_request: BatchRequest):
     """
     import time
 
-    from fastapi import Request
 
     from backend.fast_app_factory_fix import app
 
@@ -187,8 +185,6 @@ async def batch_chat_initialization():
 # Helper functions for batch initialization
 async def get_chat_sessions():
     """Get chat sessions list using async file operations"""
-    import os
-    from datetime import datetime
 
     from backend.fast_app_factory_fix import app
 

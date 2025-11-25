@@ -16,7 +16,6 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -663,7 +662,6 @@ class SimpleCacheManager:
         """Ensure Redis client is initialized (backward compatibility)"""
         # AdvancedCacheManager auto-initializes, so this is a no-op
         # But we keep it for API compatibility
-        pass
 
     async def get(self, key: str) -> Optional[Any]:
         """Get cached value"""

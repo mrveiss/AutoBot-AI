@@ -7,18 +7,15 @@ Integrates with VirusTotal, URLVoid, and threat intelligence feeds
 """
 
 import asyncio
-import hashlib
-import json
 import logging
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 import aiohttp
 import yaml
 from cachetools import TTLCache
 
-from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)

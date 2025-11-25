@@ -10,7 +10,6 @@ consistent configuration across the entire codebase.
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings

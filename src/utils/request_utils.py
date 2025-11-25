@@ -15,7 +15,6 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from src.constants.network_constants import NetworkConstants
 
 
 def generate_request_id() -> str:

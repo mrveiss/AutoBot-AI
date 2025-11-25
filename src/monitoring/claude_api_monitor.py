@@ -8,18 +8,13 @@ Provides comprehensive monitoring of Claude API usage patterns to predict
 and prevent rate limit issues during development conversations.
 """
 
-import asyncio
-import json
 import logging
 import statistics
 import time
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

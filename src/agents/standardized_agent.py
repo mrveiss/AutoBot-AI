@@ -19,7 +19,6 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 
 from .base_agent import AgentRequest, AgentResponse, BaseAgent, DeploymentMode
 
@@ -285,7 +284,6 @@ class StandardizedAgent(BaseAgent):
     @abstractmethod
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities - must be implemented by subclasses"""
-        pass
 
     # Convenience methods for common action patterns
 

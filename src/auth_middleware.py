@@ -7,8 +7,6 @@ Provides JWT-based authentication, session management, and role-based access con
 """
 
 import datetime
-import hashlib
-import hmac
 import json
 import logging
 import os
@@ -17,10 +15,8 @@ from typing import Dict, Optional, Tuple
 
 import bcrypt
 import jwt
-from fastapi import HTTPException, Request
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Request
 
-from src.constants.network_constants import NetworkConstants
 from src.security_layer import SecurityLayer
 from src.unified_config_manager import UnifiedConfigManager
 from src.utils.catalog_http_exceptions import raise_auth_error

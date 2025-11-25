@@ -17,7 +17,7 @@ Endpoints:
 
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -32,7 +32,6 @@ from backend.services.feature_flags import (
     FeatureFlags,
     get_feature_flags,
 )
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

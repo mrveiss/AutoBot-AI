@@ -14,7 +14,6 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-from src.constants.network_constants import NetworkConstants
 
 
 class CommonUtils:

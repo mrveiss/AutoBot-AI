@@ -8,8 +8,6 @@ Provides unified health checking for all LLM providers (Ollama, OpenAI, Anthropi
 Ensures providers are available before attempting to use them.
 """
 
-from src.constants.network_constants import NetworkConstants
-
 from .base import ProviderHealthResult, ProviderStatus
 from .manager import ProviderHealthManager
 from .providers import (

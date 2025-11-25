@@ -23,9 +23,8 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import Request, Response
+from fastapi import Request
 
-from src.constants.network_constants import NetworkConstants
 
 # Import centralized Redis client utility
 from src.utils.redis_client import get_redis_client

@@ -10,16 +10,14 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 # Import our components
-from src.constants.network_constants import NetworkConstants
 
 from .conversation_rate_limiter import ConversationRateLimiter
 from .payload_optimizer import PayloadOptimizer
 from .request_batcher import (
     BatchableRequest,
-    BatchingStrategy,
     IntelligentRequestBatcher,
     RequestPriority,
     create_batcher,

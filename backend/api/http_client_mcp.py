@@ -27,7 +27,6 @@ Issue #49 - Additional MCP Bridges (Browser, HTTP, Database, Git)
 import asyncio
 import json
 import logging
-import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
@@ -257,13 +256,11 @@ class HTTPPatchRequest(HTTPRequestBase):
 class HTTPDeleteRequest(HTTPRequestBase):
     """DELETE request model"""
 
-    pass
 
 
 class HTTPHeadRequest(HTTPRequestBase):
     """HEAD request model"""
 
-    pass
 
 
 # MCP Tool Definitions

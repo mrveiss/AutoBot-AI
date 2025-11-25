@@ -16,8 +16,7 @@ from typing import Any, Dict, List, Optional
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from src.constants.network_constants import NetworkConstants
-from src.dependency_container import get_config, get_llm, inject_services
+from src.dependency_container import inject_services
 from src.llm_interface import ChatMessage, LLMResponse
 
 logger = logging.getLogger(__name__)

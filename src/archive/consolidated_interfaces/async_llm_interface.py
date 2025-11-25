@@ -10,10 +10,8 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
-import aiofiles
 import aiohttp
 import xxhash
 from pydantic import Field
@@ -26,7 +24,7 @@ from tenacity import (
 )
 
 from src.constants.network_constants import NetworkConstants
-from src.utils.async_redis_manager import async_redis_manager, redis_get, redis_set
+from src.utils.async_redis_manager import redis_get, redis_set
 
 logger = logging.getLogger(__name__)
 

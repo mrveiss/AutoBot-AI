@@ -32,7 +32,6 @@ from backend.models.npu_models import (
     WorkerTestResult,
 )
 from backend.services.npu_worker_manager import get_worker_manager
-from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

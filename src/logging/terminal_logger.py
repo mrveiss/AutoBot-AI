@@ -12,16 +12,13 @@ Provides detailed logging of terminal commands with:
 """
 
 import logging
-import os
 import re
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiofiles
 
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

@@ -14,14 +14,12 @@ Usage:
 """
 
 import time
-from typing import Any, Dict, Optional
+from typing import Dict
 
 import httpx
 import structlog
 
 from backend.security.service_auth import ServiceAuthManager
-from src.constants.network_constants import NetworkConstants
-from src.constants.path_constants import PATH
 
 logger = structlog.get_logger()
 

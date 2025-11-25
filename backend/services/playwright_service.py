@@ -6,12 +6,10 @@ Embedded Playwright Service
 Integrates Docker-based Playwright into the main AutoBot application
 """
 
-import asyncio
-import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import aiohttp
 

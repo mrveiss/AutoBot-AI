@@ -9,7 +9,7 @@ Provides network mapping and asset discovery capabilities
 import ipaddress
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.command_utils import execute_shell_command

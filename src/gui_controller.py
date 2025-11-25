@@ -7,7 +7,6 @@ import subprocess
 
 import pyautogui
 
-from src.constants.network_constants import NetworkConstants
 
 
 class GUIController:

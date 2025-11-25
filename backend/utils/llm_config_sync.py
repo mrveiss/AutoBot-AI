@@ -16,10 +16,9 @@ This runs as part of the system startup to ensure configuration consistency.
 
 import asyncio
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 # Import network constants
-from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

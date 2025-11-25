@@ -17,7 +17,6 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 from src.agents.enhanced_kb_librarian import EnhancedKBLibrarian
-from src.constants.network_constants import NetworkConstants
 from src.knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)

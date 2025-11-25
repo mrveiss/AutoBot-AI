@@ -5,7 +5,6 @@ import json
 import shutil
 import subprocess
 
-from src.constants.network_constants import NetworkConstants
 
 ESSENTIAL_TOOLS = [
     "bash",

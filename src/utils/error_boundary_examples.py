@@ -16,7 +16,6 @@ import os
 import sys
 from typing import Any, Dict, List
 
-from src.constants.network_constants import NetworkConstants
 
 # Add project root to path for imports  # noqa: E402
 sys.path.insert(

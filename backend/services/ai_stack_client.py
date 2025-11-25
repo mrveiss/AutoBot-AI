@@ -11,12 +11,11 @@ This module provides a centralized interface for communicating with the AI Stack
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
 
 import aiohttp
-from fastapi import HTTPException
 
 from src.constants.network_constants import NetworkConstants
 
@@ -48,7 +47,7 @@ class AIStackClient:
 
     def __init__(self, base_url: Optional[str] = None):
         # Get configuration
-        from src.unified_config_manager import unified_config_manager
+        pass
 
         # Use NetworkConstants for AI Stack configuration
         ai_stack_config = {

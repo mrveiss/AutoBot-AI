@@ -475,7 +475,6 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         logger.info(f"Knowledge sync requested for machines: {target_machine_ids}")
         # This would implement knowledge sharing between connected AutoBot instances
         # For now, just log the request
-        pass
 
     async def _integrate_man_pages(self):
         """Integrate man pages for tools available on this machine"""

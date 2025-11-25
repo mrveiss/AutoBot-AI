@@ -22,9 +22,8 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 
 # Add AutoBot paths
@@ -37,7 +36,6 @@ from .long_running_operations_framework import (
     OperationType,
 )
 from .operation_timeout_integration import (
-    long_running_operation,
     operation_integration_manager,
 )
 
@@ -227,7 +225,6 @@ class ExistingOperationMigrator:
 
             # Run tests with proper resource management
             import concurrent.futures
-            import subprocess
 
             # Limit concurrent test execution
             max_concurrent = min(4, len(test_files))

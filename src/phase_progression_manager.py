@@ -7,16 +7,14 @@ Automated Phase Progression Manager for AutoBot
 Implements intelligent phase progression logic with automated promotions and self-awareness
 """
 
-import asyncio
 import json
 import logging
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
-from scripts.phase_validation_system import PhaseValidationCriteria, PhaseValidator
-from src.constants.network_constants import NetworkConstants
+from scripts.phase_validation_system import PhaseValidator
 from src.project_state_manager import ProjectStateManager
 
 # Setup logging

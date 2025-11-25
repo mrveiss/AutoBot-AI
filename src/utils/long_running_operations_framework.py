@@ -29,29 +29,19 @@ Operation Types Supported:
 import asyncio
 import json
 import logging
-import os
 import pickle
-import signal
 import time
 import uuid
-from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from pathlib import Path
-from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional
 
 import redis.asyncio as redis
 
 # Import existing timeout framework
-from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 
-from .adaptive_timeouts import (
-    AdaptiveTimeout,
-    AdaptiveTimeoutConfig,
-    TimeoutCategory,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -868,7 +858,6 @@ async def execute_codebase_indexing(
     async def indexing_operation(context: OperationExecutionContext):
         """Actual indexing implementation"""
 
-        import fnmatch
         from pathlib import Path
 
         path = Path(codebase_path)
@@ -949,7 +938,6 @@ async def execute_comprehensive_test_suite(
     async def test_suite_operation(context: OperationExecutionContext):
         """Actual test suite implementation"""
 
-        import subprocess
         from pathlib import Path
 
         path = Path(test_suite_path)

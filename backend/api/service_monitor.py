@@ -8,7 +8,6 @@ Comprehensive monitoring of all AutoBot services
 
 import asyncio
 import logging
-import os
 import subprocess
 import time
 from datetime import datetime

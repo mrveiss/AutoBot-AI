@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any, Dict, List
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from src.constants.network_constants import NetworkConstants
 
 if TYPE_CHECKING:
     from src.intelligence.intelligent_agent import IntelligentAgent
