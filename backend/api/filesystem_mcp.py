@@ -470,7 +470,7 @@ async def read_text_file_mcp(request: ReadTextFileRequest) -> Dict[str, Any]:
     """Read text file with security validation"""
     if not is_path_allowed(request.path):
         raise HTTPException(
-            status_code=403, detail=f"Access denied: Path not in allowed directories"
+            status_code=403, detail="Access denied: Path not in allowed directories"
         )
 
     if not os.path.exists(request.path):
@@ -646,7 +646,7 @@ async def write_file_mcp(request: WriteFileRequest) -> Dict[str, Any]:
             "success": True,
             "path": request.path,
             "size_bytes": file_size,
-            "message": f"File written successfully",
+            "message": "File written successfully",
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error writing file: {str(e)}")
