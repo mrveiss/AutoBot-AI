@@ -10,6 +10,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
+from backend.type_defs.common import Metadata
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -28,10 +30,10 @@ logger = logging.getLogger(__name__)
 class StateChangeRequest(BaseModel):
     change_type: str
     description: str
-    after_state: Dict[str, Any]
-    before_state: Optional[Dict[str, Any]] = None
+    after_state: Metadata
+    before_state: Optional[Metadata] = None
     user_id: Optional[str] = "system"
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Metadata] = None
 
 
 class ExportRequest(BaseModel):

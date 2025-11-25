@@ -13,6 +13,8 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from backend.type_defs.common import Metadata
+
 import redis
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -37,7 +39,7 @@ class ServiceStatus(BaseModel):
     message: str
     response_time: Optional[int] = None
     last_check: datetime
-    details: Optional[Dict[str, Any]] = None
+    details: Optional[Metadata] = None
     icon: str = "fas fa-server"
     category: str = "system"
 
@@ -49,7 +51,7 @@ class VMStatus(BaseModel):
     message: str
     response_time: Optional[int] = None
     last_check: datetime
-    details: Optional[Dict[str, Any]] = None
+    details: Optional[Metadata] = None
     icon: str = "fas fa-server"
     services: List[str] = []
 

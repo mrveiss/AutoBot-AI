@@ -10,6 +10,8 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from backend.type_defs.common import Metadata
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
@@ -45,14 +47,14 @@ class TaskCreateRequest(BaseModel):
     description: str
     priority: str = "medium"  # low, medium, high, critical
     agent_type: Optional[str] = None
-    inputs: Optional[Dict[str, Any]] = None
+    inputs: Optional[Metadata] = None
     parent_task_id: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Metadata] = None
 
 
 class TaskUpdateRequest(BaseModel):
     status: Optional[str] = None  # pending, in_progress, completed, failed, cancelled
-    outputs: Optional[Dict[str, Any]] = None
+    outputs: Optional[Metadata] = None
     error_message: Optional[str] = None
 
 

@@ -26,6 +26,8 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
+from backend.type_defs.common import Metadata
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
@@ -72,7 +74,7 @@ class EntityExtractionRequest(BaseModel):
     messages: List[Message] = Field(
         ..., min_items=1, description="Conversation messages"
     )
-    session_metadata: Optional[Dict[str, Any]] = Field(
+    session_metadata: Optional[Metadata] = Field(
         None, description="Optional session metadata"
     )
 

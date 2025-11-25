@@ -14,6 +14,8 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from backend.type_defs.common import Metadata
+
 import aiohttp
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -73,7 +75,7 @@ class ServiceInfo(BaseModel):
     status: str  # "online", "offline", "warning", "error"
     response_time: Optional[str] = None
     error: Optional[str] = None
-    details: Optional[Dict[str, Any]] = None
+    details: Optional[Metadata] = None
     last_check: Optional[datetime] = None
 
 

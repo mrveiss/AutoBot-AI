@@ -13,6 +13,8 @@ import json
 import logging
 from datetime import datetime
 from typing import Any, Dict, Optional
+
+from backend.type_defs.common import Metadata
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -58,7 +60,7 @@ class EnhancedChatMessage(BaseModel):
     )
     session_id: Optional[str] = Field(None, description="Chat session ID")
     message_type: Optional[str] = Field("text", description="Message type")
-    metadata: Optional[Dict[str, Any]] = Field(
+    metadata: Optional[Metadata] = Field(
         default_factory=dict, description="Additional metadata"
     )
 
