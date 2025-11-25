@@ -22,7 +22,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
-from backend.types.common import Metadata
+from backend.type_defs.common import Metadata
 
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, HTTPException, Query

@@ -129,7 +129,7 @@ const { isConnected, isConnecting, send: wsSend, connect: wsConnect, disconnect:
       }
     },
     onError: (error) => {
-      console.error('[WorkingTerminal] WebSocket error:', error)
+      console.error('[Terminal] WebSocket error:', error)
       statusMessage.value = 'Connection error'
       addTerminalLine('system', 'Connection error occurred', 'error')
     },
@@ -186,6 +186,9 @@ const initializeSession = async (): Promise<string> => {
         `/api/agent-terminal/sessions?conversation_id=${props.chatSessionId}`
       )
       const response = await fetch(sessionsUrl)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch sessions: ${response.status} ${response.statusText}`)
+      }
       const data = await response.json()
 
       if (data.sessions && data.sessions.length > 0) {
@@ -209,6 +212,9 @@ const initializeSession = async (): Promise<string> => {
           })
         })
 
+        if (!createResponse.ok) {
+          throw new Error(`Failed to create session: ${createResponse.status} ${createResponse.statusText}`)
+        }
         const createData = await createResponse.json()
         sessionId.value = createData.session_id
         addTerminalLine('system', `Created new terminal session ${sessionId.value?.slice(-8) || 'unknown'}`, 'success')
@@ -262,7 +268,7 @@ const connectTerminal = async () => {
     wsConnect()
 
   } catch (error) {
-    console.error('[WorkingTerminal] Connection failed:', error)
+    console.error('[Terminal] Connection failed:', error)
     statusMessage.value = 'Failed to connect'
     addTerminalLine('system', `Connection failed: ${error}`, 'error')
   }
@@ -311,7 +317,7 @@ const sendCommand = (command: string) => {
     currentCommand.value = ''
 
   } catch (error) {
-    console.error('[WorkingTerminal] Failed to send command:', error)
+    console.error('[Terminal] Failed to send command:', error)
     addTerminalLine('system', `Failed to send command: ${error}`, 'error')
   }
 }
