@@ -11,8 +11,13 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+from backend.utils.response_builder import (
+    error_response,
+    service_unavailable_response,
+    success_response,
+)
 
 from src.constants.network_constants import NetworkConstants
 from src.secure_sandbox_executor import (
@@ -101,25 +106,31 @@ async def execute_command(request: SandboxExecuteRequest):
         # Execute command
         result = await sandbox.execute_command(request.command, config)
 
-        return JSONResponse(
-            status_code=200 if result.success else 400,
-            content={
-                "success": result.success,
-                "exit_code": result.exit_code,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "execution_time": result.execution_time,
-                "container_id": result.container_id,
-                "security_events": result.security_events,
-                "resource_usage": result.resource_usage,
-                "metadata": result.metadata,
-            },
+        data = {
+            "exit_code": result.exit_code,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "execution_time": result.execution_time,
+            "container_id": result.container_id,
+            "security_events": result.security_events,
+            "resource_usage": result.resource_usage,
+            "metadata": result.metadata,
+        }
+        if result.success:
+            return success_response(data=data, message="Command executed successfully")
+        return error_response(
+            error="Command execution failed",
+            status_code=400,
+            error_code="EXECUTION_FAILED",
+            details=data,
         )
 
     except Exception as e:
         logger.error(f"Sandbox execution error: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Sandbox execution failed: {str(e)}"
+        return error_response(
+            error=f"Sandbox execution failed: {str(e)}",
+            status_code=500,
+            error_code="SANDBOX_ERROR",
         )
 
 
@@ -171,25 +182,31 @@ async def execute_script(request: SandboxScriptRequest):
             request.script_content, request.language, config
         )
 
-        return JSONResponse(
-            status_code=200 if result.success else 400,
-            content={
-                "success": result.success,
-                "exit_code": result.exit_code,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "execution_time": result.execution_time,
-                "container_id": result.container_id,
-                "security_events": result.security_events,
-                "resource_usage": result.resource_usage,
-                "metadata": result.metadata,
-            },
+        data = {
+            "exit_code": result.exit_code,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "execution_time": result.execution_time,
+            "container_id": result.container_id,
+            "security_events": result.security_events,
+            "resource_usage": result.resource_usage,
+            "metadata": result.metadata,
+        }
+        if result.success:
+            return success_response(data=data, message="Script executed successfully")
+        return error_response(
+            error="Script execution failed",
+            status_code=400,
+            error_code="SCRIPT_EXECUTION_FAILED",
+            details=data,
         )
 
     except Exception as e:
         logger.error(f"Script execution error: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Script execution failed: {str(e)}"
+        return error_response(
+            error=f"Script execution failed: {str(e)}",
+            status_code=500,
+            error_code="SANDBOX_ERROR",
         )
 
 
@@ -252,25 +269,33 @@ async def execute_batch(request: SandboxBatchRequest):
         # Execute as script
         result = await sandbox.execute_script(script_content, "bash", config)
 
-        return JSONResponse(
-            status_code=200 if result.success else 400,
-            content={
-                "success": result.success,
-                "commands_count": len(request.commands),
-                "exit_code": result.exit_code,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "execution_time": result.execution_time,
-                "container_id": result.container_id,
-                "security_events": result.security_events,
-                "resource_usage": result.resource_usage,
-                "metadata": result.metadata,
-            },
+        data = {
+            "commands_count": len(request.commands),
+            "exit_code": result.exit_code,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "execution_time": result.execution_time,
+            "container_id": result.container_id,
+            "security_events": result.security_events,
+            "resource_usage": result.resource_usage,
+            "metadata": result.metadata,
+        }
+        if result.success:
+            return success_response(data=data, message="Batch executed successfully")
+        return error_response(
+            error="Batch execution failed",
+            status_code=400,
+            error_code="BATCH_EXECUTION_FAILED",
+            details=data,
         )
 
     except Exception as e:
         logger.error(f"Batch execution error: {e}")
-        raise HTTPException(status_code=500, detail=f"Batch execution failed: {str(e)}")
+        return error_response(
+            error=f"Batch execution failed: {str(e)}",
+            status_code=500,
+            error_code="SANDBOX_ERROR",
+        )
 
 
 @with_error_handling(
@@ -292,37 +317,15 @@ async def get_sandbox_stats():
         # Get sandbox instance with lazy initialization
         sandbox = get_secure_sandbox()
         if sandbox is None:
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "status": "unavailable",
-                    "error": "Secure sandbox unavailable",
-                    "statistics": {
-                        "successful_executions": 0,
-                        "failed_executions": 0,
-                        "active_containers": 0,
-                    },
-                    "capabilities": {
-                        "security_levels": ["high", "medium", "low"],
-                        "execution_modes": [
-                            "command",
-                            "script",
-                            "batch",
-                            "interactive",
-                        ],
-                        "supported_languages": ["bash", "sh", "python", "python3"],
-                        "monitoring_enabled": False,
-                        "network_isolation": False,
-                        "resource_limits": False,
-                    },
-                },
+            return service_unavailable_response(
+                service="Secure sandbox",
+                retry_after=30,
             )
 
         stats = await sandbox.get_sandbox_stats()
 
-        return JSONResponse(
-            status_code=200,
-            content={
+        return success_response(
+            data={
                 "status": "operational",
                 "statistics": stats,
                 "capabilities": {
@@ -334,11 +337,16 @@ async def get_sandbox_stats():
                     "resource_limits": True,
                 },
             },
+            message="Sandbox stats retrieved",
         )
 
     except Exception as e:
         logger.error(f"Stats retrieval error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+        return error_response(
+            error=f"Failed to get stats: {str(e)}",
+            status_code=500,
+            error_code="STATS_ERROR",
+        )
 
 
 @with_error_handling(
@@ -351,9 +359,8 @@ async def get_security_levels():
     """
     Get detailed information about available security levels.
     """
-    return JSONResponse(
-        status_code=200,
-        content={
+    return success_response(
+        data={
             "levels": {
                 "high": {
                     "description": "Maximum isolation with strict command whitelist",
@@ -403,6 +410,7 @@ async def get_security_levels():
             },
             "default": "high",
         },
+        message="Security levels retrieved",
     )
 
 
@@ -416,9 +424,8 @@ async def get_sandbox_examples():
     """
     Get example sandbox execution requests.
     """
-    return JSONResponse(
-        status_code=200,
-        content={
+    return success_response(
+        data={
             "examples": {
                 "simple_command": {
                     "description": "Execute a simple command",
@@ -431,7 +438,8 @@ async def get_sandbox_examples():
                     "description": "Execute a Python script",
                     "request": {
                         "script_content": (
-                            "import sys\nprint(f'Python {sys.version}')\nprint('Secure execution successful!')"
+                            "import sys\nprint(f'Python {sys.version}')\n"
+                            "print('Secure execution successful!')"
                         ),
                         "language": "python",
                         "security_level": "medium",
@@ -469,4 +477,5 @@ async def get_sandbox_examples():
                 "Enable network only when absolutely necessary",
             ],
         },
+        message="Examples retrieved",
     )
