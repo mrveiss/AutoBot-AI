@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 
+from src.constants.model_constants import model_config
 from src.knowledge_base import KnowledgeBase
 from src.utils.logging_manager import get_llm_logger
 from src.utils.semantic_chunker_gpu import get_gpu_semantic_chunker
@@ -180,15 +181,16 @@ class AdvancedRAGOptimizer:
         expanded_queries = self._expand_query(query, query_type)
 
         # Determine optimal context length based on complexity
+        # Uses centralized constants from model_constants.py for maintainability
         if complexity_score > 0.8:
-            optimal_context_length = 3000
-            suggested_chunk_count = 8
+            optimal_context_length = model_config.RAG_CONTEXT_HIGH_COMPLEXITY
+            suggested_chunk_count = model_config.RAG_CHUNKS_HIGH_COMPLEXITY
         elif complexity_score > 0.6:
-            optimal_context_length = 2500
-            suggested_chunk_count = 6
+            optimal_context_length = model_config.RAG_CONTEXT_MEDIUM_COMPLEXITY
+            suggested_chunk_count = model_config.RAG_CHUNKS_MEDIUM_COMPLEXITY
         else:
-            optimal_context_length = 2000
-            suggested_chunk_count = 5
+            optimal_context_length = model_config.RAG_CONTEXT_LOW_COMPLEXITY
+            suggested_chunk_count = model_config.RAG_CHUNKS_LOW_COMPLEXITY
 
         context = QueryContext(
             original_query=query,
