@@ -252,6 +252,16 @@ class UnifiedConfigManager:
                 "db": int(os.getenv("AUTOBOT_REDIS_DB", "0")),
                 "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
             },
+            "celery": {
+                "visibility_timeout": int(
+                    os.getenv("AUTOBOT_CELERY_VISIBILITY_TIMEOUT", "43200")
+                ),  # 12 hours default
+                "result_expires": int(
+                    os.getenv("AUTOBOT_CELERY_RESULT_EXPIRES", "86400")
+                ),  # 24 hours default
+                "worker_prefetch_multiplier": 1,
+                "worker_max_tasks_per_child": 100,
+            },
             "memory": {
                 "redis": {
                     "enabled": True,

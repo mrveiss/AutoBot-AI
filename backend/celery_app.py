@@ -27,6 +27,13 @@ _celery_results_db = config.get("redis.databases.celery_results", 2)
 _default_broker_url = f"redis://{_redis_host}:{_redis_port}/{_celery_broker_db}"
 _default_backend_url = f"redis://{_redis_host}:{_redis_port}/{_celery_results_db}"
 
+# Get Celery-specific configuration
+_celery_config = config.get("celery", {})
+_visibility_timeout = _celery_config.get("visibility_timeout", 43200)  # 12 hours default
+_result_expires = _celery_config.get("result_expires", 86400)  # 24 hours default
+_worker_prefetch = _celery_config.get("worker_prefetch_multiplier", 1)
+_worker_max_tasks = _celery_config.get("worker_max_tasks_per_child", 100)
+
 # Configure Celery with Redis broker and result backend
 celery_app = Celery(
     "autobot",
@@ -52,13 +59,14 @@ celery_app.conf.update(
         "tasks.manage_service": {"queue": "services"},
     },
     # Worker configuration for long-running Ansible playbooks
-    worker_prefetch_multiplier=1,  # Only fetch one task at a time
-    worker_max_tasks_per_child=100,  # Restart worker after 100 tasks
+    # Uses centralized config from unified_config_manager
+    worker_prefetch_multiplier=_worker_prefetch,
+    worker_max_tasks_per_child=_worker_max_tasks,
     # Redis visibility timeout for long-running deployments
-    broker_transport_options={"visibility_timeout": 43200},  # 12 hours
-    result_backend_transport_options={"visibility_timeout": 43200},
-    # Task result expiration (24 hours)
-    result_expires=86400,
+    broker_transport_options={"visibility_timeout": _visibility_timeout},
+    result_backend_transport_options={"visibility_timeout": _visibility_timeout},
+    # Task result expiration
+    result_expires=_result_expires,
     # Enable task events for monitoring
     worker_send_task_events=True,
     task_send_sent_event=True,
