@@ -115,13 +115,23 @@ import signal
 import time
 import uuid
 from datetime import datetime
-from enum import Enum
-from typing import Dict, Optional
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
 
 from backend.services.simple_pty import simple_pty_manager
+
+# Import models from dedicated module (Issue #185 - split oversized files)
+from backend.api.terminal_models import (
+    CommandRequest,
+    CommandRiskLevel,
+    MODERATE_RISK_PATTERNS,
+    RISKY_COMMAND_PATTERNS,
+    SecurityLevel,
+    TerminalInputRequest,
+    TerminalSessionRequest,
+    ToolInstallRequest,
+)
 from src.chat_history_manager import ChatHistoryManager
 from src.constants.path_constants import PATH
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -130,114 +140,6 @@ logger = logging.getLogger(__name__)
 
 # Create router for consolidated terminal API
 router = APIRouter(tags=["terminal"])
-
-
-class SecurityLevel(Enum):
-    """Security levels for terminal access"""
-
-    STANDARD = "standard"
-    ELEVATED = "elevated"
-    RESTRICTED = "restricted"
-
-
-class CommandRiskLevel(Enum):
-    """Risk assessment levels for commands"""
-
-    SAFE = "safe"
-    MODERATE = "moderate"
-    HIGH = "high"
-    DANGEROUS = "dangerous"
-
-
-# Request/Response Models
-class CommandRequest(BaseModel):
-    command: str
-    description: Optional[str] = None
-    require_confirmation: Optional[bool] = True
-    timeout: Optional[float] = 30.0
-    working_directory: Optional[str] = None
-    environment: Optional[Dict[str, str]] = None
-
-
-class TerminalSessionRequest(BaseModel):
-    user_id: Optional[str] = "default"
-    conversation_id: Optional[str] = None  # Link to chat session for logging
-    security_level: Optional[SecurityLevel] = SecurityLevel.STANDARD
-    enable_logging: Optional[bool] = True
-    enable_workflow_control: Optional[bool] = True
-    initial_directory: Optional[str] = None
-
-
-class TerminalInputRequest(BaseModel):
-    text: str
-    is_password: Optional[bool] = False
-
-
-class WorkflowControlRequest(BaseModel):
-    action: str  # pause, resume, approve_step, cancel
-    workflow_id: Optional[str] = None
-    step_id: Optional[str] = None
-    data: Optional[Dict] = None
-
-
-class ToolInstallRequest(BaseModel):
-    tool_name: str
-    package_name: Optional[str] = None
-    install_method: Optional[str] = "auto"
-    custom_command: Optional[str] = None
-    update_first: Optional[bool] = True
-
-
-# Security patterns for command risk assessment
-RISKY_COMMAND_PATTERNS = [
-    # File system destructive operations
-    "rm -r",
-    "rm -r",
-    "sudo rm",
-    "rmdir",
-    # Disk operations
-    "dd if=",
-    "mkfs",
-    "fdisk",
-    "parted",
-    # Permission changes
-    "chmod 777",
-    "chmod -R 777",
-    "chown -R",
-    # System-level operations
-    "> /dev/",
-    "/dev/sda",
-    "/dev/sdb",
-    # Network security
-    "iptables -F",
-    "ufw disable",
-    # System shutdown
-    "shutdown",
-    "reboot",
-    "halt",
-    "powerof",
-    # Package management (can be risky)
-    "apt-get remove",
-    "yum remove",
-    "rm /etc/",
-    # Process killing
-    "kill -9",
-    "killall -9",
-]
-
-MODERATE_RISK_PATTERNS = [
-    "sudo",
-    "su -",
-    "chmod",
-    "chown",
-    "apt-get install",
-    "yum install",
-    "pip install",
-    "systemctl",
-    "service",
-    "mount",
-    "umount",
-]
 
 
 class ConsolidatedTerminalWebSocket:
