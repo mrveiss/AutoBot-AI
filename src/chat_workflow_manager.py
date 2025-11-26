@@ -56,6 +56,9 @@ from src.utils.error_boundaries import (
 )
 from src.utils.redis_client import get_redis_client as get_redis_manager
 
+# Import slash command handler - Issue #166
+from src.slash_command_handler import get_slash_command_handler
+
 logger = logging.getLogger(__name__)
 
 # =============================================================================
@@ -1450,6 +1453,43 @@ Explain what it means and answer their original question."""
                     )
                 except Exception as persist_error:
                     logger.error(f"Failed to persist exit message: {persist_error}")
+
+                return
+
+            # Stage 1.5: Check for slash commands (/docs, /help, /status) - Issue #166
+            slash_handler = get_slash_command_handler()
+            if slash_handler.is_slash_command(message):
+                logger.info(
+                    f"[ChatWorkflowManager] Processing slash command: {message[:50]}"
+                )
+                result = await slash_handler.execute(message)
+
+                cmd_msg = WorkflowMessage(
+                    type="response",
+                    content=result.content,
+                    metadata={
+                        "message_type": "slash_command",
+                        "command_type": result.command_type.value,
+                        "success": result.success,
+                        "file_paths": result.file_paths,
+                    },
+                )
+                workflow_messages.append(cmd_msg)
+                yield cmd_msg
+
+                # Persist slash command response
+                try:
+                    chat_mgr = ChatHistoryManager()
+                    await chat_mgr.add_message(
+                        sender="assistant",
+                        text=result.content,
+                        message_type="slash_command",
+                        session_id=session_id,
+                    )
+                except Exception as persist_error:
+                    logger.error(
+                        f"Failed to persist slash command response: {persist_error}"
+                    )
 
                 return
 
