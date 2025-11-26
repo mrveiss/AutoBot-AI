@@ -35,7 +35,6 @@ from typing import (
     Set,
     Tuple,
     TypeVar,
-    TypedDict,
     Union,
 )
 
