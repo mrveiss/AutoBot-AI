@@ -9,7 +9,6 @@ import json
 import requests
 import websockets
 import sys
-import uuid
 from datetime import datetime
 
 # Import centralized network configuration
