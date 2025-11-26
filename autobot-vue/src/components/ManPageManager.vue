@@ -439,7 +439,7 @@ export default {
           setProgressMessage('Machine profile not available (backend restart required)', 'warning')
         }
       } catch (error) {
-        console.error('Error refreshing machine profile:', error)
+        console.error('[ManPageManager] Error refreshing machine profile:', error)
         setProgressMessage('Could not connect to backend API', 'error')
         machineProfile.value = null
       } finally {
@@ -465,7 +465,7 @@ export default {
           setProgressMessage('Integration status not available (backend restart required)', 'warning')
         }
       } catch (error) {
-        console.error('Error refreshing integration status:', error)
+        console.error('[ManPageManager] Error refreshing integration status:', error)
         setProgressMessage('Could not connect to backend API', 'error')
         integrationStatus.value = { status: 'error', message: 'Connection failed' }
       } finally {
@@ -495,7 +495,7 @@ export default {
           throw new Error(response.message || 'Initialization failed')
         }
       } catch (error) {
-        console.error('Error initializing machine knowledge:', error)
+        console.error('[ManPageManager] Error initializing machine knowledge:', error)
         setProgressMessage(`Initialization failed: ${error.message}`, 'error')
       } finally {
         if (loading.value) loading.value.initialize = false
@@ -524,7 +524,7 @@ export default {
           throw new Error(response.message || 'Integration failed')
         }
       } catch (error) {
-        console.error('Error integrating man pages:', error)
+        console.error('[ManPageManager] Error integrating man pages:', error)
         setProgressMessage(`Integration failed: ${error.message}`, 'error')
       } finally {
         if (loading.value) loading.value.integrate = false
@@ -552,7 +552,7 @@ export default {
           throw new Error('Search failed')
         }
       } catch (error) {
-        console.error('Error searching man pages:', error)
+        console.error('[ManPageManager] Error searching man pages:', error)
         setProgressMessage(`Search failed: ${error.message}`, 'error')
         searchResults.value = []
       } finally {
@@ -629,7 +629,7 @@ export default {
         await refreshIntegrationStatus()
 
       } catch (error) {
-        console.error('Failed to initialize machine knowledge:', error)
+        console.error('[ManPageManager] Failed to initialize machine knowledge:', error)
         updateProgress('Initialization Failed', 0, error.message, 0, 'error')
         addProgressMessage(`Initialization failed: ${error.message}`, 'error')
         setProgressMessage(`Failed to initialize machine knowledge: ${error.message}`, 'error')
@@ -662,7 +662,7 @@ export default {
         await refreshIntegrationStatus()
 
       } catch (error) {
-        console.error('Failed to integrate man pages:', error)
+        console.error('[ManPageManager] Failed to integrate man pages:', error)
         updateProgress('Integration Failed', 0, error.message, 0, 'error')
         addProgressMessage(`Integration failed: ${error.message}`, 'error')
         setProgressMessage(`Failed to integrate man pages: ${error.message}`, 'error')

@@ -271,7 +271,7 @@ const refreshStatus = async () => {
       throw new Error(`Health check failed: ${response.status}`)
     }
   } catch (error) {
-    console.error('Manual health check failed:', error)
+    console.error('[SystemStatusIndicator] Manual health check failed:', error)
     appStore.setBackendStatus({
       text: 'Connection Error',
       class: 'error'
