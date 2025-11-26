@@ -16,7 +16,7 @@ import re
 import socket
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urlparse
 
 import aiohttp
@@ -503,12 +503,18 @@ class DomainSecurityManager:
             "reputation_services", {}
         )
 
-        # For now, return neutral score if no services configured
-        # TODO: Implement VirusTotal, URLVoid integration when API keys are available
+        # External reputation service integration
+        # Implementation requires:
+        # 1. API keys configured in secrets (VIRUSTOTAL_API_KEY, URLVOID_API_KEY)
+        # 2. Rate limiting to stay within API quotas
+        # 3. Async HTTP client for external API calls
+        # See: backend/api/secrets.py for secrets management
+        # See: Issue #164 for security implementation roadmap
         for service_name, service_config in reputation_services.items():
             if service_config.get("enabled", False) and service_config.get("api_key"):
                 logger.debug(
-                    f"Reputation service {service_name} configured but not implemented yet"
+                    f"Reputation service {service_name} is configured - "
+                    f"external API integration pending Issue #164 completion"
                 )
 
         # Default reputation based on basic heuristics

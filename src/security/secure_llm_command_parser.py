@@ -11,8 +11,9 @@ by validating LLM responses before extracting executable commands.
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
+from src.enhanced_security_layer import EnhancedSecurityLayer
 from src.security.prompt_injection_detector import (
     InjectionRisk,
     PromptInjectionDetector,
@@ -66,6 +67,9 @@ class SecureLLMCommandParser:
         self.command_validator = command_validator or CommandValidator()
         self.strict_mode = strict_mode
 
+        # Security layer for audit logging
+        self._security_layer: Optional[EnhancedSecurityLayer] = None
+
         # Statistics tracking
         self.stats = {
             "total_parses": 0,
@@ -75,6 +79,12 @@ class SecureLLMCommandParser:
         }
 
         logger.info(f"SecureLLMCommandParser initialized (strict_mode={strict_mode})")
+
+    def _get_security_layer(self) -> EnhancedSecurityLayer:
+        """Lazy initialization of security layer for audit logging."""
+        if self._security_layer is None:
+            self._security_layer = EnhancedSecurityLayer()
+        return self._security_layer
 
     def parse_commands(
         self, llm_response: str, user_goal: str = ""
@@ -296,10 +306,20 @@ class SecureLLMCommandParser:
             "strict_mode": self.strict_mode,
         }
 
-        # Log to security audit system (integrate with enhanced_security_layer)
+        # Log to standard logger
         logger.warning(f"SECURITY EVENT: {log_entry}")
 
-        # TODO: Integrate with enhanced_security_layer.audit_log()
+        # Log to enhanced security layer audit system
+        try:
+            security_layer = self._get_security_layer()
+            security_layer.audit_log(
+                action=f"llm_command_parser:{event_type}",
+                user="system",
+                outcome="blocked" if "blocked" in event_type.lower() else "detected",
+                details=log_entry,
+            )
+        except Exception as e:
+            logger.error(f"Failed to write to security audit log: {e}")
 
     def get_statistics(self) -> Dict[str, int]:
         """
