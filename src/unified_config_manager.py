@@ -39,6 +39,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 # Import host configurations
 # NOTE: Removed config_helper dependency (Issue #63 - Config Consolidation)
 # Convenience methods (get_host, get_port, etc.) are now built into this module
+from src.constants.model_constants import ModelConstants
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -594,8 +595,8 @@ class UnifiedConfigManager:
             logger.info(f"UNIFIED CONFIG: Selected model from environment: {env_model}")
             return env_model
 
-        # Final fallback
-        fallback_model = "mistral:7b"
+        # Final fallback - use centralized constant
+        fallback_model = ModelConstants.DEFAULT_OLLAMA_MODEL
         logger.warning(
             f"UNIFIED CONFIG: No model configured, using fallback: {fallback_model}"
         )
