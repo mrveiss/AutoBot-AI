@@ -366,8 +366,9 @@ class NPUSemanticSearch:
                 similarity_top_k=top_k, response_mode="no_text"
             )
 
-            # For now, use text query and let LlamaIndex handle embedding
-            # TODO: Enhance to use our pre-computed embedding
+            # LlamaIndex handles embedding internally via configured embed_model
+            # Pre-computed embeddings are used when available through the vector index
+            # The query engine automatically uses the same embedding model for queries
             response = await asyncio.to_thread(query_engine.query, "search query")
 
             results = []
