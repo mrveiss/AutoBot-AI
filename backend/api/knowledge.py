@@ -14,8 +14,9 @@ import uuid
 from datetime import datetime
 from enum import Enum
 from pathlib import Path as PathLib
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, overload
 
+from backend.type_defs.common import Metadata
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, Query, Request
 from pydantic import BaseModel, Field, validator
 
@@ -168,7 +169,7 @@ class AddTextRequest(BaseModel):
     """Request model for adding text to knowledge base"""
 
     text: str = Field(..., min_length=1, max_length=1000000)
-    metadata: Optional[Dict[str, Any]] = Field(default=None)
+    metadata: Optional[Metadata] = Field(default=None)
     category: Optional[str] = Field(default="general", max_length=100)
 
     @validator("metadata")
@@ -214,7 +215,7 @@ class RerankRequest(BaseModel):
     query: str = Field(
         ..., min_length=1, max_length=1000, description="Original search query"
     )
-    results: List[Dict[str, Any]] = Field(..., description="Search results to rerank")
+    results: List[Metadata] = Field(..., description="Search results to rerank")
 
 
 # ===== TAG MANAGEMENT MODELS (Issue #77) =====
@@ -558,7 +559,7 @@ def _generate_cache_key(fact_ids: List[str]) -> str:
 
 async def _check_vectorization_batch_internal(
     kb_instance, fact_ids: List[str], include_dimensions: bool = False
-) -> Dict[str, Any]:
+) -> Metadata:
     """
     Internal helper to check vectorization status for multiple facts using Redis pipeline.
 
@@ -2909,8 +2910,8 @@ async def query_knowledge(request: dict, req: Request):
 
 # Helper function for RAG enhancement
 async def _enhance_search_with_rag(
-    query: str, results: List[Dict[str, Any]]
-) -> Dict[str, Any]:
+    query: str, results: List[Metadata]
+) -> Metadata:
     """Enhance search results with RAG analysis"""
     try:
         rag_agent = get_rag_agent()
@@ -4324,7 +4325,7 @@ class UpdateFactRequest(BaseModel):
     """Request body for updating a fact"""
 
     content: Optional[str] = Field(None, description="New content for the fact")
-    metadata: Optional[Dict[str, Any]] = Field(
+    metadata: Optional[Metadata] = Field(
         None, description="Metadata updates (title, source, category, etc.)"
     )
 
