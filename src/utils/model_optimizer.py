@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 import psutil
 import yaml
 
+from src.constants.model_constants import ModelConstants
 from src.unified_config_manager import UnifiedConfigManager
 
 # Create singleton config instance
@@ -114,7 +115,9 @@ class ModelOptimizer:
                 }
 
             # Fallback to environment variable if config not found
-            default_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:1b")
+            default_model = os.getenv(
+                "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.LLAMA_32_1B
+            )
             logging.warning(
                 f"Model classifications config not found, using default model: {default_model}"
             )
@@ -126,7 +129,9 @@ class ModelOptimizer:
 
         except Exception as e:
             # Final fallback
-            default_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:1b")
+            default_model = os.getenv(
+                "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.LLAMA_32_1B
+            )
             logging.error(
                 f"Error loading model classifications: {e}, using default: {default_model}"
             )

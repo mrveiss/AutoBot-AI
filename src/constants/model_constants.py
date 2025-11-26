@@ -47,6 +47,7 @@ class ModelConstants:
     LLAMA_3_70B: str = "llama3:70b"
     LLAMA_3_8B: str = "llama3:8b"
     QWEN_72B: str = "qwen:72b"
+    QWEN_25_CODER_7B: str = "qwen2.5-coder-7b-instruct"  # Coder model - 7B params
     MISTRAL_7B: str = "mistral:7b"
 
     # Lightweight Models (for failsafe/classification scenarios)

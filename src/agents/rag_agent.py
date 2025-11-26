@@ -12,6 +12,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from src.constants.model_constants import ModelConstants
 from src.llm_interface import LLMInterface
 from src.unified_config_manager import config
 
@@ -31,9 +32,9 @@ class RAGAgent(StandardizedAgent):
 
         # Use unified config with lightweight fallback for performance
         try:
-            self.model_name = config.get("llm.models.rag", "gemma3:270m")
+            self.model_name = config.get("llm.models.rag", ModelConstants.GEMMA3_270M)
         except Exception:
-            self.model_name = "gemma3:270m"
+            self.model_name = ModelConstants.GEMMA3_270M
 
         self.capabilities = [
             "document_synthesis",
