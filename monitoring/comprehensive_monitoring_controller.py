@@ -16,7 +16,7 @@ import signal
 import sys
 
 # Import monitoring components
-from performance_monitor import PerformanceMonitor
+from performance_monitor import PerformanceMonitor, ALERT_THRESHOLDS
 from ai_performance_analytics import AIPerformanceAnalytics
 from business_intelligence_dashboard import BusinessIntelligenceDashboard
 from advanced_apm_system import AdvancedAPMSystem
@@ -389,13 +389,16 @@ class ComprehensiveMonitoringController:
         recommendations = []
 
         try:
-            # Performance-based recommendations
+            # Performance-based recommendations - use thresholds from config
+            cpu_threshold = ALERT_THRESHOLDS.get('cpu_percent', 80.0)
+            memory_threshold = ALERT_THRESHOLDS.get('memory_percent', 85.0)
+
             perf_data = self.monitoring_results.get('performance', {})
             sys_metrics = perf_data.get('system')
             if sys_metrics:
-                if hasattr(sys_metrics, 'cpu_percent') and sys_metrics.cpu_percent > 80:
+                if hasattr(sys_metrics, 'cpu_percent') and sys_metrics.cpu_percent > cpu_threshold:
                     recommendations.append("CPU utilization high - consider workload optimization")
-                if hasattr(sys_metrics, 'memory_percent') and sys_metrics.memory_percent > 85:
+                if hasattr(sys_metrics, 'memory_percent') and sys_metrics.memory_percent > memory_threshold:
                     recommendations.append("Memory utilization high - consider memory optimization")
 
             # AI analytics recommendations

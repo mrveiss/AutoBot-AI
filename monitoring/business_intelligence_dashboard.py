@@ -22,6 +22,7 @@ import pandas as pd
 import numpy as np
 from jinja2 import Template
 from src.constants.network_constants import NetworkConstants
+from performance_monitor import ALERT_THRESHOLDS
 
 
 @dataclass
@@ -473,8 +474,12 @@ class BusinessIntelligenceDashboard:
 
     def _generate_metric_recommendation(self, metric_name: str, trend: str, predicted_value: float) -> str:
         """Generate recommendations based on metric trends."""
+        # Get thresholds from centralized config
+        cpu_threshold = ALERT_THRESHOLDS.get('cpu_percent', 80.0)
+        memory_threshold = ALERT_THRESHOLDS.get('memory_percent', 85.0)
+
         if metric_name == "cpu_utilization":
-            if trend == "increasing" and predicted_value > 80:
+            if trend == "increasing" and predicted_value > cpu_threshold:
                 return "CPU utilization trending high - consider workload optimization or scaling"
             elif trend == "decreasing":
                 return "CPU utilization decreasing - good efficiency trend"
@@ -482,7 +487,7 @@ class BusinessIntelligenceDashboard:
                 return "CPU utilization stable - monitor for changes"
 
         elif metric_name == "memory_utilization":
-            if trend == "increasing" and predicted_value > 85:
+            if trend == "increasing" and predicted_value > memory_threshold:
                 return "Memory utilization trending high - consider memory optimization"
             else:
                 return "Memory utilization within acceptable range"
