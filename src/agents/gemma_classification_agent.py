@@ -183,31 +183,31 @@ Respond with valid JSON:
                     },
                     timeout=timeout,
                 ) as response:
-                        if response.status == 200:
-                            # Handle streaming response
-                            full_response = ""
-                            async for line in response.content:
-                                if line:
-                                    try:
-                                        chunk_data = json.loads(line.decode("utf-8"))
-                                        if "response" in chunk_data:
-                                            full_response += chunk_data["response"]
-                                        if chunk_data.get("done", False):
-                                            break
-                                    except json.JSONDecodeError:
-                                        continue
+                    if response.status == 200:
+                        # Handle streaming response
+                        full_response = ""
+                        async for line in response.content:
+                            if line:
+                                try:
+                                    chunk_data = json.loads(line.decode("utf-8"))
+                                    if "response" in chunk_data:
+                                        full_response += chunk_data["response"]
+                                    if chunk_data.get("done", False):
+                                        break
+                                except json.JSONDecodeError:
+                                    continue
 
-                            response_text = full_response.strip()
+                        response_text = full_response.strip()
 
-                            # Parse JSON response
-                            parsed_result = self._parse_json_response(response_text)
-                            if parsed_result:
-                                parsed_result["_model_used"] = model
-                                return parsed_result
-                        else:
-                            logger.warning(
-                                f"Gemma model {model} returned status {response.status}"
-                            )
+                        # Parse JSON response
+                        parsed_result = self._parse_json_response(response_text)
+                        if parsed_result:
+                            parsed_result["_model_used"] = model
+                            return parsed_result
+                    else:
+                        logger.warning(
+                            f"Gemma model {model} returned status {response.status}"
+                        )
 
             except Exception as e:
                 logger.warning(f"Failed to use Gemma model {model}: {e}")
