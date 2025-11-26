@@ -8,7 +8,9 @@
 set -e
 
 BASE_DIR="/home/kali/Desktop/AutoBot"
-KB_API="http://172.16.168.20:8001/api/knowledge_base/add_text"
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
+KB_API="http://${BACKEND_HOST}:${BACKEND_PORT}/api/knowledge_base/add_text"
 
 # Color codes
 GREEN='\033[0;32m'
@@ -94,5 +96,5 @@ upload_doc "docs/api/AGENT_TERMINAL_API.md" "Agent Terminal API Documentation"
 echo ""
 echo -e "${GREEN}✅ Knowledge base documentation reload complete!${NC}"
 echo ""
-echo "Run: curl -s http://172.16.168.20:8001/api/knowledge_base/stats | python3 -m json.tool"
+echo "Run: curl -s http://${BACKEND_HOST}:${BACKEND_PORT}/api/knowledge_base/stats | python3 -m json.tool"
 echo "To verify the knowledge base stats"
