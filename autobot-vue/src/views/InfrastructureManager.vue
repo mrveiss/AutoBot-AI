@@ -263,7 +263,7 @@ async function handleAddHost(formData: any) {
     showAddHostModal.value = false
     await refreshHosts()
   } catch (error) {
-    console.error('Failed to add host:', error)
+    console.error('[InfrastructureManager] Failed to add host:', error)
   }
 }
 
@@ -276,7 +276,7 @@ async function handleDeploy(hostId: string) {
     // Start polling for deployment status
     startDeploymentPolling(deployment.id)
   } catch (error) {
-    console.error('Failed to start deployment:', error)
+    console.error('[InfrastructureManager] Failed to start deployment:', error)
   }
 }
 
@@ -295,7 +295,7 @@ async function handleDeleteHost(hostId: string) {
       await deleteHost(hostId)
       await refreshHosts()
     } catch (error) {
-      console.error('Failed to delete host:', error)
+      console.error('[InfrastructureManager] Failed to delete host:', error)
     }
   }
 }

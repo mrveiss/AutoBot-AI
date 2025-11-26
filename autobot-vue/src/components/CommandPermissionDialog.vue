@@ -262,7 +262,7 @@ export default {
 
       await executeAllow(allowCommandFn).catch(err => {
         // Error already handled by useAsyncOperation
-        console.error('Command approval error:', err);
+        console.error('[CommandPermissionDialog] Command approval error:', err);
       });
     };
 
@@ -290,7 +290,7 @@ export default {
             return;
           }
         } else {
-          console.warn('handleDeny: terminal_session_id is missing - continuing with client-side denial');
+          console.warn('[CommandPermissionDialog] handleDeny: terminal_session_id is missing - continuing with client-side denial');
         }
 
         emit('denied', {
@@ -299,7 +299,7 @@ export default {
         });
         closeDialog();
       } catch (err) {
-        console.error('Command denial error:', err);
+        console.error('[CommandPermissionDialog] Command denial error:', err);
         // Still close dialog even if API call fails
         emit('denied', {
           command: props.command,
@@ -335,7 +335,7 @@ export default {
     const submitComment = async () => {
       await executeComment(submitCommentFn).catch(err => {
         // Error already handled by useAsyncOperation
-        console.error('Comment submission error:', err);
+        console.error('[CommandPermissionDialog] Comment submission error:', err);
       });
     };
 

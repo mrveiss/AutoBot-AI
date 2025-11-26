@@ -256,7 +256,7 @@ const onIframeLoad = async () => {
 }
 
 const onIframeError = (event: Event) => {
-  console.error('NoVNC iframe error:', event)
+  console.error('[NoVNCViewer] Iframe error:', event)
   isLoading.value = false
   connectionError.value = true
   errorCount.value += 1
@@ -306,7 +306,7 @@ const checkVNCServiceFn = async () => {
 
 const checkVNCService = async () => {
   await executeServiceCheck(checkVNCServiceFn).catch(async (error: any) => {
-    console.warn('VNC service check failed:', error.message)
+    console.warn('[NoVNCViewer] VNC service check failed:', error.message)
     if (error.name === 'AbortError') {
       errorDetails.value = 'Connection timeout - service may be starting up'
     } else {
@@ -371,7 +371,7 @@ const refreshViewer = async () => {
       reconnect: true
     })
   } catch (error) {
-    console.error('Failed to reload VNC URL:', error)
+    console.error('[NoVNCViewer] Failed to reload VNC URL:', error)
   }
 
   // Force iframe refresh
@@ -413,14 +413,14 @@ const toggleFullscreen = async () => {
       await document.documentElement.requestFullscreen()
       isFullscreen.value = true
     } catch (error) {
-      console.error('Failed to enter fullscreen:', error)
+      console.error('[NoVNCViewer] Failed to enter fullscreen:', error)
     }
   } else {
     try {
       await document.exitFullscreen()
       isFullscreen.value = false
     } catch (error) {
-      console.error('Failed to exit fullscreen:', error)
+      console.error('[NoVNCViewer] Failed to exit fullscreen:', error)
     }
   }
 }
@@ -478,7 +478,7 @@ onMounted(async () => {
     vncPort.value = Number(backendConfig?.services?.vnc?.desktop?.port || NetworkConstants.VNC_DESKTOP_PORT)
 
   } catch (error) {
-    console.warn('Failed to load VNC configuration from appConfig:', error)
+    console.warn('[NoVNCViewer] Failed to load VNC configuration from appConfig:', error)
     // Fallback values will be used
     vncHost.value = NetworkConstants.MAIN_MACHINE_IP
     vncPort.value = NetworkConstants.VNC_DESKTOP_PORT
