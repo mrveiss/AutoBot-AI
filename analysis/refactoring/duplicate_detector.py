@@ -10,7 +10,7 @@ import ast
 import hashlib
 from collections import defaultdict, Counter
 from pathlib import Path
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List
 
 
 class DuplicateDetector:

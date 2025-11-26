@@ -5,9 +5,6 @@ Focus on main application code, exclude archives and third-party code
 """
 
 import json
-import re
-from pathlib import Path
-from collections import defaultdict, Counter
 
 
 def is_core_autobot_file(file_path: str) -> bool:

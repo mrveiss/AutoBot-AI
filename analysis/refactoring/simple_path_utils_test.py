@@ -5,7 +5,6 @@ Simple test to verify PathUtils functionality without complex dependencies
 
 import os
 import sys
-from pathlib import Path
 
 # Add project root to path so we can import the modules
 project_root = os.path.join(os.path.dirname(__file__), "..", "..")

@@ -11,7 +11,6 @@ import os
 import sys
 import tempfile
 import asyncio
-from pathlib import Path
 
 # Add project root to path so we can import the modules
 project_root = os.path.join(os.path.dirname(__file__), "..", "..")

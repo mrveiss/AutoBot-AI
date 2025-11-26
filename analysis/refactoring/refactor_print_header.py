@@ -3,7 +3,6 @@
 Script to automatically refactor print_header function duplicates
 """
 
-import os
 import re
 from pathlib import Path
 

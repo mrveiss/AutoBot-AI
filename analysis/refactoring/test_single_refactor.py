@@ -3,7 +3,6 @@
 Test refactoring on a single file to validate the approach
 """
 
-import re
 import sys
 from pathlib import Path
 
