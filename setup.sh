@@ -16,6 +16,8 @@ print_usage() {
     echo -e "${GREEN}AutoBot - Distributed VM Setup Script${NC}"
     echo "Configures AutoBot for distributed VM deployment across multiple machines"
     echo ""
+    echo -e "${CYAN}TIP: For interactive setup, run: ./scripts/setup_wizard.sh${NC}"
+    echo ""
     echo "Usage: $0 [setup_type] [options]"
     echo ""
     echo -e "${YELLOW}Setup Types:${NC}"
