@@ -11,10 +11,8 @@ Requirements:
 
 import asyncio
 import time
-from typing import List
 
 from src.agent_tier_classifier import (
-    AgentTier,
     get_agent_tier,
     get_base_prompt_for_agent,
     get_cache_hit_expectation,
