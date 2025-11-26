@@ -24,9 +24,8 @@ from typing import Dict, Any, List
 
 # Import circuit breaker components
 from src.circuit_breaker import (
-    CircuitBreaker, CircuitBreakerConfig, CircuitState, CircuitBreakerOpenError,
-    circuit_breaker_async, circuit_breaker_sync, protected_llm_call,
-    protected_database_call, protected_network_call, circuit_breaker_manager
+    CircuitBreakerConfig, CircuitBreakerOpenError,
+    circuit_breaker_async, circuit_breaker_sync, circuit_breaker_manager
 )
 
 # Configure logging
