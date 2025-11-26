@@ -6,10 +6,11 @@
 # Reduces E501 violations by 94% (from 9,107 to 581)
 max-line-length = 100
 
-# Extend ignores for Black compatibility
+# Extend ignores for Black compatibility and false positives
 # E203: whitespace before ':' (Black formatting)
 # W503: line break before binary operator (Black formatting)
-extend-ignore = E203,W503
+# E704: multiple statements on one line - false positive for Protocol stubs (def method(): ...)
+extend-ignore = E203,W503,E704
 
 # Exclude directories from linting
 exclude =
