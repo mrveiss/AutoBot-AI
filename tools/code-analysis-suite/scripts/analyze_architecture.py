@@ -12,19 +12,19 @@ from src.architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
 
 async def analyze_architectural_patterns():
     """Analyze codebase for architectural patterns and design issues"""
-    
+
     print("🏗️ Starting architectural pattern analysis...")
-    
+
     analyzer = ArchitecturalPatternAnalyzer()
-    
+
     # Run analysis
     results = await analyzer.analyze_architecture(
         root_path=".",
         patterns=["src/**/*.py", "backend/**/*.py"]
     )
-    
+
     print("\n=== Architectural Pattern Analysis Results ===\n")
-    
+
     # Summary
     print(f"📊 **Analysis Summary:**")
     print(f"   - Total components: {results['total_components']}")
@@ -32,7 +32,7 @@ async def analyze_architectural_patterns():
     print(f"   - Design patterns found: {results['design_patterns_found']}")
     print(f"   - Architecture score: {results['architecture_score']}/100")
     print(f"   - Analysis time: {results['analysis_time_seconds']:.2f}s\n")
-    
+
     # Detailed metrics
     metrics = results['metrics']
     print("🏛️ **Architectural Quality Metrics:**")
@@ -43,42 +43,42 @@ async def analyze_architectural_patterns():
     print(f"   - Abstraction score: {metrics['abstraction_score']}/100")
     print(f"   - Instability score: {metrics['instability_score']}/100")
     print()
-    
+
     # Component breakdown
     component_types = {}
     for comp in results['components']:
         comp_type = comp['type']
         component_types[comp_type] = component_types.get(comp_type, 0) + 1
-    
+
     print("🧩 **Component Breakdown:**")
     for comp_type, count in component_types.items():
         print(f"   - {comp_type.title()}s: {count}")
     print()
-    
+
     # Design patterns detected
     if results['detected_patterns']:
         pattern_counts = {}
         for pattern in results['detected_patterns']:
             pattern_name = pattern['pattern']
             pattern_counts[pattern_name] = pattern_counts.get(pattern_name, 0) + 1
-        
+
         print("🎨 **Design Patterns Detected:**")
         for pattern, count in sorted(pattern_counts.items()):
             print(f"   - {pattern.replace('_', ' ').title()}: {count} instances")
-        
+
         print("\n📋 **Pattern Details:**")
         for pattern in results['detected_patterns'][:10]:  # Show first 10
             print(f"   - {pattern['pattern'].title()} in {pattern['file']}:{pattern['line']}")
             print(f"     {pattern['description']}")
         print()
-    
+
     # Architectural issues
     if results['architectural_issues']:
         print("🚨 **Architectural Issues:**")
         for issue in results['architectural_issues']:
             severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
             emoji = severity_emoji.get(issue['severity'], "⚪")
-            
+
             print(f"\n   {emoji} **{issue['type'].replace('_', ' ').title()}** ({issue['severity']})")
             print(f"      {issue['description']}")
             print(f"      Affects: {issue['affected_components_count']} components")
@@ -86,7 +86,7 @@ async def analyze_architectural_patterns():
             print(f"      🔧 Refactoring effort: {issue['refactoring_effort']}")
             if issue['pattern_violation']:
                 print(f"      ❌ Violates: {issue['pattern_violation']}")
-    
+
     # High coupling analysis
     high_coupling_components = [c for c in results['components'] if c['coupling_score'] > 10]
     if high_coupling_components:
@@ -99,9 +99,9 @@ async def analyze_architectural_patterns():
             if len(comp['dependencies']) > 5:
                 print(f"     ... and {len(comp['dependencies']) - 5} more")
         print()
-    
+
     # Low cohesion analysis
-    low_cohesion_classes = [c for c in results['components'] 
+    low_cohesion_classes = [c for c in results['components']
                           if c['type'] == 'class' and c['cohesion_score'] < 0.3]
     if low_cohesion_classes:
         print(f"🔄 **Low Cohesion Analysis:**")
@@ -111,7 +111,7 @@ async def analyze_architectural_patterns():
             print(f"     Cohesion score: {comp['cohesion_score']:.2f}")
             print(f"     Interfaces: {len(comp['interfaces'])} methods")
         print()
-    
+
     # Complex components
     complex_components = [c for c in results['components'] if c['complexity_score'] > 20]
     if complex_components:
@@ -123,36 +123,36 @@ async def analyze_architectural_patterns():
             if comp['patterns']:
                 print(f"     Patterns: {', '.join(comp['patterns'])}")
         print()
-    
+
     # Save detailed report
     report_path = Path("architectural_analysis_report.json")
     with open(report_path, 'w') as f:
         json.dump(results, f, indent=2, default=str)
-    
+
     print(f"📋 Detailed report saved to: {report_path}")
-    
+
     # Generate architecture recommendations
     await generate_architecture_recommendations(results)
-    
+
     return results
 
 
 async def generate_architecture_recommendations(results):
     """Generate specific architectural improvement recommendations"""
-    
+
     print("\n=== Architectural Improvement Recommendations ===\n")
-    
+
     recommendations = results['recommendations']
-    
+
     if recommendations:
         print("🏗️ **Priority Recommendations:**")
         for i, rec in enumerate(recommendations, 1):
             print(f"{i}. {rec}")
         print()
-    
+
     # Specific improvement patterns
     print("🛠️ **Architectural Improvement Patterns:**\n")
-    
+
     # SOLID Principles
     print("**1. SOLID Principles Application:**")
     print("```python")
@@ -177,7 +177,7 @@ async def generate_architecture_recommendations(results):
     print("    def validate_data(self): pass")
     print("```")
     print()
-    
+
     # Dependency Injection
     print("**2. Dependency Injection Pattern:**")
     print("```python")
@@ -200,7 +200,7 @@ async def generate_architecture_recommendations(results):
     print("        self.email = email_service  # Injected dependency")
     print("```")
     print()
-    
+
     # Observer Pattern
     print("**3. Observer Pattern for Event Handling:**")
     print("```python")
@@ -230,7 +230,7 @@ async def generate_architecture_recommendations(results):
     print("        event_bus.notify(ProfileUpdatedEvent(self))")
     print("```")
     print()
-    
+
     # Factory Pattern
     print("**4. Factory Pattern for Object Creation:**")
     print("```python")
@@ -252,7 +252,7 @@ async def generate_architecture_recommendations(results):
     print("            raise ValueError(f'Unknown config type: {config_type}')")
     print("```")
     print()
-    
+
     # Layered Architecture
     print("**5. Layered Architecture Pattern:**")
     print("```")
@@ -266,7 +266,7 @@ async def generate_architecture_recommendations(results):
     print("# Infrastructure depends on Domain (Dependency Inversion)")
     print("```")
     print()
-    
+
     # Repository Pattern
     print("**6. Repository Pattern for Data Access:**")
     print("```python")
@@ -296,12 +296,12 @@ async def generate_architecture_recommendations(results):
 
 async def demonstrate_architecture_testing():
     """Show how to add architectural tests"""
-    
+
     print("=== Architectural Testing Setup ===\n")
-    
+
     print("🧪 **Add Architectural Tests:**")
     print()
-    
+
     print("**1. Dependency Rules Testing:**")
     print("```python")
     print("import ast")
@@ -321,7 +321,7 @@ async def demonstrate_architecture_testing():
     print("                    assert False, f'{file_path} imports from infrastructure'")
     print("```")
     print()
-    
+
     print("**2. Complexity Monitoring:**")
     print("```python")
     print("def test_class_complexity():")
@@ -336,7 +336,7 @@ async def demonstrate_architecture_testing():
     print("                assert method_count < 20, f'Class {node.name} has {method_count} methods'")
     print("```")
     print()
-    
+
     print("**3. Pattern Enforcement:**")
     print("```python")
     print("def test_singleton_pattern():")
@@ -354,13 +354,13 @@ async def demonstrate_architecture_testing():
 
 async def main():
     """Run the architectural pattern analysis"""
-    
+
     # Analyze architectural patterns
     results = await analyze_architectural_patterns()
-    
+
     # Show architectural testing setup
     await demonstrate_architecture_testing()
-    
+
     print("\n=== Analysis Complete ===")
     print("Next steps:")
     print("1. Review architectural_analysis_report.json for detailed findings")

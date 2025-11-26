@@ -43,13 +43,13 @@ Education and AI intersect in numerous ways, from personalized learning platform
 async def measure_gpu_utilization():
     """Measure GPU utilization during processing."""
     import subprocess
-    
+
     try:
         result = subprocess.run([
             'nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw',
             '--format=csv,noheader,nounits'
         ], capture_output=True, text=True, timeout=5)
-        
+
         if result.returncode == 0:
             values = result.stdout.strip().split(',')
             return {
@@ -61,38 +61,38 @@ async def measure_gpu_utilization():
             }
     except:
         pass
-    
+
     return None
 
 async def benchmark_original_chunker():
     """Benchmark the original semantic chunker."""
     print("🔵 Testing Original Semantic Chunker...")
-    
+
     chunker = AutoBotSemanticChunker(
         embedding_model="all-MiniLM-L6-v2",
         percentile_threshold=95.0
     )
-    
+
     # Measure GPU before
     gpu_before = await measure_gpu_utilization()
     start_time = time.time()
     start_memory = psutil.Process().memory_info().rss / 1024**2
-    
+
     # Process text
     chunks = await chunker.chunk_text(TEST_TEXT)
-    
+
     # Measure after
     end_time = time.time()
     end_memory = psutil.Process().memory_info().rss / 1024**2
     gpu_after = await measure_gpu_utilization()
-    
+
     processing_time = end_time - start_time
     memory_used = end_memory - start_memory
-    
+
     # Calculate estimated sentences processed
     sentences_estimated = len(TEST_TEXT.split('.'))
     sentences_per_sec = sentences_estimated / processing_time
-    
+
     results = {
         'name': 'Original Chunker',
         'processing_time': processing_time,
@@ -104,7 +104,7 @@ async def benchmark_original_chunker():
         'gpu_memory_used': gpu_after['memory_used'] if gpu_after else 0,
         'gpu_power': gpu_after['power'] if gpu_after else 0
     }
-    
+
     print(f"  ⏱️  Processing Time: {processing_time:.2f}s")
     print(f"  💾 Memory Usage: {memory_used:.1f}MB")
     print(f"  📦 Chunks Created: {len(chunks)}")
@@ -112,43 +112,43 @@ async def benchmark_original_chunker():
     if gpu_after:
         print(f"  🎮 GPU Utilization: {gpu_after['gpu_util']:.1f}%")
         print(f"  🔥 GPU Power: {gpu_after['power']:.1f}W")
-    
+
     return results
 
 async def benchmark_optimized_chunker():
     """Benchmark the optimized GPU semantic chunker."""
     print("\n🟢 Testing Optimized GPU Semantic Chunker...")
-    
+
     chunker = OptimizedGPUSemanticChunker(
         embedding_model="all-MiniLM-L6-v2",
         percentile_threshold=95.0,
         gpu_batch_size=500,
         enable_gpu_memory_pool=True
     )
-    
+
     # Measure GPU before
     gpu_before = await measure_gpu_utilization()
     start_time = time.time()
     start_memory = psutil.Process().memory_info().rss / 1024**2
-    
+
     # Process text with optimized method
     chunks = await chunker.chunk_text_optimized(TEST_TEXT)
-    
+
     # Measure after
     end_time = time.time()
     end_memory = psutil.Process().memory_info().rss / 1024**2
     gpu_after = await measure_gpu_utilization()
-    
+
     processing_time = end_time - start_time
     memory_used = end_memory - start_memory
-    
+
     # Calculate performance
     sentences_estimated = len(TEST_TEXT.split('.'))
     sentences_per_sec = sentences_estimated / processing_time
-    
+
     # Get performance stats from chunker
     perf_stats = chunker.get_performance_stats()
-    
+
     results = {
         'name': 'Optimized GPU Chunker',
         'processing_time': processing_time,
@@ -161,7 +161,7 @@ async def benchmark_optimized_chunker():
         'gpu_power': gpu_after['power'] if gpu_after else 0,
         'performance_stats': perf_stats
     }
-    
+
     print(f"  ⏱️  Processing Time: {processing_time:.2f}s")
     print(f"  💾 Memory Usage: {memory_used:.1f}MB")
     print(f"  📦 Chunks Created: {len(chunks)}")
@@ -171,7 +171,7 @@ async def benchmark_optimized_chunker():
         print(f"  🔥 GPU Power: {gpu_after['power']:.1f}W")
         gpu_memory_util = (gpu_after['memory_used'] / gpu_after['memory_total']) * 100
         print(f"  💽 GPU Memory Util: {gpu_memory_util:.1f}%")
-    
+
     return results
 
 async def performance_comparison():
@@ -179,7 +179,7 @@ async def performance_comparison():
     print("=" * 60)
     print("🚀 AutoBot GPU Performance Optimization Test")
     print("=" * 60)
-    
+
     # System info
     print("\n📊 Hardware Configuration:")
     print(f"  - CPU: Intel Ultra 9 185H ({psutil.cpu_count()} cores)")
@@ -189,41 +189,41 @@ async def performance_comparison():
     print(f"  - System Memory: {psutil.virtual_memory().total / 1024**3:.1f}GB")
     print(f"  - Test Text: {len(TEST_TEXT)} characters")
     print(f"  - Estimated Sentences: ~{len(TEST_TEXT.split('.'))} sentences")
-    
+
     # Run benchmarks
     print("\n" + "=" * 40)
     print("🧪 RUNNING BENCHMARKS")
     print("=" * 40)
-    
+
     # Test original chunker
     original_results = await benchmark_original_chunker()
-    
+
     # Brief pause between tests
     await asyncio.sleep(2)
-    
+
     # Test optimized chunker
     optimized_results = await benchmark_optimized_chunker()
-    
+
     # Performance comparison
     print("\n" + "=" * 40)
     print("📈 PERFORMANCE COMPARISON")
     print("=" * 40)
-    
+
     time_improvement = original_results['processing_time'] / optimized_results['processing_time']
     throughput_improvement = optimized_results['sentences_per_sec'] / original_results['sentences_per_sec']
     gpu_util_improvement = optimized_results['gpu_util_after'] / max(original_results['gpu_util_after'], 1)
-    
+
     print(f"\n🏆 Performance Improvements:")
     print(f"  ⚡ Speed: {time_improvement:.2f}x faster")
     print(f"  📊 Throughput: {throughput_improvement:.2f}x more sentences/sec")
     print(f"  🎮 GPU Utilization: {gpu_util_improvement:.2f}x better")
-    
+
     print(f"\n📋 Detailed Comparison:")
     print(f"  Processing Time: {original_results['processing_time']:.2f}s → {optimized_results['processing_time']:.2f}s")
     print(f"  Throughput: {original_results['sentences_per_sec']:.1f} → {optimized_results['sentences_per_sec']:.1f} sent/sec")
     print(f"  GPU Utilization: {original_results['gpu_util_after']:.1f}% → {optimized_results['gpu_util_after']:.1f}%")
     print(f"  GPU Power: {original_results['gpu_power']:.1f}W → {optimized_results['gpu_power']:.1f}W")
-    
+
     # Target achievement analysis
     target_achieved = time_improvement >= 3.0
     print(f"\n🎯 Target Achievement (3x speed improvement):")
@@ -233,22 +233,22 @@ async def performance_comparison():
         print(f"  ⚠️  TARGET NOT YET REACHED ({time_improvement:.2f}x improvement)")
         remaining_improvement = 3.0 / time_improvement
         print(f"  📈 Need {remaining_improvement:.2f}x more improvement to reach 3x target")
-    
+
     # Optimization recommendations
     print(f"\n🔧 Optimization Status:")
     if optimized_results['gpu_util_after'] < 50:
         print("  📌 GPU still underutilized - more optimization possible")
     elif optimized_results['gpu_util_after'] > 75:
         print("  ✅ GPU well utilized")
-    
+
     if optimized_results['gpu_power'] > 100:  # High power usage indicates good utilization
         print("  ⚡ High GPU power usage indicates good acceleration")
-    
+
     # Memory efficiency
     gpu_memory_util = (optimized_results['gpu_memory_used'] / 8188) * 100  # RTX 4070 has ~8GB
     if gpu_memory_util < 30:
         print("  💽 GPU memory underutilized - can handle larger batches")
-    
+
     return {
         'original': original_results,
         'optimized': optimized_results,
@@ -263,22 +263,22 @@ async def performance_comparison():
 if __name__ == "__main__":
     async def main():
         results = await performance_comparison()
-        
+
         print(f"\n" + "=" * 60)
         print("🏁 BENCHMARK COMPLETE")
         print("=" * 60)
-        
+
         improvements = results['improvements']
         if improvements['target_achieved']:
             print("🎉 SUCCESS: 3x performance target achieved!")
         else:
             print("🔄 PROGRESS: Significant improvement achieved, further optimization possible")
-        
+
         print(f"\nFinal Results:")
         print(f"  - Speed Improvement: {improvements['speed_multiplier']:.2f}x")
         print(f"  - GPU Utilization: {improvements['gpu_util_multiplier']:.2f}x better")
         print(f"  - Target Status: {'✅ ACHIEVED' if improvements['target_achieved'] else '🔄 IN PROGRESS'}")
-        
+
         return results
-    
+
     results = asyncio.run(main())

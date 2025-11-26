@@ -85,7 +85,7 @@ if __name__ == "__main__":
     # Get configuration from environment variables
     listen_host = os.getenv("FORWARD_LISTEN_HOST", "127.0.0.3")
     listen_port = int(os.getenv("FORWARD_LISTEN_PORT", "8001"))
-    target_host = os.getenv("FORWARD_TARGET_HOST", "127.0.0.1") 
+    target_host = os.getenv("FORWARD_TARGET_HOST", "127.0.0.1")
     target_port = int(os.getenv("FORWARD_TARGET_PORT", "8001"))
-    
+
     start_forwarder(listen_host, listen_port, target_host, target_port)

@@ -16,7 +16,6 @@ This runs as part of the system startup to ensure configuration consistency.
 
 import asyncio
 import logging
-from typing import Dict
 
 from backend.type_defs.common import Metadata
 

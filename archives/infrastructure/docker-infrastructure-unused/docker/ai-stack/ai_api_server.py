@@ -33,15 +33,15 @@ logger = logging.getLogger(__name__)
 
 class AIContainerServer:
     """HTTP server for AI agents in container"""
-    
+
     def __init__(self):
         self.agents: Dict[str, Any] = {}
         self.startup_time = time.time()
-        
+
     async def initialize_agents(self):
         """Initialize all AI agents"""
         logger.info("Initializing AI agents in container...")
-        
+
         # Initialize agents individually to catch specific failures
         try:
             self.agents["chat"] = ChatAgent()
@@ -49,23 +49,23 @@ class AIContainerServer:
         except Exception as e:
             logger.error(f"Failed to initialize chat agent: {e}")
             logger.error(traceback.format_exc())
-        
+
         try:
             self.agents["rag"] = get_rag_agent()
             logger.info("RAG agent initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize RAG agent: {e}")
             logger.error(traceback.format_exc())
-        
+
         try:
             self.agents["classification"] = ClassificationAgent()
             logger.info("Classification agent initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize classification agent: {e}")
             logger.error(traceback.format_exc())
-        
+
         logger.info(f"Initialized {len(self.agents)} AI agents total")
-    
+
     async def cleanup_agents(self):
         """Cleanup all agents"""
         logger.info("Cleaning up AI agents...")
@@ -121,7 +121,7 @@ async def health_check():
     try:
         health_status = {}
         overall_healthy = True
-        
+
         for agent_type, agent in ai_server.agents.items():
             try:
                 if hasattr(agent, 'health_check'):
@@ -141,9 +141,9 @@ async def health_check():
                     "error": str(e)
                 }
                 overall_healthy = False
-        
+
         status_code = 200 if overall_healthy else 503
-        
+
         return JSONResponse(
             status_code=status_code,
             content={
@@ -152,7 +152,7 @@ async def health_check():
                 "uptime_seconds": time.time() - ai_server.startup_time
             }
         )
-        
+
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return JSONResponse(
@@ -168,7 +168,7 @@ async def health_check():
 async def list_agents():
     """List available agents and their capabilities"""
     agents_info = []
-    
+
     for agent_type, agent in ai_server.agents.items():
         try:
             capabilities = []
@@ -176,7 +176,7 @@ async def list_agents():
                 capabilities = agent.get_capabilities()
             elif hasattr(agent, 'capabilities'):
                 capabilities = agent.capabilities
-                
+
             agents_info.append({
                 "type": agent_type,
                 "capabilities": capabilities,
@@ -184,7 +184,7 @@ async def list_agents():
             })
         except Exception as e:
             logger.error(f"Error getting info for agent {agent_type}: {e}")
-            
+
     return {
         "agents": agents_info,
         "count": len(agents_info)
@@ -199,15 +199,15 @@ async def process_agent_request(agent_type: str, request: Request):
             status_code=404,
             detail=f"Agent type '{agent_type}' not found"
         )
-    
+
     try:
         # Parse request body
         request_data = await request.body()
         agent_request = deserialize_agent_request(request_data.decode())
-        
+
         # Get agent and process request
         agent = ai_server.agents[agent_type]
-        
+
         if hasattr(agent, 'execute_with_tracking'):
             response = await agent.execute_with_tracking(agent_request)
         elif hasattr(agent, 'process_request'):
@@ -221,16 +221,16 @@ async def process_agent_request(agent_type: str, request: Request):
                 result=None,
                 error="Agent does not support standardized interface"
             )
-        
+
         return JSONResponse(
             content=response.to_dict(),
             media_type="application/json"
         )
-        
+
     except Exception as e:
         logger.error(f"Error processing request for {agent_type}: {e}")
         logger.error(traceback.format_exc())
-        
+
         error_response = AgentResponse(
             request_id=getattr(agent_request, 'request_id', 'unknown'),
             agent_type=agent_type,
@@ -238,7 +238,7 @@ async def process_agent_request(agent_type: str, request: Request):
             result=None,
             error=f"Processing error: {str(e)}"
         )
-        
+
         return JSONResponse(
             status_code=500,
             content=error_response.to_dict()
@@ -253,10 +253,10 @@ async def agent_health(agent_type: str):
             status_code=404,
             detail=f"Agent type '{agent_type}' not found"
         )
-    
+
     try:
         agent = ai_server.agents[agent_type]
-        
+
         if hasattr(agent, 'health_check'):
             health = await agent.health_check()
             return health.to_dict()
@@ -266,7 +266,7 @@ async def agent_health(agent_type: str):
                 "status": "healthy",
                 "message": "Basic health check passed"
             }
-            
+
     except Exception as e:
         logger.error(f"Health check failed for {agent_type}: {e}")
         return JSONResponse(
@@ -287,21 +287,21 @@ async def agent_capabilities(agent_type: str):
             status_code=404,
             detail=f"Agent type '{agent_type}' not found"
         )
-    
+
     try:
         agent = ai_server.agents[agent_type]
-        
+
         capabilities = []
         if hasattr(agent, 'get_capabilities'):
             capabilities = agent.get_capabilities()
         elif hasattr(agent, 'capabilities'):
             capabilities = agent.capabilities
-            
+
         return {
             "agent_type": agent_type,
             "capabilities": capabilities
         }
-        
+
     except Exception as e:
         logger.error(f"Error getting capabilities for {agent_type}: {e}")
         return JSONResponse(
@@ -320,7 +320,7 @@ async def get_statistics():
         "container_uptime_seconds": time.time() - ai_server.startup_time,
         "agents": {}
     }
-    
+
     for agent_type, agent in ai_server.agents.items():
         try:
             if hasattr(agent, 'get_statistics'):
@@ -335,7 +335,7 @@ async def get_statistics():
                 "agent_type": agent_type,
                 "error": str(e)
             }
-    
+
     return stats
 
 
@@ -345,7 +345,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler"""
     logger.error(f"Unhandled exception: {exc}")
     logger.error(traceback.format_exc())
-    
+
     return JSONResponse(
         status_code=500,
         content={
@@ -361,12 +361,12 @@ if __name__ == "__main__":
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
-    
+
     # Get configuration from environment
     host = os.getenv("AI_SERVER_HOST", "0.0.0.0")
     port = int(os.getenv("AI_SERVER_PORT", "8080"))
     workers = int(os.getenv("AI_SERVER_WORKERS", "1"))
-    
+
     # Run server
     uvicorn.run(
         "ai_api_server:app",

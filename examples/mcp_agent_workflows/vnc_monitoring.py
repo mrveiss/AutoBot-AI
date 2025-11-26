@@ -125,7 +125,7 @@ async def monitor_browser_activity(
         print(f"   ✅ Log saved to: {log_path}")
     else:
         workflow.add_step("write_log", "error", error="Write operation failed")
-        print(f"   ❌ Log write failed")
+        print("   ❌ Log write failed")
 
     workflow.complete()
 

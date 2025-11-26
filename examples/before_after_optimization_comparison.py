@@ -29,7 +29,7 @@ async def example_before_optimization():
     system_prompt = get_prompt("default.agent.system.main")
 
     print(f"Prompt length: {len(system_prompt):,} characters (~{len(system_prompt)//4:,} tokens)")
-    print(f"Provider: ollama")
+    print("Provider: ollama")
     print()
 
     # Simulate 3 tasks
@@ -55,12 +55,12 @@ async def example_before_optimization():
         )
 
         print(f"  - Processing full {len(system_prompt)//4:,} token prompt...")
-        print(f"  - Expected time: ~6 seconds (no caching)")
+        print("  - Expected time: ~6 seconds (no caching)")
         print()
 
     print("SUMMARY:")
-    print(f"  Total expected time: ~18 seconds (6s × 3 tasks)")
-    print(f"  Cache hit rate: 0% (no caching)")
+    print("  Total expected time: ~18 seconds (6s × 3 tasks)")
+    print("  Cache hit rate: 0% (no caching)")
     print(f"  Tokens processed: {(len(system_prompt)//4) * 3:,} total")
     print()
 
@@ -99,21 +99,21 @@ async def example_after_optimization():
         # 3. Routes to vLLM provider
 
         if i == 1:
-            print(f"  - First request: Processing full 4,845 token prefix + 66 token suffix")
-            print(f"  - Expected time: ~6 seconds (cold cache)")
-            print(f"  - Cache efficiency: 0% (initializing)")
+            print("  - First request: Processing full 4,845 token prefix + 66 token suffix")
+            print("  - Expected time: ~6 seconds (cold cache)")
+            print("  - Cache efficiency: 0% (initializing)")
         else:
-            print(f"  - Subsequent request: Only 66 dynamic tokens processed")
-            print(f"  - Expected time: ~1.7 seconds (98.7% cache hit!)")
-            print(f"  - Cache efficiency: 98.7% (4,845 tokens cached)")
+            print("  - Subsequent request: Only 66 dynamic tokens processed")
+            print("  - Expected time: ~1.7 seconds (98.7% cache hit!)")
+            print("  - Cache efficiency: 98.7% (4,845 tokens cached)")
 
         print()
 
     print("SUMMARY:")
-    print(f"  Total expected time: ~9.4 seconds (6s + 1.7s + 1.7s)")
-    print(f"  Cache hit rate: 98.7% (requests 2-3)")
-    print(f"  Tokens processed: 4,977 total (vs 14,700 without caching)")
-    print(f"  Speedup: 1.9x overall (3.5x on cached requests)")
+    print("  Total expected time: ~9.4 seconds (6s + 1.7s + 1.7s)")
+    print("  Cache hit rate: 98.7% (requests 2-3)")
+    print("  Tokens processed: 4,977 total (vs 14,700 without caching)")
+    print("  Speedup: 1.9x overall (3.5x on cached requests)")
     print()
 
 

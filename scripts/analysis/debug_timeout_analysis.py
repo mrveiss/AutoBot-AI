@@ -20,13 +20,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 class TimeoutAnalyzer:
     """Analyze and test various components for blocking operations"""
-    
+
     def __init__(self):
         self.results = {}
         self.backend_url = ServiceURLs.BACKEND_LOCAL
-        
+
     async def test_backend_health(self) -> Dict[str, Any]:
         """Test if backend is responsive"""
         try:
@@ -48,20 +49,20 @@ class TimeoutAnalyzer:
                 "error": str(e),
                 "duration": time.time() - start_time
             }
-    
+
     async def test_chat_endpoint_simple(self) -> Dict[str, Any]:
         """Test a simple chat message"""
         try:
             start_time = time.time()
-            
+
             payload = {
                 "message": "Hello, what time is it?",
                 "chat_id": "test-timeout-analysis"
             }
-            
+
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    f"{self.backend_url}/api/chats/test-timeout-analysis/message", 
+                    f"{self.backend_url}/api/chats/test-timeout-analysis/message",
                     json=payload,
                     timeout=30  # Generous timeout to see if it completes
                 ) as response:
@@ -89,20 +90,20 @@ class TimeoutAnalyzer:
                 "duration": time.time() - start_time,
                 "traceback": traceback.format_exc()
             }
-    
+
     async def test_knowledge_base_direct(self) -> Dict[str, Any]:
         """Test knowledge base operations directly"""
         try:
             start_time = time.time()
-            
+
             # Test importing knowledge base
             from src.knowledge_base import KnowledgeBase
-            
+
             # Test creating KB instance (was this blocking?)
             kb_create_start = time.time()
             kb = await asyncio.to_thread(lambda: KnowledgeBase())
             kb_create_time = time.time() - kb_create_start
-            
+
             # Test initializing KB (was this blocking?)
             init_start = time.time()
             try:
@@ -110,19 +111,19 @@ class TimeoutAnalyzer:
                 init_success = True
                 init_error = None
             except asyncio.TimeoutError:
-                init_success = False  
+                init_success = False
                 init_error = "KB initialization timed out after 5 seconds"
             except Exception as e:
                 init_success = False
                 init_error = str(e)
             init_time = time.time() - init_start
-            
+
             # Test basic search (was this blocking?)
             search_start = time.time()
             search_success = False
             search_error = None
             search_results = []
-            
+
             if init_success:
                 try:
                     search_results = await asyncio.wait_for(
@@ -136,10 +137,10 @@ class TimeoutAnalyzer:
                     search_error = str(e)
             else:
                 search_error = "Skipped due to init failure"
-                
+
             search_time = time.time() - search_start
             total_time = time.time() - start_time
-            
+
             return {
                 "success": init_success and search_success,
                 "total_duration": total_time,
@@ -152,7 +153,7 @@ class TimeoutAnalyzer:
                 "search_error": search_error,
                 "search_results_count": len(search_results) if search_results else 0
             }
-            
+
         except Exception as e:
             return {
                 "success": False,
@@ -160,24 +161,24 @@ class TimeoutAnalyzer:
                 "duration": time.time() - start_time,
                 "traceback": traceback.format_exc()
             }
-    
+
     async def test_llm_interface_direct(self) -> Dict[str, Any]:
         """Test LLM interface operations directly"""
         try:
             start_time = time.time()
-            
+
             # Test importing LLM interface
             from src.llm_interface import LLMInterface
-            
+
             # Test creating LLM instance
             llm_create_start = time.time()
             llm = LLMInterface()
             llm_create_time = time.time() - llm_create_start
-            
+
             # Test simple chat completion (was this hanging in infinite loops?)
             chat_start = time.time()
             messages = [{"role": "user", "content": "Say 'hello' and nothing else"}]
-            
+
             try:
                 response = await asyncio.wait_for(
                     llm.chat_completion(messages, llm_type="general"),
@@ -194,10 +195,10 @@ class TimeoutAnalyzer:
                 chat_success = False
                 chat_error = str(e)
                 response_length = 0
-                
+
             chat_time = time.time() - chat_start
             total_time = time.time() - start_time
-            
+
             return {
                 "success": chat_success,
                 "total_duration": total_time,
@@ -207,7 +208,7 @@ class TimeoutAnalyzer:
                 "chat_error": chat_error,
                 "response_length": response_length
             }
-            
+
         except Exception as e:
             return {
                 "success": False,
@@ -215,20 +216,20 @@ class TimeoutAnalyzer:
                 "duration": time.time() - start_time,
                 "traceback": traceback.format_exc()
             }
-    
+
     async def test_simple_workflow_direct(self) -> Dict[str, Any]:
         """Test the SimpleChatWorkflow directly"""
         try:
             start_time = time.time()
-            
+
             from src.simple_chat_workflow import SimpleChatWorkflow
             from src.constants import NetworkConstants, ServiceURLs
-            
+
             # Create workflow instance
             workflow_create_start = time.time()
             workflow = SimpleChatWorkflow()
             workflow_create_time = time.time() - workflow_create_start
-            
+
             # Test processing a message (this uses the timeout workarounds)
             process_start = time.time()
             try:
@@ -247,10 +248,10 @@ class TimeoutAnalyzer:
                 process_success = False
                 process_error = str(e)
                 response_length = 0
-                
+
             process_time = time.time() - process_start
             total_time = time.time() - start_time
-            
+
             return {
                 "success": process_success,
                 "total_duration": total_time,
@@ -260,7 +261,7 @@ class TimeoutAnalyzer:
                 "process_error": process_error,
                 "response_length": response_length
             }
-            
+
         except Exception as e:
             return {
                 "success": False,
@@ -268,43 +269,43 @@ class TimeoutAnalyzer:
                 "duration": time.time() - start_time,
                 "traceback": traceback.format_exc()
             }
-    
+
     async def run_analysis(self):
         """Run all timeout analysis tests"""
         logger.info("Starting timeout analysis...")
-        
+
         # Test 1: Backend health
         logger.info("Testing backend health...")
         self.results["backend_health"] = await self.test_backend_health()
-        
+
         # Test 2: Knowledge base operations
         logger.info("Testing knowledge base operations...")
         self.results["knowledge_base"] = await self.test_knowledge_base_direct()
-        
-        # Test 3: LLM interface operations  
+
+        # Test 3: LLM interface operations
         logger.info("Testing LLM interface operations...")
         self.results["llm_interface"] = await self.test_llm_interface_direct()
-        
+
         # Test 4: Simple workflow operations
         logger.info("Testing SimpleChatWorkflow...")
         self.results["simple_workflow"] = await self.test_simple_workflow_direct()
-        
+
         # Test 5: Chat endpoint
         logger.info("Testing chat endpoint...")
         self.results["chat_endpoint"] = await self.test_chat_endpoint_simple()
-        
+
         logger.info("Analysis complete!")
-    
+
     def print_results(self):
         """Print comprehensive analysis results"""
         print("\n" + "="*80)
         print("TIMEOUT ANALYSIS RESULTS")
         print("="*80)
-        
+
         for test_name, result in self.results.items():
             print(f"\n{test_name.upper().replace('_', ' ')}:")
             print("-" * 40)
-            
+
             if result.get("success"):
                 print(f"✅ SUCCESS - Duration: {result.get('duration', 0):.2f}s")
             else:
@@ -313,7 +314,7 @@ class TimeoutAnalyzer:
                     print(f"   Error: {result['error']}")
                 if result.get("blocking_detected"):
                     print(f"   ⚠️  BLOCKING OPERATION DETECTED")
-            
+
             # Print detailed timing information
             for key, value in result.items():
                 if key.endswith("_time") and isinstance(value, (int, float)):
@@ -321,11 +322,11 @@ class TimeoutAnalyzer:
                 elif key.endswith("_success") and isinstance(value, bool):
                     status = "✅" if value else "❌"
                     print(f"   {key.replace('_', ' ').title()}: {status}")
-        
+
         print(f"\n{'='*80}")
         print("BLOCKING OPERATIONS SUMMARY")
         print("="*80)
-        
+
         blocking_operations = []
         for test_name, result in self.results.items():
             if not result.get("success") or result.get("duration", 0) > 5.0:
@@ -335,13 +336,14 @@ class TimeoutAnalyzer:
                     "error": result.get("error", "Slow operation"),
                     "blocking": result.get("blocking_detected", False)
                 })
-        
+
         if blocking_operations:
             print("Found potential blocking operations:")
             for op in blocking_operations:
                 print(f"  - {op['test']}: {op['duration']:.2f}s - {op['error']}")
         else:
             print("No obvious blocking operations detected.")
+
 
 async def main():
     analyzer = TimeoutAnalyzer()

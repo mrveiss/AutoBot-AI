@@ -27,6 +27,7 @@ from src.utils.system_context import (
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
 async def get_all_available_commands():
     """Get ALL commands with man pages on this system"""
     logger.info("Scanning for all available commands with man pages...")
@@ -70,6 +71,7 @@ async def get_all_available_commands():
     except Exception as e:
         logger.error(f"Error scanning commands: {e}")
         return []
+
 
 async def index_command_batch(kb_v2, commands_batch, system_ctx=None):
     """Index a batch of commands with OS/machine context"""
@@ -175,6 +177,7 @@ async def index_command_batch(kb_v2, commands_batch, system_ctx=None):
             continue
 
     return indexed_count
+
 
 async def main():
     """Main indexing function"""

@@ -9,7 +9,7 @@ Provides REST API for managing alerts and notifications
 
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from backend.type_defs.common import Metadata
 

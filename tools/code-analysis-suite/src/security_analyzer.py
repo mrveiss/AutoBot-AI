@@ -51,15 +51,15 @@ class SecurityRecommendation:
 
 class SecurityAnalyzer:
     """Analyzes code for security vulnerabilities"""
-    
+
     def __init__(self, redis_client=None):
         self.redis_client = redis_client or get_redis_client(async_client=True)
         self.config = config
-        
+
         # Caching keys
         self.SECURITY_KEY = "security_analysis:vulnerabilities"
         self.RECOMMENDATIONS_KEY = "security_analysis:recommendations"
-        
+
         # Security vulnerability patterns
         self.security_patterns = {
             'sql_injection': [
@@ -118,40 +118,40 @@ class SecurityAnalyzer:
                 (r'if\s+[^:]*(?:password|hash)\s*==', 'String comparison timing', 'CWE-208'),
             ]
         }
-        
+
         logger.info("Security Analyzer initialized")
-    
+
     async def analyze_security(self, root_path: str = ".", patterns: List[str] = None) -> Dict[str, Any]:
         """Analyze codebase for security vulnerabilities"""
-        
+
         start_time = time.time()
         patterns = patterns or ["**/*.py"]
-        
+
         # Clear previous analysis cache
         await self._clear_cache()
-        
+
         logger.info(f"Scanning for security vulnerabilities in {root_path}")
         vulnerabilities = await self._scan_for_vulnerabilities(root_path, patterns)
         logger.info(f"Found {len(vulnerabilities)} potential security vulnerabilities")
-        
+
         # Analyze AST for complex security patterns
         logger.info("Performing AST-based security analysis")
         ast_vulns = await self._ast_security_analysis(root_path, patterns)
         vulnerabilities.extend(ast_vulns)
-        
+
         # Categorize and prioritize findings
         logger.info("Categorizing and prioritizing vulnerabilities")
         categorized = await self._categorize_vulnerabilities(vulnerabilities)
-        
+
         # Generate security recommendations
         logger.info("Generating security recommendations")
         recommendations = await self._generate_security_recommendations(categorized)
-        
+
         # Calculate security metrics
         metrics = self._calculate_security_metrics(vulnerabilities, recommendations)
-        
+
         analysis_time = time.time() - start_time
-        
+
         results = {
             "total_vulnerabilities": len(vulnerabilities),
             "categories": {cat: len(vulns) for cat, vulns in categorized.items()},
@@ -163,19 +163,19 @@ class SecurityAnalyzer:
             "security_recommendations": [self._serialize_recommendation(r) for r in recommendations],
             "metrics": metrics
         }
-        
+
         # Cache results
         await self._cache_results(results)
-        
+
         logger.info(f"Security analysis complete in {analysis_time:.2f}s")
         return results
-    
+
     async def _scan_for_vulnerabilities(self, root_path: str, patterns: List[str]) -> List[SecurityVulnerability]:
         """Scan files for security vulnerabilities"""
-        
+
         vulnerabilities = []
         root = Path(root_path)
-        
+
         for pattern in patterns:
             for file_path in root.glob(pattern):
                 if file_path.is_file() and not self._should_skip_file(file_path):
@@ -184,9 +184,9 @@ class SecurityAnalyzer:
                         vulnerabilities.extend(file_vulns)
                     except Exception as e:
                         logger.warning(f"Failed to scan {file_path}: {e}")
-        
+
         return vulnerabilities
-    
+
     def _should_skip_file(self, file_path: Path) -> bool:
         """Check if file should be skipped"""
         skip_patterns = [
@@ -194,44 +194,44 @@ class SecurityAnalyzer:
             "test_", "_test.py", ".pyc", "env_analysis", "performance_analyzer",
             "analyze_", "security_analyzer"
         ]
-        
+
         path_str = str(file_path)
         return any(pattern in path_str for pattern in skip_patterns)
-    
+
     async def _scan_file_for_vulnerabilities(self, file_path: str) -> List[SecurityVulnerability]:
         """Scan a single file for security vulnerabilities"""
-        
+
         vulnerabilities = []
-        
+
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
                 lines = content.splitlines()
-            
+
             # Regex-based scanning for each vulnerability category
             for category, pattern_list in self.security_patterns.items():
                 for pattern, description, cwe_id in pattern_list:
                     for match in re.finditer(pattern, content, re.MULTILINE | re.IGNORECASE):
                         line_num = content[:match.start()].count('\n') + 1
-                        
+
                         vuln = self._create_vulnerability(
-                            file_path, line_num, match.group(0), category, 
+                            file_path, line_num, match.group(0), category,
                             description, cwe_id, lines
                         )
                         if vuln:
                             vulnerabilities.append(vuln)
-            
+
         except Exception as e:
             logger.error(f"Error scanning {file_path}: {e}")
-        
+
         return vulnerabilities
-    
+
     async def _ast_security_analysis(self, root_path: str, patterns: List[str]) -> List[SecurityVulnerability]:
         """Perform AST-based security analysis"""
-        
+
         vulnerabilities = []
         root = Path(root_path)
-        
+
         for pattern in patterns:
             for file_path in root.glob(pattern):
                 if file_path.is_file() and not self._should_skip_file(file_path):
@@ -240,53 +240,53 @@ class SecurityAnalyzer:
                         vulnerabilities.extend(file_vulns)
                     except Exception as e:
                         logger.warning(f"Failed to analyze AST for {file_path}: {e}")
-        
+
         return vulnerabilities
-    
+
     async def _analyze_ast_security(self, file_path: str) -> List[SecurityVulnerability]:
         """Analyze AST for security patterns"""
-        
+
         vulnerabilities = []
-        
+
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
                 lines = content.splitlines()
-            
+
             tree = ast.parse(content, filename=file_path)
-            
+
             for node in ast.walk(tree):
                 # Check for dangerous function calls
                 if isinstance(node, ast.Call):
                     vuln = self._analyze_dangerous_call(node, file_path, lines)
                     if vuln:
                         vulnerabilities.append(vuln)
-                
+
                 # Check for insecure assignments
                 elif isinstance(node, ast.Assign):
                     vuln = self._analyze_insecure_assignment(node, file_path, lines)
                     if vuln:
                         vulnerabilities.append(vuln)
-                
+
                 # Check for dangerous imports
                 elif isinstance(node, (ast.Import, ast.ImportFrom)):
                     vuln = self._analyze_dangerous_import(node, file_path, lines)
                     if vuln:
                         vulnerabilities.append(vuln)
-        
+
         except SyntaxError:
             # Skip files with syntax errors
             pass
         except Exception as e:
             logger.error(f"AST security analysis error for {file_path}: {e}")
-        
+
         return vulnerabilities
-    
+
     def _analyze_dangerous_call(self, node: ast.Call, file_path: str, lines: List[str]) -> Optional[SecurityVulnerability]:
         """Analyze function calls for security issues"""
-        
+
         call_name = self._get_call_name(node)
-        
+
         # Check for dangerous functions
         dangerous_functions = {
             'eval': ('Code injection risk', 'critical', 'CWE-94'),
@@ -294,7 +294,7 @@ class SecurityAnalyzer:
             'compile': ('Dynamic code compilation', 'high', 'CWE-94'),
             'input': ('Potential injection if used unsanitized', 'medium', 'CWE-20'),
         }
-        
+
         if call_name in dangerous_functions:
             desc, severity, cwe = dangerous_functions[call_name]
             return SecurityVulnerability(
@@ -309,20 +309,20 @@ class SecurityAnalyzer:
                 fix_suggestion=f"Avoid {call_name} or implement strict input validation",
                 confidence=0.8
             )
-        
+
         return None
-    
+
     def _analyze_insecure_assignment(self, node: ast.Assign, file_path: str, lines: List[str]) -> Optional[SecurityVulnerability]:
         """Analyze assignments for security issues"""
-        
+
         # Check for hardcoded secrets in assignments
         if isinstance(node.value, ast.Str):
             value = node.value.s
             line_content = lines[node.lineno - 1] if node.lineno <= len(lines) else ""
-            
+
             # Look for secret-like patterns
             secret_patterns = ['password', 'secret', 'key', 'token', 'api_key']
-            
+
             if any(pattern in line_content.lower() for pattern in secret_patterns):
                 if len(value) > 8 and any(c.isalnum() for c in value):
                     return SecurityVulnerability(
@@ -337,18 +337,18 @@ class SecurityAnalyzer:
                         fix_suggestion="Use environment variables or secure key management",
                         confidence=0.7
                     )
-        
+
         return None
-    
+
     def _analyze_dangerous_import(self, node: ast.AST, file_path: str, lines: List[str]) -> Optional[SecurityVulnerability]:
         """Analyze imports for security concerns"""
-        
+
         dangerous_modules = {
             'pickle': ('Unsafe deserialization module', 'high', 'CWE-502'),
             'marshal': ('Unsafe serialization module', 'medium', 'CWE-502'),
             'shelve': ('Pickle-based storage module', 'medium', 'CWE-502'),
         }
-        
+
         if isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name in dangerous_modules:
@@ -365,27 +365,27 @@ class SecurityAnalyzer:
                         fix_suggestion=f"Consider safer alternatives to {alias.name}",
                         confidence=0.6
                     )
-        
+
         return None
-    
+
     def _create_vulnerability(self, file_path: str, line_num: int, code_match: str,
                             category: str, description: str, cwe_id: str,
                             lines: List[str]) -> Optional[SecurityVulnerability]:
         """Create a SecurityVulnerability object"""
-        
+
         # Get context
         snippet = self._get_code_snippet(lines, line_num)
-        
+
         # Skip false positives
         if self._is_security_false_positive(code_match, snippet, category):
             return None
-        
+
         # Determine severity
         severity = self._get_vulnerability_severity(category, code_match)
-        
+
         # Generate fix suggestion
         fix_suggestion = self._generate_fix_suggestion(category, code_match)
-        
+
         return SecurityVulnerability(
             file_path=file_path,
             line_number=line_num,
@@ -398,13 +398,13 @@ class SecurityAnalyzer:
             fix_suggestion=fix_suggestion,
             confidence=0.8
         )
-    
+
     def _get_vulnerability_severity(self, category: str, code_match: str) -> str:
         """Determine vulnerability severity"""
-        
+
         severity_map = {
             'sql_injection': 'critical',
-            'command_injection': 'critical', 
+            'command_injection': 'critical',
             'hardcoded_secrets': 'critical',
             'insecure_crypto': 'high',
             'path_traversal': 'high',
@@ -414,12 +414,12 @@ class SecurityAnalyzer:
             'deserialization': 'high',
             'timing_attacks': 'medium'
         }
-        
+
         return severity_map.get(category, 'low')
-    
+
     def _generate_fix_suggestion(self, category: str, code_match: str) -> str:
         """Generate fix suggestion for vulnerability"""
-        
+
         suggestions = {
             'sql_injection': 'Use parameterized queries or ORM with parameter binding',
             'command_injection': 'Use subprocess with shell=False and validate inputs',
@@ -432,36 +432,36 @@ class SecurityAnalyzer:
             'deserialization': 'Use safe serialization formats like JSON',
             'timing_attacks': 'Use constant-time comparison functions'
         }
-        
+
         return suggestions.get(category, 'Review and fix this security issue')
-    
+
     def _is_security_false_positive(self, code_match: str, context: str, category: str) -> bool:
         """Check if this is likely a false positive"""
-        
+
         # Skip comments and docstrings
         context_clean = context.strip()
         if context_clean.startswith('#') or '"""' in context or "'''" in context:
             return True
-        
+
         # Skip test files and examples
         if any(word in context.lower() for word in ['test', 'example', 'demo', 'mock']):
             return True
-        
+
         # Category-specific false positive checks
         if category == 'hardcoded_secrets':
             # Skip common non-secret strings
             non_secrets = ['example', 'test', 'default', 'placeholder', 'sample']
             if any(word in code_match.lower() for word in non_secrets):
                 return True
-        
+
         return False
-    
+
     def _get_code_snippet(self, lines: List[str], line_num: int, context_lines: int = 2) -> str:
         """Get code snippet with context"""
         start = max(0, line_num - context_lines - 1)
         end = min(len(lines), line_num + context_lines)
         return '\n'.join(lines[start:end])
-    
+
     def _get_call_name(self, node: ast.Call) -> str:
         """Get the name of a function call"""
         if isinstance(node.func, ast.Name):
@@ -470,40 +470,40 @@ class SecurityAnalyzer:
             return f"{node.func.attr}"
         else:
             return str(node.func)
-    
+
     def _get_containing_function(self, node: ast.AST) -> Optional[str]:
         """Get the name of the function containing this node"""
         # This would require maintaining parent references in AST
         return None
-    
+
     async def _categorize_vulnerabilities(self, vulnerabilities: List[SecurityVulnerability]) -> Dict[str, List[SecurityVulnerability]]:
         """Categorize vulnerabilities"""
-        
+
         categories = {}
         for vuln in vulnerabilities:
             if vuln.vulnerability_type not in categories:
                 categories[vuln.vulnerability_type] = []
             categories[vuln.vulnerability_type].append(vuln)
-        
+
         return categories
-    
+
     async def _generate_security_recommendations(self, categorized: Dict[str, List[SecurityVulnerability]]) -> List[SecurityRecommendation]:
         """Generate security recommendations"""
-        
+
         recommendations = []
-        
+
         for category, vulns in categorized.items():
             if not vulns:
                 continue
-            
+
             # Group by severity
             critical_vulns = [v for v in vulns if v.severity == 'critical']
             high_vulns = [v for v in vulns if v.severity == 'high']
-            
+
             if critical_vulns or high_vulns:
                 priority_vulns = critical_vulns + high_vulns
                 severity = 'critical' if critical_vulns else 'high'
-                
+
                 recommendation = SecurityRecommendation(
                     category=category,
                     title=f"Fix {category.replace('_', ' ').title()} Vulnerabilities",
@@ -514,14 +514,14 @@ class SecurityAnalyzer:
                     fix_examples=self._generate_security_examples(category, priority_vulns[:2])
                 )
                 recommendations.append(recommendation)
-        
+
         return recommendations
-    
+
     def _generate_security_examples(self, category: str, vulns: List[SecurityVulnerability]) -> List[Dict[str, str]]:
         """Generate before/after security examples"""
-        
+
         examples = []
-        
+
         example_templates = {
             'sql_injection': {
                 'before': 'cursor.execute("SELECT * FROM users WHERE id = %s" % user_id)',
@@ -540,35 +540,35 @@ class SecurityAnalyzer:
                 'after': 'hashlib.sha256(password.encode()).hexdigest()'
             }
         }
-        
+
         template = example_templates.get(category)
         if template:
             examples.append(template)
-        
+
         return examples
-    
+
     def _calculate_security_metrics(self, vulnerabilities: List[SecurityVulnerability],
                                    recommendations: List[SecurityRecommendation]) -> Dict[str, Any]:
         """Calculate security analysis metrics"""
-        
+
         severity_counts = {
             'critical': len([v for v in vulnerabilities if v.severity == 'critical']),
             'high': len([v for v in vulnerabilities if v.severity == 'high']),
             'medium': len([v for v in vulnerabilities if v.severity == 'medium']),
             'low': len([v for v in vulnerabilities if v.severity == 'low'])
         }
-        
+
         category_counts = {}
         for vuln in vulnerabilities:
             category_counts[vuln.vulnerability_type] = category_counts.get(vuln.vulnerability_type, 0) + 1
-        
+
         file_counts = len(set(v.file_path for v in vulnerabilities))
-        
+
         # Calculate security score (0-100, higher is better)
         total_weight = severity_counts['critical'] * 10 + severity_counts['high'] * 5 + severity_counts['medium'] * 2 + severity_counts['low']
         max_possible = len(vulnerabilities) * 10 if vulnerabilities else 1
         security_score = max(0, 100 - (total_weight / max_possible * 100))
-        
+
         return {
             "severity_breakdown": severity_counts,
             "category_breakdown": category_counts,
@@ -576,12 +576,12 @@ class SecurityAnalyzer:
             "security_score": round(security_score, 1),
             "critical_security_issues": severity_counts['critical'],
             "injection_vulnerabilities": (
-                category_counts.get('sql_injection', 0) + 
+                category_counts.get('sql_injection', 0) +
                 category_counts.get('command_injection', 0)
             ),
             "hardcoded_secrets_count": category_counts.get('hardcoded_secrets', 0)
         }
-    
+
     def _serialize_vulnerability(self, vuln: SecurityVulnerability) -> Dict[str, Any]:
         """Serialize vulnerability for output"""
         return {
@@ -596,7 +596,7 @@ class SecurityAnalyzer:
             "confidence": vuln.confidence,
             "code_snippet": vuln.code_snippet
         }
-    
+
     def _serialize_recommendation(self, rec: SecurityRecommendation) -> Dict[str, Any]:
         """Serialize recommendation for output"""
         return {
@@ -608,7 +608,7 @@ class SecurityAnalyzer:
             "cwe_references": rec.cwe_references,
             "fix_examples": rec.fix_examples
         }
-    
+
     async def _cache_results(self, results: Dict[str, Any]):
         """Cache analysis results in Redis"""
         if self.redis_client:
@@ -618,7 +618,7 @@ class SecurityAnalyzer:
                 await self.redis_client.setex(key, 3600, value)
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
-    
+
     async def _clear_cache(self):
         """Clear analysis cache"""
         if self.redis_client:
@@ -640,15 +640,15 @@ class SecurityAnalyzer:
 
 async def main():
     """Example usage of security analyzer"""
-    
+
     analyzer = SecurityAnalyzer()
-    
+
     # Analyze the codebase for security vulnerabilities
     results = await analyzer.analyze_security(
         root_path=".",
         patterns=["src/**/*.py", "backend/**/*.py"]
     )
-    
+
     # Print summary
     print(f"\n=== Security Analysis Results ===")
     print(f"Total vulnerabilities: {results['total_vulnerabilities']}")
@@ -656,12 +656,12 @@ async def main():
     print(f"High severity count: {results['high_severity_count']}")
     print(f"Security score: {results['metrics']['security_score']}/100")
     print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
-    
+
     # Print category breakdown
     print(f"\n=== Vulnerability Categories ===")
     for category, count in results['categories'].items():
         print(f"{category}: {count}")
-    
+
     # Print critical vulnerabilities
     print(f"\n=== Critical Security Vulnerabilities ===")
     critical_vulns = [v for v in results['vulnerability_details'] if v['severity'] == 'critical']

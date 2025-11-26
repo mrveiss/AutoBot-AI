@@ -8,7 +8,6 @@ Provides comprehensive logging of user interactions, errors, and performance met
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict
 
 from backend.type_defs.common import Metadata
 

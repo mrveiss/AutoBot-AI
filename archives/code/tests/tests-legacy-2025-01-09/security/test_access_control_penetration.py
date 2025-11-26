@@ -48,7 +48,7 @@ TEST_USER_ATTACKER = {"username": "attacker", "user_id": "user_attacker"}
 
 class PenetrationTestResults:
     """Track penetration test results and findings"""
-    
+
     def __init__(self):
         self.total_tests = 0
         self.vulnerabilities_found = []
@@ -56,7 +56,7 @@ class PenetrationTestResults:
         self.audit_failures = []
         self.false_positives = []
         self.performance_issues = []
-        
+
     def add_vulnerability(self, test_name: str, severity: str, description: str, evidence: Dict):
         """Record a discovered vulnerability"""
         self.vulnerabilities_found.append({
@@ -66,7 +66,7 @@ class PenetrationTestResults:
             "evidence": evidence,
             "timestamp": datetime.now().isoformat()
         })
-    
+
     def add_bypass(self, test_name: str, endpoint: str, method: str, details: Dict):
         """Record a successful authorization bypass"""
         self.bypasses_successful.append({
@@ -76,7 +76,7 @@ class PenetrationTestResults:
             "details": details,
             "timestamp": datetime.now().isoformat()
         })
-    
+
     def add_audit_failure(self, test_name: str, reason: str, details: Dict):
         """Record an audit logging failure"""
         self.audit_failures.append({
@@ -85,7 +85,7 @@ class PenetrationTestResults:
             "details": details,
             "timestamp": datetime.now().isoformat()
         })
-    
+
     def add_false_positive(self, test_name: str, description: str):
         """Record a false positive (legitimate user blocked)"""
         self.false_positives.append({
@@ -93,7 +93,7 @@ class PenetrationTestResults:
             "description": description,
             "timestamp": datetime.now().isoformat()
         })
-    
+
     def generate_report(self) -> Dict:
         """Generate comprehensive test report"""
         return {
@@ -132,7 +132,7 @@ async def setup_test_sessions(http_client):
     """Create test chat sessions for Alice and Bob"""
     alice_session_id = str(uuid.uuid4())
     bob_session_id = str(uuid.uuid4())
-    
+
     # Create Alice's session
     alice_response = await http_client.post(
         f"{BACKEND_URL}/api/chat/sessions",
@@ -143,7 +143,7 @@ async def setup_test_sessions(http_client):
         },
         headers={"X-Username": TEST_USER_ALICE["username"]}
     )
-    
+
     # Create Bob's session
     bob_response = await http_client.post(
         f"{BACKEND_URL}/api/chat/sessions",
@@ -154,7 +154,7 @@ async def setup_test_sessions(http_client):
         },
         headers={"X-Username": TEST_USER_BOB["username"]}
     )
-    
+
     return {
         "alice": {
             "session_id": alice_session_id,
@@ -177,23 +177,23 @@ async def setup_test_sessions(http_client):
 async def test_unauthorized_session_access(http_client, setup_test_sessions, test_results):
     """
     **CRITICAL VULNERABILITY TEST**
-    
+
     Attempt: Attacker tries to access Alice's private chat session
     Expected: 403 Forbidden + audit log entry
     Reality: Will likely succeed due to missing endpoint protection
-    
+
     This is the PRIMARY CVSS 9.1 vulnerability being tested.
     """
     test_results.total_tests += 1
     sessions = await setup_test_sessions
     alice_session_id = sessions["alice"]["session_id"]
-    
+
     # Attacker attempts to access Alice's session
     response = await http_client.get(
         f"{BACKEND_URL}/api/chat/sessions/{alice_session_id}",
         headers={"X-Username": TEST_USER_ATTACKER["username"]}
     )
-    
+
     # Analyze result
     if response.status_code == 200:
         # VULNERABILITY: Unauthorized access succeeded
@@ -219,15 +219,15 @@ async def test_unauthorized_session_access(http_client, setup_test_sessions, tes
             }
         )
         pytest.fail("CRITICAL: Unauthorized session access succeeded - CVSS 9.1 vulnerability CONFIRMED")
-    
+
     elif response.status_code == 403:
         # Expected behavior - access denied
         print("✅ Unauthorized access properly blocked (403 Forbidden)")
-    
+
     elif response.status_code == 401:
         # Authentication required
         print("✅ Authentication required (401 Unauthorized)")
-    
+
     else:
         # Unexpected response
         test_results.add_vulnerability(
@@ -242,7 +242,7 @@ async def test_unauthorized_session_access(http_client, setup_test_sessions, tes
 async def test_unauthorized_session_deletion(http_client, setup_test_sessions, test_results):
     """
     **CRITICAL VULNERABILITY TEST**
-    
+
     Attempt: Attacker tries to delete Bob's chat session
     Expected: 403 Forbidden + audit log entry
     Reality: Will likely succeed due to missing endpoint protection
@@ -250,13 +250,13 @@ async def test_unauthorized_session_deletion(http_client, setup_test_sessions, t
     test_results.total_tests += 1
     sessions = await setup_test_sessions
     bob_session_id = sessions["bob"]["session_id"]
-    
+
     # Attacker attempts to delete Bob's session
     response = await http_client.delete(
         f"{BACKEND_URL}/api/chat/sessions/{bob_session_id}",
         headers={"X-Username": TEST_USER_ATTACKER["username"]}
     )
-    
+
     if response.status_code in [200, 204]:
         # VULNERABILITY: Unauthorized deletion succeeded
         test_results.add_vulnerability(
@@ -280,10 +280,10 @@ async def test_unauthorized_session_deletion(http_client, setup_test_sessions, t
             }
         )
         pytest.fail("CRITICAL: Unauthorized session deletion succeeded - CVSS 9.1 vulnerability CONFIRMED")
-    
+
     elif response.status_code == 403:
         print("✅ Unauthorized deletion properly blocked (403 Forbidden)")
-    
+
     elif response.status_code == 401:
         print("✅ Authentication required (401 Unauthorized)")
 
@@ -298,14 +298,14 @@ async def test_unauthorized_session_export(http_client, setup_test_sessions, tes
     test_results.total_tests += 1
     sessions = await setup_test_sessions
     alice_session_id = sessions["alice"]["session_id"]
-    
+
     # Attacker attempts to export Alice's session
     response = await http_client.get(
         f"{BACKEND_URL}/api/chat/sessions/{alice_session_id}/export",
         headers={"X-Username": TEST_USER_ATTACKER["username"]},
         params={"format": "json"}
     )
-    
+
     if response.status_code == 200:
         test_results.add_vulnerability(
             test_name="unauthorized_session_export",
@@ -319,7 +319,7 @@ async def test_unauthorized_session_export(http_client, setup_test_sessions, tes
             }
         )
         pytest.fail("CRITICAL: Unauthorized data export succeeded")
-    
+
     elif response.status_code in [401, 403]:
         print("✅ Unauthorized export properly blocked")
 
@@ -337,7 +337,7 @@ async def test_session_id_tampering(http_client, setup_test_sessions, test_resul
     test_results.total_tests += 1
     sessions = await setup_test_sessions
     alice_session_id = sessions["alice"]["session_id"]
-    
+
     # Try various session ID manipulations
     manipulations = [
         alice_session_id[:-4] + "0000",  # Change last 4 chars
@@ -346,13 +346,13 @@ async def test_session_id_tampering(http_client, setup_test_sessions, test_resul
         "../../" + alice_session_id,  # Path traversal
         alice_session_id + "' OR '1'='1",  # SQL injection attempt
     ]
-    
+
     for manipulated_id in manipulations:
         response = await http_client.get(
             f"{BACKEND_URL}/api/chat/sessions/{manipulated_id}",
             headers={"X-Username": TEST_USER_ATTACKER["username"]}
         )
-        
+
         if response.status_code == 200:
             test_results.add_vulnerability(
                 test_name="session_id_tampering",
@@ -371,13 +371,13 @@ async def test_missing_authentication(http_client, setup_test_sessions, test_res
     test_results.total_tests += 1
     sessions = await setup_test_sessions
     alice_session_id = sessions["alice"]["session_id"]
-    
+
     # Try to access without any authentication
     response = await http_client.get(
         f"{BACKEND_URL}/api/chat/sessions/{alice_session_id}"
         # No headers provided
     )
-    
+
     if response.status_code == 200:
         test_results.add_vulnerability(
             test_name="missing_authentication",
@@ -386,7 +386,7 @@ async def test_missing_authentication(http_client, setup_test_sessions, test_res
             evidence={"endpoint": f"/api/chat/sessions/{alice_session_id}", "response_code": 200}
         )
         pytest.fail("CRITICAL: No authentication required for sensitive endpoint")
-    
+
     elif response.status_code == 401:
         print("✅ Authentication properly required")
 
@@ -399,35 +399,35 @@ async def test_missing_authentication(http_client, setup_test_sessions, test_res
 async def test_orphaned_session_hijacking(http_client, test_results):
     """
     **VULNERABILITY: Legacy Session Auto-Migration**
-    
+
     Test the auto-migration feature that assigns orphaned sessions
     to the requesting user. This could enable session hijacking.
-    
+
     Scenario:
     1. Create a session without owner assignment
     2. Attacker requests the orphaned session
     3. System auto-assigns it to attacker (vulnerability)
     """
     test_results.total_tests += 1
-    
+
     # Create an orphaned session (session exists but no owner in Redis)
     orphaned_session_id = str(uuid.uuid4())
-    
+
     # Note: This test requires direct Redis manipulation to create orphaned state
     # In production, this scenario could occur from:
     # - Redis key expiration while session data persists
     # - Database inconsistencies
     # - Legacy sessions from before ownership tracking
-    
+
     # Attacker attempts to access the orphaned session
     response = await http_client.get(
         f"{BACKEND_URL}/api/chat/sessions/{orphaned_session_id}",
         headers={"X-Username": TEST_USER_ATTACKER["username"]}
     )
-    
+
     # If the session is auto-assigned to the attacker, this is a vulnerability
     # Check if session now belongs to attacker via subsequent requests
-    
+
     print("⚠️  Legacy session migration vulnerability requires manual validation")
     print("    See session_ownership.py lines 126-134 for auto-assignment logic")
 
@@ -440,14 +440,14 @@ async def test_orphaned_session_hijacking(http_client, test_results):
 async def test_cross_vm_session_access(http_client, setup_test_sessions, test_results):
     """
     Test distributed environment security across 6 VMs
-    
+
     Scenario: Session created on Frontend VM, accessed from different VMs
     Expected: Consistent authorization enforcement across all VMs
     """
     test_results.total_tests += 1
     sessions = await setup_test_sessions
     alice_session_id = sessions["alice"]["session_id"]
-    
+
     # Test from different VM IPs (simulated via headers)
     vm_sources = [
         "172.16.168.21",  # Frontend VM
@@ -455,7 +455,7 @@ async def test_cross_vm_session_access(http_client, setup_test_sessions, test_re
         "172.16.168.24",  # AI Stack VM
         "172.16.168.25",  # Browser VM
     ]
-    
+
     for vm_ip in vm_sources:
         response = await http_client.get(
             f"{BACKEND_URL}/api/chat/sessions/{alice_session_id}",
@@ -464,7 +464,7 @@ async def test_cross_vm_session_access(http_client, setup_test_sessions, test_re
                 "X-Forwarded-For": vm_ip
             }
         )
-        
+
         if response.status_code == 200:
             test_results.add_vulnerability(
                 test_name="cross_vm_unauthorized_access",
@@ -482,7 +482,7 @@ async def test_cross_vm_session_access(http_client, setup_test_sessions, test_re
 async def test_audit_logging_coverage(http_client, setup_test_sessions, test_results):
     """
     Verify that all unauthorized access attempts are logged
-    
+
     This test validates:
     1. Unauthorized attempts create audit log entries
     2. Audit logs contain required OWASP fields
@@ -492,17 +492,17 @@ async def test_audit_logging_coverage(http_client, setup_test_sessions, test_res
     test_results.total_tests += 1
     sessions = await setup_test_sessions
     alice_session_id = sessions["alice"]["session_id"]
-    
+
     # Make unauthorized access attempt
     attack_timestamp = datetime.now()
     response = await http_client.get(
         f"{BACKEND_URL}/api/chat/sessions/{alice_session_id}",
         headers={"X-Username": TEST_USER_ATTACKER["username"]}
     )
-    
+
     # Wait for audit logging (async batch processing)
     await asyncio.sleep(2)
-    
+
     # Query audit logs for this event
     audit_response = await http_client.get(
         f"{BACKEND_URL}/api/audit/logs",
@@ -514,10 +514,10 @@ async def test_audit_logging_coverage(http_client, setup_test_sessions, test_res
             "end_time": (attack_timestamp + timedelta(minutes=1)).isoformat()
         }
     )
-    
+
     if audit_response.status_code == 200:
         audit_logs = audit_response.json()
-        
+
         if not audit_logs or len(audit_logs) == 0:
             test_results.add_audit_failure(
                 test_name="audit_logging_coverage",
@@ -531,12 +531,12 @@ async def test_audit_logging_coverage(http_client, setup_test_sessions, test_res
             print("❌ AUDIT FAILURE: Unauthorized access not logged")
         else:
             print(f"✅ Audit log captured: {len(audit_logs)} entries")
-            
+
             # Validate log structure
             for log_entry in audit_logs:
                 required_fields = ["timestamp", "operation", "result", "user_id", "ip_address"]
                 missing_fields = [f for f in required_fields if f not in log_entry]
-                
+
                 if missing_fields:
                     test_results.add_audit_failure(
                         test_name="audit_logging_coverage",
@@ -558,10 +558,10 @@ async def test_audit_log_tampering_resistance(http_client, test_results):
     Expected: Append-only, tamper-resistant storage
     """
     test_results.total_tests += 1
-    
+
     # Attempt to delete audit logs via API (if endpoint exists)
     response = await http_client.delete(f"{BACKEND_URL}/api/audit/logs")
-    
+
     if response.status_code in [200, 204]:
         test_results.add_vulnerability(
             test_name="audit_log_tampering",
@@ -570,13 +570,13 @@ async def test_audit_log_tampering_resistance(http_client, test_results):
             evidence={"endpoint": "/api/audit/logs", "method": "DELETE"}
         )
         pytest.fail("CRITICAL: Audit logs are not tamper-resistant")
-    
+
     # Attempt to modify audit logs
     response = await http_client.put(
         f"{BACKEND_URL}/api/audit/logs/some-id",
         json={"result": "success"}  # Try to change denied to success
     )
-    
+
     if response.status_code in [200, 204]:
         test_results.add_vulnerability(
             test_name="audit_log_tampering",
@@ -594,7 +594,7 @@ async def test_audit_log_tampering_resistance(http_client, test_results):
 async def test_concurrent_ownership_change(http_client, setup_test_sessions, test_results):
     """
     Test race conditions during ownership validation
-    
+
     Scenario:
     1. Alice owns session
     2. Concurrent requests: Alice accesses + Ownership changes + Bob accesses
@@ -603,19 +603,19 @@ async def test_concurrent_ownership_change(http_client, setup_test_sessions, tes
     test_results.total_tests += 1
     sessions = await setup_test_sessions
     alice_session_id = sessions["alice"]["session_id"]
-    
+
     async def alice_access():
         return await http_client.get(
             f"{BACKEND_URL}/api/chat/sessions/{alice_session_id}",
             headers={"X-Username": TEST_USER_ALICE["username"]}
         )
-    
+
     async def bob_access():
         return await http_client.get(
             f"{BACKEND_URL}/api/chat/sessions/{alice_session_id}",
             headers={"X-Username": TEST_USER_BOB["username"]}
         )
-    
+
     # Execute concurrent requests
     results = await asyncio.gather(
         alice_access(),
@@ -624,10 +624,10 @@ async def test_concurrent_ownership_change(http_client, setup_test_sessions, tes
         bob_access(),
         return_exceptions=True
     )
-    
+
     # Analyze race condition results
     bob_successful_accesses = sum(1 for r in results if hasattr(r, 'status_code') and r.status_code == 200 and "bob" in str(r))
-    
+
     if bob_successful_accesses > 0:
         test_results.add_vulnerability(
             test_name="race_condition_ownership",
@@ -648,29 +648,29 @@ async def test_session_id_enumeration(http_client, test_results):
     Expected: Rate limiting or timing-safe comparisons
     """
     test_results.total_tests += 1
-    
+
     # Generate random session IDs and try to access them
     attempted_ids = [str(uuid.uuid4()) for _ in range(100)]
-    
+
     start_time = datetime.now()
     valid_sessions_found = 0
-    
+
     for session_id in attempted_ids:
         response = await http_client.get(
             f"{BACKEND_URL}/api/chat/sessions/{session_id}",
             headers={"X-Username": TEST_USER_ATTACKER["username"]}
         )
-        
+
         if response.status_code == 200:
             valid_sessions_found += 1
-        
+
         # Check for rate limiting
         if response.status_code == 429:
             print("✅ Rate limiting active")
             return
-    
+
     elapsed_time = (datetime.now() - start_time).total_seconds()
-    
+
     if valid_sessions_found > 0:
         test_results.add_vulnerability(
             test_name="session_enumeration",
@@ -682,7 +682,7 @@ async def test_session_id_enumeration(http_client, test_results):
                 "elapsed_seconds": elapsed_time
             }
         )
-    
+
     if elapsed_time < 5:  # 100 requests in < 5 seconds
         test_results.add_vulnerability(
             test_name="missing_rate_limiting",
@@ -705,11 +705,11 @@ async def test_dos_via_ownership_validation(http_client, setup_test_sessions, te
     test_results.total_tests += 1
     sessions = await setup_test_sessions
     alice_session_id = sessions["alice"]["session_id"]
-    
+
     # Rapid-fire validation requests
     num_requests = 1000
     start_time = datetime.now()
-    
+
     tasks = [
         http_client.get(
             f"{BACKEND_URL}/api/chat/sessions/{alice_session_id}",
@@ -717,12 +717,12 @@ async def test_dos_via_ownership_validation(http_client, setup_test_sessions, te
         )
         for _ in range(num_requests)
     ]
-    
+
     responses = await asyncio.gather(*tasks, return_exceptions=True)
     elapsed_time = (datetime.now() - start_time).total_seconds()
-    
+
     avg_time_per_request = (elapsed_time / num_requests) * 1000  # ms
-    
+
     if avg_time_per_request > 10:
         test_results.performance_issues.append({
             "test": "dos_via_ownership_validation",
@@ -744,20 +744,20 @@ async def test_dos_via_ownership_validation(http_client, setup_test_sessions, te
 async def test_auth_disabled_mode(http_client, test_results):
     """
     **VULNERABILITY: Development Auth Bypass Mode**
-    
+
     Test if auth_disabled=True or enable_auth=False allows
     complete security bypass.
-    
+
     This is a CRITICAL issue if enabled in production.
     """
     test_results.total_tests += 1
-    
+
     # Check current auth status
     response = await http_client.get(f"{BACKEND_URL}/api/security/status")
-    
+
     if response.status_code == 200:
         status = response.json()
-        
+
         if not status.get("security_enabled", True):
             test_results.add_vulnerability(
                 test_name="auth_disabled_mode",
@@ -779,19 +779,19 @@ async def test_file_operations_protected(http_client, setup_test_sessions, test_
     """
     Verify that conversation file operations ARE protected
     (These should have session ownership validation)
-    
+
     This is a POSITIVE test - we expect these to be blocked.
     """
     test_results.total_tests += 1
     sessions = await setup_test_sessions
     alice_session_id = sessions["alice"]["session_id"]
-    
+
     # Attempt unauthorized file listing
     response = await http_client.get(
         f"{BACKEND_URL}/api/conversation-files/{alice_session_id}/files",
         headers={"X-Username": TEST_USER_ATTACKER["username"]}
     )
-    
+
     if response.status_code == 200:
         test_results.add_vulnerability(
             test_name="file_operations_unprotected",
@@ -800,11 +800,11 @@ async def test_file_operations_protected(http_client, setup_test_sessions, test_
             evidence={"endpoint": f"/api/conversation-files/{alice_session_id}/files"}
         )
         pytest.fail("File operations should be protected but are not")
-    
+
     elif response.status_code in [401, 403]:
         print("✅ File operations properly protected (403 Forbidden)")
         # This is EXPECTED and CORRECT behavior
-    
+
     else:
         print(f"⚠️  Unexpected response: {response.status_code}")
 
@@ -819,14 +819,14 @@ async def test_generate_security_report(test_results):
     Generate comprehensive security penetration test report
     """
     report = test_results.generate_report()
-    
+
     # Save report to file
     report_path = Path("/home/kali/Desktop/AutoBot/reports/security/PENETRATION_TEST_RESULTS.json")
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     with open(report_path, 'w') as f:
         json.dump(report, indent=2, fp=f)
-    
+
     # Print summary
     print("\n" + "="*80)
     print("SECURITY PENETRATION TEST SUMMARY")
@@ -838,24 +838,24 @@ async def test_generate_security_report(test_results):
     print(f"False Positives: {report['summary']['false_positives_count']}")
     print(f"Performance Issues: {report['summary']['performance_issues_count']}")
     print("="*80)
-    
+
     if report['summary']['vulnerabilities_count'] > 0:
         print("\n⚠️  VULNERABILITIES DISCOVERED:")
         for vuln in report['vulnerabilities']:
             print(f"  [{vuln['severity']}] {vuln['test']}: {vuln['description']}")
-    
+
     if report['summary']['bypasses_count'] > 0:
         print("\n❌ AUTHORIZATION BYPASSES:")
         for bypass in report['bypasses']:
             print(f"  {bypass['endpoint']} ({bypass['method']}): {bypass['details']['vulnerability']}")
-    
+
     if report['summary']['audit_failures_count'] > 0:
         print("\n🚨 AUDIT LOGGING FAILURES:")
         for failure in report['audit_failures']:
             print(f"  {failure['test']}: {failure['reason']}")
-    
+
     print(f"\nFull report saved to: {report_path}")
-    
+
     # FAIL the test suite if critical vulnerabilities found
     if report['summary']['vulnerabilities_count'] > 0:
         critical_vulns = [v for v in report['vulnerabilities'] if v['severity'] == 'CRITICAL']

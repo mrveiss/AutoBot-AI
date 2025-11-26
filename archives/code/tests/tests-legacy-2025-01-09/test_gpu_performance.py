@@ -18,7 +18,7 @@ from src.utils.semantic_chunker import AutoBotSemanticChunker
 
 # Sample text for performance testing
 TEST_TEXT = """
-Artificial intelligence has revolutionized countless industries and aspects of human life. 
+Artificial intelligence has revolutionized countless industries and aspects of human life.
 Machine learning algorithms can now process vast amounts of data with unprecedented speed and accuracy.
 Neural networks, inspired by the human brain, have enabled computers to recognize patterns, understand language, and make complex decisions.
 
@@ -47,13 +47,13 @@ async def measure_gpu_utilization():
     """Measure GPU utilization during processing."""
     import subprocess
     import json
-    
+
     try:
         result = subprocess.run([
             'nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw',
             '--format=csv,noheader,nounits'
         ], capture_output=True, text=True, timeout=5)
-        
+
         if result.returncode == 0:
             values = result.stdout.strip().split(',')
             return {
@@ -65,13 +65,13 @@ async def measure_gpu_utilization():
             }
     except:
         pass
-    
+
     return None
 
 async def performance_test():
     """Run comprehensive performance test."""
     print("=== AutoBot GPU Performance Analysis ===\n")
-    
+
     # System info
     print("Hardware Configuration:")
     print(f"- CPU: Intel Ultra 9 185H ({psutil.cpu_count()} cores)")
@@ -80,7 +80,7 @@ async def performance_test():
     print(f"- System Memory: {psutil.virtual_memory().total / 1024**3:.1f} GB")
     print(f"- Current CPU Usage: {psutil.cpu_percent()}%")
     print()
-    
+
     # Initial GPU status
     gpu_before = await measure_gpu_utilization()
     if gpu_before:
@@ -90,7 +90,7 @@ async def performance_test():
         print(f"- Temperature: {gpu_before['temperature']}°C")
         print(f"- Power Draw: {gpu_before['power']} W")
         print()
-    
+
     # Initialize semantic chunker
     print("Initializing Semantic Chunker...")
     chunker = AutoBotSemanticChunker(
@@ -99,29 +99,29 @@ async def performance_test():
         min_chunk_size=100,
         max_chunk_size=1000
     )
-    
+
     # Test performance
     print("Starting Performance Test...")
     print(f"Text Length: {len(TEST_TEXT)} characters")
     print(f"Estimated Sentences: ~{len(TEST_TEXT.split('.'))} sentences")
     print()
-    
+
     # Measure processing time
     start_time = time.time()
     start_memory = psutil.Process().memory_info().rss / 1024**2
-    
+
     # Run semantic chunking
     chunks = await chunker.chunk_text(TEST_TEXT)
-    
+
     end_time = time.time()
     end_memory = psutil.Process().memory_info().rss / 1024**2
-    
+
     processing_time = end_time - start_time
     memory_used = end_memory - start_memory
-    
+
     # Final GPU status
     gpu_after = await measure_gpu_utilization()
-    
+
     # Results
     print("=== PERFORMANCE RESULTS ===")
     print(f"Processing Time: {processing_time:.2f} seconds")
@@ -129,7 +129,7 @@ async def performance_test():
     print(f"Chunks Created: {len(chunks)}")
     print(f"Average Chunk Size: {sum(len(c.content) for c in chunks) // len(chunks)} chars")
     print()
-    
+
     if gpu_after:
         print("GPU Utilization During Processing:")
         print(f"- GPU Utilization: {gpu_after['gpu_util']}%")
@@ -137,21 +137,21 @@ async def performance_test():
         print(f"- Temperature: {gpu_after['temperature']}°C")
         print(f"- Power Draw: {gpu_after['power']} W")
         print()
-        
+
         if gpu_before:
             util_increase = gpu_after['gpu_util'] - gpu_before['gpu_util']
             memory_increase = gpu_after['memory_used'] - gpu_before['memory_used']
             temp_increase = gpu_after['temperature'] - gpu_before['temperature']
-            
+
             print("GPU Usage Change:")
             print(f"- Utilization: +{util_increase:.1f}%")
             print(f"- Memory: +{memory_increase:.0f} MB")
             print(f"- Temperature: +{temp_increase:.1f}°C")
             print()
-    
+
     # Performance analysis
     print("=== OPTIMIZATION OPPORTUNITIES ===")
-    
+
     # GPU utilization analysis
     if gpu_after and gpu_after['gpu_util'] < 50:
         print(f"⚠️ GPU underutilized ({gpu_after['gpu_util']}%) - Opportunity for optimization")
@@ -160,14 +160,14 @@ async def performance_test():
         print("   - Optimize tensor operations for RTX 4070")
     elif gpu_after and gpu_after['gpu_util'] > 85:
         print(f"✅ GPU well utilized ({gpu_after['gpu_util']}%)")
-    
+
     # Performance targets
     sentences_estimated = len(TEST_TEXT.split('.'))
     sentences_per_second = sentences_estimated / processing_time
-    
+
     print(f"\nCurrent Performance: {sentences_per_second:.1f} sentences/second")
     print(f"Target Performance: {sentences_per_second * 3:.1f} sentences/second (3x improvement)")
-    
+
     # Memory efficiency
     if gpu_after:
         memory_util = gpu_after['memory_used'] / gpu_after['memory_total'] * 100
@@ -176,13 +176,13 @@ async def performance_test():
             print("   - GPU memory underutilized, can handle larger batches")
         elif memory_util > 85:
             print("   - GPU memory highly utilized, good efficiency")
-    
+
     # CPU utilization
     final_cpu = psutil.cpu_percent()
     print(f"CPU Utilization: {final_cpu}%")
     if final_cpu < 20:
         print("   - CPU underutilized, opportunity for parallel processing")
-    
+
     return {
         'processing_time': processing_time,
         'memory_used': memory_used,
@@ -194,11 +194,11 @@ async def performance_test():
 async def npu_assessment():
     """Assess NPU worker functionality."""
     print("\n=== NPU WORKER ASSESSMENT ===")
-    
+
     try:
         import aiohttp
         import asyncio
-        
+
         async with aiohttp.ClientSession() as session:
             # Test NPU worker health
             try:
@@ -208,21 +208,21 @@ async def npu_assessment():
                     print(f"Device: {health_data.get('device', 'unknown')}")
                     print(f"Models Loaded: {health_data.get('models_loaded', 0)}")
                     print(f"Requests Processed: {health_data.get('requests_processed', 0)}")
-                    
+
                     if health_data.get('device') == 'CPU':
                         print("⚠️ NPU Worker running on CPU - No Intel NPU acceleration detected")
                         return False
                     else:
                         print("✅ NPU Worker potentially using hardware acceleration")
                         return True
-                        
+
             except asyncio.TimeoutError:
                 print("❌ NPU Worker not responding (timeout)")
                 return False
             except Exception as e:
                 print(f"❌ NPU Worker error: {e}")
                 return False
-                
+
     except ImportError:
         print("❌ aiohttp not available for NPU testing")
         return False
@@ -231,39 +231,39 @@ if __name__ == "__main__":
     async def main():
         # Run performance test
         results = await performance_test()
-        
+
         # Assess NPU
         npu_available = await npu_assessment()
-        
+
         # Optimization recommendations
         print("\n=== OPTIMIZATION RECOMMENDATIONS ===")
-        
+
         if results['gpu_util'] < 50:
             print("🚀 HIGH PRIORITY: GPU Optimization")
             print("   1. Increase embedding batch sizes (current: adaptive)")
             print("   2. Enable FP16 mixed precision")
             print("   3. Optimize GPU memory pooling")
             print("   4. Target: 70-85% GPU utilization")
-        
+
         if results['sentences_per_second'] < 50:
             print("⚡ MEDIUM PRIORITY: Processing Speed")
             print("   1. Optimize sentence splitting algorithm")
             print("   2. Implement parallel embedding computation")
             print("   3. Cache embeddings for repeated content")
-        
+
         if not npu_available:
             print("🔧 MEDIUM PRIORITY: NPU Integration")
             print("   1. Investigate Intel NPU hardware availability")
             print("   2. If NPU not functional, consolidate to GPU-only")
             print("   3. Optimize workload distribution")
-        
+
         # Expected improvements
         print("\n=== EXPECTED IMPROVEMENTS ===")
         print("With optimizations:")
         print(f"- Processing Speed: {results['processing_time']:.2f}s → {results['processing_time']/3:.2f}s (3x faster)")
         print(f"- GPU Utilization: {results['gpu_util']:.0f}% → 75% (optimal)")
         print(f"- Throughput: {results['sentences_per_second']:.1f} → {results['sentences_per_second']*3:.1f} sentences/sec")
-        
+
         return results
-    
+
     asyncio.run(main())

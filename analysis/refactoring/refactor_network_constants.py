@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.unified_config_manager import unified_config_manager
 
+
 def get_replacement_map() -> Dict[str, str]:
     """Generate replacement map dynamically from configuration"""
     # Get configuration values
@@ -62,8 +63,10 @@ def get_replacement_map() -> Dict[str, str]:
 
     return replacement_map
 
+
 # Get replacement map from configuration
 REPLACEMENT_MAP = get_replacement_map()
+
 
 def should_refactor_file(file_path: Path) -> bool:
     """Check if file should be refactored"""
@@ -81,6 +84,7 @@ def should_refactor_file(file_path: Path) -> bool:
 
     # Only refactor code files
     return file_path.suffix in {'.py', '.js', '.ts', '.vue', '.jsx', '.tsx'}
+
 
 def add_import_if_needed(content: str, file_path: Path) -> str:
     """Add NetworkConstants import if replacements were made and not already imported"""
@@ -124,6 +128,7 @@ def add_import_if_needed(content: str, file_path: Path) -> str:
 
     return '\n'.join(lines)
 
+
 def refactor_file_content(content: str, file_path: Path) -> Tuple[str, int]:
     """Refactor content to use constants. Returns (new_content, num_replacements)"""
     original_content = content
@@ -166,6 +171,7 @@ def refactor_file_content(content: str, file_path: Path) -> Tuple[str, int]:
 
     return content, replacements_made
 
+
 def refactor_file(file_path: Path) -> bool:
     """Refactor a single file. Returns True if changes were made."""
     try:
@@ -187,6 +193,7 @@ def refactor_file(file_path: Path) -> bool:
         print(f"   ❌ Error refactoring {file_path}: {e}")
         return False
 
+
 def find_core_files() -> List[Path]:
     """Find core AutoBot files that should be refactored"""
     # Use project-relative path instead of hardcoded absolute path
@@ -204,6 +211,7 @@ def find_core_files() -> List[Path]:
                     core_files.append(file_path)
 
     return core_files
+
 
 def main():
     """Main refactoring function"""
@@ -236,14 +244,15 @@ def main():
         except Exception as e:
             print(f"❌ Error processing {file_path}: {e}")
 
-    print(f"\n✅ Network constants refactoring complete!")
+    print("\n✅ Network constants refactoring complete!")
     print(f"📊 Files modified: {total_files_changed}")
     print(f"🔄 Total patterns available for replacement: {len(REPLACEMENT_MAP)}")
 
-    print(f"\n💡 Next steps:")
-    print(f"   1. Test the refactored code")
-    print(f"   2. Update any remaining hardcoded values manually")
-    print(f"   3. Add environment-specific configuration")
+    print("\n💡 Next steps:")
+    print("   1. Test the refactored code")
+    print("   2. Update any remaining hardcoded values manually")
+    print("   3. Add environment-specific configuration")
+
 
 if __name__ == "__main__":
     main()

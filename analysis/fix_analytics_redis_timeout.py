@@ -25,6 +25,7 @@ from src.constants.network_constants import NetworkConstants
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class AnalyticsRedisOptimizer:
     """Optimizes Redis operations for analytics database to prevent timeouts"""
 
@@ -231,7 +232,7 @@ class AnalyticsRedisOptimizer:
                         "impact": "High"
                     })
 
-            logger.info(f"📊 Vector analysis complete:")
+            logger.info("📊 Vector analysis complete:")
             logger.info(f"  - Average size: {vector_analysis['average_size']} bytes")
             logger.info(f"  - Recommendations: {len(vector_analysis['optimization_recommendations'])}")
 
@@ -281,7 +282,7 @@ class AnalyticsRedisOptimizer:
                 try:
                     index_info = self.analytics_redis.execute_command('FT.INFO', 'analytics_index')
                     logger.info("ℹ️ Analytics index already exists")
-                except:
+                except Exception:
                     # Create optimized search index
                     create_command = [
                         'FT.CREATE', 'analytics_index',
@@ -450,7 +451,7 @@ async def get_redis_connection_with_timeout(self, database: RedisDatabase, timeo
                 )
                 test_results["search_test"] = True
                 test_results["performance_metrics"]["search_results"] = len(search_result)
-                logger.info(f"✅ Search test: Found results")
+                logger.info("✅ Search test: Found results")
 
             except Exception as e:
                 logger.info(f"ℹ️ Search test skipped (no index): {e}")
@@ -469,6 +470,7 @@ async def get_redis_connection_with_timeout(self, database: RedisDatabase, timeo
         except Exception as e:
             logger.error(f"❌ Timeout fix testing failed: {e}")
             return {}
+
 
 async def main():
     """Main execution function"""
@@ -530,8 +532,8 @@ async def main():
             print("⚠️ Testing incomplete")
 
         # Summary
-        print(f"\n🎉 Redis Timeout Fix Complete!")
-        print(f"📊 Summary:")
+        print("\n🎉 Redis Timeout Fix Complete!")
+        print("📊 Summary:")
         if analysis:
             print(f"  - Database size: {analysis.get('database_size', 0)} keys")
             print(f"  - Memory usage: {analysis.get('memory_info', {}).get('used_memory_human', 'Unknown')}")
@@ -541,7 +543,7 @@ async def main():
         if test_results:
             print(f"  - Test success rate: {test_results.get('overall_success_rate', 0):.1f}%")
 
-        print(f"\n💡 Analytics Redis operations should now be more stable and timeout-resistant!")
+        print("\n💡 Analytics Redis operations should now be more stable and timeout-resistant!")
 
     except Exception as e:
         print(f"❌ Error: {e}")

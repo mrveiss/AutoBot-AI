@@ -8,7 +8,7 @@ Week 3 Phase 2: Comprehensive endpoint categorization and selective enforcement
 """
 
 import os
-from typing import Dict, List
+from typing import List
 
 import structlog
 from fastapi import HTTPException, Request

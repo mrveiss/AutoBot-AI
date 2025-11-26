@@ -11,35 +11,38 @@ import yaml
 import os
 from pathlib import Path
 
+
 def load_config():
     """Load the complete.yaml configuration"""
     config_path = Path(__file__).parent.parent / 'config' / 'complete.yaml'
     with open(config_path, 'r') as f:
         return yaml.safe_load(f)
 
+
 def resolve_template_value(value, config):
     """Resolve template variables in configuration values"""
     if not isinstance(value, str) or '${' not in value:
         return value
-    
+
     # Simple template resolution for ${section.key} syntax
     import re
     templates = re.findall(r'\$\{([^}]+)\}', value)
-    
+
     for template in templates:
         keys = template.split('.')
         resolved_value = config
-        
+
         try:
             for key in keys:
                 resolved_value = resolved_value[key]
-            
+
             value = value.replace(f'${{{template}}}', str(resolved_value))
         except (KeyError, TypeError):
             # Keep original if can't resolve
             pass
-    
+
     return value
+
 
 def generate_main_env(config):
     """Generate main .env file for backend"""
@@ -120,8 +123,9 @@ def generate_main_env(config):
         f"OLLAMA_PORT={config['infrastructure']['ports']['ollama']}",
         ""
     ]
-    
+
     return '\n'.join(content)
+
 
 def generate_localhost_env(config):
     """Generate .env.localhost for local development"""
@@ -196,8 +200,9 @@ def generate_localhost_env(config):
         f"OLLAMA_PORT={config['infrastructure']['ports']['ollama']}",
         ""
     ]
-    
+
     return '\n'.join(content)
+
 
 def generate_native_vm_env(config):
     """Generate .env.native-vm for distributed VM deployment"""
@@ -274,14 +279,15 @@ def generate_native_vm_env(config):
         f"OLLAMA_PORT={config['infrastructure']['ports']['ollama']}",
         ""
     ]
-    
+
     return '\n'.join(content)
+
 
 def generate_frontend_env(config):
     """Generate autobot-vue/.env for frontend"""
     content = [
         "# AutoBot Frontend Environment Configuration",
-        "# Generated from config/complete.yaml - DO NOT EDIT MANUALLY", 
+        "# Generated from config/complete.yaml - DO NOT EDIT MANUALLY",
         "# Run 'python scripts/generate-env-files.py' to regenerate",
         "",
         "# API Configuration - Use proxy in development",
@@ -321,8 +327,9 @@ def generate_frontend_env(config):
         f"VITE_DEBUG={str(config['development']['debug']).lower()}",
         ""
     ]
-    
+
     return '\n'.join(content)
+
 
 def generate_network_env(config):
     """Generate .env.network for network configuration"""
@@ -390,8 +397,9 @@ def generate_network_env(config):
         f"OLLAMA_PORT={config['infrastructure']['ports']['ollama']}",
         ""
     ]
-    
+
     return '\n'.join(content)
+
 
 def generate_docker_production_env(config):
     """Generate docker/compose/.env.production for Docker production deployment"""
@@ -479,14 +487,15 @@ def generate_docker_production_env(config):
         f"OLLAMA_PORT={config['infrastructure']['ports']['ollama']}",
         ""
     ]
-    
+
     return '\n'.join(content)
+
 
 def main():
     """Main function to generate all environment files"""
     print("AutoBot Environment File Generator")
     print("=" * 40)
-    
+
     # Load configuration
     try:
         config = load_config()
@@ -494,7 +503,7 @@ def main():
     except Exception as e:
         print(f"✗ Error loading configuration: {e}")
         return 1
-    
+
     # Define environment files to generate
     env_files = {
         '.env': generate_main_env,
@@ -504,39 +513,40 @@ def main():
         'autobot-vue/.env': generate_frontend_env,
         'docker/compose/.env.production': generate_docker_production_env,
     }
-    
+
     project_root = Path(__file__).parent.parent
     generated_count = 0
-    
+
     # Generate each environment file
     for file_path, generator_func in env_files.items():
         try:
             full_path = project_root / file_path
-            
+
             # Create directory if it doesn't exist
             full_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Generate content
             content = generator_func(config)
-            
+
             # Write file
             with open(full_path, 'w') as f:
                 f.write(content)
-            
+
             print(f"✓ Generated {file_path}")
             generated_count += 1
-            
+
         except Exception as e:
             print(f"✗ Error generating {file_path}: {e}")
-    
+
     print(f"\nGenerated {generated_count}/{len(env_files)} environment files")
     print("\n" + "=" * 40)
     print("Environment files have been standardized!")
     print("All files now reference unified configuration from config/complete.yaml")
     print("\nTo regenerate files after config changes:")
     print("  python scripts/generate-env-files.py")
-    
+
     return 0
+
 
 if __name__ == '__main__':
     exit(main())

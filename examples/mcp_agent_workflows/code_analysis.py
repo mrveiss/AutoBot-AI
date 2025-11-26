@@ -260,7 +260,7 @@ Key Insights:
         if "error" not in thought:
             findings += f"\nThought {i}: {thought.get('thought', 'No content')[:200]}"
 
-    findings += f"""
+    findings += """
 
 Analysis completed using AutoBot Sequential Thinking MCP.
 This entry provides insights into code structure, patterns, and potential improvements.

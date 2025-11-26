@@ -19,7 +19,7 @@ async def test_consolidated_interface():
     """Test the consolidated LLM interface functionality"""
     print("🧪 Testing Consolidated LLM Interface")
     print("=" * 50)
-    
+
     # Initialize interface
     try:
         settings = LLMSettings()
@@ -28,7 +28,7 @@ async def test_consolidated_interface():
     except Exception as e:
         print(f"❌ Interface initialization failed: {e}")
         return False
-    
+
     # Test Ollama connection
     try:
         connection_ok = await interface.check_ollama_connection()
@@ -38,7 +38,7 @@ async def test_consolidated_interface():
             print("⚠️  Ollama connection test failed (may be expected)")
     except Exception as e:
         print(f"⚠️  Ollama connection test error: {e}")
-    
+
     # Test backward compatibility - orchestrator chat completion
     try:
         messages = [{"role": "user", "content": "Hello, this is a test message."}]
@@ -51,7 +51,7 @@ async def test_consolidated_interface():
     except Exception as e:
         print(f"❌ Orchestrator chat completion failed: {e}")
         return False
-    
+
     # Test task chat completion
     try:
         messages = [{"role": "user", "content": "Test task completion."}]
@@ -61,7 +61,7 @@ async def test_consolidated_interface():
     except Exception as e:
         print(f"❌ Task chat completion failed: {e}")
         return False
-    
+
     # Test new structured request format
     try:
         request = LLMRequest(
@@ -77,7 +77,7 @@ async def test_consolidated_interface():
     except Exception as e:
         print(f"❌ Structured request failed: {e}")
         return False
-    
+
     # Test metrics collection
     try:
         metrics = interface.get_metrics()
@@ -88,7 +88,7 @@ async def test_consolidated_interface():
     except Exception as e:
         print(f"❌ Metrics collection failed: {e}")
         return False
-    
+
     # Test hardware detection
     try:
         detected = interface._detect_hardware()
@@ -99,7 +99,7 @@ async def test_consolidated_interface():
     except Exception as e:
         print(f"❌ Hardware detection failed: {e}")
         return False
-    
+
     # Test available models (if Ollama is running)
     try:
         models = await interface.get_available_models("ollama")
@@ -110,14 +110,14 @@ async def test_consolidated_interface():
             print("   No models found (Ollama may not be running)")
     except Exception as e:
         print(f"⚠️  Available models query error: {e}")
-    
+
     # Cleanup
     try:
         await interface.cleanup()
         print("✅ Interface cleanup successful")
     except Exception as e:
         print(f"⚠️  Cleanup warning: {e}")
-    
+
     print("=" * 50)
     print("🎉 All core functionality tests passed!")
     print("✅ Consolidated interface is ready for deployment")
@@ -127,36 +127,36 @@ async def test_import_compatibility():
     """Test that common import patterns still work"""
     print("\n🔍 Testing Import Compatibility")
     print("=" * 50)
-    
+
     try:
         # Test direct class import
         from src.llm_interface import LLMInterface
         print("✅ Direct LLMInterface import works")
-        
+
         # Test backward compatibility imports
         from src.llm_interface import safe_query, execute_ollama_request, TORCH_AVAILABLE
         print("✅ Backward compatibility imports work")
-        
+
         # Test factory function
         from src.llm_interface import get_llm_interface
         interface = get_llm_interface()
         print("✅ Factory function works")
-        
+
         # Test that the interface has expected methods
         expected_methods = [
             'chat_completion', 'check_ollama_connection', 'get_available_models',
             'get_metrics', '_ollama_chat_completion', '_openai_chat_completion'
         ]
-        
+
         for method in expected_methods:
             if hasattr(interface, method):
                 print(f"✅ Method {method} exists")
             else:
                 print(f"❌ Method {method} missing")
                 return False
-        
+
         return True
-        
+
     except Exception as e:
         print(f"❌ Import compatibility test failed: {e}")
         return False
@@ -166,19 +166,19 @@ async def main():
     print("🚀 AutoBot LLM Interface Consolidation Test")
     print("Testing consolidated interface before deployment...")
     print()
-    
+
     # Test import compatibility first
     import_ok = await test_import_compatibility()
     if not import_ok:
         print("💥 Import compatibility tests failed - consolidation not ready")
         return False
-    
+
     # Test functionality
     functionality_ok = await test_consolidated_interface()
     if not functionality_ok:
         print("💥 Functionality tests failed - consolidation not ready")
         return False
-    
+
     print("\n🎊 SUCCESS: Consolidated LLM interface passed all tests!")
     print("✅ Ready to replace the original interface")
     print("🔧 Next steps:")
@@ -187,7 +187,7 @@ async def main():
     print("   3. Update imports in codebase")
     print("   4. Remove duplicate files")
     print("   5. Test full system functionality")
-    
+
     return True
 
 if __name__ == "__main__":

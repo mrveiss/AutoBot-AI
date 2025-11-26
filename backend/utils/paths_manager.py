@@ -8,7 +8,6 @@ Ensures all log/data writes use consistent, configurable paths.
 
 import logging
 from pathlib import Path
-from typing import Dict
 
 from backend.type_defs.common import Metadata
 

@@ -13,7 +13,7 @@ import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from backend.type_defs.common import Metadata
 

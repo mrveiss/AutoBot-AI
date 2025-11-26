@@ -30,15 +30,15 @@ class WorkflowTestResult:
 
 class MultiAgentWorkflowValidator:
     """Validates multi-agent coordination and workflow execution"""
-    
+
     def __init__(self):
         self.results = []
         self.backend_host = "172.16.168.20"
         self.backend_port = 8001
         self.base_url = f"http://{self.backend_host}:{self.backend_port}"
-        
-    def log_result(self, test_name: str, status: str, message: str, 
-                   agents_involved: List[str] = None, 
+
+    def log_result(self, test_name: str, status: str, message: str,
+                   agents_involved: List[str] = None,
                    performance_metrics: Dict = None,
                    details: Dict = None):
         """Log workflow test result"""
@@ -52,10 +52,10 @@ class MultiAgentWorkflowValidator:
             details=details or {}
         )
         self.results.append(result)
-        
+
         status_icon = {"pass": "✅", "fail": "❌", "warning": "⚠️", "skip": "⏭️"}
         print(f"{status_icon.get(status, '?')} {test_name}: {message}")
-        
+
         if agents_involved:
             print(f"    Agents: {', '.join(agents_involved)}")
         if performance_metrics:
@@ -85,7 +85,7 @@ class MultiAgentWorkflowValidator:
         except Exception as e:
             self.log_result(
                 "Backend Availability",
-                "fail", 
+                "fail",
                 f"Backend not accessible: {str(e)}",
                 details={"exception": str(e)}
             )
@@ -94,7 +94,7 @@ class MultiAgentWorkflowValidator:
     def test_multi_agent_coordination(self):
         """Test multi-agent coordination system"""
         print("\n=== MULTI-AGENT COORDINATION TESTS ===")
-        
+
         if not self.test_backend_availability():
             self.log_result(
                 "Multi-Agent Coordination",
@@ -102,7 +102,7 @@ class MultiAgentWorkflowValidator:
                 "Backend not available - skipping multi-agent tests"
             )
             return
-        
+
         # Test agent deployment endpoints
         agent_endpoints = [
             ("/api/intelligent-agent/deploy", "Intelligent Agent"),
@@ -110,9 +110,9 @@ class MultiAgentWorkflowValidator:
             ("/api/knowledge_base/search", "Knowledge Agent"),
             ("/api/llm/status", "LLM Agent")
         ]
-        
+
         active_agents = []
-        
+
         for endpoint, agent_name in agent_endpoints:
             try:
                 response = requests.get(f"{self.base_url}{endpoint}", timeout=10)
@@ -141,7 +141,7 @@ class MultiAgentWorkflowValidator:
                     agents_involved=[agent_name],
                     details={"exception": str(e)}
                 )
-        
+
         # Test agent coordination
         if len(active_agents) >= 2:
             self.log_result(
@@ -153,7 +153,7 @@ class MultiAgentWorkflowValidator:
             )
         else:
             self.log_result(
-                "Agent Coordination Status", 
+                "Agent Coordination Status",
                 "warning",
                 f"Only {len(active_agents)} agents available - limited coordination",
                 agents_involved=active_agents,
@@ -163,26 +163,26 @@ class MultiAgentWorkflowValidator:
     def test_parallel_task_execution(self):
         """Test parallel task execution capabilities"""
         print("\n=== PARALLEL TASK EXECUTION TESTS ===")
-        
+
         if not self.test_backend_availability():
             return
-        
+
         # Test concurrent API calls to different endpoints
         test_endpoints = [
             "/api/health",
-            "/api/system/status", 
+            "/api/system/status",
             "/api/endpoints",
             "/ws/health"
         ]
-        
+
         start_time = time.time()
-        
+
         # Execute requests in parallel using asyncio
         async def make_request(endpoint):
             try:
                 loop = asyncio.get_event_loop()
                 response = await loop.run_in_executor(
-                    None, 
+                    None,
                     lambda: requests.get(f"{self.base_url}{endpoint}", timeout=5)
                 )
                 return {
@@ -197,23 +197,23 @@ class MultiAgentWorkflowValidator:
                     "error": str(e),
                     "success": False
                 }
-        
+
         # Run parallel requests
         async def run_parallel_tests():
             tasks = [make_request(endpoint) for endpoint in test_endpoints]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             return results
-        
+
         try:
             # Run the async test
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             parallel_results = loop.run_until_complete(run_parallel_tests())
             loop.close()
-            
+
             total_time = time.time() - start_time
             successful_requests = sum(1 for r in parallel_results if isinstance(r, dict) and r.get("success", False))
-            
+
             if successful_requests >= len(test_endpoints) * 0.8:  # 80% success rate
                 self.log_result(
                     "Parallel Task Execution",
@@ -240,7 +240,7 @@ class MultiAgentWorkflowValidator:
                     },
                     details={"results": parallel_results}
                 )
-                
+
         except Exception as e:
             self.log_result(
                 "Parallel Task Execution",
@@ -252,16 +252,16 @@ class MultiAgentWorkflowValidator:
     def test_agent_task_completion(self):
         """Test agent task completion tracking"""
         print("\n=== AGENT TASK COMPLETION TESTS ===")
-        
+
         if not self.test_backend_availability():
             return
-            
+
         # Test knowledge base search task (simulates agent task)
         search_payload = {
             "query": "AutoBot system architecture",
             "limit": 5
         }
-        
+
         try:
             start_time = time.time()
             response = requests.post(
@@ -270,11 +270,11 @@ class MultiAgentWorkflowValidator:
                 timeout=15
             )
             completion_time = time.time() - start_time
-            
+
             if response.status_code == 200:
                 results = response.json()
                 result_count = len(results.get("results", []))
-                
+
                 self.log_result(
                     "Knowledge Base Task Completion",
                     "pass" if result_count > 0 else "warning",
@@ -294,7 +294,7 @@ class MultiAgentWorkflowValidator:
                     agents_involved=["Knowledge Agent"],
                     details={"status_code": response.status_code}
                 )
-                
+
         except Exception as e:
             self.log_result(
                 "Knowledge Base Task Completion",
@@ -307,15 +307,15 @@ class MultiAgentWorkflowValidator:
     def test_agent_communication_workflow(self):
         """Test inter-agent communication workflow"""
         print("\n=== INTER-AGENT COMMUNICATION TESTS ===")
-        
+
         if not self.test_backend_availability():
             return
-            
+
         # Test chat workflow that involves multiple agents
         chat_payload = {
             "message": "What Redis configuration does AutoBot use for distributed VMs?"
         }
-        
+
         try:
             start_time = time.time()
             response = requests.post(
@@ -324,10 +324,10 @@ class MultiAgentWorkflowValidator:
                 timeout=30
             )
             processing_time = time.time() - start_time
-            
+
             if response.status_code == 200:
                 chat_result = response.json()
-                
+
                 # Analyze response for agent involvement
                 agents_involved = []
                 if "knowledge" in str(chat_result).lower():
@@ -336,7 +336,7 @@ class MultiAgentWorkflowValidator:
                     agents_involved.append("Search Agent")
                 if "redis" in str(chat_result).lower():
                     agents_involved.append("System Agent")
-                
+
                 self.log_result(
                     "Inter-Agent Communication Workflow",
                     "pass",
@@ -357,7 +357,7 @@ class MultiAgentWorkflowValidator:
                     agents_involved=["Chat Agent"],
                     details={"status_code": response.status_code}
                 )
-                
+
         except Exception as e:
             self.log_result(
                 "Inter-Agent Communication Workflow",
@@ -369,34 +369,34 @@ class MultiAgentWorkflowValidator:
     def test_system_resilience(self):
         """Test system resilience and error recovery"""
         print("\n=== SYSTEM RESILIENCE TESTS ===")
-        
+
         if not self.test_backend_availability():
             return
-            
+
         # Test invalid endpoint handling
         invalid_endpoints = [
             "/api/nonexistent/endpoint",
             "/api/chat/invalid_method",
             "/api/knowledge_base/malformed"
         ]
-        
+
         resilience_score = 0
         total_tests = len(invalid_endpoints)
-        
+
         for endpoint in invalid_endpoints:
             try:
                 response = requests.get(f"{self.base_url}{endpoint}", timeout=5)
-                
+
                 # Should gracefully handle with 404 or similar
                 if 400 <= response.status_code < 500:
                     resilience_score += 1
-                    
+
             except Exception:
                 # Connection errors are expected and show resilience
                 resilience_score += 1
-        
+
         resilience_percentage = (resilience_score / total_tests) * 100
-        
+
         if resilience_percentage >= 80:
             self.log_result(
                 "System Resilience",
@@ -410,7 +410,7 @@ class MultiAgentWorkflowValidator:
                 "System Resilience",
                 "warning",
                 f"System resilience could be improved ({resilience_percentage:.0f}% resilience)",
-                agents_involved=["Error Handler", "API Gateway"], 
+                agents_involved=["Error Handler", "API Gateway"],
                 performance_metrics={"resilience_score": f"{resilience_percentage:.0f}%"}
             )
 
@@ -418,15 +418,15 @@ class MultiAgentWorkflowValidator:
         """Generate comprehensive workflow validation report"""
         total_tests = len(self.results)
         passed = len([r for r in self.results if r.status == "pass"])
-        failed = len([r for r in self.results if r.status == "fail"]) 
+        failed = len([r for r in self.results if r.status == "fail"])
         warnings = len([r for r in self.results if r.status == "warning"])
         skipped = len([r for r in self.results if r.status == "skip"])
-        
+
         # Collect all agents involved
         all_agents = set()
         for result in self.results:
             all_agents.update(result.agents_involved)
-        
+
         # Performance metrics
         response_times = []
         for result in self.results:
@@ -436,9 +436,9 @@ class MultiAgentWorkflowValidator:
                     response_times.append(float(time_str))
                 except:
                     pass
-        
+
         avg_response_time = sum(response_times) / len(response_times) if response_times else 0
-        
+
         return {
             "test_summary": {
                 "total_tests": total_tests,
@@ -470,21 +470,21 @@ class MultiAgentWorkflowValidator:
         print("🚀 AutoBot Multi-Agent Workflow Validation")
         print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("=" * 60)
-        
+
         # Run all multi-agent tests
         self.test_multi_agent_coordination()
         self.test_parallel_task_execution()
         self.test_agent_task_completion()
         self.test_agent_communication_workflow()
         self.test_system_resilience()
-        
+
         # Generate comprehensive report
         print("\n" + "=" * 60)
         print("📊 MULTI-AGENT VALIDATION SUMMARY")
         print("=" * 60)
-        
+
         report = self.generate_workflow_report()
-        
+
         # Console summary
         print(f"Total Tests: {report['test_summary']['total_tests']}")
         print(f"✅ Passed: {report['test_summary']['passed']}")
@@ -492,35 +492,35 @@ class MultiAgentWorkflowValidator:
         print(f"⚠️ Warnings: {report['test_summary']['warnings']}")
         print(f"⏭️ Skipped: {report['test_summary']['skipped']}")
         print(f"Success Rate: {report['test_summary']['success_rate']}")
-        
+
         print(f"\n🤖 AGENT ANALYSIS:")
         print(f"Agents Tested: {report['agent_analysis']['agent_count']}")
         print(f"Coordination Capable: {'✅ Yes' if report['agent_analysis']['coordination_capable'] else '⚠️ Limited'}")
-        
+
         print(f"\n⚡ PERFORMANCE:")
         print(f"Average Response Time: {report['performance_metrics']['average_response_time']}")
         print(f"Range: {report['performance_metrics']['fastest_response']} - {report['performance_metrics']['slowest_response']}")
-        
+
         print(f"\n🏭 PRODUCTION READINESS:")
         for key, value in report['production_readiness'].items():
             status = "✅ Ready" if value else "⚠️ Needs Review"
             print(f"{key.replace('_', ' ').title()}: {status}")
-        
+
         # Save results
         self.save_workflow_results(report)
-        
+
         return report
 
     def save_workflow_results(self, report: Dict):
         """Save workflow validation results"""
         results_dir = Path("/home/kali/Desktop/AutoBot/tests/results")
         results_dir.mkdir(parents=True, exist_ok=True)
-        
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
+
         # Save comprehensive results
         results_file = results_dir / f"multi_agent_workflow_validation_{timestamp}.json"
-        
+
         full_report = {
             "summary": report,
             "detailed_results": [
@@ -537,33 +537,33 @@ class MultiAgentWorkflowValidator:
             "timestamp": datetime.now().isoformat(),
             "validation_type": "multi_agent_workflow"
         }
-        
+
         with open(results_file, 'w') as f:
             json.dump(full_report, f, indent=2)
-            
+
         print(f"\n💾 Multi-agent validation results saved to: {results_file}")
 
 
 def main():
     """Main multi-agent workflow validation"""
     validator = MultiAgentWorkflowValidator()
-    
+
     try:
         report = validator.run_multi_agent_validation()
-        
+
         # Exit based on production readiness
         production_ready = all(report['production_readiness'].values())
-        
+
         if production_ready and report['test_summary']['failed'] == 0:
             print(f"\n✅ Multi-agent system is production ready!")
             sys.exit(0)
         elif report['test_summary']['failed'] > 0:
             print(f"\n❌ Multi-agent validation failed with critical issues")
-            sys.exit(1)  
+            sys.exit(1)
         else:
             print(f"\n⚠️ Multi-agent system needs review before production")
             sys.exit(2)
-            
+
     except KeyboardInterrupt:
         print(f"\n⚠️ Multi-agent validation interrupted")
         sys.exit(130)

@@ -8,7 +8,6 @@ Provides comprehensive cache clearing functionality for frontend, backend, and R
 
 import json
 import logging
-from typing import Dict
 
 from backend.type_defs.common import Metadata
 

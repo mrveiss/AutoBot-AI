@@ -14,47 +14,47 @@ from pathlib import Path
 def validate_workflow():
     """Validate the GitHub Actions workflow file"""
     workflow_path = ".github/workflows/ci.yml"
-    
+
     print("🔍 Validating GitHub Actions CI/CD Pipeline")
     print("=" * 60)
-    
+
     if not Path(workflow_path).exists():
         print(f"❌ Workflow file not found: {workflow_path}")
         return False
-    
+
     try:
         with open(workflow_path, 'r') as f:
             workflow = yaml.safe_load(f)
-        
+
         print("✅ YAML syntax is valid")
-        
+
         # Check required top-level keys (handle YAML parsing quirk with 'on')
         required_keys = ['name', 'jobs']
         trigger_key = 'on' if 'on' in workflow else True  # YAML parses 'on:' as True sometimes
-        
+
         for key in required_keys:
             if key in workflow:
                 print(f"✅ Required key '{key}' present")
             else:
                 print(f"❌ Missing required key: {key}")
                 return False
-                
+
         if 'on' in workflow or True in workflow:
             print("✅ Required key 'on' (triggers) present")
         else:
             print("❌ Missing required key: on")
             return False
-        
+
         # Validate jobs
         jobs = workflow.get('jobs', {})
         expected_jobs = [
             'security-tests',
-            'docker-build', 
+            'docker-build',
             'frontend-tests',
             'deployment-check',
             'notify'
         ]
-        
+
         print(f"\n📋 Jobs configured: {len(jobs)}")
         for job_name in expected_jobs:
             if job_name in jobs:
@@ -66,7 +66,7 @@ def validate_workflow():
                     print(f"❌ {job_name}: Missing 'runs-on' configuration")
             else:
                 print(f"⚠️  Optional job '{job_name}' not found")
-        
+
         # Check triggers (handle YAML parsing quirk)
         triggers = workflow.get('on', workflow.get(True, {}))
         if isinstance(triggers, dict) and 'push' in triggers and 'pull_request' in triggers:
@@ -75,7 +75,7 @@ def validate_workflow():
             print(f"✅ Triggers: push to {push_branches}, PRs to {pr_branches}")
         elif triggers:
             print("✅ Triggers configured (structure detected)")
-        
+
         print("\n🎯 Pipeline Features:")
         features = [
             "Multi-Python version testing (3.10, 3.11)",
@@ -88,15 +88,15 @@ def validate_workflow():
             "Coverage reporting to Codecov",
             "Comprehensive status notifications"
         ]
-        
+
         for feature in features:
             print(f"✅ {feature}")
-        
+
         print("\n🚀 CI Pipeline Status: READY FOR DEPLOYMENT")
         print("=" * 60)
-        
+
         return True
-        
+
     except yaml.YAMLError as e:
         print(f"❌ YAML parsing error: {e}")
         return False
@@ -108,11 +108,11 @@ def validate_workflow():
 def check_supporting_files():
     """Check that supporting files exist"""
     print("\n📁 Checking Supporting Files:")
-    
+
     required_files = [
         "run_unit_tests.py",
         "tests/test_secure_command_executor.py",
-        "tests/test_enhanced_security_layer.py", 
+        "tests/test_enhanced_security_layer.py",
         "tests/test_security_api.py",
         "tests/test_secure_terminal_websocket.py",
         "tests/test_security_integration.py",
@@ -123,7 +123,7 @@ def check_supporting_files():
         "TESTING_SUMMARY.md",
         "CI_PIPELINE_SETUP.md"
     ]
-    
+
     all_present = True
     for file_path in required_files:
         if Path(file_path).exists():
@@ -131,7 +131,7 @@ def check_supporting_files():
         else:
             print(f"❌ Missing: {file_path}")
             all_present = False
-    
+
     return all_present
 
 
@@ -139,7 +139,7 @@ def main():
     """Main validation function"""
     workflow_valid = validate_workflow()
     files_present = check_supporting_files()
-    
+
     if workflow_valid and files_present:
         print("\n🎉 CI/CD Pipeline is fully configured and ready!")
         print("\n💡 Next steps:")

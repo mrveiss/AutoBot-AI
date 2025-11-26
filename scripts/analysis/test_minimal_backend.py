@@ -25,18 +25,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/api/hello")
 async def hello():
     return {"message": "Hello from minimal backend!"}
+
 
 @app.get("/api/system/health")
 async def health():
     return {"status": "healthy", "backend": "minimal"}
 
+
 @app.post("/api/workflow/execute")
 async def execute_workflow(request: dict):
     user_message = request.get("user_message", "")
-    
+
     # Simple greeting response
     if user_message.lower().strip() in ["hello", "hi", "hey"]:
         return {
@@ -47,10 +50,10 @@ async def execute_workflow(request: dict):
                 "response_text": "Hello! I'm AutoBot's minimal backend. The main backend had performance issues, but this proves the basic functionality works. What can I help you with?"
             }
         }
-    
+
     return {
         "success": True,
-        "type": "direct_execution", 
+        "type": "direct_execution",
         "result": {
             "status": "success",
             "response_text": f"You said: '{user_message}'. This is a minimal backend response - the full backend is having performance issues."

@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import sys
-from typing import Dict, Optional
+from typing import Optional
 
 from backend.type_defs.common import Metadata
 

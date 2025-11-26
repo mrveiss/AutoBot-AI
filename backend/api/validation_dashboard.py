@@ -12,7 +12,7 @@ import os
 # Import the dashboard generator
 import sys
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Optional
 
 from backend.type_defs.common import Metadata
 

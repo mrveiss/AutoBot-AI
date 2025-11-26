@@ -10,7 +10,6 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Dict
 
 from backend.type_defs.common import Metadata
 import requests

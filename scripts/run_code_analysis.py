@@ -19,6 +19,7 @@ import argparse
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+
 def run_code_quality_analysis(target_path: str) -> Dict[str, Any]:
     """Run code quality analysis"""
     script_path = project_root / "tools" / "code-analysis-suite" / "scripts" / "analyze_code_quality.py"
@@ -57,6 +58,7 @@ def run_code_quality_analysis(target_path: str) -> Dict[str, Any]:
     except Exception as e:
         return {"error": str(e)}
 
+
 def run_duplicate_analysis(target_path: str) -> Dict[str, Any]:
     """Run duplicate code analysis"""
     script_path = project_root / "tools" / "code-analysis-suite" / "scripts" / "analyze_duplicates.py"
@@ -87,6 +89,7 @@ def run_duplicate_analysis(target_path: str) -> Dict[str, Any]:
 
     except Exception as e:
         return {"error": str(e)}
+
 
 def run_performance_analysis(target_path: str) -> Dict[str, Any]:
     """Run performance analysis"""
@@ -122,6 +125,7 @@ def run_performance_analysis(target_path: str) -> Dict[str, Any]:
     except Exception as e:
         return {"error": str(e)}
 
+
 def run_architecture_analysis(target_path: str) -> Dict[str, Any]:
     """Run architecture analysis"""
     script_path = project_root / "tools" / "code-analysis-suite" / "scripts" / "analyze_architecture.py"
@@ -155,6 +159,7 @@ def run_architecture_analysis(target_path: str) -> Dict[str, Any]:
 
     except Exception as e:
         return {"error": str(e)}
+
 
 def run_full_analysis(target_path: str, analysis_type: str = "full") -> Dict[str, Any]:
     """Run complete code analysis suite"""
@@ -194,6 +199,7 @@ def run_full_analysis(target_path: str, analysis_type: str = "full") -> Dict[str
 
     return results
 
+
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(description="Run code analysis suite")
@@ -226,6 +232,7 @@ def main():
             print("\nCodebase Metrics:")
             for key, value in results["codebase_metrics"].items():
                 print(f"  {key}: {value}")
+
 
 if __name__ == "__main__":
     main()

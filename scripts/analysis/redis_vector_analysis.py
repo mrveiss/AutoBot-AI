@@ -22,6 +22,7 @@ sys.path.insert(0, '/home/kali/Desktop/AutoBot')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
 class RedisVectorStoreAnalyzer:
     def __init__(self):
         self.redis_host = "localhost"
@@ -29,7 +30,7 @@ class RedisVectorStoreAnalyzer:
         self.redis_db = 2
         self.ollama_base_url = ServiceURLs.OLLAMA_LOCAL
         self.embedding_model = "nomic-embed-text:latest"
-        
+
     async def get_available_models(self) -> List[str]:
         """Get available Ollama models"""
         try:
@@ -46,25 +47,25 @@ class RedisVectorStoreAnalyzer:
     async def analyze_existing_data(self) -> Dict[str, Any]:
         """Analyze the existing Redis vector data structure"""
         logger.info("🔍 Analyzing existing Redis data structure...")
-        
+
         try:
             import redis
             client = redis.Redis(
-                host=self.redis_host, 
-                port=self.redis_port, 
-                db=self.redis_db, 
+                host=self.redis_host,
+                port=self.redis_port,
+                db=self.redis_db,
                 decode_responses=True
             )
-            
+
             # Get index information
             index_info = client.execute_command('FT.INFO', 'llama_index')
-            
+
             # Parse index info
             info_dict = {}
             for i in range(0, len(index_info), 2):
                 if i + 1 < len(index_info):
                     info_dict[index_info[i]] = index_info[i + 1]
-            
+
             # Get vector field configuration
             vector_config = {}
             if 'attributes' in info_dict:
@@ -80,11 +81,11 @@ class RedisVectorStoreAnalyzer:
                             'dim': attrs[j + 5] if j + 5 < len(attrs) else 'unknown'
                         }
                         break
-            
+
             # Sample a few documents to understand structure
             sample_keys = list(client.scan_iter(match="llama_index/vector*", count=3))
             sample_docs = []
-            
+
             for key in sample_keys:
                 doc_data = client.hgetall(key)
                 sample_docs.append({
@@ -95,7 +96,7 @@ class RedisVectorStoreAnalyzer:
                     'has_metadata': any('metadata' in k for k in doc_data.keys()),
                     'text_preview': doc_data.get('text', '')[:100] if 'text' in doc_data else None
                 })
-            
+
             analysis = {
                 'total_documents': info_dict.get('num_docs', 0),
                 'index_name': info_dict.get('index_name', 'unknown'),
@@ -106,10 +107,10 @@ class RedisVectorStoreAnalyzer:
                 'sample_documents': sample_docs,
                 'key_prefixes': info_dict.get('prefixes', [])
             }
-            
+
             logger.info(f"📊 Analysis complete: {analysis['total_documents']} docs, {analysis['vector_dimension']} dim vectors")
             return analysis
-            
+
         except Exception as e:
             logger.error(f"❌ Data analysis failed: {e}")
             return {}
@@ -117,62 +118,62 @@ class RedisVectorStoreAnalyzer:
     async def test_llamaindex_with_existing_data(self) -> Tuple[bool, int, str]:
         """Test LlamaIndex with existing data using correct configuration"""
         logger.info("\n🧪 Testing LlamaIndex with existing data...")
-        
+
         try:
             # Get available models
             models = await self.get_available_models()
             llm_model = models[0] if models else "gemma3:270m"
             logger.info(f"Using LLM model: {llm_model}")
-            
+
             from llama_index.vector_stores.redis import RedisVectorStore
             from llama_index.vector_stores.redis.schema import RedisVectorStoreSchema
             from llama_index.embeddings.ollama import OllamaEmbedding
             from llama_index.llms.ollama import Ollama
             from llama_index.core import VectorStoreIndex, Settings
-            
+
             # Configure LLM and embeddings
             llm = Ollama(model=llm_model, base_url=self.ollama_base_url)
             embed_model = OllamaEmbedding(
                 model_name=self.embedding_model,
                 base_url=self.ollama_base_url
             )
-            
+
             Settings.llm = llm
             Settings.embed_model = embed_model
-            
+
             # Connect to existing vector store
             schema = RedisVectorStoreSchema(
                 index_name="llama_index",
                 prefix="llama_index/vector",
                 overwrite=False
             )
-            
+
             vector_store = RedisVectorStore(
                 schema=schema,
                 redis_url=f"redis://{self.redis_host}:{self.redis_port}",
                 redis_kwargs={"db": self.redis_db}
             )
-            
+
             # Load existing index
             index = VectorStoreIndex.from_vector_store(
                 vector_store=vector_store,
                 embed_model=embed_model
             )
-            
+
             query_engine = index.as_query_engine()
-            
+
             # Test query
             test_query = "kubernetes deployment configuration"
             response = await asyncio.to_thread(query_engine.query, test_query)
-            
+
             result_count = len(response.source_nodes) if hasattr(response, 'source_nodes') else 0
-            
+
             logger.info(f"✅ LlamaIndex successful: {result_count} results")
-            
+
             assessment = "EXCELLENT" if result_count > 5 else "GOOD" if result_count > 0 else "POOR"
-            
+
             return True, result_count, assessment
-            
+
         except Exception as e:
             logger.error(f"❌ LlamaIndex test failed: {e}")
             return False, 0, "FAILED"
@@ -180,11 +181,11 @@ class RedisVectorStoreAnalyzer:
     async def test_langchain_new_approach(self) -> Tuple[bool, int, str]:
         """Test LangChain with modern approach"""
         logger.info("\n🧪 Testing LangChain with modern approach...")
-        
+
         try:
             # Try the new langchain-redis package
             from langchain_redis import RedisVectorStore
-            
+
             # Try modern ollama embeddings
             try:
                 from langchain_ollama import OllamaEmbeddings
@@ -192,20 +193,20 @@ class RedisVectorStoreAnalyzer:
             except ImportError:
                 from langchain_community.embeddings import OllamaEmbeddings
                 logger.info("Using community ollama embeddings")
-            
+
             # Initialize embeddings
             embeddings = OllamaEmbeddings(
                 model=self.embedding_model,
                 base_url=self.ollama_base_url
             )
-            
+
             # Create new index for testing (avoid conflicts)
             vector_store = RedisVectorStore(
                 embeddings=embeddings,  # Note: parameter name difference
                 index_name="autobot_langchain_test",
                 redis_url=f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
             )
-            
+
             # Test with sample data
             test_docs = [
                 "Kubernetes deployment configuration for AutoBot system",
@@ -217,23 +218,23 @@ class RedisVectorStoreAnalyzer:
                 {"source": "test", "category": "deployment", "type": "docker"},
                 {"source": "test", "category": "integration", "type": "vector"}
             ]
-            
+
             # Add documents
             doc_ids = await asyncio.to_thread(
                 vector_store.add_texts,
                 test_docs,
                 metadatas=test_metadata
             )
-            
+
             # Test search
             results = await asyncio.to_thread(
                 vector_store.similarity_search,
                 "deployment configuration setup",
                 k=5
             )
-            
+
             logger.info(f"✅ LangChain successful: {len(results)} results")
-            
+
             # Test advanced features
             try:
                 # Test with filters if supported
@@ -246,11 +247,11 @@ class RedisVectorStoreAnalyzer:
                 logger.info(f"✅ Filtered search: {len(filtered_results)} results")
             except Exception as filter_e:
                 logger.warning(f"Filtering not supported: {filter_e}")
-            
+
             assessment = "EXCELLENT" if len(results) >= len(test_docs) else "GOOD"
-            
+
             return True, len(results), assessment
-            
+
         except Exception as e:
             logger.error(f"❌ LangChain test failed: {e}")
             import traceback
@@ -260,16 +261,16 @@ class RedisVectorStoreAnalyzer:
     async def test_direct_redis_access(self) -> Tuple[bool, int, str]:
         """Test direct Redis FT.SEARCH capabilities"""
         logger.info("\n🧪 Testing direct Redis FT.SEARCH capabilities...")
-        
+
         try:
             import redis
             client = redis.Redis(
                 host=self.redis_host,
-                port=self.redis_port, 
+                port=self.redis_port,
                 db=self.redis_db,
                 decode_responses=True
             )
-            
+
             # Test different search queries
             queries = [
                 "deployment configuration",
@@ -277,7 +278,7 @@ class RedisVectorStoreAnalyzer:
                 "@text:(docker AND redis)",
                 "*"  # Match all
             ]
-            
+
             results = {}
             for query in queries:
                 try:
@@ -292,13 +293,13 @@ class RedisVectorStoreAnalyzer:
                 except Exception as e:
                     logger.warning(f"Query '{query}' failed: {e}")
                     results[query] = 0
-            
+
             total_accessible = max(results.values())
             assessment = "EXCELLENT" if total_accessible > 1000 else "GOOD" if total_accessible > 100 else "POOR"
-            
+
             logger.info(f"✅ Direct Redis access: {total_accessible} max results")
             return True, total_accessible, assessment
-            
+
         except Exception as e:
             logger.error(f"❌ Direct Redis test failed: {e}")
             return False, 0, "FAILED"
@@ -306,7 +307,7 @@ class RedisVectorStoreAnalyzer:
     async def generate_migration_complexity_estimate(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
         """Estimate complexity of different migration approaches"""
         logger.info("\n📋 Estimating migration complexity...")
-        
+
         # Current LlamaIndex fix complexity
         llamaindex_fix = {
             "complexity": "LOW",
@@ -320,7 +321,7 @@ class RedisVectorStoreAnalyzer:
             ],
             "data_migration": "NONE - works with existing data"
         }
-        
+
         # LangChain migration complexity
         langchain_migration = {
             "complexity": "MEDIUM-HIGH",
@@ -337,11 +338,11 @@ class RedisVectorStoreAnalyzer:
             ],
             "data_migration": "FULL - requires re-indexing all documents"
         }
-        
+
         # Hybrid approach complexity
         hybrid_approach = {
             "complexity": "HIGH",
-            "time_estimate": "3-5 days", 
+            "time_estimate": "3-5 days",
             "risk": "HIGH",
             "changes_required": [
                 "Implement dual vector store support",
@@ -352,7 +353,7 @@ class RedisVectorStoreAnalyzer:
             ],
             "data_migration": "PARTIAL - gradual migration possible"
         }
-        
+
         return {
             "llamaindex_fix": llamaindex_fix,
             "langchain_migration": langchain_migration,
@@ -364,22 +365,22 @@ class RedisVectorStoreAnalyzer:
     async def run_comprehensive_analysis(self):
         """Run complete analysis and generate recommendation"""
         logger.info("🚀 Starting comprehensive Redis vector store analysis for AutoBot\n")
-        
+
         # Analyze existing data
         data_analysis = await self.analyze_existing_data()
-        
+
         # Test direct access
         direct_success, direct_count, direct_assessment = await self.test_direct_redis_access()
-        
-        # Test LlamaIndex 
+
+        # Test LlamaIndex
         llamaindex_success, llamaindex_count, llamaindex_assessment = await self.test_llamaindex_with_existing_data()
-        
+
         # Test LangChain
         langchain_success, langchain_count, langchain_assessment = await self.test_langchain_new_approach()
-        
+
         # Migration complexity analysis
         migration_analysis = await self.generate_migration_complexity_estimate(data_analysis)
-        
+
         # Generate final recommendation
         recommendation = self.generate_recommendation(
             data_analysis, direct_success, direct_count,
@@ -387,27 +388,27 @@ class RedisVectorStoreAnalyzer:
             langchain_success, langchain_count, langchain_assessment,
             migration_analysis
         )
-        
+
         # Print comprehensive report
         self.print_analysis_report(
-            data_analysis, 
+            data_analysis,
             (direct_success, direct_count, direct_assessment),
             (llamaindex_success, llamaindex_count, llamaindex_assessment),
             (langchain_success, langchain_count, langchain_assessment),
             migration_analysis,
             recommendation
         )
-        
+
         return recommendation
 
-    def generate_recommendation(self, data_analysis, direct_success, direct_count, 
+    def generate_recommendation(self, data_analysis, direct_success, direct_count,
                               llamaindex_success, llamaindex_count, llamaindex_assessment,
                               langchain_success, langchain_count, langchain_assessment,
                               migration_analysis) -> Dict[str, Any]:
         """Generate final recommendation based on all test results"""
-        
+
         existing_data_valuable = data_analysis.get('total_documents', 0) > 10000
-        
+
         if existing_data_valuable and direct_success:
             if llamaindex_success:
                 return {
@@ -423,7 +424,7 @@ class RedisVectorStoreAnalyzer:
                 }
             elif langchain_success:
                 return {
-                    "approach": "MIGRATE_TO_LANGCHAIN", 
+                    "approach": "MIGRATE_TO_LANGCHAIN",
                     "confidence": "MEDIUM",
                     "reasoning": [
                         "LangChain integration works better out of the box",
@@ -436,7 +437,7 @@ class RedisVectorStoreAnalyzer:
             else:
                 return {
                     "approach": "INVESTIGATE_FURTHER",
-                    "confidence": "LOW", 
+                    "confidence": "LOW",
                     "reasoning": [
                         "Valuable data exists but neither library works properly",
                         "Configuration or dependency issues need resolution",
@@ -456,64 +457,64 @@ class RedisVectorStoreAnalyzer:
                 "implementation": migration_analysis["langchain_migration"]
             }
 
-    def print_analysis_report(self, data_analysis, direct_results, llamaindex_results, 
+    def print_analysis_report(self, data_analysis, direct_results, llamaindex_results,
                             langchain_results, migration_analysis, recommendation):
         """Print comprehensive analysis report"""
-        
+
         print("\n" + "="*80)
         print("📊 AUTOBOT REDIS VECTOR STORE ANALYSIS REPORT")
         print("="*80)
-        
+
         print(f"\n📈 EXISTING DATA ANALYSIS:")
         print(f"  • Total Documents: {data_analysis.get('total_documents', 0):,}")
         print(f"  • Vector Dimensions: {data_analysis.get('vector_dimension', 'unknown')}")
         print(f"  • Index Size: {data_analysis.get('index_size_mb', 0)} MB")
         print(f"  • Algorithm: {data_analysis.get('vector_algorithm', 'unknown')}")
-        
+
         print(f"\n🧪 INTEGRATION TEST RESULTS:")
         print(f"  • Direct Redis Access: {'✅' if direct_results[0] else '❌'} ({direct_results[1]} results) - {direct_results[2]}")
         print(f"  • LlamaIndex Integration: {'✅' if llamaindex_results[0] else '❌'} ({llamaindex_results[1]} results) - {llamaindex_results[2]}")
         print(f"  • LangChain Integration: {'✅' if langchain_results[0] else '❌'} ({langchain_results[1]} results) - {langchain_results[2]}")
-        
+
         print(f"\n🎯 FINAL RECOMMENDATION: {recommendation['approach']}")
         print(f"  • Confidence: {recommendation['confidence']}")
         print(f"  • Reasoning:")
         for reason in recommendation['reasoning']:
             print(f"    - {reason}")
-        
+
         impl = recommendation['implementation']
         print(f"\n📋 IMPLEMENTATION PLAN:")
         print(f"  • Complexity: {impl.get('complexity', 'unknown')}")
         print(f"  • Time Estimate: {impl.get('time_estimate', 'unknown')}")
         print(f"  • Risk Level: {impl.get('risk', 'unknown')}")
         print(f"  • Data Migration: {impl.get('data_migration', 'unknown')}")
-        
+
         if 'changes_required' in impl:
             print(f"  • Required Changes:")
             for change in impl['changes_required']:
                 print(f"    - {change}")
-        
+
         print("\n" + "="*80)
 
     async def test_llamaindex_with_existing_data(self) -> Tuple[bool, int, str]:
         """Test LlamaIndex with existing data using correct configuration"""
         logger.info("\n🧪 Testing LlamaIndex with existing data...")
-        
+
         try:
             # Get available models
             models = await self.get_available_models()
             llm_model = models[0] if models else "gemma3:270m"
             logger.info(f"Using LLM model: {llm_model}")
-            
+
             from llama_index.vector_stores.redis import RedisVectorStore
             from llama_index.vector_stores.redis.schema import RedisVectorStoreSchema
             from llama_index.embeddings.ollama import OllamaEmbedding
             from llama_index.llms.ollama import Ollama
             from llama_index.core import VectorStoreIndex, Settings
-            
+
             # Configure LLM and embeddings with timeout protection
             llm = Ollama(
-                model=llm_model, 
+                model=llm_model,
                 base_url=self.ollama_base_url,
                 request_timeout=10.0  # Add timeout
             )
@@ -521,56 +522,57 @@ class RedisVectorStoreAnalyzer:
                 model_name=self.embedding_model,
                 base_url=self.ollama_base_url
             )
-            
+
             Settings.llm = llm
             Settings.embed_model = embed_model
-            
+
             # Connect to existing vector store without overwriting
             schema = RedisVectorStoreSchema(
                 index_name="llama_index",
                 prefix="llama_index/vector",
                 overwrite=False  # Critical: don't destroy existing data
             )
-            
+
             vector_store = RedisVectorStore(
                 schema=schema,
                 redis_url=f"redis://{self.redis_host}:{self.redis_port}",
                 redis_kwargs={"db": self.redis_db}
             )
-            
+
             # Load existing index
             index = VectorStoreIndex.from_vector_store(
                 vector_store=vector_store,
                 embed_model=embed_model
             )
-            
+
             # Create retriever instead of full query engine to avoid LLM issues
             retriever = index.as_retriever(similarity_top_k=5)
-            
+
             # Test retrieval directly
             nodes = await asyncio.to_thread(retriever.retrieve, "kubernetes deployment guide")
-            
+
             result_count = len(nodes)
             logger.info(f"✅ LlamaIndex retrieval successful: {result_count} results")
-            
+
             if result_count > 0:
                 for i, node in enumerate(nodes[:2]):
                     logger.info(f"  Result {i+1}: {node.text[:100]}...")
-            
+
             assessment = "EXCELLENT" if result_count > 5 else "GOOD" if result_count > 0 else "POOR"
-            
+
             return True, result_count, assessment
-            
+
         except Exception as e:
             logger.error(f"❌ LlamaIndex test failed: {e}")
             import traceback
             logger.error(traceback.format_exc())
             return False, 0, "FAILED"
 
+
 async def main():
     analyzer = RedisVectorStoreAnalyzer()
     recommendation = await analyzer.run_comprehensive_analysis()
-    
+
     # Write recommendation to file
     import os
     from src.constants import NetworkConstants, ServiceURLs
@@ -578,7 +580,7 @@ async def main():
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, 'w') as f:
         json.dump(recommendation, f, indent=2)
-    
+
     logger.info(f"\n💾 Detailed recommendation saved to: {output_file}")
 
 if __name__ == "__main__":

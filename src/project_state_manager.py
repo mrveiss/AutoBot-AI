@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Self
+from typing import Any, Dict, List, Optional
 
 from src.constants.network_constants import NetworkConstants
 from src.utils.logging_manager import get_logger

@@ -12,6 +12,7 @@ from collections import defaultdict, Counter
 from pathlib import Path
 from typing import Dict, List, Tuple, Set
 
+
 class DuplicateDetector:
     def __init__(self, root_path: str):
         self.root_path = Path(root_path)
@@ -88,7 +89,7 @@ class DuplicateDetector:
                             'line': node.lineno,
                             'hash': hashlib.md5(normalized.encode()).hexdigest()
                         })
-        except:
+        except SyntaxError:
             pass  # Skip files with syntax errors
 
         return functions
@@ -117,8 +118,8 @@ class DuplicateDetector:
                             'line': node.lineno,
                             'hash': hashlib.md5(normalized.encode()).hexdigest()
                         })
-        except:
-            pass
+        except SyntaxError:
+            pass  # Skip files with syntax errors
 
         return classes
 
@@ -360,6 +361,7 @@ class DuplicateDetector:
 
         return results
 
+
 def main():
     detector = DuplicateDetector('/home/kali/Desktop/AutoBot')
     results = detector.run_analysis()
@@ -369,7 +371,7 @@ def main():
     print("="*60)
 
     summary = results['summary']
-    print(f"📊 SUMMARY:")
+    print("📊 SUMMARY:")
     print(f"   Total duplicate patterns found: {summary['total_patterns']}")
     print(f"   - Duplicate functions: {summary['total_duplicate_functions']}")
     print(f"   - Duplicate classes: {summary['total_duplicate_classes']}")
@@ -379,19 +381,19 @@ def main():
     print(f"   - Duplicate strings: {summary['total_duplicate_strings']}")
 
     # Show top duplicates
-    print(f"\n🔄 TOP FUNCTION DUPLICATES:")
+    print("\n🔄 TOP FUNCTION DUPLICATES:")
     for dup in sorted(results['duplicate_functions'], key=lambda x: x['count'], reverse=True)[:5]:
         print(f"   {dup['count']} occurrences: {dup['functions'][0]['name']}")
         for func in dup['functions']:
             print(f"     - {func['file']}:{func['line']}")
 
-    print(f"\n🔄 TOP CONFIGURATION DUPLICATES:")
+    print("\n🔄 TOP CONFIGURATION DUPLICATES:")
     for dup in sorted(results['duplicate_config_patterns'], key=lambda x: x['count'], reverse=True)[:5]:
         print(f"   {dup['count']} occurrences: {dup['patterns'][0]['pattern'][:50]}...")
         for pattern in dup['patterns']:
             print(f"     - {pattern['file']}:{pattern['line']}")
 
-    print(f"\n🔄 TOP STRING DUPLICATES:")
+    print("\n🔄 TOP STRING DUPLICATES:")
     for dup in sorted(results['duplicate_strings'], key=lambda x: x['count'], reverse=True)[:5]:
         print(f"   {dup['count']} occurrences: {dup['value']}")
         for occ in dup['occurrences'][:3]:  # Show first 3
@@ -408,6 +410,7 @@ def main():
     print(f"\n💾 Detailed results saved to: {output_file}")
 
     return results
+
 
 if __name__ == "__main__":
     main()

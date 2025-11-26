@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 from collections import defaultdict, Counter
 
+
 def is_core_autobot_file(file_path: str) -> bool:
     """Check if file is part of core AutoBot application"""
     exclusions = [
@@ -33,6 +34,7 @@ def is_core_autobot_file(file_path: str) -> bool:
             return True
 
     return False
+
 
 def analyze_core_duplicates():
     """Analyze duplicates in core AutoBot files only"""
@@ -102,7 +104,7 @@ def analyze_core_duplicates():
                 'sample_code': dup['sample_code']
             })
 
-    print(f"📊 CORE DUPLICATE SUMMARY:")
+    print("📊 CORE DUPLICATE SUMMARY:")
     print(f"   Core function duplicates: {len(core_function_duplicates)}")
     print(f"   Core class duplicates: {len(core_class_duplicates)}")
     print(f"   Core config duplicates: {len(core_config_duplicates)}")
@@ -110,7 +112,7 @@ def analyze_core_duplicates():
     print(f"   Core API duplicates: {len(core_api_duplicates)}")
 
     # Top function duplicates
-    print(f"\n🔄 TOP CORE FUNCTION DUPLICATES:")
+    print("\n🔄 TOP CORE FUNCTION DUPLICATES:")
     sorted_funcs = sorted(core_function_duplicates, key=lambda x: x['count'], reverse=True)
     for i, dup in enumerate(sorted_funcs[:10]):
         print(f"   {i+1}. {dup['count']} occurrences: {dup['functions'][0]['name']}")
@@ -119,7 +121,7 @@ def analyze_core_duplicates():
         print()
 
     # Top config duplicates
-    print(f"\n🔧 TOP CORE CONFIG DUPLICATES:")
+    print("\n🔧 TOP CORE CONFIG DUPLICATES:")
     sorted_configs = sorted(core_config_duplicates, key=lambda x: x['count'], reverse=True)
     for i, dup in enumerate(sorted_configs[:5]):
         pattern = dup['patterns'][0]['pattern'][:60] + "..." if len(dup['patterns'][0]['pattern']) > 60 else dup['patterns'][0]['pattern']
@@ -129,7 +131,7 @@ def analyze_core_duplicates():
         print()
 
     # Top string duplicates (IP addresses, URLs, etc.)
-    print(f"\n🌐 TOP CORE STRING DUPLICATES:")
+    print("\n🌐 TOP CORE STRING DUPLICATES:")
     sorted_strings = sorted(core_string_duplicates, key=lambda x: x['count'], reverse=True)
     for i, dup in enumerate(sorted_strings[:5]):
         print(f"   {i+1}. {dup['count']} occurrences: {dup['value']} ({dup['type']})")
@@ -138,12 +140,12 @@ def analyze_core_duplicates():
         print()
 
     # Refactoring recommendations
-    print(f"\n💡 REFACTORING RECOMMENDATIONS:")
-    print(f"   1. Create shared utility functions for path resolution")
-    print(f"   2. Consolidate Redis connection patterns")
-    print(f"   3. Create configuration management utilities")
-    print(f"   4. Extract common API endpoint patterns")
-    print(f"   5. Centralize hardcoded URLs and IP addresses")
+    print("\n💡 REFACTORING RECOMMENDATIONS:")
+    print("   1. Create shared utility functions for path resolution")
+    print("   2. Consolidate Redis connection patterns")
+    print("   3. Create configuration management utilities")
+    print("   4. Extract common API endpoint patterns")
+    print("   5. Centralize hardcoded URLs and IP addresses")
 
     # Save core results
     core_results = {
@@ -169,6 +171,7 @@ def analyze_core_duplicates():
     print(f"\n💾 Core duplicates saved to: {output_file}")
 
     return core_results
+
 
 if __name__ == "__main__":
     analyze_core_duplicates()

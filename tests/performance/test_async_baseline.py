@@ -44,6 +44,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class PerformanceMetrics:
     """Performance test results"""
@@ -62,6 +63,7 @@ class PerformanceMetrics:
     std_dev_latency_ms: float
     timestamp: str
     metadata: Dict[str, Any] = None
+
 
 class AsyncBaselineTest:
     """Async operations baseline performance testing suite"""
@@ -588,6 +590,7 @@ class AsyncBaselineTest:
         print("="*80)
 
         return report
+
 
 async def main():
     """Main execution function"""

@@ -42,6 +42,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class TimeoutIssue:
     """Represents a timeout configuration issue"""
@@ -53,6 +54,7 @@ class TimeoutIssue:
     severity: str  # critical, high, medium, low
     description: str
     fix_required: bool = True
+
 
 @dataclass
 class StandardTimeoutConfig:
@@ -80,6 +82,7 @@ class StandardTimeoutConfig:
     # Upload/processing timeouts
     upload_timeout: int = 300
     background_processing_timeout: int = 60
+
 
 class TimeoutConfigurationAnalyzer:
     """Analyzes and standardizes timeout configurations"""

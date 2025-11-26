@@ -16,22 +16,23 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+
 def test_security_config():
     """Test that security configuration is properly loaded."""
     try:
         print("🔐 AUTOBOT SECURITY CONFIGURATION VALIDATION")
         print("=" * 50)
-        
+
         # Test 1: Import SecurityLayer
         print("\n1. Testing SecurityLayer import...")
         from src.security_layer import SecurityLayer
         print("✅ SecurityLayer imported successfully")
-        
+
         # Test 2: Initialize SecurityLayer
         print("\n2. Testing SecurityLayer initialization...")
         security = SecurityLayer()
         print("✅ SecurityLayer initialized successfully")
-        
+
         # Test 3: Check authentication enabled
         print(f"\n3. Testing authentication status...")
         print(f"   enable_auth: {security.enable_auth}")
@@ -40,7 +41,7 @@ def test_security_config():
         else:
             print("❌ Authentication is DISABLED - SECURITY VULNERABILITY!")
             return False
-            
+
         # Test 4: Check audit log configuration
         print(f"\n4. Testing audit log configuration...")
         print(f"   audit_log_file: {security.audit_log_file}")
@@ -50,7 +51,7 @@ def test_security_config():
         else:
             print(f"❌ Audit log directory missing: {audit_dir}")
             return False
-            
+
         # Test 5: Check allowed users configuration
         print(f"\n5. Testing allowed users configuration...")
         print(f"   Number of allowed users: {len(security.allowed_users)}")
@@ -67,7 +68,7 @@ def test_security_config():
             else:
                 print(f"   ❌ Missing user '{user}'")
                 return False
-                
+
         # Test 6: Check roles configuration
         print(f"\n6. Testing roles configuration...")
         print(f"   Number of roles: {len(security.roles)}")
@@ -85,10 +86,10 @@ def test_security_config():
             else:
                 print(f"   ❌ Missing role '{role}'")
                 return False
-                
+
         # Test 7: Test permission checking
         print(f"\n7. Testing permission checking...")
-        
+
         # Admin should have all permissions
         has_all = security.check_permission('admin', 'allow_shell_execute')
         if has_all:
@@ -96,7 +97,7 @@ def test_security_config():
         else:
             print("   ❌ Admin role missing permissions")
             return False
-            
+
         # Readonly should not have write permissions
         has_write = security.check_permission('readonly', 'files.upload')
         if not has_write:
@@ -104,13 +105,13 @@ def test_security_config():
         else:
             print("   ❌ Readonly role has too many permissions")
             return False
-            
+
         # Test 8: Test audit logging
         print(f"\n8. Testing audit logging...")
         try:
             security.audit_log(
                 action="security_validation_test",
-                user="test_user", 
+                user="test_user",
                 outcome="success",
                 details={"test": "security_config_validation"}
             )
@@ -118,7 +119,7 @@ def test_security_config():
         except Exception as e:
             print(f"   ❌ Audit logging failed: {e}")
             return False
-            
+
         print(f"\n🎉 ALL SECURITY CONFIGURATION TESTS PASSED!")
         print(f"\n📋 SECURITY STATUS SUMMARY:")
         print(f"   • Authentication: ENABLED")
@@ -126,9 +127,9 @@ def test_security_config():
         print(f"   • Roles configured: {len(security.roles)}")
         print(f"   • Audit logging: WORKING")
         print(f"   • Permission system: FUNCTIONAL")
-        
+
         return True
-        
+
     except Exception as e:
         print(f"\n❌ SECURITY CONFIGURATION TEST FAILED!")
         print(f"Error: {e}")
@@ -136,18 +137,19 @@ def test_security_config():
         traceback.print_exc()
         return False
 
+
 def test_auth_middleware():
     """Test that AuthMiddleware can load the security configuration."""
     try:
         print(f"\n" + "=" * 50)
         print("🔐 AUTHENTICATION MIDDLEWARE VALIDATION")
         print("=" * 50)
-        
+
         # Test AuthMiddleware import and initialization
         print("\n1. Testing AuthMiddleware import...")
         from src.auth_middleware import auth_middleware
         print("✅ AuthMiddleware imported successfully")
-        
+
         print(f"\n2. Testing AuthMiddleware configuration...")
         print(f"   enable_auth: {auth_middleware.enable_auth}")
         if auth_middleware.enable_auth:
@@ -155,29 +157,30 @@ def test_auth_middleware():
         else:
             print("❌ AuthMiddleware authentication DISABLED")
             return False
-            
+
         print(f"\n🎉 AUTHENTICATION MIDDLEWARE TESTS PASSED!")
         return True
-        
+
     except Exception as e:
         print(f"\n❌ AUTHENTICATION MIDDLEWARE TEST FAILED!")
         print(f"Error: {e}")
         traceback.print_exc()
         return False
 
+
 if __name__ == "__main__":
     print("Starting AutoBot Security Configuration Validation...")
-    
+
     success = True
-    
+
     # Test SecurityLayer
     if not test_security_config():
         success = False
-        
-    # Test AuthMiddleware  
+
+    # Test AuthMiddleware
     if not test_auth_middleware():
         success = False
-        
+
     if success:
         print(f"\n✅ ALL SECURITY TESTS PASSED - AUTHENTICATION BYPASS FIXED!")
         sys.exit(0)

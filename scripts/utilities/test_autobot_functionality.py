@@ -150,20 +150,20 @@ class AutoBotFunctionalityTest:
         """Test Redis connectivity using centralized client"""
         try:
             logger.info("📊 Testing Redis Connectivity...")
-            
+
             async def test_redis():
                 redis_client = await get_redis_client('main')
                 if not redis_client:
                     return False
-                
+
                 # Test basic operations
                 await redis_client.ping()
                 await redis_client.set("autobot_test_key", "test_value", ex=10)
                 value = await redis_client.get("autobot_test_key")
                 await redis_client.delete("autobot_test_key")
-                
+
                 return value == "test_value"
-            
+
             # Run async test
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)

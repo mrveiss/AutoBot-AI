@@ -7,6 +7,7 @@ import os
 import re
 from pathlib import Path
 
+
 def refactor_print_header_script(file_path: Path):
     """Refactor a single script to use shared ScriptFormatter"""
     print(f"🔧 Refactoring {file_path.name}...")
@@ -17,12 +18,12 @@ def refactor_print_header_script(file_path: Path):
 
         # Check if it already imports ScriptFormatter
         if 'from src.utils.script_utils import ScriptFormatter' in content:
-            print(f"   ✅ Already refactored")
+            print("   ✅ Already refactored")
             return
 
         # Check if it has the print_header function
         if 'def print_header(self, title: str):' not in content:
-            print(f"   ⏭️  No print_header function found")
+            print("   ⏭️  No print_header function found")
             return
 
         # Add import after existing imports
@@ -65,10 +66,11 @@ def refactor_print_header_script(file_path: Path):
         with open(file_path, 'w') as f:
             f.write(content)
 
-        print(f"   ✅ Successfully refactored")
+        print("   ✅ Successfully refactored")
 
     except Exception as e:
         print(f"   ❌ Error refactoring {file_path}: {e}")
+
 
 def main():
     """Refactor all scripts with print_header duplicates"""
@@ -90,6 +92,7 @@ def main():
             print(f"   ⚠️  File not found: {script_path}")
 
     print("\n✅ Print header refactoring complete!")
+
 
 if __name__ == "__main__":
     main()

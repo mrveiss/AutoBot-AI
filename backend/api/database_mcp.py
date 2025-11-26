@@ -28,7 +28,7 @@ import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from backend.type_defs.common import JSONObject, Metadata
 from fastapi import APIRouter, HTTPException

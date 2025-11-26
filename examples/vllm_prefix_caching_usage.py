@@ -198,7 +198,7 @@ def example_tier_statistics():
         print(f"  Base Prompt: {data['base_prompt']}")
 
         if data['agents']:
-            print(f"  Agents:")
+            print("  Agents:")
             for agent in data['agents']:
                 print(f"    - {agent}")
 

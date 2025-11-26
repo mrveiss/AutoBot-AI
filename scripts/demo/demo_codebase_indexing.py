@@ -16,6 +16,7 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+
 async def demo_indexing():
     """Demonstrate the codebase indexing functionality"""
     print("🚀 AutoBot Codebase Indexing Service Demo")
@@ -119,6 +120,7 @@ async def demo_indexing():
     except Exception as e:
         print(f"❌ Demo failed: {e}")
         return False
+
 
 async def main():
     """Main demo function"""

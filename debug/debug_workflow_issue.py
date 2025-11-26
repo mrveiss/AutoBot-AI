@@ -20,27 +20,27 @@ async def debug_workflow_planning_issue():
     orchestrator = Orchestrator()
     user_message = "I need to scan my network for security vulnerabilities"
 
-    print(f"1. Direct test of plan_workflow_steps:")
+    print("1. Direct test of plan_workflow_steps:")
     direct_steps = orchestrator.plan_workflow_steps(
         user_message, TaskComplexity.COMPLEX
     )
     print(f"   Direct call returned {len(direct_steps)} steps")
 
-    print(f"2. Test through classify_request_complexity:")
+    print("2. Test through classify_request_complexity:")
     complexity = await orchestrator.classify_request_complexity(user_message)
     print(f"   Classification returned: {complexity}")
 
-    print(f"3. Test plan_workflow_steps with classified complexity:")
+    print("3. Test plan_workflow_steps with classified complexity:")
     classified_steps = orchestrator.plan_workflow_steps(user_message, complexity)
     print(f"   With classified complexity: {len(classified_steps)} steps")
 
-    print(f"4. Test should_use_workflow_orchestration:")
+    print("4. Test should_use_workflow_orchestration:")
     should_orchestrate = await orchestrator.should_use_workflow_orchestration(
         user_message
     )
     print(f"   Should orchestrate: {should_orchestrate}")
 
-    print(f"5. Test create_workflow_response (the problematic method):")
+    print("5. Test create_workflow_response (the problematic method):")
     try:
         workflow_response = await orchestrator.create_workflow_response(user_message)
         steps = workflow_response.get("workflow_steps", [])

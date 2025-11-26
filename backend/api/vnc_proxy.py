@@ -14,7 +14,6 @@ enabling the agent to see what users are viewing in real-time.
 
 import asyncio
 import logging
-from typing import Dict
 
 from backend.type_defs.common import Metadata
 

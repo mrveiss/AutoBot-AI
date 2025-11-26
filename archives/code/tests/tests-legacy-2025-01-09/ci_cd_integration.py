@@ -80,11 +80,11 @@ class PipelineResult:
 
 class CICDIntegrationTester:
     """CI/CD integration testing framework"""
-    
+
     def __init__(self):
         self.results: List[PipelineResult] = []
         self.start_time = time.time()
-        
+
         # Define test pipeline stages
         self.pipeline_stages = [
             TestPipelineStage(
@@ -159,7 +159,7 @@ class CICDIntegrationTester:
                 artifacts=["deployment-results.json"]
             )
         ]
-        
+
         # Define quality gates
         self.quality_gates = [
             QualityGate(
@@ -211,13 +211,13 @@ class CICDIntegrationTester:
                 description="Distributed system tests must have 85% success rate"
             )
         ]
-        
+
         # Create results directory
         self.results_dir = Path("/home/kali/Desktop/AutoBot/tests/results")
         self.results_dir.mkdir(exist_ok=True)
-        
+
         self.pipeline_id = f"phase9_pipeline_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
+
         # CI/CD environment detection
         self.ci_environment = self._detect_ci_environment()
 
@@ -236,15 +236,15 @@ class CICDIntegrationTester:
         """Execute a single pipeline stage"""
         logger.info(f"🚀 Executing stage: {stage.name}")
         logger.info(f"   Description: {stage.description}")
-        
+
         start_time = datetime.now()
-        
+
         # Check dependencies
         for dependency in stage.dependencies:
             dependency_result = next(
                 (r for r in self.results if r.stage_name == dependency), None
             )
-            
+
             if not dependency_result or dependency_result.status == "FAIL":
                 logger.warning(f"⚠️ Dependency {dependency} failed, skipping {stage.name}")
                 return PipelineResult(
@@ -258,17 +258,17 @@ class CICDIntegrationTester:
                     stderr=f"Dependency {dependency} failed",
                     exit_code=-1
                 )
-        
+
         # Set environment variables
         env = os.environ.copy()
         env.update(stage.environment_vars)
         env["AUTOBOT_PIPELINE_ID"] = self.pipeline_id
         env["AUTOBOT_STAGE_NAME"] = stage.name
-        
+
         try:
             # Execute stage command
             logger.info(f"   Command: {stage.command}")
-            
+
             process = subprocess.run(
                 stage.command.split(),
                 capture_output=True,
@@ -277,10 +277,10 @@ class CICDIntegrationTester:
                 env=env,
                 cwd="/home/kali/Desktop/AutoBot"
             )
-            
+
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
-            
+
             # Determine status
             if process.returncode == 0:
                 status = "PASS"
@@ -288,17 +288,17 @@ class CICDIntegrationTester:
             else:
                 status = "FAIL"
                 logger.error(f"❌ Stage {stage.name} failed with exit code {process.returncode}")
-                
+
                 # Show error output
                 if process.stderr:
                     logger.error(f"   Error output: {process.stderr[:500]}...")
-            
+
             # Collect artifacts
             artifacts_generated = []
             for artifact_pattern in stage.artifacts:
                 artifact_files = list(self.results_dir.glob(artifact_pattern))
                 artifacts_generated.extend([str(f) for f in artifact_files])
-            
+
             return PipelineResult(
                 pipeline_id=self.pipeline_id,
                 stage_name=stage.name,
@@ -311,13 +311,13 @@ class CICDIntegrationTester:
                 exit_code=process.returncode,
                 artifacts_generated=artifacts_generated
             )
-            
+
         except subprocess.TimeoutExpired:
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
-            
+
             logger.error(f"⏰ Stage {stage.name} timed out after {stage.timeout} seconds")
-            
+
             return PipelineResult(
                 pipeline_id=self.pipeline_id,
                 stage_name=stage.name,
@@ -329,13 +329,13 @@ class CICDIntegrationTester:
                 stderr=f"Stage timed out after {stage.timeout} seconds",
                 exit_code=-1
             )
-            
+
         except Exception as e:
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
-            
+
             logger.error(f"💥 Stage {stage.name} failed with exception: {e}")
-            
+
             return PipelineResult(
                 pipeline_id=self.pipeline_id,
                 stage_name=stage.name,
@@ -351,27 +351,27 @@ class CICDIntegrationTester:
     async def evaluate_quality_gates(self) -> Tuple[List[str], List[str]]:
         """Evaluate quality gates based on test results"""
         logger.info("🚪 Evaluating Quality Gates...")
-        
+
         passed_gates = []
         failed_gates = []
-        
+
         # Collect metrics from test results
         metrics = await self._collect_pipeline_metrics()
-        
+
         for gate in self.quality_gates:
             logger.info(f"   Evaluating: {gate.name}")
-            
+
             if gate.metric not in metrics:
                 logger.warning(f"   ⚠️ Metric {gate.metric} not available, skipping gate")
                 continue
-            
+
             metric_value = metrics[gate.metric]
-            
+
             # Evaluate gate condition
             gate_passed = self._evaluate_gate_condition(
                 metric_value, gate.threshold, gate.operator
             )
-            
+
             if gate_passed:
                 passed_gates.append(gate.name)
                 logger.info(f"   ✅ {gate.name}: {metric_value} {gate.operator} {gate.threshold}")
@@ -379,7 +379,7 @@ class CICDIntegrationTester:
                 failed_gates.append(gate.name)
                 severity_emoji = "🚫" if gate.severity == "blocking" else "⚠️"
                 logger.warning(f"   {severity_emoji} {gate.name}: {metric_value} {gate.operator} {gate.threshold} (FAILED)")
-        
+
         return passed_gates, failed_gates
 
     def _evaluate_gate_condition(self, value: float, threshold: float, operator: str) -> bool:
@@ -402,20 +402,20 @@ class CICDIntegrationTester:
     async def _collect_pipeline_metrics(self) -> Dict[str, float]:
         """Collect metrics from pipeline execution results"""
         metrics = {}
-        
+
         # Analyze test result files
         result_files = list(self.results_dir.glob("*results*.json"))
-        
+
         total_tests = 0
         passed_tests = 0
         failed_tests = 0
         critical_failures = 0
-        
+
         for result_file in result_files:
             try:
                 with open(result_file, 'r') as f:
                     data = json.load(f)
-                
+
                 # Extract test statistics
                 if "summary" in data:
                     summary = data["summary"]
@@ -423,57 +423,57 @@ class CICDIntegrationTester:
                         total_tests += summary.get("total_tests", 0)
                         passed_tests += summary.get("passed", 0)
                         failed_tests += summary.get("failed", 0)
-                    
+
                     # Count critical failures
                     if "test_results" in data:
                         for test in data["test_results"]:
                             if test.get("status") == "FAIL" and test.get("severity") == "critical":
                                 critical_failures += 1
-                
+
                 # Extract coverage information
                 if "coverage" in data:
                     metrics["test_coverage_percentage"] = data["coverage"].get("percentage", 0)
-                
+
                 # Extract performance metrics
                 if "performance_metrics" in data:
                     perf_metrics = data["performance_metrics"]
                     if "response_time" in perf_metrics:
                         metrics["average_response_time"] = perf_metrics["response_time"]
-                
+
             except Exception as e:
                 logger.warning(f"Failed to parse result file {result_file}: {e}")
-        
+
         # Calculate derived metrics
         if total_tests > 0:
             metrics["integration_success_rate"] = (passed_tests / total_tests) * 100
             metrics["distributed_system_success_rate"] = (passed_tests / total_tests) * 100
-        
+
         metrics["critical_test_failures"] = critical_failures
         metrics["high_severity_vulnerabilities"] = 0  # Placeholder
         metrics["response_time_degradation"] = 0  # Placeholder
-        
+
         return metrics
 
     async def send_pipeline_notifications(self, passed_gates: List[str], failed_gates: List[str]):
         """Send pipeline notifications"""
         logger.info("📢 Sending Pipeline Notifications...")
-        
+
         # Calculate overall pipeline status
         pipeline_status = "SUCCESS"
         blocking_failures = []
-        
+
         for gate_name in failed_gates:
             gate = next((g for g in self.quality_gates if g.name == gate_name), None)
             if gate and gate.severity == "blocking":
                 blocking_failures.append(gate_name)
                 pipeline_status = "FAILED"
-        
+
         if not blocking_failures and failed_gates:
             pipeline_status = "WARNING"
-        
+
         # Create notification message
         total_duration = time.time() - self.start_time
-        
+
         notification = {
             "pipeline_id": self.pipeline_id,
             "status": pipeline_status,
@@ -487,28 +487,28 @@ class CICDIntegrationTester:
             "timestamp": datetime.now().isoformat(),
             "environment": self.ci_environment
         }
-        
+
         # Save notification to file (for CI/CD system pickup)
         notification_file = self.results_dir / f"pipeline_notification_{self.pipeline_id}.json"
         with open(notification_file, 'w') as f:
             json.dump(notification, f, indent=2)
-        
+
         # Console notification
         status_emoji = {"SUCCESS": "✅", "WARNING": "⚠️", "FAILED": "❌"}
         logger.info(f"{status_emoji[pipeline_status]} Pipeline {pipeline_status}")
         logger.info(f"   Duration: {total_duration:.2f} seconds")
         logger.info(f"   Stages: {notification['stages_passed']}/{notification['stages_executed']} passed")
         logger.info(f"   Quality Gates: {len(passed_gates)}/{len(passed_gates) + len(failed_gates)} passed")
-        
+
         if blocking_failures:
             logger.error(f"   Blocking Failures: {', '.join(blocking_failures)}")
-        
+
         # Environment-specific notifications
         if self.ci_environment == "github_actions":
             await self._send_github_actions_notification(notification)
         elif self.ci_environment == "jenkins":
             await self._send_jenkins_notification(notification)
-        
+
         logger.info(f"   Notification saved: {notification_file}")
 
     async def _send_github_actions_notification(self, notification: Dict):
@@ -521,20 +521,20 @@ class CICDIntegrationTester:
                     f.write(f"pipeline_duration={notification['duration']:.2f}\n")
                     f.write(f"quality_gates_passed={notification['quality_gates_passed']}\n")
                     f.write(f"quality_gates_failed={notification['quality_gates_failed']}\n")
-            
+
             # Create step summary
             if os.getenv("GITHUB_STEP_SUMMARY"):
                 summary = self._generate_github_summary(notification)
                 with open(os.getenv("GITHUB_STEP_SUMMARY"), 'w') as f:
                     f.write(summary)
-                    
+
         except Exception as e:
             logger.warning(f"Failed to send GitHub Actions notification: {e}")
 
     def _generate_github_summary(self, notification: Dict) -> str:
         """Generate GitHub Actions step summary"""
         status_emoji = {"SUCCESS": "✅", "WARNING": "⚠️", "FAILED": "❌"}
-        
+
         summary = f"""# AutoBot Phase 9 Pipeline Results {status_emoji[notification['status']]}
 
 ## Pipeline Summary
@@ -547,22 +547,22 @@ class CICDIntegrationTester:
 | Stage | Status | Duration |
 |-------|--------|----------|
 """
-        
+
         for result in self.results:
             status_emoji_stage = {"PASS": "✅", "FAIL": "❌", "WARNING": "⚠️", "SKIP": "⏭️"}
             summary += f"| {result.stage_name} | {status_emoji_stage.get(result.status, '?')} {result.status} | {result.duration:.2f}s |\n"
-        
+
         summary += f"""
 ## Quality Gates
 - **Passed**: {notification['quality_gates_passed']}
 - **Failed**: {notification['quality_gates_failed']}
 """
-        
+
         if notification['blocking_failures']:
             summary += f"\n### ❌ Blocking Failures\n"
             for failure in notification['blocking_failures']:
                 summary += f"- {failure}\n"
-        
+
         return summary
 
     async def _send_jenkins_notification(self, notification: Dict):
@@ -577,7 +577,7 @@ class CICDIntegrationTester:
                 f.write(f"STAGES_FAILED={notification['stages_failed']}\n")
                 f.write(f"QUALITY_GATES_PASSED={notification['quality_gates_passed']}\n")
                 f.write(f"QUALITY_GATES_FAILED={notification['quality_gates_failed']}\n")
-                
+
         except Exception as e:
             logger.warning(f"Failed to send Jenkins notification: {e}")
 
@@ -587,28 +587,28 @@ class CICDIntegrationTester:
         logger.info(f"   Pipeline ID: {self.pipeline_id}")
         logger.info(f"   Environment: {self.ci_environment}")
         logger.info(f"   Stages: {len(self.pipeline_stages)}")
-        
+
         pipeline_success = True
-        
+
         # Execute pipeline stages
         for stage in self.pipeline_stages:
             result = await self.execute_pipeline_stage(stage)
             self.results.append(result)
-            
+
             # Check if required stage failed
             if stage.required and result.status == "FAIL":
                 logger.error(f"💥 Required stage {stage.name} failed, aborting pipeline")
                 pipeline_success = False
                 break
-        
+
         # Evaluate quality gates
         passed_gates, failed_gates = await self.evaluate_quality_gates()
-        
+
         # Update results with quality gate information
         for result in self.results:
             result.quality_gates_passed = passed_gates
             result.quality_gates_failed = failed_gates
-        
+
         # Check for blocking quality gate failures
         blocking_failures = []
         for gate_name in failed_gates:
@@ -616,18 +616,18 @@ class CICDIntegrationTester:
             if gate and gate.severity == "blocking":
                 blocking_failures.append(gate_name)
                 pipeline_success = False
-        
+
         # Send notifications
         await self.send_pipeline_notifications(passed_gates, failed_gates)
-        
+
         # Generate final report
         report_file = await self.generate_pipeline_report()
-        
+
         # Pipeline summary
         total_duration = time.time() - self.start_time
         stages_passed = sum(1 for r in self.results if r.status == "PASS")
         stages_total = len(self.results)
-        
+
         logger.info("\n" + "="*80)
         logger.info("🏁 CI/CD PIPELINE COMPLETED")
         logger.info("="*80)
@@ -636,16 +636,16 @@ class CICDIntegrationTester:
         logger.info(f"Stages: {stages_passed}/{stages_total} passed")
         logger.info(f"Quality Gates: {len(passed_gates)}/{len(passed_gates) + len(failed_gates)} passed")
         logger.info(f"Report: {report_file}")
-        
+
         if blocking_failures:
             logger.error(f"Blocking Failures: {', '.join(blocking_failures)}")
-        
+
         return pipeline_success
 
     async def generate_pipeline_report(self) -> Path:
         """Generate comprehensive pipeline report"""
         total_duration = time.time() - self.start_time
-        
+
         # Create comprehensive report
         report = {
             "autobot_phase9_cicd_pipeline": {
@@ -698,12 +698,12 @@ class CICDIntegrationTester:
                 "recommendations": self._generate_pipeline_recommendations()
             }
         }
-        
+
         # Save report
         report_file = self.results_dir / f"cicd_pipeline_report_{self.pipeline_id}.json"
         with open(report_file, 'w') as f:
             json.dump(report, f, indent=2)
-        
+
         # Create human-readable summary
         summary_file = self.results_dir / f"cicd_pipeline_summary_{self.pipeline_id}.txt"
         with open(summary_file, 'w') as f:
@@ -713,74 +713,74 @@ class CICDIntegrationTester:
             f.write(f"Environment: {self.ci_environment}\n")
             f.write(f"Duration: {total_duration:.2f} seconds\n")
             f.write(f"Status: {report['autobot_phase9_cicd_pipeline']['summary']['overall_status']}\n\n")
-            
+
             f.write("Stage Results:\n")
             for result in self.results:
                 status_icon = {"PASS": "✅", "FAIL": "❌", "WARNING": "⚠️", "SKIP": "⏭️"}
                 f.write(f"  {status_icon.get(result.status, '?')} {result.stage_name}: {result.status} ({result.duration:.2f}s)\n")
             f.write("\n")
-            
+
             f.write("Quality Gates:\n")
             for gate in self.quality_gates:
                 status = "PASS" if gate.name in (self.results[0].quality_gates_passed if self.results else []) else "FAIL"
                 status_icon = "✅" if status == "PASS" else "❌"
                 f.write(f"  {status_icon} {gate.name}: {status}\n")
             f.write("\n")
-            
+
             f.write("Recommendations:\n")
             for i, rec in enumerate(self._generate_pipeline_recommendations(), 1):
                 f.write(f"  {i}. {rec}\n")
-        
+
         logger.info(f"📊 Pipeline report generated: {report_file}")
         logger.info(f"📊 Pipeline summary: {summary_file}")
-        
+
         return report_file
 
     def _generate_pipeline_recommendations(self) -> List[str]:
         """Generate recommendations based on pipeline execution"""
         recommendations = []
-        
+
         # Analyze stage failures
         failed_stages = [r for r in self.results if r.status == "FAIL"]
         skipped_stages = [r for r in self.results if r.status == "SKIP"]
-        
+
         if failed_stages:
             recommendations.append(f"🚨 Fix {len(failed_stages)} failed stages before next deployment")
-        
+
         if skipped_stages:
             recommendations.append(f"⚠️ {len(skipped_stages)} stages were skipped due to dependencies")
-        
+
         # Analyze quality gate failures
         if self.results and self.results[0].quality_gates_failed:
             failed_gates = self.results[0].quality_gates_failed
             blocking_gates = [
-                gate.name for gate in self.quality_gates 
+                gate.name for gate in self.quality_gates
                 if gate.name in failed_gates and gate.severity == "blocking"
             ]
-            
+
             if blocking_gates:
                 recommendations.append(f"🚫 Address {len(blocking_gates)} blocking quality gate failures")
-            
+
             warning_gates = [
                 gate.name for gate in self.quality_gates
                 if gate.name in failed_gates and gate.severity == "warning"
             ]
-            
+
             if warning_gates:
                 recommendations.append(f"⚠️ Review {len(warning_gates)} quality gate warnings")
-        
+
         # Performance recommendations
         slow_stages = [r for r in self.results if r.duration > 600]  # Longer than 10 minutes
         if slow_stages:
             recommendations.append(f"⚡ Optimize {len(slow_stages)} slow stages for faster feedback")
-        
+
         # Success recommendations
         if all(r.status in ["PASS", "SKIP"] for r in self.results):
             if self.results and not self.results[0].quality_gates_failed:
                 recommendations.append("✅ Pipeline excellent - ready for production deployment")
             else:
                 recommendations.append("✅ All stages passed - address quality gate warnings")
-        
+
         return recommendations
 
 async def main():
@@ -790,14 +790,14 @@ async def main():
     parser.add_argument('--quality-gates', action='store_true', help='Test quality gates only')
     parser.add_argument('--notifications', action='store_true', help='Test notification systems')
     parser.add_argument('--stage', type=str, help='Execute specific stage only')
-    
+
     args = parser.parse_args()
-    
+
     # Create CI/CD tester
     tester = CICDIntegrationTester()
-    
+
     logger.info("🚀 Starting AutoBot Phase 9 CI/CD Integration Testing")
-    
+
     if args.stage:
         # Execute specific stage
         stage = next((s for s in tester.pipeline_stages if s.name == args.stage), None)
@@ -819,9 +819,9 @@ async def main():
     else:
         # Execute full pipeline
         success = await tester.execute_full_pipeline()
-    
+
     logger.info("✅ CI/CD integration testing completed")
-    
+
     # Exit with appropriate code for CI/CD systems
     return 0 if success else 1
 

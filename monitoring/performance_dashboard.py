@@ -31,7 +31,7 @@ from src.utils.html_dashboard_utils import (
 
 class PerformanceDashboard:
     """Real-time performance dashboard for AutoBot distributed system."""
-    
+
     def __init__(self, port: int = 9090):
         self.port = port
         self.app = web.Application()
@@ -40,7 +40,7 @@ class PerformanceDashboard:
         self.redis_client = None
         self.setup_routes()
         self.setup_templates()
-        
+
     def setup_routes(self):
         """Set up HTTP routes for the dashboard."""
         self.app.router.add_get('/', self.dashboard_home)
@@ -50,21 +50,21 @@ class PerformanceDashboard:
         self.app.router.add_get('/api/alerts', self.get_alerts)
         self.app.router.add_get('/ws', self.websocket_handler)
         self.app.router.add_static('/static', Path(__file__).parent / 'static')
-        
+
     def setup_templates(self):
         """Set up Jinja2 templates for HTML rendering."""
         template_dir = Path(__file__).parent / 'templates'
         template_dir.mkdir(exist_ok=True)
         aiohttp_jinja2.setup(self.app, loader=jinja2.FileSystemLoader(str(template_dir)))
-        
+
         # Create dashboard HTML template if it doesn't exist
         self.create_dashboard_template()
-    
+
     def create_dashboard_template(self):
         """Create the main dashboard HTML template."""
         template_path = Path(__file__).parent / 'templates' / 'dashboard.html'
         template_path.parent.mkdir(exist_ok=True)
-        
+
         # Generate dashboard components using utility functions
         header_html = create_dashboard_header(
             title="🤖 AutoBot Performance Dashboard",
@@ -244,19 +244,19 @@ class PerformanceDashboard:
             connectWebSocket() {
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const wsUrl = `${protocol}//${window.location.host}/ws`;
-                
+
                 this.ws = new WebSocket(wsUrl);
-                
+
                 this.ws.onopen = () => {
                     console.log('WebSocket connected');
                     this.reconnectAttempts = 0;
                 };
-                
+
                 this.ws.onmessage = (event) => {
                     const data = JSON.parse(event.data);
                     this.handleRealtimeUpdate(data);
                 };
-                
+
                 this.ws.onclose = () => {
                     console.log('WebSocket disconnected');
                     if (this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -287,7 +287,7 @@ class PerformanceDashboard:
                         timestamp: new Date(),
                         ...data.data
                     });
-                    
+
                     // Keep only last 50 data points
                     if (this.performanceHistory.length > 50) {
                         this.performanceHistory.shift();
@@ -301,7 +301,7 @@ class PerformanceDashboard:
                     document.getElementById('cpu-usage').textContent = `${data.system.cpu_percent.toFixed(1)}%`;
                     document.getElementById('memory-usage').textContent = `${data.system.memory_percent.toFixed(1)}%`;
                     document.getElementById('memory-available').textContent = `${data.system.memory_available_gb.toFixed(1)}GB`;
-                    
+
                     if (data.system.gpu_utilization !== null) {
                         document.getElementById('gpu-usage').textContent = `${data.system.gpu_utilization.toFixed(1)}%`;
                     } else {
@@ -331,10 +331,10 @@ class PerformanceDashboard:
 
                 // Update VM status
                 this.updateVMStatus(data);
-                
+
                 // Update services
                 this.updateServices(data.services || []);
-                
+
                 // Update alerts
                 this.updateAlerts(alerts);
             }
@@ -356,10 +356,10 @@ class PerformanceDashboard:
                     const vmData = data.inter_vm?.find(vm => vm.target_vm === vmName) || {};
                     const latency = vmData.latency_ms || 0;
                     const packetLoss = vmData.packet_loss_percent || 0;
-                    
+
                     const statusClass = packetLoss > 10 ? 'status-down' : 'status-up';
                     const statusText = packetLoss > 10 ? 'Connection Issues' : 'Connected';
-                    
+
                     vmHtml += `
                         <div class="vm-card">
                             <div class="vm-name">${vmName.toUpperCase()}</div>
@@ -392,7 +392,7 @@ class PerformanceDashboard:
                     const statusClass = service.is_healthy ? 'status-up' : 'status-down';
                     const statusText = service.is_healthy ? 'Healthy' : 'Down';
                     const responseTime = service.response_time ? `${(service.response_time * 1000).toFixed(0)}ms` : 'N/A';
-                    
+
                     servicesHtml += `
                         <div class="service-card">
                             <div class="service-name">${service.service_name}</div>
@@ -413,7 +413,7 @@ class PerformanceDashboard:
 
             updateAlerts(alerts) {
                 const alertsContainer = document.getElementById('alerts-container');
-                
+
                 if (alerts.length === 0) {
                     alertsContainer.innerHTML = '<div style="color: #8b949e; text-align: center; padding: 1rem;">No active alerts</div>';
                     return;
@@ -423,7 +423,7 @@ class PerformanceDashboard:
                 alerts.forEach(alert => {
                     const isCritical = alert.includes('DOWN') || alert.includes('ERROR');
                     const alertClass = isCritical ? 'alert-item critical' : 'alert-item';
-                    
+
                     alertsHtml += `
                         <div class="${alertClass}">
                             <strong>${isCritical ? '🚨' : '⚠️'} ${alert}</strong>
@@ -497,7 +497,7 @@ class PerformanceDashboard:
 
         with open(template_path, 'w') as f:
             f.write(html_content)
-    
+
     @aiohttp_jinja2.template('dashboard.html')
     async def dashboard_home(self, request):
         """Serve the main dashboard page."""
@@ -509,7 +509,7 @@ class PerformanceDashboard:
             'ai_stack_ip': NetworkConstants.AI_STACK_VM_IP,
             'browser_ip': NetworkConstants.BROWSER_VM_IP
         }
-    
+
     async def get_current_metrics(self, request):
         """Get current performance metrics."""
         try:
@@ -517,7 +517,7 @@ class PerformanceDashboard:
             return web.json_response(metrics, dumps=lambda obj: json.dumps(obj, default=str))
         except Exception as e:
             return web.json_response({'error': str(e)}, status=500)
-    
+
     async def get_metrics_history(self, request):
         """Get historical performance metrics."""
         try:
@@ -536,38 +536,38 @@ class PerformanceDashboard:
             # Get last 100 metrics entries
             history = self.redis_client.lrange("autobot:performance:history", 0, 99)
             parsed_history = []
-            
+
             for entry in history:
                 try:
                     parsed_entry = json.loads(entry)
                     parsed_history.append(parsed_entry)
                 except json.JSONDecodeError:
                     continue
-            
+
             return web.json_response(parsed_history)
-            
+
         except Exception as e:
             return web.json_response({'error': str(e), 'history': []}, status=500)
-    
+
     async def get_system_status(self, request):
         """Get overall system status summary."""
         try:
             metrics = await self.monitor.generate_performance_report()
-            
+
             # Calculate overall system health
             system_health = "healthy"
             alerts = metrics.get("alerts", [])
-            
+
             if any("DOWN" in alert or "ERROR" in alert for alert in alerts):
                 system_health = "critical"
             elif len(alerts) > 0:
                 system_health = "warning"
-            
+
             # Service availability
             services = metrics.get("services", [])
             healthy_services = sum(1 for s in services if s.is_healthy)
             total_services = len(services)
-            
+
             status_summary = {
                 "system_health": system_health,
                 "services": {
@@ -578,39 +578,39 @@ class PerformanceDashboard:
                 "alerts": len(alerts),
                 "timestamp": datetime.now().isoformat()
             }
-            
+
             return web.json_response(status_summary)
-            
+
         except Exception as e:
             return web.json_response({'error': str(e)}, status=500)
-    
+
     async def get_alerts(self, request):
         """Get current performance alerts."""
         try:
             metrics = await self.monitor.generate_performance_report()
             alerts = metrics.get("alerts", [])
-            
+
             # Categorize alerts by severity
             critical_alerts = [a for a in alerts if "DOWN" in a or "ERROR" in a]
             warning_alerts = [a for a in alerts if a not in critical_alerts]
-            
+
             return web.json_response({
                 "critical": critical_alerts,
                 "warnings": warning_alerts,
                 "total": len(alerts),
                 "timestamp": datetime.now().isoformat()
             })
-            
+
         except Exception as e:
             return web.json_response({'error': str(e)}, status=500)
-    
+
     async def websocket_handler(self, request):
         """Handle WebSocket connections for real-time updates."""
         ws = web.WebSocketResponse()
         await ws.prepare(request)
-        
+
         self.websocket_connections.add(ws)
-        
+
         try:
             async for msg in ws:
                 if msg.type == WSMsgType.TEXT:
@@ -622,20 +622,20 @@ class PerformanceDashboard:
             print(f'WebSocket connection error: {e}')
         finally:
             self.websocket_connections.discard(ws)
-        
+
         return ws
-    
+
     async def broadcast_metrics_update(self, metrics):
         """Broadcast metrics update to all connected WebSocket clients."""
         if not self.websocket_connections:
             return
-        
+
         message = json.dumps({
             "type": "metrics_update",
             "data": metrics,
             "timestamp": datetime.now().isoformat()
         }, default=str)
-        
+
         # Send to all connected clients
         disconnected = set()
         for ws in self.websocket_connections:
@@ -643,43 +643,43 @@ class PerformanceDashboard:
                 await ws.send_str(message)
             except Exception:
                 disconnected.add(ws)
-        
+
         # Remove disconnected clients
         self.websocket_connections -= disconnected
-    
+
     async def start_metrics_broadcasting(self):
         """Start background task for broadcasting metrics updates."""
         while True:
             try:
                 # Generate current metrics
                 metrics = await self.monitor.generate_performance_report()
-                
+
                 # Broadcast to WebSocket clients
                 await self.broadcast_metrics_update(metrics)
-                
+
             except Exception as e:
                 print(f"Error in metrics broadcasting: {e}")
-            
+
             # Wait before next update
             await asyncio.sleep(10)  # Update every 10 seconds
-    
+
     async def run(self):
         """Start the performance dashboard server."""
         # Initialize Redis connection for the monitor
         await self.monitor.initialize_redis_connection()
-        
+
         # Start background metrics broadcasting
         asyncio.create_task(self.start_metrics_broadcasting())
-        
+
         # Start the web server
         runner = web.AppRunner(self.app)
         await runner.setup()
         site = web.TCPSite(runner, '0.0.0.0', self.port)
         await site.start()
-        
+
         print(f"🚀 AutoBot Performance Dashboard running on http://localhost:{self.port}")
         print("📊 Real-time monitoring active with WebSocket updates")
-        
+
         # Keep the server running
         try:
             while True:
@@ -692,12 +692,12 @@ class PerformanceDashboard:
 async def main():
     """Main function to run the performance dashboard."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description='AutoBot Performance Dashboard')
     parser.add_argument('--port', type=int, default=9090, help='Dashboard port (default: 9090)')
-    
+
     args = parser.parse_args()
-    
+
     dashboard = PerformanceDashboard(port=args.port)
     await dashboard.run()
 

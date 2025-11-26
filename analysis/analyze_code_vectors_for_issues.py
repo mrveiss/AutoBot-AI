@@ -32,6 +32,7 @@ from src.unified_config_manager import unified_config_manager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class CodeIssueAnalyzer:
     """Analyzes code vectors to identify duplicates, hardcoded values, and issues"""
 
@@ -535,6 +536,7 @@ This analysis examined code vectors from the AutoBot codebase to identify:
             logger.error(f"❌ Report generation failed: {e}")
             return "Report generation failed"
 
+
 async def main():
     """Main execution function"""
     try:
@@ -604,18 +606,18 @@ async def main():
         print(f"✅ Report saved to: {str(report_path)}")
 
         # Summary
-        print(f"\n🎉 Code Analysis Complete!")
-        print(f"📊 Summary:")
+        print("\n🎉 Code Analysis Complete!")
+        print("📊 Summary:")
         print(f"  - Code samples analyzed: {len(code_samples)}")
         print(f"  - Duplicate patterns: {len(duplicates)}")
         print(f"  - Hardcoded values: {total_hardcoded}")
         print(f"  - Architectural issues: {len(architectural)}")
         print(f"  - Report saved: {str(report_path)}")
 
-        print(f"\n💡 This analysis will help identify:")
-        print(f"   - Code that can be deduplicated")
-        print(f"   - Values that should be moved to configuration")
-        print(f"   - Architecture improvements needed")
+        print("\n💡 This analysis will help identify:")
+        print("   - Code that can be deduplicated")
+        print("   - Values that should be moved to configuration")
+        print("   - Architecture improvements needed")
 
     except Exception as e:
         print(f"❌ Error: {e}")

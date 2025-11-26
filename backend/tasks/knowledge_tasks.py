@@ -10,7 +10,6 @@ Celery tasks for long-running knowledge base operations with progress tracking.
 import logging
 import subprocess
 import sys
-from typing import Dict
 
 from backend.type_defs.common import Metadata
 

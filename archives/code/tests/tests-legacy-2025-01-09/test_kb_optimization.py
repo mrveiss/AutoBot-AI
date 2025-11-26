@@ -67,23 +67,23 @@ async def test_knowledge_base_optimization():
     """Test knowledge base with GPU optimization."""
     print("🧪 Testing AutoBot Knowledge Base with GPU Optimization")
     print("=" * 60)
-    
+
     # Initialize knowledge base
     print("📚 Initializing knowledge base...")
     kb = get_knowledge_base()
-    
+
     # Check if GPU optimization is active
     print("\n🔍 Checking optimization status...")
     stats = await kb.get_stats()
     print(f"Redis Connected: {stats.get('redis_connected', False)}")
     print(f"Index Available: {stats.get('index_available', False)}")
-    
+
     # Test document processing with performance measurement
     print(f"\n⚡ Testing GPU-optimized document processing...")
     print(f"Document length: {len(TEST_DOCUMENT_CONTENT)} characters")
-    
+
     start_time = time.time()
-    
+
     # Create a temporary directory with test content
     import tempfile
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -91,52 +91,52 @@ async def test_knowledge_base_optimization():
         test_file = os.path.join(temp_dir, "test_document.txt")
         with open(test_file, 'w') as f:
             f.write(TEST_DOCUMENT_CONTENT)
-        
+
         print(f"📄 Processing test document: {test_file}")
-        
+
         # Process with GPU-optimized chunking
         results = await kb.add_documents_from_directory(
-            temp_dir, 
+            temp_dir,
             file_extensions=['.txt']
         )
-        
+
         processing_time = time.time() - start_time
-        
+
         print(f"\n📊 Processing Results:")
         print(f"  ⏱️  Processing Time: {processing_time:.2f}s")
         print(f"  📁 Files Processed: {results['processed_files']}")
         print(f"  📦 Chunks Created: {results['total_chunks']}")
         print(f"  ❌ Errors: {len(results['errors'])}")
-        
+
         if results['total_chunks'] > 0:
             chunks_per_second = results['total_chunks'] / processing_time
             print(f"  ⚡ Performance: {chunks_per_second:.1f} chunks/sec")
-        
+
         # Test search functionality
         print(f"\n🔍 Testing search with processed document...")
         search_start = time.time()
-        
+
         search_results = await kb.search_documents("AutoBot architecture", limit=3)
-        
+
         search_time = time.time() - search_start
-        
+
         print(f"  🔍 Search completed in {search_time:.3f}s")
         print(f"  📋 Results found: {len(search_results)}")
-        
+
         if search_results:
             for i, result in enumerate(search_results[:2], 1):
                 print(f"    {i}. Score: {result['score']:.3f}")
                 print(f"       Content: {result['content'][:100]}...")
-        
+
         # Performance analysis
         print(f"\n📈 Performance Analysis:")
-        
+
         # Estimate performance improvement based on previous benchmarks
         estimated_original_time = processing_time * 5.4  # Based on our 5.4x improvement
         print(f"  🐌 Estimated original processing time: {estimated_original_time:.2f}s")
         print(f"  🚀 GPU-optimized time: {processing_time:.2f}s")
         print(f"  📊 Speed improvement: ~{estimated_original_time/processing_time:.1f}x faster")
-        
+
         # Memory and resource efficiency
         if processing_time < 5.0:
             print(f"  ✅ Excellent performance: <5 seconds for document processing")
@@ -156,16 +156,16 @@ async def test_knowledge_base_optimization():
 async def test_chunker_optimization_status():
     """Test which semantic chunker is being used."""
     print(f"\n🔧 Testing Semantic Chunker Status...")
-    
+
     try:
         # Try to import both chunkers and check which one is active
         from src.knowledge_base import get_semantic_chunker
-        
+
         chunker = get_semantic_chunker()
         chunker_type = type(chunker).__name__
-        
+
         print(f"  📦 Active chunker: {chunker_type}")
-        
+
         # Check if it's the optimized version
         if hasattr(chunker, 'get_performance_stats'):
             print(f"  🚀 GPU optimization: ✅ ACTIVE")
@@ -175,13 +175,13 @@ async def test_chunker_optimization_status():
                 print(f"  🎮 GPU flag: {chunker._gpu_optimized}")
         else:
             print(f"  🚀 GPU optimization: ❌ NOT ACTIVE")
-        
+
         # Check chunker module location
         chunker_module = chunker.__class__.__module__
         print(f"  📍 Module: {chunker_module}")
-        
+
         return chunker_type
-        
+
     except Exception as e:
         print(f"  ❌ Error checking chunker status: {e}")
         return None
@@ -190,29 +190,29 @@ if __name__ == "__main__":
     async def main():
         print("🚀 AutoBot Knowledge Base GPU Optimization Test")
         print("=" * 70)
-        
+
         # Test chunker status
         chunker_type = await test_chunker_optimization_status()
-        
+
         # Test knowledge base with optimization
         results = await test_knowledge_base_optimization()
-        
+
         # Final summary
         print(f"\n" + "=" * 70)
         print("📋 OPTIMIZATION TEST SUMMARY")
         print("=" * 70)
-        
+
         if chunker_type and "Optimized" in chunker_type:
             print("✅ GPU-optimized semantic chunker is ACTIVE")
         else:
             print("⚠️  GPU-optimized semantic chunker may not be active")
-        
+
         print(f"📊 Performance Metrics:")
         print(f"  - Document processing: {results['processing_time']:.2f}s")
         print(f"  - Chunks created: {results['chunks_created']}")
         print(f"  - Search performance: {results['search_time']:.3f}s")
         print(f"  - Search results: {results['search_results']}")
-        
+
         # Success criteria
         success = all([
             results['processing_time'] < 10.0,  # Fast processing
@@ -220,12 +220,12 @@ if __name__ == "__main__":
             results['search_results'] > 0,      # Working search
             results['search_time'] < 2.0        # Fast search
         ])
-        
+
         if success:
             print(f"\n🎉 SUCCESS: Knowledge base GPU optimization is working correctly!")
         else:
             print(f"\n⚠️  ATTENTION: Some optimization issues detected")
-        
+
         return results
-    
+
     results = asyncio.run(main())

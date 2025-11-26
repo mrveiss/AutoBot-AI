@@ -23,6 +23,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 # Configuration loader
+
+
 def load_config():
     """Load configuration from YAML file"""
     config_path = Path(__file__).parent.parent / "config" / "npu_worker.yaml"
@@ -30,6 +32,7 @@ def load_config():
         with open(config_path, 'r') as f:
             return yaml.safe_load(f)
     return {}
+
 
 # Load configuration
 config = load_config()

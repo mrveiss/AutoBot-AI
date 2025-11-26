@@ -43,7 +43,7 @@ async def chat_health():
     try:
         unified_service = await get_unified_chat_service()
         stats = await unified_service.get_service_stats()
-        
+
         return {
             "status": "healthy",
             "service": "unified_chat",
@@ -72,17 +72,17 @@ async def send_unified_chat_message(
     """
     try:
         logger.info(f"Processing unified chat message for chat_id: {chat_id}")
-        
+
         # Validate chat_id format
         if not chat_id or len(chat_id) < 3:
             raise HTTPException(
                 status_code=400,
                 detail="Invalid chat_id format"
             )
-        
+
         # Get unified chat service
         unified_service = await get_unified_chat_service()
-        
+
         # Map message type if provided
         message_type = None
         if request_data.message_type:
@@ -91,7 +91,7 @@ async def send_unified_chat_message(
             except ValueError:
                 # Invalid message type, let service classify it
                 pass
-        
+
         # Process message through unified service
         result = await unified_service.process_message(
             session_id=chat_id,
@@ -99,7 +99,7 @@ async def send_unified_chat_message(
             role="user",
             message_type=message_type
         )
-        
+
         # Convert result to API response format
         response_data = {
             "response": result.content,
@@ -111,18 +111,18 @@ async def send_unified_chat_message(
             "metadata": result.metadata or {},
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
         }
-        
+
         # Add error information if present
         if result.error:
             response_data["error"] = result.error
-        
+
         logger.info(
             f"Unified chat processed successfully: {len(result.content)} chars, "
             f"{result.processing_time:.2f}s, status: {result.status.value}"
         )
-        
+
         return response_data
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -138,10 +138,10 @@ async def create_new_unified_chat() -> Dict[str, Any]:
     """Create new chat session using unified service"""
     try:
         chat_id = str(uuid.uuid4())
-        
+
         # Initialize session in unified service
         unified_service = await get_unified_chat_service()
-        
+
         # Process a welcome message to initialize the session
         welcome_result = await unified_service.process_message(
             session_id=chat_id,
@@ -149,16 +149,16 @@ async def create_new_unified_chat() -> Dict[str, Any]:
             role="assistant",
             message_type=MessageType.SYSTEM
         )
-        
+
         logger.info(f"Created new unified chat session: {chat_id}")
-        
+
         return {
             "chat_id": chat_id,
             "created": True,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "welcome_message": welcome_result.content
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to create new unified chat: {e}")
         raise HTTPException(
@@ -173,14 +173,14 @@ async def get_unified_chat_history(chat_id: str) -> Dict[str, Any]:
     try:
         unified_service = await get_unified_chat_service()
         history = await unified_service.get_session_history(chat_id, limit=50)
-        
+
         return {
             "chat_id": chat_id,
             "history": history,
             "message_count": len(history),
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to get unified chat history for {chat_id}: {e}")
         raise HTTPException(
@@ -194,7 +194,7 @@ async def list_unified_chats() -> Dict[str, Any]:
     """List all chat sessions using unified service"""
     try:
         unified_service = await get_unified_chat_service()
-        
+
         # For now, return basic structure
         # In production, this would query session storage
         return {
@@ -203,7 +203,7 @@ async def list_unified_chats() -> Dict[str, Any]:
             "service": "unified_chat",
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to list unified chats: {e}")
         raise HTTPException(
@@ -219,14 +219,14 @@ async def delete_unified_chat(chat_id: str) -> Dict[str, Any]:
         # For now, just return success
         # In production, this would clean up session storage
         logger.info(f"Deleted unified chat session: {chat_id}")
-        
+
         return {
             "chat_id": chat_id,
             "deleted": True,
             "service": "unified_chat",
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to delete unified chat {chat_id}: {e}")
         raise HTTPException(
@@ -241,7 +241,7 @@ async def get_unified_chat_stats() -> Dict[str, Any]:
     try:
         unified_service = await get_unified_chat_service()
         stats = await unified_service.get_service_stats()
-        
+
         return {
             "service": "unified_chat",
             "timestamp": stats["timestamp"],
@@ -255,7 +255,7 @@ async def get_unified_chat_stats() -> Dict[str, Any]:
                 "code_consolidation": True
             }
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to get unified chat stats: {e}")
         raise HTTPException(

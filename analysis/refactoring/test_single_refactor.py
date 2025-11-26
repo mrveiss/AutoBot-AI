@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.unified_config_manager import unified_config_manager
 from src.constants.network_constants import NetworkConstants
 
+
 def test_refactor_single_file():
     """Test refactoring on config_consolidated.py"""
     # Use project-relative path instead of hardcoded absolute path
@@ -56,6 +57,7 @@ def test_refactor_single_file():
         print("\nWould need to add import: from src.constants import NetworkConstants")
 
     print(f"\nChanges made: {content != new_content}")
+
 
 if __name__ == "__main__":
     test_refactor_single_file()

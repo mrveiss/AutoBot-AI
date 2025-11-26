@@ -635,7 +635,7 @@ class ChatSave(BaseModel):
     messages: list
 
 
-@router.post("/chats/new") 
+@router.post("/chats/new")
 async def create_new_chat(request: Request):
     """Create a new chat session ID (POST method)."""
     try:
@@ -813,7 +813,7 @@ async def delete_chat(chat_id: str, request: Request):
         # Attempt deletion
         try:
             success = chat_history_manager.delete_session(chat_id)
-            
+
             if success:
                 return JSONResponse(
                     status_code=200,
@@ -918,7 +918,7 @@ async def conversation_chat_message(chat_message: dict, request: Request):
             chat_id=chat_id,
             conversation=conversation
         )
-        
+
         # Convert workflow result to expected format
         result = {
             "response": workflow_result.response,
@@ -932,11 +932,11 @@ async def conversation_chat_message(chat_message: dict, request: Request):
             "conversation_id": chat_id,
             "message_id": str(uuid.uuid4()),
         }
-        
+
         # Add research information if available
         if workflow_result.research_results:
             result["research"] = workflow_result.research_results
-        
+
         # Log workflow results for debugging
         logger.info(
             f"Chat workflow completed: status={workflow_result.knowledge_status.value}, "
@@ -1654,7 +1654,7 @@ async def send_chat_message_legacy(chat_message: dict, request: Request):
 async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Request):
     """Send a message to a specific chat and get a response with full source attribution."""
     logging.info(f"Processing chat message for chat_id: {chat_id}")
-    
+
     # RESTORED: Full chat workflow with source attribution and knowledge base integration
     # Add timeout protection to prevent the entire endpoint from hanging
     async def _process_message():
@@ -1666,7 +1666,7 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         logging.info(
             "DEBUG: Getting orchestrator and chat_history_manager from app " "state..."
         )
-        
+
         # Lazy load orchestrator if needed
         try:
             from backend.fast_app_factory_fix import get_or_create_orchestrator
@@ -1674,7 +1674,7 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         except ImportError:
             # Fall back to direct access for non-fast backend
             orchestrator = getattr(request.app.state, "orchestrator", None)
-        
+
         chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
         logging.info(
             f"DEBUG: Got orchestrator: {orchestrator is not None}, "
@@ -1735,10 +1735,10 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                     conversation=None
                 )
             )
-            
+
             # ROOT CAUSE FIX: Replace timeout with smart cancellation
             from src.utils.async_cancellation import CancellationContext
-            
+
             async with CancellationContext(f"chat_workflow_{chat_id}_{len(existing_history)}") as token:
                 # Monitor for cancellation during workflow execution
                 while not workflow_task.done():
@@ -1747,25 +1747,25 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                     await asyncio.sleep(0.1)
                     if workflow_task.done():
                         break
-                        
+
                 workflow_result = await workflow_task
-            
+
             logger.info(
                 f"Workflow completed: {workflow_result.knowledge_status.value}, "
                 f"KB results: {len(workflow_result.kb_results)}, "
                 f"Response length: {len(workflow_result.response)}"
             )
-            
+
             # Add workflow messages first (thoughts, planning, debug, etc.)
             if hasattr(workflow_result, 'workflow_messages') and workflow_result.workflow_messages:
                 for wf_msg in workflow_result.workflow_messages:
                     existing_history.append(wf_msg)
-            
-            # Save the final response to chat history  
+
+            # Save the final response to chat history
             assistant_message = {
                 "sender": "assistant",
                 "text": workflow_result.response,
-                "messageType": "assistant", 
+                "messageType": "assistant",
                 "type": "response",  # Add type field for frontend filtering
                 "rawData": {
                     "message_type": workflow_result.message_type.value,
@@ -1778,11 +1778,11 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                 },
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             }
-            
+
             # Save all messages to history
             existing_history.append(assistant_message)
             await chat_history_manager.save_session(chat_id, existing_history)
-            
+
             # Ensure workflow messages are JSON serializable
             serializable_workflow_messages = []
             if hasattr(workflow_result, 'workflow_messages') and workflow_result.workflow_messages:
@@ -1797,7 +1797,7 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                             "metadata": msg.get("metadata", {})
                         }
                         serializable_workflow_messages.append(clean_msg)
-            
+
             # Return the workflow results including all workflow messages
             return JSONResponse(
                 content={
@@ -1814,12 +1814,12 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                     "workflow_messages": serializable_workflow_messages,
                 }
             )
-            
+
         except asyncio.TimeoutError:
             logger.error("ChatWorkflowManager timed out after 20 seconds")
             # Return a timeout response
             timeout_response = "I'm taking too long to process your request. The knowledge base might still be initializing. Please try again in a moment."
-            
+
             assistant_message = {
                 "sender": "assistant",
                 "text": timeout_response,
@@ -1827,10 +1827,10 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                 "rawData": {"error": "timeout", "message": "Workflow processing timeout"},
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             }
-            
+
             existing_history.append(assistant_message)
             await chat_history_manager.save_session(chat_id, existing_history)
-            
+
             return JSONResponse(
                 content={
                     "response": timeout_response,
@@ -1846,12 +1846,12 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                     "error": "Processing timeout - KB may still be initializing"
                 }
             )
-            
+
         except Exception as e:
             logger.error(f"ChatWorkflowManager failed: {e}")
             # Fallback to simple response if workflow fails
             simple_response = f"I encountered an error processing your message: {e}. Please try again."
-            
+
             assistant_message = {
                 "sender": "assistant",
                 "text": simple_response,
@@ -1859,15 +1859,15 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
                 "rawData": {"error": str(e)},
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             }
-            
+
             existing_history.append(assistant_message)
             await chat_history_manager.save_session(chat_id, existing_history)
-            
+
             return JSONResponse(
                 content={
                     "response": simple_response,
                     "message_type": "error",
-                    "knowledge_status": "error", 
+                    "knowledge_status": "error",
                     "sources": [],
                     "kb_results_count": 0,
                     "processing_time": 0.0,
@@ -1898,7 +1898,7 @@ async def send_chat_message(chat_id: str, chat_message: ChatMessage, request: Re
         logger.error(f"Unexpected error in chat processing: {e}")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        
+
         # Try to return a proper error response
         return JSONResponse(
             status_code=500,

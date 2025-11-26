@@ -24,6 +24,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 class LLMModelOptimizer:
     """Optimize LLM model configuration for AutoBot"""
 
@@ -484,6 +485,7 @@ class LLMModelOptimizer:
         print("="*60)
 
         return report_path
+
 
 async def main():
     """Main optimization function"""

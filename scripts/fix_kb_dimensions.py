@@ -34,13 +34,13 @@ async def fix_dimensions():
 
     # Clean specific databases using centralized client
     database_names = ["main", "knowledge", "prompts", "agents", "metrics", "logs", "sessions", "workflows", "vectors", "models"]
-    
+
     for db_name in database_names:
         try:
             r_db = get_redis_client(database=db_name)
             if r_db is None:
                 continue
-                
+
             # Delete any llama_index related keys
             keys = r_db.keys("llama_index:*")
             if keys:

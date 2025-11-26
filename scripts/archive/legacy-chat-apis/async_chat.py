@@ -74,14 +74,14 @@ async def send_chat_message(
     try:
         logger.info(f"Processing chat message for chat_id: {chat_id}")
         logger.debug(f"Message: {request_data.message[:100]}...")
-        
+
         # Validate chat_id format
         if not chat_id or len(chat_id) < 3:
             raise HTTPException(
                 status_code=400,
                 detail="Invalid chat_id format"
             )
-        
+
         # Process message through async workflow with timeout protection
         try:
             # ROOT CAUSE FIX: Remove timeout and fix underlying blocking operations
@@ -103,24 +103,24 @@ async def send_chat_message(
                 mcp_used=False,
                 processing_time=0.0
             )
-        
+
         # Convert to API response format
         response_data = workflow_result.to_dict()
-        
+
         logger.info(
             f"Chat processed successfully: {len(response_data['response'])} chars, "
             f"{response_data['processing_time']:.2f}s"
         )
-        
+
         return response_data
-        
+
     except asyncio.TimeoutError:
         logger.error(f"Chat processing timeout for chat_id: {chat_id}")
         raise HTTPException(
             status_code=408,
             detail="Request timeout - chat processing took too long"
         )
-        
+
     except Exception as e:
         logger.error(f"Chat processing error for chat_id {chat_id}: {e}", exc_info=True)
         raise HTTPException(
@@ -137,15 +137,15 @@ async def create_new_chat(
     try:
         import uuid
         chat_id = str(uuid.uuid4())
-        
+
         logger.info(f"Created new chat session: {chat_id}")
-        
+
         return {
             "chat_id": chat_id,
             "created": True,
             "timestamp": "2025-09-01T13:45:00.000Z"
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to create new chat: {e}")
         raise HTTPException(
@@ -163,13 +163,13 @@ async def get_chat_messages(
     try:
         # For now, return empty messages
         # This would typically load from database/storage
-        
+
         return {
             "chat_id": chat_id,
             "messages": [],
             "message_count": 0
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to get chat messages for {chat_id}: {e}")
         raise HTTPException(
@@ -186,12 +186,12 @@ async def list_chats(
     try:
         # For now, return empty list
         # This would typically load from database/storage
-        
+
         return {
             "chats": [],
             "total_count": 0
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to list chats: {e}")
         raise HTTPException(
@@ -208,12 +208,12 @@ async def delete_chat(
     """Delete a chat session"""
     try:
         logger.info(f"Deleted chat session: {chat_id}")
-        
+
         return {
             "chat_id": chat_id,
             "deleted": True
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to delete chat {chat_id}: {e}")
         raise HTTPException(
@@ -232,14 +232,14 @@ async def chat_health(
         # Check LLM service health
         llm = await get_llm()
         llm_health = await llm.health_check()
-        
+
         return {
             "status": "healthy" if llm_health.get("status") == "healthy" else "degraded",
             "llm": llm_health,
             "async_architecture": True,
             "service": "chat"
         }
-        
+
     except Exception as e:
         logger.error(f"Chat health check failed: {e}")
         return {
