@@ -20,7 +20,6 @@ from base import (
     ensure_directory_exists,
     format_iso_timestamp,
     generate_session_id,
-    logger,
     write_file_safe,
 )
 
