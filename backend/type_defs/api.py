@@ -7,7 +7,8 @@ API Response Type Definitions for AutoBot
 Provides strongly-typed API response structures to replace Dict[str, Any] patterns.
 """
 
-from typing import (Generic,
+from typing import (
+    Generic,
     List,
     Optional,
     TypeVar,
