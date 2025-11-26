@@ -29,17 +29,30 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Redis Service Management"])
 
-# Global service manager instance
+# Global service manager instance (singleton)
 _service_manager: Optional[RedisServiceManager] = None
+_service_manager_started: bool = False
 
 
 async def get_service_manager() -> RedisServiceManager:
-    """Get or create Redis Service Manager instance (fresh instance per request)"""
-    # Always create fresh instance to avoid caching stale code during development
-    # TODO: Optimize to singleton pattern for production after development complete
-    manager = RedisServiceManager()
-    await manager.start()
-    return manager
+    """
+    Get the singleton Redis Service Manager instance.
+
+    Uses singleton pattern to avoid creating multiple instances and maintain
+    consistent state (error tracking, status cache) across requests.
+    """
+    global _service_manager, _service_manager_started
+
+    if _service_manager is None:
+        _service_manager = RedisServiceManager()
+        logger.info("Created Redis Service Manager singleton instance")
+
+    if not _service_manager_started:
+        await _service_manager.start()
+        _service_manager_started = True
+        logger.info("Started Redis Service Manager singleton")
+
+    return _service_manager
 
 
 def check_admin_permission(request: Request) -> str:
