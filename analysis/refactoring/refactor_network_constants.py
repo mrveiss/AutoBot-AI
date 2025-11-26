@@ -3,7 +3,6 @@
 Script to refactor hardcoded IP addresses and URLs to use shared constants
 """
 
-import os
 import re
 import sys
 from pathlib import Path

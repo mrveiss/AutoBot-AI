@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Import canonical Redis client utility
 from src.utils.redis_client import get_redis_client
 from src.knowledge_base import KnowledgeBase
-from src.utils.redis_database_manager import RedisDatabaseManager, RedisDatabase
+from src.utils.redis_database_manager import RedisDatabaseManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

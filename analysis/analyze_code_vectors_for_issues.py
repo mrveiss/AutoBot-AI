@@ -13,13 +13,11 @@ Focus on extracting insights rather than creating new vectors.
 
 import asyncio
 import sys
-import os
-import json
 import re
 import logging
 from datetime import datetime
-from typing import List, Dict, Any, Set
-from collections import defaultdict, Counter
+from typing import List, Dict, Any
+from collections import defaultdict
 from pathlib import Path
 
 # Add project root to path for imports
@@ -27,7 +25,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Use canonical Redis client utility
 from src.utils.redis_client import get_redis_client
-from src.unified_config_manager import unified_config_manager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
