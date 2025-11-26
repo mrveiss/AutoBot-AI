@@ -10,7 +10,7 @@ from VM4 (uses NetworkConstants.AI_STACK_VM_IP) with the main AutoBot backend.
 
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from backend.type_defs.common import Metadata
 from fastapi import APIRouter, Depends, HTTPException

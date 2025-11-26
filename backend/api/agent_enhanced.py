@@ -11,7 +11,7 @@ coordination, and execution across multiple specialized AI agents.
 
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from backend.type_defs.common import Metadata
 
