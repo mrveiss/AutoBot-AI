@@ -9,6 +9,7 @@ Provides context injection for LLM agents to be aware of current system state, c
 
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -116,7 +117,7 @@ class LLMSelfAwareness:
                 },
                 "contextual_information": {
                     "timestamp": datetime.now().isoformat(),
-                    "environment": "development",  # TODO: Get from config
+                    "environment": os.getenv("AUTOBOT_ENVIRONMENT", "production"),
                     "api_endpoints_available": self._get_available_endpoints(),
                     "data_sources": [
                         "knowledge_base",
@@ -273,19 +274,47 @@ class LLMSelfAwareness:
         return {k: v for k, v in categories.items() if v}
 
     def _get_available_endpoints(self) -> List[str]:
-        """Get list of available API endpoints"""
-        # TODO: Dynamically fetch from FastAPI app
+        """
+        Get list of available API endpoints.
+
+        NOTE: For dynamic endpoint discovery, use FastAPI's app.routes
+        in a context where the app object is available (e.g., middleware).
+        This method returns key endpoints for LLM context awareness.
+        See backend/initialization/routers.py for the full router registry.
+        """
         return [
+            # Core endpoints
             "/api/chat",
             "/api/system",
+            "/api/settings",
+            "/api/prompts",
             "/api/knowledge_base",
-            "/api/phases",
-            "/api/state-tracking",
-            "/api/orchestration",
-            "/api/workflow",
-            "/api/terminal",
+            "/api/llm",
+            "/api/redis",
+            "/api/voice",
+            "/api/vnc",
+            "/api/agent",
+            "/api/agent_config",
+            "/api/intelligent_agent",
             "/api/files",
-            "/api/metrics",
+            "/api/memory",
+            # MCP endpoints
+            "/api/mcp",
+            "/api/knowledge",
+            "/api/filesystem",
+            "/api/browser",
+            "/api/database",
+            "/api/git",
+            # Optional endpoints (may not be loaded)
+            "/api/terminal",
+            "/api/workflow",
+            "/api/orchestrator",
+            "/api/analytics",
+            "/api/monitoring",
+            "/api/state-tracking",
+            "/api/services",
+            "/api/vision",
+            "/api/embeddings",
         ]
 
     def _get_detailed_capabilities(self) -> Dict[str, Any]:
