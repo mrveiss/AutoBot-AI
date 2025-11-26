@@ -39,6 +39,7 @@ from backend.conversation_safety import (
     SafetyCheckResult,
 )
 from backend.dependencies import global_config_manager
+from src.constants.model_constants import ModelConstants
 
 # Import comprehensive intent classification system - Issue #159
 from backend.intent_classifier import (
@@ -718,7 +719,9 @@ NEVER teach commands - ALWAYS execute them."""
             logger.error(f"Failed to load model from config: {config_error}")
             import os
 
-            selected_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "mistral:7b")
+            selected_model = os.getenv(
+                "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.MISTRAL_7B
+            )
 
         logger.info(
             f"[ChatWorkflowManager] Making Ollama request to: {ollama_endpoint}"

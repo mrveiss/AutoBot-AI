@@ -38,6 +38,7 @@ from pydantic_settings import BaseSettings
 
 # Import unified configuration and dependencies
 from src.circuit_breaker import circuit_breaker_async
+from src.constants.model_constants import ModelConstants
 from src.constants.network_constants import NetworkConstants
 
 # REFACTORED: Removed unused import from deprecated redis_pool_manager
@@ -127,8 +128,8 @@ class LLMSettings(BaseSettings):
     ollama_port: int = Field(default=NetworkConstants.OLLAMA_PORT, env="OLLAMA_PORT")
     # Removed timeout - using circuit breaker pattern instead
 
-    # Model settings
-    default_model: str = Field(default="mistral:7b", env="DEFAULT_LLM_MODEL")
+    # Model settings - Uses centralized model constants
+    default_model: str = Field(default=ModelConstants.MISTRAL_7B, env="DEFAULT_LLM_MODEL")
     temperature: float = Field(default=0.7, env="LLM_TEMPERATURE")
     top_k: int = Field(default=40, env="LLM_TOP_K")
     top_p: float = Field(default=0.9, env="LLM_TOP_P")

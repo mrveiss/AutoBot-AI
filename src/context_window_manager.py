@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 
 import yaml
 
-from src.constants.model_constants import ModelConfig
+from src.constants.model_constants import ModelConfig, ModelConstants
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class ContextWindowManager:
         return {
             "models": {
                 "default": {
-                    "name": "qwen2.5-coder-7b-instruct",
+                    "name": ModelConstants.QWEN_25_CODER_7B,
                     "context_window_tokens": 4096,
                     "max_output_tokens": 2048,
                     "message_budget": {
@@ -68,7 +68,7 @@ class ContextWindowManager:
                         "max_history_tokens": ModelConfig.MAX_HISTORY_TOKENS,
                     },
                 },
-                "qwen2.5-coder-7b-instruct": {
+                ModelConstants.QWEN_25_CODER_7B: {
                     "context_window_tokens": 4096,
                     "max_output_tokens": 2048,
                     "message_budget": {
