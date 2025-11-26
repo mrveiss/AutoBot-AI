@@ -15,7 +15,6 @@ from typing import (
     Dict,
     List,
     Optional,
-    Pattern,
 )
 
 from src.autobot_types import TaskComplexity

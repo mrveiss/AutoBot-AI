@@ -60,7 +60,6 @@ from typing import (
     Any,
     Iterable,
     Optional,
-    Pattern,
     Set,
     Union,
 )
