@@ -3890,8 +3890,10 @@ return 0
 
                         # Skip if already found as exact duplicate
                         is_exact = any(
-                            (d["fact_id_1"] == fact1["fact_id"] and d["fact_id_2"] == fact2["fact_id"]) or
-                            (d["fact_id_1"] == fact2["fact_id"] and d["fact_id_2"] == fact1["fact_id"])
+                            (d["fact_id_1"] == fact1["fact_id"]
+                             and d["fact_id_2"] == fact2["fact_id"])
+                            or (d["fact_id_1"] == fact2["fact_id"]
+                                and d["fact_id_2"] == fact1["fact_id"])
                             for d in exact_duplicates
                         )
                         if is_exact:
