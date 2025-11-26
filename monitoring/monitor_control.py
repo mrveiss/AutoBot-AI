@@ -322,21 +322,27 @@ class MonitorControl:
         try:
             score = 100.0
 
+            # Get thresholds from loaded config
+            thresholds = self.config.alert_thresholds or {}
+            cpu_threshold = thresholds.get('cpu_percent', 80.0)
+            memory_threshold = thresholds.get('memory_percent', 85.0)
+            disk_threshold = thresholds.get('disk_percent', 90.0)
+
             # Deduct points for system resource issues
             if 'system' in metrics:
                 sys_metrics = metrics['system']
 
                 # CPU usage penalty
-                if sys_metrics.cpu_percent > 80:
-                    score -= min(20, (sys_metrics.cpu_percent - 80) / 2)
+                if sys_metrics.cpu_percent > cpu_threshold:
+                    score -= min(20, (sys_metrics.cpu_percent - cpu_threshold) / 2)
 
                 # Memory usage penalty
-                if sys_metrics.memory_percent > 85:
-                    score -= min(20, (sys_metrics.memory_percent - 85) / 1.5)
+                if sys_metrics.memory_percent > memory_threshold:
+                    score -= min(20, (sys_metrics.memory_percent - memory_threshold) / 1.5)
 
                 # Disk usage penalty
-                if sys_metrics.disk_percent > 90:
-                    score -= min(15, (sys_metrics.disk_percent - 90) / 1)
+                if sys_metrics.disk_percent > disk_threshold:
+                    score -= min(15, (sys_metrics.disk_percent - disk_threshold) / 1)
 
             # Deduct points for unhealthy services
             services = metrics.get('services', [])
