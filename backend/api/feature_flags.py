@@ -32,6 +32,7 @@ from backend.services.feature_flags import (
     FeatureFlags,
     get_feature_flags,
 )
+from src.auth_middleware import get_current_user
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -67,21 +68,37 @@ class ViolationStatistics(BaseModel):
 
 
 # Dependency for admin authentication
-# Note: This should be replaced with actual admin auth check
 async def require_admin(
-    # current_user: Dict = Depends(get_current_user)
+    current_user: Dict = Depends(get_current_user),
 ) -> Dict:
     """
-    Require admin role for access
+    Require admin role for access to feature flags endpoints.
 
-    TODO: Integrate with actual authentication system
-    For now, allows access (development mode)
+    Uses the authentication middleware to verify the user is authenticated
+    and has admin privileges. Falls back to development mode if auth is disabled.
+
+    Args:
+        current_user: Authenticated user from auth middleware
+
+    Returns:
+        User information dict
+
+    Raises:
+        HTTPException: 403 if user lacks admin role
     """
-    # In production, check if user has admin role:
-    # if current_user.get("role") != "admin":
-    #     raise HTTPException(status_code=403, detail="Admin access required")
+    # Check if user has admin role
+    user_role = current_user.get("role", "").lower()
+    if user_role != "admin":
+        logger.warning(
+            f"Non-admin user '{current_user.get('username', 'unknown')}' "
+            f"attempted to access feature flags (role: {user_role})"
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required for feature flag management",
+        )
 
-    return {"username": "admin", "role": "admin"}  # Development placeholder
+    return current_user
 
 
 @with_error_handling(
