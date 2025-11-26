@@ -17,7 +17,7 @@ import json
 import os
 import sys
 import argparse
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 try:
     import redis

@@ -6,7 +6,6 @@ Captures and logs all output from AutoBot processes
 
 import subprocess
 import sys
-import time
 import os
 from datetime import datetime
 import threading
