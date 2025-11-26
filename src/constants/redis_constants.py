@@ -10,6 +10,22 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class RedisConnectionConfig:
+    """Centralized Redis connection configuration - NO HARDCODED VALUES"""
+
+    # Socket timeouts (seconds)
+    SOCKET_TIMEOUT: int = 5
+    SOCKET_CONNECT_TIMEOUT: int = 3
+
+    # Connection pool settings
+    MAX_CONNECTIONS: int = 10
+    HEALTH_CHECK_INTERVAL: int = 30
+
+    # Retry settings
+    RETRY_ON_TIMEOUT: bool = True
+
+
+@dataclass(frozen=True)
 class RedisKeyConstants:
     """Centralized Redis key patterns - NO HARDCODED KEYS"""
 
@@ -71,5 +87,6 @@ class RedisKeyConstants:
         return f"{cls.SANDBOX_METRICS}:{sandbox_id}"
 
 
-# Export constants instance
+# Export constants instances
 REDIS_KEY = RedisKeyConstants()
+REDIS_CONFIG = RedisConnectionConfig()
