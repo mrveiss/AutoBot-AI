@@ -154,10 +154,10 @@ def get_security_layer(request: Request) -> SecurityLayer:
 
 def get_conversation_file_manager(request: Request):
     """
-    Get ConversationFileManager from app state
+    Get ConversationFileManager from app state.
 
-    TODO: This will be injected when ConversationFileManager is available
-    Currently returns None - integration point for file manager
+    Returns the conversation file manager instance initialized in lifespan.py.
+    Returns None if not yet initialized (startup phase).
     """
     return getattr(request.app.state, "conversation_file_manager", None)
 
@@ -337,7 +337,6 @@ async def upload_conversation_file(
         # Get conversation file manager
         file_manager = get_conversation_file_manager(request)
         if not file_manager:
-            # TODO: Remove this when ConversationFileManager is integrated
             logger.error("ConversationFileManager not available")
             raise HTTPException(
                 status_code=503,
