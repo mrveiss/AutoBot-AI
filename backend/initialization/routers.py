@@ -11,7 +11,7 @@ application factory to improve maintainability and organization.
 Core routers are essential for basic functionality and should always load.
 Optional routers provide enhanced features and gracefully fall back if unavailable.
 """
-from typing import List
+
 import logging
 
 # Core router imports - these are required for basic functionality

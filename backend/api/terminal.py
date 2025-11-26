@@ -116,7 +116,7 @@ import time
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Optional, Type
+from typing import Dict, Optional
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel

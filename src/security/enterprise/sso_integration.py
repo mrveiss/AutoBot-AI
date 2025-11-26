@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import uuid4
 
-import aiohttp
 import yaml
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa

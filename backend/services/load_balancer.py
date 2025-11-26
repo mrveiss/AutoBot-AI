@@ -28,7 +28,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Optional
 
 from backend.type_defs.common import Metadata
 from src.event_manager import event_manager

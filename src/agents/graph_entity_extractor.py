@@ -54,7 +54,7 @@ Usage:
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple, Type
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from src.agents.knowledge_extraction_agent import KnowledgeExtractionAgent
 from src.autobot_memory_graph import AutoBotMemoryGraph

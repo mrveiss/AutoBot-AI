@@ -28,10 +28,9 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from backend.type_defs.common import JSONObject, Metadata
-from backend.type_defs.mcp import MCPInputSchema
 from urllib.parse import urlparse
 
 import aiohttp

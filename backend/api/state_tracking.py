@@ -8,7 +8,7 @@ Provides endpoints for comprehensive project state tracking and reporting
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Optional
 
 from backend.type_defs.common import Metadata
 

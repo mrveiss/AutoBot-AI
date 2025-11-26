@@ -7,7 +7,7 @@ URL validation service for preventing SSRF attacks
 
 import ipaddress
 import socket
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from urllib.parse import urlparse
 
 from src.constants.network_constants import NetworkConstants

@@ -12,7 +12,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
 from backend.type_defs.common import Metadata

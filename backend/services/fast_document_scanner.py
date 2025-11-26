@@ -12,7 +12,7 @@ import os
 import subprocess
 import time
 from dataclasses import asdict, dataclass
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 

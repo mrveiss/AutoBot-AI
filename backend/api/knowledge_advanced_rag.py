@@ -10,7 +10,7 @@ with cross-encoder reranking for improved relevance scoring.
 """
 
 import logging
-from typing import Any, List, Optional
+from typing import List
 
 from backend.type_defs.common import Metadata
 

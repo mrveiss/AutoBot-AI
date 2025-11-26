@@ -9,7 +9,7 @@ Provides REST and WebSocket endpoints for the intelligent agent system.
 
 import logging
 import time
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Dict, List
 
 from backend.type_defs.common import Metadata
 

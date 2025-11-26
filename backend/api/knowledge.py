@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime
 from enum import Enum
 from pathlib import Path as PathLib
-from typing import Any, List, Optional, overload
+from typing import List, Optional
 
 from backend.type_defs.common import Metadata
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, Query, Request
