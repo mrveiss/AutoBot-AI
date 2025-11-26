@@ -14,17 +14,23 @@ import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import psutil
-
-from backend.type_defs.common import Metadata
 import redis
 import requests
 from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field
 
+from backend.type_defs.common import Metadata
 from src.constants import PATH
+
+# Import models from dedicated module (Issue #185 - split oversized files)
+from backend.api.analytics_models import (
+    AnalyticsOverview,
+    CodeAnalysisRequest,
+    CommunicationPattern,
+    RealTimeEvent,
+)
 from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import UnifiedConfigManager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -62,63 +68,6 @@ analytics_state = {
     "code_analysis_cache": {},
     "last_analysis_time": None,
 }
-
-# ============================================================================
-# PYDANTIC MODELS FOR ANALYTICS
-# ============================================================================
-
-
-class AnalyticsOverview(BaseModel):
-    """Comprehensive analytics dashboard overview model"""
-
-    timestamp: str
-    system_health: Metadata
-    performance_metrics: Metadata
-    communication_patterns: Metadata
-    code_analysis_status: Metadata
-    usage_statistics: Metadata
-    realtime_metrics: Metadata
-    trends: Metadata
-
-
-class CommunicationPattern(BaseModel):
-    """Communication pattern analysis model"""
-
-    endpoint: str
-    frequency: int
-    avg_response_time: float
-    error_rate: float
-    last_accessed: str
-    pattern_type: str = Field(description="API, WebSocket, or Internal")
-
-
-class CodeAnalysisRequest(BaseModel):
-    """Code analysis request model"""
-
-    target_path: Optional[str] = Field(default_factory=lambda: str(PATH.PROJECT_ROOT))
-    analysis_type: str = Field(
-        default="full", description="full, incremental, or communication_chains"
-    )
-    include_metrics: bool = True
-
-
-class PerformanceMetrics(BaseModel):
-    """Performance metrics model"""
-
-    response_times: List[float]
-    throughput: float
-    error_rates: Metadata
-    resource_utilization: Metadata
-    bottlenecks: List[str]
-
-
-class RealTimeEvent(BaseModel):
-    """Real-time analytics event model"""
-
-    event_type: str
-    timestamp: str
-    data: Metadata
-    severity: str = "info"
 
 
 # ============================================================================
