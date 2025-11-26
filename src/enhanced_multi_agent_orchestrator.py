@@ -11,6 +11,7 @@ intelligent task distribution, and collaborative workflows.
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -882,8 +883,66 @@ class EnhancedMultiAgentOrchestrator:
                 if result.get("status") != "completed":
                     return False
 
-        # TODO: Implement custom success criteria checking
+        # Check custom success criteria from the plan
+        if plan.success_criteria:
+            for criterion in plan.success_criteria:
+                if not self._evaluate_success_criterion(criterion, results):
+                    self.logger.warning(f"Success criterion not met: {criterion}")
+                    return False
 
+        return True
+
+    def _evaluate_success_criterion(
+        self, criterion: str, results: Dict[str, Any]
+    ) -> bool:
+        """
+        Evaluate a single success criterion against workflow results.
+
+        Supports these criterion patterns:
+        - "All tasks completed" - All tasks must have status 'completed'
+        - "No failures" - No task should have status 'failed'
+        - "Success rate >= X%" - At least X% of tasks must complete
+        - "Task:<task_id> completed" - Specific task must complete
+        - Default: Returns True (unknown criteria are considered met)
+        """
+        criterion_lower = criterion.lower().strip()
+
+        # Pattern: "All tasks completed"
+        if "all tasks completed" in criterion_lower:
+            return all(
+                r.get("status") == "completed" for r in results.values()
+            )
+
+        # Pattern: "No failures"
+        if "no failure" in criterion_lower:
+            return not any(
+                r.get("status") == "failed" for r in results.values()
+            )
+
+        # Pattern: "Success rate >= X%"
+        if "success rate" in criterion_lower and ">=" in criterion_lower:
+            match = re.search(r"(\d+(?:\.\d+)?)\s*%", criterion)
+            if match:
+                required_rate = float(match.group(1)) / 100
+                if results:
+                    completed = sum(
+                        1 for r in results.values() if r.get("status") == "completed"
+                    )
+                    actual_rate = completed / len(results)
+                    return actual_rate >= required_rate
+            return True
+
+        # Pattern: "Task:<task_id> completed"
+        if criterion_lower.startswith("task:") and "completed" in criterion_lower:
+            # Extract task_id between "task:" and "completed"
+            parts = criterion_lower.replace("task:", "").replace("completed", "").strip()
+            task_id = parts.strip()
+            if task_id in results:
+                return results[task_id].get("status") == "completed"
+            return False
+
+        # Default: unknown criteria considered met (log for visibility)
+        self.logger.debug(f"Unknown success criterion pattern: {criterion}")
         return True
 
     def _summarize_results(self, results: Dict[str, Any]) -> Dict[str, Any]:
