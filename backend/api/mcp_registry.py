@@ -459,7 +459,7 @@ async def list_all_mcp_tools() -> Metadata:
     error_code_prefix="MCP_REGISTRY",
 )
 @router.get("/bridges")
-async def get_mcp_bridges() -> Dict[str, Any]:
+async def get_mcp_bridges() -> Metadata:
     """
     Get information about all MCP bridges (with caching)
 
@@ -503,7 +503,7 @@ async def get_mcp_bridges() -> Dict[str, Any]:
     error_code_prefix="MCP_REGISTRY",
 )
 @router.post("/cache/invalidate")
-async def invalidate_mcp_cache() -> Dict[str, Any]:
+async def invalidate_mcp_cache() -> Metadata:
     """
     Manually invalidate MCP Registry cache (Issue #50)
 
@@ -531,7 +531,7 @@ async def invalidate_mcp_cache() -> Dict[str, Any]:
     error_code_prefix="MCP_REGISTRY",
 )
 @router.get("/cache/stats")
-async def get_mcp_cache_stats() -> Dict[str, Any]:
+async def get_mcp_cache_stats() -> Metadata:
     """
     Get MCP Registry cache statistics (Issue #50)
 
@@ -554,7 +554,7 @@ async def get_mcp_cache_stats() -> Dict[str, Any]:
     error_code_prefix="MCP_REGISTRY",
 )
 @router.get("/tools/{bridge_name}/{tool_name}")
-async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Dict[str, Any]:
+async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
     """
     Get detailed information about a specific MCP tool
 
@@ -633,7 +633,7 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Dict[str, An
     error_code_prefix="MCP_REGISTRY",
 )
 @router.get("/health")
-async def get_mcp_registry_health() -> Dict[str, Any]:
+async def get_mcp_registry_health() -> Metadata:
     """
     Get overall health status of MCP registry system
 
@@ -698,7 +698,7 @@ async def get_mcp_registry_health() -> Dict[str, Any]:
     error_code_prefix="MCP_REGISTRY",
 )
 @router.get("/stats")
-async def get_mcp_registry_stats() -> Dict[str, Any]:
+async def get_mcp_registry_stats() -> Metadata:
     """
     Get usage statistics for MCP registry
 
@@ -746,7 +746,7 @@ async def get_mcp_registry_stats() -> Dict[str, Any]:
     error_code_prefix="MCP_REGISTRY",
 )
 @router.get("/")
-async def get_mcp_registry_info() -> Dict[str, Any]:
+async def get_mcp_registry_info() -> Metadata:
     """
     Get information about the MCP Registry API
 

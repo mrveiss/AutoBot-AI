@@ -16,7 +16,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
 from src.utils.redis_client import get_redis_client
 from src.worker_node import WorkerNode

@@ -7,7 +7,7 @@ MCP (Model Context Protocol) Type Definitions for AutoBot
 Provides strongly-typed MCP tool and response structures.
 """
 
-from typing import Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -23,10 +23,11 @@ class MCPPropertyDefinition(BaseModel):
 
     type: str = Field(..., description="JSON Schema type")
     description: Optional[str] = None
-    default: Optional[JSONValue] = None
-    enum: Optional[List[JSONValue]] = None
-    items: Optional["MCPPropertyDefinition"] = None
-    properties: Optional[Dict[str, "MCPPropertyDefinition"]] = None
+    default: Optional[Any] = None
+    enum: Optional[List[Any]] = None
+    # Use Any for self-referential fields to avoid Pydantic recursion issues
+    items: Optional[Any] = None  # Would be MCPPropertyDefinition
+    properties: Optional[Metadata] = None  # Would be Dict[str, MCPPropertyDefinition]
     required: Optional[List[str]] = None
 
 
@@ -160,5 +161,4 @@ class MCPCapabilities(BaseModel):
     prompts: Optional[List[MCPPromptDefinition]] = None
 
 
-# Allow forward references for nested types
-MCPPropertyDefinition.model_rebuild()
+# Note: model_rebuild() removed - using Any for self-referential fields instead

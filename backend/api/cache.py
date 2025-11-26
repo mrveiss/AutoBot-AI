@@ -8,7 +8,9 @@ Provides comprehensive cache clearing functionality for frontend, backend, and R
 
 import json
 import logging
-from typing import Any, Dict
+from typing import Dict
+
+from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, HTTPException
 
@@ -249,7 +251,7 @@ async def clear_cache_type(cache_type: str):
     error_code_prefix="CACHE",
 )
 @router.post("/config")
-async def save_cache_config(config_data: Dict[str, Any]):
+async def save_cache_config(config_data: Metadata):
     """Save cache configuration settings"""
     try:
         logger.info(f"Cache configuration update requested: {config_data}")

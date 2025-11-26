@@ -120,7 +120,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Pattern
 
 from src.utils.error_boundaries import error_boundary
 

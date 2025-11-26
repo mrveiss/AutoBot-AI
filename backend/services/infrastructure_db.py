@@ -12,7 +12,9 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional, Type
+
+from backend.type_defs.common import Metadata
 
 from cryptography.fernet import Fernet
 from sqlalchemy import create_engine
@@ -143,7 +145,7 @@ class InfrastructureDB:
 
     # ==================== Host Management ====================
 
-    def create_host(self, host_data: Dict[str, Any]) -> InfraHost:
+    def create_host(self, host_data: Metadata) -> InfraHost:
         """
         Create new infrastructure host.
 
@@ -209,7 +211,7 @@ class InfrastructureDB:
 
     def get_hosts(
         self, filters: Optional[Dict] = None, page: int = 1, page_size: int = 20
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Get hosts with optional filters and database-level pagination.
 
@@ -649,7 +651,7 @@ class InfrastructureDB:
 
     # ==================== Statistics & Health ====================
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> Metadata:
         """
         Get infrastructure statistics.
 

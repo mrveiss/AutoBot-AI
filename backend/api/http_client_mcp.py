@@ -29,6 +29,9 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+from backend.type_defs.common import JSONObject, Metadata
+from backend.type_defs.mcp import MCPInputSchema
 from urllib.parse import urlparse
 
 import aiohttp
@@ -192,7 +195,7 @@ class MCPTool(BaseModel):
 
     name: str
     description: str
-    input_schema: Dict[str, Any]
+    input_schema: JSONObject
 
 
 class HTTPRequestBase(BaseModel):
@@ -229,7 +232,7 @@ class HTTPGetRequest(HTTPRequestBase):
 class HTTPPostRequest(HTTPRequestBase):
     """POST request model"""
 
-    json_body: Optional[Dict[str, Any]] = Field(
+    json_body: Optional[JSONObject] = Field(
         default=None, description="JSON request body"
     )
     form_data: Optional[Dict[str, str]] = Field(
@@ -240,7 +243,7 @@ class HTTPPostRequest(HTTPRequestBase):
 class HTTPPutRequest(HTTPRequestBase):
     """PUT request model"""
 
-    json_body: Optional[Dict[str, Any]] = Field(
+    json_body: Optional[JSONObject] = Field(
         default=None, description="JSON request body"
     )
 
@@ -248,7 +251,7 @@ class HTTPPutRequest(HTTPRequestBase):
 class HTTPPatchRequest(HTTPRequestBase):
     """PATCH request model"""
 
-    json_body: Optional[Dict[str, Any]] = Field(
+    json_body: Optional[JSONObject] = Field(
         default=None, description="JSON request body for partial update"
     )
 
@@ -471,10 +474,10 @@ async def execute_http_request(
     url: str,
     headers: Optional[Dict[str, str]] = None,
     params: Optional[Dict[str, str]] = None,
-    json_body: Optional[Dict[str, Any]] = None,
+    json_body: Optional[JSONObject] = None,
     form_data: Optional[Dict[str, str]] = None,
     timeout: int = DEFAULT_TIMEOUT,
-) -> Dict[str, Any]:
+) -> JSONObject:
     """
     Execute HTTP request with security controls
 
@@ -593,7 +596,7 @@ async def execute_http_request(
     error_code_prefix="HTTP_CLIENT_MCP",
 )
 @router.post("/mcp/get")
-async def http_get_mcp(request: HTTPGetRequest) -> Dict[str, Any]:
+async def http_get_mcp(request: HTTPGetRequest) -> JSONObject:
     """
     Execute HTTP GET request
 
@@ -636,7 +639,7 @@ async def http_get_mcp(request: HTTPGetRequest) -> Dict[str, Any]:
     error_code_prefix="HTTP_CLIENT_MCP",
 )
 @router.post("/mcp/post")
-async def http_post_mcp(request: HTTPPostRequest) -> Dict[str, Any]:
+async def http_post_mcp(request: HTTPPostRequest) -> JSONObject:
     """
     Execute HTTP POST request
 
@@ -696,7 +699,7 @@ async def http_post_mcp(request: HTTPPostRequest) -> Dict[str, Any]:
     error_code_prefix="HTTP_CLIENT_MCP",
 )
 @router.post("/mcp/put")
-async def http_put_mcp(request: HTTPPutRequest) -> Dict[str, Any]:
+async def http_put_mcp(request: HTTPPutRequest) -> JSONObject:
     """
     Execute HTTP PUT request
 
@@ -748,7 +751,7 @@ async def http_put_mcp(request: HTTPPutRequest) -> Dict[str, Any]:
     error_code_prefix="HTTP_CLIENT_MCP",
 )
 @router.post("/mcp/patch")
-async def http_patch_mcp(request: HTTPPatchRequest) -> Dict[str, Any]:
+async def http_patch_mcp(request: HTTPPatchRequest) -> JSONObject:
     """
     Execute HTTP PATCH request
 
@@ -800,7 +803,7 @@ async def http_patch_mcp(request: HTTPPatchRequest) -> Dict[str, Any]:
     error_code_prefix="HTTP_CLIENT_MCP",
 )
 @router.post("/mcp/delete")
-async def http_delete_mcp(request: HTTPDeleteRequest) -> Dict[str, Any]:
+async def http_delete_mcp(request: HTTPDeleteRequest) -> JSONObject:
     """
     Execute HTTP DELETE request
 
@@ -842,7 +845,7 @@ async def http_delete_mcp(request: HTTPDeleteRequest) -> Dict[str, Any]:
     error_code_prefix="HTTP_CLIENT_MCP",
 )
 @router.post("/mcp/head")
-async def http_head_mcp(request: HTTPHeadRequest) -> Dict[str, Any]:
+async def http_head_mcp(request: HTTPHeadRequest) -> JSONObject:
     """
     Execute HTTP HEAD request
 
@@ -878,7 +881,7 @@ async def http_head_mcp(request: HTTPHeadRequest) -> Dict[str, Any]:
 
 
 @router.get("/mcp/status")
-async def get_http_client_mcp_status() -> Dict[str, Any]:
+async def get_http_client_mcp_status() -> Metadata:
     """
     Get HTTP Client MCP service status
 

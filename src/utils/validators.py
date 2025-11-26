@@ -54,8 +54,16 @@ def process_input(value: str):
 """
 
 import re
+from collections.abc import Collection
 from pathlib import Path
-from typing import Any, Collection, Iterable, Optional, Set, Union
+from typing import (
+    Any,
+    Iterable,
+    Optional,
+    Pattern,
+    Set,
+    Union,
+)
 from urllib.parse import urlparse
 
 # ============================================================================

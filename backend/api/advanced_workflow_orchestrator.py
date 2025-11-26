@@ -14,7 +14,9 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
+
+from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -99,13 +101,13 @@ class WorkflowIntelligence:
     """AI-driven workflow intelligence and optimization"""
 
     workflow_id: str
-    user_behavior_patterns: Dict[str, Any] = field(default_factory=dict)
+    user_behavior_patterns: Metadata = field(default_factory=dict)
     success_predictions: Dict[str, float] = field(default_factory=dict)
     optimization_suggestions: List[str] = field(default_factory=list)
     risk_mitigation_strategies: List[str] = field(default_factory=list)
     estimated_completion_time: float = 0.0
     confidence_score: float = 0.0
-    learning_data: Dict[str, Any] = field(default_factory=dict)
+    learning_data: Metadata = field(default_factory=dict)
 
 
 @dataclass
@@ -118,7 +120,7 @@ class SmartWorkflowStep(WorkflowStep):
     success_probability: float = 0.0
     rollback_command: Optional[str] = None
     validation_command: Optional[str] = None
-    learning_metadata: Dict[str, Any] = field(default_factory=dict)
+    learning_metadata: Metadata = field(default_factory=dict)
     ai_generated: bool = True
     user_customizations: List[str] = field(default_factory=list)
 
@@ -153,7 +155,7 @@ class AdvancedWorkflowOrchestrator:
         # AI Intelligence Components
         self.workflow_intelligence: Dict[str, WorkflowIntelligence] = {}
         self.workflow_templates: Dict[str, WorkflowTemplate] = {}
-        self.user_preferences: Dict[str, Dict[str, Any]] = {}
+        self.user_preferences: Dict[str, Metadata] = {}
         self.learning_model = WorkflowLearningEngine()
 
         # Performance Analytics
@@ -455,7 +457,7 @@ class AdvancedWorkflowOrchestrator:
         )
 
     async def generate_intelligent_workflow(
-        self, user_request: str, session_id: str, context: Dict[str, Any] = None
+        self, user_request: str, session_id: str, context: Metadata = None
     ) -> str:
         """Generate AI-optimized workflow from user request"""
         try:
@@ -514,7 +516,7 @@ class AdvancedWorkflowOrchestrator:
             logger.error(f"Failed to generate intelligent workflow: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
-    async def _analyze_user_intent(self, user_request: str) -> Dict[str, Any]:
+    async def _analyze_user_intent(self, user_request: str) -> Metadata:
         """Analyze user intent using AI"""
         try:
             analysis_prompt = """
@@ -551,7 +553,7 @@ complexity, and requirements:
             logger.error(f"Intent analysis failed: {e}")
             return self._fallback_intent_analysis(user_request)
 
-    def _fallback_intent_analysis(self, user_request: str) -> Dict[str, Any]:
+    def _fallback_intent_analysis(self, user_request: str) -> Metadata:
         """Fallback intent analysis using keywords"""
         request_lower = user_request.lower()
 
@@ -651,8 +653,8 @@ complexity, and requirements:
     async def _generate_smart_steps(
         self,
         user_request: str,
-        intent_analysis: Dict[str, Any],
-        context: Dict[str, Any],
+        intent_analysis: Metadata,
+        context: Metadata,
     ) -> List[SmartWorkflowStep]:
         """Generate intelligent workflow steps"""
         try:
@@ -807,7 +809,7 @@ complexity, and requirements:
         return any(pattern in command.lower() for pattern in high_risk_patterns)
 
     async def _add_intelligent_bookends(
-        self, steps: List[SmartWorkflowStep], intent_analysis: Dict[str, Any]
+        self, steps: List[SmartWorkflowStep], intent_analysis: Metadata
     ) -> List[SmartWorkflowStep]:
         """Add intelligent pre and post workflow steps"""
         enhanced_steps = []
@@ -869,7 +871,7 @@ complexity, and requirements:
         return enhanced_steps
 
     def _generate_fallback_steps(
-        self, user_request: str, intent_analysis: Dict[str, Any]
+        self, user_request: str, intent_analysis: Metadata
     ) -> List[SmartWorkflowStep]:
         """Generate fallback steps when AI generation fails"""
         return [
@@ -888,7 +890,7 @@ complexity, and requirements:
         ]
 
     async def _apply_ai_optimizations(
-        self, steps: List[SmartWorkflowStep], intent_analysis: Dict[str, Any]
+        self, steps: List[SmartWorkflowStep], intent_analysis: Metadata
     ) -> List[SmartWorkflowStep]:
         """Apply AI-driven optimizations to workflow steps"""
         optimized_steps = steps.copy()
@@ -1137,7 +1139,7 @@ class WorkflowLearningEngine:
     async def record_workflow_generation(
         self,
         user_request: str,
-        intent_analysis: Dict[str, Any],
+        intent_analysis: Metadata,
         generated_steps: List[SmartWorkflowStep],
     ):
         """Record workflow generation for learning"""
@@ -1166,7 +1168,7 @@ class WorkflowLearningEngine:
             logger.error(f"Failed to record learning data: {e}")
 
     async def get_optimization_recommendations(
-        self, workflow_id: str, user_feedback: Dict[str, Any] = None
+        self, workflow_id: str, user_feedback: Metadata = None
     ) -> List[str]:
         """Get AI-driven optimization recommendations"""
         recommendations = []

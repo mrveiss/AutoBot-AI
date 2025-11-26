@@ -11,8 +11,10 @@ import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 from uuid import uuid4
+
+from backend.type_defs.common import Metadata
 
 from cryptography.fernet import Fernet
 
@@ -147,7 +149,7 @@ class SecretsService:
         expires_at: Optional[str] = None,
         metadata: Optional[Dict] = None,
         created_by: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """Create a new secret with encryption"""
         secret_id = str(uuid4())
         encrypted_value = self._encrypt_value(value)
@@ -213,7 +215,7 @@ class SecretsService:
         chat_id: Optional[str] = None,
         include_value: bool = False,
         accessed_by: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[Metadata]:
         """Get a secret by ID or name with optional value decryption"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -296,7 +298,7 @@ class SecretsService:
         chat_id: Optional[str] = None,
         secret_type: Optional[str] = None,
         include_expired: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Metadata]:
         """List secrets based on filters"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -496,7 +498,7 @@ class SecretsService:
         action: str = "delete",  # "delete", "transfer", "export"
         target_chat_id: Optional[str] = None,
         cleaned_by: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """Clean up secrets when a chat is deleted"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -569,7 +571,7 @@ class SecretsService:
 
     def get_audit_log(
         self, secret_id: Optional[str] = None, limit: int = 100
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Metadata]:
         """Get audit log entries"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()

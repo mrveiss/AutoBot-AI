@@ -100,7 +100,7 @@ async def check_wake_word(request: WakeWordCheckRequest) -> WakeWordCheckRespons
     error_code_prefix="WAKE_WORD",
 )
 @router.get("/words")
-async def get_wake_words() -> Dict[str, Any]:
+async def get_wake_words() -> Metadata:
     """Get list of configured wake words"""
     detector = get_wake_word_detector()
     return {
@@ -115,7 +115,7 @@ async def get_wake_words() -> Dict[str, Any]:
     error_code_prefix="WAKE_WORD",
 )
 @router.post("/words")
-async def add_wake_word(request: AddWakeWordRequest) -> Dict[str, Any]:
+async def add_wake_word(request: AddWakeWordRequest) -> Metadata:
     """Add a new wake word to the detection list"""
     detector = get_wake_word_detector()
     success = detector.add_wake_word(request.wake_word)
@@ -140,7 +140,7 @@ async def add_wake_word(request: AddWakeWordRequest) -> Dict[str, Any]:
     error_code_prefix="WAKE_WORD",
 )
 @router.delete("/words/{wake_word}")
-async def remove_wake_word(wake_word: str) -> Dict[str, Any]:
+async def remove_wake_word(wake_word: str) -> Metadata:
     """Remove a wake word from the detection list"""
     detector = get_wake_word_detector()
 
@@ -169,7 +169,7 @@ async def remove_wake_word(wake_word: str) -> Dict[str, Any]:
     error_code_prefix="WAKE_WORD",
 )
 @router.get("/config")
-async def get_wake_word_config() -> Dict[str, Any]:
+async def get_wake_word_config() -> Metadata:
     """Get current wake word detection configuration"""
     detector = get_wake_word_detector()
     return detector.get_config()
@@ -181,7 +181,7 @@ async def get_wake_word_config() -> Dict[str, Any]:
     error_code_prefix="WAKE_WORD",
 )
 @router.put("/config")
-async def update_wake_word_config(request: WakeWordConfigRequest) -> Dict[str, Any]:
+async def update_wake_word_config(request: WakeWordConfigRequest) -> Metadata:
     """Update wake word detection configuration"""
     detector = get_wake_word_detector()
 
@@ -215,7 +215,7 @@ async def update_wake_word_config(request: WakeWordConfigRequest) -> Dict[str, A
     error_code_prefix="WAKE_WORD",
 )
 @router.get("/stats")
-async def get_wake_word_stats() -> Dict[str, Any]:
+async def get_wake_word_stats() -> Metadata:
     """Get wake word detection statistics"""
     detector = get_wake_word_detector()
     return detector.get_stats()
@@ -227,7 +227,7 @@ async def get_wake_word_stats() -> Dict[str, Any]:
     error_code_prefix="WAKE_WORD",
 )
 @router.post("/stats/reset")
-async def reset_wake_word_stats() -> Dict[str, Any]:
+async def reset_wake_word_stats() -> Metadata:
     """Reset wake word detection statistics"""
     detector = get_wake_word_detector()
     detector.reset_stats()
@@ -244,7 +244,7 @@ async def reset_wake_word_stats() -> Dict[str, Any]:
     error_code_prefix="WAKE_WORD",
 )
 @router.post("/feedback")
-async def report_detection_feedback(request: ReportFeedbackRequest) -> Dict[str, Any]:
+async def report_detection_feedback(request: ReportFeedbackRequest) -> Metadata:
     """
     Report feedback on the last wake word detection.
 
@@ -270,7 +270,7 @@ async def report_detection_feedback(request: ReportFeedbackRequest) -> Dict[str,
     error_code_prefix="WAKE_WORD",
 )
 @router.post("/enable")
-async def enable_wake_word() -> Dict[str, Any]:
+async def enable_wake_word() -> Metadata:
     """Enable wake word detection"""
     detector = get_wake_word_detector()
     detector.enable()
@@ -287,7 +287,7 @@ async def enable_wake_word() -> Dict[str, Any]:
     error_code_prefix="WAKE_WORD",
 )
 @router.post("/disable")
-async def disable_wake_word() -> Dict[str, Any]:
+async def disable_wake_word() -> Metadata:
     """Disable wake word detection"""
     detector = get_wake_word_detector()
     detector.disable()

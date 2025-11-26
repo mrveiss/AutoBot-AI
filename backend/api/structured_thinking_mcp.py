@@ -24,8 +24,9 @@ Enables agents to:
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
+from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -46,7 +47,7 @@ class ThinkingStage(str, Enum):
 
 
 # In-memory storage for structured thinking sessions
-structured_sessions: Dict[str, List[Dict[str, Any]]] = {}
+structured_sessions: Dict[str, List[Metadata]] = {}
 
 
 class MCPTool(BaseModel):
@@ -54,7 +55,7 @@ class MCPTool(BaseModel):
 
     name: str
     description: str
-    input_schema: Dict[str, Any]
+    input_schema: Metadata
 
 
 class ProcessThoughtRequest(BaseModel):
@@ -225,7 +226,7 @@ async def get_structured_thinking_mcp_tools() -> List[MCPTool]:
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
 @router.post("/mcp/process_thought")
-async def process_thought_mcp(request: ProcessThoughtRequest) -> Dict[str, Any]:
+async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     """
     Process and record a thought within the structured cognitive framework
 
@@ -335,7 +336,7 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Dict[str, Any]:
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
 @router.post("/mcp/generate_summary")
-async def generate_summary_mcp(request: GenerateSummaryRequest) -> Dict[str, Any]:
+async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
     """
     Generate a comprehensive summary of the thinking process
 
@@ -424,7 +425,7 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Dict[str, Any
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
 @router.post("/mcp/clear_history")
-async def clear_history_mcp(request: ClearHistoryRequest) -> Dict[str, Any]:
+async def clear_history_mcp(request: ClearHistoryRequest) -> Metadata:
     """Clear the thinking history for a session"""
     session_id = request.session_id or "default"
 
@@ -448,7 +449,7 @@ async def clear_history_mcp(request: ClearHistoryRequest) -> Dict[str, Any]:
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
 @router.get("/sessions/{session_id}")
-async def get_structured_session(session_id: str) -> Dict[str, Any]:
+async def get_structured_session(session_id: str) -> Metadata:
     """Get complete structured thinking session"""
     if session_id not in structured_sessions:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
@@ -483,7 +484,7 @@ async def get_structured_session(session_id: str) -> Dict[str, Any]:
     error_code_prefix="STRUCTURED_THINKING_MCP",
 )
 @router.get("/sessions")
-async def list_structured_sessions() -> Dict[str, Any]:
+async def list_structured_sessions() -> Metadata:
     """List all active structured thinking sessions"""
     sessions = []
     for session_id, thoughts in structured_sessions.items():

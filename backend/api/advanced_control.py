@@ -8,8 +8,9 @@ Provides monitoring, desktop streaming, and takeover management endpoints
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
+from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
@@ -52,20 +53,20 @@ class TakeoverRequest(BaseModel):
 
 class TakeoverApprovalRequest(BaseModel):
     human_operator: str
-    takeover_scope: Optional[Dict[str, Any]] = None
+    takeover_scope: Optional[Metadata] = None
 
 
 class TakeoverActionRequest(BaseModel):
     action_type: str
-    action_data: Dict[str, Any]
+    action_data: Metadata
 
 
 class SystemMonitoringResponse(BaseModel):
-    system_status: Dict[str, Any]
-    active_sessions: List[Dict[str, Any]]
-    pending_takeovers: List[Dict[str, Any]]
-    active_takeovers: List[Dict[str, Any]]
-    resource_usage: Dict[str, Any]
+    system_status: Metadata
+    active_sessions: List[Metadata]
+    pending_takeovers: List[Metadata]
+    active_takeovers: List[Metadata]
+    resource_usage: Metadata
 
 
 # Desktop Streaming Endpoints
@@ -273,7 +274,7 @@ async def resume_takeover_session(session_id: str):
     error_code_prefix="ADVANCED_CONTROL",
 )
 @router.post("/takeover/sessions/{session_id}/complete")
-async def complete_takeover_session(session_id: str, completion_data: Dict[str, Any]):
+async def complete_takeover_session(session_id: str, completion_data: Metadata):
     """Complete a takeover session and return control"""
     success = await takeover_manager.complete_takeover_session(
         session_id=session_id,

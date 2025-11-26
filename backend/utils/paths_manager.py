@@ -8,7 +8,9 @@ Ensures all log/data writes use consistent, configurable paths.
 
 import logging
 from pathlib import Path
-from typing import Any, Dict
+from typing import Dict
+
+from backend.type_defs.common import Metadata
 
 from src.unified_config_manager import unified_config_manager
 
@@ -45,7 +47,7 @@ class PathsManager:
         logger.debug("Paths cache cleared")
 
     @staticmethod
-    def get_paths() -> Dict[str, Any]:
+    def get_paths() -> Metadata:
         """Get all configured paths"""
         import time
 

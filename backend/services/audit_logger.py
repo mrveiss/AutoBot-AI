@@ -37,7 +37,9 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional
+
+from backend.type_defs.common import Metadata
 
 import redis.asyncio as async_redis
 
@@ -121,7 +123,7 @@ class AuditEntry:
     vm_name: Optional[str] = None
 
     # Additional Metadata
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: Metadata = field(default_factory=dict)
     performance_ms: Optional[float] = None
 
     def to_json(self) -> str:
@@ -245,7 +247,7 @@ class AuditLogger:
         ip_address: Optional[str] = None,
         resource: Optional[str] = None,
         user_role: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
+        details: Optional[Metadata] = None,
         performance_ms: Optional[float] = None,
     ) -> bool:
         """
@@ -769,7 +771,7 @@ class AuditLogger:
 
         return None
 
-    async def get_statistics(self) -> Dict[str, Any]:
+    async def get_statistics(self) -> Metadata:
         """Get audit logging statistics"""
         try:
             audit_db = await self._get_audit_db()

@@ -12,6 +12,7 @@ All reranking parameters are configurable without code changes.
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
+from backend.type_defs.common import Metadata
 from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("rag_config")
@@ -97,7 +98,7 @@ class RAGConfig:
             raise ValueError(f"timeout_seconds must be > 0, got {self.timeout_seconds}")
 
     @classmethod
-    def from_dict(cls, config_dict: Dict[str, Any]) -> "RAGConfig":
+    def from_dict(cls, config_dict: Metadata) -> "RAGConfig":
         """
         Create RAGConfig from dictionary.
 
@@ -113,7 +114,7 @@ class RAGConfig:
 
         return cls(**filtered_config)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> Metadata:
         """
         Convert configuration to dictionary.
 
@@ -194,7 +195,7 @@ def get_rag_config(config_manager: Optional[Any] = None) -> RAGConfig:
     return _rag_config_instance
 
 
-def update_rag_config(updates: Dict[str, Any]) -> RAGConfig:
+def update_rag_config(updates: Metadata) -> RAGConfig:
     """
     Update RAG configuration at runtime.
 

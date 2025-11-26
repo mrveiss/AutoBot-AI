@@ -11,7 +11,9 @@ intelligent content analysis using the AI Stack VM.
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
+
+from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -71,7 +73,7 @@ class KnowledgeExtractionRequest(BaseModel):
 class DocumentAnalysisRequest(BaseModel):
     """Request model for document analysis."""
 
-    documents: List[Dict[str, Any]] = Field(..., description="Documents to analyze")
+    documents: List[Metadata] = Field(..., description="Documents to analyze")
     analysis_type: str = Field("comprehensive", description="Analysis type")
     extract_entities: bool = Field(True, description="Extract entities")
     generate_summary: bool = Field(True, description="Generate summary")
@@ -81,7 +83,7 @@ class RAGQueryRequest(BaseModel):
     """Request model for RAG queries."""
 
     query: str = Field(..., min_length=1, max_length=5000, description="RAG query")
-    documents: Optional[List[Dict[str, Any]]] = Field(
+    documents: Optional[List[Metadata]] = Field(
         None, description="Specific documents to query"
     )
     context: Optional[str] = Field(None, description="Additional context")
@@ -96,7 +98,7 @@ class RAGQueryRequest(BaseModel):
 
 def create_success_response(
     data: Any, message: str = "Operation completed successfully"
-) -> Dict[str, Any]:
+) -> Metadata:
     """Create standardized success response."""
     return {
         "success": True,

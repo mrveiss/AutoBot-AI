@@ -15,7 +15,7 @@ Tier 4 (Orchestrator): 50-70% cache hit rate
 
 import logging
 from enum import Enum
-from typing import Dict
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 

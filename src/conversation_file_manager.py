@@ -23,7 +23,7 @@ import sqlite3
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
 import redis.asyncio as async_redis
 from redis.exceptions import ConnectionError as RedisConnectionError
@@ -888,7 +888,7 @@ class ConversationFileManager:
                 """Thread-safe database query for schema version."""
                 connection = sqlite3.connect(
                     str(self.db_path), timeout=30.0, check_same_thread=False
-                ),
+                )
                 cursor = connection.cursor()
 
                 try:
@@ -913,7 +913,7 @@ class ConversationFileManager:
                         SELECT version FROM schema_migrations
                         ORDER BY migration_id DESC LIMIT 1
                     """
-                    ),
+                    )
                     result = cursor.fetchone()
 
                     return result[0] if result else "unknown"

@@ -10,8 +10,9 @@ from VM4 (uses NetworkConstants.AI_STACK_VM_IP) with the main AutoBot backend.
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
+from backend.type_defs.common import Metadata
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -37,7 +38,7 @@ class RAGQueryRequest(BaseModel):
     """RAG query request model."""
 
     query: str = Field(..., min_length=1, max_length=10000, description="Search query")
-    documents: Optional[List[Dict[str, Any]]] = Field(
+    documents: Optional[List[Metadata]] = Field(
         None, description="Pre-retrieved documents"
     )
     context: Optional[str] = Field(None, description="Additional context")
@@ -51,7 +52,7 @@ class EnhancedChatRequest(BaseModel):
         ..., min_length=1, max_length=50000, description="Chat message"
     )
     context: Optional[str] = Field(None, description="Conversation context")
-    chat_history: Optional[List[Dict[str, Any]]] = Field(
+    chat_history: Optional[List[Metadata]] = Field(
         None, description="Previous messages"
     )
     use_knowledge_base: bool = Field(True, description="Whether to use knowledge base")
@@ -132,7 +133,7 @@ async def handle_ai_stack_error(
 
 def create_success_response(
     data: Any, message: str = "Operation completed successfully"
-) -> Dict[str, Any]:
+) -> Metadata:
     """Create standardized success response."""
     return {
         "success": True,
@@ -257,7 +258,7 @@ async def reformulate_query(query: str, context: Optional[str] = None):
     error_code_prefix="AI_STACK",
 )
 @router.post("/rag/analyze-documents")
-async def analyze_documents(documents: List[Dict[str, Any]]):
+async def analyze_documents(documents: List[Metadata]):
     """Analyze and synthesize multiple documents."""
     ai_client = await get_ai_stack_client()
     result = await ai_client.analyze_documents(documents)

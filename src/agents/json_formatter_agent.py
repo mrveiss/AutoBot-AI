@@ -13,7 +13,13 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Pattern,
+)
 
 
 logger = logging.getLogger(__name__)

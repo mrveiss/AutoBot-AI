@@ -13,7 +13,9 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Any, Dict
+from typing import Dict
+
+from backend.type_defs.common import Metadata
 
 from fastapi import FastAPI
 
@@ -27,7 +29,7 @@ from src.utils.background_llm_sync import BackgroundLLMSync
 logger = logging.getLogger(__name__)
 
 # Global state shared across app
-app_state: Dict[str, Any] = {
+app_state: Metadata = {
     "knowledge_base": None,
     "chat_workflow_manager": None,
     "chat_history_manager": None,
@@ -202,14 +204,19 @@ async def initialize_background_services(app: FastAPI):
             # Initialize Graph-RAG Service - depends on knowledge base and memory graph
             logger.info("✅ [ 87%] Graph-RAG: Initializing graph-aware RAG service...")
             try:
+                from backend.services.rag_config import RAGConfig
                 from backend.services.rag_service import RAGService
                 from src.services.graph_rag_service import GraphRAGService
 
                 if app.state.knowledge_base:
-                    rag_service = RAGService(
-                        knowledge_base=app.state.knowledge_base,
+                    # Create RAGConfig with custom settings
+                    rag_config = RAGConfig(
                         enable_advanced_rag=True,
                         timeout_seconds=10.0,
+                    )
+                    rag_service = RAGService(
+                        knowledge_base=app.state.knowledge_base,
+                        config=rag_config,
                     )
                     await rag_service.initialize()
 

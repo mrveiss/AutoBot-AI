@@ -8,8 +8,9 @@ Provides NPU-accelerated semantic search endpoints for AutoBot
 """
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
+from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -33,7 +34,7 @@ class SearchRequest(BaseModel):
     similarity_top_k: int = Field(
         10, description="Number of results to return", ge=1, le=100
     )
-    filters: Optional[Dict[str, Any]] = Field(
+    filters: Optional[Metadata] = Field(
         None, description="Optional metadata filters"
     )
     enable_npu_acceleration: bool = Field(True, description="Enable NPU acceleration")
@@ -46,8 +47,8 @@ class SearchResponse(BaseModel):
     """Enhanced search response model."""
 
     query: str
-    results: List[Dict[str, Any]]
-    metrics: Dict[str, Any]
+    results: List[Metadata]
+    metrics: Metadata
     total_results: int
     search_time_ms: float
     device_used: str
@@ -348,7 +349,7 @@ async def test_npu_connectivity():
 
 
 def _generate_performance_recommendations(
-    benchmark_results: Dict[str, Any],
+    benchmark_results: Metadata,
 ) -> List[str]:
     """Generate performance recommendations based on benchmark results."""
     recommendations = []
@@ -410,7 +411,7 @@ def _generate_performance_recommendations(
 
 
 def _generate_system_recommendations(
-    statistics: Dict[str, Any], hardware_status: Dict[str, Any]
+    statistics: Metadata, hardware_status: Metadata
 ) -> List[str]:
     """Generate system-wide recommendations."""
     recommendations = []

@@ -7,7 +7,9 @@ Provides workflow scheduling and queue management capabilities
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union
+
+from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -24,7 +26,7 @@ class ScheduleWorkflowRequest(BaseModel):
     priority: str = "normal"
     complexity: str = "simple"
     template_id: Optional[str] = None
-    variables: Optional[Dict[str, Any]] = None
+    variables: Optional[Metadata] = None
     auto_approve: bool = False
     tags: Optional[List[str]] = None
     dependencies: Optional[List[str]] = None

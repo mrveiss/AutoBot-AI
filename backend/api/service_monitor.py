@@ -11,7 +11,7 @@ import logging
 import subprocess
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from backend.type_defs.common import Metadata
 
@@ -320,7 +320,7 @@ class ServiceMonitor:
                 category="knowledge",
             )
 
-    def check_system_resources(self) -> Dict[str, Any]:
+    def check_system_resources(self) -> Metadata:
         """Check system resource usage"""
         try:
             import psutil
@@ -601,7 +601,7 @@ class ServiceMonitor:
                 )
             ]
 
-    async def get_all_services(self) -> Dict[str, Any]:
+    async def get_all_services(self) -> Metadata:
         """Get comprehensive service status"""
         start_time = time.time()
 

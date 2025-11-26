@@ -7,6 +7,7 @@ FastAPI Dependency Injection Module
 This module provides dependency injection functions for FastAPI endpoints,
 removing the need for components to directly import and use global_config_manager.
 """
+from typing import Optional
 
 import threading
 

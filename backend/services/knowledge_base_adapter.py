@@ -11,6 +11,7 @@ providing a consistent interface for the RAG service layer.
 
 from typing import Any, Dict, List, Protocol
 
+from backend.type_defs.common import Metadata
 from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("knowledge_base_adapter")
@@ -19,15 +20,15 @@ logger = get_llm_logger("knowledge_base_adapter")
 class KnowledgeBaseProtocol(Protocol):
     """Protocol defining the expected interface for knowledge base implementations."""
 
-    async def search(self, query: str, **kwargs) -> List[Dict[str, Any]]:
+    async def search(self, query: str, **kwargs) -> List[Metadata]:
         """Search for documents matching the query."""
         ...
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> Metadata:
         """Get knowledge base statistics."""
         ...
 
-    async def get_all_facts(self) -> List[Dict[str, Any]]:
+    async def get_all_facts(self) -> List[Metadata]:
         """Get all facts from the knowledge base."""
         ...
 
@@ -61,7 +62,7 @@ class KnowledgeBaseAdapter:
         top_k: int = 10,
         mode: str = "auto",
         **kwargs,
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Metadata]:
         """
         Unified search interface that works with both KB implementations.
 
@@ -96,7 +97,7 @@ class KnowledgeBaseAdapter:
             logger.error(f"Search failed in {self.kb_type}: {e}")
             raise
 
-    async def get_all_facts(self) -> List[Dict[str, Any]]:
+    async def get_all_facts(self) -> List[Metadata]:
         """
         Get all facts from the knowledge base.
 
@@ -111,7 +112,7 @@ class KnowledgeBaseAdapter:
             logger.error(f"Failed to get all facts: {e}")
             raise
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> Metadata:
         """
         Get knowledge base statistics.
 
@@ -126,7 +127,7 @@ class KnowledgeBaseAdapter:
             logger.error(f"Failed to get stats: {e}")
             raise
 
-    def _normalize_results(self, results: List[Any]) -> List[Dict[str, Any]]:
+    def _normalize_results(self, results: List[Any]) -> List[Metadata]:
         """
         Normalize search results to consistent format.
 

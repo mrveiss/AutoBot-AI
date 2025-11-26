@@ -24,7 +24,9 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
+
+from backend.type_defs.common import Metadata
 
 from src.secure_command_executor import CommandRisk
 
@@ -51,7 +53,7 @@ class AgentPermissions:
     allow_dangerous: bool = False
     supervised_mode: bool = False  # Allows FORBIDDEN with approval
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> Metadata:
         """Convert to dictionary format"""
         return {
             "max_risk": self.max_risk,

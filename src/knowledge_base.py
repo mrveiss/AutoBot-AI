@@ -1521,6 +1521,21 @@ class KnowledgeBase:
                             f"Inserted fact {fact_id} into existing vector index"
                         )
 
+                    # Persist vectorization status to Redis (Issue #152)
+                    if vector_indexed:
+                        try:
+                            await self.aioredis_client.hset(
+                                fact_key,
+                                mapping={
+                                    "vectorization_status": "completed",
+                                    "vectorized_at": datetime.now().isoformat(),
+                                },
+                            )
+                        except Exception as status_error:
+                            logger.warning(
+                                f"Failed to persist vectorization status for {fact_id}: {status_error}"
+                            )
+
                 except Exception as vector_error:
                     error_msg = str(vector_error)
                     logger.error(
@@ -1611,6 +1626,21 @@ class KnowledgeBase:
                 # Insert into existing index
                 await asyncio.to_thread(self.vector_index.insert, document)
                 logger.debug(f"Vectorized existing fact {fact_id}")
+
+            # Persist vectorization status to Redis (Issue #152)
+            try:
+                fact_key = f"fact:{fact_id}"
+                await self.aioredis_client.hset(
+                    fact_key,
+                    mapping={
+                        "vectorization_status": "completed",
+                        "vectorized_at": datetime.now().isoformat(),
+                    },
+                )
+            except Exception as status_error:
+                logger.warning(
+                    f"Failed to persist vectorization status for {fact_id}: {status_error}"
+                )
 
             return {
                 "status": "success",
@@ -2347,6 +2377,20 @@ class KnowledgeBase:
                     vector_updated = True
                     updated_fields.append("vectorization")
                     logger.info(f"Re-vectorized fact {fact_id} due to content change")
+
+                    # Persist vectorization status to Redis (Issue #152)
+                    try:
+                        await self.aioredis_client.hset(
+                            fact_key,
+                            mapping={
+                                "vectorization_status": "completed",
+                                "vectorized_at": datetime.now().isoformat(),
+                            },
+                        )
+                    except Exception as status_error:
+                        logger.warning(
+                            f"Failed to persist vectorization status for {fact_id}: {status_error}"
+                        )
 
                 except Exception as vector_error:
                     logger.error(

@@ -13,7 +13,9 @@ import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
+
+from backend.type_defs.common import Metadata
 
 import aiofiles
 from fastapi import APIRouter, HTTPException, Query, WebSocket
@@ -162,7 +164,7 @@ async def get_recent_logs(limit: int = 100):
     error_code_prefix="LOGS",
 )
 @router.get("/logs/list")
-async def list_logs() -> List[Dict[str, Any]]:
+async def list_logs() -> List[Metadata]:
     """List all available log files (backward compatibility)"""
     try:
         sources = await get_log_sources()
@@ -295,7 +297,7 @@ async def read_container_logs(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def parse_docker_log_line(line: str, service: str) -> Dict[str, Any]:
+def parse_docker_log_line(line: str, service: str) -> Metadata:
     """Parse a Docker log line and extract structured information"""
     parsed = {
         "raw": line.strip(),
@@ -427,7 +429,7 @@ async def get_unified_logs(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def parse_file_log_line(line: str, source: str) -> Dict[str, Any]:
+def parse_file_log_line(line: str, source: str) -> Metadata:
     """Parse a file log line and extract structured information"""
     parsed = {
         "raw": line,

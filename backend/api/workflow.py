@@ -10,7 +10,7 @@ import asyncio
 import time
 import uuid
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 from backend.type_defs.common import Metadata
 
@@ -43,7 +43,7 @@ class WorkflowApprovalResponse(BaseModel):
     workflow_id: str
     step_id: str
     approved: bool
-    user_input: Optional[Dict[str, Any]] = None
+    user_input: Optional[Metadata] = None
     timestamp: float
 
 
@@ -63,7 +63,7 @@ class WorkflowExecutionRequest(BaseModel):
 
 
 # In-memory workflow storage (in production, use Redis or database)
-active_workflows: Dict[str, Dict[str, Any]] = {}
+active_workflows: Dict[str, Metadata] = {}
 pending_approvals: Dict[str, asyncio.Future] = {}
 
 
@@ -539,7 +539,7 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
         )
 
 
-async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrator):
+async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
     """Execute a single workflow step with real agent integration."""
     agent_type = (
         step["agent_type"].split(".")[1]

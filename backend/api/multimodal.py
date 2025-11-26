@@ -10,7 +10,7 @@ Provides REST API access to GPU-accelerated multi-modal AI capabilities
 import logging
 import time
 import uuid
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 from backend.type_defs.common import Metadata
 
@@ -69,7 +69,7 @@ class MultiModalResponse(BaseModel):
     modality: str
     processing_time: float
     confidence: float
-    result_data: Dict[str, Any]
+    result_data: Metadata
     device_used: Optional[str] = None
     error_message: Optional[str] = None
 
@@ -77,7 +77,7 @@ class MultiModalResponse(BaseModel):
 class CrossModalSearchResponse(BaseModel):
     query: str
     query_modality: str
-    results: Dict[str, List[Dict[str, Any]]]
+    results: Dict[str, List[Metadata]]
     total_found: int
     processing_time: float
 

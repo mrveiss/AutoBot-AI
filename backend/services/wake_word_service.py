@@ -14,7 +14,9 @@ import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
+
+from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +57,7 @@ class WakeWordEvent:
     confidence: float
     timestamp: float
     audio_context: Optional[bytes] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Metadata = field(default_factory=dict)
 
 
 @dataclass
@@ -406,7 +408,7 @@ class WakeWordDetector:
         if callback in self._callbacks:
             self._callbacks.remove(callback)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> Metadata:
         """Get detection statistics"""
         total = self.stats.total_detections
         return {
@@ -428,7 +430,7 @@ class WakeWordDetector:
         self._false_positive_buffer.clear()
         logger.info("Wake word detection statistics reset")
 
-    def get_config(self) -> Dict[str, Any]:
+    def get_config(self) -> Metadata:
         """Get current configuration"""
         return {
             "enabled": self.config.enabled,
@@ -441,7 +443,7 @@ class WakeWordDetector:
             "max_cpu_percent": self.config.max_cpu_percent,
         }
 
-    def update_config(self, updates: Dict[str, Any]) -> None:
+    def update_config(self, updates: Metadata) -> None:
         """Update configuration"""
         for key, value in updates.items():
             if hasattr(self.config, key):

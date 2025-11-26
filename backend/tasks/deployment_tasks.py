@@ -9,7 +9,9 @@ Celery tasks for asynchronous Ansible playbook execution with real-time progress
 
 import asyncio
 import logging
-from typing import Any, Dict
+from typing import Dict
+
+from backend.type_defs.common import Metadata
 
 from backend.celery_app import celery_app
 from backend.services.ansible_executor import AnsibleExecutor
@@ -18,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(bind=True, name="tasks.deploy_host")
-def deploy_host(self, host_config: Dict[str, Any], force_redeploy: bool = False):
+def deploy_host(self, host_config: Metadata, force_redeploy: bool = False):
     """
     Deploy or redeploy a host using Ansible
 
@@ -51,7 +53,7 @@ def deploy_host(self, host_config: Dict[str, Any], force_redeploy: bool = False)
         loop.close()
 
 
-async def _deploy_host_async(task, host_config: Dict[str, Any], force_redeploy: bool):
+async def _deploy_host_async(task, host_config: Metadata, force_redeploy: bool):
     """
     Async implementation of host deployment
 

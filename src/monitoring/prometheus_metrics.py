@@ -6,7 +6,7 @@ Prometheus Metrics Manager for AutoBot
 Provides centralized metrics collection and exposure.
 """
 
-from typing import Optional
+from typing import Counter, Optional
 
 from prometheus_client import (
     CollectorRegistry,

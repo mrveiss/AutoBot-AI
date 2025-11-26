@@ -10,7 +10,9 @@ import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Dict, List
+
+from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -24,13 +26,13 @@ router = APIRouter(tags=["batch", "optimization"])
 class BatchRequest(BaseModel):
     """Request multiple endpoints in one call"""
 
-    requests: List[Dict[str, Any]]  # List of {endpoint: str, method: str, params: dict}
+    requests: List[Metadata]  # List of {endpoint: str, method: str, params: dict}
 
 
 class BatchResponse(BaseModel):
     """Combined response from multiple endpoints"""
 
-    responses: Dict[str, Any]  # Map of endpoint to response data
+    responses: Metadata  # Map of endpoint to response data
     errors: Dict[str, str]  # Map of endpoint to error message
     timing: Dict[str, float]  # Map of endpoint to response time
 
@@ -81,7 +83,7 @@ async def batch_load(batch_request: BatchRequest):
     errors = {}
     timing = {}
 
-    async def execute_request(req: Dict[str, Any]):
+    async def execute_request(req: Metadata):
         endpoint = req.get("endpoint", "")
         method = req.get("method", "GET").upper()
         params = req.get("params", {})

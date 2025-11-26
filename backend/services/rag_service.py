@@ -13,6 +13,7 @@ import asyncio
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+from backend.type_defs.common import Metadata
 from backend.services.knowledge_base_adapter import KnowledgeBaseAdapter
 from backend.services.rag_config import RAGConfig, get_rag_config
 from src.advanced_rag_optimizer import (
@@ -209,8 +210,8 @@ class RAGService:
     async def rerank_results(
         self,
         query: str,
-        results: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        results: List[Metadata],
+    ) -> List[Metadata]:
         """
         Rerank existing search results using cross-encoder.
 
@@ -343,7 +344,7 @@ class RAGService:
             self._cache.clear()
         logger.info("RAG service cache cleared")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> Metadata:
         """Get service statistics."""
         return {
             "initialized": self._initialized,

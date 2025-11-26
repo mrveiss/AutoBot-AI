@@ -20,8 +20,9 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
+from backend.type_defs.common import Metadata
 import paramiko
 
 from backend.services.ssh_connection_pool import SSHConnectionPool
@@ -55,7 +56,7 @@ class RemoteCommandResult:
     success: bool
     execution_time: float
     timestamp: datetime
-    security_info: Dict[str, Any]
+    security_info: Metadata
 
 
 class SSHManager:
@@ -226,7 +227,7 @@ class SSHManager:
             logger.error(f"Failed to setup audit logging: {e}")
             self.enable_audit_logging = False
 
-    def _audit_log(self, event_type: str, data: Dict[str, Any]):
+    def _audit_log(self, event_type: str, data: Metadata):
         """Log audit event"""
         if not self.enable_audit_logging:
             return
@@ -534,7 +535,7 @@ class SSHManager:
 
             return results
 
-    async def get_pool_stats(self) -> Dict[str, Any]:
+    async def get_pool_stats(self) -> Metadata:
         """Get connection pool statistics"""
         return await self.connection_pool.get_pool_stats()
 

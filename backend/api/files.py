@@ -13,7 +13,7 @@ import mimetypes
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import aiofiles
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile

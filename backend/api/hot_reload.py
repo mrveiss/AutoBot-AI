@@ -7,7 +7,7 @@ Provides REST endpoints for hot reloading chat workflow modules during developme
 """
 
 import logging
-from typing import Any, Dict
+from typing import Dict
 
 from backend.type_defs.common import Metadata
 
@@ -139,7 +139,7 @@ async def reload_module(request: ReloadRequest):
     operation="get_reload_status",
     error_code_prefix="HOT_RELOAD",
 )
-@router.get("/status", response_model=Dict[str, Any])
+@router.get("/status", response_model=Metadata)
 async def get_reload_status():
     """
     Get hot reload manager status

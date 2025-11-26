@@ -6,7 +6,9 @@ Security API endpoints for command approval and audit
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Dict, List
+
+from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -32,7 +34,7 @@ class SecurityStatusResponse(BaseModel):
     security_enabled: bool
     command_security_enabled: bool
     docker_sandbox_enabled: bool
-    pending_approvals: List[Dict[str, Any]]
+    pending_approvals: List[Metadata]
 
 
 @with_error_handling(

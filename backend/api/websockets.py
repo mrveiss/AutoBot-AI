@@ -14,6 +14,7 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from backend.type_defs.common import STREAMING_MESSAGE_TYPES
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -215,9 +216,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 sender = "workflow"
 
             # Add to chat history if we have meaningful text and chat_history_manager is available
-            if text and chat_history_manager:
+            # CRITICAL FIX: Skip streaming responses to prevent duplicate messages
+            # Streaming responses are persisted once at completion in chat_workflow_manager.py
+            if text and chat_history_manager and message_type not in STREAMING_MESSAGE_TYPES:
                 try:
-                    chat_history_manager.add_message(
+                    await chat_history_manager.add_message(
                         sender, text, message_type, raw_data
                     )
                 except Exception as e:

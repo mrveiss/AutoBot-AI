@@ -100,13 +100,13 @@ class ScreenAnalysisResponse(BaseModel):
 
     timestamp: float
     ui_elements: List[UIElementResponse]
-    text_regions: List[Dict[str, Any]]
-    dominant_colors: List[Dict[str, Any]]
-    layout_structure: Dict[str, Any]
-    automation_opportunities: List[Dict[str, Any]]
-    context_analysis: Dict[str, Any]
+    text_regions: List[Metadata]
+    dominant_colors: List[Metadata]
+    layout_structure: Metadata
+    automation_opportunities: List[Metadata]
+    context_analysis: Metadata
     confidence_score: float
-    multimodal_analysis: Optional[List[Dict[str, Any]]] = None
+    multimodal_analysis: Optional[List[Metadata]] = None
 
 
 class VisionHealthResponse(BaseModel):

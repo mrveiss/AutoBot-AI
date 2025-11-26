@@ -17,23 +17,78 @@ import base64
 import json
 import logging
 import os
+import re
 import uuid
+from collections import defaultdict
 from datetime import datetime
 from enum import Enum
+from time import time
 from typing import Dict, List, Optional
 
 from backend.type_defs.common import Metadata
 
 from cryptography.fernet import Fernet
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Security constants
+SECRET_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+RATE_LIMIT_WINDOW = 60  # seconds
+RATE_LIMIT_MAX_REQUESTS = 30  # max requests per window
+
+
+class RateLimiter:
+    """Simple in-memory rate limiter for secrets API"""
+
+    def __init__(
+        self, window: int = RATE_LIMIT_WINDOW, max_requests: int = RATE_LIMIT_MAX_REQUESTS
+    ):
+        self.window = window
+        self.max_requests = max_requests
+        self.requests: Dict[str, List[float]] = defaultdict(list)
+
+    def is_allowed(self, client_id: str) -> bool:
+        """Check if request is allowed under rate limit"""
+        now = time()
+        # Clean old requests
+        self.requests[client_id] = [
+            t for t in self.requests[client_id] if now - t < self.window
+        ]
+        # Check limit
+        if len(self.requests[client_id]) >= self.max_requests:
+            return False
+        # Record request
+        self.requests[client_id].append(now)
+        return True
+
+    def get_remaining(self, client_id: str) -> int:
+        """Get remaining requests for client"""
+        now = time()
+        self.requests[client_id] = [
+            t for t in self.requests[client_id] if now - t < self.window
+        ]
+        return max(0, self.max_requests - len(self.requests[client_id]))
+
+
+# Global rate limiter instance
+rate_limiter = RateLimiter()
+
+
+def validate_secret_name(name: str) -> str:
+    """Validate and sanitize secret name"""
+    if not SECRET_NAME_PATTERN.match(name):
+        raise ValueError(
+            "Secret name must contain only alphanumeric characters, "
+            "underscores, hyphens, and dots"
+        )
+    return name
 
 
 class SecretScope(str, Enum):
@@ -84,6 +139,12 @@ class SecretCreateRequest(BaseModel):
     expires_at: Optional[datetime] = None
     metadata: Metadata = Field(default_factory=dict)
 
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """Validate secret name contains only safe characters"""
+        return validate_secret_name(v)
+
 
 class SecretUpdateRequest(BaseModel):
     """Request model for updating secrets"""
@@ -93,6 +154,14 @@ class SecretUpdateRequest(BaseModel):
     tags: Optional[List[str]] = None
     expires_at: Optional[datetime] = None
     metadata: Optional[Metadata] = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        """Validate secret name contains only safe characters"""
+        if v is not None:
+            return validate_secret_name(v)
+        return v
 
 
 class SecretTransferRequest(BaseModel):
@@ -442,6 +511,43 @@ class SecretsManager:
 secrets_manager = SecretsManager()
 
 
+def get_client_id(request: Request) -> str:
+    """Extract client identifier for rate limiting"""
+    # Use forwarded header if behind proxy, otherwise client host
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def check_rate_limit(request: Request) -> None:
+    """Check rate limit and raise exception if exceeded"""
+    client_id = get_client_id(request)
+    if not rate_limiter.is_allowed(client_id):
+        logger.warning(f"[Secrets] Rate limit exceeded for client: {client_id}")
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Please try again later.",
+            headers={"Retry-After": str(RATE_LIMIT_WINDOW)},
+        )
+
+
+def audit_log(
+    operation: str,
+    secret_id: str,
+    request: Request,
+    success: bool = True,
+    details: str = "",
+) -> None:
+    """Log security-relevant operations for audit trail"""
+    client_id = get_client_id(request)
+    status = "SUCCESS" if success else "FAILED"
+    logger.info(
+        f"[Secrets Audit] {status} | Operation: {operation} | "
+        f"SecretID: {secret_id} | Client: {client_id} | {details}"
+    )
+
+
 # API Endpoints
 
 
@@ -451,8 +557,9 @@ secrets_manager = SecretsManager()
     error_code_prefix="SECRETS",
 )
 @router.post("/")
-async def create_secret(request: SecretCreateRequest):
+async def create_secret(request: SecretCreateRequest, http_request: Request):
     """Create a new secret"""
+    check_rate_limit(http_request)
     try:
         secret = secrets_manager.create_secret(request)
         # Convert datetime objects to strings for JSON serialization
@@ -464,6 +571,7 @@ async def create_secret(request: SecretCreateRequest):
         if secret_data.get("expires_at"):
             secret_data["expires_at"] = secret_data["expires_at"].isoformat()
 
+        audit_log("CREATE", secret.id, http_request, details=f"name={request.name}")
         return JSONResponse(
             status_code=201,
             content={
@@ -473,8 +581,10 @@ async def create_secret(request: SecretCreateRequest):
             },
         )
     except ValueError as e:
+        audit_log("CREATE", "N/A", http_request, success=False, details=str(e))
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        audit_log("CREATE", "N/A", http_request, success=False, details=str(e))
         logger.error(f"Failed to create secret: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to create secret: {str(e)}"
@@ -488,11 +598,15 @@ async def create_secret(request: SecretCreateRequest):
 )
 @router.get("/")
 async def list_secrets(
-    chat_id: Optional[str] = Query(None), scope: Optional[SecretScope] = Query(None)
+    http_request: Request,
+    chat_id: Optional[str] = Query(None),
+    scope: Optional[SecretScope] = Query(None),
 ):
     """List secrets with optional filtering"""
+    check_rate_limit(http_request)
     try:
         secrets = secrets_manager.list_secrets(chat_id=chat_id, scope=scope)
+        audit_log("LIST", "N/A", http_request, details=f"count={len(secrets)}")
         return JSONResponse(
             status_code=200,
             content={
@@ -609,17 +723,26 @@ async def get_secrets_stats():
     error_code_prefix="SECRETS",
 )
 @router.get("/{secret_id}")
-async def get_secret(secret_id: str, chat_id: Optional[str] = Query(None)):
+async def get_secret(
+    secret_id: str, http_request: Request, chat_id: Optional[str] = Query(None)
+):
     """Get a specific secret with its value"""
+    check_rate_limit(http_request)
     try:
         secret = secrets_manager.get_secret(secret_id, chat_id=chat_id)
         if not secret:
+            audit_log("ACCESS", secret_id, http_request, success=False, details="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
 
+        audit_log("ACCESS", secret_id, http_request, details="value_retrieved")
         return JSONResponse(status_code=200, content=secret)
     except PermissionError as e:
+        audit_log("ACCESS", secret_id, http_request, success=False, details="permission_denied")
         raise HTTPException(status_code=403, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
+        audit_log("ACCESS", secret_id, http_request, success=False, details=str(e))
         logger.error(f"Failed to get secret: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get secret: {str(e)}")
 
@@ -631,12 +754,17 @@ async def get_secret(secret_id: str, chat_id: Optional[str] = Query(None)):
 )
 @router.put("/{secret_id}")
 async def update_secret(
-    secret_id: str, request: SecretUpdateRequest, chat_id: Optional[str] = Query(None)
+    secret_id: str,
+    request: SecretUpdateRequest,
+    http_request: Request,
+    chat_id: Optional[str] = Query(None),
 ):
     """Update a secret's metadata"""
+    check_rate_limit(http_request)
     try:
         secret = secrets_manager.update_secret(secret_id, request, chat_id=chat_id)
         if not secret:
+            audit_log("UPDATE", secret_id, http_request, success=False, details="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
 
         # Convert datetime objects to strings for JSON serialization
@@ -648,6 +776,7 @@ async def update_secret(
         if secret_data.get("expires_at"):
             secret_data["expires_at"] = secret_data["expires_at"].isoformat()
 
+        audit_log("UPDATE", secret_id, http_request)
         return JSONResponse(
             status_code=200,
             content={
@@ -657,8 +786,12 @@ async def update_secret(
             },
         )
     except PermissionError as e:
+        audit_log("UPDATE", secret_id, http_request, success=False, details="permission_denied")
         raise HTTPException(status_code=403, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
+        audit_log("UPDATE", secret_id, http_request, success=False, details=str(e))
         logger.error(f"Failed to update secret: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to update secret: {str(e)}"
@@ -671,20 +804,29 @@ async def update_secret(
     error_code_prefix="SECRETS",
 )
 @router.delete("/{secret_id}")
-async def delete_secret(secret_id: str, chat_id: Optional[str] = Query(None)):
+async def delete_secret(
+    secret_id: str, http_request: Request, chat_id: Optional[str] = Query(None)
+):
     """Delete a secret"""
+    check_rate_limit(http_request)
     try:
         success = secrets_manager.delete_secret(secret_id, chat_id=chat_id)
         if not success:
+            audit_log("DELETE", secret_id, http_request, success=False, details="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
 
+        audit_log("DELETE", secret_id, http_request)
         return JSONResponse(
             status_code=200,
             content={"status": "success", "message": "Secret deleted successfully"},
         )
     except PermissionError as e:
+        audit_log("DELETE", secret_id, http_request, success=False, details="permission_denied")
         raise HTTPException(status_code=403, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
+        audit_log("DELETE", secret_id, http_request, success=False, details=str(e))
         logger.error(f"Failed to delete secret: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to delete secret: {str(e)}"
@@ -698,11 +840,20 @@ async def delete_secret(secret_id: str, chat_id: Optional[str] = Query(None)):
 )
 @router.post("/transfer")
 async def transfer_secrets(
-    request: SecretTransferRequest, chat_id: Optional[str] = Query(None)
+    request: SecretTransferRequest,
+    http_request: Request,
+    chat_id: Optional[str] = Query(None),
 ):
     """Transfer secrets between scopes"""
+    check_rate_limit(http_request)
     try:
         result = secrets_manager.transfer_secrets(request, chat_id=chat_id)
+        audit_log(
+            "TRANSFER",
+            ",".join(result.get("transferred", [])),
+            http_request,
+            details=f"to={request.target_scope}",
+        )
         return JSONResponse(
             status_code=200,
             content={
@@ -715,6 +866,7 @@ async def transfer_secrets(
             },
         )
     except Exception as e:
+        audit_log("TRANSFER", "N/A", http_request, success=False, details=str(e))
         logger.error(f"Failed to transfer secrets: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to transfer secrets: {str(e)}"
@@ -746,11 +898,19 @@ async def get_chat_cleanup_info(chat_id: str):
 )
 @router.delete("/chat/{chat_id}")
 async def delete_chat_secrets(
-    chat_id: str, secret_ids: Optional[List[str]] = Query(None)
+    chat_id: str, http_request: Request, secret_ids: Optional[List[str]] = Query(None)
 ):
     """Delete secrets for a specific chat (used during chat cleanup)"""
+    check_rate_limit(http_request)
     try:
         result = secrets_manager.delete_chat_secrets(chat_id, secret_ids)
+        deleted_ids = [s.get("id", "unknown") for s in result.get("deleted_secrets", [])]
+        audit_log(
+            "BULK_DELETE",
+            ",".join(deleted_ids),
+            http_request,
+            details=f"chat={chat_id}, count={result['total_deleted']}",
+        )
         return JSONResponse(
             status_code=200,
             content={
@@ -762,6 +922,7 @@ async def delete_chat_secrets(
             },
         )
     except Exception as e:
+        audit_log("BULK_DELETE", "N/A", http_request, success=False, details=str(e))
         logger.error(f"Failed to delete chat secrets: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to delete chat secrets: {str(e)}"

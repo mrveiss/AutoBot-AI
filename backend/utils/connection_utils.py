@@ -10,8 +10,9 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Any, Dict
+from typing import Dict
 
+from backend.type_defs.common import Metadata
 import requests
 
 from src.constants.model_constants import ModelConstants
@@ -34,7 +35,7 @@ class ConnectionTester:
     """Centralized connection testing for all backend services"""
 
     @staticmethod
-    async def get_fast_health_status() -> Dict[str, Any]:
+    async def get_fast_health_status() -> Metadata:
         """Fast health check without expensive operations (< 1 second)"""
         try:
             # Check cache first
@@ -97,7 +98,7 @@ class ConnectionTester:
             }
 
     @staticmethod
-    async def test_ollama_connection() -> Dict[str, Any]:
+    async def test_ollama_connection() -> Metadata:
         """Test Ollama LLM connection with current configuration"""
         try:
             # Get Ollama configuration from the correct paths
@@ -207,7 +208,7 @@ class ConnectionTester:
             }
 
     @staticmethod
-    def test_redis_connection() -> Dict[str, Any]:
+    def test_redis_connection() -> Metadata:
         """Test Redis connection with current configuration"""
         try:
             # First check task_transport config (backwards compatibility)
@@ -311,7 +312,7 @@ class ConnectionTester:
             }
 
     @staticmethod
-    async def _get_embedding_status() -> Dict[str, Any]:
+    async def _get_embedding_status() -> Metadata:
         """Get current embedding model status"""
         try:
             # Get embedding configuration from unified config
@@ -390,7 +391,7 @@ class ConnectionTester:
             }
 
     @staticmethod
-    async def get_comprehensive_health_status() -> Dict[str, Any]:
+    async def get_comprehensive_health_status() -> Metadata:
         """Get comprehensive health status for all services"""
         try:
             # Test Ollama
@@ -443,7 +444,7 @@ class ModelManager:
     _warning_interval = 60  # Only warn once per minute
 
     @staticmethod
-    async def get_available_models() -> Dict[str, Any]:
+    async def get_available_models() -> Metadata:
         """Get list of available LLM models from all configured providers"""
         models = []
 

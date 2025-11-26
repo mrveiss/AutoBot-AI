@@ -21,7 +21,15 @@ import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+from typing import (
+    Any,
+    AsyncGenerator,
+    Dict,
+    List,
+    Optional,
+    Type,
+    Union,
+)
 
 import aiohttp
 import xxhash

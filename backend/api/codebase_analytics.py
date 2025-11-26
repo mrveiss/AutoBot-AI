@@ -14,8 +14,9 @@ import re
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, Final, List, Optional
 
+from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -32,7 +33,7 @@ router = APIRouter(prefix="/codebase", tags=["codebase-analytics"])
 _in_memory_storage = {}
 
 # Global storage for indexing task progress (thread-safe with asyncio)
-indexing_tasks: Dict[str, Dict[str, Any]] = {}
+indexing_tasks: Dict[str, Metadata] = {}
 
 # Store active task references to prevent garbage collection
 _active_tasks: Dict[str, asyncio.Task] = {}
@@ -177,7 +178,7 @@ class InMemoryStorage:
 
 async def detect_hardcodes_and_debt_with_llm(
     code_snippet: str, file_path: str, language: str = "python"
-) -> Dict[str, List[Dict[str, Any]]]:
+) -> Dict[str, List[Metadata]]:
     """
     Use LLM to detect semantic hardcodes and technical debt that regex patterns might miss.
 
@@ -261,7 +262,7 @@ IMPORTANT: Return ONLY the JSON object, no other text."""
         return {"hardcodes": [], "technical_debt": []}
 
 
-async def analyze_python_file(file_path: str, use_llm: bool = False) -> Dict[str, Any]:
+async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata:
     """Analyze a Python file for functions, classes, and potential issues"""
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -416,7 +417,7 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Dict[str
         }
 
 
-def analyze_javascript_vue_file(file_path: str) -> Dict[str, Any]:
+def analyze_javascript_vue_file(file_path: str) -> Metadata:
     """Analyze JavaScript/Vue file for functions and hardcodes"""
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -510,7 +511,7 @@ def analyze_javascript_vue_file(file_path: str) -> Dict[str, Any]:
 
 async def scan_codebase(
     root_path: Optional[str] = None, progress_callback: Optional[callable] = None
-) -> Dict[str, Any]:
+) -> Metadata:
     """Scan the entire codebase using MCP-like file operations"""
     # Use project-relative path if not specified
     if root_path is None:

@@ -26,7 +26,9 @@ Created: 2025-01-14
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Type
+
+from backend.type_defs.common import Metadata
 from uuid import uuid4
 
 from fastapi import Request
@@ -348,7 +350,7 @@ def log_chat_error(
 def log_chat_event(
     event_type: str,
     session_id: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
+    details: Optional[Metadata] = None,
     request_id: Optional[str] = None,
 ) -> None:
     """
