@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from backend.services.config_service import ConfigService
+from backend.utils.connection_utils import ModelManager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,24 @@ DEFAULT_LLM_MODEL = os.getenv(
 )
 
 router = APIRouter()
+
+
+async def _get_available_models() -> list:
+    """
+    Fetch available models from the model manager.
+
+    Returns:
+        list: List of available model names from Ollama or other providers.
+              Returns empty list if model service is unavailable.
+    """
+    try:
+        result = await ModelManager.get_available_models()
+        if result and "models" in result:
+            return [m.get("name", m) if isinstance(m, dict) else m for m in result["models"]]
+        return []
+    except Exception as e:
+        logger.warning(f"Could not fetch available models: {e}")
+        return []
 
 
 class AgentConfig(BaseModel):
@@ -157,7 +176,9 @@ async def list_agents():
             "status": status,
             "priority": config["priority"],
             "tasks": config["tasks"],
-            "last_used": "N/A",  # TODO: Track actual usage
+            # Usage tracking requires Redis-based agent metrics service
+            # See: backend/services/agent_metrics_service.py (to be implemented)
+            "last_used": "N/A",
             "performance": {
                 "avg_response_time": 0.0,
                 "success_rate": 1.0,
@@ -216,7 +237,7 @@ async def get_agent_config(agent_id: str):
         "default_model": base_config["default_model"],
         "status": "connected" if enabled and current_model else "disconnected",
         "configuration_options": {
-            "available_models": [],  # TODO: Get from model manager
+            "available_models": await _get_available_models(),
             "available_providers": ["ollama", "openai", "anthropic"],
             "configurable_settings": ["model", "provider", "enabled", "priority"],
         },
