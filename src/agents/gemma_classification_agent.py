@@ -14,6 +14,7 @@ import aiohttp
 
 from src.agents.classification_agent import ClassificationResult
 from src.autobot_types import TaskComplexity
+from src.constants.model_constants import ModelConstants
 from src.unified_config_manager import config as global_config_manager
 from src.utils.http_client import get_http_client
 from src.utils.redis_client import get_redis_client
@@ -39,10 +40,11 @@ class GemmaClassificationAgent(StandardizedAgent):
         self.keyword_classifier = WorkflowClassifier(self.redis_client)
 
         # Preferred models in order of preference (smallest/fastest first)
+        # Uses centralized model constants for maintainability
         self.preferred_models = [
-            "gemma3:270m",  # Ultra lightweight - 291MB - fastest
-            "gemma3:1b",  # 1B parameters - 815MB
-            "llama3.2:1b",  # Fallback to existing small model
+            ModelConstants.GEMMA3_270M,  # Ultra lightweight - 291MB - fastest
+            ModelConstants.GEMMA3_1B,  # 1B parameters - 815MB
+            ModelConstants.LLAMA_32_1B,  # Fallback to existing small model
         ]
 
         self.capabilities = [

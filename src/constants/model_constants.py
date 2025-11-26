@@ -49,6 +49,12 @@ class ModelConstants:
     QWEN_72B: str = "qwen:72b"
     MISTRAL_7B: str = "mistral:7b"
 
+    # Lightweight Models (for failsafe/classification scenarios)
+    GEMMA3_270M: str = "gemma3:270m"  # Ultra lightweight - 291MB
+    GEMMA3_1B: str = "gemma3:1b"  # 1B parameters - 815MB
+    LLAMA_32_1B: str = "llama3.2:1b"  # Lightweight - ~1GB
+    LLAMA_32_1B_INSTRUCT: str = "llama3.2:1b-instruct-q4_K_M"  # 807MB
+
     # Model Endpoints (constructed from NetworkConstants)
     @staticmethod
     def get_ollama_url() -> str:

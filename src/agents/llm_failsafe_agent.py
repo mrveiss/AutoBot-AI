@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from src.constants.model_constants import ModelConstants
 
 logger = logging.getLogger(__name__)
 
@@ -69,12 +70,15 @@ class LLMFailsafeAgent:
             tier: {"requests": 0, "failures": 0, "avg_time": 0.0} for tier in LLMTier
         }
 
-        # Configuration
+        # Configuration - use centralized model constants
         self.primary_models = [
-            "gemma3:270m",  # Ultra lightweight - 291MB
-            "llama3.2:1b-instruct-q4_K_M",  # Backup lightweight - 807MB
+            ModelConstants.GEMMA3_270M,  # Ultra lightweight - 291MB
+            ModelConstants.LLAMA_32_1B_INSTRUCT,  # Backup lightweight - 807MB
         ]
-        self.secondary_models = ["gemma3:270m", "llama3.2:1b"]
+        self.secondary_models = [
+            ModelConstants.GEMMA3_270M,
+            ModelConstants.LLAMA_32_1B,
+        ]
 
         # Timeout settings (in seconds)
         self.timeouts = {
