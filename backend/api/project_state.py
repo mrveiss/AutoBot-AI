@@ -8,19 +8,14 @@ Exposes project development phase information and validation status
 """
 
 import logging
-import os
-import sys
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-
-# Add project root to path and import project state manager
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 from src.project_state_manager import DevelopmentPhase, get_project_state_manager
 from src.utils.advanced_cache_manager import smart_cache
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

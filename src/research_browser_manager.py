@@ -17,16 +17,16 @@ from typing import Any, Dict, Optional
 import aiofiles
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
-from src.unified_config_manager import UnifiedConfigManager
-
-# Create singleton config instance
-config = UnifiedConfigManager()
 from src.constants.network_constants import ServiceURLs
 from src.constants.security_constants import SecurityConstants
 from src.source_attribution import SourceType, track_source
+from src.unified_config_manager import UnifiedConfigManager
 from src.utils.display_utils import get_playwright_config
 
 logger = logging.getLogger(__name__)
+
+# Create singleton config instance
+config = UnifiedConfigManager()
 
 
 class ResearchBrowserSession:

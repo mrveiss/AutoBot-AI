@@ -20,16 +20,16 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 # Import unified configuration system - NO HARDCODED VALUES
+from src.constants.network_constants import NetworkConstants, ServiceURLs
+from src.constants.path_constants import PATH
 from src.unified_config_manager import UnifiedConfigManager
-from src.utils.http_client import get_http_client
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.http_client import get_http_client
+
+logger = logging.getLogger(__name__)
 
 # Create singleton config instance
 config = UnifiedConfigManager()
-from src.constants.network_constants import NetworkConstants, ServiceURLs
-from src.constants.path_constants import PATH
-
-logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
