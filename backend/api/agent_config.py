@@ -20,13 +20,15 @@ from pydantic import BaseModel
 
 from backend.services.config_service import ConfigService
 from backend.utils.connection_utils import ModelManager
+from src.constants.model_constants import ModelConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
-# Get default LLM model from environment (NO HARDCODING)
+# Get default LLM model from environment - uses centralized model constants
 DEFAULT_LLM_MODEL = os.getenv(
-    "AUTOBOT_DEFAULT_LLM_MODEL", os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", "llama3.2:1b")
+    "AUTOBOT_DEFAULT_LLM_MODEL",
+    os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", ModelConstants.LLAMA_32_1B),
 )
 
 router = APIRouter()

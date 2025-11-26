@@ -201,7 +201,8 @@ class UnifiedConfigManager:
                                 "host": f"http://{ollama_host}:{ollama_port}",
                                 "models": [],
                                 "selected_model": os.getenv(
-                                    "AUTOBOT_OLLAMA_MODEL", "gemma3:270m"
+                                    "AUTOBOT_OLLAMA_MODEL",
+                                    ModelConstants.GEMMA3_270M,
                                 ),
                             }
                         },
