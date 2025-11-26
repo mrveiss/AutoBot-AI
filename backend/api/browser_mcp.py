@@ -28,7 +28,9 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
+
+from backend.type_defs.common import JSONObject, Metadata
 from urllib.parse import urlparse
 
 import aiohttp
@@ -167,7 +169,7 @@ class MCPTool(BaseModel):
 
     name: str
     description: str
-    input_schema: Dict[str, Any]
+    input_schema: JSONObject
 
 
 # Request Models
@@ -443,7 +445,7 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
 # Tool Implementations
 
 
-async def send_to_browser_vm(action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+async def send_to_browser_vm(action: str, params: Metadata) -> Metadata:
     """
     Send automation command to Browser VM
 
@@ -492,7 +494,7 @@ async def send_to_browser_vm(action: str, params: Dict[str, Any]) -> Dict[str, A
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/navigate")
-async def navigate_mcp(request: NavigateRequest) -> Dict[str, Any]:
+async def navigate_mcp(request: NavigateRequest) -> Metadata:
     """Navigate browser to URL with security validation"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -529,7 +531,7 @@ async def navigate_mcp(request: NavigateRequest) -> Dict[str, Any]:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/click")
-async def click_mcp(request: ClickRequest) -> Dict[str, Any]:
+async def click_mcp(request: ClickRequest) -> Metadata:
     """Click on element by selector"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -556,7 +558,7 @@ async def click_mcp(request: ClickRequest) -> Dict[str, Any]:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/fill")
-async def fill_mcp(request: FillRequest) -> Dict[str, Any]:
+async def fill_mcp(request: FillRequest) -> Metadata:
     """Fill form field with value"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -588,7 +590,7 @@ async def fill_mcp(request: FillRequest) -> Dict[str, Any]:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/screenshot")
-async def screenshot_mcp(request: ScreenshotRequest) -> Dict[str, Any]:
+async def screenshot_mcp(request: ScreenshotRequest) -> Metadata:
     """Capture screenshot of page or element"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -619,7 +621,7 @@ async def screenshot_mcp(request: ScreenshotRequest) -> Dict[str, Any]:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/evaluate")
-async def evaluate_mcp(request: EvaluateRequest) -> Dict[str, Any]:
+async def evaluate_mcp(request: EvaluateRequest) -> Metadata:
     """Execute JavaScript with security validation"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -649,7 +651,7 @@ async def evaluate_mcp(request: EvaluateRequest) -> Dict[str, Any]:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/wait_for_selector")
-async def wait_for_selector_mcp(request: WaitForSelectorRequest) -> Dict[str, Any]:
+async def wait_for_selector_mcp(request: WaitForSelectorRequest) -> Metadata:
     """Wait for element to reach specified state"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -681,7 +683,7 @@ async def wait_for_selector_mcp(request: WaitForSelectorRequest) -> Dict[str, An
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/get_text")
-async def get_text_mcp(request: GetTextRequest) -> Dict[str, Any]:
+async def get_text_mcp(request: GetTextRequest) -> Metadata:
     """Extract text content from element"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -705,7 +707,7 @@ async def get_text_mcp(request: GetTextRequest) -> Dict[str, Any]:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/get_attribute")
-async def get_attribute_mcp(request: GetAttributeRequest) -> Dict[str, Any]:
+async def get_attribute_mcp(request: GetAttributeRequest) -> Metadata:
     """Get attribute value from element"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -733,7 +735,7 @@ async def get_attribute_mcp(request: GetAttributeRequest) -> Dict[str, Any]:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/select")
-async def select_mcp(request: SelectRequest) -> Dict[str, Any]:
+async def select_mcp(request: SelectRequest) -> Metadata:
     """Select option from dropdown"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -761,7 +763,7 @@ async def select_mcp(request: SelectRequest) -> Dict[str, Any]:
     error_code_prefix="BROWSER_MCP",
 )
 @router.post("/mcp/hover")
-async def hover_mcp(request: HoverRequest) -> Dict[str, Any]:
+async def hover_mcp(request: HoverRequest) -> Metadata:
     """Hover mouse over element"""
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
@@ -785,7 +787,7 @@ async def hover_mcp(request: HoverRequest) -> Dict[str, Any]:
     error_code_prefix="BROWSER_MCP",
 )
 @router.get("/mcp/status")
-async def get_browser_mcp_status() -> Dict[str, Any]:
+async def get_browser_mcp_status() -> Metadata:
     """Get Browser MCP bridge status and statistics"""
     # Check Browser VM connectivity
     vm_status = "unavailable"

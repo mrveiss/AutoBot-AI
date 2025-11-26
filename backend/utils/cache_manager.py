@@ -21,7 +21,9 @@ Implements TTL-based caching for frequently requested API endpoints
 import functools
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
+
+from backend.type_defs.common import Metadata
 
 from fastapi import Request
 
@@ -72,7 +74,7 @@ class CacheManager:
         """Generate cache key with prefix"""
         return f"{self.cache_prefix}{key}"
 
-    async def get(self, key: str) -> Optional[Dict[str, Any]]:
+    async def get(self, key: str) -> Optional[Metadata]:
         """Get cached data by key"""
         await self._ensure_redis_client()
 
@@ -96,7 +98,7 @@ class CacheManager:
             return None
 
     async def set(
-        self, key: str, data: Dict[str, Any], ttl: Optional[int] = None
+        self, key: str, data: Metadata, ttl: Optional[int] = None
     ) -> bool:
         """Set cached data with TTL"""
         await self._ensure_redis_client()
@@ -165,7 +167,7 @@ class CacheManager:
             logger.error(f"Error clearing cache for pattern {pattern}: {e}")
             return 0
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> Metadata:
         """Get cache statistics"""
         await self._ensure_redis_client()
 

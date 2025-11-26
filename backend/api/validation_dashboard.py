@@ -12,7 +12,9 @@ import os
 # Import the dashboard generator
 import sys
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
+
+from backend.type_defs.common import Metadata
 
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks
@@ -177,7 +179,7 @@ def get_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
     return _dashboard_generator
 
 
-def get_validation_judges() -> Optional[Dict[str, Any]]:
+def get_validation_judges() -> Optional[Metadata]:
     """Get or create validation judges instance"""
     global _validation_judges
 

@@ -19,7 +19,9 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Type
+
+from backend.type_defs.common import Metadata
 
 # REUSABLE PRINCIPLE: Dependency Injection - import queue manager
 from backend.models.command_execution import CommandExecution, CommandState, RiskLevel
@@ -247,10 +249,10 @@ class AgentTerminalSession:
     state: AgentSessionState = AgentSessionState.AGENT_CONTROL
     created_at: float = field(default_factory=time.time)
     last_activity: float = field(default_factory=time.time)
-    command_queue: List[Dict[str, Any]] = field(default_factory=list)
-    command_history: List[Dict[str, Any]] = field(default_factory=list)
-    pending_approval: Optional[Dict[str, Any]] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    command_queue: List[Metadata] = field(default_factory=list)
+    command_history: List[Metadata] = field(default_factory=list)
+    pending_approval: Optional[Metadata] = None
+    metadata: Metadata = field(default_factory=dict)
     pty_session_id: Optional[str] = None  # PTY session for terminal display
     running_command_task: Optional[asyncio.Task] = None  # Track running command for cancellation
 
@@ -345,7 +347,7 @@ class AgentTerminalService:
         agent_role: AgentRole,
         conversation_id: Optional[str] = None,
         host: str = "main",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Metadata] = None,
     ) -> AgentTerminalSession:
         """
         Create a new agent terminal session with PTY integration.
@@ -1245,7 +1247,7 @@ class AgentTerminalService:
 
     async def _execute_in_pty(
         self, session: AgentTerminalSession, command: str, timeout: float = 30.0
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Execute command directly in PTY shell (true collaboration mode).
         User and agent work as one in the same terminal.
@@ -1330,7 +1332,7 @@ class AgentTerminalService:
         command: str,
         description: Optional[str] = None,
         force_approval: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Execute a command in an agent terminal session.
 
@@ -1370,7 +1372,7 @@ class AgentTerminalService:
             }
 
         # Create secure command executor with approval callback
-        async def approval_callback(approval_data: Dict[str, Any]) -> bool:
+        async def approval_callback(approval_data: Metadata) -> bool:
             """Callback for user approval requests"""
             # Store pending approval in session
             session.pending_approval = approval_data
@@ -1666,7 +1668,7 @@ class AgentTerminalService:
         user_id: Optional[str] = None,
         comment: Optional[str] = None,
         auto_approve_future: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Approve or deny a pending agent command.
 
@@ -1695,7 +1697,7 @@ class AgentTerminalService:
         user_id: Optional[str] = None,
         comment: Optional[str] = None,
         auto_approve_future: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """Internal implementation of approve_command (called with lock held)."""
         session = await self.get_session(session_id)
         if not session:
@@ -2171,7 +2173,7 @@ class AgentTerminalService:
         self,
         session_id: str,
         user_id: str,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         User requests to interrupt agent and take control.
 
@@ -2209,7 +2211,7 @@ class AgentTerminalService:
     async def agent_resume(
         self,
         session_id: str,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Resume agent control after user interrupt.
 
@@ -2242,7 +2244,7 @@ class AgentTerminalService:
             "current_state": session.state.value,
         }
 
-    async def get_session_info(self, session_id: str) -> Optional[Dict[str, Any]]:
+    async def get_session_info(self, session_id: str) -> Optional[Metadata]:
         """
         Get comprehensive session information.
 

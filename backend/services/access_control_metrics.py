@@ -20,8 +20,9 @@ import json
 import logging
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
+from backend.type_defs.common import Metadata
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -146,7 +147,7 @@ class AccessControlMetrics:
 
     async def get_statistics(
         self, days: int = 7, include_details: bool = False
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Get aggregated violation statistics
 
@@ -229,7 +230,7 @@ class AccessControlMetrics:
             logger.error(f"Failed to get statistics: {e}")
             return {"error": str(e), "total_violations": 0}
 
-    async def _get_recent_violations(self, limit: int = 20) -> List[Dict[str, Any]]:
+    async def _get_recent_violations(self, limit: int = 20) -> List[Metadata]:
         """
         Get most recent violations
 
@@ -282,7 +283,7 @@ class AccessControlMetrics:
 
     async def get_endpoint_statistics(
         self, endpoint: str, days: int = 7
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Get statistics for a specific endpoint
 
@@ -323,7 +324,7 @@ class AccessControlMetrics:
             logger.error(f"Failed to get endpoint statistics: {e}")
             return {"endpoint": endpoint, "error": str(e)}
 
-    async def get_user_statistics(self, username: str, days: int = 7) -> Dict[str, Any]:
+    async def get_user_statistics(self, username: str, days: int = 7) -> Metadata:
         """
         Get statistics for a specific user
 

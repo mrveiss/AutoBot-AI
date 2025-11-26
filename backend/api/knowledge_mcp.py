@@ -9,8 +9,9 @@ Integrates with LangChain, LlamaIndex, and Redis Vector Store
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
+from backend.type_defs.common import Metadata
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
@@ -64,7 +65,7 @@ class MCPTool(BaseModel):
 
     name: str
     description: str
-    input_schema: Dict[str, Any]
+    input_schema: Metadata
 
 
 class KnowledgeSearchRequest(BaseModel):
@@ -72,14 +73,14 @@ class KnowledgeSearchRequest(BaseModel):
 
     query: str = Field(..., description="Search query")
     top_k: int = Field(5, description="Number of results to return")
-    filters: Optional[Dict[str, Any]] = Field(None, description="Optional filters")
+    filters: Optional[Metadata] = Field(None, description="Optional filters")
 
 
 class DocumentAddRequest(BaseModel):
     """Request model for adding documents"""
 
     content: str = Field(..., description="Document content")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Document metadata")
+    metadata: Optional[Metadata] = Field(None, description="Document metadata")
     source: Optional[str] = Field(None, description="Document source")
 
 
@@ -354,7 +355,7 @@ async def mcp_get_knowledge_stats(request: KnowledgeStatsRequest):
     error_code_prefix="KNOWLEDGE_MCP",
 )
 @router.post("/mcp/summarize_knowledge_topic")
-async def mcp_summarize_knowledge_topic(request: Dict[str, Any]):
+async def mcp_summarize_knowledge_topic(request: Metadata):
     """MCP tool: Summarize knowledge on a topic"""
     try:
         kb = get_knowledge_base()
@@ -410,7 +411,7 @@ async def mcp_summarize_knowledge_topic(request: Dict[str, Any]):
     error_code_prefix="KNOWLEDGE_MCP",
 )
 @router.post("/mcp/vector_similarity_search")
-async def mcp_vector_similarity_search(request: Dict[str, Any]):
+async def mcp_vector_similarity_search(request: Metadata):
     """MCP tool: Perform vector similarity search in Redis"""
     try:
         kb = get_knowledge_base()
@@ -453,7 +454,7 @@ async def mcp_vector_similarity_search(request: Dict[str, Any]):
     error_code_prefix="KNOWLEDGE_MCP",
 )
 @router.post("/mcp/langchain_qa_chain")
-async def mcp_langchain_qa_chain(request: Dict[str, Any]):
+async def mcp_langchain_qa_chain(request: Metadata):
     """MCP tool: Use LangChain QA chain for comprehensive answers"""
     try:
         kb = get_knowledge_base()
@@ -514,7 +515,7 @@ async def mcp_langchain_qa_chain(request: Dict[str, Any]):
     error_code_prefix="KNOWLEDGE_MCP",
 )
 @router.post("/mcp/redis_vector_operations")
-async def mcp_redis_vector_operations(request: Dict[str, Any]):
+async def mcp_redis_vector_operations(request: Metadata):
     """MCP tool: Direct Redis vector store operations"""
     try:
         operation = request.get("operation")

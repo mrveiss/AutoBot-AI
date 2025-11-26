@@ -229,7 +229,7 @@ async def check_rate_limit() -> bool:
 
 async def execute_git_command(
     repo_path: str, git_args: List[str], timeout: int = 30
-) -> Dict[str, Any]:
+) -> Metadata:
     """
     Execute git command safely with output capture
 
@@ -682,7 +682,7 @@ async def get_git_mcp_tools() -> List[MCPTool]:
     error_code_prefix="GIT_MCP",
 )
 @router.post("/mcp/status")
-async def git_status_mcp(request: GitStatusRequest) -> Dict[str, Any]:
+async def git_status_mcp(request: GitStatusRequest) -> Metadata:
     """
     Get git repository status
 
@@ -721,7 +721,7 @@ async def git_status_mcp(request: GitStatusRequest) -> Dict[str, Any]:
     error_code_prefix="GIT_MCP",
 )
 @router.post("/mcp/log")
-async def git_log_mcp(request: GitLogRequest) -> Dict[str, Any]:
+async def git_log_mcp(request: GitLogRequest) -> Metadata:
     """
     Get commit history
 
@@ -768,7 +768,7 @@ async def git_log_mcp(request: GitLogRequest) -> Dict[str, Any]:
     error_code_prefix="GIT_MCP",
 )
 @router.post("/mcp/diff")
-async def git_diff_mcp(request: GitDiffRequest) -> Dict[str, Any]:
+async def git_diff_mcp(request: GitDiffRequest) -> Metadata:
     """
     Show git diff
 
@@ -819,7 +819,7 @@ async def git_diff_mcp(request: GitDiffRequest) -> Dict[str, Any]:
     error_code_prefix="GIT_MCP",
 )
 @router.post("/mcp/branch")
-async def git_branch_mcp(request: GitBranchRequest) -> Dict[str, Any]:
+async def git_branch_mcp(request: GitBranchRequest) -> Metadata:
     """
     List git branches
 
@@ -872,7 +872,7 @@ async def git_branch_mcp(request: GitBranchRequest) -> Dict[str, Any]:
     error_code_prefix="GIT_MCP",
 )
 @router.post("/mcp/blame")
-async def git_blame_mcp(request: GitBlameRequest) -> Dict[str, Any]:
+async def git_blame_mcp(request: GitBlameRequest) -> Metadata:
     """
     Show git blame for a file
 
@@ -916,7 +916,7 @@ async def git_blame_mcp(request: GitBlameRequest) -> Dict[str, Any]:
     error_code_prefix="GIT_MCP",
 )
 @router.post("/mcp/show")
-async def git_show_mcp(request: GitShowRequest) -> Dict[str, Any]:
+async def git_show_mcp(request: GitShowRequest) -> Metadata:
     """
     Show git commit details
 
@@ -949,7 +949,7 @@ async def git_show_mcp(request: GitShowRequest) -> Dict[str, Any]:
 
 
 @router.get("/mcp/info")
-async def get_git_repo_info() -> Dict[str, Any]:
+async def get_git_repo_info() -> Metadata:
     """
     Get information about whitelisted repositories
 
@@ -1004,7 +1004,7 @@ async def get_git_repo_info() -> Dict[str, Any]:
 
 
 @router.get("/mcp/service_status")
-async def get_git_mcp_status() -> Dict[str, Any]:
+async def get_git_mcp_status() -> Metadata:
     """
     Get Git MCP service status
 

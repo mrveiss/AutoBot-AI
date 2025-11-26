@@ -10,7 +10,9 @@ Celery tasks for long-running knowledge base operations with progress tracking.
 import logging
 import subprocess
 import sys
-from typing import Any, Dict
+from typing import Dict
+
+from backend.type_defs.common import Metadata
 
 from backend.celery_app import celery_app
 
@@ -18,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(bind=True, name="tasks.refresh_system_knowledge")
-def refresh_system_knowledge(self) -> Dict[str, Any]:
+def refresh_system_knowledge(self) -> Metadata:
     """
     Refresh ALL system knowledge (man pages + AutoBot docs) in background.
 
@@ -100,7 +102,7 @@ def refresh_system_knowledge(self) -> Dict[str, Any]:
 
 
 @celery_app.task(bind=True, name="tasks.reindex_knowledge_base")
-def reindex_knowledge_base(self) -> Dict[str, Any]:
+def reindex_knowledge_base(self) -> Metadata:
     """
     Reindex the entire knowledge base (rebuild vector indexes).
 

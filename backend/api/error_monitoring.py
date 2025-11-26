@@ -12,7 +12,9 @@ import json
 import logging
 import os
 import sys
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
+
+from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel
@@ -297,7 +299,7 @@ async def test_error_system(request: TestErrorRequest):
         }
 
 
-def _get_health_recommendations(health_status: str, stats: Dict[str, Any]) -> list:
+def _get_health_recommendations(health_status: str, stats: Metadata) -> list:
     """Generate health recommendations based on error patterns"""
     recommendations = []
 

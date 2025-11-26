@@ -10,7 +10,9 @@ deployments, and credentials.
 
 import ipaddress
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
+
+from backend.type_defs.common import Metadata
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -109,7 +111,7 @@ class HostResponse(BaseModel):
     ssh_port: int
     ssh_user: str
     ssh_key_path: Optional[str] = None
-    ansible_facts: Optional[Dict[str, Any]] = None
+    ansible_facts: Optional[Metadata] = None
     last_seen_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
@@ -129,7 +131,7 @@ class HostDetailResponse(BaseModel):
     ssh_port: int
     ssh_user: str
     ssh_key_path: Optional[str] = None
-    ansible_facts: Optional[Dict[str, Any]] = None
+    ansible_facts: Optional[Metadata] = None
     last_seen_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime

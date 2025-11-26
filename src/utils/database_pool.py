@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime
 from pathlib import Path
 from queue import Queue
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 
 logger = logging.getLogger(__name__)

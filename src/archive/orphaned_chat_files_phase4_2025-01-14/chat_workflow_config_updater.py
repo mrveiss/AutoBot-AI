@@ -7,7 +7,7 @@ Updates chat workflow to enable enterprise-grade web research orchestration.
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 logger = logging.getLogger(__name__)

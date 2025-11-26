@@ -25,7 +25,9 @@ import mimetypes
 import os
 import shutil
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
+
+from backend.type_defs.common import JSONObject, Metadata
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -99,7 +101,7 @@ class MCPTool(BaseModel):
 
     name: str
     description: str
-    input_schema: Dict[str, Any]
+    input_schema: JSONObject
 
 
 # Request Models
@@ -464,7 +466,7 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/read_text_file")
-async def read_text_file_mcp(request: ReadTextFileRequest) -> Dict[str, Any]:
+async def read_text_file_mcp(request: ReadTextFileRequest) -> Metadata:
     """Read text file with security validation"""
     if not is_path_allowed(request.path):
         raise HTTPException(
@@ -518,7 +520,7 @@ async def read_text_file_mcp(request: ReadTextFileRequest) -> Dict[str, Any]:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/read_media_file")
-async def read_media_file_mcp(request: ReadMediaFileRequest) -> Dict[str, Any]:
+async def read_media_file_mcp(request: ReadMediaFileRequest) -> Metadata:
     """Read media file as base64 with MIME type"""
     if not is_path_allowed(request.path):
         raise HTTPException(
@@ -570,7 +572,7 @@ async def read_media_file_mcp(request: ReadMediaFileRequest) -> Dict[str, Any]:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/read_multiple_files")
-async def read_multiple_files_mcp(request: ReadMultipleFilesRequest) -> Dict[str, Any]:
+async def read_multiple_files_mcp(request: ReadMultipleFilesRequest) -> Metadata:
     """Batch read multiple files with graceful error handling"""
     results = []
     errors = []
@@ -618,7 +620,7 @@ async def read_multiple_files_mcp(request: ReadMultipleFilesRequest) -> Dict[str
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/write_file")
-async def write_file_mcp(request: WriteFileRequest) -> Dict[str, Any]:
+async def write_file_mcp(request: WriteFileRequest) -> Metadata:
     """Write file with security validation"""
     if not is_path_allowed(request.path):
         raise HTTPException(
@@ -656,7 +658,7 @@ async def write_file_mcp(request: WriteFileRequest) -> Dict[str, Any]:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/edit_file")
-async def edit_file_mcp(request: EditFileRequest) -> Dict[str, Any]:
+async def edit_file_mcp(request: EditFileRequest) -> Metadata:
     """Edit file using find-and-replace patterns"""
     if not is_path_allowed(request.path):
         raise HTTPException(
@@ -710,7 +712,7 @@ async def edit_file_mcp(request: EditFileRequest) -> Dict[str, Any]:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/create_directory")
-async def create_directory_mcp(request: CreateDirectoryRequest) -> Dict[str, Any]:
+async def create_directory_mcp(request: CreateDirectoryRequest) -> Metadata:
     """Create directory with recursive parent creation"""
     if not is_path_allowed(request.path):
         raise HTTPException(
@@ -737,7 +739,7 @@ async def create_directory_mcp(request: CreateDirectoryRequest) -> Dict[str, Any
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/list_directory")
-async def list_directory_mcp(request: ListDirectoryRequest) -> Dict[str, Any]:
+async def list_directory_mcp(request: ListDirectoryRequest) -> Metadata:
     """List directory contents with type prefixes"""
     if not is_path_allowed(request.path):
         raise HTTPException(
@@ -784,7 +786,7 @@ async def list_directory_mcp(request: ListDirectoryRequest) -> Dict[str, Any]:
 @router.post("/mcp/list_directory_with_sizes")
 async def list_directory_with_sizes_mcp(
     request: ListDirectoryWithSizesRequest,
-) -> Dict[str, Any]:
+) -> Metadata:
     """List directory with detailed size information"""
     if not is_path_allowed(request.path):
         raise HTTPException(
@@ -842,7 +844,7 @@ async def list_directory_with_sizes_mcp(
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/move_file")
-async def move_file_mcp(request: MoveFileRequest) -> Dict[str, Any]:
+async def move_file_mcp(request: MoveFileRequest) -> Metadata:
     """Move or rename file/directory"""
     if not is_path_allowed(request.source):
         raise HTTPException(
@@ -885,7 +887,7 @@ async def move_file_mcp(request: MoveFileRequest) -> Dict[str, Any]:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/search_files")
-async def search_files_mcp(request: SearchFilesRequest) -> Dict[str, Any]:
+async def search_files_mcp(request: SearchFilesRequest) -> Metadata:
     """Search for files matching pattern"""
     if not is_path_allowed(request.path):
         raise HTTPException(
@@ -937,7 +939,7 @@ async def search_files_mcp(request: SearchFilesRequest) -> Dict[str, Any]:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/directory_tree")
-async def directory_tree_mcp(request: DirectoryTreeRequest) -> Dict[str, Any]:
+async def directory_tree_mcp(request: DirectoryTreeRequest) -> Metadata:
     """Get recursive directory tree as JSON"""
     if not is_path_allowed(request.path):
         raise HTTPException(
@@ -993,7 +995,7 @@ async def directory_tree_mcp(request: DirectoryTreeRequest) -> Dict[str, Any]:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/get_file_info")
-async def get_file_info_mcp(request: GetFileInfoRequest) -> Dict[str, Any]:
+async def get_file_info_mcp(request: GetFileInfoRequest) -> Metadata:
     """Get comprehensive file/directory metadata"""
     if not is_path_allowed(request.path):
         raise HTTPException(
@@ -1035,7 +1037,7 @@ async def get_file_info_mcp(request: GetFileInfoRequest) -> Dict[str, Any]:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.get("/mcp/list_allowed_directories")
-async def list_allowed_directories_mcp() -> Dict[str, Any]:
+async def list_allowed_directories_mcp() -> Metadata:
     """List all allowed directories for filesystem access"""
     return {
         "success": True,

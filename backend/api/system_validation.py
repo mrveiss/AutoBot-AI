@@ -7,7 +7,9 @@ System Validation API endpoints for AutoBot optimization suite
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Dict, List
+
+from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
@@ -42,7 +44,7 @@ class ValidationResult(BaseModel):
     overall_score: float
     component_scores: Dict[str, float]
     recommendations: List[str]
-    test_results: Dict[str, Any]
+    test_results: Metadata
     execution_time: float
     timestamp: str
 

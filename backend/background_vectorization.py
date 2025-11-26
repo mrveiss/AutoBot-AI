@@ -62,7 +62,22 @@ class BackgroundVectorizer:
 
                 for fact_key in batch:
                     try:
-                        # Get fact data
+                        # Check vectorization status FIRST - O(1) field lookup
+                        # This avoids loading entire fact data for already-vectorized facts
+                        status_bytes = await kb.aioredis_client.hget(
+                            fact_key, "vectorization_status"
+                        )
+                        if status_bytes:
+                            status = (
+                                status_bytes.decode("utf-8")
+                                if isinstance(status_bytes, bytes)
+                                else str(status_bytes)
+                            )
+                            if status == "completed":
+                                skipped_count += 1
+                                continue  # Skip already-vectorized fact
+
+                        # Get fact data only if vectorization needed
                         fact_data = await kb.aioredis_client.hgetall(fact_key)
 
                         if not fact_data:
@@ -110,6 +125,21 @@ class BackgroundVectorizer:
                                 )
                                 success_count += 1
                                 logger.debug(f"Vectorized fact {fact_id}")
+
+                                # Persist vectorization status to Redis
+                                try:
+                                    await kb.aioredis_client.hset(
+                                        fact_key,
+                                        mapping={
+                                            "vectorization_status": "completed",
+                                            "vectorized_at": datetime.now().isoformat(),
+                                        },
+                                    )
+                                except Exception as status_error:
+                                    # Don't let status persistence failure mask successful vectorization
+                                    logger.warning(
+                                        f"Failed to persist vectorization status for {fact_id}: {status_error}"
+                                    )
                             else:
                                 logger.warning("Vector index not available")
                                 failed_count += 1
@@ -117,6 +147,17 @@ class BackgroundVectorizer:
                             # If document already exists or other error, skip
                             if "already exists" in str(doc_error).lower():
                                 skipped_count += 1
+                                # Mark as completed so we skip on future runs
+                                try:
+                                    await kb.aioredis_client.hset(
+                                        fact_key,
+                                        mapping={
+                                            "vectorization_status": "completed",
+                                            "vectorized_at": datetime.now().isoformat(),
+                                        },
+                                    )
+                                except Exception:
+                                    pass  # Best effort, non-critical
                             else:
                                 failed_count += 1
                                 logger.error(

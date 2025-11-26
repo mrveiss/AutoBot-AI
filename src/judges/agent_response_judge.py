@@ -10,7 +10,7 @@ This judge assesses agent outputs to improve system reliability and user experie
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult

@@ -32,7 +32,14 @@ import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Set,
+)
 
 from src.agents.machine_aware_system_knowledge_manager import (
     MachineAwareSystemKnowledgeManager,

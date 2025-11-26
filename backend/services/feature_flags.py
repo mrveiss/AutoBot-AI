@@ -31,7 +31,9 @@ import json
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
+
+from backend.type_defs.common import Metadata
 
 from src.utils.redis_client import get_redis_client
 
@@ -240,7 +242,7 @@ class FeatureFlags:
             logger.error(f"Failed to set feature flag {feature_name}: {e}")
             return False
 
-    async def get_rollout_statistics(self) -> Dict[str, Any]:
+    async def get_rollout_statistics(self) -> Metadata:
         """
         Get rollout statistics and metrics
 

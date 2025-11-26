@@ -9,7 +9,9 @@ Provides REST API for managing alerts and notifications
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
+
+from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel
@@ -82,7 +84,7 @@ class NotificationChannelRequest(BaseModel):
 
     name: str
     type: str  # "log", "redis", "webhook"
-    config: Dict[str, Any]
+    config: Metadata
     enabled: bool = True
 
 

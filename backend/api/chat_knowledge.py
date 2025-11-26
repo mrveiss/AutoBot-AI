@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from backend.type_defs.common import Metadata
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -119,7 +119,7 @@ class ChatKnowledgeManager:
         # In-memory storage (should be persisted to database in production)
         self.chat_contexts: Dict[str, ChatKnowledgeContext] = {}
         self.file_associations: Dict[str, List[ChatFileAssociation]] = {}
-        self.pending_decisions: Dict[str, List[Dict[str, Any]]] = {}
+        self.pending_decisions: Dict[str, List[Metadata]] = {}
 
         # Initialize storage directory using centralized path management
         from backend.utils.paths_manager import ensure_data_directory, get_data_path
@@ -161,7 +161,7 @@ class ChatKnowledgeManager:
         chat_id: str,
         file_path: str,
         association_type: FileAssociationType,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Metadata] = None,
     ) -> ChatFileAssociation:
         """Associate a file with a chat session"""
         file_id = str(uuid.uuid4())
@@ -202,7 +202,7 @@ class ChatKnowledgeManager:
         return association
 
     async def add_temporary_knowledge(
-        self, chat_id: str, content: str, metadata: Optional[Dict[str, Any]] = None
+        self, chat_id: str, content: str, metadata: Optional[Metadata] = None
     ) -> str:
         """Add temporary knowledge to chat context"""
         knowledge_id = str(uuid.uuid4())
@@ -223,7 +223,7 @@ class ChatKnowledgeManager:
         logger.info(f"Temporary knowledge added to chat {chat_id}: {knowledge_id}")
         return knowledge_id
 
-    async def get_knowledge_for_decision(self, chat_id: str) -> List[Dict[str, Any]]:
+    async def get_knowledge_for_decision(self, chat_id: str) -> List[Metadata]:
         """Get temporary knowledge items pending decision"""
         if chat_id not in self.chat_contexts:
             return []
@@ -323,7 +323,7 @@ class ChatKnowledgeManager:
         chat_id: str,
         title: Optional[str] = None,
         include_system_messages: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """Compile entire chat conversation to knowledge base"""
         # Get chat history
         chat_history = self.chat_history_manager.get_chat_history(chat_id)
@@ -390,7 +390,7 @@ class ChatKnowledgeManager:
 
     async def search_chat_knowledge(
         self, query: str, chat_id: Optional[str] = None, include_temporary: bool = True
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Metadata]:
         """Search knowledge across chats or within specific chat"""
         results = []
 
@@ -490,7 +490,7 @@ class AssociateFileRequest(BaseModel):
     chat_id: str
     file_path: str
     association_type: FileAssociationType
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Metadata] = None
 
 
 @with_error_handling(
@@ -567,7 +567,7 @@ async def upload_file_to_chat(
 class AddKnowledgeRequest(BaseModel):
     chat_id: str
     content: str
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Metadata] = None
 
 
 @with_error_handling(

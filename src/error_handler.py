@@ -14,7 +14,14 @@ import logging
 import time
 import traceback
 from contextlib import contextmanager
-from typing import Any, Callable, Optional, Type, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+)
 
 from src.exceptions import AutoBotError, InternalError
 

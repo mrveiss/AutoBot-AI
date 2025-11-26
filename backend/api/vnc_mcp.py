@@ -9,8 +9,9 @@ Integrates with backend VNC proxy for browser and desktop observation
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Dict, List
 
+from backend.type_defs.common import Metadata
 import aiohttp
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -34,7 +35,7 @@ class MCPTool(BaseModel):
 
     name: str
     description: str
-    input_schema: Dict[str, Any]
+    input_schema: Metadata
 
 
 class VNCStatusRequest(BaseModel):
@@ -138,7 +139,7 @@ async def get_vnc_mcp_tools() -> List[MCPTool]:
     error_code_prefix="VNC_MCP",
 )
 @router.post("/mcp/check_vnc_status")
-async def check_vnc_status_mcp(request: VNCStatusRequest) -> Dict[str, Any]:
+async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
     """
     MCP tool implementation: check_vnc_status
 
@@ -182,7 +183,7 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Dict[str, Any]:
     error_code_prefix="VNC_MCP",
 )
 @router.post("/mcp/observe_vnc_activity")
-async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Dict[str, Any]:
+async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Metadata:
     """
     MCP tool implementation: observe_vnc_activity
 
@@ -228,7 +229,7 @@ async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Dict[str, 
     error_code_prefix="VNC_MCP",
 )
 @router.post("/mcp/get_browser_vnc_context")
-async def get_browser_vnc_context_mcp() -> Dict[str, Any]:
+async def get_browser_vnc_context_mcp() -> Metadata:
     """
     MCP tool implementation: get_browser_vnc_context
 
@@ -298,7 +299,7 @@ async def get_browser_vnc_context_mcp() -> Dict[str, Any]:
     error_code_prefix="VNC_MCP",
 )
 @router.post("/observations/{vnc_type}")
-async def record_vnc_observation(vnc_type: str, observation: Dict[str, Any]):
+async def record_vnc_observation(vnc_type: str, observation: Metadata):
     """
     Record VNC observation from the proxy
 

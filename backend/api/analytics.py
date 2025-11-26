@@ -14,7 +14,7 @@ import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import psutil
 
@@ -203,7 +203,7 @@ class AnalyticsController:
         except Exception as e:
             logger.error(f"Failed to store API call analytics: {e}")
 
-    async def analyze_communication_patterns(self) -> Dict[str, Any]:
+    async def analyze_communication_patterns(self) -> Metadata:
         """Analyze communication patterns across the system"""
         patterns = {}
 
@@ -245,7 +245,7 @@ class AnalyticsController:
 
     async def perform_code_analysis(
         self, request: CodeAnalysisRequest
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """Perform code analysis using integrated tools"""
         analysis_results = {
             "status": "success",
@@ -361,7 +361,7 @@ class AnalyticsController:
         except Exception as e:
             results["code_index_error"] = str(e)
 
-    async def collect_performance_metrics(self) -> Dict[str, Any]:
+    async def collect_performance_metrics(self) -> Metadata:
         """Collect comprehensive performance metrics"""
         metrics = {}
 
@@ -434,7 +434,7 @@ class AnalyticsController:
 
         return metrics
 
-    async def get_usage_statistics(self) -> Dict[str, Any]:
+    async def get_usage_statistics(self) -> Metadata:
         """Get comprehensive usage statistics"""
         stats = {}
 
@@ -496,7 +496,7 @@ class AnalyticsController:
 
         return stats
 
-    async def detect_trends(self) -> Dict[str, Any]:
+    async def detect_trends(self) -> Metadata:
         """Detect trends in system performance and usage"""
         trends = {}
 

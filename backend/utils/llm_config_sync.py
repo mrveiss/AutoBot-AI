@@ -16,7 +16,9 @@ This runs as part of the system startup to ensure configuration consistency.
 
 import asyncio
 import logging
-from typing import Any, Dict
+from typing import Dict
+
+from backend.type_defs.common import Metadata
 
 # Import network constants
 
@@ -27,7 +29,7 @@ class LLMConfigurationSynchronizer:
     """Synchronizes LLM configuration across the system"""
 
     @staticmethod
-    def sync_llm_config_with_agents() -> Dict[str, Any]:
+    def sync_llm_config_with_agents() -> Metadata:
         """
         Synchronize global LLM configuration with agent configurations
 
@@ -154,7 +156,7 @@ class LLMConfigurationSynchronizer:
             return {"status": "error", "error": str(e)}
 
     @staticmethod
-    async def ensure_models_populated() -> Dict[str, Any]:
+    async def ensure_models_populated() -> Metadata:
         """
         Ensure that the available models list is populated in the configuration
 
@@ -201,7 +203,7 @@ class LLMConfigurationSynchronizer:
             return {"status": "error", "error": str(e)}
 
     @staticmethod
-    async def full_synchronization() -> Dict[str, Any]:
+    async def full_synchronization() -> Metadata:
         """
         Perform a complete LLM configuration synchronization
 
@@ -263,13 +265,13 @@ class LLMConfigurationSynchronizer:
 
 
 # Convenience function for easy import
-async def sync_llm_configuration() -> Dict[str, Any]:
+async def sync_llm_configuration() -> Metadata:
     """Convenience function to perform full LLM configuration synchronization"""
     return await LLMConfigurationSynchronizer.full_synchronization()
 
 
 # Additional convenience function for backward compatibility
-async def sync_llm_config_async() -> Dict[str, Any]:
+async def sync_llm_config_async() -> Metadata:
     """Async function to synchronize LLM configuration with agents"""
     return await LLMConfigurationSynchronizer.full_synchronization()
 

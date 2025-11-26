@@ -9,9 +9,11 @@ UPDATED: Now uses unified_config_manager for consistent model selection
 """
 
 import logging
-from typing import Any, Dict
+from typing import Dict
 
 import yaml
+
+from backend.type_defs.common import Metadata
 
 from src.constants.network_constants import NetworkConstants
 
@@ -55,7 +57,7 @@ class ConfigService:
         logger.info("Configuration cache cleared")
 
     @staticmethod
-    def get_full_config() -> Dict[str, Any]:
+    def get_full_config() -> Metadata:
         """Get complete application configuration"""
         import time
 
@@ -284,7 +286,7 @@ class ConfigService:
             raise
 
     @staticmethod
-    def get_llm_config() -> Dict[str, Any]:
+    def get_llm_config() -> Metadata:
         """Get current LLM configuration using unified config system"""
         try:
             logger.info("UNIFIED CONFIG SERVICE: Getting LLM configuration")
@@ -294,7 +296,7 @@ class ConfigService:
             raise
 
     @staticmethod
-    def get_redis_config() -> Dict[str, Any]:
+    def get_redis_config() -> Metadata:
         """Get current Redis configuration"""
         try:
             task_transport_config = unified_config_manager.get("task_transport", {})
@@ -312,7 +314,7 @@ class ConfigService:
             raise
 
     @staticmethod
-    def update_llm_config(config_data: Dict[str, Any]) -> Dict[str, str]:
+    def update_llm_config(config_data: Metadata) -> Dict[str, str]:
         """Update LLM configuration using unified config system"""
         try:
             logger.info(
@@ -360,7 +362,7 @@ class ConfigService:
             raise
 
     @staticmethod
-    def update_redis_config(config_data: Dict[str, Any]) -> Dict[str, str]:
+    def update_redis_config(config_data: Metadata) -> Dict[str, str]:
         """Update Redis configuration"""
         try:
             # Load current config
@@ -415,7 +417,7 @@ class ConfigService:
             raise
 
     @staticmethod
-    def save_full_config(config_data: Dict[str, Any]) -> Dict[str, str]:
+    def save_full_config(config_data: Metadata) -> Dict[str, str]:
         """Save complete application configuration to config.yaml and reload"""
         try:
             # Create a copy of the config data to avoid modifying the original
@@ -451,7 +453,7 @@ class ConfigService:
             raise
 
     @staticmethod
-    def get_backend_settings() -> Dict[str, Any]:
+    def get_backend_settings() -> Metadata:
         """Get backend-specific settings from config.yaml"""
         try:
             return unified_config_manager.get("backend", {})
@@ -460,7 +462,7 @@ class ConfigService:
             raise
 
     @staticmethod
-    def update_backend_settings(backend_settings: Dict[str, Any]) -> Dict[str, str]:
+    def update_backend_settings(backend_settings: Metadata) -> Dict[str, str]:
         """Update backend-specific settings in config.yaml"""
         try:
             # Load current config
@@ -498,7 +500,7 @@ class ConfigService:
             raise
 
     @staticmethod
-    def _save_config_to_file(config: Dict[str, Any]) -> None:
+    def _save_config_to_file(config: Metadata) -> None:
         """Save configuration to config.yaml file"""
         # SAFETY NET: Always filter out prompts before saving (prompts are managed separately)
         import copy

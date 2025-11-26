@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Type
 
 from src.utils.redis_client import get_redis_client
 

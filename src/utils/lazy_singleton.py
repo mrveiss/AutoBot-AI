@@ -82,7 +82,7 @@ def get_complex_service(request):
 
 import asyncio
 import logging
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, Optional, Pattern, TypeVar
 
 logger = logging.getLogger(__name__)
 

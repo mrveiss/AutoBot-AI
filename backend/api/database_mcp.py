@@ -408,7 +408,7 @@ async def get_database_mcp_tools() -> List[MCPTool]:
     error_code_prefix="DATABASE_MCP",
 )
 @router.post("/mcp/query")
-async def database_query_mcp(request: SQLQueryRequest) -> Dict[str, Any]:
+async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
     """
     Execute SELECT query on SQLite database
 
@@ -494,7 +494,7 @@ async def database_query_mcp(request: SQLQueryRequest) -> Dict[str, Any]:
     error_code_prefix="DATABASE_MCP",
 )
 @router.post("/mcp/execute")
-async def database_execute_mcp(request: SQLExecuteRequest) -> Dict[str, Any]:
+async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
     """
     Execute INSERT/UPDATE/DELETE on SQLite database
 
@@ -580,7 +580,7 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Dict[str, Any]:
     error_code_prefix="DATABASE_MCP",
 )
 @router.post("/mcp/list_tables")
-async def database_list_tables_mcp(request: TableListRequest) -> Dict[str, Any]:
+async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
     """
     List all tables in a SQLite database
 
@@ -646,7 +646,7 @@ async def database_list_tables_mcp(request: TableListRequest) -> Dict[str, Any]:
     error_code_prefix="DATABASE_MCP",
 )
 @router.post("/mcp/describe_schema")
-async def database_describe_schema_mcp(request: SchemaRequest) -> Dict[str, Any]:
+async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
     """
     Get schema information for database tables
 
@@ -740,7 +740,7 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Dict[str, Any]
     error_code_prefix="DATABASE_MCP",
 )
 @router.get("/mcp/list_databases")
-async def database_list_databases_mcp() -> Dict[str, Any]:
+async def database_list_databases_mcp() -> Metadata:
     """
     List all available whitelisted databases
 
@@ -785,7 +785,7 @@ async def database_list_databases_mcp() -> Dict[str, Any]:
     error_code_prefix="DATABASE_MCP",
 )
 @router.post("/mcp/statistics")
-async def database_statistics_mcp(request: TableListRequest) -> Dict[str, Any]:
+async def database_statistics_mcp(request: TableListRequest) -> Metadata:
     """
     Get statistics for a database
 
@@ -864,7 +864,7 @@ async def database_statistics_mcp(request: TableListRequest) -> Dict[str, Any]:
 
 
 @router.get("/mcp/status")
-async def get_database_mcp_status() -> Dict[str, Any]:
+async def get_database_mcp_status() -> Metadata:
     """
     Get Database MCP service status
 

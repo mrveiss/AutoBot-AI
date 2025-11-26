@@ -8,7 +8,9 @@ Provides comprehensive logging of user interactions, errors, and performance met
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict
+from typing import Dict
+
+from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -43,7 +45,7 @@ class RumEvent(BaseModel):
     sessionId: str
     url: str
     userAgent: str
-    data: Dict[str, Any] = {}
+    data: Metadata = {}
 
 
 class RumConfig(BaseModel):
@@ -329,7 +331,7 @@ async def get_rum_status():
         )
 
 
-def format_rum_log_message(event_data: Dict[str, Any]) -> str:
+def format_rum_log_message(event_data: Metadata) -> str:
     """Format RUM event data into a readable log message"""
     event_type = event_data.get("type", "unknown")
     session_id = event_data.get("sessionId", "unknown")

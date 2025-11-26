@@ -4,7 +4,9 @@
 """KB Librarian API endpoints."""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
+
+from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -32,7 +34,7 @@ class KBQueryResponse(BaseModel):
     is_question: bool
     query: str
     documents_found: int
-    documents: List[Dict[str, Any]]
+    documents: List[Metadata]
     summary: Optional[str] = None
 
 

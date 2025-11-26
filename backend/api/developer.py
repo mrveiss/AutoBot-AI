@@ -11,7 +11,9 @@ Provides developer mode functionality including:
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Dict, List
+
+from backend.type_defs.common import Metadata
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -28,7 +30,7 @@ class APIRegistry:
     """Registry to track all API endpoints across routers"""
 
     def __init__(self):
-        self.endpoints: Dict[str, Dict[str, Any]] = {}
+        self.endpoints: Dict[str, Metadata] = {}
         self.routers: List[str] = []
 
     def register_router(self, router_name: str, router_instance, prefix: str = ""):
@@ -49,7 +51,7 @@ class APIRegistry:
                             "tags": getattr(route, "tags", []),
                         }
 
-    def get_all_endpoints(self) -> Dict[str, Any]:
+    def get_all_endpoints(self) -> Metadata:
         """Get all registered endpoints"""
         return {
             "total_endpoints": len(self.endpoints),

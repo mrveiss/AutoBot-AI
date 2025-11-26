@@ -13,7 +13,7 @@ import os
 import platform
 import subprocess
 from enum import Enum
-from typing import Any, Dict
+from typing import Any, Dict, Type
 
 import psutil
 

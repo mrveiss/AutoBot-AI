@@ -12,7 +12,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 from backend.type_defs.common import Metadata
 from uuid import uuid4
@@ -103,10 +103,10 @@ async def process_enhanced_chat_message(
     message: EnhancedChatMessage,
     chat_history_manager,
     knowledge_base,
-    config: Dict[str, Any],
+    config: Metadata,
     request_id: str,
     preferences: Optional[ChatPreferences] = None,
-) -> Dict[str, Any]:
+) -> Metadata:
     """
     Process a chat message with AI Stack enhanced capabilities.
 

@@ -11,8 +11,9 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
+from backend.type_defs.common import Metadata
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -124,7 +125,7 @@ class MonitoringWebSocketManager:
             self.update_task.cancel()
             self.update_task = None
 
-    async def broadcast_update(self, data: Dict[str, Any]):
+    async def broadcast_update(self, data: Metadata):
         """Broadcast update to all connected clients"""
         if not self.active_connections:
             return
@@ -224,7 +225,7 @@ async def start_monitoring_endpoint(background_tasks: BackgroundTasks):
     background_tasks.add_task(start_monitoring)
 
     # Add alert callback for WebSocket broadcasting
-    async def alert_callback(alerts: List[Dict[str, Any]]):
+    async def alert_callback(alerts: List[Metadata]):
         await ws_manager.broadcast_update(
             {
                 "type": "performance_alerts",
@@ -789,7 +790,7 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
 
 
 # Helper functions
-def _calculate_overall_health(dashboard: Dict[str, Any]) -> str:
+def _calculate_overall_health(dashboard: Metadata) -> str:
     """Calculate overall system health based on dashboard data"""
     try:
         health_factors = []
@@ -837,7 +838,7 @@ def _calculate_overall_health(dashboard: Dict[str, Any]) -> str:
         return "unknown"
 
 
-def _calculate_performance_score(dashboard: Dict[str, Any]) -> float:
+def _calculate_performance_score(dashboard: Metadata) -> float:
     """Calculate overall performance score (0-100)"""
     try:
         scores = []
@@ -876,7 +877,7 @@ def _calculate_performance_score(dashboard: Dict[str, Any]) -> float:
         return 0.0
 
 
-def _identify_bottlenecks(dashboard: Dict[str, Any]) -> List[str]:
+def _identify_bottlenecks(dashboard: Metadata) -> List[str]:
     """Identify system bottlenecks"""
     bottlenecks = []
 
@@ -915,7 +916,7 @@ def _identify_bottlenecks(dashboard: Dict[str, Any]) -> List[str]:
     return bottlenecks
 
 
-def _analyze_resource_utilization(dashboard: Dict[str, Any]) -> Dict[str, float]:
+def _analyze_resource_utilization(dashboard: Metadata) -> Dict[str, float]:
     """Analyze resource utilization efficiency"""
     utilization = {}
 
@@ -975,7 +976,7 @@ def _calculate_npu_efficiency(npu_metrics) -> float:
         return 0.0
 
 
-def _convert_metrics_to_csv(data: Dict[str, Any]) -> str:
+def _convert_metrics_to_csv(data: Metadata) -> str:
     """Convert metrics data to CSV format"""
     try:
         import csv

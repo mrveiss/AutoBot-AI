@@ -10,7 +10,9 @@ import asyncio
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict
+from typing import Dict
+
+from backend.type_defs.common import Metadata
 
 
 logger = logging.getLogger(__name__)
@@ -29,7 +31,7 @@ class ConsolidatedHealthService:
         """Register a health checker for a component"""
         self.component_checkers[component_name] = health_checker
 
-    async def get_comprehensive_health(self) -> Dict[str, Any]:
+    async def get_comprehensive_health(self) -> Metadata:
         """Get comprehensive health status from all registered components"""
 
         # Check cache first
@@ -95,7 +97,7 @@ class ConsolidatedHealthService:
 
         return health_status
 
-    async def get_fast_health(self) -> Dict[str, Any]:
+    async def get_fast_health(self) -> Metadata:
         """Get fast health status with minimal checks"""
         return {
             "status": "healthy",
@@ -107,7 +109,7 @@ class ConsolidatedHealthService:
             ),
         }
 
-    def get_component_health(self, component_name: str) -> Dict[str, Any]:
+    def get_component_health(self, component_name: str) -> Metadata:
         """Get health status for a specific component"""
         if component_name not in self.component_checkers:
             return {

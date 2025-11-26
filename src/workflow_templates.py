@@ -10,7 +10,13 @@ allowing users to quickly execute standardized multi-agent workflows.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Pattern,
+)
 
 from src.autobot_types import TaskComplexity
 

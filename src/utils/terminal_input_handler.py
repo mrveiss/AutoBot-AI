@@ -15,7 +15,7 @@ import queue
 import sys
 import threading
 from contextlib import contextmanager
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Pattern
 
 from src.constants.network_constants import NetworkConstants
 

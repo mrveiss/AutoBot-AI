@@ -28,7 +28,6 @@ from typing import (
     List,
     Literal,
     Mapping,
-    MutableMapping,
     NamedTuple,
     Optional,
     Protocol,
@@ -36,6 +35,7 @@ from typing import (
     Set,
     Tuple,
     TypeVar,
+    TypedDict,
     Union,
 )
 

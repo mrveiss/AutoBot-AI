@@ -32,7 +32,7 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
 import redis.asyncio as async_redis  # Modern async Redis with JSON support
 from cachetools import LRUCache

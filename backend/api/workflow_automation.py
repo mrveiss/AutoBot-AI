@@ -15,8 +15,9 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
+from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
@@ -74,7 +75,7 @@ class WorkflowStep:
     estimated_duration: float = 5.0
     dependencies: List[str] = None
     status: WorkflowStepStatus = WorkflowStepStatus.PENDING
-    execution_result: Optional[Dict[str, Any]] = None
+    execution_result: Optional[Metadata] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
@@ -120,7 +121,7 @@ class ActiveWorkflow:
     created_at: datetime = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    user_interventions: List[Dict[str, Any]] = None
+    user_interventions: List[Metadata] = None
     prometheus_start_time: Optional[float] = None  # For Prometheus duration tracking
 
     def __post_init__(self):
@@ -533,7 +534,7 @@ class WorkflowAutomationManager:
 
     async def _execute_workflow_command(
         self, session_id: str, command: str
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """Execute command via terminal session"""
         # This would integrate with the existing terminal WebSocket system
         # For now, simulate command execution
@@ -667,7 +668,7 @@ class WorkflowAutomationManager:
             {"type": "workflow_cancelled", "workflow_id": workflow_id},
         )
 
-    async def _send_workflow_message(self, session_id: str, message: Dict[str, Any]):
+    async def _send_workflow_message(self, session_id: str, message: Metadata):
         """Send workflow control message to frontend terminal"""
         try:
             # This would integrate with the existing WebSocket system
@@ -682,7 +683,7 @@ class WorkflowAutomationManager:
         except Exception as e:
             logger.error(f"Failed to send workflow message: {e}")
 
-    def get_workflow_status(self, workflow_id: str) -> Optional[Dict[str, Any]]:
+    def get_workflow_status(self, workflow_id: str) -> Optional[Metadata]:
         """Get current workflow status"""
         if workflow_id not in self.active_workflows:
             return None
@@ -727,7 +728,7 @@ class WorkflowAutomationManager:
 
     async def _evaluate_workflow_step(
         self, workflow_id: str, step: WorkflowStep
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """Evaluate workflow step using LLM judges"""
         if not self.judges_enabled:
             return {"should_proceed": True, "reason": "Judges disabled"}

@@ -59,3 +59,38 @@ OptionalInt = Optional[int]
 OptionalFloat = Optional[float]
 OptionalBool = Optional[bool]
 OptionalMetadata = Optional[Metadata]
+
+# Message type constants for chat/streaming systems
+# Used for deduplication logic and persistence filtering
+
+
+class MessageTypes:
+    """Constants for message types in the chat system."""
+
+    # Streaming LLM response types - these accumulate tokens progressively
+    LLM_RESPONSE = "llm_response"
+    LLM_RESPONSE_CHUNK = "llm_response_chunk"
+    RESPONSE = "response"
+
+    # Terminal/command types
+    TERMINAL_COMMAND = "terminal_command"
+    TERMINAL_OUTPUT = "terminal_output"
+    COMMAND_APPROVAL_REQUEST = "command_approval_request"
+
+    # System message types
+    SYSTEM = "system"
+    ERROR = "error"
+    DEFAULT = "default"
+
+    # User message types
+    USER = "user"
+    TERMINAL_INTERPRETATION = "terminal_interpretation"
+
+
+# Frozenset of streaming message types for efficient membership testing
+# Used in deduplication logic to handle progressive token accumulation
+STREAMING_MESSAGE_TYPES: frozenset = frozenset([
+    MessageTypes.LLM_RESPONSE,
+    MessageTypes.LLM_RESPONSE_CHUNK,
+    MessageTypes.RESPONSE,
+])

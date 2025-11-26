@@ -4,7 +4,7 @@ Extends the existing LLM interface to add vLLM and HuggingFace model support
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 
 from .llm_interface import LLMInterface

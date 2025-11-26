@@ -14,7 +14,9 @@ enabling the agent to see what users are viewing in real-time.
 
 import asyncio
 import logging
-from typing import Any, Dict
+from typing import Dict
+
+from backend.type_defs.common import Metadata
 
 import aiohttp
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -35,7 +37,7 @@ VNC_ENDPOINTS = {
 
 
 async def record_observation(
-    vnc_type: str, observation_type: str, data: Dict[str, Any]
+    vnc_type: str, observation_type: str, data: Metadata
 ):
     """
     Record VNC observation to MCP bridge for agent access

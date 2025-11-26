@@ -4,8 +4,9 @@
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
+from backend.type_defs.common import Metadata, STREAMING_MESSAGE_TYPES
 from fastapi import (
     APIRouter,
     Body,
@@ -164,7 +165,7 @@ class ChatMessage(BaseModel):
     )
     session_id: Optional[str] = Field(None, description="Chat session ID")
     message_type: Optional[str] = Field("text", description="Message type")
-    metadata: Optional[Dict[str, Any]] = Field(
+    metadata: Optional[Metadata] = Field(
         default_factory=dict, description="Additional metadata"
     )
 
@@ -177,14 +178,14 @@ class ChatResponse(BaseModel):
     session_id: str
     message_id: str
     timestamp: datetime
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Metadata = Field(default_factory=dict)
 
 
 class SessionCreate(BaseModel):
     """Session creation model"""
 
     title: Optional[str] = Field(None, max_length=200, description="Session title")
-    metadata: Optional[Dict[str, Any]] = Field(
+    metadata: Optional[Metadata] = Field(
         default_factory=dict, description="Session metadata"
     )
 
@@ -193,13 +194,13 @@ class SessionUpdate(BaseModel):
     """Session update model"""
 
     title: Optional[str] = Field(None, max_length=200, description="New session title")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Updated metadata")
+    metadata: Optional[Metadata] = Field(None, description="Updated metadata")
 
 
 class MessageHistory(BaseModel):
     """Message history response model"""
 
-    messages: List[Dict[str, Any]]
+    messages: List[Metadata]
     session_id: str
     total_count: int
     page: int = 1
@@ -227,9 +228,9 @@ async def process_chat_message(
     llm_service,
     memory_interface,
     knowledge_base,
-    config: Dict[str, Any],
+    config: Metadata,
     request_id: str,
-) -> Dict[str, Any]:
+) -> Metadata:
     """Process a chat message and generate response"""
     # Validate session ID
     if message.session_id and not validate_chat_session_id(message.session_id):
@@ -1318,6 +1319,9 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
     backend-added messages (terminal_command, terminal_output). It preserves
     backend-added messages that don't exist in the new message set.
 
+    CRITICAL FIX: Uses message ID for deduplication when available to handle
+    streaming scenarios where text content accumulates progressively.
+
     Args:
         existing: Existing messages from file/cache (may include backend-added messages)
         new: New messages from frontend save request
@@ -1330,20 +1334,81 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
         """
         Create a unique signature for message deduplication.
 
-        Uses timestamp, sender, and first 100 chars of text to identify messages.
-        This allows backend-added messages (with same timestamp) to be preserved.
+        CRITICAL FIX: Prioritizes message ID for deduplication to prevent
+        streaming token accumulation from creating duplicate messages.
+        Falls back to timestamp + sender + text prefix for legacy messages.
         """
+        # Prefer message ID for stable identity during streaming
+        msg_id = msg.get("id") or msg.get("messageId")
+        if msg_id:
+            return ("id", msg_id)
+
+        # Fallback: Use timestamp + sender + messageType for streaming messages
+        # This prevents each accumulated token state from being treated as unique
+        message_type = msg.get("messageType", msg.get("type", "default"))
+        if message_type in STREAMING_MESSAGE_TYPES:
+            # For streaming responses, don't use text content in signature
+            # as it changes with each accumulated token
+            return (
+                msg.get("timestamp", ""),
+                msg.get("sender", ""),
+                message_type,
+            )
+
+        # For other message types (terminal, system), use text prefix
         return (
             msg.get("timestamp", ""),
             msg.get("sender", ""),
             msg.get("text", "")[:100],  # First 100 chars to handle long outputs
         )
 
+    def is_streaming_response(msg: Dict) -> bool:
+        """Check if message is a streaming LLM response."""
+        message_type = msg.get("messageType", msg.get("type", "default"))
+        return message_type in STREAMING_MESSAGE_TYPES
+
     # Build set of new message signatures
     new_sigs = {msg_signature(msg) for msg in new}
 
+    # For streaming responses, also track new messages by ID for update detection
+    new_by_id = {}
+    for msg in new:
+        msg_id = msg.get("id") or msg.get("messageId")
+        if msg_id:
+            new_by_id[msg_id] = msg
+
     # Keep existing messages not in new set (e.g., terminal messages added by backend)
-    preserved = [msg for msg in existing if msg_signature(msg) not in new_sigs]
+    # But skip streaming messages that have a newer version in the new set
+    preserved = []
+    for msg in existing:
+        sig = msg_signature(msg)
+        msg_id = msg.get("id") or msg.get("messageId")
+
+        # If message has an ID and new set has same ID, skip (use new version)
+        if msg_id and msg_id in new_by_id:
+            continue
+
+        # If signature matches, skip (deduplicate)
+        if sig in new_sigs:
+            continue
+
+        # For streaming responses without IDs, check for timestamp overlap
+        # to prevent duplicate accumulated states
+        if is_streaming_response(msg):
+            msg_ts = msg.get("timestamp", "")
+            msg_sender = msg.get("sender", "")
+            # Check if any new message has same timestamp and sender
+            has_newer = any(
+                n.get("timestamp", "") == msg_ts
+                and n.get("sender", "") == msg_sender
+                and is_streaming_response(n)
+                and len(n.get("text", "")) >= len(msg.get("text", ""))
+                for n in new
+            )
+            if has_newer:
+                continue
+
+        preserved.append(msg)
 
     # Combine: preserved messages + new messages
     merged = preserved + new

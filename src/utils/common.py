@@ -12,7 +12,7 @@ import json
 import logging
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 
 class CommonUtils:

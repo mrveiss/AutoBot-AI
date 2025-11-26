@@ -28,8 +28,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional, Type
 
+from backend.type_defs.common import Metadata
 from src.event_manager import event_manager
 from src.npu_integration import NPUWorkerClient
 
@@ -154,7 +155,7 @@ class Worker:
                     f"Circuit breaker HALF_OPEN for worker {self.worker_id}, allowing test requests"
                 )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> Metadata:
         """Serialize worker to dictionary"""
         return {
             "worker_id": self.worker_id,
@@ -439,9 +440,9 @@ class NPULoadBalancer:
         self,
         worker_id: str,
         task_type: str,
-        task_data: Dict[str, Any],
+        task_data: Metadata,
         max_retries: int = 2,
-    ) -> Dict[str, Any]:
+    ) -> Metadata:
         """
         Submit task to specific worker with retry logic.
 
@@ -504,7 +505,7 @@ class NPULoadBalancer:
         finally:
             await client.close()
 
-    async def get_worker_status(self, worker_id: str) -> Optional[Dict[str, Any]]:
+    async def get_worker_status(self, worker_id: str) -> Optional[Metadata]:
         """
         Get status of specific worker.
 
@@ -517,7 +518,7 @@ class NPULoadBalancer:
         worker = self.get_worker(worker_id)
         return worker.to_dict() if worker else None
 
-    async def get_all_workers_status(self) -> List[Dict[str, Any]]:
+    async def get_all_workers_status(self) -> List[Metadata]:
         """
         Get status of all workers.
 

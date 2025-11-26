@@ -16,8 +16,9 @@ Enables agents to:
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
+from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["sequential_thinking_mcp", "mcp"])
 
 # In-memory storage for thinking sessions (could be moved to Redis for persistence)
-thinking_sessions: Dict[str, List[Dict[str, Any]]] = {}
+thinking_sessions: Dict[str, List[Metadata]] = {}
 
 
 class MCPTool(BaseModel):
@@ -35,7 +36,7 @@ class MCPTool(BaseModel):
 
     name: str
     description: str
-    input_schema: Dict[str, Any]
+    input_schema: Metadata
 
 
 class SequentialThinkingRequest(BaseModel):
@@ -171,7 +172,7 @@ async def get_sequential_thinking_mcp_tools() -> List[MCPTool]:
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
 @router.post("/mcp/sequential_thinking")
-async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Dict[str, Any]:
+async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadata:
     """
     Execute sequential thinking tool
 
@@ -292,7 +293,7 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Dict[st
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
 @router.get("/sessions/{session_id}")
-async def get_thinking_session(session_id: str) -> Dict[str, Any]:
+async def get_thinking_session(session_id: str) -> Metadata:
     """Get complete thinking session history"""
     if session_id not in thinking_sessions:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
@@ -318,7 +319,7 @@ async def get_thinking_session(session_id: str) -> Dict[str, Any]:
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
 @router.delete("/sessions/{session_id}")
-async def clear_thinking_session(session_id: str) -> Dict[str, Any]:
+async def clear_thinking_session(session_id: str) -> Metadata:
     """Clear a thinking session"""
     if session_id not in thinking_sessions:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
@@ -340,7 +341,7 @@ async def clear_thinking_session(session_id: str) -> Dict[str, Any]:
     error_code_prefix="SEQUENTIAL_THINKING_MCP",
 )
 @router.get("/sessions")
-async def list_thinking_sessions() -> Dict[str, Any]:
+async def list_thinking_sessions() -> Metadata:
     """List all active thinking sessions"""
     sessions = []
     for session_id, thoughts in thinking_sessions.items():

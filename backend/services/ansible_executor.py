@@ -14,8 +14,9 @@ import logging
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Callable, Dict, Optional
 
+from backend.type_defs.common import Metadata
 import ansible_runner
 
 logger = logging.getLogger(__name__)
@@ -46,8 +47,8 @@ class AnsibleExecutor:
     async def run_playbook(
         self,
         playbook_path: str,
-        inventory: Dict[str, Any],
-        extra_vars: Optional[Dict[str, Any]] = None,
+        inventory: Metadata,
+        extra_vars: Optional[Metadata] = None,
         event_callback: Optional[Callable[[Dict], None]] = None,
         run_id: Optional[str] = None,
     ) -> ansible_runner.Runner:
@@ -91,8 +92,8 @@ class AnsibleExecutor:
     def _execute_runner(
         self,
         playbook_path: str,
-        inventory: Dict[str, Any],
-        extra_vars: Dict[str, Any],
+        inventory: Metadata,
+        extra_vars: Metadata,
         event_callback: Optional[Callable[[Dict], None]],
         run_id: str,
     ) -> ansible_runner.Runner:
