@@ -7,7 +7,7 @@ Provides workflow scheduling and queue management capabilities
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 from backend.type_defs.common import Metadata
 

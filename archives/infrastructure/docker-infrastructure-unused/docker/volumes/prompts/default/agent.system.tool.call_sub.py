@@ -1,4 +1,4 @@
-# import json  # unused import  
+# import json  # unused import
 from typing import Any
 
 from python.helpers import files

@@ -11,6 +11,7 @@ import json
 import time
 from playwright.sync_api import sync_playwright
 
+
 def analyze_frontend_issue():
     """Analyze the frontend blank page issue using Playwright"""
 
@@ -317,6 +318,7 @@ def analyze_frontend_issue():
             'network_responses': network_responses,
             'analysis_complete': True
         }
+
 
 if __name__ == '__main__':
     print("Starting Headless Frontend Analysis on Browser VM...")

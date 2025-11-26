@@ -7,7 +7,6 @@ Provides REST endpoints for hot reloading chat workflow modules during developme
 """
 
 import logging
-from typing import Dict
 
 from backend.type_defs.common import Metadata
 

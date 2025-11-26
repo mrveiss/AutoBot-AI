@@ -38,7 +38,6 @@ from typing import (
     List,
     Optional,
     Protocol,
-    Set,
 )
 
 from src.agents.machine_aware_system_knowledge_manager import (

@@ -27,12 +27,12 @@ class AutoBotFrontendTester:
         self.frontend_base = "http://172.16.168.21"
         self.results: List[TestResult] = []
         self.session: Optional[aiohttp.ClientSession] = None
-        
+
     async def __aenter__(self):
         timeout = aiohttp.ClientTimeout(total=10, connect=5)
         self.session = aiohttp.ClientSession(timeout=timeout)
         return self
-        
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self.session:
             await self.session.close()
@@ -84,7 +84,7 @@ class AutoBotFrontendTester:
                     )
                 else:
                     return TestResult(
-                        name="Frontend Availability", 
+                        name="Frontend Availability",
                         success=False,
                         message=f"Frontend returned status {resp.status}",
                         response_time=response_time
@@ -105,7 +105,7 @@ class AutoBotFrontendTester:
             ("/api/system/status", "System Status"),
             ("/api/validation-dashboard/status", "Validation Dashboard"),  # Fixed path
         ]
-        
+
         results = []
         for endpoint, name in endpoints:
             try:
@@ -142,13 +142,13 @@ class AutoBotFrontendTester:
                     success=False,
                     message=f"Request failed: {str(e)}"
                 ))
-        
+
         return results
 
     async def test_knowledge_base_functionality(self) -> List[TestResult]:
         """Test knowledge base specific functionality"""
         results = []
-        
+
         # Test basic stats
         try:
             async with self.session.get(f"{self.backend_base}/api/knowledge_base/stats/basic") as resp:
@@ -156,7 +156,7 @@ class AutoBotFrontendTester:
                     data = await resp.json()
                     total_docs = data.get("total_documents", 0)
                     total_chunks = data.get("total_chunks", 0)
-                    
+
                     if total_docs > 0:
                         results.append(TestResult(
                             name="Knowledge Base Stats",
@@ -246,7 +246,7 @@ class AutoBotFrontendTester:
     async def test_chat_functionality(self) -> List[TestResult]:
         """Test chat system functionality"""
         results = []
-        
+
         # Test chat creation using the correct endpoint
         try:
             chat_data = {"title": "Test Chat", "chat_type": "general"}
@@ -263,7 +263,7 @@ class AutoBotFrontendTester:
                         message=f"Chat created successfully with ID: {chat_id}",
                         details={"chat_id": chat_id}
                     ))
-                    
+
                     # Test sending message if chat creation succeeded
                     if chat_id:
                         try:
@@ -401,14 +401,14 @@ class AutoBotFrontendTester:
         try:
             navigation_endpoints = [
                 "/api/system/status",
-                "/api/validation-dashboard/status", 
+                "/api/validation-dashboard/status",
                 "/api/knowledge_base/stats/basic",
                 "/api/settings/"
             ]
-            
+
             working_endpoints = 0
             endpoint_details = {}
-            
+
             for endpoint in navigation_endpoints:
                 try:
                     async with self.session.get(f"{self.backend_base}{endpoint}") as resp:
@@ -417,7 +417,7 @@ class AutoBotFrontendTester:
                             working_endpoints += 1
                 except Exception as e:
                     endpoint_details[endpoint] = f"error: {str(e)}"
-                    
+
             success_rate = working_endpoints / len(navigation_endpoints)
             return TestResult(
                 name="Navigation Routing Support",
@@ -435,7 +435,7 @@ class AutoBotFrontendTester:
     async def test_previous_fixes_verification(self) -> List[TestResult]:
         """Test specific fixes mentioned in previous issues"""
         results = []
-        
+
         # Test 1: Verify chat persistence is working
         try:
             # Check if chat list is accessible
@@ -460,8 +460,8 @@ class AutoBotFrontendTester:
                 success=False,
                 message=f"Chat persistence test failed: {str(e)}"
             ))
-        
-        # Test 2: Verify identity hallucination fixes 
+
+        # Test 2: Verify identity hallucination fixes
         try:
             # Check system status for proper identity
             async with self.session.get(f"{self.backend_base}/api/system/status") as resp:
@@ -495,7 +495,7 @@ class AutoBotFrontendTester:
                     data = await resp.json()
                     vector_count = data.get("vector_count", 0)
                     results.append(TestResult(
-                        name="LlamaIndex Integration Fix", 
+                        name="LlamaIndex Integration Fix",
                         success=vector_count > 0,
                         message=f"LlamaIndex working with {vector_count} vectors accessible" if vector_count > 0 else "LlamaIndex accessible but no vectors found",
                         details=data
@@ -512,45 +512,45 @@ class AutoBotFrontendTester:
                 success=False,
                 message=f"LlamaIndex integration test failed: {str(e)}"
             ))
-            
+
         return results
 
     async def run_all_tests(self) -> Dict[str, Any]:
         """Run comprehensive test suite"""
         print("🔍 Starting AutoBot Frontend Comprehensive Testing...")
         print("=" * 60)
-        
+
         # Core infrastructure tests
         print("\n📡 Testing Core Infrastructure...")
         self.results.append(await self.test_backend_health())
         self.results.append(await self.test_frontend_availability())
-        
+
         # API functionality tests
         print("\n🔌 Testing API Endpoints...")
         api_results = await self.test_api_endpoints()
         self.results.extend(api_results)
-        
+
         # Knowledge base tests
         print("\n📚 Testing Knowledge Base Functionality...")
         kb_results = await self.test_knowledge_base_functionality()
         self.results.extend(kb_results)
-        
+
         # Chat functionality tests
         print("\n💬 Testing Chat Functionality...")
         chat_results = await self.test_chat_functionality()
         self.results.extend(chat_results)
-        
+
         # Specific fix verification tests
         print("\n🔧 Testing Previous Issue Fixes...")
         self.results.append(await self.test_desktop_interface_fixes())
         self.results.append(await self.test_file_upload_permissions())
         self.results.append(await self.test_navigation_routing())
-        
+
         # Previous fixes verification
         print("\n✨ Testing Previous Critical Fixes...")
         fix_results = await self.test_previous_fixes_verification()
         self.results.extend(fix_results)
-        
+
         return self.generate_report()
 
     def generate_report(self) -> Dict[str, Any]:
@@ -559,11 +559,11 @@ class AutoBotFrontendTester:
         passed_tests = sum(1 for r in self.results if r.success)
         failed_tests = total_tests - passed_tests
         success_rate = (passed_tests / total_tests) * 100 if total_tests > 0 else 0
-        
+
         # Calculate average response time
         response_times = [r.response_time for r in self.results if r.response_time]
         avg_response_time = sum(response_times) / len(response_times) if response_times else 0
-        
+
         report = {
             "summary": {
                 "total_tests": total_tests,
@@ -575,27 +575,27 @@ class AutoBotFrontendTester:
             "results": self.results,
             "recommendations": self.generate_recommendations()
         }
-        
+
         return report
 
     def generate_recommendations(self) -> List[str]:
         """Generate recommendations based on test results"""
         recommendations = []
-        
+
         failed_tests = [r for r in self.results if not r.success]
-        
+
         if any("Backend" in r.name for r in failed_tests):
             recommendations.append("🔴 Backend service needs attention - check server logs and configuration")
-            
+
         if any("Frontend" in r.name for r in failed_tests):
             recommendations.append("🟡 Frontend service may need restart or configuration update - native VM deployment without Docker")
-            
+
         if any("Knowledge" in r.name for r in failed_tests):
             recommendations.append("📚 Knowledge base may need reindexing or database connection check")
-            
+
         if any("Chat" in r.name for r in failed_tests):
             recommendations.append("💬 Chat system requires debugging - check LLM connections and workflow manager")
-        
+
         success_rate = (sum(1 for r in self.results if r.success) / len(self.results)) * 100
         if success_rate >= 80:
             recommendations.append("✅ Most systems operational - AutoBot frontend functionality in good working order")
@@ -603,7 +603,7 @@ class AutoBotFrontendTester:
             recommendations.append("⚠️ Partial functionality - several components working but some need attention")
         else:
             recommendations.append("🚨 Multiple issues detected - comprehensive debugging needed")
-            
+
         return recommendations
 
     def print_detailed_report(self, report: Dict[str, Any]):
@@ -611,10 +611,10 @@ class AutoBotFrontendTester:
         print("\n" + "=" * 60)
         print("🎯 AUTOBOT FRONTEND FUNCTIONALITY REPORT")
         print("=" * 60)
-        
+
         summary = report["summary"]
         success_rate = summary["success_rate"]
-        
+
         # Color-coded summary
         if success_rate >= 95:
             status_color = "🟢"
@@ -628,16 +628,16 @@ class AutoBotFrontendTester:
         else:
             status_color = "🔴"
             status = "NEEDS ATTENTION"
-            
+
         print(f"\n{status_color} OVERALL STATUS: {status} ({success_rate:.1f}% success rate)")
         print(f"📊 Tests: {summary['passed']}/{summary['total_tests']} passed")
         if summary['avg_response_time'] > 0:
             print(f"⚡ Average Response Time: {summary['avg_response_time']:.2f}s")
-        
+
         # Detailed results
         print(f"\n📋 DETAILED RESULTS:")
         print("-" * 40)
-        
+
         for result in self.results:
             status_icon = "✅" if result.success else "❌"
             response_info = f" ({result.response_time:.2f}s)" if result.response_time else ""
@@ -650,15 +650,15 @@ class AutoBotFrontendTester:
                     details_str = details_str[:200] + "..."
                 print(f"   Details: {details_str}")
             print()
-            
+
         # Recommendations
         print("🔧 RECOMMENDATIONS:")
         print("-" * 40)
         for rec in report["recommendations"]:
             print(f"• {rec}")
-        
+
         print("\n" + "=" * 60)
-        
+
         # Final status determination
         if success_rate >= 95:
             print("🎉 SUCCESS: AutoBot frontend functionality is at 95-100% working state!")
@@ -678,7 +678,7 @@ async def main():
     async with AutoBotFrontendTester() as tester:
         report = await tester.run_all_tests()
         tester.print_detailed_report(report)
-        
+
         # Return appropriate exit code
         success_rate = report["summary"]["success_rate"]
         sys.exit(0 if success_rate >= 60 else 1)  # Lower bar for success given native deployment

@@ -26,14 +26,14 @@ async def simple_lifespan(app: FastAPI):
 
 def create_simple_app() -> FastAPI:
     """Create FastAPI app with minimal async architecture"""
-    
+
     app = FastAPI(
         title="AutoBot API (Simple Async)",
         version="2.0.0-simple",
         description="AutoBot backend with simple async architecture",
         lifespan=simple_lifespan
     )
-    
+
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -42,7 +42,7 @@ def create_simple_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Global exception handler
     @app.exception_handler(Exception)
     async def global_exception_handler(request, exc):
@@ -55,7 +55,7 @@ def create_simple_app() -> FastAPI:
                 "type": type(exc).__name__
             }
         )
-    
+
     # Health endpoint
     @app.get("/api/system/health")
     async def health_check():
@@ -67,21 +67,21 @@ def create_simple_app() -> FastAPI:
             "simple_async": True,
             "response_time_ms": "< 50ms"
         }
-    
+
     # Simple chat endpoint
     class ChatMessageRequest(BaseModel):
         message: str = Field(..., min_length=1, max_length=10000)
         options: dict = Field(default_factory=dict)
-    
+
     @app.post("/api/chat/chats/{chat_id}/message")
     async def send_chat_message(chat_id: str, request_data: ChatMessageRequest):
         """Simple chat endpoint with mock LLM response"""
         try:
             logger.info(f"Processing chat message for chat_id: {chat_id}")
-            
+
             # Mock response (replace with actual LLM call later)
             mock_response = f"Hello! I received your message: '{request_data.message}'. This is a simple async response from the new architecture."
-            
+
             return {
                 "response": mock_response,
                 "message_type": "general_query",
@@ -97,7 +97,7 @@ def create_simple_app() -> FastAPI:
                         "metadata": {}
                     },
                     {
-                        "type": "response", 
+                        "type": "response",
                         "text": mock_response,
                         "sender": "assistant",
                         "timestamp": "14:30:00",
@@ -110,11 +110,11 @@ def create_simple_app() -> FastAPI:
                     "redis_required": False
                 }
             }
-            
+
         except Exception as e:
             logger.error(f"Chat processing error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
-    
+
     @app.post("/api/chat/chats/new")
     async def create_new_chat():
         """Create new chat session"""
@@ -125,7 +125,7 @@ def create_simple_app() -> FastAPI:
             "created": True,
             "timestamp": "2025-09-01T14:30:00.000Z"
         }
-    
+
     @app.get("/api/chat/chats/{chat_id}")
     async def get_chat_messages(chat_id: str):
         """Get messages for a chat session"""
@@ -134,7 +134,7 @@ def create_simple_app() -> FastAPI:
             "messages": [],
             "message_count": 0
         }
-    
+
     @app.get("/api/chat/chats")
     async def list_chats():
         """List all chat sessions"""
@@ -142,7 +142,7 @@ def create_simple_app() -> FastAPI:
             "chats": [],
             "total_count": 0
         }
-    
+
     return app
 
 

@@ -109,7 +109,7 @@ async def research_and_document(topic: str, output_path: str) -> Dict[str, Any]:
         print(f"   ✅ Report saved to: {output_path}")
     else:
         workflow.add_step("write_report", "error", error="Write operation failed")
-        print(f"   ❌ Write failed")
+        print("   ❌ Write failed")
 
     workflow.complete()
 
@@ -211,7 +211,7 @@ Total entries found: {len(search_results.get('results', []))}
 """
 
     # Footer
-    report += f"""---
+    report += """---
 
 ## Methodology
 

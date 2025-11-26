@@ -22,6 +22,8 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 
 # Test Issue 3: Terminal Output Buffer Race
+
+
 class TestTerminalBufferRace:
     """Test terminal output buffer concurrency safety"""
 

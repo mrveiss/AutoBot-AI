@@ -51,7 +51,7 @@ def test_platform_info():
 
     info = get_platform_info()
 
-    print(f"\n✓ Platform Information:")
+    print("\n✓ Platform Information:")
     print(f"  System:    {info.get('system', 'Unknown')}")
     print(f"  Release:   {info.get('release', 'Unknown')}")
     print(f"  Machine:   {info.get('machine', 'Unknown')}")
@@ -65,7 +65,7 @@ def test_platform_info():
         for device in npu_devices:
             print(f"             - {device}")
     else:
-        print(f"  NPU:       ✗ Not detected (CPU fallback)")
+        print("  NPU:       ✗ Not detected (CPU fallback)")
 
     print()
     return True

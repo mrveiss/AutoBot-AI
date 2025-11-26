@@ -13,7 +13,6 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Dict
 
 from backend.type_defs.common import Metadata
 

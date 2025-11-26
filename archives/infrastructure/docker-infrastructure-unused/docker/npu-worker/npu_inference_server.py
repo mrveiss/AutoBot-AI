@@ -44,24 +44,24 @@ model_manager: Optional[NPUModelManager] = None
 async def lifespan(app: FastAPI):
     """Application lifespan management"""
     global model_manager
-    
+
     # Startup
     logger.info("Starting NPU Inference Server")
     model_manager = NPUModelManager()
-    
+
     # Load default models if configured
     default_models = os.getenv("NPU_DEFAULT_MODELS", "").split(",")
     for model_id in default_models:
         if model_id.strip():
             await model_manager.load_model(
-                model_id.strip(), 
+                model_id.strip(),
                 {"auto_load": True}
             )
-    
+
     logger.info("NPU Inference Server started")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down NPU Inference Server")
     if model_manager:
@@ -113,9 +113,9 @@ async def health_check():
     """Health check endpoint"""
     if not model_manager:
         raise HTTPException(status_code=503, detail="Model manager not initialized")
-    
+
     status = model_manager.get_model_status()
-    
+
     return HealthResponse(
         status="healthy",
         npu_available=status["npu_available"],
@@ -129,7 +129,7 @@ async def list_models():
     """List loaded models and their status"""
     if not model_manager:
         raise HTTPException(status_code=503, detail="Model manager not initialized")
-    
+
     return model_manager.get_model_status()
 
 
@@ -138,9 +138,9 @@ async def load_model(request: ModelLoadRequest):
     """Load a model for inference"""
     if not model_manager:
         raise HTTPException(status_code=503, detail="Model manager not initialized")
-    
+
     success = await model_manager.load_model(request.model_id, request.model_config)
-    
+
     if success:
         return {"status": "success", "model_id": request.model_id}
     else:
@@ -152,9 +152,9 @@ async def unload_model(model_id: str):
     """Unload a model to free memory"""
     if not model_manager:
         raise HTTPException(status_code=503, detail="Model manager not initialized")
-    
+
     success = await model_manager.unload_model(model_id)
-    
+
     if success:
         return {"status": "success", "model_id": model_id}
     else:
@@ -166,7 +166,7 @@ async def run_inference(request: InferenceRequest):
     """Run inference on NPU"""
     if not model_manager:
         raise HTTPException(status_code=503, detail="Model manager not initialized")
-    
+
     result = await model_manager.inference(
         model_id=request.model_id,
         input_text=request.input_text,
@@ -174,10 +174,10 @@ async def run_inference(request: InferenceRequest):
         temperature=request.temperature,
         top_p=request.top_p
     )
-    
+
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
-    
+
     return InferenceResponse(**result)
 
 
@@ -186,9 +186,9 @@ async def list_devices():
     """List available OpenVINO devices"""
     if not model_manager:
         raise HTTPException(status_code=503, detail="Model manager not initialized")
-    
+
     status = model_manager.get_model_status()
-    
+
     return {
         "available_devices": status["available_devices"],
         "npu_available": status["npu_available"],
@@ -208,11 +208,11 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     host = os.getenv("NPU_WORKER_HOST", "0.0.0.0")
     port = int(os.getenv("NPU_WORKER_PORT", 8081))
     workers = int(os.getenv("NPU_WORKER_WORKERS", 1))
-    
+
     uvicorn.run(
         app,
         host=host,

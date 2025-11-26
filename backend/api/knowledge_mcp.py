@@ -9,7 +9,7 @@ Integrates with LangChain, LlamaIndex, and Redis Vector Store
 
 import asyncio
 import logging
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from backend.type_defs.common import Metadata
 from fastapi import APIRouter

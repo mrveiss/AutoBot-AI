@@ -49,15 +49,15 @@ class PerformanceRecommendation:
 
 class PerformanceAnalyzer:
     """Analyzes code for performance issues and memory leaks"""
-    
+
     def __init__(self, redis_client=None):
         self.redis_client = redis_client or get_redis_client(async_client=True)
         self.config = config
-        
+
         # Caching keys
         self.PERFORMANCE_KEY = "perf_analysis:issues"
         self.RECOMMENDATIONS_KEY = "perf_analysis:recommendations"
-        
+
         # Performance anti-patterns
         self.performance_patterns = {
             'memory_leaks': [
@@ -117,40 +117,40 @@ class PerformanceAnalyzer:
                 r'\.read\(\)(?!\s*(?:\.decode|\.split|\.strip))',
             ]
         }
-        
+
         logger.info("Performance Analyzer initialized")
-    
+
     async def analyze_performance(self, root_path: str = ".", patterns: List[str] = None) -> Dict[str, Any]:
         """Analyze codebase for performance issues"""
-        
+
         start_time = time.time()
         patterns = patterns or ["**/*.py"]
-        
+
         # Clear previous analysis cache
         await self._clear_cache()
-        
+
         logger.info(f"Scanning for performance issues in {root_path}")
         performance_issues = await self._scan_for_performance_issues(root_path, patterns)
         logger.info(f"Found {len(performance_issues)} potential performance issues")
-        
+
         # Analyze AST for complex patterns
         logger.info("Performing AST-based performance analysis")
         ast_issues = await self._ast_performance_analysis(root_path, patterns)
         performance_issues.extend(ast_issues)
-        
+
         # Categorize and prioritize findings
         logger.info("Categorizing and prioritizing issues")
         categorized = await self._categorize_issues(performance_issues)
-        
+
         # Generate optimization recommendations
         logger.info("Generating optimization recommendations")
         recommendations = await self._generate_optimization_recommendations(categorized)
-        
+
         # Calculate performance metrics
         metrics = self._calculate_performance_metrics(performance_issues, recommendations)
-        
+
         analysis_time = time.time() - start_time
-        
+
         results = {
             "total_performance_issues": len(performance_issues),
             "categories": {cat: len(issues) for cat, issues in categorized.items()},
@@ -162,19 +162,19 @@ class PerformanceAnalyzer:
             "optimization_recommendations": [self._serialize_recommendation(r) for r in recommendations],
             "metrics": metrics
         }
-        
+
         # Cache results
         await self._cache_results(results)
-        
+
         logger.info(f"Performance analysis complete in {analysis_time:.2f}s")
         return results
-    
+
     async def _scan_for_performance_issues(self, root_path: str, patterns: List[str]) -> List[PerformanceIssue]:
         """Scan files for performance anti-patterns"""
-        
+
         issues = []
         root = Path(root_path)
-        
+
         for pattern in patterns:
             for file_path in root.glob(pattern):
                 if file_path.is_file() and not self._should_skip_file(file_path):
@@ -183,9 +183,9 @@ class PerformanceAnalyzer:
                         issues.extend(file_issues)
                     except Exception as e:
                         logger.warning(f"Failed to scan {file_path}: {e}")
-        
+
         return issues
-    
+
     def _should_skip_file(self, file_path: Path) -> bool:
         """Check if file should be skipped"""
         skip_patterns = [
@@ -201,43 +201,43 @@ class PerformanceAnalyzer:
             "performance_analyzer",
             "analyze_",
         ]
-        
+
         path_str = str(file_path)
         return any(pattern in path_str for pattern in skip_patterns)
-    
+
     async def _scan_file_for_performance_issues(self, file_path: str) -> List[PerformanceIssue]:
         """Scan a single file for performance issues"""
-        
+
         issues = []
-        
+
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
                 lines = content.splitlines()
-            
+
             # Regex-based scanning for each category
             for category, pattern_list in self.performance_patterns.items():
                 for pattern in pattern_list:
                     for match in re.finditer(pattern, content, re.MULTILINE):
                         line_num = content[:match.start()].count('\n') + 1
-                        
+
                         issue = self._create_performance_issue(
                             file_path, line_num, match.group(0), category, lines
                         )
                         if issue:
                             issues.append(issue)
-            
+
         except Exception as e:
             logger.error(f"Error scanning {file_path}: {e}")
-        
+
         return issues
-    
+
     async def _ast_performance_analysis(self, root_path: str, patterns: List[str]) -> List[PerformanceIssue]:
         """Perform AST-based performance analysis"""
-        
+
         issues = []
         root = Path(root_path)
-        
+
         for pattern in patterns:
             for file_path in root.glob(pattern):
                 if file_path.is_file() and not self._should_skip_file(file_path):
@@ -246,61 +246,61 @@ class PerformanceAnalyzer:
                         issues.extend(file_issues)
                     except Exception as e:
                         logger.warning(f"Failed to analyze AST for {file_path}: {e}")
-        
+
         return issues
-    
+
     async def _analyze_ast_performance(self, file_path: str) -> List[PerformanceIssue]:
         """Analyze AST for performance patterns"""
-        
+
         issues = []
-        
+
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
                 lines = content.splitlines()
-            
+
             tree = ast.parse(content, filename=file_path)
-            
+
             for node in ast.walk(tree):
                 # Detect potential memory leaks
                 if isinstance(node, ast.With):
                     # Check for proper resource management
                     pass
-                
+
                 # Detect inefficient loops
                 elif isinstance(node, ast.For):
                     issue = self._analyze_loop_efficiency(node, file_path, lines)
                     if issue:
                         issues.append(issue)
-                
+
                 # Detect blocking calls in async functions
                 elif isinstance(node, ast.AsyncFunctionDef):
                     blocking_issues = self._analyze_async_function(node, file_path, lines)
                     issues.extend(blocking_issues)
-                
+
                 # Detect database query patterns
                 elif isinstance(node, ast.Call):
                     db_issue = self._analyze_database_call(node, file_path, lines)
                     if db_issue:
                         issues.append(db_issue)
-        
+
         except SyntaxError:
             # Skip files with syntax errors
             pass
         except Exception as e:
             logger.error(f"AST analysis error for {file_path}: {e}")
-        
+
         return issues
-    
+
     def _analyze_loop_efficiency(self, node: ast.For, file_path: str, lines: List[str]) -> Optional[PerformanceIssue]:
         """Analyze loop for efficiency issues"""
-        
+
         # Check for nested loops (potential O(n²) or worse)
         nested_loops = 0
         for child in ast.walk(node):
             if isinstance(child, (ast.For, ast.While)) and child != node:
                 nested_loops += 1
-        
+
         if nested_loops >= 2:
             return PerformanceIssue(
                 file_path=file_path,
@@ -313,19 +313,19 @@ class PerformanceAnalyzer:
                 suggestion="Consider using list comprehensions, vectorized operations, or algorithm optimization",
                 estimated_impact="high"
             )
-        
+
         return None
-    
+
     def _analyze_async_function(self, node: ast.AsyncFunctionDef, file_path: str, lines: List[str]) -> List[PerformanceIssue]:
         """Analyze async function for blocking operations"""
-        
+
         issues = []
         blocking_calls = ['time.sleep', 'requests.', 'subprocess.run', 'input(', 'urllib.']
-        
+
         for child in ast.walk(node):
             if isinstance(child, ast.Call):
                 call_name = self._get_call_name(child)
-                
+
                 for blocking_pattern in blocking_calls:
                     if blocking_pattern in call_name:
                         issues.append(PerformanceIssue(
@@ -339,14 +339,14 @@ class PerformanceAnalyzer:
                             suggestion=f"Use async equivalent: asyncio.sleep, aiohttp, asyncio.subprocess, etc.",
                             estimated_impact="high"
                         ))
-        
+
         return issues
-    
+
     def _analyze_database_call(self, node: ast.Call, file_path: str, lines: List[str]) -> Optional[PerformanceIssue]:
         """Analyze database calls for efficiency"""
-        
+
         call_name = self._get_call_name(node)
-        
+
         # Check for potential N+1 queries
         if any(db_pattern in call_name for db_pattern in ['execute', 'query', 'filter', 'get']):
             # This is a simplified check - in practice, you'd need more context
@@ -362,23 +362,23 @@ class PerformanceAnalyzer:
                     suggestion="Use bulk operations, joins, or prefetch_related to reduce queries",
                     estimated_impact="high"
                 )
-        
+
         return None
-    
-    def _create_performance_issue(self, file_path: str, line_num: int, code_match: str, 
+
+    def _create_performance_issue(self, file_path: str, line_num: int, code_match: str,
                                 category: str, lines: List[str]) -> Optional[PerformanceIssue]:
         """Create a PerformanceIssue object"""
-        
+
         # Get context
         snippet = self._get_code_snippet(lines, line_num, 3)
-        
+
         # Skip false positives
         if self._is_false_positive(code_match, snippet, category):
             return None
-        
+
         # Determine severity and description
         severity, description, suggestion = self._classify_performance_issue(code_match, category, snippet)
-        
+
         return PerformanceIssue(
             file_path=file_path,
             line_number=line_num,
@@ -390,10 +390,10 @@ class PerformanceAnalyzer:
             suggestion=suggestion,
             estimated_impact=severity
         )
-    
+
     def _classify_performance_issue(self, code_match: str, category: str, context: str) -> Tuple[str, str, str]:
         """Classify performance issue severity and provide description/suggestion"""
-        
+
         classifications = {
             'memory_leaks': {
                 'severity': 'critical' if any(leak in code_match for leak in ['open(', 'Popen(']) else 'high',
@@ -426,35 +426,35 @@ class PerformanceAnalyzer:
                 'suggestion': "Optimize resource usage and eliminate redundant operations"
             }
         }
-        
+
         info = classifications.get(category, {
             'severity': 'medium',
             'description': f"Performance issue in category: {category}",
             'suggestion': "Review and optimize this code section"
         })
-        
+
         return info['severity'], info['description'], info['suggestion']
-    
+
     def _is_false_positive(self, code_match: str, context: str, category: str) -> bool:
         """Check if this is likely a false positive"""
-        
+
         # Skip comments and docstrings
         context_clean = context.strip()
         if context_clean.startswith('#') or '"""' in context or "'''" in context:
             return True
-        
+
         # Skip test files and examples
         if any(word in context.lower() for word in ['test', 'example', 'demo', 'mock']):
             return True
-        
+
         return False
-    
+
     def _get_code_snippet(self, lines: List[str], line_num: int, context_lines: int = 2) -> str:
         """Get code snippet with context"""
         start = max(0, line_num - context_lines - 1)
         end = min(len(lines), line_num + context_lines)
         return '\n'.join(lines[start:end])
-    
+
     def _get_call_name(self, node: ast.Call) -> str:
         """Get the name of a function call"""
         if isinstance(node.func, ast.Name):
@@ -463,42 +463,42 @@ class PerformanceAnalyzer:
             return f"{self._get_call_name(node.func.value)}.{node.func.attr}"
         else:
             return str(node.func)
-    
+
     def _get_containing_function(self, node: ast.AST) -> Optional[str]:
         """Get the name of the function containing this node"""
         # This would require maintaining parent references in AST
         # Simplified implementation
         return None
-    
+
     def _is_in_loop_context(self, node: ast.AST) -> bool:
         """Check if node is inside a loop"""
         # This would require parent node tracking
         # Simplified implementation
         return False
-    
+
     async def _categorize_issues(self, performance_issues: List[PerformanceIssue]) -> Dict[str, List[PerformanceIssue]]:
         """Categorize performance issues"""
-        
+
         categories = {}
         for issue in performance_issues:
             if issue.issue_type not in categories:
                 categories[issue.issue_type] = []
             categories[issue.issue_type].append(issue)
-        
+
         return categories
-    
+
     async def _generate_optimization_recommendations(self, categorized: Dict[str, List[PerformanceIssue]]) -> List[PerformanceRecommendation]:
         """Generate optimization recommendations"""
-        
+
         recommendations = []
-        
+
         for category, issues in categorized.items():
             if not issues:
                 continue
-            
+
             # Group similar issues
             high_impact = [i for i in issues if i.severity in ['critical', 'high']]
-            
+
             if high_impact:
                 recommendation = PerformanceRecommendation(
                     category=category,
@@ -509,14 +509,14 @@ class PerformanceAnalyzer:
                     code_examples=self._generate_code_examples(category, high_impact[:3])
                 )
                 recommendations.append(recommendation)
-        
+
         return recommendations
-    
+
     def _generate_code_examples(self, category: str, issues: List[PerformanceIssue]) -> List[Dict[str, str]]:
         """Generate before/after code examples"""
-        
+
         examples = []
-        
+
         example_templates = {
             'memory_leaks': {
                 'before': 'f = open("file.txt", "r")\ndata = f.read()',
@@ -535,30 +535,30 @@ class PerformanceAnalyzer:
                 'after': 'profiles = db.get_profiles_bulk([u.id for u in users])'
             }
         }
-        
+
         template = example_templates.get(category)
         if template:
             examples.append(template)
-        
+
         return examples
-    
-    def _calculate_performance_metrics(self, issues: List[PerformanceIssue], 
+
+    def _calculate_performance_metrics(self, issues: List[PerformanceIssue],
                                      recommendations: List[PerformanceRecommendation]) -> Dict[str, Any]:
         """Calculate performance analysis metrics"""
-        
+
         severity_counts = {
             'critical': len([i for i in issues if i.severity == 'critical']),
             'high': len([i for i in issues if i.severity == 'high']),
             'medium': len([i for i in issues if i.severity == 'medium']),
             'low': len([i for i in issues if i.severity == 'low'])
         }
-        
+
         category_counts = {}
         for issue in issues:
             category_counts[issue.issue_type] = category_counts.get(issue.issue_type, 0) + 1
-        
+
         file_counts = len(set(i.file_path for i in issues))
-        
+
         return {
             "severity_breakdown": severity_counts,
             "category_breakdown": category_counts,
@@ -568,12 +568,12 @@ class PerformanceAnalyzer:
             "blocking_call_count": category_counts.get('blocking_calls', 0),
             "performance_debt_score": self._calculate_debt_score(severity_counts)
         }
-    
+
     def _calculate_debt_score(self, severity_counts: Dict[str, int]) -> int:
         """Calculate technical debt score for performance"""
         weights = {'critical': 10, 'high': 5, 'medium': 2, 'low': 1}
         return sum(count * weights[severity] for severity, count in severity_counts.items())
-    
+
     def _serialize_performance_issue(self, issue: PerformanceIssue) -> Dict[str, Any]:
         """Serialize performance issue for output"""
         return {
@@ -587,7 +587,7 @@ class PerformanceAnalyzer:
             "impact": issue.estimated_impact,
             "code_snippet": issue.code_snippet
         }
-    
+
     def _serialize_recommendation(self, rec: PerformanceRecommendation) -> Dict[str, Any]:
         """Serialize recommendation for output"""
         return {
@@ -598,7 +598,7 @@ class PerformanceAnalyzer:
             "priority": rec.priority,
             "code_examples": rec.code_examples
         }
-    
+
     async def _cache_results(self, results: Dict[str, Any]):
         """Cache analysis results in Redis"""
         if self.redis_client:
@@ -608,7 +608,7 @@ class PerformanceAnalyzer:
                 await self.redis_client.setex(key, 3600, value)
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
-    
+
     async def _clear_cache(self):
         """Clear analysis cache"""
         if self.redis_client:
@@ -616,7 +616,7 @@ class PerformanceAnalyzer:
                 cursor = 0
                 while True:
                     cursor, keys = await self.redis_client.scan(
-                        cursor, 
+                        cursor,
                         match="perf_analysis:*",
                         count=100
                     )
@@ -630,15 +630,15 @@ class PerformanceAnalyzer:
 
 async def main():
     """Example usage of performance analyzer"""
-    
+
     analyzer = PerformanceAnalyzer()
-    
+
     # Analyze the codebase for performance issues
     results = await analyzer.analyze_performance(
         root_path=".",
         patterns=["src/**/*.py", "backend/**/*.py"]
     )
-    
+
     # Print summary
     print(f"\n=== Performance Analysis Results ===")
     print(f"Total performance issues: {results['total_performance_issues']}")
@@ -646,12 +646,12 @@ async def main():
     print(f"High priority issues: {results['high_priority_issues']}")
     print(f"Optimization recommendations: {results['recommendations_count']}")
     print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
-    
+
     # Print category breakdown
     print(f"\n=== Issue Categories ===")
     for category, count in results['categories'].items():
         print(f"{category}: {count}")
-    
+
     # Print top critical issues
     print(f"\n=== Critical Performance Issues ===")
     critical_issues = [i for i in results['performance_details'] if i['severity'] == 'critical']
@@ -659,7 +659,7 @@ async def main():
         print(f"\n{i}. {issue['type']} in {issue['file']}:{issue['line']}")
         print(f"   Description: {issue['description']}")
         print(f"   Suggestion: {issue['suggestion']}")
-    
+
     # Print optimization recommendations
     print(f"\n=== Optimization Recommendations ===")
     for i, rec in enumerate(results['optimization_recommendations'][:3], 1):

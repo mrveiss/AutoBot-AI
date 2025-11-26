@@ -19,12 +19,12 @@ from npu_inference_server import app
 def setup_logging():
     """Setup structured logging for NPU worker"""
     log_level = os.getenv("NPU_LOG_LEVEL", "INFO").upper()
-    
+
     logging.basicConfig(
         level=getattr(logging, log_level),
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
-    
+
     # Configure structlog
     structlog.configure(
         processors=[
@@ -48,28 +48,28 @@ def setup_logging():
 def check_environment():
     """Check NPU worker environment"""
     logger = structlog.get_logger()
-    
+
     # Check OpenVINO environment
     try:
         import openvino as ov
         from openvino.runtime import Core
-        
+
         core = Core()
         devices = core.available_devices
         logger.info("OpenVINO initialized", devices=devices)
-        
+
         # Check for NPU specifically
         npu_devices = [d for d in devices if 'NPU' in d]
         if npu_devices:
             logger.info("NPU devices detected", npu_devices=npu_devices)
         else:
             logger.warning("No NPU devices detected - will use CPU/GPU fallback")
-            
+
     except ImportError:
         logger.error("OpenVINO not available - NPU acceleration disabled")
     except Exception as e:
         logger.error("OpenVINO initialization failed", error=str(e))
-    
+
     # Check environment variables
     required_env = ["NPU_WORKER_HOST", "NPU_WORKER_PORT"]
     for env_var in required_env:
@@ -78,7 +78,7 @@ def check_environment():
             logger.info(f"Environment: {env_var}={value}")
         else:
             logger.warning(f"Environment variable {env_var} not set")
-    
+
     # Check directories
     directories = ["/app/models", "/app/data", "/app/logs"]
     for directory in directories:
@@ -95,28 +95,28 @@ def main():
     # Setup logging first
     setup_logging()
     logger = structlog.get_logger()
-    
+
     logger.info("Starting AutoBot NPU Worker")
-    
+
     # Check environment
     check_environment()
-    
+
     # Get configuration
     host = os.getenv("NPU_WORKER_HOST", "0.0.0.0")
     port = int(os.getenv("NPU_WORKER_PORT", 8081))
     workers = int(os.getenv("NPU_WORKER_WORKERS", 1))
-    
+
     logger.info(
         "NPU Worker configuration",
         host=host,
         port=port,
         workers=workers
     )
-    
+
     # Start the server
     try:
         import uvicorn
-        
+
         uvicorn.run(
             "npu_inference_server:app",
             host=host,
@@ -126,7 +126,7 @@ def main():
             access_log=True,
             reload=False
         )
-        
+
     except KeyboardInterrupt:
         logger.info("NPU Worker stopped by user")
     except Exception as e:

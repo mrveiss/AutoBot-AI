@@ -6,7 +6,7 @@
 AutoBot Native VM Deployment Validation Script
 
 Tests connectivity and health of all services across 6 machines:
-- 5 Hyper-V VMs (172.16.168.21-25) 
+- 5 Hyper-V VMs (172.16.168.21-25)
 - 1 WSL machine (172.16.168.20) running backend + terminal + noVNC
 All services run natively (no Docker containers).
 """
@@ -22,10 +22,12 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from enum import Enum
 
+
 class ServiceStatus(Enum):
     HEALTHY = "healthy"
     UNHEALTHY = "unhealthy"
     UNREACHABLE = "unreachable"
+
 
 @dataclass
 class ServiceCheck:
@@ -36,6 +38,7 @@ class ServiceCheck:
     endpoint: Optional[str] = None
     expected_response: Optional[str] = None
     timeout: int = 10
+
 
 class DeploymentValidator:
     def __init__(self):
@@ -56,7 +59,7 @@ class DeploymentValidator:
     async def check_http_service(self, service: ServiceCheck) -> Tuple[ServiceStatus, str]:
         """Check HTTP-based service health"""
         url = f"http://{service.host}:{service.port}{service.endpoint or ''}"
-        
+
         try:
             timeout = aiohttp.ClientTimeout(total=service.timeout)
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -77,13 +80,13 @@ class DeploymentValidator:
         """Check Redis service health"""
         try:
             r = redis.Redis(
-                host=service.host, 
-                port=service.port, 
+                host=service.host,
+                port=service.port,
                 password=os.environ.get('REDIS_PASSWORD', os.environ.get('AUTOBOT_REDIS_PASSWORD', '')),
                 socket_timeout=service.timeout,
                 decode_responses=True
             )
-            
+
             response = r.ping()
             if response:
                 info = r.info('server')
@@ -91,7 +94,7 @@ class DeploymentValidator:
                 return ServiceStatus.HEALTHY, f"Redis {version} - PONG received"
             else:
                 return ServiceStatus.UNHEALTHY, "No PONG response"
-                
+
         except redis.ConnectionError as e:
             return ServiceStatus.UNREACHABLE, f"Redis connection failed: {str(e)}"
         except redis.TimeoutError:
@@ -102,18 +105,18 @@ class DeploymentValidator:
     async def check_service(self, service: ServiceCheck) -> Dict:
         """Check individual service health"""
         print(f"🔍 Checking {service.name} at {service.host}:{service.port}...")
-        
+
         start_time = time.time()
-        
+
         if service.check_type == "http":
             status, message = await self.check_http_service(service)
         elif service.check_type == "redis":
             status, message = self.check_redis_service(service)
         else:
             status, message = ServiceStatus.UNREACHABLE, "Unknown check type"
-        
+
         response_time = (time.time() - start_time) * 1000  # milliseconds
-        
+
         result = {
             "name": service.name,
             "host": service.host,
@@ -123,7 +126,7 @@ class DeploymentValidator:
             "response_time_ms": round(response_time, 2),
             "timestamp": time.time()
         }
-        
+
         # Print result with color coding
         if status == ServiceStatus.HEALTHY:
             print(f"✅ {service.name}: {message} ({response_time:.0f}ms)")
@@ -131,30 +134,30 @@ class DeploymentValidator:
             print(f"⚠️  {service.name}: {message} ({response_time:.0f}ms)")
         else:
             print(f"❌ {service.name}: {message} ({response_time:.0f}ms)")
-        
+
         return result
 
     async def validate_deployment(self) -> Dict:
         """Validate entire native deployment"""
         print("🚀 AutoBot Native VM Deployment Validation")
         print("=" * 50)
-        
+
         # Check all services concurrently
         tasks = [self.check_service(service) for service in self.services]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         # Process results
         healthy_count = 0
         unhealthy_count = 0
         unreachable_count = 0
-        
+
         for result in results:
             if isinstance(result, Exception):
                 print(f"❌ Service check failed: {result}")
                 continue
-                
+
             self.results[result["name"]] = result
-            
+
             if result["status"] == "healthy":
                 healthy_count += 1
             elif result["status"] == "unhealthy":
@@ -170,7 +173,7 @@ class DeploymentValidator:
         print(f"✅ Healthy Services:     {healthy_count}/{total_services}")
         print(f"⚠️  Unhealthy Services:   {unhealthy_count}/{total_services}")
         print(f"❌ Unreachable Services: {unreachable_count}/{total_services}")
-        
+
         # Overall status
         if healthy_count == total_services:
             print(f"\n🎉 SUCCESS: All services are healthy!")
@@ -196,9 +199,9 @@ class DeploymentValidator:
         """Test backend's ability to connect to VM services"""
         print("\n🔗 Testing Backend → VM Service Connectivity")
         print("=" * 50)
-        
+
         connectivity_tests = []
-        
+
         # Test Redis connection from backend perspective
         try:
             r = redis.Redis(host='172.16.168.23', port=6379, password=os.environ.get('REDIS_PASSWORD', os.environ.get('AUTOBOT_REDIS_PASSWORD', '')), decode_responses=True)
@@ -216,7 +219,7 @@ class DeploymentValidator:
             ("Ollama", "172.16.168.24", 11434, "/api/tags"),
             ("Browser Service", "172.16.168.25", 3000, "/health")
         ]
-        
+
         for service_name, host, port, endpoint in http_services:
             try:
                 url = f"http://{host}:{port}{endpoint}"
@@ -225,22 +228,22 @@ class DeploymentValidator:
                     async with session.get(url) as response:
                         if response.status == 200:
                             connectivity_tests.append({
-                                "test": f"Backend → {service_name}", 
-                                "status": "success", 
+                                "test": f"Backend → {service_name}",
+                                "status": "success",
                                 "message": f"HTTP {response.status}"
                             })
                             print(f"✅ Backend → {service_name}: HTTP {response.status}")
                         else:
                             connectivity_tests.append({
-                                "test": f"Backend → {service_name}", 
-                                "status": "failure", 
+                                "test": f"Backend → {service_name}",
+                                "status": "failure",
                                 "message": f"HTTP {response.status}"
                             })
                             print(f"❌ Backend → {service_name}: HTTP {response.status}")
             except Exception as e:
                 connectivity_tests.append({
-                    "test": f"Backend → {service_name}", 
-                    "status": "failure", 
+                    "test": f"Backend → {service_name}",
+                    "status": "failure",
                     "message": str(e)
                 })
                 print(f"❌ Backend → {service_name}: {str(e)}")
@@ -251,28 +254,29 @@ class DeploymentValidator:
         """Save validation results to JSON file"""
         if filename is None:
             filename = f"/tmp/autobot-validation-{int(time.time())}.json"
-        
+
         with open(filename, 'w') as f:
             json.dump(results, f, indent=2, default=str)
-        
+
         print(f"\n📁 Results saved to: {filename}")
+
 
 async def main():
     validator = DeploymentValidator()
-    
+
     # Run validation
     validation_results = await validator.validate_deployment()
     connectivity_results = await validator.test_backend_vm_connectivity()
-    
+
     # Combine results
     full_results = {
         **validation_results,
         **connectivity_results
     }
-    
+
     # Save results
     validator.save_results(full_results)
-    
+
     # Exit with appropriate code
     if validation_results["overall_status"] == "success":
         print("\n🎉 Native deployment validation PASSED!")

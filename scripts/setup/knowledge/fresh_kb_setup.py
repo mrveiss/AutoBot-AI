@@ -38,7 +38,7 @@ async def fresh_setup():
 
     # Clean specific databases using centralized client
     database_names = ["main", "knowledge", "prompts", "agents", "metrics", "logs", "sessions", "workflows", "vectors", "models"]
-    
+
     for db_name in database_names:
         try:
             r_db = get_redis_client(database=db_name)

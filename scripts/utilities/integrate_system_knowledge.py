@@ -17,6 +17,7 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
 async def integrate_cached_man_pages(kb_v2):
     """Integrate cached man pages from data/system_knowledge/man_pages/"""
     logger.info("Starting cached man pages integration...")
@@ -95,6 +96,7 @@ async def integrate_cached_man_pages(kb_v2):
     logger.info(f"✓ Integrated {integrated_count} man pages into Knowledge Base V2")
     return integrated_count
 
+
 async def integrate_autobot_documentation(kb_v2):
     """Integrate AutoBot documentation from docs/ directory"""
     logger.info("Starting AutoBot documentation integration...")
@@ -169,6 +171,7 @@ async def integrate_autobot_documentation(kb_v2):
 
     logger.info(f"✓ Integrated {integrated_count} documentation files into Knowledge Base V2")
     return integrated_count
+
 
 async def main():
     """Main integration function"""

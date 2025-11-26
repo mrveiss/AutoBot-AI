@@ -12,26 +12,26 @@ from src.code_analyzer import CodeAnalyzer
 
 async def analyze_command_execution_duplicates():
     """Specifically analyze command execution related duplicates"""
-    
+
     print("Starting code analysis for command execution duplicates...")
-    
+
     analyzer = CodeAnalyzer(use_npu=False)  # NPU not needed for this analysis
-    
+
     # Run fresh analysis
     results = await analyzer.analyze_codebase(
         root_path=".",
         patterns=["src/**/*.py", "backend/**/*.py"]
     )
-    
+
     # Filter for command execution related functions
     command_functions = [
         "execute_command", "run_command", "execute_shell_command",
         "run_shell_command", "_run_command", "execute_command_with_output",
         "execute_interactive_command"
     ]
-    
+
     print("\n=== Command Execution Duplicate Analysis ===\n")
-    
+
     # Find command execution duplicates
     command_duplicates = []
     for group in results['duplicate_details']:
@@ -39,10 +39,10 @@ async def analyze_command_execution_duplicates():
             if any(cmd in func['name'].lower() for cmd in command_functions):
                 command_duplicates.append(group)
                 break
-    
+
     if command_duplicates:
         print(f"Found {len(command_duplicates)} groups of duplicate command execution functions:\n")
-        
+
         for i, group in enumerate(command_duplicates, 1):
             print(f"{i}. Similarity: {group['similarity_score']:.0%}")
             print(f"   Potential lines saved: {group['estimated_lines_saved']}")
@@ -50,10 +50,10 @@ async def analyze_command_execution_duplicates():
             for func in group['functions']:
                 print(f"   - {func['file']}:{func['line_range']} - {func['name']}")
             print()
-    
+
     # Generate refactoring plan
     print("\n=== Refactoring Plan for Command Execution ===\n")
-    
+
     refactoring_plan = {
         "phase1": {
             "title": "Consolidate Basic Command Execution",
@@ -80,13 +80,13 @@ async def analyze_command_execution_duplicates():
             ]
         }
     }
-    
+
     for phase, details in refactoring_plan.items():
         print(f"{phase.upper()}: {details['title']}")
         for action in details['actions']:
             print(f"  {action}")
         print()
-    
+
     # Save detailed report
     report_path = Path("code_analysis_report.json")
     with open(report_path, 'w') as f:
@@ -95,9 +95,9 @@ async def analyze_command_execution_duplicates():
             "command_duplicates": command_duplicates,
             "refactoring_plan": refactoring_plan
         }, f, indent=2, default=str)
-    
+
     print(f"\nDetailed report saved to: {report_path}")
-    
+
     # Generate migration script outline
     print("\n=== Migration Script Outline ===\n")
     print("1. Update imports in all files:")
@@ -107,13 +107,13 @@ async def analyze_command_execution_duplicates():
     print("   # After:  result = await execute_shell_command(cmd)")
     print("\n3. Handle return format differences:")
     print("   # Standardize to: result['stdout'], result['stderr'], result['status']")
-    
+
     return results
 
 
 async def create_command_utils_library():
     """Create consolidated command utilities library"""
-    
+
     library_content = '''"""
 Consolidated Command Execution Utilities
 Provides consistent command execution across AutoBot
@@ -136,7 +136,7 @@ def strip_ansi_codes(text: str) -> str:
 
 
 async def execute_shell_command(
-    command: Union[str, List[str]], 
+    command: Union[str, List[str]],
     timeout: Optional[int] = 30,
     cwd: Optional[str] = None,
     env: Optional[Dict[str, str]] = None,
@@ -145,7 +145,7 @@ async def execute_shell_command(
 ) -> Dict[str, Any]:
     """
     Execute a shell command asynchronously with consistent error handling.
-    
+
     Args:
         command: Command to execute (string or list)
         timeout: Command timeout in seconds
@@ -153,13 +153,13 @@ async def execute_shell_command(
         env: Environment variables
         capture_output: Whether to capture stdout/stderr
         strip_ansi: Whether to strip ANSI codes from output
-    
+
     Returns:
         Dict with keys: stdout, stderr, return_code, status, execution_time
     """
     import time
     start_time = time.time()
-    
+
     try:
         # Handle both string and list commands
         if isinstance(command, list):
@@ -168,7 +168,7 @@ async def execute_shell_command(
         else:
             shell = True
             cmd = command
-        
+
         # Create subprocess
         process = await asyncio.create_subprocess_shell(
             cmd if shell else ' '.join(cmd),
@@ -177,11 +177,11 @@ async def execute_shell_command(
             cwd=cwd,
             env=env
         )
-        
+
         # Wait for completion with timeout
         try:
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(), 
+                process.communicate(),
                 timeout=timeout
             )
         except asyncio.TimeoutError:
@@ -194,18 +194,18 @@ async def execute_shell_command(
                 "status": "timeout",
                 "execution_time": time.time() - start_time
             }
-        
+
         # Process output
         stdout_str = stdout.decode('utf-8', errors='replace').strip() if stdout else ""
         stderr_str = stderr.decode('utf-8', errors='replace').strip() if stderr else ""
-        
+
         if strip_ansi:
             stdout_str = strip_ansi_codes(stdout_str)
             stderr_str = strip_ansi_codes(stderr_str)
-        
+
         return_code = process.returncode
         status = "success" if return_code == 0 else "error"
-        
+
         return {
             "stdout": stdout_str,
             "stderr": stderr_str,
@@ -213,7 +213,7 @@ async def execute_shell_command(
             "status": status,
             "execution_time": time.time() - start_time
         }
-        
+
     except FileNotFoundError:
         return {
             "stdout": "",
@@ -228,13 +228,13 @@ async def execute_shell_command(
             "stdout": "",
             "stderr": f"Error executing command: {e}",
             "return_code": 1,
-            "status": "error", 
+            "status": "error",
             "execution_time": time.time() - start_time
         }
 
 
 def execute_shell_command_sync(
-    command: Union[str, List[str]], 
+    command: Union[str, List[str]],
     timeout: Optional[int] = 30,
     cwd: Optional[str] = None,
     env: Optional[Dict[str, str]] = None,
@@ -243,12 +243,12 @@ def execute_shell_command_sync(
 ) -> Dict[str, Any]:
     """
     Synchronous version of execute_shell_command for non-async contexts.
-    
+
     Returns same format as async version.
     """
     import time
     start_time = time.time()
-    
+
     try:
         result = subprocess.run(
             command,
@@ -259,14 +259,14 @@ def execute_shell_command_sync(
             cwd=cwd,
             env=env
         )
-        
+
         stdout_str = result.stdout.strip() if result.stdout else ""
         stderr_str = result.stderr.strip() if result.stderr else ""
-        
+
         if strip_ansi:
             stdout_str = strip_ansi_codes(stdout_str)
             stderr_str = strip_ansi_codes(stderr_str)
-        
+
         return {
             "stdout": stdout_str,
             "stderr": stderr_str,
@@ -274,7 +274,7 @@ def execute_shell_command_sync(
             "status": "success" if result.returncode == 0 else "error",
             "execution_time": time.time() - start_time
         }
-        
+
     except subprocess.TimeoutExpired:
         return {
             "stdout": "",
@@ -306,7 +306,7 @@ def execute_shell_command_sync(
 run_command = execute_shell_command
 run_command_sync = execute_shell_command_sync
 '''
-    
+
     # Save the consolidated library
     lib_path = Path("src/utils/command_utils_consolidated.py")
     lib_path.write_text(library_content)
@@ -315,13 +315,13 @@ run_command_sync = execute_shell_command_sync
 
 async def main():
     """Run the duplicate analysis"""
-    
+
     # Analyze duplicates
     results = await analyze_command_execution_duplicates()
-    
+
     # Create consolidated library
     await create_command_utils_library()
-    
+
     print("\n=== Analysis Complete ===")
     print("Next steps:")
     print("1. Review code_analysis_report.json for detailed findings")

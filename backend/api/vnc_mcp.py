@@ -9,7 +9,7 @@ Integrates with backend VNC proxy for browser and desktop observation
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import List
 
 from backend.type_defs.common import Metadata
 import aiohttp

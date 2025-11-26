@@ -25,6 +25,7 @@ from src.utils.redis_client import get_redis_client
 
 logging.basicConfig(level=logging.INFO)
 
+
 async def main():
     try:
         print("🗂️ Reorganizing Redis databases for optimal separation...")

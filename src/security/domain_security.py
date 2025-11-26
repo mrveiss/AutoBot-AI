@@ -16,7 +16,7 @@ import re
 import socket
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Optional, Set
 from urllib.parse import urlparse
 
 import aiohttp

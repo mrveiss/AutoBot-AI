@@ -10,7 +10,6 @@ import asyncio
 import logging
 import time
 from datetime import datetime
-from typing import Dict
 
 from backend.type_defs.common import Metadata
 

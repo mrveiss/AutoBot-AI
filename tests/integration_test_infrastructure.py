@@ -10,6 +10,7 @@ import sys
 
 BASE_URL = "http://172.16.168.20:8001/api/iac"
 
+
 def test_health():
     """Test 1: Health Check"""
     response = requests.get(f"{BASE_URL}/health")
@@ -17,6 +18,7 @@ def test_health():
     print(f"✅ Test 1: Health Check - PASSED")
     print(f"   Status: {data['status']}, Database: {data['database']}, Hosts: {data['total_hosts']}")
     return True
+
 
 def test_list_roles():
     """Test 2: List Infrastructure Roles"""
@@ -27,6 +29,7 @@ def test_list_roles():
     print(f"   Found {len(data)} roles: {role_names}")
     return True
 
+
 def test_statistics():
     """Test 3: Get Statistics"""
     response = requests.get(f"{BASE_URL}/statistics")
@@ -35,6 +38,7 @@ def test_statistics():
     print(f"   Hosts: {data['total_hosts']}, Roles: {data['total_roles']}, Deployments: {data['total_deployments']}")
     return True
 
+
 def test_list_hosts_empty():
     """Test 4: List Hosts (Empty Database)"""
     response = requests.get(f"{BASE_URL}/hosts", params={"page": 1, "page_size": 20})
@@ -42,6 +46,7 @@ def test_list_hosts_empty():
     print(f"✅ Test 4: List Hosts (Empty) - PASSED")
     print(f"   Pagination: page={data['pagination']['page']}, total={data['pagination']['total']}")
     return True
+
 
 def test_create_host():
     """Test 5: Create Test Host"""
@@ -66,6 +71,7 @@ def test_create_host():
     print(f"   Created host ID={data['id']}, hostname={data['hostname']}, status={data['status']}")
     return data['id']
 
+
 def test_get_host_details(host_id):
     """Test 6: Get Host Details (Relationship Loading)"""
     response = requests.get(f"{BASE_URL}/hosts/{host_id}")
@@ -73,6 +79,7 @@ def test_get_host_details(host_id):
     print(f"✅ Test 6: Get Host Details - PASSED")
     print(f"   Host: {data['hostname']}, Role: {data.get('role_name', 'N/A')}, Deployments: {data.get('deployment_count', 0)}")
     return True
+
 
 def test_list_hosts_after_create():
     """Test 7: List Hosts After Creation"""
@@ -82,6 +89,7 @@ def test_list_hosts_after_create():
     print(f"✅ Test 7: List Hosts After Creation - PASSED")
     print(f"   Total hosts: {data['pagination']['total']}, First host: {first_host}")
     return True
+
 
 def test_delete_host(host_id):
     """Test 8: Delete Test Host"""
@@ -94,6 +102,7 @@ def test_delete_host(host_id):
     data = response.json()
     print(f"   Remaining hosts after deletion: {data['pagination']['total']}")
     return True
+
 
 def test_celery_worker_status():
     """Test 9: Celery Worker Status"""
@@ -111,6 +120,7 @@ def test_celery_worker_status():
     except Exception as e:
         print(f"❌ Test 9: Celery Worker - ERROR: {e}")
         return False
+
 
 def main():
     print("=" * 60)
@@ -162,6 +172,7 @@ def main():
     except Exception as e:
         print(f"\n❌ TEST SUITE FAILED: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

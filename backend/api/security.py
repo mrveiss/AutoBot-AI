@@ -6,7 +6,7 @@ Security API endpoints for command approval and audit
 """
 
 import logging
-from typing import Dict, List
+from typing import List
 
 from backend.type_defs.common import Metadata
 

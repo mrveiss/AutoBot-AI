@@ -9,7 +9,7 @@ Integrates Docker-based Playwright into the main AutoBot application
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Dict, Optional
+from typing import Optional
 
 import aiohttp
 

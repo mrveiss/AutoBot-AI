@@ -10,7 +10,7 @@ All reranking parameters are configurable without code changes.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from backend.type_defs.common import Metadata
 from src.utils.logging_manager import get_llm_logger

@@ -15,6 +15,7 @@ logging.basicConfig(level=logging.INFO)
 # Import canonical Redis client utility
 from src.utils.redis_client import get_redis_client
 
+
 async def main():
     try:
         print("🔧 Fixing Redis index dimensions to match existing vectors...")

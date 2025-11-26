@@ -9,7 +9,6 @@ Celery tasks for asynchronous Ansible playbook execution with real-time progress
 
 import asyncio
 import logging
-from typing import Dict
 
 from backend.type_defs.common import Metadata
 

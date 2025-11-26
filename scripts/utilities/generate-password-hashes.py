@@ -11,18 +11,20 @@ import bcrypt
 import getpass
 import sys
 
+
 def hash_password(password: str) -> str:
     """Hash password using bcrypt"""
     salt = bcrypt.gensalt(rounds=12)
     return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
+
 def main():
     print("AutoBot Password Hash Generator")
     print("=" * 40)
-    
+
     # Default users
     users = ["admin", "user"]
-    
+
     for username in users:
         print(f"\n🔐 Setting password for user '{username}':")
         while True:
@@ -30,29 +32,30 @@ def main():
             if len(password) < 6:
                 print("❌ Password must be at least 6 characters")
                 continue
-            
+
             confirm = getpass.getpass("Confirm password: ")
             if password != confirm:
                 print("❌ Passwords don't match")
                 continue
-            
+
             # Generate hash
             password_hash = hash_password(password)
             print(f"✅ Hash generated for {username}")
             print(f"Hash: {password_hash}")
-            
+
             # Update config suggestion
             print(f"\n📝 Update config.yaml for user '{username}':")
             print(f"    {username}:")
             print(f"      password_hash: \"{password_hash}\"")
             break
-    
+
     print("\n✅ All password hashes generated successfully!")
     print("\n📋 Security Notes:")
     print("- Replace the placeholder hashes in config/config.yaml")
     print("- Store the plaintext passwords securely for initial login")
     print("- Consider implementing password change functionality")
     print("- Use strong, unique passwords for production deployment")
+
 
 if __name__ == "__main__":
     try:

@@ -12,12 +12,14 @@ import re
 import shutil
 from pathlib import Path
 
+
 def backup_file(file_path):
     """Create backup of file before modification"""
     backup_path = f"{file_path}.backup"
     shutil.copy2(file_path, backup_path)
     print(f"✅ Created backup: {backup_path}")
     return backup_path
+
 
 def fix_connection_utils():
     """Fix deepseek-r1:14b references in connection_utils.py"""
@@ -49,6 +51,7 @@ def fix_connection_utils():
         print("⚠️ No changes needed")
         return False
 
+
 def fix_langchain_orchestrator():
     """Fix phi:2.7b reference in langchain_agent_orchestrator.py"""
     file_path = "/home/kali/Desktop/AutoBot/src/langchain_agent_orchestrator.py"
@@ -78,6 +81,7 @@ def fix_langchain_orchestrator():
     else:
         print("⚠️ No changes needed")
         return False
+
 
 def fix_config_py():
     """Fix model configurations in config.py"""
@@ -115,6 +119,7 @@ def fix_config_py():
     else:
         print("⚠️ No changes needed in config.py")
         return False
+
 
 def fix_vllm_provider():
     """Add fallback for missing vLLM models"""
@@ -171,6 +176,7 @@ def fix_vllm_provider():
         print("⚠️ Could not add fallback logic to vLLM provider")
         return False
 
+
 def install_missing_models():
     """Install critical missing models"""
     critical_models = [
@@ -201,6 +207,7 @@ def install_missing_models():
             print(f"⏱️ Installation of {model} timed out")
         except Exception as e:
             print(f"❌ Error installing {model}: {e}")
+
 
 def verify_fixes():
     """Verify that the fixes are working"""
@@ -248,6 +255,7 @@ def verify_fixes():
     except Exception as e:
         print(f"❌ Error checking Ollama: {e}")
 
+
 def main():
     """Main function to apply all fixes"""
     print("🚀 AutoBot LLM Model Critical Fixes")
@@ -282,6 +290,7 @@ def main():
     print("2. Test model functionality")
     print("3. Monitor logs for any remaining model errors")
     print("4. Run full optimization script: python scripts/ai-ml/optimize_llm_models.py")
+
 
 if __name__ == "__main__":
     main()

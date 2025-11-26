@@ -20,7 +20,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from backend.type_defs.common import Metadata
 from src.utils.redis_client import get_redis_client

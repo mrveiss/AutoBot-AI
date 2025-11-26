@@ -14,14 +14,14 @@ async def test_direct_optimization():
     """Test GPU-optimized semantic chunker directly."""
     print("🚀 Testing GPU-Optimized Semantic Chunker")
     print("=" * 50)
-    
+
     try:
         from src.utils.semantic_chunker_gpu_optimized import get_optimized_semantic_chunker
-        
+
         chunker = get_optimized_semantic_chunker()
         print(f"✅ Optimized chunker imported: {type(chunker).__name__}")
         print(f"📍 Module: {chunker.__class__.__module__}")
-        
+
         # Test text
         test_text = """
         AutoBot represents a significant advancement in Linux system automation.
@@ -31,34 +31,34 @@ async def test_direct_optimization():
         Multi-modal AI processing handles text, images, and audio simultaneously.
         Real-time system monitoring ensures optimal performance across all hardware components.
         """
-        
+
         print(f"\n⚡ Testing optimized chunking...")
         print(f"Text length: {len(test_text)} characters")
-        
+
         start_time = time.time()
         chunks = await chunker.chunk_text_optimized(test_text)
         processing_time = time.time() - start_time
-        
+
         print(f"\n📊 Results:")
         print(f"  ⏱️  Processing time: {processing_time:.3f}s")
         print(f"  📦 Chunks created: {len(chunks)}")
-        
+
         if chunks:
             first_chunk = chunks[0]
             print(f"  📝 Sample chunk: {first_chunk.content[:100]}...")
-            
+
             # Check for optimization metadata
             if hasattr(first_chunk, 'metadata'):
                 opt_version = first_chunk.metadata.get('optimization_version', 'none')
                 print(f"  🚀 Optimization level: {opt_version}")
-        
+
         # Performance check
         sentences = len(test_text.split('.'))
         sentences_per_sec = sentences / processing_time if processing_time > 0 else 0
         print(f"  ⚡ Performance: {sentences_per_sec:.1f} sentences/sec")
-        
+
         return True
-        
+
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
@@ -68,12 +68,12 @@ async def test_direct_optimization():
 async def test_performance_stats():
     """Test chunker performance statistics."""
     print(f"\n📊 Testing Performance Statistics...")
-    
+
     try:
         from src.utils.semantic_chunker_gpu_optimized import get_optimized_semantic_chunker
-        
+
         chunker = get_optimized_semantic_chunker()
-        
+
         # Check if performance stats are available
         if hasattr(chunker, 'get_performance_stats'):
             stats = chunker.get_performance_stats()
@@ -87,7 +87,7 @@ async def test_performance_stats():
         else:
             print(f"  ⚠️  Performance stats not available")
             return False
-            
+
     except Exception as e:
         print(f"  ❌ Stats test failed: {e}")
         return False
@@ -96,29 +96,29 @@ if __name__ == "__main__":
     async def main():
         print("🎯 AutoBot Simple GPU Optimization Test")
         print("=" * 60)
-        
+
         # Test direct optimization
         optimization_success = await test_direct_optimization()
-        
+
         # Test performance stats
         stats_success = await test_performance_stats()
-        
+
         print(f"\n" + "=" * 60)
         print("📋 SIMPLE TEST SUMMARY")
         print("=" * 60)
-        
+
         if optimization_success:
             print("✅ GPU-optimized chunker: WORKING")
         else:
             print("❌ GPU-optimized chunker: FAILED")
-        
+
         if stats_success:
             print("✅ Performance statistics: AVAILABLE")
         else:
             print("⚠️  Performance statistics: LIMITED")
-        
+
         overall_success = optimization_success
-        
+
         if overall_success:
             print(f"\n🎉 SUCCESS: GPU optimization is functional!")
             print("  - 5x performance improvement available")
@@ -126,9 +126,9 @@ if __name__ == "__main__":
             print("  - Hardware optimization deployed")
         else:
             print(f"\n⚠️  ISSUE: GPU optimization needs attention")
-        
+
         return overall_success
-    
+
     success = asyncio.run(main())
     print(f"\nTest completed: {'PASS' if success else 'FAIL'}")
     sys.exit(0 if success else 1)

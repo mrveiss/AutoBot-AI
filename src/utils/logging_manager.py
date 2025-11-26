@@ -10,7 +10,7 @@ import logging
 import logging.handlers
 import os
 from pathlib import Path
-from typing import Optional, Type
+from typing import Optional
 
 from src.unified_config_manager import config_manager
 

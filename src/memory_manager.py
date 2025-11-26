@@ -18,7 +18,7 @@ import pickle  # Still imported for backward compatibility, but using JSON for n
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional
 
 
 # Import the centralized ConfigManager

@@ -9,7 +9,7 @@ Eliminates code duplication across deployment, backup, and monitoring scripts
 
 import sys
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 
 class ScriptFormatter:

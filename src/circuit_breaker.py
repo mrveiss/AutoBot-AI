@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
 from threading import Lock
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 
 logger = logging.getLogger(__name__)

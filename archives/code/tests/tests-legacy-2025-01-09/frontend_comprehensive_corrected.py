@@ -28,12 +28,12 @@ class AutoBotComprehensiveFrontendTester:
         self.frontend_base = "http://172.16.168.21:5173"
         self.results: List[TestResult] = []
         self.session: Optional[aiohttp.ClientSession] = None
-        
+
     async def __aenter__(self):
         timeout = aiohttp.ClientTimeout(total=15, connect=5)
         self.session = aiohttp.ClientSession(timeout=timeout)
         return self
-        
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self.session:
             await self.session.close()
@@ -72,7 +72,7 @@ class AutoBotComprehensiveFrontendTester:
     async def test_api_connectivity_from_frontend(self) -> List[TestResult]:
         """Test API endpoints that the frontend would call"""
         results = []
-        
+
         critical_endpoints = [
             ("/api/health", "Backend Health"),
             ("/api/system/status", "System Status"),
@@ -82,7 +82,7 @@ class AutoBotComprehensiveFrontendTester:
             ("/api/settings/", "Settings API"),
             ("/api/monitoring/services", "Service Monitor"),
         ]
-        
+
         for endpoint, name in critical_endpoints:
             try:
                 start_time = time.time()
@@ -118,22 +118,22 @@ class AutoBotComprehensiveFrontendTester:
                     success=False,
                     message=f"Request failed: {str(e)}"
                 ))
-                
+
         return results
 
     async def test_websocket_connections(self) -> TestResult:
         """Test WebSocket connectivity for real-time features"""
         try:
             ws_url = "ws://172.16.168.20:8001/api/websocket/chat"
-            
+
             start_time = time.time()
             async with websockets.connect(ws_url, timeout=10) as websocket:
                 response_time = time.time() - start_time
-                
+
                 # Send test message
                 test_message = {"type": "ping", "data": "connectivity_test"}
                 await websocket.send(json.dumps(test_message))
-                
+
                 # Wait for response
                 try:
                     response = await asyncio.wait_for(websocket.recv(), timeout=5)
@@ -152,7 +152,7 @@ class AutoBotComprehensiveFrontendTester:
                         message="WebSocket connected (no immediate response expected)",
                         response_time=response_time
                     )
-                    
+
         except Exception as e:
             # Try alternative WebSocket endpoint
             try:
@@ -174,7 +174,7 @@ class AutoBotComprehensiveFrontendTester:
     async def test_core_ui_components(self) -> List[TestResult]:
         """Test core UI components via API endpoints they depend on"""
         results = []
-        
+
         # Chat interface dependencies
         try:
             # Test chat list
@@ -213,7 +213,7 @@ class AutoBotComprehensiveFrontendTester:
                     ))
                 else:
                     results.append(TestResult(
-                        name="System Monitor Component", 
+                        name="System Monitor Component",
                         success=False,
                         message=f"Service monitoring API returned {resp.status}"
                     ))
@@ -334,7 +334,7 @@ class AutoBotComprehensiveFrontendTester:
     async def test_knowledge_base_interface(self) -> List[TestResult]:
         """Comprehensive knowledge base interface testing"""
         results = []
-        
+
         # Test stats display
         try:
             async with self.session.get(f"{self.backend_base}/api/knowledge_base/stats/basic") as resp:
@@ -342,7 +342,7 @@ class AutoBotComprehensiveFrontendTester:
                     data = await resp.json()
                     total_docs = data.get("total_documents", 0)
                     total_chunks = data.get("total_chunks", 0)
-                    
+
                     results.append(TestResult(
                         name="KB Interface: Stats Display",
                         success=True,
@@ -420,7 +420,7 @@ class AutoBotComprehensiveFrontendTester:
     async def test_chat_functionality_comprehensive(self) -> List[TestResult]:
         """Comprehensive chat functionality testing"""
         results = []
-        
+
         # Test chat creation
         try:
             chat_data = {"title": "Frontend Test Chat", "chat_type": "general"}
@@ -431,14 +431,14 @@ class AutoBotComprehensiveFrontendTester:
                 if resp.status == 200:
                     data = await resp.json()
                     chat_id = data.get("id") or data.get("chat_id")
-                    
+
                     results.append(TestResult(
                         name="Chat: Creation Function",
                         success=True,
                         message=f"Chat creation working, ID: {chat_id}",
                         details={"chat_id": chat_id, "response": data}
                     ))
-                    
+
                     # Test message sending if chat was created
                     if chat_id:
                         try:
@@ -513,27 +513,27 @@ class AutoBotComprehensiveFrontendTester:
     async def test_performance_and_responsiveness(self) -> List[TestResult]:
         """Test frontend performance and responsiveness"""
         results = []
-        
+
         # Test multiple API calls concurrently to simulate frontend load
         concurrent_endpoints = [
             "/api/health",
-            "/api/system/status", 
+            "/api/system/status",
             "/api/knowledge_base/stats/basic",
             "/api/monitoring/services"
         ]
-        
+
         start_time = time.time()
         tasks = []
         for endpoint in concurrent_endpoints:
             task = self.session.get(f"{self.backend_base}{endpoint}")
             tasks.append(task)
-            
+
         try:
             responses = await asyncio.gather(*tasks, return_exceptions=True)
             total_time = time.time() - start_time
-            
+
             successful_requests = sum(1 for r in responses if hasattr(r, 'status') and r.status == 200)
-            
+
             results.append(TestResult(
                 name="Performance: Concurrent API Calls",
                 success=successful_requests >= 3,
@@ -541,19 +541,19 @@ class AutoBotComprehensiveFrontendTester:
                 details={"concurrent_requests": len(concurrent_endpoints), "successful": successful_requests},
                 response_time=total_time
             ))
-            
+
             # Clean up responses
             for resp in responses:
                 if hasattr(resp, 'close'):
                     resp.close()
-                    
+
         except Exception as e:
             results.append(TestResult(
                 name="Performance: Concurrent API Calls",
                 success=False,
                 message=f"Concurrent API test failed: {str(e)}"
             ))
-            
+
         # Test individual response times
         fast_endpoints = ["/api/health", "/api/system/status"]
         for endpoint in fast_endpoints:
@@ -561,7 +561,7 @@ class AutoBotComprehensiveFrontendTester:
                 start_time = time.time()
                 async with self.session.get(f"{self.backend_base}{endpoint}") as resp:
                     response_time = time.time() - start_time
-                    
+
                     results.append(TestResult(
                         name=f"Performance: {endpoint} Response Time",
                         success=response_time < 2.0,
@@ -574,13 +574,13 @@ class AutoBotComprehensiveFrontendTester:
                     success=False,
                     message=f"Response time test failed: {str(e)}"
                 ))
-                
+
         return results
 
     async def test_error_handling_and_edge_cases(self) -> List[TestResult]:
         """Test error handling and edge cases"""
         results = []
-        
+
         # Test invalid endpoints
         try:
             async with self.session.get(f"{self.backend_base}/api/nonexistent/endpoint") as resp:
@@ -625,53 +625,53 @@ class AutoBotComprehensiveFrontendTester:
         """Run the complete comprehensive test suite"""
         print("🚀 Starting AutoBot Frontend Comprehensive Testing Suite")
         print("=" * 70)
-        
+
         # 1. Frontend Health and Accessibility
         print("\n🌐 Testing Frontend Health & Accessibility...")
         self.results.append(await self.test_frontend_health_and_accessibility())
-        
+
         # 2. API Connectivity
         print("\n🔌 Testing API Connectivity from Frontend...")
         api_results = await self.test_api_connectivity_from_frontend()
         self.results.extend(api_results)
-        
+
         # 3. WebSocket Communication
         print("\n🔄 Testing WebSocket Real-time Communication...")
         self.results.append(await self.test_websocket_connections())
-        
+
         # 4. Core UI Components
         print("\n🎨 Testing Core UI Components...")
         ui_results = await self.test_core_ui_components()
         self.results.extend(ui_results)
-        
+
         # 5. Knowledge Base Interface
         print("\n📚 Testing Knowledge Base Interface...")
         kb_results = await self.test_knowledge_base_interface()
         self.results.extend(kb_results)
-        
+
         # 6. Terminal Integration
         print("\n💻 Testing Terminal Integration...")
         self.results.append(await self.test_terminal_integration())
-        
+
         # 7. Chat Functionality
         print("\n💬 Testing Chat Functionality...")
         chat_results = await self.test_chat_functionality_comprehensive()
         self.results.extend(chat_results)
-        
+
         # 8. Desktop Viewer
         print("\n🖥️  Testing Desktop Viewer Component...")
         self.results.append(await self.test_desktop_viewer_component())
-        
+
         # 9. Performance Testing
         print("\n⚡ Testing Performance & Responsiveness...")
         perf_results = await self.test_performance_and_responsiveness()
         self.results.extend(perf_results)
-        
+
         # 10. Error Handling
         print("\n🛡️  Testing Error Handling & Edge Cases...")
         error_results = await self.test_error_handling_and_edge_cases()
         self.results.extend(error_results)
-        
+
         return self.generate_comprehensive_report()
 
     def generate_comprehensive_report(self) -> Dict[str, Any]:
@@ -680,13 +680,13 @@ class AutoBotComprehensiveFrontendTester:
         passed_tests = sum(1 for r in self.results if r.success)
         failed_tests = total_tests - passed_tests
         success_rate = (passed_tests / total_tests) * 100 if total_tests > 0 else 0
-        
+
         # Calculate performance metrics
         response_times = [r.response_time for r in self.results if r.response_time]
         avg_response_time = sum(response_times) / len(response_times) if response_times else 0
         max_response_time = max(response_times) if response_times else 0
         min_response_time = min(response_times) if response_times else 0
-        
+
         # Categorize results
         categories = {
             "Frontend Health": [r for r in self.results if "Frontend" in r.name],
@@ -700,7 +700,7 @@ class AutoBotComprehensiveFrontendTester:
             "Performance": [r for r in self.results if "Performance" in r.name],
             "Error Handling": [r for r in self.results if "Error Handling" in r.name]
         }
-        
+
         report = {
             "summary": {
                 "total_tests": total_tests,
@@ -716,36 +716,36 @@ class AutoBotComprehensiveFrontendTester:
             "results": self.results,
             "recommendations": self.generate_recommendations()
         }
-        
+
         return report
 
     def generate_recommendations(self) -> List[str]:
         """Generate detailed recommendations"""
         recommendations = []
         failed_tests = [r for r in self.results if not r.success]
-        
+
         # Specific recommendations based on failures
         if any("Frontend Health" in r.name for r in failed_tests):
             recommendations.append("🔴 CRITICAL: Frontend service not accessible - check Vue.js application and port 5173")
-            
+
         if any("WebSocket" in r.name for r in failed_tests):
             recommendations.append("🟡 WebSocket connectivity issues - real-time features may be limited")
-            
+
         if any("API Connectivity" in r.name for r in failed_tests):
             recommendations.append("🟠 Backend API connectivity issues - check backend service at port 8001")
-            
+
         if any("Knowledge Base" in r.name or "KB Interface" in r.name for r in failed_tests):
             recommendations.append("📚 Knowledge Base interface issues - check vector database and search functionality")
-            
+
         if any("Chat" in r.name for r in failed_tests):
             recommendations.append("💬 Chat system issues - check LLM integration and chat workflow")
-            
+
         if any("Performance" in r.name for r in failed_tests):
             recommendations.append("⚡ Performance issues detected - optimize API response times")
-        
+
         # Overall system assessment
         success_rate = (sum(1 for r in self.results if r.success) / len(self.results)) * 100
-        
+
         if success_rate >= 95:
             recommendations.append("✅ EXCELLENT: AutoBot frontend is fully operational with outstanding performance")
         elif success_rate >= 85:
@@ -756,7 +756,7 @@ class AutoBotComprehensiveFrontendTester:
             recommendations.append("🟠 NEEDS IMPROVEMENT: AutoBot frontend has significant issues requiring attention")
         else:
             recommendations.append("🔴 CRITICAL: AutoBot frontend has major issues requiring immediate attention")
-            
+
         return recommendations
 
     def print_comprehensive_report(self, report: Dict[str, Any]):
@@ -764,10 +764,10 @@ class AutoBotComprehensiveFrontendTester:
         print("\n" + "=" * 70)
         print("🎯 AUTOBOT FRONTEND COMPREHENSIVE TEST REPORT")
         print("=" * 70)
-        
+
         summary = report["summary"]
         success_rate = summary["success_rate"]
-        
+
         # Status determination
         if success_rate >= 95:
             status_color = "🟢"
@@ -784,13 +784,13 @@ class AutoBotComprehensiveFrontendTester:
         else:
             status_color = "❌"
             status = "CRITICAL"
-            
+
         print(f"\n{status_color} OVERALL STATUS: {status} ({success_rate:.1f}% success rate)")
         print(f"📊 Test Results: {summary['passed']}/{summary['total_tests']} passed")
-        
+
         if summary['avg_response_time'] > 0:
             print(f"⚡ Response Times: avg={summary['avg_response_time']:.3f}s, min={summary['min_response_time']:.3f}s, max={summary['max_response_time']:.3f}s")
-        
+
         # Category breakdown
         print(f"\n📋 CATEGORY BREAKDOWN:")
         print("-" * 50)
@@ -800,11 +800,11 @@ class AutoBotComprehensiveFrontendTester:
                 cat_success_rate = (passed / total) * 100
                 status_icon = "✅" if cat_success_rate == 100 else "⚠️" if cat_success_rate >= 50 else "❌"
                 print(f"{status_icon} {category}: {passed}/{total} ({cat_success_rate:.0f}%)")
-        
+
         # Detailed results
         print(f"\n📝 DETAILED TEST RESULTS:")
         print("-" * 50)
-        
+
         current_category = ""
         for result in self.results:
             # Determine category
@@ -829,30 +829,30 @@ class AutoBotComprehensiveFrontendTester:
                 result_category = "Performance"
             elif "Error Handling" in result.name:
                 result_category = "Error Handling"
-            
+
             if result_category != current_category:
                 current_category = result_category
                 print(f"\n📂 {current_category}:")
-                
+
             status_icon = "✅" if result.success else "❌"
             response_info = f" ({result.response_time:.3f}s)" if result.response_time else ""
             print(f"  {status_icon} {result.name}{response_info}")
             print(f"      {result.message}")
-            
+
         # Recommendations
         print(f"\n🔧 RECOMMENDATIONS & NEXT STEPS:")
         print("-" * 50)
         for rec in report["recommendations"]:
             print(f"• {rec}")
-        
+
         print("\n" + "=" * 70)
-        
+
         # Final assessment
         if success_rate >= 95:
             print("🎉 SUCCESS: AutoBot frontend is operating at peak performance!")
             print("All major systems functional with excellent response times.")
         elif success_rate >= 85:
-            print("👍 VERY GOOD: AutoBot frontend is working very well!")  
+            print("👍 VERY GOOD: AutoBot frontend is working very well!")
             print("Minor issues present but system is highly functional.")
         elif success_rate >= 75:
             print("👌 GOOD: AutoBot frontend is working well overall.")
@@ -863,24 +863,24 @@ class AutoBotComprehensiveFrontendTester:
         else:
             print("🚨 CRITICAL: AutoBot frontend requires immediate attention.")
             print("Major system issues are affecting core functionality.")
-            
+
         return success_rate >= 75  # Return True if system is in good state
 
 async def main():
     """Main execution function"""
     print("Starting AutoBot Frontend Comprehensive Testing...")
-    
+
     async with AutoBotComprehensiveFrontendTester() as tester:
         report = await tester.run_comprehensive_test_suite()
         system_healthy = tester.print_comprehensive_report(report)
-        
+
         # Save report to file
         timestamp = int(time.time())
         report_file = f"tests/results/frontend_comprehensive_test_{timestamp}.json"
-        
+
         # Ensure results directory exists
         Path("tests/results").mkdir(exist_ok=True)
-        
+
         # Convert TestResult objects to dictionaries for JSON serialization
         serializable_results = []
         for result in report["results"]:
@@ -891,14 +891,14 @@ async def main():
                 "details": result.details,
                 "response_time": result.response_time
             })
-        
+
         report["results"] = serializable_results
-        
+
         with open(report_file, 'w') as f:
             json.dump(report, f, indent=2)
-        
+
         print(f"\n📄 Full test report saved to: {report_file}")
-        
+
         # Exit with appropriate code
         sys.exit(0 if system_healthy else 1)
 

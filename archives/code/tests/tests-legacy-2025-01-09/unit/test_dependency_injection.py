@@ -35,11 +35,11 @@ class TestDependencyInjection:
             "task_llm": "test_task_llm"
         }
         mock_config.get_nested.return_value = "local"
-        
+
         mock_llm = Mock()
         mock_kb = Mock()
         mock_diagnostics = Mock()
-        
+
         # Create orchestrator with injected dependencies
         orchestrator = Orchestrator(
             config_manager=mock_config,
@@ -47,13 +47,13 @@ class TestDependencyInjection:
             knowledge_base=mock_kb,
             diagnostics=mock_diagnostics
         )
-        
+
         # Verify dependencies are properly injected
         assert orchestrator.config_manager is mock_config
         assert orchestrator.llm_interface is mock_llm
         assert orchestrator.knowledge_base is mock_kb
         assert orchestrator.diagnostics is mock_diagnostics
-        
+
         # Verify config is used correctly
         mock_config.get_llm_config.assert_called_once()
         mock_config.get_nested.assert_called()
@@ -62,13 +62,13 @@ class TestDependencyInjection:
         """Test that Orchestrator still works without injected dependencies"""
         # Create orchestrator without dependencies (should use defaults)
         orchestrator = Orchestrator()
-        
+
         # Verify that default dependencies are created
         assert orchestrator.config_manager is not None
         assert orchestrator.llm_interface is not None
         assert orchestrator.knowledge_base is not None
         assert orchestrator.diagnostics is not None
-        
+
         # Verify they are the expected types
         assert isinstance(orchestrator.config_manager, ConfigManager)
 
@@ -81,10 +81,10 @@ class TestDependencyInjection:
             "unified": {"embedding": {"providers": {"ollama": {"selected_model": "test_embed"}}}}
         }
         mock_config.get.return_value = {"redis": {"host": "test_host", "port": 6379}}
-        
+
         # Create knowledge base with injected config
         kb = KnowledgeBase(config_manager=mock_config)
-        
+
         # Verify config is properly injected and used
         assert kb.config_manager is mock_config
         mock_config.get_llm_config.assert_called_once()
@@ -94,7 +94,7 @@ class TestDependencyInjection:
         """Test that KnowledgeBase still works without injected config"""
         # Create knowledge base without config (should use global)
         kb = KnowledgeBase()
-        
+
         # Verify that global config is used
         assert kb.config_manager is not None
         assert isinstance(kb.config_manager, ConfigManager)
@@ -111,18 +111,18 @@ class TestDependencyInjection:
             "diagnostics.use_web_search_for_analysis": False,
             "diagnostics.auto_apply_fixes": False
         }.get(key, default)
-        
+
         mock_llm = Mock()
-        
+
         # Create a minimal reliability stats file for the test
         import tempfile
         import json
         import os
-        
+
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             json.dump({}, f)
             temp_file = f.name
-        
+
         try:
             # Update mock to use the temp file
             mock_config.get_nested.side_effect = lambda key, default=None: {
@@ -132,20 +132,20 @@ class TestDependencyInjection:
                 "diagnostics.use_web_search_for_analysis": False,
                 "diagnostics.auto_apply_fixes": False
             }.get(key, default)
-            
+
             # Create diagnostics with injected dependencies
             diagnostics = Diagnostics(
                 config_manager=mock_config,
                 llm_interface=mock_llm
             )
-            
+
             # Verify dependencies are properly injected
             assert diagnostics.config_manager is mock_config
             assert diagnostics.llm_interface is mock_llm
-            
+
             # Verify config is used correctly
             mock_config.get_nested.assert_called()
-            
+
         finally:
             # Clean up temp file
             os.unlink(temp_file)
@@ -154,11 +154,11 @@ class TestDependencyInjection:
         """Test that Diagnostics still works without injected dependencies"""
         # Create diagnostics without dependencies (should use defaults)
         diagnostics = Diagnostics()
-        
+
         # Verify that default dependencies are created
         assert diagnostics.config_manager is not None
         assert diagnostics.llm_interface is not None
-        
+
         # Verify they are the expected types
         assert isinstance(diagnostics.config_manager, ConfigManager)
 
@@ -167,30 +167,30 @@ class TestDependencyInjection:
         # Test config provider (this works outside FastAPI context)
         config = get_config()
         assert isinstance(config, ConfigManager)
-        
+
         # Note: Other dependency providers require FastAPI request context
         # They use Depends() which only works within FastAPI endpoint execution
         # We test the actual dependency injection in other test methods
-        
+
         # Test that the provider functions exist and are callable
         assert callable(get_diagnostics)
         assert callable(get_knowledge_base)
         assert callable(get_orchestrator)
-        
+
         # Test manual dependency creation (simulates FastAPI behavior)
         config = get_config()
-        
+
         # Manually call with resolved dependencies (as FastAPI would do)
         from src.diagnostics import Diagnostics
         from src.knowledge_base import KnowledgeBase
         from src.orchestrator import Orchestrator
-        
+
         diagnostics = Diagnostics(config_manager=config)
         assert isinstance(diagnostics, Diagnostics)
-        
+
         kb = KnowledgeBase(config_manager=config)
         assert isinstance(kb, KnowledgeBase)
-        
+
         orchestrator = Orchestrator(config_manager=config)
         assert isinstance(orchestrator, Orchestrator)
         assert hasattr(orchestrator, 'config_manager')
@@ -209,17 +209,17 @@ class TestDependencyInjection:
         }
         mock_config.get_nested.return_value = "local"
         mock_config.get.return_value = {"redis": {"host": "test_host", "port": 6379}}
-        
+
         # Create components with mock config
         orchestrator = Orchestrator(config_manager=mock_config)
         kb = KnowledgeBase(config_manager=mock_config)
         diagnostics = Diagnostics(config_manager=mock_config)
-        
+
         # Verify that mock config is used (not global)
         assert orchestrator.config_manager is mock_config
         assert kb.config_manager is mock_config
         assert diagnostics.config_manager is mock_config
-        
+
         # Verify config methods are called on the injected instance
         assert mock_config.get_llm_config.called
         assert mock_config.get_nested.called

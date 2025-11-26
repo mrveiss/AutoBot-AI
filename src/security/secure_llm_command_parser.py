@@ -11,7 +11,7 @@ by validating LLM responses before extracting executable commands.
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional
 
 from src.enhanced_security_layer import EnhancedSecurityLayer
 from src.security.prompt_injection_detector import (

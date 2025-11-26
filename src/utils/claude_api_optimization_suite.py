@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional
 
 
 from ..monitoring.claude_api_monitor import ClaudeAPIMonitor

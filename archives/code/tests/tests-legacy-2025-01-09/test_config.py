@@ -15,7 +15,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.utils.terminal_input_handler import (
-    get_terminal_input_handler, 
+    get_terminal_input_handler,
     configure_testing_defaults,
     patch_builtin_input
 )
@@ -27,17 +27,17 @@ def configure_test_environment():
     os.environ['CI'] = '1'
     os.environ['TESTING'] = '1'
     os.environ['PYTEST_RUNNING'] = '1'
-    
+
     # Configure terminal input handler for testing
     handler = get_terminal_input_handler()
     handler.configure_for_testing()
-    
+
     # Set up common testing defaults
     configure_testing_defaults()
-    
+
     # Patch built-in input function globally
     original_input = patch_builtin_input()
-    
+
     return original_input
 
 
@@ -46,10 +46,10 @@ def configure_test_environment():
 def mock_input():
     """Fixture to mock input function with predefined responses."""
     from src.utils.terminal_input_handler import mock_terminal_input
-    
+
     def _mock_input(responses: List[str]):
         return mock_terminal_input(responses)
-    
+
     return _mock_input
 
 
@@ -57,14 +57,14 @@ def mock_input():
 def non_interactive_environment():
     """Fixture to ensure non-interactive test environment."""
     original_env = os.environ.copy()
-    
+
     # Set testing environment variables
     os.environ['CI'] = '1'
     os.environ['TESTING'] = '1'
     os.environ['PYTEST_RUNNING'] = '1'
-    
+
     yield
-    
+
     # Restore original environment
     os.environ.clear()
     os.environ.update(original_env)
@@ -82,27 +82,27 @@ def run_with_timeout(func, timeout=30, *args, **kwargs):
     """Run a function with timeout to prevent hanging tests."""
     import signal
     import threading
-    
+
     result = [None]
     exception = [None]
-    
+
     def target():
         try:
             result[0] = func(*args, **kwargs)
         except Exception as e:
             exception[0] = e
-    
+
     thread = threading.Thread(target=target)
     thread.daemon = True
     thread.start()
     thread.join(timeout)
-    
+
     if thread.is_alive():
         raise TimeoutError(f"Function {func.__name__} timed out after {timeout} seconds")
-    
+
     if exception[0]:
         raise exception[0]
-    
+
     return result[0]
 
 
@@ -111,10 +111,10 @@ def ensure_non_blocking(test_func):
     def wrapper(*args, **kwargs):
         # Configure testing environment
         configure_test_environment()
-        
+
         # Run test with timeout
         return run_with_timeout(test_func, 60, *args, **kwargs)
-    
+
     return wrapper
 
 
@@ -149,19 +149,19 @@ def pytest_runtest_setup(item):
 # Context managers for specific test scenarios
 class MockInputContext:
     """Context manager for mocking input with specific responses."""
-    
+
     def __init__(self, responses: List[str]):
         self.responses = responses
         self.handler = get_terminal_input_handler()
         self.original_responses = []
         self.original_index = 0
-    
+
     def __enter__(self):
         self.original_responses = self.handler.mock_responses.copy()
         self.original_index = self.handler._mock_index
         self.handler.set_mock_responses(self.responses)
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.handler.mock_responses = self.original_responses
         self.handler._mock_index = self.original_index
@@ -173,7 +173,7 @@ def setup_classification_agent_test():
     responses = ['test message', 'classification test', 'exit']
     handler = get_terminal_input_handler()
     handler.set_mock_responses(responses)
-    
+
     defaults = {
         'enter message': 'test message',
         'classification': 'test classification',
@@ -187,7 +187,7 @@ def setup_terminal_test():
     responses = ['help', 'status', 'exit']
     handler = get_terminal_input_handler()
     handler.set_mock_responses(responses)
-    
+
     defaults = {
         'command': 'help',
         'choice': '1',
@@ -212,26 +212,26 @@ if __name__ != '__main__':
 if __name__ == '__main__':
     print("Test Configuration Module")
     print("=" * 40)
-    
+
     # Test the configuration
     print("Testing terminal input handler...")
-    
+
     from src.utils.terminal_input_handler import safe_input
-    
+
     # Test with mock responses
     handler = get_terminal_input_handler()
     handler.set_mock_responses(['test1', 'test2', 'test3'])
-    
+
     result1 = safe_input("Test prompt 1: ")
     result2 = safe_input("Test prompt 2: ")
     result3 = safe_input("Test prompt 3: ")
-    
+
     print(f"Response 1: '{result1}'")
     print(f"Response 2: '{result2}'")
     print(f"Response 3: '{result3}'")
-    
+
     # Test default behavior
     result4 = safe_input("Test prompt 4: ", default="default_value")
     print(f"Response 4: '{result4}'")
-    
+
     print("✅ Test configuration working correctly!")

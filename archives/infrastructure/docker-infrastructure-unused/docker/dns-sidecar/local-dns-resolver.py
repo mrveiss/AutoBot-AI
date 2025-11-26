@@ -21,29 +21,29 @@ class LocalDNSResolver:
         self.cache = {}
         self.hosts_file = "/etc/hosts.autobot"
         self.cache_file = "/tmp/dns-cache.json"
-        
+
         # Key mappings for AutoBot infrastructure
         self.static_mappings = {
             # Host system
             "host.docker.internal": "host-gateway",
             "backend.autobot": "host-gateway",
             "api.autobot": "host-gateway",
-            
+
             # Container services
             "redis.autobot": "redis",
-            "frontend.autobot": "autobot-frontend", 
+            "frontend.autobot": "autobot-frontend",
             "ai-stack.autobot": "autobot-ai-stack",
             "npu-worker.autobot": "autobot-npu-worker",
             "browser.autobot": "autobot-browser",
             "seq.autobot": "autobot-seq",
-            
+
             # Fallbacks
             "localhost": "127.0.0.1",
         }
-        
+
         self.load_cache()
         self.update_hosts_file()
-    
+
     def load_cache(self):
         """Load DNS cache from file"""
         try:
@@ -59,7 +59,7 @@ class LocalDNSResolver:
                 logger.info(f"Loaded {len(self.cache)} cached DNS entries")
         except Exception as e:
             logger.warning(f"Could not load DNS cache: {e}")
-    
+
     def save_cache(self):
         """Save DNS cache to file"""
         try:
@@ -67,7 +67,7 @@ class LocalDNSResolver:
                 json.dump(self.cache, f)
         except Exception as e:
             logger.warning(f"Could not save DNS cache: {e}")
-    
+
     def resolve_hostname(self, hostname: str) -> Optional[str]:
         """Resolve hostname using cache and static mappings"""
         # Check static mappings first
@@ -76,13 +76,13 @@ class LocalDNSResolver:
             if target == "host-gateway":
                 return self.get_host_gateway_ip()
             return target
-        
+
         # Check cache
         if hostname in self.cache:
             entry = self.cache[hostname]
             if time.time() - entry.get('timestamp', 0) < 60:  # 1 minute TTL
                 return entry.get('ip')
-        
+
         # Perform resolution
         try:
             ip = socket.gethostbyname(hostname)
@@ -95,7 +95,7 @@ class LocalDNSResolver:
         except socket.gaierror:
             logger.warning(f"Could not resolve {hostname}")
             return None
-    
+
     def get_host_gateway_ip(self) -> str:
         """Get the host gateway IP (Docker host)"""
         try:
@@ -111,15 +111,15 @@ class LocalDNSResolver:
                         return line.split()[2]
             except:
                 pass
-            
+
             # Final fallback
             return "172.17.0.1"
-    
+
     def update_hosts_file(self):
         """Update /etc/hosts with our mappings"""
         try:
             entries = ["# AutoBot Local DNS Resolver"]
-            
+
             # Add static mappings
             for hostname, target in self.static_mappings.items():
                 if target == "host-gateway":
@@ -131,21 +131,21 @@ class LocalDNSResolver:
                         entries.append(f"{ip}\t{hostname}")
                     except:
                         pass
-            
+
             # Add cached entries
             for hostname, entry in self.cache.items():
                 if hostname not in self.static_mappings:
                     entries.append(f"{entry['ip']}\t{hostname}")
-            
+
             # Write to hosts file
             with open(self.hosts_file, 'w') as f:
                 f.write('\n'.join(entries))
-            
+
             logger.info(f"Updated hosts file with {len(entries)-1} entries")
-            
+
         except Exception as e:
             logger.error(f"Could not update hosts file: {e}")
-    
+
     async def refresh_cache(self):
         """Refresh DNS cache periodically"""
         while True:
@@ -153,29 +153,29 @@ class LocalDNSResolver:
                 # Resolve common hostnames
                 hostnames_to_check = [
                     "host.docker.internal",
-                    "redis", 
+                    "redis",
                     "autobot-frontend",
                     "autobot-ai-stack",
                     "autobot-npu-worker"
                 ]
-                
+
                 for hostname in hostnames_to_check:
                     self.resolve_hostname(hostname)
-                
+
                 self.update_hosts_file()
                 self.save_cache()
-                
+
                 await asyncio.sleep(30)  # Refresh every 30 seconds
-                
+
             except Exception as e:
                 logger.error(f"Error refreshing DNS cache: {e}")
                 await asyncio.sleep(10)
-    
+
     def start_background_refresh(self):
         """Start background cache refresh"""
         def run_refresh():
             asyncio.new_event_loop().run_until_complete(self.refresh_cache())
-        
+
         thread = threading.Thread(target=run_refresh, daemon=True)
         thread.start()
         logger.info("Started background DNS cache refresh")
@@ -183,13 +183,13 @@ class LocalDNSResolver:
 def install_resolver():
     """Install the DNS resolver in the container"""
     resolver = LocalDNSResolver()
-    
+
     # Start background refresh
     resolver.start_background_refresh()
-    
+
     # Initial resolution
     logger.info("🚀 Local DNS Resolver initialized")
-    
+
     # Keep the process alive
     try:
         while True:

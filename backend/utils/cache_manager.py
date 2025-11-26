@@ -21,7 +21,7 @@ Implements TTL-based caching for frequently requested API endpoints
 import functools
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from backend.type_defs.common import Metadata
 

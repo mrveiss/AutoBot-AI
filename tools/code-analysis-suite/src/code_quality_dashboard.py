@@ -69,11 +69,11 @@ class QualityTrend:
 
 class CodeQualityDashboard:
     """Comprehensive code quality dashboard"""
-    
+
     def __init__(self, redis_client=None):
         self.redis_client = redis_client or get_redis_client(async_client=True)
         self.config = config
-        
+
         # Initialize all analyzers
         self.code_analyzer = CodeAnalyzer(self.redis_client)
         self.env_analyzer = EnvironmentVariableAnalyzer(self.redis_client)
@@ -82,24 +82,24 @@ class CodeQualityDashboard:
         self.api_analyzer = APIConsistencyAnalyzer(self.redis_client)
         self.testing_analyzer = TestingCoverageAnalyzer(self.redis_client)
         self.architecture_analyzer = ArchitecturalPatternAnalyzer(self.redis_client)
-        
+
         # Caching keys
         self.DASHBOARD_KEY = "code_quality:dashboard"
         self.TRENDS_KEY = "code_quality:trends"
         self.ISSUES_KEY = "code_quality:issues"
-        
+
         logger.info("Code Quality Dashboard initialized with all analyzers")
-    
-    async def generate_comprehensive_report(self, root_path: str = ".", 
+
+    async def generate_comprehensive_report(self, root_path: str = ".",
                                           patterns: List[str] = None,
                                           include_trends: bool = True) -> Dict[str, Any]:
         """Generate comprehensive code quality report"""
-        
+
         start_time = time.time()
         patterns = patterns or ["src/**/*.py", "backend/**/*.py"]
-        
+
         logger.info("Starting comprehensive code quality analysis...")
-        
+
         # Run all analyses in parallel for better performance
         analyses = await asyncio.gather(
             self._run_duplication_analysis(root_path, patterns),
@@ -111,11 +111,11 @@ class CodeQualityDashboard:
             self._run_architecture_analysis(root_path, patterns),
             return_exceptions=True
         )
-        
+
         # Process results
         duplication_results, env_results, performance_results, security_results, \
         api_results, testing_results, architecture_results = analyses
-        
+
         # Handle any analysis failures
         analysis_results = {
             'duplication': duplication_results if not isinstance(duplication_results, Exception) else None,
@@ -126,27 +126,27 @@ class CodeQualityDashboard:
             'testing_coverage': testing_results if not isinstance(testing_results, Exception) else None,
             'architecture': architecture_results if not isinstance(architecture_results, Exception) else None,
         }
-        
+
         # Calculate overall quality metrics
         quality_metrics = self._calculate_quality_metrics(analysis_results)
-        
+
         # Extract and prioritize issues
         all_issues = self._extract_all_issues(analysis_results)
         prioritized_issues = self._prioritize_issues(all_issues)
-        
+
         # Generate improvement recommendations
         recommendations = self._generate_improvement_recommendations(analysis_results, prioritized_issues)
-        
+
         # Calculate technical debt
         technical_debt = self._calculate_technical_debt(prioritized_issues)
-        
+
         analysis_time = time.time() - start_time
-        
+
         # Generate trend data if requested
         trend_data = []
         if include_trends:
             trend_data = await self._get_quality_trends()
-        
+
         comprehensive_report = {
             "timestamp": datetime.now().isoformat(),
             "analysis_time_seconds": analysis_time,
@@ -178,16 +178,16 @@ class CodeQualityDashboard:
             "quality_trends": trend_data,
             "files_analyzed": self._count_analyzed_files(analysis_results),
         }
-        
+
         # Save current analysis for trend tracking
         await self._save_quality_trend(quality_metrics, len(all_issues))
-        
+
         # Cache comprehensive report
         await self._cache_dashboard_report(comprehensive_report)
-        
+
         logger.info(f"Comprehensive code quality analysis complete in {analysis_time:.2f}s")
         return comprehensive_report
-    
+
     async def _run_duplication_analysis(self, root_path: str, patterns: List[str]) -> Optional[Dict[str, Any]]:
         """Run code duplication analysis"""
         try:
@@ -196,7 +196,7 @@ class CodeQualityDashboard:
         except Exception as e:
             logger.error(f"Duplication analysis failed: {e}")
             return None
-    
+
     async def _run_environment_analysis(self, root_path: str, patterns: List[str]) -> Optional[Dict[str, Any]]:
         """Run environment variable analysis"""
         try:
@@ -205,7 +205,7 @@ class CodeQualityDashboard:
         except Exception as e:
             logger.error(f"Environment analysis failed: {e}")
             return None
-    
+
     async def _run_performance_analysis(self, root_path: str, patterns: List[str]) -> Optional[Dict[str, Any]]:
         """Run performance analysis"""
         try:
@@ -214,7 +214,7 @@ class CodeQualityDashboard:
         except Exception as e:
             logger.error(f"Performance analysis failed: {e}")
             return None
-    
+
     async def _run_security_analysis(self, root_path: str, patterns: List[str]) -> Optional[Dict[str, Any]]:
         """Run security analysis"""
         try:
@@ -223,7 +223,7 @@ class CodeQualityDashboard:
         except Exception as e:
             logger.error(f"Security analysis failed: {e}")
             return None
-    
+
     async def _run_api_analysis(self, root_path: str, patterns: List[str]) -> Optional[Dict[str, Any]]:
         """Run API consistency analysis"""
         try:
@@ -232,7 +232,7 @@ class CodeQualityDashboard:
         except Exception as e:
             logger.error(f"API analysis failed: {e}")
             return None
-    
+
     async def _run_testing_analysis(self, root_path: str, patterns: List[str]) -> Optional[Dict[str, Any]]:
         """Run testing coverage analysis"""
         try:
@@ -241,7 +241,7 @@ class CodeQualityDashboard:
         except Exception as e:
             logger.error(f"Testing analysis failed: {e}")
             return None
-    
+
     async def _run_architecture_analysis(self, root_path: str, patterns: List[str]) -> Optional[Dict[str, Any]]:
         """Run architectural pattern analysis"""
         try:
@@ -250,43 +250,43 @@ class CodeQualityDashboard:
         except Exception as e:
             logger.error(f"Architecture analysis failed: {e}")
             return None
-    
+
     def _calculate_quality_metrics(self, analysis_results: Dict[str, Any]) -> QualityMetrics:
         """Calculate overall quality metrics"""
-        
+
         # Extract scores from each analysis (default to 50 if analysis failed)
         duplication_score = 100  # Start high, reduce based on duplicates found
         if analysis_results.get('duplication'):
             total_groups = analysis_results['duplication'].get('total_duplicate_groups', 0)
             duplication_score = max(0, 100 - (total_groups * 2))
-        
+
         env_score = 100  # Start high, reduce based on hardcoded values
         if analysis_results.get('environment'):
             critical_values = analysis_results['environment'].get('critical_hardcoded_values', 0)
             env_score = max(0, 100 - (critical_values * 0.5))
-        
+
         performance_score = 100  # Start high, reduce based on issues
         if analysis_results.get('performance'):
             critical_issues = analysis_results['performance'].get('critical_issues', 0)
             high_issues = analysis_results['performance'].get('high_priority_issues', 0)
             performance_score = max(0, 100 - (critical_issues * 10 + high_issues * 5))
-        
+
         security_score = 100
         if analysis_results.get('security') and 'metrics' in analysis_results['security']:
             security_score = analysis_results['security']['metrics'].get('security_score', 50)
-        
+
         api_score = 100
         if analysis_results.get('api_consistency'):
             api_score = analysis_results['api_consistency'].get('consistency_score', 50)
-        
+
         test_coverage_score = 0
         if analysis_results.get('testing_coverage'):
             test_coverage_score = analysis_results['testing_coverage'].get('test_coverage_percentage', 0)
-        
+
         architecture_score = 50
         if analysis_results.get('architecture'):
             architecture_score = analysis_results['architecture'].get('architecture_score', 50)
-        
+
         # Calculate weighted overall score
         weights = {
             'security': 0.25,      # Security is most important
@@ -297,7 +297,7 @@ class CodeQualityDashboard:
             'duplication': 0.10,
             'environment': 0.05,
         }
-        
+
         overall_score = (
             security_score * weights['security'] +
             performance_score * weights['performance'] +
@@ -307,10 +307,10 @@ class CodeQualityDashboard:
             duplication_score * weights['duplication'] +
             env_score * weights['environment']
         )
-        
+
         # Calculate maintainability index (simplified)
         maintainability = (architecture_score + test_coverage_score + duplication_score) / 3
-        
+
         # Calculate technical debt ratio (higher is worse)
         debt_factors = []
         if analysis_results.get('duplication'):
@@ -321,9 +321,9 @@ class CodeQualityDashboard:
         if analysis_results.get('performance'):
             critical_perf = analysis_results['performance'].get('critical_issues', 0)
             debt_factors.append(min(50, critical_perf * 5))
-        
+
         technical_debt_ratio = sum(debt_factors) / len(debt_factors) if debt_factors else 0
-        
+
         return QualityMetrics(
             overall_score=round(overall_score, 2),
             code_duplication_score=round(duplication_score, 2),
@@ -336,12 +336,12 @@ class CodeQualityDashboard:
             maintainability_index=round(maintainability, 2),
             technical_debt_ratio=round(technical_debt_ratio, 2)
         )
-    
+
     def _extract_all_issues(self, analysis_results: Dict[str, Any]) -> List[QualityIssue]:
         """Extract all issues from analysis results"""
-        
+
         all_issues = []
-        
+
         # Extract duplication issues
         if analysis_results.get('duplication') and 'duplicate_groups' in analysis_results['duplication']:
             for group in analysis_results['duplication']['duplicate_groups'][:10]:  # Top 10 duplicate groups
@@ -356,7 +356,7 @@ class CodeQualityDashboard:
                     estimated_effort="medium",
                     priority_score=60
                 ))
-        
+
         # Extract environment issues
         if analysis_results.get('environment') and 'critical_hardcoded_values' in analysis_results['environment']:
             for value in analysis_results['environment'].get('hardcoded_values', [])[:20]:  # Top 20
@@ -372,13 +372,13 @@ class CodeQualityDashboard:
                         estimated_effort="low",
                         priority_score=70
                     ))
-        
+
         # Extract security issues
         if analysis_results.get('security') and 'vulnerability_details' in analysis_results['security']:
             for vuln in analysis_results['security']['vulnerability_details']:
                 severity = vuln.get('severity', 'low')
                 priority = {'critical': 100, 'high': 80, 'medium': 60, 'low': 40}.get(severity, 40)
-                
+
                 all_issues.append(QualityIssue(
                     category="security",
                     severity=severity,
@@ -390,13 +390,13 @@ class CodeQualityDashboard:
                     estimated_effort="high" if severity == "critical" else "medium",
                     priority_score=priority
                 ))
-        
+
         # Extract performance issues
         if analysis_results.get('performance') and 'performance_details' in analysis_results['performance']:
             for perf in analysis_results['performance']['performance_details'][:15]:  # Top 15
                 severity = perf.get('severity', 'low')
                 priority = {'critical': 90, 'high': 70, 'medium': 50, 'low': 30}.get(severity, 30)
-                
+
                 all_issues.append(QualityIssue(
                     category="performance",
                     severity=severity,
@@ -408,13 +408,13 @@ class CodeQualityDashboard:
                     estimated_effort="medium",
                     priority_score=priority
                 ))
-        
+
         # Extract API consistency issues
         if analysis_results.get('api_consistency') and 'inconsistencies' in analysis_results['api_consistency']:
             for inconsistency in analysis_results['api_consistency']['inconsistencies']:
                 severity = inconsistency.get('severity', 'low')
                 priority = {'high': 60, 'medium': 40, 'low': 20}.get(severity, 20)
-                
+
                 all_issues.append(QualityIssue(
                     category="api_consistency",
                     severity=severity,
@@ -426,13 +426,13 @@ class CodeQualityDashboard:
                     estimated_effort="medium",
                     priority_score=priority
                 ))
-        
+
         # Extract testing issues
         if analysis_results.get('testing_coverage') and 'coverage_gaps' in analysis_results['testing_coverage']:
             for gap in analysis_results['testing_coverage']['coverage_gaps']:
                 severity = gap.get('severity', 'medium')
                 priority = {'critical': 85, 'high': 65, 'medium': 45, 'low': 25}.get(severity, 45)
-                
+
                 all_issues.append(QualityIssue(
                     category="testing_coverage",
                     severity=severity,
@@ -444,13 +444,13 @@ class CodeQualityDashboard:
                     estimated_effort="medium",
                     priority_score=priority
                 ))
-        
+
         # Extract architectural issues
         if analysis_results.get('architecture') and 'architectural_issues' in analysis_results['architecture']:
             for issue in analysis_results['architecture']['architectural_issues']:
                 severity = issue.get('severity', 'medium')
                 priority = {'critical': 75, 'high': 55, 'medium': 35, 'low': 15}.get(severity, 35)
-                
+
                 all_issues.append(QualityIssue(
                     category="architecture",
                     severity=severity,
@@ -462,67 +462,67 @@ class CodeQualityDashboard:
                     estimated_effort=issue.get('refactoring_effort', 'medium'),
                     priority_score=priority
                 ))
-        
+
         return all_issues
-    
+
     def _prioritize_issues(self, issues: List[QualityIssue]) -> List[QualityIssue]:
         """Prioritize issues based on severity and impact"""
-        
+
         # Sort by priority score (descending) and then by severity
         severity_weight = {'critical': 1000, 'high': 100, 'medium': 10, 'low': 1}
-        
+
         def priority_key(issue):
             return (
                 severity_weight.get(issue.severity, 0) + issue.priority_score,
                 issue.severity,
                 issue.category
             )
-        
+
         return sorted(issues, key=priority_key, reverse=True)
-    
+
     def _group_issues_by_category(self, issues: List[QualityIssue]) -> Dict[str, int]:
         """Group issues by category"""
         categories = {}
         for issue in issues:
             categories[issue.category] = categories.get(issue.category, 0) + 1
         return categories
-    
-    def _generate_improvement_recommendations(self, analysis_results: Dict[str, Any], 
+
+    def _generate_improvement_recommendations(self, analysis_results: Dict[str, Any],
                                             issues: List[QualityIssue]) -> List[str]:
         """Generate improvement recommendations based on analysis"""
-        
+
         recommendations = []
-        
+
         # Category-based recommendations
         categories = self._group_issues_by_category(issues)
-        
+
         if categories.get('security', 0) > 0:
             recommendations.append("🛡️ Address security vulnerabilities immediately - this is the highest priority")
-        
+
         if categories.get('performance', 0) > 5:
             recommendations.append("⚡ Fix performance bottlenecks and memory leaks to improve system responsiveness")
-        
+
         if categories.get('testing_coverage', 0) > 0:
             recommendations.append("🧪 Increase test coverage, especially for critical and complex functions")
-        
+
         if categories.get('architecture', 0) > 0:
             recommendations.append("🏗️ Refactor architectural issues to improve maintainability and scalability")
-        
+
         if categories.get('code_duplication', 0) > 0:
             recommendations.append("♻️ Eliminate code duplication by extracting common functionality")
-        
+
         if categories.get('api_consistency', 0) > 0:
             recommendations.append("🔗 Standardize API patterns for better consistency and developer experience")
-        
+
         if categories.get('environment_configuration', 0) > 0:
             recommendations.append("⚙️ Move hardcoded values to configuration files or environment variables")
-        
+
         # Quality score based recommendations
         if analysis_results.get('duplication'):
             total_groups = analysis_results['duplication'].get('total_duplicate_groups', 0)
             if total_groups > 50:
                 recommendations.append(f"📊 High code duplication detected ({total_groups} groups) - consider major refactoring")
-        
+
         # Add general best practices
         recommendations.extend([
             "📈 Set up automated code quality monitoring in CI/CD pipeline",
@@ -530,31 +530,31 @@ class CodeQualityDashboard:
             "🎯 Define and enforce coding standards across the team",
             "📚 Create technical debt backlog for systematic improvement",
         ])
-        
+
         return recommendations[:10]  # Top 10 recommendations
-    
+
     def _calculate_technical_debt(self, issues: List[QualityIssue]) -> Dict[str, Any]:
         """Calculate technical debt metrics"""
-        
+
         # Estimate effort in hours
         effort_mapping = {'low': 2, 'medium': 8, 'high': 24}
-        
+
         total_effort = 0
         critical_effort = 0
         by_category = {}
-        
+
         for issue in issues:
             effort = effort_mapping.get(issue.estimated_effort, 8)
             total_effort += effort
-            
+
             if issue.severity == 'critical':
                 critical_effort += effort
-            
+
             if issue.category not in by_category:
                 by_category[issue.category] = {'count': 0, 'effort_hours': 0}
             by_category[issue.category]['count'] += 1
             by_category[issue.category]['effort_hours'] += effort
-        
+
         return {
             'total_issues': len(issues),
             'estimated_total_effort_hours': total_effort,
@@ -563,20 +563,20 @@ class CodeQualityDashboard:
             'effort_by_category': by_category,
             'debt_ratio': round((total_effort / 1000) * 100, 2)  # Percentage of total project effort
         }
-    
+
     def _count_analyzed_files(self, analysis_results: Dict[str, Any]) -> int:
         """Count total files analyzed"""
         file_count = 0
-        
+
         for analysis_type, results in analysis_results.items():
             if results and isinstance(results, dict):
                 if 'files_analyzed' in results:
                     file_count = max(file_count, results['files_analyzed'])
                 elif 'total_files' in results:
                     file_count = max(file_count, results['total_files'])
-        
+
         return file_count
-    
+
     def _serialize_issue(self, issue: QualityIssue) -> Dict[str, Any]:
         """Serialize issue for output"""
         return {
@@ -590,7 +590,7 @@ class CodeQualityDashboard:
             'estimated_effort': issue.estimated_effort,
             'priority_score': issue.priority_score
         }
-    
+
     async def _save_quality_trend(self, metrics: QualityMetrics, issue_count: int):
         """Save quality trend data"""
         if self.redis_client:
@@ -602,7 +602,7 @@ class CodeQualityDashboard:
                     critical_issues=0,  # Would need to be calculated
                     files_analyzed=0   # Would need to be calculated
                 )
-                
+
                 trend_data = {
                     'timestamp': trend.timestamp.isoformat(),
                     'overall_score': trend.overall_score,
@@ -610,14 +610,14 @@ class CodeQualityDashboard:
                     'critical_issues': trend.critical_issues,
                     'files_analyzed': trend.files_analyzed
                 }
-                
+
                 # Store in Redis list (keep last 30 entries)
                 await self.redis_client.lpush(self.TRENDS_KEY, json.dumps(trend_data))
                 await self.redis_client.ltrim(self.TRENDS_KEY, 0, 29)
                 await self.redis_client.expire(self.TRENDS_KEY, 86400 * 30)  # 30 days
             except Exception as e:
                 logger.warning(f"Failed to save quality trend: {e}")
-    
+
     async def _get_quality_trends(self) -> List[Dict[str, Any]]:
         """Get historical quality trends"""
         if self.redis_client:
@@ -627,31 +627,31 @@ class CodeQualityDashboard:
             except Exception as e:
                 logger.warning(f"Failed to get quality trends: {e}")
         return []
-    
+
     async def _cache_dashboard_report(self, report: Dict[str, Any]):
         """Cache dashboard report"""
         if self.redis_client:
             try:
                 await self.redis_client.setex(
-                    self.DASHBOARD_KEY, 
+                    self.DASHBOARD_KEY,
                     3600,  # 1 hour
                     json.dumps(report, default=str)
                 )
             except Exception as e:
                 logger.warning(f"Failed to cache dashboard report: {e}")
-    
+
     async def generate_executive_summary(self, report: Dict[str, Any]) -> str:
         """Generate executive summary from comprehensive report"""
-        
+
         metrics = report['quality_metrics']
         issues = report['issue_summary']
-        
+
         summary = f"""
 # Code Quality Executive Summary
 
 ## Overall Assessment
-- **Quality Score**: {metrics['overall_score']}/100 
-- **Total Issues**: {issues['total_issues']} 
+- **Quality Score**: {metrics['overall_score']}/100
+- **Total Issues**: {issues['total_issues']}
 - **Critical Issues**: {issues['critical_issues']}
 - **Analysis Date**: {report['timestamp']}
 
@@ -675,13 +675,13 @@ class CodeQualityDashboard:
 
 ## Immediate Actions Required
 """
-        
+
         # Add top 3 recommendations
         for i, rec in enumerate(report['improvement_recommendations'][:3], 1):
             summary += f"{i}. {rec}\n"
-        
+
         return summary
-    
+
     def _get_status_emoji(self, score: float) -> str:
         """Get status emoji based on score"""
         if score >= 90:
@@ -694,9 +694,9 @@ class CodeQualityDashboard:
 
 async def main():
     """Example usage of code quality dashboard"""
-    
+
     dashboard = CodeQualityDashboard()
-    
+
     # Generate comprehensive report
     print("🚀 Generating comprehensive code quality report...")
     report = await dashboard.generate_comprehensive_report(
@@ -704,11 +704,11 @@ async def main():
         patterns=["src/**/*.py", "backend/**/*.py"],
         include_trends=True
     )
-    
+
     # Print executive summary
     summary = await dashboard.generate_executive_summary(report)
     print(summary)
-    
+
     # Print detailed metrics
     metrics = report['quality_metrics']
     print(f"\n=== Detailed Quality Metrics ===")
@@ -720,7 +720,7 @@ async def main():
     print(f"API Consistency: {metrics['api_consistency_score']}/100")
     print(f"Code Duplication: {metrics['code_duplication_score']}/100")
     print(f"Environment Config: {metrics['environment_config_score']}/100")
-    
+
     # Print top issues
     print(f"\n=== Top Priority Issues ===")
     for i, issue in enumerate(report['prioritized_issues'][:10], 1):
@@ -731,14 +731,14 @@ async def main():
         print(f"   Fix: {issue['fix_suggestion']}")
         print(f"   Effort: {issue['estimated_effort']}")
         print()
-    
+
     # Save comprehensive report
     report_path = Path("comprehensive_quality_report.json")
     with open(report_path, 'w') as f:
         json.dump(report, f, indent=2, default=str)
-    
+
     print(f"📋 Comprehensive report saved to: {report_path}")
-    
+
     return report
 
 

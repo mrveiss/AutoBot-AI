@@ -8,7 +8,7 @@ Provides NPU-accelerated semantic search endpoints for AutoBot
 """
 
 import time
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException

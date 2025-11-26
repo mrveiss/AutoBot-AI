@@ -11,7 +11,7 @@ input validation, domain security, and content filtering.
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional
 
 
 from ..agents.web_research_integration import ResearchType, WebResearchIntegration

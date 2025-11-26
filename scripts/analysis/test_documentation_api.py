@@ -19,30 +19,31 @@ sys.path.insert(0, '/home/kali/Desktop/AutoBot')
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 async def test_documentation_browser_logic():
     """Test the documentation browser logic locally without the backend"""
-    
+
     print("=== Testing Documentation Browser Logic ===")
-    
+
     try:
         import mimetypes
         import hashlib
         from datetime import datetime
-        
+
         project_root = Path("/home/kali/Desktop/AutoBot")
-        
+
         documentation_files = []
         total_size = 0
         total_docs = 0
-        
+
         def scan_directory(dir_path: Path, category_prefix: str = ""):
             """Recursively scan directory for documentation files"""
             nonlocal total_size, total_docs
             files = []
-            
+
             if not dir_path.exists() or not dir_path.is_dir():
                 return files
-                
+
             try:
                 for item in dir_path.iterdir():
                     if item.is_file() and item.suffix.lower() in ['.md', '.txt', '.yaml', '.yml', '.json']:
@@ -50,10 +51,10 @@ async def test_documentation_browser_logic():
                             stat = item.stat()
                             with open(item, 'r', encoding='utf-8', errors='ignore') as f:
                                 content = f.read()
-                            
+
                             # Calculate content hash for unique identification
                             content_hash = hashlib.md5(content.encode('utf-8')).hexdigest()[:8]
-                            
+
                             # Extract first line as title if it's a markdown header
                             title = item.name
                             preview = ""
@@ -65,10 +66,10 @@ async def test_documentation_browser_logic():
                                             title = line[2:].strip()
                                         preview = line.strip()
                                         break
-                                        
+
                             # Get relative path from project root
                             rel_path = str(item.relative_to(project_root))
-                            
+
                             # Determine category
                             category = category_prefix
                             if '/docs/' in rel_path:
@@ -77,7 +78,7 @@ async def test_documentation_browser_logic():
                                     category = f"docs/{parts[1]}"
                                 else:
                                     category = "docs/root"
-                            
+
                             file_info = {
                                 "id": f"doc_{content_hash}_{stat.st_ino}",
                                 "path": rel_path,
@@ -97,27 +98,27 @@ async def test_documentation_browser_logic():
                                 "line_count": len(content.split('\n')) if content else 0,
                                 "word_count": len(content.split()) if content else 0
                             }
-                            
+
                             files.append(file_info)
                             total_size += stat.st_size
                             total_docs += 1
-                            
+
                         except Exception as e:
                             logger.warning(f"Error processing file {item}: {e}")
-                    
+
                     elif item.is_dir() and not item.name.startswith('.') and item.name != '__pycache__':
                         # Recursively scan subdirectories
                         subdir_category = f"{category_prefix}/{item.name}" if category_prefix else item.name
                         subdir_files = scan_directory(item, subdir_category)
                         files.extend(subdir_files)
-                        
+
             except PermissionError as e:
                 logger.warning(f"Permission denied accessing {dir_path}: {e}")
             except Exception as e:
                 logger.error(f"Error scanning directory {dir_path}: {e}")
-                
+
             return files
-        
+
         # Add root documentation files
         root_files = [
             ("CLAUDE.md", "Claude Development Instructions", "project-root"),
@@ -126,9 +127,9 @@ async def test_documentation_browser_logic():
             ("CHAT_HANG_ANALYSIS.md", "Chat Hang Analysis", "project-root"),
             ("DESKTOP_ACCESS.md", "Desktop Access Guide", "project-root"),
         ]
-        
+
         all_files = []
-        
+
         for file_path, title, category in root_files:
             full_path = project_root / file_path
             if full_path.exists() and full_path.is_file():
@@ -136,9 +137,9 @@ async def test_documentation_browser_logic():
                     stat = full_path.stat()
                     with open(full_path, 'r', encoding='utf-8') as f:
                         content = f.read()
-                    
+
                     content_hash = hashlib.md5(content.encode('utf-8')).hexdigest()[:8]
-                    
+
                     file_info = {
                         "id": f"root_{content_hash}_{stat.st_ino}",
                         "path": file_path,
@@ -152,17 +153,17 @@ async def test_documentation_browser_logic():
                         "line_count": len(content.split('\n')),
                         "word_count": len(content.split())
                     }
-                    
+
                     all_files.append(file_info)
                     total_size += stat.st_size
                     total_docs += 1
-                    
+
                     print(f"✅ {file_path} - {title}")
                     print(f"   Size: {file_info['size_chars']} chars, {file_info['line_count']} lines")
-                    
+
                 except Exception as e:
                     print(f"❌ Error processing {file_path}: {e}")
-        
+
         # Scan docs directory
         print(f"\n📁 Scanning docs directory...")
         docs_path = project_root / "docs"
@@ -170,7 +171,7 @@ async def test_documentation_browser_logic():
             docs_files = scan_directory(docs_path, "docs")
             all_files.extend(docs_files)
             print(f"   Found {len(docs_files)} documentation files in docs/")
-        
+
         # Group by category
         categories = {}
         for file_info in all_files:
@@ -185,17 +186,17 @@ async def test_documentation_browser_logic():
             categories[category]["files"].append(file_info)
             categories[category]["total_files"] += 1
             categories[category]["total_size"] += file_info.get('size_bytes', 0)
-        
+
         print(f"\n📊 Documentation Statistics:")
         print(f"   Total files: {total_docs}")
         print(f"   Total size: {round(total_size / (1024 * 1024), 2)} MB")
         print(f"   Categories: {len(categories)}")
-        
+
         print(f"\n📁 Categories found:")
         for category, info in categories.items():
             size_mb = round(info['total_size'] / (1024 * 1024), 2)
             print(f"   {category}: {info['total_files']} files ({size_mb} MB)")
-        
+
         # Test reading a specific file
         print(f"\n📖 Testing file reading:")
         test_file = "CLAUDE.md"
@@ -203,7 +204,7 @@ async def test_documentation_browser_logic():
         if full_path.exists():
             with open(full_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            
+
             # Check if AutoBot identity is in the content
             if "AutoBot" in content:
                 print(f"✅ {test_file} contains AutoBot information")
@@ -212,7 +213,7 @@ async def test_documentation_browser_logic():
                 print(f"   AutoBot mentioned on lines: {lines_with_autobot[:10]}...")
             else:
                 print(f"❌ {test_file} does not contain AutoBot information")
-        
+
         return {
             "success": True,
             "total_files": total_docs,
@@ -220,7 +221,7 @@ async def test_documentation_browser_logic():
             "categories": list(categories.keys()),
             "files": all_files[:5]  # Sample
         }
-        
+
     except Exception as e:
         print(f"❌ Error in documentation browser test: {e}")
         import traceback

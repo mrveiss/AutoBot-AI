@@ -603,7 +603,7 @@ class PhaseValidator:
                             await redis_client.ping()
                             return True
                         return False
-                    
+
                     # Run the async check
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)

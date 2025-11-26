@@ -97,17 +97,17 @@ class TerminalWebSocketHandler:
                 try:
                     # Use asyncio.create_task for non-blocking message receive
                     message_task = asyncio.create_task(websocket.receive_text())
-                    
+
                     # Poll for message or connection state change
                     while not message_task.done() and websocket.client_state == WebSocketState.CONNECTED:
                         await asyncio.sleep(0.1)
-                    
+
                     if message_task.done():
                         message = await message_task
                     else:
                         message_task.cancel()
                         break
-                        
+
                 except asyncio.CancelledError:
                     break
                 except Exception:

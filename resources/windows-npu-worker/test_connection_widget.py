@@ -3,6 +3,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 from gui.widgets.connection_info import ConnectionInfoWidget
 
+
 def main():
     app = QApplication(sys.argv)
 
@@ -19,6 +20,7 @@ def main():
         import traceback
         traceback.print_exc()
         return 1
+
 
 if __name__ == "__main__":
     main()

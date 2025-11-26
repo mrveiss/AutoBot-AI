@@ -10,7 +10,7 @@ import re
 import tempfile
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional
 
 import aiofiles
 

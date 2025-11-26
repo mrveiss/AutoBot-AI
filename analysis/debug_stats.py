@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.unified_config_manager import unified_config_manager
 
+
 def test_stats_endpoint():
     """Test the stats endpoint and show detailed response"""
     print("=== Testing Knowledge Base Stats Endpoint ===")
@@ -85,6 +86,7 @@ def test_stats_endpoint():
 
     except Exception as e:
         print(f"❌ Exception on second endpoint: {e}")
+
 
 if __name__ == "__main__":
     test_stats_endpoint()

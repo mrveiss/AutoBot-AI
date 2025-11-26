@@ -23,7 +23,7 @@ import sqlite3
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional
 
 import redis.asyncio as async_redis
 from redis.exceptions import ConnectionError as RedisConnectionError

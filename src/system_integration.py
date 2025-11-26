@@ -5,7 +5,7 @@ import json
 import os
 import platform
 import subprocess
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 import aiohttp  # Import aiohttp for async web fetching
 from markdownify import (

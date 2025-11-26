@@ -25,6 +25,7 @@ from src.utils.redis_database_manager import RedisDatabaseManager, RedisDatabase
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class CodeVectorKnowledgeCreator:
     """Creates vector knowledge base from code analytics indexes"""
 
@@ -308,6 +309,7 @@ Database: {vector['metadata'].get('database', 'analytics_db8')}
             logger.error(f"❌ Search test failed: {e}")
             return False
 
+
 async def main():
     """Main execution function"""
     try:
@@ -360,14 +362,14 @@ async def main():
             print("⚠️ Search test failed, but knowledge base was created")
 
         # Summary
-        print(f"\n🎉 Vector Knowledge Base Creation Complete!")
-        print(f"📊 Statistics:")
+        print("\n🎉 Vector Knowledge Base Creation Complete!")
+        print("📊 Statistics:")
         print(f"  - Source vectors processed: {len(vectors)}")
         print(f"  - Knowledge entries created: {created_count}")
         print(f"  - Search index: {'✅ Created' if index_created else '❌ Failed'}")
         print(f"  - Search functionality: {'✅ Working' if search_works else '❌ Issues'}")
-        print(f"\n💡 The code analytics are now searchable through the main knowledge base!")
-        print(f"   You can search for terms like: 'code analytics', 'function', 'python', etc.")
+        print("\n💡 The code analytics are now searchable through the main knowledge base!")
+        print("   You can search for terms like: 'code analytics', 'function', 'python', etc.")
 
     except Exception as e:
         print(f"❌ Error: {e}")
