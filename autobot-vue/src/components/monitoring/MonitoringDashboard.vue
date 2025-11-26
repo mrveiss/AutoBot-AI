@@ -440,22 +440,26 @@ export default {
     async initializeDashboard() {
       this.loading = true
       try {
-        // Check monitoring status
-        const statusResponse = await fetch('/api/monitoring/status')
-        if (!statusResponse.ok) {
-          throw new Error(`Status check failed: HTTP ${statusResponse.status}`)
+        // Check monitoring status (may fail if monitoring service not available)
+        try {
+          const statusResponse = await fetch('/api/monitoring/status')
+          if (statusResponse.ok) {
+            const status = await statusResponse.json()
+            this.monitoringActive = status.active
+          }
+        } catch (statusError) {
+          console.warn('[MonitoringDashboard] Monitoring status unavailable, using fallback data:', statusError)
+          this.monitoringActive = false
         }
-        const status = await statusResponse.json()
-        this.monitoringActive = status.active
-        
-        // Load dashboard data
+
+        // Load dashboard data (will fetch from multiple sources)
         await this.refreshDashboard()
-        
+
         // Initialize charts
         this.$nextTick(() => {
           this.initializeCharts()
         })
-        
+
       } catch (error) {
         console.error('[MonitoringDashboard] Failed to initialize dashboard:', error)
         this.$toast.error('Failed to initialize performance monitoring dashboard')
@@ -466,34 +470,139 @@ export default {
     
     async refreshDashboard() {
       try {
-        // Get dashboard data
-        const dashboardResponse = await fetch('/api/monitoring/dashboard/overview')
-        if (!dashboardResponse.ok) {
-          throw new Error(`Dashboard fetch failed: HTTP ${dashboardResponse.status}`)
-        }
-        this.dashboardData = await dashboardResponse.json()
+        // Fetch data from multiple sources in parallel for better performance
+        const [dashboardResponse, resourcesResponse, servicesResponse, alertsResponse] = await Promise.all([
+          fetch('/api/monitoring/dashboard/overview').catch(err => {
+            console.warn('[MonitoringDashboard] Dashboard overview fetch failed:', err.message)
+            return null
+          }),
+          fetch('/api/service-monitor/resources').catch(err => {
+            console.warn('[MonitoringDashboard] Resources fetch failed:', err.message)
+            return null
+          }),
+          fetch('/api/service-monitor/services').catch(err => {
+            console.warn('[MonitoringDashboard] Services fetch failed:', err.message)
+            return null
+          }),
+          fetch('/api/monitoring/alerts/check').catch(err => {
+            console.warn('[MonitoringDashboard] Alerts fetch failed:', err.message)
+            return null
+          })
+        ])
 
-        // Extract metrics (map backend field names to frontend)
-        this.gpuMetrics = this.dashboardData.gpu_status
-        this.npuMetrics = this.dashboardData.npu_status
-        this.systemMetrics = this.dashboardData.system_resources
-        this.services = Object.values(this.dashboardData.services_status || {})
-
-        // Get alerts
-        const alertsResponse = await fetch('/api/monitoring/alerts/check')
-        if (!alertsResponse.ok) {
-          console.warn('[MonitoringDashboard] Alerts check failed:', alertsResponse.status)
+        // Process monitoring dashboard data (may have GPU/NPU data when active)
+        if (dashboardResponse && dashboardResponse.ok) {
+          try {
+            this.dashboardData = await dashboardResponse.json()
+            // Extract GPU/NPU metrics from monitoring system
+            this.gpuMetrics = this.dashboardData.gpu || this.dashboardData.gpu_status || null
+            this.npuMetrics = this.dashboardData.npu || this.dashboardData.npu_status || null
+          } catch (parseErr) {
+            console.error('[MonitoringDashboard] Failed to parse dashboard response:', parseErr)
+          }
         }
-        const alertsData = await alertsResponse.json()
-        this.allAlerts = alertsData.alerts || []
-        
+
+        // Process real-time system resources (ALWAYS available)
+        if (resourcesResponse && resourcesResponse.ok) {
+          try {
+            const resources = await resourcesResponse.json()
+
+            // Map service-monitor resources to expected systemMetrics format
+            // Use actual load_average from backend (not estimated)
+            this.systemMetrics = {
+              cpu: {
+                percent_overall: resources.cpu?.usage_percent || 0,
+                load_average: resources.cpu?.load_average || [0, 0, 0]
+              },
+              memory: {
+                percent: resources.memory?.percent || 0,
+                total_gb: resources.memory?.total || 0,
+                available_gb: resources.memory?.available || 0,
+                used_gb: resources.memory?.used || 0
+              },
+              disk: {
+                percent: resources.disk?.percent || 0,
+                total_gb: resources.disk?.total || 0,
+                free_gb: resources.disk?.free || 0,
+                used_gb: resources.disk?.used || 0
+              },
+              network: {
+                bytes_sent: resources.network?.bytes_sent || 0,
+                bytes_recv: resources.network?.bytes_recv || 0,
+                packets_sent: resources.network?.packets_sent || 0,
+                packets_recv: resources.network?.packets_recv || 0
+              }
+            }
+          } catch (parseErr) {
+            console.error('[MonitoringDashboard] Failed to parse resources response:', parseErr)
+          }
+        }
+
+        // Process real-time services status (ALWAYS available)
+        if (servicesResponse && servicesResponse.ok) {
+          try {
+            const servicesData = await servicesResponse.json()
+            // Normalize services to array format consistently
+            this.services = this.normalizeServicesData(servicesData.services || servicesData || [])
+          } catch (parseErr) {
+            console.error('[MonitoringDashboard] Failed to parse services response:', parseErr)
+          }
+        }
+
+        // Process alerts
+        if (alertsResponse && alertsResponse.ok) {
+          try {
+            const alertsData = await alertsResponse.json()
+            this.allAlerts = alertsData.alerts || []
+          } catch (parseErr) {
+            console.error('[MonitoringDashboard] Failed to parse alerts response:', parseErr)
+          }
+        }
+
         // Get recommendations
         await this.refreshRecommendations()
-        
+
       } catch (error) {
         console.error('[MonitoringDashboard] Failed to refresh dashboard:', error)
         this.$toast.error('Failed to refresh dashboard data')
       }
+    },
+
+    /**
+     * Normalize services data to consistent array format
+     * Handles both array and object inputs from different API endpoints
+     */
+    normalizeServicesData(servicesInput) {
+      if (!servicesInput) return []
+
+      // Convert object to array if needed
+      const servicesArray = Array.isArray(servicesInput)
+        ? servicesInput
+        : Object.values(servicesInput)
+
+      return servicesArray.map(svc => ({
+        name: svc.name || svc.service_name || 'Unknown',
+        status: this.normalizeServiceStatus(svc.status),
+        host: svc.host || 'localhost',
+        port: svc.port || 0,
+        response_time_ms: svc.response_time_ms || svc.latency_ms || 0,
+        health_score: svc.health_score || (svc.status === 'online' || svc.status === 'healthy' ? 100 : 0)
+      }))
+    },
+
+    /**
+     * Normalize service status to expected values
+     */
+    normalizeServiceStatus(status) {
+      const statusMap = {
+        'online': 'healthy',
+        'healthy': 'healthy',
+        'offline': 'offline',
+        'degraded': 'degraded',
+        'warning': 'degraded',
+        'critical': 'critical'
+      }
+      return statusMap[status] || 'offline'
     },
     
     async refreshRecommendations() {
@@ -618,11 +727,33 @@ export default {
     
     updateDashboardFromWebSocket(data) {
       this.dashboardData = data
-      this.gpuMetrics = data.gpu_status
-      this.npuMetrics = data.npu_status
-      this.systemMetrics = data.system_resources
-      this.services = Object.values(data.services_status || {})
-      
+      this.gpuMetrics = data.gpu || data.gpu_status || null
+      this.npuMetrics = data.npu || data.npu_status || null
+
+      // Map system resources to expected format
+      if (data.system_resources || data.system) {
+        const sys = data.system_resources || data.system
+        this.systemMetrics = {
+          cpu: {
+            percent_overall: sys.cpu_usage_percent || sys.cpu?.percent_overall || 0,
+            // Use actual load_average from backend, fallback to cpu_load_1m if available
+            load_average: sys.cpu?.load_average || (sys.cpu_load_1m ? [sys.cpu_load_1m, 0, 0] : [0, 0, 0])
+          },
+          memory: {
+            percent: sys.memory_usage_percent || sys.memory?.percent || 0
+          },
+          network: {
+            bytes_sent: sys.network?.bytes_sent || 0
+          }
+        }
+      }
+
+      // Map services to expected format using shared normalizer
+      if (data.services_status || data.services) {
+        const services = data.services_status || data.services
+        this.services = this.normalizeServicesData(services)
+      }
+
       // Update charts with new data
       this.updateChartData()
     },

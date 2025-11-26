@@ -763,6 +763,12 @@ async def get_system_resources():
         cpu_percent = psutil.cpu_percent(interval=1)
         cpu_count = psutil.cpu_count()
 
+        # Load average (Unix systems)
+        try:
+            load_avg = list(psutil.getloadavg()) if hasattr(psutil, "getloadavg") else [0, 0, 0]
+        except Exception:
+            load_avg = [0, 0, 0]
+
         # Memory information
         memory = psutil.virtual_memory()
         memory_info = {
@@ -795,7 +801,7 @@ async def get_system_resources():
 
         return {
             "timestamp": datetime.utcnow().isoformat(),
-            "cpu": {"usage_percent": cpu_percent, "core_count": cpu_count},
+            "cpu": {"usage_percent": cpu_percent, "core_count": cpu_count, "load_average": load_avg},
             "memory": memory_info,
             "disk": disk_info,
             "network": network_info,
