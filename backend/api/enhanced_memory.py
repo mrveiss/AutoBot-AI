@@ -8,7 +8,7 @@ Provides endpoints for task execution tracking, markdown management, and memory 
 
 import logging
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from backend.type_defs.common import Metadata
 

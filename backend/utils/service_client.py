@@ -14,7 +14,7 @@ Usage:
 """
 
 import time
-from typing import Dict, Tuple
+from typing import Dict
 
 import aiohttp
 import structlog

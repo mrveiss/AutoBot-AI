@@ -26,7 +26,7 @@ Created: 2025-01-14
 """
 
 import logging
-from typing import Any, Optional, Type
+from typing import Any, Optional
 
 from backend.type_defs.common import Metadata
 from uuid import uuid4

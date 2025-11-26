@@ -755,8 +755,6 @@ NEVER teach commands - ALWAYS execute them."""
         Returns:
             Full interpretation text
         """
-        import httpx
-
         interpretation_prompt = f"""The command `{command}` was executed successfully.
 
 Output:

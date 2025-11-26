@@ -24,7 +24,7 @@ Endpoints:
 
 import logging
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from backend.type_defs.common import Metadata
 

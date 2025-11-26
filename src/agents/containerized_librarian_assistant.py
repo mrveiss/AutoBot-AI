@@ -13,8 +13,6 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import aiohttp
-
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 from src.unified_config_manager import config

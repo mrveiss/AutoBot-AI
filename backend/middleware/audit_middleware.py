@@ -33,7 +33,7 @@ import asyncio
 import functools
 import logging
 import time
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, Optional
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware

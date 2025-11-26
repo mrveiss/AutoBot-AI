@@ -14,7 +14,7 @@ import re
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Final, List, Optional
+from typing import Dict, List, Optional
 
 from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
