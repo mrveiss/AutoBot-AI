@@ -21,6 +21,23 @@ from src.utils.error_boundaries import ErrorCategory
 
 logger = logging.getLogger(__name__)
 
+# Lazy import to avoid circular dependencies
+_alerts_manager = None
+
+
+def _get_alerts_manager():
+    """Lazy load alerts manager to avoid circular imports."""
+    global _alerts_manager
+    if _alerts_manager is None:
+        try:
+            from src.utils.monitoring_alerts import get_alerts_manager
+
+            _alerts_manager = get_alerts_manager()
+        except ImportError:
+            logger.warning("monitoring_alerts not available for alert notifications")
+            _alerts_manager = None
+    return _alerts_manager
+
 
 @dataclass
 class ErrorMetric:
@@ -204,7 +221,7 @@ class ErrorMetricsCollector:
     async def _check_alerts(
         self, component: str, error_code: Optional[str], stats: ErrorStats
     ) -> None:
-        """Check if error stats exceed alert thresholds"""
+        """Check if error stats exceed alert thresholds and send notifications"""
         threshold_key = f"{component}:{error_code or 'any'}"
         threshold = self._alert_thresholds.get(threshold_key, 0)
 
@@ -213,7 +230,72 @@ class ErrorMetricsCollector:
                 f"⚠️ Error alert threshold exceeded: {threshold_key} "
                 f"({stats.total_count} >= {threshold})"
             )
-            # TODO: Send alert notification
+            # Send alert notification via monitoring_alerts system
+            await self._send_alert_notification(
+                component=component,
+                error_code=error_code,
+                stats=stats,
+                threshold=threshold,
+            )
+
+    async def _send_alert_notification(
+        self,
+        component: str,
+        error_code: Optional[str],
+        stats: ErrorStats,
+        threshold: int,
+    ) -> None:
+        """Send alert notification through the monitoring alerts system."""
+        alerts_manager = _get_alerts_manager()
+        if alerts_manager is None:
+            return
+
+        try:
+            from src.utils.monitoring_alerts import (
+                Alert,
+                AlertSeverity,
+                AlertStatus,
+            )
+
+            # Determine severity based on error count vs threshold
+            ratio = stats.total_count / threshold if threshold > 0 else 1
+            if ratio >= 3:
+                severity = AlertSeverity.CRITICAL
+            elif ratio >= 2:
+                severity = AlertSeverity.HIGH
+            elif ratio >= 1.5:
+                severity = AlertSeverity.MEDIUM
+            else:
+                severity = AlertSeverity.LOW
+
+            # Create alert
+            alert = Alert(
+                rule_id=f"error_metrics:{component}:{error_code or 'any'}",
+                rule_name=f"Error Threshold: {component}",
+                metric_path=f"error_metrics.{component}.{error_code or 'total'}",
+                current_value=float(stats.total_count),
+                threshold=float(threshold),
+                severity=severity,
+                status=AlertStatus.ACTIVE,
+                message=(
+                    f"Error threshold exceeded for {component}: "
+                    f"{stats.total_count} errors (threshold: {threshold})"
+                ),
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
+                tags=["error_metrics", component, stats.category],
+            )
+
+            # Send through all enabled notification channels
+            await alerts_manager._send_alert_notifications(alert)
+
+            logger.info(
+                f"Alert notification sent for {component}: "
+                f"{stats.total_count} errors (severity: {severity.value})"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to send alert notification: {e}")
 
     async def mark_resolved(self, trace_id: str) -> bool:
         """

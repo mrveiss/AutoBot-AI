@@ -18,7 +18,9 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
+
+from backend.type_defs.common import Metadata
 
 from backend.services.ssh_manager import RemoteCommandResult, SSHManager
 from src.constants.network_constants import NetworkConstants
@@ -113,10 +115,31 @@ class RedisServiceManager:
         self._status_cache_time: Optional[datetime] = None
         self._cache_ttl_seconds = 10  # Cache TTL
 
+        # Error tracking for health metrics
+        self._error_count: int = 0
+        self._error_count_hour_start: datetime = datetime.now()
+
         logger.info(
             f"Redis Service Manager initialized for host={redis_host}, "
             f"service={service_name}"
         )
+
+    def _record_error(self) -> None:
+        """Record an error for health metrics tracking."""
+        now = datetime.now()
+        # Reset counter if hour has passed
+        if (now - self._error_count_hour_start).total_seconds() >= 3600:
+            self._error_count = 0
+            self._error_count_hour_start = now
+        self._error_count += 1
+
+    def _get_error_count_last_hour(self) -> int:
+        """Get error count for the last hour, resetting if needed."""
+        now = datetime.now()
+        if (now - self._error_count_hour_start).total_seconds() >= 3600:
+            self._error_count = 0
+            self._error_count_hour_start = now
+        return self._error_count
 
     async def start(self):
         """Start Redis Service Manager"""
@@ -129,7 +152,7 @@ class RedisServiceManager:
         logger.info("Redis Service Manager stopped")
 
     def _audit_log(
-        self, event_type: str, data: Dict[str, Any], user_id: Optional[str] = None
+        self, event_type: str, data: Metadata, user_id: Optional[str] = None
     ):
         """Log audit event"""
         if not self.enable_audit_logging:
@@ -175,6 +198,7 @@ class RedisServiceManager:
 
         except Exception as e:
             logger.error(f"Failed to execute systemctl {command}: {e}")
+            self._record_error()
             raise RedisConnectionError(
                 f"Cannot execute command on Redis VM: {str(e)}"
             ) from e
@@ -251,6 +275,7 @@ class RedisServiceManager:
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
             logger.error(f"Start service failed: {e}")
+            self._record_error()
 
             self._audit_log(
                 "redis_service_start_failed", {"error": str(e)}, user_id=user_id
@@ -338,6 +363,7 @@ class RedisServiceManager:
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
             logger.error(f"Stop service failed: {e}")
+            self._record_error()
 
             self._audit_log(
                 "redis_service_stop_failed", {"error": str(e)}, user_id=user_id
@@ -412,6 +438,7 @@ class RedisServiceManager:
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
             logger.error(f"Restart service failed: {e}")
+            self._record_error()
 
             self._audit_log(
                 "redis_service_restart_failed", {"error": str(e)}, user_id=user_id
@@ -488,6 +515,7 @@ class RedisServiceManager:
 
         except Exception as e:
             logger.error(f"Failed to get service status: {e}")
+            self._record_error()
             return ServiceStatus(status="unknown", last_check=datetime.now())
 
     async def get_health(self) -> HealthStatus:
@@ -555,17 +583,18 @@ class RedisServiceManager:
                 connectivity=connectivity,
                 response_time_ms=response_time_ms,
                 last_successful_command=datetime.now() if connectivity else None,
-                error_count_last_hour=0,  # TODO: Implement error tracking
+                error_count_last_hour=self._get_error_count_last_hour(),
                 recommendations=recommendations,
             )
 
         except Exception as e:
             logger.error(f"Health check failed: {e}")
+            self._record_error()
             return HealthStatus(
                 overall_status="critical",
                 service_running=False,
                 connectivity=False,
                 response_time_ms=0.0,
-                error_count_last_hour=0,
+                error_count_last_hour=self._get_error_count_last_hour(),
                 recommendations=["Health check failed - cannot determine status"],
             )
