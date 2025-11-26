@@ -23,6 +23,7 @@ from PIL import Image
 
 
 # Import centralized components
+from src.constants.model_constants import model_config
 from src.unified_config_manager import cfg
 from src.utils.http_client import get_http_client
 from src.utils.logging_manager import get_llm_logger
@@ -312,10 +313,13 @@ class AIHardwareAccelerator:
                 return TaskComplexity.HEAVY
 
         elif task_type == "chat_inference":
-            model_size = input_data.get("model_size_mb", 1000)
-            if model_size < 1000:  # < 1GB
+            model_size = input_data.get(
+                "model_size_mb", model_config.MODEL_SIZE_LIGHTWEIGHT_THRESHOLD_MB
+            )
+            # Uses centralized thresholds from model_constants.py
+            if model_size < model_config.MODEL_SIZE_LIGHTWEIGHT_THRESHOLD_MB:
                 return TaskComplexity.LIGHTWEIGHT
-            elif model_size < 3000:  # < 3GB
+            elif model_size < model_config.MODEL_SIZE_MODERATE_THRESHOLD_MB:
                 return TaskComplexity.MODERATE
             else:
                 return TaskComplexity.HEAVY

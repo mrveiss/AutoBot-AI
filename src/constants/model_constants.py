@@ -78,6 +78,20 @@ class ModelConfig:
     MAX_CONTEXT_LENGTH: int = 32768
     MAX_HISTORY_TOKENS: int = 3000  # Maximum tokens for conversation history
 
+    # RAG Context Length Optimization (by complexity score)
+    RAG_CONTEXT_HIGH_COMPLEXITY: int = 3000  # complexity > 0.8
+    RAG_CONTEXT_MEDIUM_COMPLEXITY: int = 2500  # complexity > 0.6
+    RAG_CONTEXT_LOW_COMPLEXITY: int = 2000  # complexity <= 0.6
+
+    # RAG Chunk Count Optimization (by complexity score)
+    RAG_CHUNKS_HIGH_COMPLEXITY: int = 8
+    RAG_CHUNKS_MEDIUM_COMPLEXITY: int = 6
+    RAG_CHUNKS_LOW_COMPLEXITY: int = 5
+
+    # Model Size Thresholds (MB) for task complexity classification
+    MODEL_SIZE_LIGHTWEIGHT_THRESHOLD_MB: int = 1000  # < 1GB = lightweight
+    MODEL_SIZE_MODERATE_THRESHOLD_MB: int = 3000  # < 3GB = moderate, else heavy
+
     # Generation parameters
     DEFAULT_TEMPERATURE: float = 0.7
     DEFAULT_TOP_P: float = 0.9
