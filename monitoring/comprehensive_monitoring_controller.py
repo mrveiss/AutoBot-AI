@@ -10,10 +10,9 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 from pathlib import Path
 import signal
-import sys
 
 # Import monitoring components
 from performance_monitor import PerformanceMonitor, ALERT_THRESHOLDS

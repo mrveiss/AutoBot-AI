@@ -6,21 +6,16 @@ for the distributed AutoBot system across 6 VMs.
 """
 
 import asyncio
-import json
 import logging
-import os
-import subprocess
-import time
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Any
+from datetime import datetime
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from pathlib import Path
 
-import redis
 import psutil
 import yaml
 
-from performance_monitor import PerformanceMonitor, VMS, ALERT_THRESHOLDS
+from performance_monitor import PerformanceMonitor
 from src.constants.path_constants import PATH
 
 @dataclass
