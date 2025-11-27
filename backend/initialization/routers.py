@@ -29,6 +29,7 @@ from backend.api.http_client_mcp import router as http_client_mcp_router
 from backend.api.intelligent_agent import router as intelligent_agent_router
 from backend.api.knowledge import router as knowledge_router
 from backend.api.knowledge_mcp import router as knowledge_mcp_router
+from backend.api.knowledge_search import router as knowledge_search_router
 from backend.api.knowledge_tags import router as knowledge_tags_router
 from backend.api.llm import router as llm_router
 from backend.api.mcp_registry import router as mcp_registry_router
@@ -68,6 +69,7 @@ def load_core_routers():
         (settings_router, "/settings", ["settings"], "settings"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (knowledge_router, "/knowledge_base", ["knowledge"], "knowledge"),
+        (knowledge_search_router, "/knowledge_base", ["knowledge-search"], "knowledge_search"),
         (knowledge_tags_router, "/knowledge_base", ["knowledge-tags"], "knowledge_tags"),
         (llm_router, "/llm", ["llm"], "llm"),
         (redis_router, "/redis", ["redis"], "redis"),
