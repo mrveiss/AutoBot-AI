@@ -20,9 +20,8 @@ import os
 import aiohttp
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 
-from performance_monitor import VMS, SERVICE_ENDPOINTS
+from performance_monitor import VMS
 from src.constants.network_constants import NetworkConstants
 
 @dataclass
@@ -496,8 +495,6 @@ class PerformanceBenchmark:
     async def _benchmark_memory(self) -> float:
         """Benchmark memory bandwidth."""
         try:
-            import psutil
-
             # Simple memory bandwidth test
             start_time = time.time()
 

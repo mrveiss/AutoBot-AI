@@ -7,26 +7,19 @@ Provides interactive charts, alerts, and system status overview.
 
 import asyncio
 import json
-import logging
-from datetime import datetime, timedelta
-from typing import Dict, List, Any
+from datetime import datetime
 from pathlib import Path
 
-import aiohttp
 import aiohttp_jinja2
 import jinja2
 from aiohttp import web, WSMsgType
-import plotly.graph_objects as go
-import plotly.utils
-from plotly.subplots import make_subplots
 from src.constants.network_constants import NetworkConstants
 
-from performance_monitor import PerformanceMonitor, VMS, SERVICE_ENDPOINTS
+from performance_monitor import PerformanceMonitor
 from src.utils.html_dashboard_utils import (
     get_dark_theme_css,
     create_dashboard_header,
     create_metric_card,
-    create_chart_container,
 )
 
 class PerformanceDashboard:
