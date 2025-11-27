@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel, QTabWidget, QStatusBar,
     QMessageBox, QSystemTrayIcon, QMenu
 )
-from PySide6.QtCore import Qt, QTimer, Signal, Slot
+from PySide6.QtCore import QTimer, Slot
 from PySide6.QtGui import QIcon, QAction
 
 from gui.widgets.status_panel import StatusPanel

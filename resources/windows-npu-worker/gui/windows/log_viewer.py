@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QPushButton, QComboBox, QLabel, QCheckBox,
     QFileDialog
 )
-from PySide6.QtCore import Qt, QTimer, Signal, Slot, QThread
+from PySide6.QtCore import Signal, Slot, QThread
 from PySide6.QtGui import QFont, QTextCursor
 
 

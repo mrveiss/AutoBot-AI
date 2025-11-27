@@ -49,14 +49,8 @@ def test_sync_memory_manager():
     """Test the synchronous memory manager"""
     print("\nTesting sync memory manager...")
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        # Test with relative path
-        test_db = os.path.join(temp_dir, "test_sync.db")
-
-        # Mock the config to use our test database
-        import src.config
-        original_config = src.config.config.to_dict()
-
+    with tempfile.TemporaryDirectory():
+        # Test with temporary directory context (cleanup automatic)
         try:
             # Create memory manager
             memory_mgr = LongTermMemoryManager()
@@ -87,7 +81,7 @@ async def test_async_memory_manager():
     """Test the asynchronous memory manager"""
     print("\nTesting async memory manager...")
 
-    with tempfile.TemporaryDirectory() as temp_dir:
+    with tempfile.TemporaryDirectory():
         try:
             # Create async memory manager
             async_memory_mgr = AsyncLongTermMemoryManager()

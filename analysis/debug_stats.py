@@ -53,7 +53,6 @@ def test_stats_endpoint():
 
             # Check if we're getting the expected fields
             total_docs = data.get('total_documents', 0)
-            total_chunks = data.get('total_chunks', 0)
 
             if total_docs > 1000:
                 print(f"✅ SUCCESS: Showing realistic stats ({total_docs} documents)")

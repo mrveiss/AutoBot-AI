@@ -6,7 +6,7 @@ import subprocess
 import requests
 from pathlib import Path
 from PySide6.QtCore import QObject, Signal, Slot, QThread
-from typing import Optional, Dict, Any
+from typing import Optional
 
 
 class MetricsWorker(QThread):

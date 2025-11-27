@@ -5,7 +5,7 @@ Detects and formats network interface information for the NPU worker
 
 import platform
 import socket
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 
 def get_network_interfaces() -> List[Dict[str, str]]:
