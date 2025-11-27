@@ -31,6 +31,7 @@ from backend.api.knowledge import router as knowledge_router
 from backend.api.knowledge_mcp import router as knowledge_mcp_router
 from backend.api.knowledge_search import router as knowledge_search_router
 from backend.api.knowledge_tags import router as knowledge_tags_router
+from backend.api.knowledge_population import router as knowledge_population_router
 from backend.api.llm import router as llm_router
 from backend.api.mcp_registry import router as mcp_registry_router
 from backend.api.memory import router as memory_router
@@ -71,6 +72,7 @@ def load_core_routers():
         (knowledge_router, "/knowledge_base", ["knowledge"], "knowledge"),
         (knowledge_search_router, "/knowledge_base", ["knowledge-search"], "knowledge_search"),
         (knowledge_tags_router, "/knowledge_base", ["knowledge-tags"], "knowledge_tags"),
+        (knowledge_population_router, "/knowledge_base", ["knowledge-population"], "knowledge_population"),
         (llm_router, "/llm", ["llm"], "llm"),
         (redis_router, "/redis", ["redis"], "redis"),
         (voice_router, "/voice", ["voice"], "voice"),
