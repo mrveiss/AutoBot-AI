@@ -3,11 +3,10 @@ Status Panel - NPU Worker Status Display
 """
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
+    QWidget, QVBoxLayout, QGroupBox,
     QLabel, QProgressBar, QGridLayout
 )
-from PySide6.QtCore import Qt, Slot
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Slot
 
 
 class StatusPanel(QWidget):

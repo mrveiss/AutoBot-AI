@@ -423,9 +423,8 @@ class CodeIssueAnalyzer:
                         "recommendation": "Address technical debt items"
                     })
 
-            # Analyze import dependencies for circular references
-            # (This is a simplified analysis)
-            file_imports = {file: set(imports) for file, imports in dependency_files}
+            # Note: Circular reference detection would analyze dependency_files
+            # but is not implemented in this simplified version
 
             logger.info(f"📊 Found {len(issues)} architectural issues")
 

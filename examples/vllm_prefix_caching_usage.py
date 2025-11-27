@@ -213,8 +213,7 @@ def example_performance_comparison():
     """
     print("=== Example 4: Performance Comparison ===\n")
 
-    agent_type = "frontend-engineer"
-
+    # Example uses frontend-engineer agent type for comparison
     print("Scenario: 10 sequential frontend engineering tasks\n")
 
     print("WITHOUT Optimization:")

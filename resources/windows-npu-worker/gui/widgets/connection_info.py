@@ -7,7 +7,6 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QTextEdit, QMessageBox, QGridLayout
 )
 from PySide6.QtCore import Qt, Slot
-from PySide6.QtGui import QFont
 
 from gui.utils.network_info import (
     get_network_interfaces,

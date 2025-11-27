@@ -6,9 +6,7 @@ Standalone Windows service with port 8082
 """
 
 import asyncio
-import json
 import logging
-import os
 import sys
 import time
 import uuid

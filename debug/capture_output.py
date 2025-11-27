@@ -162,7 +162,7 @@ def capture_specific_test():
         capture_autobot_output()
     else:
         capture = OutputCapture(args.output)
-        return_code = capture.run_command(args.command)
+        capture.run_command(args.command)
 
         if args.tail and os.path.exists(capture.log_file):
             print(f"\n📜 Tailing log file: {capture.log_file}")

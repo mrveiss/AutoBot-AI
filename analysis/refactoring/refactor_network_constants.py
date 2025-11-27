@@ -36,7 +36,6 @@ def get_replacement_map() -> Dict[str, str]:
     ai_stack_host = services_config.get("ai_stack", {}).get("host") or system_defaults.get("ai_stack_host", "localhost")
     browser_host = services_config.get("browser_service", {}).get("host") or system_defaults.get("browser_service_host", "localhost")
     ollama_config = services_config.get("ollama", {})
-    ollama_host = ollama_config.get("host") or system_defaults.get("ollama_host", "localhost")
     ollama_port = ollama_config.get("port") or system_defaults.get("ollama_port", 11434)
 
     # Mapping of hardcoded values to constants (from configuration)
@@ -150,9 +149,7 @@ def refactor_file_content(content: str, file_path: Path) -> Tuple[str, int]:
             if pattern in content:
                 # For quoted strings, replace with the constant
                 if pattern.startswith(('"', "'")):
-                    quote_char = pattern[0]
-                    replacement = f'{constant_name}'
-                    content = content.replace(pattern, replacement)
+                    content = content.replace(pattern, constant_name)
                 else:
                     # For unquoted occurrences, be more careful
                     # Use word boundaries to avoid partial matches
@@ -224,7 +221,6 @@ def main():
     print(f"📁 Found {len(files)} files to analyze")
 
     total_files_changed = 0
-    total_replacements = 0
 
     for file_path in files:
         try:

@@ -6,7 +6,6 @@ and the new optimized approach for vLLM prefix caching.
 """
 
 import asyncio
-from src.llm_interface import LLMInterface, LLMRequest
 
 
 async def example_before_optimization():
@@ -21,7 +20,8 @@ async def example_before_optimization():
     print("=" * 70)
     print()
 
-    llm = LLMInterface()
+    # Note: LLMInterface would be used for actual API calls
+    # This example demonstrates prompt structure without making real calls
 
     # Traditional approach - get static prompt
     from src.prompt_manager import get_prompt
@@ -45,14 +45,9 @@ async def example_before_optimization():
     for i, task in enumerate(tasks, 1):
         print(f"Task {i}: {task}")
 
-        request = LLMRequest(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": task},
-            ],
-            provider="ollama",  # Not using vLLM
-            max_tokens=512,
-        )
+        # Note: In actual usage, you would create and send the request:
+        # request = LLMRequest(messages=[...], provider="ollama", max_tokens=512)
+        # response = await llm.chat_completion(request)
 
         print(f"  - Processing full {len(system_prompt)//4:,} token prompt...")
         print("  - Expected time: ~6 seconds (no caching)")
@@ -77,7 +72,8 @@ async def example_after_optimization():
     print("=" * 70)
     print()
 
-    llm = LLMInterface()
+    # Note: LLMInterface would be used for actual API calls
+    # This example demonstrates the optimization concepts
 
     # Tasks
     tasks = [

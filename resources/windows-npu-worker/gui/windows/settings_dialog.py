@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QFileDialog, QGroupBox, QFormLayout, QLineEdit,
     QSpinBox, QComboBox, QCheckBox
 )
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Slot
 from PySide6.QtGui import QFont
 
 
