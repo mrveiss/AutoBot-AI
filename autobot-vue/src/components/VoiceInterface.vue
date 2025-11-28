@@ -324,12 +324,11 @@ export default {
         }
 
         // Send to backend for processing
-        const response = await apiClient.post('/api/voice/listen', {
+        // ApiClient.post() returns parsed JSON directly
+        return await apiClient.post('/api/voice/listen', {
           text: text,
           confidence: confidence
         });
-
-        return await response.json();
       },
       {
         onSuccess: async (data) => {
@@ -405,8 +404,8 @@ export default {
     // Wake word management methods
     const loadWakeWordSettings = async () => {
       try {
-        const response = await apiClient.get('/api/wake_word/config');
-        const data = await response.json();
+        // ApiClient.get() returns parsed JSON directly
+        const data = await apiClient.get('/api/wake_word/config');
         if (data) {
           wakeWordSettings.value = {
             ...wakeWordSettings.value,
@@ -420,8 +419,8 @@ export default {
 
     const loadWakeWordStats = async () => {
       try {
-        const response = await apiClient.get('/api/wake_word/stats');
-        const data = await response.json();
+        // ApiClient.get() returns parsed JSON directly
+        const data = await apiClient.get('/api/wake_word/stats');
         if (data) {
           wakeWordStats.value = {
             total_detections: data.total_detections || 0,
@@ -468,10 +467,10 @@ export default {
       if (!newWakeWord.value.trim()) return;
 
       try {
-        const response = await apiClient.post('/api/wake_word/words', {
+        // ApiClient.post() returns parsed JSON directly
+        const data = await apiClient.post('/api/wake_word/words', {
           wake_word: newWakeWord.value.trim()
         });
-        const data = await response.json();
         if (data.success) {
           wakeWordSettings.value.wake_words = data.wake_words;
           newWakeWord.value = '';
@@ -487,8 +486,8 @@ export default {
 
     const removeWakeWord = async (word) => {
       try {
-        const response = await apiClient.delete(`/api/wake_word/words/${encodeURIComponent(word)}`);
-        const data = await response.json();
+        // ApiClient.delete() returns parsed JSON directly
+        const data = await apiClient.delete(`/api/wake_word/words/${encodeURIComponent(word)}`);
         if (data.success) {
           wakeWordSettings.value.wake_words = data.wake_words;
           statusMessage.value = `Wake word "${word}" removed`;

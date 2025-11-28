@@ -338,11 +338,10 @@ export default {
       async () => {
         if (!props.sessionId) return null
 
+        // ApiClient.get() returns parsed JSON directly, throws on error
         // Two sequential API calls
-        const statusResponse = await apiClient.get(`/api/research/session/${props.sessionId}/status`)
-        const statusData = await statusResponse.json()
-        const browserResponse = await apiClient.get(`/api/research/browser/${props.sessionId}`)
-        const browserData = await browserResponse.json()
+        const statusData = await apiClient.get(`/api/research/session/${props.sessionId}/status`)
+        const browserData = await apiClient.get(`/api/research/browser/${props.sessionId}`)
 
         return { statusData, browserData }
       },
@@ -366,12 +365,12 @@ export default {
     // 2. Migrate handleWaitForUser - Chains refreshStatus
     const { execute: handleWaitForUser, loading: isWaitingForUser } = useAsyncHandler(
       async () => {
-        const response = await apiClient.post('/api/research/session/action', {
+        // ApiClient.post() returns parsed JSON directly, throws on error
+        return await apiClient.post('/api/research/session/action', {
           session_id: props.sessionId,
           action: 'wait',
           timeout_seconds: 300
         })
-        return await response.json()
       },
       {
         onSuccess: async (data) => {
@@ -387,11 +386,11 @@ export default {
     // 3. Migrate handleSessionAction - Chains refreshStatus
     const { execute: performSessionAction, loading: isPerformingAction } = useAsyncHandler(
       async (action) => {
-        const response = await apiClient.post('/api/research/session/action', {
+        // ApiClient.post() returns parsed JSON directly, throws on error
+        return await apiClient.post('/api/research/session/action', {
           session_id: props.sessionId,
           action: action
         })
-        return await response.json()
       },
       {
         onSuccess: async (data) => {
@@ -414,10 +413,10 @@ export default {
       async () => {
         if (!navigationUrl.value) return null
 
-        const response = await apiClient.post(`/api/research/session/${props.sessionId}/navigate`, {
+        // ApiClient.post() returns parsed JSON directly, throws on error
+        return await apiClient.post(`/api/research/session/${props.sessionId}/navigate`, {
           url: navigationUrl.value
         })
-        return await response.json()
       },
       {
         onSuccess: async (data) => {
@@ -462,12 +461,12 @@ export default {
 
         // If there's no research session, create one for this navigation
         if (!props.sessionId) {
-          const response = await apiClient.post('/api/research/url', {
+          // ApiClient.post() returns parsed JSON directly, throws on error
+          return await apiClient.post('/api/research/url', {
             conversation_id: 'unified-browser-session',
             url: browserUrl.value,
             extract_content: false
           })
-          return await response.json()
         }
 
         return null
@@ -498,11 +497,11 @@ export default {
       async () => {
         if (!props.sessionId) return null
 
-        const response = await apiClient.post('/api/research/session/action', {
+        // ApiClient.post() returns parsed JSON directly, throws on error
+        return await apiClient.post('/api/research/session/action', {
           session_id: props.sessionId,
           action: 'manual_intervention'
         })
-        return await response.json()
       },
       {
         onSuccess: (data) => {
@@ -525,12 +524,12 @@ export default {
       async () => {
         if (!props.sessionId) return null
 
-        const response = await apiClient.post('/api/research/session/action', {
+        // ApiClient.post() returns parsed JSON directly, throws on error
+        return await apiClient.post('/api/research/session/action', {
           session_id: props.sessionId,
           action: 'wait',
           timeout_seconds: 300
         })
-        return await response.json()
       },
       {
         onSuccess: async (data) => {

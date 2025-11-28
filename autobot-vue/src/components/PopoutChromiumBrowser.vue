@@ -475,10 +475,8 @@ export default {
             props.sessionId !== 'manual-browser' &&
             props.sessionId !== 'unified-browser') {
           try {
-            const response = await apiClient.get(`/api/research/browser/${props.sessionId}`)
-            if (response.ok) {
-              sessionData = await response.json()
-            }
+            // ApiClient.get() returns parsed JSON directly, throws on error
+            sessionData = await apiClient.get(`/api/research/browser/${props.sessionId}`)
           } catch (sessionError) {
             console.warn('Could not get session info, using manual mode')
           }
@@ -549,14 +547,11 @@ export default {
         let playwrightResult = null
         if (playwrightStatus.value === 'connected') {
           try {
-            const response = await apiClient.post(`${playwrightApiUrl.value}/navigate`, {
+            // ApiClient.post() returns parsed JSON directly, throws on error
+            playwrightResult = await apiClient.post(`${playwrightApiUrl.value}/navigate`, {
               url: targetUrl,
               session_id: props.sessionId
             })
-
-            if (response.ok) {
-              playwrightResult = await response.json()
-            }
           } catch (navError) {
             console.warn('Playwright navigation failed, relying on VNC')
           }
@@ -609,8 +604,8 @@ export default {
           return null
         }
 
-        const response = await apiClient.post('/api/playwright/back')
-        return response.ok ? await response.json() : null
+        // ApiClient.post() returns parsed JSON directly, throws on error
+        return await apiClient.post('/api/playwright/back')
       },
       {
         onSuccess: (result) => {
@@ -641,8 +636,8 @@ export default {
           return null
         }
 
-        const response = await apiClient.post('/api/playwright/forward')
-        return response.ok ? await response.json() : null
+        // ApiClient.post() returns parsed JSON directly, throws on error
+        return await apiClient.post('/api/playwright/forward')
       },
       {
         onSuccess: (result) => {
@@ -672,8 +667,8 @@ export default {
           return 'navigate-fallback'
         }
 
-        const response = await apiClient.post('/api/playwright/reload')
-        return response.ok ? await response.json() : null
+        // ApiClient.post() returns parsed JSON directly, throws on error
+        return await apiClient.post('/api/playwright/reload')
       },
       {
         onSuccess: async (result) => {
@@ -703,12 +698,11 @@ export default {
 
         addConsoleLog('info', `Starting web search for: ${searchQuery.value}`)
 
-        const response = await apiClient.post(`${playwrightApiUrl.value}/search`, {
+        // ApiClient.post() returns parsed JSON directly, throws on error
+        return await apiClient.post(`${playwrightApiUrl.value}/search`, {
           query: searchQuery.value,
           search_engine: 'duckduckgo'
         })
-
-        return await response.json()
       },
       {
         onSuccess: (data) => {
@@ -730,11 +724,10 @@ export default {
       async () => {
         addConsoleLog('info', 'Starting frontend tests...')
 
-        const response = await apiClient.post(`${playwrightApiUrl.value}/test-frontend`, {
+        // ApiClient.post() returns parsed JSON directly, throws on error
+        return await apiClient.post(`${playwrightApiUrl.value}/test-frontend`, {
           frontend_url: window.location.origin
         })
-
-        return await response.json()
       },
       {
         onSuccess: (data) => {
@@ -760,12 +753,11 @@ export default {
       async () => {
         addConsoleLog('info', 'Sending test message...')
 
-        const response = await apiClient.post(`${playwrightApiUrl.value}/send-test-message`, {
+        // ApiClient.post() returns parsed JSON directly, throws on error
+        return await apiClient.post(`${playwrightApiUrl.value}/send-test-message`, {
           message: 'Test message from browser automation',
           frontend_url: window.location.origin
         })
-
-        return await response.json()
       },
       {
         onSuccess: (data) => {
