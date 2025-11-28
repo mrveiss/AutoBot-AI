@@ -291,6 +291,11 @@ class KnowledgeBase:
                 await self._cleanup_on_failure()
                 return False
 
+    # Alias for backward compatibility with scripts using ainit()
+    async def ainit(self) -> bool:
+        """Alias for initialize() - backward compatibility with existing scripts."""
+        return await self.initialize()
+
     async def _configure_llama_index(self):
         """Configure LlamaIndex with Ollama models"""
         try:
