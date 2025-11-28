@@ -61,7 +61,7 @@ class ConnectionTester:
                 ollama_endpoint = os.getenv(
                     "AUTOBOT_OLLAMA_HOST",
                     f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}",
-                ),
+                )
                 ollama_check_url = f"{ollama_endpoint}/api/tags"
                 response = requests.get(ollama_check_url, timeout=3)
                 if response.status_code == 200:
@@ -220,7 +220,7 @@ class ConnectionTester:
                 redis_config = task_transport_config.get("redis", {})
                 redis_host = redis_config.get(
                     "host", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
-                ),
+                )
                 redis_port = redis_config.get(
                     "port",
                     int(
@@ -237,7 +237,7 @@ class ConnectionTester:
                 if redis_config.get("enabled", False):
                     redis_host = redis_config.get(
                         "host", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
-                    ),
+                    )
                     redis_port = redis_config.get(
                         "port",
                         int(

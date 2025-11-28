@@ -320,7 +320,7 @@ async def vectorize_existing_facts(
 
                 metadata_str = fact_data.get("metadata") or fact_data.get(
                     b"metadata", b"{}"
-                ),
+                )
                 metadata = json.loads(
                     metadata_str.decode("utf-8")
                     if isinstance(metadata_str, bytes)
@@ -423,7 +423,7 @@ async def _vectorize_fact_background(
             fact_hash.get("content", "")
             if isinstance(fact_hash.get("content"), str)
             else fact_hash.get("content", b"").decode("utf-8")
-        ),
+        )
         metadata_str = fact_hash.get("metadata", "{}")
         metadata = (
             json.loads(metadata_str)

@@ -495,7 +495,7 @@ class EnhancedMemoryManager:
                 WHERE task_id IN ({task_ids_placeholder})
                 """,
                 task_ids,
-            ),
+            )
             markdown_refs_by_task = {}
             for ref_row in ref_cursor.fetchall():
                 task_id = ref_row[0]
@@ -511,7 +511,7 @@ class EnhancedMemoryManager:
                 WHERE parent_task_id IN ({task_ids_placeholder})
                 """,
                 task_ids,
-            ),
+            )
             subtasks_by_parent = {}
             for subtask_row in subtask_cursor.fetchall():
                 parent_id = subtask_row[0]
@@ -626,7 +626,7 @@ class EnhancedMemoryManager:
                 WHERE created_at < ?
             """,
                 (cutoff_date,),
-            ),
+            )
             tasks_deleted = cursor.rowcount
 
             # Clean up old embeddings (keep frequently accessed ones)
@@ -636,7 +636,7 @@ class EnhancedMemoryManager:
                 WHERE last_accessed < ?
             """,
                 (cutoff_date,),
-            ),
+            )
             embeddings_deleted = cursor.rowcount
 
             conn.commit()

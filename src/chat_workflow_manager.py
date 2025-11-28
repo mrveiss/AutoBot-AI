@@ -108,6 +108,10 @@ class ChatWorkflowManager:
         self.terminal_tool = None
         self._init_terminal_tool()
 
+        # Knowledge service for RAG integration (Issue #249)
+        self.knowledge_service = None
+        self._use_knowledge = True  # Can be toggled per session/request
+
         logger.info("ChatWorkflowManager initialized")
 
     def _init_terminal_tool(self):
@@ -448,6 +452,31 @@ class ChatWorkflowManager:
 
                 # Create default workflow instance
                 self.default_workflow = AsyncChatWorkflow()
+
+                # Initialize knowledge service for RAG (Issue #249)
+                try:
+                    from backend.knowledge_factory import get_or_create_knowledge_base_sync
+                    from backend.services.rag_service import RAGService
+                    from src.services.chat_knowledge_service import ChatKnowledgeService
+
+                    # Get knowledge base instance
+                    kb = get_or_create_knowledge_base_sync()
+                    if kb:
+                        rag_service = RAGService(kb)
+                        await rag_service.initialize()
+                        self.knowledge_service = ChatKnowledgeService(rag_service)
+                        logger.info("✅ Knowledge service initialized for RAG")
+                    else:
+                        logger.warning(
+                            "⚠️ Knowledge base not available - RAG disabled"
+                        )
+                except Exception as kb_error:
+                    logger.warning(
+                        f"⚠️ Knowledge service initialization failed: {kb_error} - "
+                        f"continuing without RAG"
+                    )
+                    self.knowledge_service = None
+
                 self._initialized = True
 
                 logger.info("✅ ChatWorkflowManager initialized successfully")
@@ -623,7 +652,7 @@ class ChatWorkflowManager:
         return session, terminal_session_id, user_wants_exit
 
     async def _prepare_llm_request_params(
-        self, session: WorkflowSession, message: str
+        self, session: WorkflowSession, message: str, use_knowledge: bool = True
     ) -> Dict[str, Any]:
         """
         Prepare LLM request parameters including endpoint, model, and prompt.
@@ -631,6 +660,7 @@ class ChatWorkflowManager:
         Args:
             session: Current workflow session
             message: User message
+            use_knowledge: Whether to use knowledge base for RAG (Issue #249)
 
         Returns:
             Dictionary with 'endpoint', 'model', and 'prompt' keys
@@ -693,12 +723,48 @@ NEVER teach commands - ALWAYS execute them."""
                     f"User: {msg['user']}\nYou: {msg['assistant']}\n\n"
                 )
 
-        # Build complete prompt
-        full_prompt = (
-            system_prompt
-            + conversation_context
-            + f"\n**Current user message:** {message}\n\nAssistant:"
-        )
+        # Issue #249: Retrieve relevant knowledge for RAG
+        knowledge_context = ""
+        citations = []
+        if self.knowledge_service and use_knowledge:
+            try:
+                knowledge_context, citations = (
+                    await self.knowledge_service.retrieve_relevant_knowledge(
+                        query=message,
+                        top_k=5,
+                        score_threshold=0.7,
+                    )
+                )
+                if knowledge_context:
+                    logger.info(
+                        f"[RAG] Retrieved {len(citations)} knowledge facts for query"
+                    )
+                    # Store citations in session metadata for frontend
+                    session.metadata["last_citations"] = citations
+                    session.metadata["used_knowledge"] = True
+                else:
+                    session.metadata["used_knowledge"] = False
+            except Exception as kb_error:
+                logger.warning(f"[RAG] Knowledge retrieval failed: {kb_error}")
+                session.metadata["used_knowledge"] = False
+                # Continue without knowledge - graceful degradation
+        else:
+            session.metadata["used_knowledge"] = False
+
+        # Build complete prompt with optional knowledge context
+        if knowledge_context:
+            full_prompt = (
+                system_prompt
+                + "\n\n" + knowledge_context + "\n"
+                + conversation_context
+                + f"\n**Current user message:** {message}\n\nAssistant:"
+            )
+        else:
+            full_prompt = (
+                system_prompt
+                + conversation_context
+                + f"\n**Current user message:** {message}\n\nAssistant:"
+            )
 
         # Get selected model from config
         try:
@@ -732,6 +798,8 @@ NEVER teach commands - ALWAYS execute them."""
             "endpoint": ollama_endpoint,
             "model": selected_model,
             "prompt": full_prompt,
+            "citations": citations,  # Issue #249: RAG citations for frontend
+            "used_knowledge": bool(knowledge_context),
         }
 
     async def _interpret_command_results(
@@ -1118,7 +1186,7 @@ Explain what it means and answer their original question."""
                                 "approved"
                                 if last_command.get("approved_by")
                                 else "denied"
-                            ),
+                            )
                             comment = last_command.get(
                                 "approval_comment"
                             ) or last_command.get("denial_reason")
@@ -1496,11 +1564,17 @@ Explain what it means and answer their original question."""
 
                 return
 
-            # Stage 2: Prepare LLM request parameters
-            llm_params = await self._prepare_llm_request_params(session, message)
+            # Stage 2: Prepare LLM request parameters (includes RAG knowledge retrieval)
+            # Issue #249: Extract use_knowledge from context (frontend toggle)
+            use_knowledge = context.get("use_knowledge", True) if context else True
+            llm_params = await self._prepare_llm_request_params(
+                session, message, use_knowledge=use_knowledge
+            )
             ollama_endpoint = llm_params["endpoint"]
             selected_model = llm_params["model"]
             full_prompt = llm_params["prompt"]
+            rag_citations = llm_params.get("citations", [])  # Issue #249: RAG citations
+            used_knowledge = llm_params.get("used_knowledge", False)
 
             # Debug logging
             logger.info(
@@ -1572,6 +1646,11 @@ Explain what it means and answer their original question."""
                                                 "streaming": True,
                                                 "terminal_session_id": (
                                                     terminal_session_id
+                                                ),
+                                                # Issue #249: RAG metadata
+                                                "used_knowledge": used_knowledge,
+                                                "citations": (
+                                                    rag_citations if used_knowledge else []
                                                 ),
                                             },
                                         )

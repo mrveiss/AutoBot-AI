@@ -563,7 +563,7 @@ class LangChainAgentOrchestrator:
                         f"{msg['role']}: {msg['content']}"
                         for msg in conversation_history[-5:]
                     ]
-                ),
+                )
                 context = f"Recent conversation:\n{context}\n\n"
 
             # Add knowledge base context

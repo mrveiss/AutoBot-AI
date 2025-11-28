@@ -413,7 +413,7 @@ class ChatWorkflowManager:
                     # Conduct web research
                     research_task = asyncio.create_task(
                         self.web_research_integration.conduct_research(original_query)
-                    ),
+                    )
                     research_result = await asyncio.wait_for(
                         research_task, timeout=self.research_timeout
                     )
@@ -791,7 +791,7 @@ class ChatWorkflowManager:
                     logger.info("WORKFLOW: Conducting web research")
                     research_task = asyncio.create_task(
                         self.web_research_integration.conduct_research(user_message)
-                    ),
+                    )
                     web_research_result = await asyncio.wait_for(
                         research_task, timeout=self.research_timeout
                     )
@@ -903,7 +903,7 @@ class ChatWorkflowManager:
                             "research_conducted": research_results is not None,
                         },
                     )
-                ),
+                )
                 llm_response = await asyncio.wait_for(llm_task, timeout=10.0)
             except asyncio.TimeoutError:
                 logger.error("LLM response timed out after 10 seconds")

@@ -625,7 +625,7 @@ class AIHardwareAccelerator:
                     if self.image_projection:
                         unified_embedding = self.image_projection(
                             image_features.squeeze()
-                        ),
+                        )
                         unified_embedding = F.normalize(unified_embedding, p=2, dim=-1)
                         final_embedding = unified_embedding.cpu().numpy()
                     else:
@@ -643,7 +643,7 @@ class AIHardwareAccelerator:
                 with torch.no_grad():
                     inputs = self.wav2vec_processor(
                         audio_array, sampling_rate=16000, return_tensors="pt"
-                    ),
+                    )
                     inputs = {k: v.to(device) for k, v in inputs.items()}
 
                     if torch.cuda.is_available():

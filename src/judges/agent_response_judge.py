@@ -194,7 +194,7 @@ Focus on practical assessment that helps improve agent performance and user expe
                     if s.dimension == JudgmentDimension.RELEVANCE
                 ),
                 0.0,
-            ),
+            )
             quality_score = next(
                 (
                     s.score

@@ -636,7 +636,7 @@ class InfrastructureMonitor:
         # Determine overall status
         all_services = (
             services.core + services.database + services.application + services.support
-        ),
+        )
         error_count = sum(1 for s in all_services if s.status == "error")
         warning_count = sum(1 for s in all_services if s.status == "warning")
 
@@ -802,7 +802,7 @@ class InfrastructureMonitor:
         # Determine overall status
         all_services = (
             services.core + services.database + services.application + services.support
-        ),
+        )
         error_count = sum(1 for s in all_services if s.status == "error")
         warning_count = sum(1 for s in all_services if s.status == "warning")
 

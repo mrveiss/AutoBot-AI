@@ -295,7 +295,7 @@ class ClaudeAPIBatchManager:
         if self.metrics["total_requests"] > 0:
             batched_ratio = (
                 self.metrics["batched_requests"] / self.metrics["total_requests"]
-            ),
+            )
             batch_efficiency = batched_ratio * 100
 
         batcher_stats = {}

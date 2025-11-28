@@ -418,7 +418,7 @@ class GraphRAGService:
                     # Relationship strength also factors in
                     relationship_strength = relation.get("metadata", {}).get(
                         "strength", 1.0
-                    ),
+                    )
                     proximity_score = base_score * relationship_strength
 
                     # Create SearchResult from entity observations

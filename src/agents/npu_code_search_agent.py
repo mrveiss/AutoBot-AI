@@ -393,7 +393,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 for element in element_list:
                     element_key = (
                         f"{self.index_prefix}element:{element_type}:{element['name']}"
-                    ),
+                    )
                     element_data = {
                         "file_path": relative_path,
                         "line_number": element.get("line_number", 0),

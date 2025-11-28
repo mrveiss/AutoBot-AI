@@ -997,7 +997,7 @@ class ModernAIIntegration:
         # Calculate statistics
         avg_confidence = (
             sum(r.confidence for r in self.request_history) / total_requests
-        ),
+        )
         avg_processing_time = (
             sum(r.processing_time for r in self.request_history) / total_requests
         )

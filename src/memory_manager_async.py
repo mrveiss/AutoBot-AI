@@ -235,7 +235,7 @@ class AsyncLongTermMemoryManager:
                     embedding,
                     content_hash,
                 ),
-            ),
+            )
             memory_id = cursor.lastrowid
             await conn.commit()
             self.logger.debug(f"Stored memory entry {memory_id} in category {category}")
@@ -326,7 +326,7 @@ class AsyncLongTermMemoryManager:
                     datetime.now() if status in ["DONE", "FAILED"] else None,
                     json.dumps(metadata or {}),
                 ),
-            ),
+            )
             log_id = cursor.lastrowid
             await conn.commit()
             self.logger.debug(f"Logged task execution {log_id} for {task_id}")
@@ -358,7 +358,7 @@ class AsyncLongTermMemoryManager:
                     system_status,
                     datetime.now().timestamp(),
                 ),
-            ),
+            )
             state_id = cursor.lastrowid
             await conn.commit()
             self.logger.debug(f"Stored agent state {state_id}: {state_name}")
@@ -394,7 +394,7 @@ class AsyncLongTermMemoryManager:
                     token_usage,
                     model_used,
                 ),
-            ),
+            )
             conv_id = cursor.lastrowid
             await conn.commit()
             self.logger.debug(f"Logged conversation {conv_id} for session {session_id}")
@@ -424,7 +424,7 @@ class AsyncLongTermMemoryManager:
                     change_reason,
                     datetime.now().timestamp(),
                 ),
-            ),
+            )
             config_id = cursor.lastrowid
             await conn.commit()
             self.logger.debug(f"Logged config change {config_id} for {config_key}")
@@ -442,26 +442,26 @@ class AsyncLongTermMemoryManager:
             # Clean up old memory entries
             cursor = await conn.execute(
                 "DELETE FROM memory_entries WHERE timestamp < ?", (cutoff_timestamp,)
-            ),
+            )
             deleted_memory = cursor.rowcount
 
             # Clean up old task logs
             cursor = await conn.execute(
                 "DELETE FROM task_logs WHERE started_at < ?", (cutoff_timestamp,)
-            ),
+            )
             deleted_tasks = cursor.rowcount
 
             # Clean up old agent states
             cursor = await conn.execute(
                 "DELETE FROM agent_states WHERE timestamp < ?", (cutoff_timestamp,)
-            ),
+            )
             deleted_states = cursor.rowcount
 
             # Clean up old conversations
             cursor = await conn.execute(
                 "DELETE FROM conversation_history WHERE timestamp < ?",
                 (cutoff_timestamp,),
-            ),
+            )
             deleted_conversations = cursor.rowcount
 
             await conn.commit()

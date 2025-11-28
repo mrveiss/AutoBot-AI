@@ -95,7 +95,7 @@ class ExistingOperationMigrator:
                 checkpoint_data = context.get_resume_data()
                 processed_files = checkpoint_data.intermediate_results.get(
                     "processed_files", []
-                ),
+                )
                 start_index = len(processed_files)
                 logger.info(f"Resuming indexing from file {start_index}")
             else:
@@ -212,10 +212,10 @@ class ExistingOperationMigrator:
                 checkpoint_data = context.get_resume_data()
                 completed_tests = checkpoint_data.intermediate_results.get(
                     "completed_tests", []
-                ),
+                )
                 failed_tests = checkpoint_data.intermediate_results.get(
                     "failed_tests", []
-                ),
+                )
                 start_index = len(completed_tests) + len(failed_tests)
                 logger.info(f"Resuming test suite from test {start_index}")
             else:
@@ -359,7 +359,7 @@ class ExistingOperationMigrator:
                 checkpoint_data = context.get_resume_data()
                 scan_results = checkpoint_data.intermediate_results.get(
                     "scan_results", []
-                ),
+                )
                 start_index = len(scan_results)
                 logger.info(f"Resuming security scan from file {start_index}")
             else:

@@ -326,7 +326,7 @@ async def rag_search(
                 kb_results = await knowledge_base.search(
                     query=request_data.query,
                     top_k=15,  # Get more documents for RAG context
-                ),
+                )
                 documents = kb_results if isinstance(kb_results, list) else []
                 logger.info(
                     f"Retrieved {len(documents)} documents from local KB for RAG"

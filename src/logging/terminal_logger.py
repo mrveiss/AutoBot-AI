@@ -372,7 +372,7 @@ class TerminalLogger:
 
         success_count = sum(
             1 for cmd in commands if cmd.get("status") in ["success", "SUCCESS"]
-        ),
+        )
         error_count = sum(
             1 for cmd in commands if cmd.get("status") in ["error", "ERROR"]
         )

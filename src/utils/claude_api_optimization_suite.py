@@ -493,7 +493,7 @@ class ClaudeAPIOptimizationSuite:
                     # Check for critical inefficiencies
                     recommendations = (
                         self.pattern_analyzer.get_optimization_recommendations()
-                    ),
+                    )
                     critical_recommendations = [
                         rec
                         for rec in recommendations

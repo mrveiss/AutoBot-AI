@@ -444,7 +444,7 @@ async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str)
         config = session_manager.session_configs.get(session_id, {})
         security_level = SecurityLevel(
             config.get("security_level", SecurityLevel.STANDARD.value)
-        ),
+        )
         conversation_id = config.get("conversation_id")  # For chat/terminal linking
 
         # Get Redis client for TerminalLogger

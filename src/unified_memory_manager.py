@@ -417,7 +417,7 @@ class TaskStorage:
             conn.row_factory = aiosqlite.Row
             cursor = await conn.execute(
                 "SELECT * FROM task_execution_history WHERE task_id = ?", (task_id,)
-            ),
+            )
             row = await cursor.fetchone()
 
             if not row:
@@ -488,7 +488,7 @@ class TaskStorage:
                 FROM task_execution_history
                 GROUP BY status
             """
-            ),
+            )
             by_status = {row[0]: row[1] for row in await cursor.fetchall()}
 
             # Tasks by priority
@@ -498,7 +498,7 @@ class TaskStorage:
                 FROM task_execution_history
                 GROUP BY priority
             """
-            ),
+            )
             by_priority = {row[0]: row[1] for row in await cursor.fetchall()}
 
             return {
@@ -718,7 +718,7 @@ class GeneralStorage:
                 FROM memory_entries
                 GROUP BY category
             """
-            ),
+            )
             by_category = {row[0]: row[1] for row in await cursor.fetchall()}
 
             return {"total_entries": total, "by_category": by_category}

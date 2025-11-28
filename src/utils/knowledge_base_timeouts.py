@@ -190,7 +190,7 @@ class KnowledgeBaseTimeouts:
         """Get all LlamaIndex operation timeouts"""
         indexing = self._config.get_timeout_group(
             "llamaindex.indexing", environment=self.environment
-        ),
+        )
         search = self._config.get_timeout_group(
             "llamaindex.search", environment=self.environment
         )

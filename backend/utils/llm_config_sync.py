@@ -63,7 +63,7 @@ class LLMConfigurationSynchronizer:
             for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
                 agent_model = global_config_manager.get_nested(
                     f"agents.{agent_id}.model", config["default_model"]
-                ),
+                )
                 agent_enabled = global_config_manager.get_nested(
                     f"agents.{agent_id}.enabled", config["enabled"]
                 )

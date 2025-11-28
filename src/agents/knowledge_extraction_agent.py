@@ -222,17 +222,17 @@ Respond only with valid JSON.
             1
             for keyword in self.temporal_keywords["dynamic_indicators"]
             if keyword in text_lower
-        ),
+        )
         static_count = sum(
             1
             for keyword in self.temporal_keywords["static_indicators"]
             if keyword in text_lower
-        ),
+        )
         future_count = sum(
             1
             for keyword in self.temporal_keywords["future_indicators"]
             if keyword in text_lower
-        ),
+        )
         past_count = sum(
             1
             for keyword in self.temporal_keywords["past_indicators"]
@@ -451,7 +451,7 @@ Respond only with valid JSON.
                         fact_text = (
                             f"{fact_data['subject']} {fact_data['predicate']} "
                             f"{fact_data['object']}"
-                        ),
+                        )
                         enhanced_temporal = self._classify_temporal_type(
                             fact_text, content
                         )
@@ -463,7 +463,7 @@ Respond only with valid JSON.
                         fact_text = (
                             f"{fact_data['subject']} {fact_data['predicate']} "
                             f"{fact_data['object']}"
-                        ),
+                        )
                         additional_entities = self._extract_entities(fact_text)
                         fact_data["entities"] = list(
                             set(entities + additional_entities)

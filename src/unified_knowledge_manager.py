@@ -1013,7 +1013,7 @@ class UnifiedKnowledgeManager:
                 temporal_backup_path = (
                     self._system_manager.runtime_knowledge_dir
                     / "temporal_metadata_backup.json"
-                ),
+                )
                 temporal_data = {
                     content_id: {
                         "content_id": meta.content_id,

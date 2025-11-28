@@ -279,7 +279,7 @@ class PromptInjectionDetector:
             # Check both messages for injection patterns
             user_result = self.detect_injection(
                 user_msg, context="conversation_context"
-            ),
+            )
             assistant_result = self.detect_injection(
                 assistant_msg, context="conversation_context"
             )

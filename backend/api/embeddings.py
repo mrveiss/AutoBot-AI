@@ -156,7 +156,7 @@ async def get_available_embedding_models():
     try:
         embedding_config = unified_config_manager.get_nested(
             "backend.llm.unified.embedding", {}
-        ),
+        )
         providers = embedding_config.get("providers", {})
 
         available_models = {}
@@ -256,12 +256,12 @@ async def get_embedding_status():
     try:
         embedding_config = unified_config_manager.get_nested(
             "backend.llm.unified.embedding", {}
-        ),
+        )
         current_provider = embedding_config.get("provider", "ollama")
 
         provider_config = embedding_config.get("providers", {}).get(
             current_provider, {}
-        ),
+        )
         selected_model = provider_config.get("selected_model", "")
         endpoint = provider_config.get("endpoint", "")
 

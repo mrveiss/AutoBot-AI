@@ -209,7 +209,7 @@ class ToolRegistry:
                         result["content"][:200] + "..."
                         if len(result["content"]) > 200
                         else result["content"]
-                    ),
+                    )
                     metadata = result.get("metadata", {})
                     filename = metadata.get("filename", "N/A")
                     chunk_index = metadata.get("chunk_index", "N/A")

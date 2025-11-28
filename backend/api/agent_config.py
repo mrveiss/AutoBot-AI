@@ -157,10 +157,10 @@ async def list_agents():
         # Get current model from config or use default
         current_model = unified_config_manager.get_nested(
             f"agents.{agent_id}.model", config["default_model"]
-        ),
+        )
         current_provider = unified_config_manager.get_nested(
             f"agents.{agent_id}.provider", config["provider"]
-        ),
+        )
         enabled = unified_config_manager.get_nested(
             f"agents.{agent_id}.enabled", config["enabled"]
         )
@@ -218,10 +218,10 @@ async def get_agent_config(agent_id: str):
     # Get current configuration
     current_model = unified_config_manager.get_nested(
         f"agents.{agent_id}.model", base_config["default_model"]
-    ),
+    )
     current_provider = unified_config_manager.get_nested(
         f"agents.{agent_id}.provider", base_config["provider"]
-    ),
+    )
     enabled = unified_config_manager.get_nested(
         f"agents.{agent_id}.enabled", base_config["enabled"]
     )
@@ -458,7 +458,7 @@ async def get_agents_overview():
     for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
         enabled = unified_config_manager.get_nested(
             f"agents.{agent_id}.enabled", config["enabled"]
-        ),
+        )
         model = unified_config_manager.get_nested(
             f"agents.{agent_id}.model", config["default_model"]
         )

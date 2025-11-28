@@ -367,7 +367,7 @@ class ConversationFileManager:
             file_id = str(uuid.uuid4())
             stored_filename = self._generate_stored_filename(
                 original_filename, file_hash
-            ),
+            )
             file_path = self.storage_dir / stored_filename
 
             # Database operations

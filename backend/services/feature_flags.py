@@ -258,7 +258,7 @@ class FeatureFlags:
             # Get change history
             history_raw = await redis._redis.lrange(
                 "feature_flag:access_control:history", 0, 9
-            ),
+            )
             history = []
             for entry in history_raw:
                 if isinstance(entry, bytes):

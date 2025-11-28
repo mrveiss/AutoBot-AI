@@ -345,7 +345,7 @@ class ServiceMonitor:
 
                 cpu_result = subprocess.run(
                     cpu_cmd, shell=True, capture_output=True, text=True, timeout=5
-                ),
+                )
                 cpu_percent = (
                     float(cpu_result.stdout.strip()) if cpu_result.stdout.strip() else 0
                 )
@@ -354,7 +354,7 @@ class ServiceMonitor:
                 mem_cmd = "free | grep Mem | awk '{print ($3/$2) * 100.0}'"
                 mem_result = subprocess.run(
                     mem_cmd, shell=True, capture_output=True, text=True, timeout=5
-                ),
+                )
                 mem_percent = (
                     float(mem_result.stdout.strip()) if mem_result.stdout.strip() else 0
                 )

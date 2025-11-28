@@ -182,7 +182,7 @@ class ScreenAnalyzer:
                             "audio_result": processing_results[1].result_data,
                             "session_id": session_id,
                         },
-                    ),
+                    )
                     combined_result = await self.multimodal_processor.process(
                         combined_input
                     )
@@ -874,7 +874,7 @@ class ContextAnalyzer:
         # Simple heuristics for application type detection
         button_count = sum(
             1 for el in ui_elements if el.element_type == ElementType.BUTTON
-        ),
+        )
         input_count = sum(
             1 for el in ui_elements if el.element_type == ElementType.INPUT_FIELD
         )

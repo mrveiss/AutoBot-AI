@@ -164,7 +164,7 @@ class AdvancedCacheManager:
             cache_key = self._make_cache_key(data_type, key, user_id)
             config = self.cache_configs.get(
                 data_type, CacheConfig(CacheStrategy.DYNAMIC, 300)
-            ),
+            )
             ttl = custom_ttl or config.ttl
 
             # Add metadata

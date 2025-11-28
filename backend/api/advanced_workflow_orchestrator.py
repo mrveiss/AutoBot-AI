@@ -673,7 +673,7 @@ complexity, and requirements:
                 TaskComplexity,
                 intent_analysis.get("complexity", "simple").upper(),
                 TaskComplexity.SIMPLE,
-            ),
+            )
             base_steps = (
                 self.enhanced_orchestrator.base_orchestrator.plan_workflow_steps(
                     user_request, complexity

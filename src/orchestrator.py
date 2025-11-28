@@ -203,7 +203,7 @@ class OrchestratorConfig:
         self.orchestrator_llm_model = llm_config.get(
             "orchestrator_llm",
             llm_config.get("ollama", {}).get("selected_model"),
-        ),
+        )
         default_model = llm_config.get("ollama", {}).get("selected_model")
         self.task_llm_model = llm_config.get(
             "task_llm",
@@ -842,7 +842,7 @@ class ConsolidatedOrchestrator:
             # Calculate overall suitability score
             workload_factor = 1.0 - (
                 agent.current_workload / agent.max_concurrent_tasks
-            ),
+            )
             performance_factor = agent.success_rate
 
             suitability_score = (

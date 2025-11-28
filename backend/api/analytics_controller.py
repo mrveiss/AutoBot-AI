@@ -150,7 +150,7 @@ class AnalyticsController:
                 sum(self.response_times[endpoint]) / len(self.response_times[endpoint])
                 if self.response_times[endpoint]
                 else 0
-            ),
+            )
             error_rate = (
                 self.error_counts[endpoint] / frequency * 100 if frequency > 0 else 0
             )
@@ -444,7 +444,7 @@ class AnalyticsController:
                 # Calculate trends
                 cpu_trend = self._calculate_trend(
                     [p.get("cpu_percent", 0) for p in recent_performance]
-                ),
+                )
                 memory_trend = self._calculate_trend(
                     [p.get("memory_percent", 0) for p in recent_performance]
                 )

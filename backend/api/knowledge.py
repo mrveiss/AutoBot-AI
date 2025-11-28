@@ -334,14 +334,14 @@ async def add_text_to_knowledge(request: dict, req: Request):
         result = await kb_to_use.store_fact(
             content=text,
             metadata={"title": title, "source": source, "category": category},
-        ),
+        )
         fact_id = result.get("fact_id")
     else:
         # Original KnowledgeBase
         result = await kb_to_use.store_fact(
             text=text,
             metadata={"title": title, "source": source, "category": category},
-        ),
+        )
         fact_id = result.get("fact_id")
 
     return {
@@ -995,7 +995,7 @@ async def get_facts_by_category(
             # Extract metadata (handle both bytes and string keys from Redis)
             metadata_str = fact_data.get("metadata") or fact_data.get(
                 b"metadata", b"{}"
-            ),
+            )
             metadata = json.loads(
                 metadata_str.decode("utf-8")
                 if isinstance(metadata_str, bytes)
@@ -1016,7 +1016,7 @@ async def get_facts_by_category(
             source = metadata.get("source", "")
             fact_category = (
                 get_category_for_source(source).value if source else "general"
-            ),
+            )
             fact_title = metadata.get("title", metadata.get("command", "Untitled"))
             fact_type = metadata.get("type", "unknown")
 

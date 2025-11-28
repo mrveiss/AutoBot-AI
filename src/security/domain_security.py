@@ -289,7 +289,7 @@ class DomainSecurityManager:
             # Step 6: Make final decision
             reputation_threshold = self.config.config.get("domain_security", {}).get(
                 "reputation_threshold", 0.7
-            ),
+            )
             whitelist_mode = self.config.config.get("domain_security", {}).get(
                 "whitelist_mode", False
             )
