@@ -278,16 +278,15 @@ export default {
     // Load current settings
     const { execute: loadSettings, loading: isLoadingSettings } = useAsyncHandler(
       async () => {
+        // ApiClient.get() returns parsed JSON directly
         // Load status
-        const statusResponse = await apiClient.get('/web-research/status')
-        const statusData = await statusResponse.json()
+        const statusData = await apiClient.get('/web-research/status')
         if (statusData.status === 'success') {
           webResearchStore.updateStatus(statusData)
         }
 
         // Load settings
-        const settingsResponse = await apiClient.get('/web-research/settings')
-        const settingsData = await settingsResponse.json()
+        const settingsData = await apiClient.get('/web-research/settings')
         if (settingsData.status === 'success') {
           webResearchStore.updateSettings(settingsData.settings)
         }
@@ -301,9 +300,9 @@ export default {
     // Toggle web research on/off
     const { execute: toggleWebResearch, loading: isTogglingResearch } = useAsyncHandler(
       async () => {
+        // ApiClient.post() returns parsed JSON directly
         const endpoint = researchSettings.enabled ? '/web-research/enable' : '/web-research/disable'
-        const response = await apiClient.post(endpoint)
-        return await response.json()
+        return await apiClient.post(endpoint)
       },
       {
         onSuccess: async (data) => {
@@ -324,8 +323,8 @@ export default {
     // Update settings (with debounce for auto-save)
     const { execute: updateSettings, loading: isUpdatingSettings } = useAsyncHandler(
       async () => {
-        const response = await apiClient.put('/web-research/settings', researchSettings)
-        return await response.json()
+        // ApiClient.put() returns parsed JSON directly
+        return await apiClient.put('/web-research/settings', researchSettings)
       },
       {
         debounce: 1000, // Built-in debounce
@@ -345,8 +344,8 @@ export default {
       async () => {
         testResult.value = null
 
-        const response = await apiClient.post('/web-research/test', { query: 'test web research functionality' })
-        const data = await response.json()
+        // ApiClient.post() returns parsed JSON directly
+        const data = await apiClient.post('/web-research/test', { query: 'test web research functionality' })
         testResult.value = data
 
         showMessage('Test completed', data.status === 'success' ? 'success' : 'error')
@@ -367,8 +366,8 @@ export default {
     // Clear cache
     const { execute: clearCache, loading: isClearingCache } = useAsyncHandler(
       async () => {
-        const response = await apiClient.post('/web-research/clear-cache')
-        return await response.json()
+        // ApiClient.post() returns parsed JSON directly
+        return await apiClient.post('/web-research/clear-cache')
       },
       {
         onSuccess: async (data) => {
@@ -385,8 +384,8 @@ export default {
     // Reset circuit breakers
     const { execute: resetCircuitBreakers, loading: isResettingCircuitBreakers } = useAsyncHandler(
       async () => {
-        const response = await apiClient.post('/web-research/reset-circuit-breakers')
-        return await response.json()
+        // ApiClient.post() returns parsed JSON directly
+        return await apiClient.post('/web-research/reset-circuit-breakers')
       },
       {
         onSuccess: async (data) => {

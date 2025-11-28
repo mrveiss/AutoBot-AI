@@ -58,10 +58,8 @@ export default {
 
     const { execute: loadCategories, loading } = useAsyncHandler(
       async () => {
-        const response = await apiClient.get('/api/knowledge_base/categories');
-        // Handle both Response object and already-parsed JSON
-        const data = typeof response.json === 'function' ? await response.json() : response;
-        return data;
+        // ApiClient.get() returns parsed JSON directly
+        return await apiClient.get('/api/knowledge_base/categories');
       },
       {
         onSuccess: (data) => {
