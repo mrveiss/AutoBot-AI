@@ -11,7 +11,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Any
+from typing import Dict, List, Optional, Any
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -19,7 +19,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from src.utils.redis_client import get_redis_client
 from src.unified_config import UnifiedConfig
-from src.multimodal_processor import MultiModalProcessor, ModalInput, ModalityType, ProcessingIntent
 
 
 # Initialize unified config

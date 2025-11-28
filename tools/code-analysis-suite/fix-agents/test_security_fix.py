@@ -7,7 +7,6 @@ to the HTML files and tests the protection mechanisms.
 """
 
 import os
-import re
 import sys
 from pathlib import Path
 

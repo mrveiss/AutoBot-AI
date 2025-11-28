@@ -3,15 +3,13 @@ Automated Fix Recommendation Generator
 Generates specific code fixes and patches based on analysis results from all analyzers
 """
 
-import ast
 import asyncio
 import json
 import logging
 import re
 import time
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Any
 
 from src.utils.redis_client import get_redis_client
 from src.unified_config import UnifiedConfig
