@@ -723,27 +723,46 @@ NEVER teach commands - ALWAYS execute them."""
                     f"User: {msg['user']}\nYou: {msg['assistant']}\n\n"
                 )
 
-        # Issue #249: Retrieve relevant knowledge for RAG
+        # Issue #249 Phase 3: Conversation-aware knowledge retrieval
+        # Uses conversation history to enhance queries with context
         knowledge_context = ""
         citations = []
+        query_intent = None
+        enhanced_query = None
         if self.knowledge_service and use_knowledge:
             try:
-                knowledge_context, citations = (
-                    await self.knowledge_service.retrieve_relevant_knowledge(
+                # Use conversation-aware retrieval
+                # - Detects query intent (Phase 2)
+                # - Enhances query with conversation context (Phase 3)
+                # - Skips RAG for commands/greetings/short queries
+                knowledge_context, citations, query_intent, enhanced_query = (
+                    await self.knowledge_service.conversation_aware_retrieve(
                         query=message,
+                        conversation_history=session.conversation_history or [],
                         top_k=5,
                         score_threshold=0.7,
+                        force_retrieval=False,  # Allow intent-based skipping
                     )
                 )
                 if knowledge_context:
                     logger.info(
-                        f"[RAG] Retrieved {len(citations)} knowledge facts for query"
+                        f"[RAG] Retrieved {len(citations)} knowledge facts "
+                        f"(intent: {query_intent.intent.value}, "
+                        f"enhanced: {enhanced_query.enhancement_applied if enhanced_query else False})"
                     )
-                    # Store citations in session metadata for frontend
+                    # Store citations and context info in session metadata for frontend
                     session.metadata["last_citations"] = citations
                     session.metadata["used_knowledge"] = True
+                    session.metadata["query_intent"] = query_intent.intent.value
+                    if enhanced_query and enhanced_query.enhancement_applied:
+                        session.metadata["query_enhanced"] = True
+                        session.metadata["context_entities"] = enhanced_query.context_entities
                 else:
                     session.metadata["used_knowledge"] = False
+                    session.metadata["query_enhanced"] = False
+                    if query_intent:
+                        session.metadata["query_intent"] = query_intent.intent.value
+                        session.metadata["rag_skipped_reason"] = query_intent.reasoning
             except Exception as kb_error:
                 logger.warning(f"[RAG] Knowledge retrieval failed: {kb_error}")
                 session.metadata["used_knowledge"] = False

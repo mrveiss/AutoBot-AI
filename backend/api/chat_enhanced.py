@@ -137,7 +137,7 @@ async def process_enhanced_chat_message(
             await chat_history_manager.add_message(session_id, user_message_data)
 
         # Log chat event
-        await log_chat_event(
+        log_chat_event(
             "enhanced_message_received",
             session_id,
             {
@@ -292,7 +292,7 @@ async def process_enhanced_chat_message(
             await chat_history_manager.add_message(session_id, ai_message_data)
 
         # Log response event
-        await log_chat_event(
+        log_chat_event(
             "enhanced_response_generated",
             session_id,
             {

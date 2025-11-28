@@ -15,6 +15,7 @@ Features:
 - Performance logging
 - Citation formatting for source attribution
 - Query intent detection for smart RAG triggering (Issue #249 Phase 2)
+- Conversation-aware query enhancement (Issue #249 Phase 3)
 """
 
 import re
@@ -198,12 +199,254 @@ def get_query_intent_detector() -> QueryKnowledgeIntentDetector:
     return _query_intent_detector
 
 
+@dataclass
+class EnhancedQuery:
+    """Result of conversation-aware query enhancement."""
+
+    original_query: str
+    enhanced_query: str
+    context_entities: List[str]  # Entities extracted from conversation
+    context_topics: List[str]  # Topics from recent conversation
+    enhancement_applied: bool
+    reasoning: str
+
+
+class ConversationContextEnhancer:
+    """
+    Enhances queries with conversation context for better RAG results.
+
+    Issue #249 Phase 3: Conversation-Aware RAG.
+
+    Uses conversation history to:
+    1. Resolve pronouns and references (it, this, that, they)
+    2. Extract key entities and topics from conversation
+    3. Expand queries with relevant context
+    """
+
+    # Pronouns that may refer to previous context
+    REFERENCE_PRONOUNS = {
+        "it", "this", "that", "these", "those", "they", "them",
+        "its", "their", "the same", "such", "above", "previous",
+    }
+
+    # Question words that often need context
+    CONTEXT_QUESTION_PATTERNS = [
+        r"^(how|why|what|when|where)\s+(about|does|do|is|are|can|should)\s+(it|this|that)",
+        r"^(can you|could you|would you)\s+.*\s+(it|this|that|them)",
+        r"^(tell me more|explain more|elaborate)",
+        r"^(and|but|also|what about)",
+    ]
+
+    # Patterns to extract entities from text
+    ENTITY_PATTERNS = [
+        r"\b(Redis|Docker|Kubernetes|PostgreSQL|MongoDB|Nginx|Apache)\b",
+        r"\b(Python|JavaScript|TypeScript|Vue|React|FastAPI|Django)\b",
+        r"\b(API|REST|GraphQL|WebSocket|SSE|HTTP)\b",
+        r"\b(database|server|service|worker|queue|cache)\b",
+        r"\b(config|configuration|setup|deployment|installation)\b",
+        r"\b(error|exception|bug|issue|problem|failure)\b",
+    ]
+
+    def __init__(self):
+        """Initialize the context enhancer with compiled patterns."""
+        self._reference_re = re.compile(
+            r"\b(" + "|".join(self.REFERENCE_PRONOUNS) + r")\b",
+            re.IGNORECASE
+        )
+        self._context_question_re = [
+            re.compile(p, re.IGNORECASE) for p in self.CONTEXT_QUESTION_PATTERNS
+        ]
+        self._entity_re = [
+            re.compile(p, re.IGNORECASE) for p in self.ENTITY_PATTERNS
+        ]
+
+    def enhance_query(
+        self,
+        query: str,
+        conversation_history: List[Dict[str, str]],
+        max_history_items: int = 3,
+    ) -> EnhancedQuery:
+        """
+        Enhance a query with conversation context.
+
+        Args:
+            query: Current user query
+            conversation_history: List of conversation exchanges
+                Format: [{"user": "msg", "assistant": "response"}, ...]
+            max_history_items: Maximum number of history items to consider
+
+        Returns:
+            EnhancedQuery with original and enhanced query
+        """
+        # Check if enhancement is needed
+        needs_context = self._needs_context_enhancement(query)
+
+        if not needs_context or not conversation_history:
+            return EnhancedQuery(
+                original_query=query,
+                enhanced_query=query,
+                context_entities=[],
+                context_topics=[],
+                enhancement_applied=False,
+                reasoning="No context enhancement needed",
+            )
+
+        # Get recent conversation context
+        recent_history = conversation_history[-max_history_items:]
+
+        # Extract entities and topics from conversation
+        context_entities = self._extract_entities(recent_history)
+        context_topics = self._extract_topics(recent_history)
+
+        # Build enhanced query
+        enhanced_query = self._build_enhanced_query(
+            query, recent_history, context_entities, context_topics
+        )
+
+        return EnhancedQuery(
+            original_query=query,
+            enhanced_query=enhanced_query,
+            context_entities=context_entities,
+            context_topics=context_topics,
+            enhancement_applied=enhanced_query != query,
+            reasoning=self._get_enhancement_reasoning(query, context_entities),
+        )
+
+    def _needs_context_enhancement(self, query: str) -> bool:
+        """Check if a query would benefit from context enhancement."""
+        query_lower = query.lower().strip()
+
+        # Check for pronoun references
+        if self._reference_re.search(query_lower):
+            return True
+
+        # Check for context-dependent question patterns
+        for pattern in self._context_question_re:
+            if pattern.search(query_lower):
+                return True
+
+        # Very short queries often need context
+        if len(query.split()) <= 3:
+            return True
+
+        return False
+
+    def _extract_entities(
+        self, history: List[Dict[str, str]]
+    ) -> List[str]:
+        """Extract named entities from conversation history."""
+        entities = set()
+
+        for exchange in history:
+            user_msg = exchange.get("user", "")
+            assistant_msg = exchange.get("assistant", "")
+
+            for pattern in self._entity_re:
+                # Extract from user messages
+                for match in pattern.finditer(user_msg):
+                    entities.add(match.group(0))
+                # Extract from assistant messages
+                for match in pattern.finditer(assistant_msg):
+                    entities.add(match.group(0))
+
+        return list(entities)[:5]  # Limit to 5 most recent entities
+
+    def _extract_topics(
+        self, history: List[Dict[str, str]]
+    ) -> List[str]:
+        """Extract main topics from conversation history."""
+        topics = []
+
+        # Look at user messages to understand conversation topics
+        for exchange in history:
+            user_msg = exchange.get("user", "")
+            # Extract first significant noun phrase (simplified approach)
+            words = user_msg.split()
+            if len(words) >= 3:
+                # Take key phrase from user message
+                topic = " ".join(words[:min(5, len(words))])
+                if len(topic) > 10:  # Only meaningful topics
+                    topics.append(topic)
+
+        return topics[-3:]  # Last 3 topics
+
+    def _build_enhanced_query(
+        self,
+        query: str,
+        history: List[Dict[str, str]],
+        entities: List[str],
+        topics: List[str],
+    ) -> str:
+        """Build an enhanced query with context."""
+        enhanced_parts = [query]
+
+        # If query has pronouns and we have entities, add context
+        if self._reference_re.search(query.lower()) and entities:
+            # Add most relevant entity as context
+            context_phrase = f" (context: {', '.join(entities[:2])})"
+            enhanced_parts.append(context_phrase)
+
+        # For very short queries, add recent topic
+        elif len(query.split()) <= 3 and topics:
+            last_topic = topics[-1]
+            # Check if the short query relates to last topic
+            enhanced_parts.append(f" (regarding: {last_topic})")
+
+        # If asking "more" about something, include last assistant response snippet
+        if any(word in query.lower() for word in ["more", "elaborate", "explain"]):
+            if history:
+                last_response = history[-1].get("assistant", "")
+                if last_response:
+                    # Add snippet of last response for context
+                    snippet = last_response[:100].strip()
+                    if len(last_response) > 100:
+                        snippet += "..."
+                    enhanced_parts.append(f" (following up on: {snippet})")
+
+        return "".join(enhanced_parts)
+
+    def _get_enhancement_reasoning(
+        self, query: str, entities: List[str]
+    ) -> str:
+        """Generate reasoning for the enhancement."""
+        reasons = []
+
+        if self._reference_re.search(query.lower()):
+            reasons.append("pronoun reference detected")
+
+        if len(query.split()) <= 3:
+            reasons.append("short query")
+
+        if entities:
+            reasons.append(f"context entities: {', '.join(entities[:2])}")
+
+        if not reasons:
+            return "Context enhancement applied"
+
+        return "; ".join(reasons)
+
+
+# Global context enhancer instance
+_context_enhancer: Optional[ConversationContextEnhancer] = None
+
+
+def get_context_enhancer() -> ConversationContextEnhancer:
+    """Get or create the global context enhancer instance."""
+    global _context_enhancer
+    if _context_enhancer is None:
+        _context_enhancer = ConversationContextEnhancer()
+    return _context_enhancer
+
+
 class ChatKnowledgeService:
     """
     Service for retrieving and formatting knowledge for chat interactions.
 
     This service acts as a bridge between the chat workflow and the RAG system,
     providing knowledge retrieval with appropriate filtering and formatting.
+
+    Issue #249 Phase 2: Now includes smart intent detection to optimize
+    when to use knowledge retrieval.
     """
 
     def __init__(self, rag_service: RAGService):
@@ -214,7 +457,12 @@ class ChatKnowledgeService:
             rag_service: Configured RAGService instance
         """
         self.rag_service = rag_service
-        logger.info("ChatKnowledgeService initialized")
+        self.intent_detector = get_query_intent_detector()
+        self.context_enhancer = get_context_enhancer()
+        logger.info(
+            "ChatKnowledgeService initialized with intent detection "
+            "and conversation-aware RAG"
+        )
 
     async def retrieve_relevant_knowledge(
         self,
@@ -387,6 +635,162 @@ class ChatKnowledgeService:
 
         return citations
 
+    async def smart_retrieve_knowledge(
+        self,
+        query: str,
+        top_k: int = 5,
+        score_threshold: float = 0.7,
+        force_retrieval: bool = False,
+    ) -> Tuple[str, List[Dict], QueryIntentResult]:
+        """
+        Smart knowledge retrieval with intent detection.
+
+        Issue #249 Phase 2: Uses query intent detection to decide whether
+        to perform knowledge retrieval, optimizing performance by skipping
+        RAG for queries that don't need it.
+
+        Args:
+            query: User's chat message/query
+            top_k: Maximum number of knowledge facts to retrieve
+            score_threshold: Minimum relevance score (0.0-1.0) to include
+            force_retrieval: If True, bypass intent detection and always retrieve
+
+        Returns:
+            Tuple of (context_string, citations, intent_result)
+            - context_string: Knowledge context for LLM prompt (empty if skipped)
+            - citations: List of citation dicts (empty if skipped)
+            - intent_result: The intent detection result for logging/debugging
+        """
+        start_time = time.time()
+
+        # Detect query intent
+        intent_result = self.intent_detector.detect_intent(query)
+
+        # Decide whether to retrieve knowledge
+        if not force_retrieval and not intent_result.should_use_knowledge:
+            logger.info(
+                f"[Smart RAG] Skipping retrieval - intent={intent_result.intent.value}, "
+                f"confidence={intent_result.confidence:.2f}, reason={intent_result.reasoning}"
+            )
+            return "", [], intent_result
+
+        # Perform retrieval
+        logger.info(
+            f"[Smart RAG] Retrieving - intent={intent_result.intent.value}, "
+            f"confidence={intent_result.confidence:.2f}"
+        )
+
+        context_string, citations = await self.retrieve_relevant_knowledge(
+            query=query,
+            top_k=top_k,
+            score_threshold=score_threshold,
+        )
+
+        retrieval_time = time.time() - start_time
+        logger.info(
+            f"[Smart RAG] Completed in {retrieval_time:.3f}s - "
+            f"{len(citations)} citations found"
+        )
+
+        return context_string, citations, intent_result
+
+    def detect_query_intent(self, query: str) -> QueryIntentResult:
+        """
+        Detect the intent of a query without performing retrieval.
+
+        Useful for logging, debugging, or making decisions before retrieval.
+
+        Args:
+            query: User's chat message
+
+        Returns:
+            QueryIntentResult with intent type and recommendation
+        """
+        return self.intent_detector.detect_intent(query)
+
+    async def conversation_aware_retrieve(
+        self,
+        query: str,
+        conversation_history: List[Dict[str, str]],
+        top_k: int = 5,
+        score_threshold: float = 0.7,
+        force_retrieval: bool = False,
+    ) -> Tuple[str, List[Dict], QueryIntentResult, Optional[EnhancedQuery]]:
+        """
+        Conversation-aware knowledge retrieval with context enhancement.
+
+        Issue #249 Phase 3: Uses conversation history to enhance queries
+        before performing RAG retrieval. Combines intent detection (Phase 2)
+        with context enhancement for optimal results.
+
+        Args:
+            query: User's chat message/query
+            conversation_history: List of conversation exchanges
+                Format: [{"user": "msg", "assistant": "response"}, ...]
+            top_k: Maximum number of knowledge facts to retrieve
+            score_threshold: Minimum relevance score (0.0-1.0) to include
+            force_retrieval: If True, bypass intent detection and always retrieve
+
+        Returns:
+            Tuple of (context_string, citations, intent_result, enhanced_query)
+            - context_string: Knowledge context for LLM prompt (empty if skipped)
+            - citations: List of citation dicts (empty if skipped)
+            - intent_result: The intent detection result
+            - enhanced_query: The enhanced query result (None if not enhanced)
+        """
+        start_time = time.time()
+
+        # Step 1: Detect query intent
+        intent_result = self.intent_detector.detect_intent(query)
+
+        # Step 2: Check if we should skip retrieval
+        if not force_retrieval and not intent_result.should_use_knowledge:
+            logger.info(
+                f"[Conversation RAG] Skipping - intent={intent_result.intent.value}, "
+                f"confidence={intent_result.confidence:.2f}"
+            )
+            return "", [], intent_result, None
+
+        # Step 3: Enhance query with conversation context
+        enhanced_query = self.context_enhancer.enhance_query(
+            query=query,
+            conversation_history=conversation_history,
+            max_history_items=3,
+        )
+
+        # Log enhancement if applied
+        if enhanced_query.enhancement_applied:
+            logger.info(
+                f"[Conversation RAG] Query enhanced: "
+                f"'{query[:50]}...' → '{enhanced_query.enhanced_query[:80]}...' "
+                f"(entities: {enhanced_query.context_entities})"
+            )
+        else:
+            logger.debug(
+                f"[Conversation RAG] No enhancement needed for query: '{query[:50]}...'"
+            )
+
+        # Step 4: Perform retrieval with enhanced query
+        search_query = (
+            enhanced_query.enhanced_query
+            if enhanced_query.enhancement_applied
+            else query
+        )
+
+        context_string, citations = await self.retrieve_relevant_knowledge(
+            query=search_query,
+            top_k=top_k,
+            score_threshold=score_threshold,
+        )
+
+        retrieval_time = time.time() - start_time
+        logger.info(
+            f"[Conversation RAG] Completed in {retrieval_time:.3f}s - "
+            f"{len(citations)} citations, enhanced={enhanced_query.enhancement_applied}"
+        )
+
+        return context_string, citations, intent_result, enhanced_query
+
     async def get_knowledge_stats(self) -> Dict:
         """
         Get statistics about knowledge retrieval service.
@@ -401,6 +805,8 @@ class ChatKnowledgeService:
             "rag_service_initialized": rag_stats.get("initialized", False),
             "rag_cache_entries": rag_stats.get("cache_entries", 0),
             "kb_implementation": rag_stats.get("kb_implementation", "unknown"),
+            "intent_detector_available": self.intent_detector is not None,
+            "context_enhancer_available": self.context_enhancer is not None,
         }
 
 

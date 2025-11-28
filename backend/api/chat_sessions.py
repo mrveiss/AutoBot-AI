@@ -256,7 +256,7 @@ async def create_session(session_data: SessionCreate, request: Request):
         metadata=metadata,
     )
 
-    await log_chat_event(
+    log_chat_event(
         "session_created",
         session_id,
         {"title": session_title, "request_id": request_id},
@@ -319,7 +319,7 @@ async def update_session(
         ) = get_exceptions_lazy()
         raise ResourceNotFoundError(f"Session {session_id} not found")
 
-    await log_chat_event(
+    log_chat_event(
         "session_updated",
         session_id,
         {"title": session_data.title, "request_id": request_id},
@@ -544,7 +544,7 @@ async def delete_session(
         ) = get_exceptions_lazy()
         raise ResourceNotFoundError(f"Session {session_id} not found")
 
-    await log_chat_event(
+    log_chat_event(
         "session_deleted",
         session_id,
         {
@@ -623,7 +623,7 @@ async def export_session(session_id: str, request: Request, format: str = "json"
         "csv": "text/csv",
     }
 
-    await log_chat_event(
+    log_chat_event(
         "session_exported", session_id, {"format": format, "request_id": request_id}
     )
 
