@@ -19,6 +19,8 @@ import type {
   KnowledgeStats,
   KnowledgeStatsResponse,
   CategoryResponse,
+  CategoriesListResponse,
+  KnowledgeCategoryItem,
   SearchResponse,
   AddFactResponse,
   UploadResponse,
@@ -92,6 +94,33 @@ export function useKnowledgeBase() {
     } catch (error) {
       console.error('Error fetching stats:', error)
       throw error
+    }
+  }
+
+  /**
+   * Fetch all categories with counts
+   * Returns list of categories with document counts for filtering
+   * @throws Error if API request fails (consistent with other API functions)
+   */
+  const fetchCategories = async (): Promise<KnowledgeCategoryItem[]> => {
+    try {
+      const response = await apiClient.get('/api/knowledge_base/categories')
+
+      if (!response) {
+        throw new Error('Failed to fetch categories: No response from server')
+      }
+
+      const data = await parseApiResponse(response) as CategoriesListResponse
+
+      // Validate response structure
+      if (!data || !Array.isArray(data.categories)) {
+        throw new Error('Invalid categories response format')
+      }
+
+      return data.categories
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+      throw error // Throw consistently with other API functions
     }
   }
 
@@ -656,6 +685,7 @@ export function useKnowledgeBase() {
   return {
     // API calls
     fetchStats,
+    fetchCategories,
     fetchCategory,
     searchKnowledge,
     addFact,
