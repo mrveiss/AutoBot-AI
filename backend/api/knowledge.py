@@ -1000,23 +1000,23 @@ async def get_facts_by_category(
             categories_to_fetch = [cat.value for cat in KnowledgeCategory]
 
         # Step 1: Get fact IDs from category indexes (O(1) per category)
+        # Use SRANDMEMBER to get only 'limit' random IDs - avoids fetching all 5000+ IDs
         category_fact_ids = {}
         for cat in categories_to_fetch:
             index_key = f"category:index:{cat}"
-            # SRANDMEMBER returns random members - use SMEMBERS for all, then limit
+            # SRANDMEMBER with count returns up to 'limit' random members efficiently
             fact_ids = await asyncio.to_thread(
-                kb.redis_client.smembers, index_key
+                kb.redis_client.srandmember, index_key, limit
             )
             if fact_ids:
-                # Decode bytes to strings and limit
+                # Decode bytes to strings
                 decoded_ids = [
                     fid.decode("utf-8") if isinstance(fid, bytes) else fid
                     for fid in fact_ids
                 ]
-                category_fact_ids[cat] = decoded_ids[:limit]
+                category_fact_ids[cat] = decoded_ids
                 logger.debug(
-                    f"Category index {cat}: {len(decoded_ids)} facts "
-                    f"(limited to {len(category_fact_ids[cat])})"
+                    f"Category index {cat}: fetched {len(decoded_ids)} fact IDs"
                 )
 
         if not category_fact_ids:
