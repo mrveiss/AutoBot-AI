@@ -128,7 +128,6 @@ from backend.api.terminal_models import (
     SecurityLevel,
     TerminalInputRequest,
     TerminalSessionRequest,
-    ToolInstallRequest,
 )
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 

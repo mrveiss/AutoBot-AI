@@ -49,8 +49,7 @@ from backend.api.monitoring_utils import (
     _identify_bottlenecks,
 )
 
-# Import hardware monitor (extracted from this file - Issue #213)
-from backend.api.monitoring_hardware import HardwareMonitor, hardware_monitor
+# Hardware monitor moved to monitoring_hardware.py (Issue #213)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["AutoBot Monitoring"])
