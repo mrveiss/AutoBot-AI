@@ -145,6 +145,12 @@ from backend.api.terminal_handlers import (
     session_manager,
 )
 
+# Import tool management router (extracted from this file - Issue #185)
+from backend.api.terminal_tools import router as tools_router
+
+# Include tool management router
+router.include_router(tools_router, prefix="/terminal")
+
 
 # REST API Endpoints
 
@@ -542,85 +548,6 @@ async def secure_terminal_websocket_compat(websocket: WebSocket, session_id: str
 
     # Route to main WebSocket handler
     await consolidated_terminal_websocket(websocket, session_id)
-
-
-# Tool Management endpoints
-
-
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="install_tool",
-    error_code_prefix="TERMINAL",
-)
-@router.post("/terminal/install-tool")
-async def install_tool(request: ToolInstallRequest):
-    """Install a tool with terminal streaming"""
-    # Import system command agent for tool installation
-    from src.agents.system_command_agent import SystemCommandAgent
-
-    system_command_agent = SystemCommandAgent()
-
-    tool_info = {
-        "name": request.tool_name,
-        "package_name": request.package_name or request.tool_name,
-        "install_method": request.install_method,
-        "custom_command": request.custom_command,
-        "update_first": request.update_first,
-    }
-
-    result = await system_command_agent.install_tool(tool_info, "default")
-    return result
-
-
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="check_tool_installed",
-    error_code_prefix="TERMINAL",
-)
-@router.post("/terminal/check-tool")
-async def check_tool_installed(tool_name: str):
-    """Check if a tool is installed"""
-    from src.agents.system_command_agent import SystemCommandAgent
-
-    system_command_agent = SystemCommandAgent()
-    result = await system_command_agent.check_tool_installed(tool_name)
-    return result
-
-
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="validate_command",
-    error_code_prefix="TERMINAL",
-)
-@router.post("/terminal/validate-command")
-async def validate_command(command: str):
-    """Validate command safety"""
-    from src.agents.system_command_agent import SystemCommandAgent
-
-    system_command_agent = SystemCommandAgent()
-    result = await system_command_agent.validate_command_safety(command)
-    return result
-
-
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_package_managers",
-    error_code_prefix="TERMINAL",
-)
-@router.get("/terminal/package-managers")
-async def get_package_managers():
-    """Get available package managers"""
-    from src.agents.system_command_agent import SystemCommandAgent
-
-    system_command_agent = SystemCommandAgent()
-    detected = await system_command_agent.detect_package_manager()
-    all_managers = list(system_command_agent.PACKAGE_MANAGERS.keys())
-
-    return {
-        "detected": detected,
-        "available": all_managers,
-        "package_managers": system_command_agent.PACKAGE_MANAGERS,
-    }
 
 
 # Information endpoints
