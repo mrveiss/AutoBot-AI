@@ -11,7 +11,6 @@ Author: mrveiss
 import random
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -277,7 +276,6 @@ class TestRAGPipelineBenchmarks:
 
     def test_full_rag_query_simulation(self, runner):
         """Benchmark complete RAG query pipeline (simulated)"""
-        import random
         import time
 
         def simulate_rag_pipeline():

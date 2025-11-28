@@ -15,12 +15,10 @@ Test Coverage Target: >80% for backend/api/service_management.py
 """
 
 import asyncio
-import json
 import logging
 import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Dict, Any
 
 try:
     from httpx import AsyncClient, HTTPStatusError

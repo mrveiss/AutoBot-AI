@@ -125,7 +125,7 @@ class TestConfigurationSource:
 
     def test_no_hardcoded_ips_in_redis_helper(self):
         """Ensure redis_helper uses unified_config_manager"""
-        from src.utils.redis_helper import REDIS_HOST, REDIS_PORT
+        from src.utils.redis_helper import REDIS_HOST
 
         # These should come from configuration, not be hardcoded
         assert REDIS_HOST != NetworkConstants.REDIS_VM_IP or (

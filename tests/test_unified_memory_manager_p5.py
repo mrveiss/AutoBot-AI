@@ -11,7 +11,6 @@ Total: 10+ tests covering all functionality
 
 import asyncio
 import os
-import sqlite3
 import tempfile
 from datetime import datetime
 from pathlib import Path

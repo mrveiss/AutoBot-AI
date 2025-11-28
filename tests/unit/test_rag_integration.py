@@ -368,35 +368,30 @@ class TestAPIEndpoints:
         """Test /search endpoint accepts enable_reranking parameter."""
         # This would require FastAPI TestClient integration
         # Placeholder for integration test
-        pass
 
     @pytest.mark.asyncio
     async def test_advanced_search_endpoint(self):
         """Test /knowledge_base/rag/advanced_search endpoint."""
         # This would require FastAPI TestClient integration
         # Placeholder for integration test
-        pass
 
     @pytest.mark.asyncio
     async def test_rerank_results_endpoint(self):
         """Test /knowledge_base/rag/rerank_results endpoint."""
         # This would require FastAPI TestClient integration
         # Placeholder for integration test
-        pass
 
     @pytest.mark.asyncio
     async def test_config_get_endpoint(self):
         """Test /knowledge_base/rag/config endpoint GET."""
         # This would require FastAPI TestClient integration
         # Placeholder for integration test
-        pass
 
     @pytest.mark.asyncio
     async def test_config_update_endpoint(self):
         """Test /knowledge_base/rag/config endpoint PUT."""
         # This would require FastAPI TestClient integration
         # Placeholder for integration test
-        pass
 
 
 if __name__ == "__main__":

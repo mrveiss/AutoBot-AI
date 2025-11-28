@@ -4,14 +4,12 @@ Test Suite for Redis Client Consolidation
 Verifies all consolidated features work correctly and backward compatibility is maintained.
 """
 
-import asyncio
 import sys
 from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pytest
 
 from src.utils.redis_client import (
     ConnectionState,

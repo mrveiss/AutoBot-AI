@@ -16,7 +16,6 @@ Test Strategy:
 
 import pytest
 from unittest.mock import AsyncMock, Mock
-from typing import List
 
 from src.agents.graph_entity_extractor import (
     GraphEntityExtractor,

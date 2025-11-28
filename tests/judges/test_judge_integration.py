@@ -169,10 +169,8 @@ class TestJudgeIntegration:
         ):
             from backend.api.workflow_automation import (
                 ActiveWorkflow,
-                AutomationMode,
                 WorkflowAutomationManager,
                 WorkflowStep,
-                WorkflowStepStatus,
             )
 
             manager = WorkflowAutomationManager()

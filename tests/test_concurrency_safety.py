@@ -15,9 +15,7 @@ import json
 import os
 import tempfile
 import time
-from pathlib import Path
-from typing import Dict, List
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -268,7 +266,6 @@ class TestIntegration:
     async def test_concurrent_terminal_and_save(self):
         """Test concurrent terminal output + chat save (real-world scenario)"""
         from backend.api.chat import merge_messages
-        from backend.api.terminal import ConsolidatedTerminalWebSocket
 
         # Simulate real scenario: terminal adding messages while frontend saves
 

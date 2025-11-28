@@ -6,7 +6,6 @@ Tests the LRU cache with TTL for ChromaDB query embeddings.
 import asyncio
 import pytest
 import time
-from unittest.mock import patch, MagicMock
 
 from src.knowledge_base import EmbeddingCache, get_embedding_cache
 

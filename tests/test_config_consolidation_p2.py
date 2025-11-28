@@ -5,7 +5,6 @@ Verifies unified_config_manager.py functionality after consolidation.
 """
 
 import asyncio
-import json
 import sys
 from pathlib import Path
 

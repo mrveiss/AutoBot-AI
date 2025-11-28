@@ -20,7 +20,6 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 
 
 class TestChatHealthEndpoint:
@@ -7134,7 +7133,6 @@ class TestBatch40AnalyticsMigrations(unittest.TestCase):
         import inspect
 
         from backend.api.analytics import get_code_quality_metrics
-        from src.utils.error_boundaries import ErrorCategory
 
         source = inspect.getsource(get_code_quality_metrics)
         # Verify decorator configuration
@@ -7183,7 +7181,6 @@ class TestBatch40AnalyticsMigrations(unittest.TestCase):
         import inspect
 
         from backend.api.analytics import get_communication_chains
-        from src.utils.error_boundaries import ErrorCategory
 
         source = inspect.getsource(get_communication_chains)
         # Verify decorator configuration
@@ -14433,7 +14430,6 @@ class TestBatch83CodebaseAnalyticsMigrations(unittest.TestCase):
         """Test batch 83 endpoints removed generic exception handlers that raise HTTPException"""
         from backend.api.codebase_analytics import (
             get_codebase_stats,
-            get_indexing_status,
             index_codebase,
         )
 
@@ -14848,10 +14844,6 @@ class TestBatch85CodebaseAnalyticsMigrations(unittest.TestCase):
 
     def test_batch_85_lines_saved(self):
         """Test batch 85 migrations reduced code by removing exception handlers"""
-        from backend.api.codebase_analytics import (
-            clear_codebase_cache,
-            get_duplicate_code,
-        )
 
         # Count total exception handlers that were removed
         removed_handlers = 0
@@ -15132,11 +15124,6 @@ class TestBatch86AIStackIntegrationMigrations(unittest.TestCase):
 
     def test_batch_86_lines_saved(self):
         """Test batch 86 migrations reduced code by removing exception handlers"""
-        from backend.api.ai_stack_integration import (
-            list_ai_agents,
-            rag_query,
-            reformulate_query,
-        )
 
         # Count total exception handlers that were removed
         removed_handlers = 0
@@ -15386,11 +15373,6 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
 
     def test_batch_87_lines_saved(self):
         """Test batch 87 migrations reduced code by removing exception handlers"""
-        from backend.api.ai_stack_integration import (
-            analyze_documents,
-            enhanced_chat,
-            extract_knowledge,
-        )
 
         # Count total exception handlers that were removed
         removed_handlers = 0
@@ -15767,8 +15749,6 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
     def test_batch_88_line_count_reductions(self):
         """Test batch 88 reduced line counts by removing error handling"""
         from backend.api.ai_stack_integration import (
-            comprehensive_research,
-            enhanced_knowledge_search,
             get_system_knowledge,
             web_research,
         )
@@ -17419,7 +17399,6 @@ class TestBatch94AdvancedControlStreamingAndTakeoverCRUD(unittest.TestCase):
         # Target: 13th file to reach 100%
         # Patterns: 4 Simple, 3 Mixed
 
-        from backend.api import advanced_control
 
         batch_94_count = 7
         total_endpoints = 19  # Total in advanced_control.py
@@ -17652,7 +17631,6 @@ class TestBatch95AdvancedControlTakeoverManagement(unittest.TestCase):
 
     def test_batch_95_progress_tracking(self):
         """Verify batch 95 progress: 14/19 endpoints migrated (74%)"""
-        from backend.api import advanced_control
 
         batch_95_count = 7
         total_migrated = 14  # batch 94 + batch 95
@@ -17854,7 +17832,6 @@ class TestBatch96AdvancedControlSystemAndWebSocketFINAL(unittest.TestCase):
         # 12. service_monitor.py
         # 13. advanced_control.py <- NEW (100% COMPLETE)
 
-        from backend.api import advanced_control
 
         # Verify all endpoints are migrated
         total_endpoints = 19
@@ -17862,7 +17839,6 @@ class TestBatch96AdvancedControlSystemAndWebSocketFINAL(unittest.TestCase):
 
     def test_batch_96_progress_tracking(self):
         """Verify batch 96 progress: 19/19 endpoints migrated (100%)"""
-        from backend.api import advanced_control
 
         batch_96_count = 5
         total_migrated = 19  # batch 94 + batch 95 + batch 96

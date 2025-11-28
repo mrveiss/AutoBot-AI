@@ -21,8 +21,7 @@ Test Strategy:
 """
 
 import pytest
-from unittest.mock import AsyncMock, Mock, patch
-from typing import List
+from unittest.mock import AsyncMock, Mock
 
 from src.advanced_rag_optimizer import SearchResult, RAGMetrics
 from src.services.graph_rag_service import (

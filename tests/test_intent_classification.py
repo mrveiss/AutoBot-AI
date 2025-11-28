@@ -12,21 +12,17 @@ Tests the 3-layer intent classification system:
 Related Issue: #159 - Prevent Premature Conversation Endings
 """
 
-import pytest
 from typing import List, Dict
 
 from backend.intent_classifier import (
     ConversationIntent,
-    IntentClassification,
     IntentClassifier,
 )
 from backend.conversation_context import (
-    ConversationContext,
     ConversationContextAnalyzer,
 )
 from backend.conversation_safety import (
     ConversationSafetyGuards,
-    SafetyCheckResult,
 )
 
 

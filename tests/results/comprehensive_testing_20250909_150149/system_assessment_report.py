@@ -14,7 +14,6 @@ from datetime import datetime
 from typing import Dict, List, Any, Tuple
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
-import threading
 
 
 @dataclass

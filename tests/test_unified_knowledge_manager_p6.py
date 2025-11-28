@@ -12,14 +12,12 @@ Total: 15+ tests covering all functionality
 
 import asyncio
 import hashlib
-import json
 import os
 import tempfile
-import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import MagicMock
 
 # Test imports
 import sys
@@ -98,7 +96,6 @@ class MockSystemKnowledgeManager:
 
     async def reload_system_knowledge(self):
         """Mock reload"""
-        pass
 
     def get_knowledge_categories(self) -> Dict[str, Any]:
         """Mock get_knowledge_categories"""
@@ -113,7 +110,6 @@ class MockSystemKnowledgeManager:
 
     async def _backup_current_knowledge(self):
         """Mock backup"""
-        pass
 
 
 class MockMachineAwareSystemKnowledgeManager(MockSystemKnowledgeManager):

@@ -15,12 +15,10 @@ Test Coverage Target: >80% for backend/services/redis_service_manager.py
 """
 
 import asyncio
-import json
 import logging
 import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch, call
-from typing import Dict, Any
+from unittest.mock import AsyncMock, MagicMock
 
 # Configure logging for tests
 logging.basicConfig(level=logging.INFO)
