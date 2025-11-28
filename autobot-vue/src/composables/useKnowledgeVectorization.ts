@@ -226,9 +226,8 @@ export function useKnowledgeVectorization() {
       setDocumentStatus(documentId, 'pending', 0)
 
       // Call backend API to vectorize the fact
-      // Issue #156 Fix: ApiClient.post() returns Response, need to call .json()
-      const response = await apiClient.post(`/api/knowledge_base/vectorize_fact/${documentId}`)
-      const data = await response.json()
+      // Note: ApiClient.post() already parses JSON and returns the data object directly
+      const data = await apiClient.post(`/api/knowledge_base/vectorize_fact/${documentId}`)
 
       // Check if backend returned success status
       if (data.status !== 'success') {
@@ -246,9 +245,8 @@ export function useKnowledgeVectorization() {
       while (!completed && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
 
-        // Issue #156 Fix: ApiClient.get() returns Response, need to call .json()
-        const jobResponse = await apiClient.get(`/api/knowledge_base/vectorize_job/${jobId}`)
-        const jobData = await jobResponse.json()
+        // Note: ApiClient.get() already parses JSON and returns the data object directly
+        const jobData = await apiClient.get(`/api/knowledge_base/vectorize_job/${jobId}`)
 
         // Backend returns: { status: "success", job: { status: "completed", error: null, ... } }
         const job = jobData.job
