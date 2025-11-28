@@ -1,5 +1,9 @@
 # AutoBot Advanced Code Intelligence - 30 Methods Issue Breakdown
 
+**GitHub Issue:** [#217 (Epic)](https://github.com/mrveiss/AutoBot-AI/issues/217)
+**Sub-Issues:** #219-#248 (28 implementation tasks)
+**Status:** Planning
+
 ## 🚀 Main Epic Issue
 **Title**: [EPIC] Implement Advanced Code Intelligence Methods - 30 Integrations
 **Labels**: `epic`, `enhancement`, `ai-powered`, `code-intelligence`

@@ -1,8 +1,9 @@
 # Secrets Management System Implementation Plan
 
-**Date**: August 17, 2025  
-**Priority**: High  
-**Status**: 🔄 **IN PROGRESS**
+**GitHub Issue:** [#211](https://github.com/mrveiss/AutoBot-AI/issues/211)
+**Date**: August 17, 2025
+**Priority**: High
+**Status:** 🔄 **IN PROGRESS**
 
 ## Overview
 
