@@ -266,6 +266,11 @@ class HTTPHeadRequest(HTTPRequestBase):
 # MCP Tool Definitions
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_http_client_mcp_tools",
+    error_code_prefix="HTTP_MCP",
+)
 @router.get("/mcp/tools")
 async def get_http_client_mcp_tools() -> List[MCPTool]:
     """
@@ -879,6 +884,11 @@ async def http_head_mcp(request: HTTPHeadRequest) -> JSONObject:
     return result
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_http_client_mcp_status",
+    error_code_prefix="HTTP_MCP",
+)
 @router.get("/mcp/status")
 async def get_http_client_mcp_status() -> Metadata:
     """

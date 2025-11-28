@@ -54,6 +54,9 @@ class ErrorHandlingAnalyzer(ast.NodeVisitor):
     # FastAPI endpoint decorators
     API_DECORATORS = {"get", "post", "put", "delete", "patch", "api_route", "router"}
 
+    # Error handling decorators (these provide error handling)
+    ERROR_HANDLING_DECORATORS = {"with_error_handling", "error_boundary"}
+
     def __init__(self, filename: str):
         self.filename = filename
         self.issues: List[ErrorHandlingIssue] = []
@@ -84,22 +87,25 @@ class ErrorHandlingAnalyzer(ast.NodeVisitor):
         # Check if function has any try/except blocks
         has_try_except = self._has_try_except(node)
 
+        # Check if function has error handling decorator
+        has_error_decorator = self._has_error_handling_decorator(node)
+
         # Check for risky calls
         risky_calls = self._find_risky_calls(node)
 
-        # API endpoints should have error handling
-        if is_api_endpoint and not has_try_except:
+        # API endpoints should have error handling (try/except OR decorator)
+        if is_api_endpoint and not has_try_except and not has_error_decorator:
             self.issues.append(ErrorHandlingIssue(
                 file=self.filename,
                 line=node.lineno,
                 function=self._get_full_function_name(node.name),
                 issue_type="missing_error_handling",
-                description=f"API endpoint '{node.name}' has no try/except block",
+                description=f"API endpoint '{node.name}' has no try/except block or @with_error_handling",
                 severity="high"
             ))
 
         # Functions with risky calls should have error handling
-        if risky_calls and not has_try_except:
+        if risky_calls and not has_try_except and not has_error_decorator:
             for call in risky_calls[:3]:  # Limit to first 3
                 self.issues.append(ErrorHandlingIssue(
                     file=self.filename,
@@ -166,6 +172,21 @@ class ErrorHandlingAnalyzer(ast.NodeVisitor):
         for child in ast.walk(node):
             if isinstance(child, ast.Try):
                 return True
+        return False
+
+    def _has_error_handling_decorator(self, node) -> bool:
+        """Check if function has an error handling decorator."""
+        for decorator in node.decorator_list:
+            if isinstance(decorator, ast.Call):
+                if isinstance(decorator.func, ast.Name):
+                    if decorator.func.id in self.ERROR_HANDLING_DECORATORS:
+                        return True
+                elif isinstance(decorator.func, ast.Attribute):
+                    if decorator.func.attr in self.ERROR_HANDLING_DECORATORS:
+                        return True
+            elif isinstance(decorator, ast.Name):
+                if decorator.id in self.ERROR_HANDLING_DECORATORS:
+                    return True
         return False
 
     def _find_risky_calls(self, node) -> List[dict]:

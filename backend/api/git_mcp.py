@@ -496,6 +496,11 @@ class GitShowRequest(BaseModel):
 # MCP Tool Definitions
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_git_mcp_tools",
+    error_code_prefix="GIT_MCP",
+)
 @router.get("/mcp/tools")
 async def get_git_mcp_tools() -> List[MCPTool]:
     """
@@ -1003,6 +1008,11 @@ async def get_git_repo_info() -> Metadata:
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_git_mcp_status",
+    error_code_prefix="GIT_MCP",
+)
 @router.get("/mcp/service_status")
 async def get_git_mcp_status() -> Metadata:
     """

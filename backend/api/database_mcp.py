@@ -249,6 +249,11 @@ class TableListRequest(BaseModel):
 # MCP Tool Definitions
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_database_mcp_tools",
+    error_code_prefix="DB_MCP",
+)
 @router.get("/mcp/tools")
 async def get_database_mcp_tools() -> List[MCPTool]:
     """
@@ -863,6 +868,11 @@ async def database_statistics_mcp(request: TableListRequest) -> Metadata:
             conn.close()
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_database_mcp_status",
+    error_code_prefix="DB_MCP",
+)
 @router.get("/mcp/status")
 async def get_database_mcp_status() -> Metadata:
     """
