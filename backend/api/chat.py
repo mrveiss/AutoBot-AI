@@ -12,7 +12,6 @@ from fastapi import (
     Body,
     Depends,
     Request,
-    Response,
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -34,7 +33,6 @@ from backend.utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-from src.auth_middleware import auth_middleware
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import models - DISABLED: Models don't exist yet
