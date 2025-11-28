@@ -111,6 +111,21 @@
 
           <!-- Input Actions -->
           <div class="input-actions">
+            <!-- Issue #249: Knowledge Base Toggle -->
+            <label class="knowledge-toggle" :class="{ 'active': useKnowledge }" title="Use Knowledge Base for enhanced answers">
+              <input
+                type="checkbox"
+                v-model="useKnowledge"
+                class="knowledge-checkbox sr-only"
+                :disabled="isDisabled"
+              />
+              <i class="fas fa-brain" aria-hidden="true"></i>
+              <span class="toggle-label">KB</span>
+            </label>
+
+            <!-- Vertical Divider after KB toggle -->
+            <div class="action-divider"></div>
+
             <!-- File Attach Button -->
             <BaseButton
               variant="ghost"
@@ -260,6 +275,9 @@ const isVoiceRecording = ref(false)
 const isSending = ref(false)
 const showEmojiPicker = ref(false)
 const showQuickActions = ref(true)
+
+// Issue #249: Knowledge-Enhanced Chat (RAG) toggle
+const useKnowledge = ref(true) // Default enabled
 const uploadProgress = ref<Array<{
   id: string
   filename: string
@@ -375,7 +393,7 @@ const sendMessage = async () => {
   isSending.value = true
 
   try {
-    // Send message with attachments
+    // Send message with attachments and knowledge toggle (Issue #249)
     await controller.sendMessage(message, {
       attachments: files.length > 0 ? files.map(f => ({
         id: generateId(),
@@ -383,7 +401,8 @@ const sendMessage = async () => {
         type: f.type,
         size: f.size,
         data: f // In real implementation, would upload file first
-      })) : undefined
+      })) : undefined,
+      use_knowledge: useKnowledge.value  // Issue #249: RAG toggle
     })
 
   } catch (error) {
@@ -802,6 +821,27 @@ onUnmounted(() => {
 .action-divider {
   @apply w-px h-6 bg-gray-300 mx-2;
   flex-shrink: 0;
+}
+
+/* Issue #249: Knowledge Base Toggle Styles */
+.knowledge-toggle {
+  @apply flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all duration-200 text-gray-500;
+}
+
+.knowledge-toggle:hover {
+  @apply bg-gray-100 text-gray-700;
+}
+
+.knowledge-toggle.active {
+  @apply bg-indigo-100 text-indigo-600;
+}
+
+.knowledge-toggle.active i {
+  @apply text-indigo-600;
+}
+
+.knowledge-toggle .toggle-label {
+  @apply text-xs font-medium;
 }
 
 .action-label {

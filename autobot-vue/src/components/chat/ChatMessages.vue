@@ -129,6 +129,45 @@
             </div>
           </div>
 
+          <!-- Issue #249: Knowledge Base Citations Display -->
+          <div
+            v-if="message.sender === 'assistant' && message.metadata?.used_knowledge && message.metadata?.citations?.length > 0"
+            class="knowledge-citations"
+          >
+            <div class="citations-header" @click="toggleCitations(message.id)">
+              <div class="citations-header-left">
+                <i class="fas fa-brain text-indigo-600" aria-hidden="true"></i>
+                <span class="citations-label">Knowledge Sources</span>
+                <span class="citations-count">{{ message.metadata.citations.length }}</span>
+              </div>
+              <i :class="expandedCitations.has(message.id) ? 'fas fa-chevron-up' : 'fas fa-chevron-down'" aria-hidden="true"></i>
+            </div>
+            <Transition name="slide-fade">
+              <div v-if="expandedCitations.has(message.id)" class="citations-list">
+                <div
+                  v-for="(citation, idx) in message.metadata.citations"
+                  :key="citation.id || idx"
+                  class="citation-item"
+                >
+                  <div class="citation-rank">[{{ citation.rank || idx + 1 }}]</div>
+                  <div class="citation-content">
+                    <div class="citation-text">{{ truncateCitation(citation.content) }}</div>
+                    <div class="citation-meta">
+                      <span class="citation-score" :class="getScoreClass(citation.score)">
+                        <i class="fas fa-chart-line" aria-hidden="true"></i>
+                        {{ (citation.score * 100).toFixed(0) }}%
+                      </span>
+                      <span v-if="citation.source" class="citation-source">
+                        <i class="fas fa-file-alt" aria-hidden="true"></i>
+                        {{ formatSourcePath(citation.source) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </div>
+
           <!-- Attachments -->
           <div v-if="message.attachments && message.attachments.length > 0" class="message-attachments">
             <div class="attachment-header">
@@ -488,6 +527,9 @@ const editingMessage = ref<ChatMessage | null>(null)
 const typingStartTime = ref<number | null>(null)
 const estimatedResponseTime = ref<number | null>(null)
 
+// Issue #249: Citation display state
+const expandedCitations = ref<Set<string>>(new Set())
+
 // Approval state
 const processingApproval = ref(false)
 
@@ -662,6 +704,37 @@ const shouldShowMetadata = (message: ChatMessage): boolean => {
 
 const hasCodeBlocks = (content: string): boolean => {
   return /```[\s\S]*?```/.test(content)
+}
+
+// Issue #249: Citation helper functions
+const toggleCitations = (messageId: string) => {
+  if (expandedCitations.value.has(messageId)) {
+    expandedCitations.value.delete(messageId)
+  } else {
+    expandedCitations.value.add(messageId)
+  }
+  // Force reactivity update for Set
+  expandedCitations.value = new Set(expandedCitations.value)
+}
+
+const truncateCitation = (content: string, maxLength: number = 200): string => {
+  if (!content) return ''
+  if (content.length <= maxLength) return content
+  return content.substring(0, maxLength).trim() + '...'
+}
+
+const getScoreClass = (score: number): string => {
+  if (score >= 0.9) return 'score-excellent'
+  if (score >= 0.8) return 'score-good'
+  if (score >= 0.7) return 'score-acceptable'
+  return 'score-low'
+}
+
+const formatSourcePath = (sourcePath: string): string => {
+  if (!sourcePath) return 'Unknown'
+  // Extract filename from path
+  const parts = sourcePath.split('/')
+  return parts[parts.length - 1] || sourcePath
 }
 
 const editMessage = async (message: ChatMessage) => {
@@ -1548,5 +1621,101 @@ onMounted(() => {
 
 .auto-approve-hint i {
   @apply mt-0.5;
+}
+
+/* Issue #249: Knowledge Citations Styles */
+.knowledge-citations {
+  @apply mt-3 border border-indigo-200 rounded-lg overflow-hidden bg-indigo-50;
+}
+
+.citations-header {
+  @apply flex items-center justify-between px-3 py-2 cursor-pointer transition-colors;
+}
+
+.citations-header:hover {
+  @apply bg-indigo-100;
+}
+
+.citations-header-left {
+  @apply flex items-center gap-2;
+}
+
+.citations-label {
+  @apply text-sm font-medium text-indigo-700;
+}
+
+.citations-count {
+  @apply px-1.5 py-0.5 text-xs font-semibold bg-indigo-600 text-white rounded-full;
+}
+
+.citations-list {
+  @apply border-t border-indigo-200 bg-white;
+}
+
+.citation-item {
+  @apply flex gap-2 px-3 py-2 border-b border-indigo-100 last:border-b-0;
+}
+
+.citation-rank {
+  @apply text-sm font-mono font-semibold text-indigo-600 flex-shrink-0;
+}
+
+.citation-content {
+  @apply flex-1 min-w-0;
+}
+
+.citation-text {
+  @apply text-sm text-gray-700 leading-snug mb-1;
+}
+
+.citation-meta {
+  @apply flex flex-wrap gap-3 text-xs text-gray-500;
+}
+
+.citation-score {
+  @apply flex items-center gap-1 font-medium;
+}
+
+.citation-score.score-excellent {
+  @apply text-green-600;
+}
+
+.citation-score.score-good {
+  @apply text-blue-600;
+}
+
+.citation-score.score-acceptable {
+  @apply text-yellow-600;
+}
+
+.citation-score.score-low {
+  @apply text-gray-500;
+}
+
+.citation-source {
+  @apply flex items-center gap-1 text-gray-500;
+}
+
+/* Citation slide transition */
+.slide-fade-enter-active {
+  transition: all 0.2s ease-out;
+}
+
+.slide-fade-leave-active {
+  transition: all 0.15s ease-in;
+}
+
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  opacity: 0;
+  max-height: 0;
+  transform: translateY(-10px);
+}
+
+.slide-fade-enter-to,
+.slide-fade-leave-from {
+  opacity: 1;
+  max-height: 500px;
+  transform: translateY(0);
 }
 </style>
