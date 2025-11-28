@@ -730,12 +730,12 @@ class UnifiedConfigManager:
 
         # Fallback to NetworkConstants
         service_map = {
-            "backend": NetworkConstants.BACKEND_HOST,
-            "redis": NetworkConstants.REDIS_HOST,
-            "frontend": NetworkConstants.FRONTEND_HOST,
-            "npu_worker": NetworkConstants.NPU_WORKER_HOST,
-            "ai_stack": NetworkConstants.AI_STACK_HOST,
-            "browser": NetworkConstants.BROWSER_HOST,
+            "backend": NetworkConstants.MAIN_MACHINE_IP,
+            "redis": NetworkConstants.REDIS_VM_IP,
+            "frontend": NetworkConstants.FRONTEND_VM_IP,
+            "npu_worker": NetworkConstants.NPU_WORKER_VM_IP,
+            "ai_stack": NetworkConstants.AI_STACK_VM_IP,
+            "browser": NetworkConstants.BROWSER_VM_IP,
         }
         return service_map.get(service, "localhost")
 
