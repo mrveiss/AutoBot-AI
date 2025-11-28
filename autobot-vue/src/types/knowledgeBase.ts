@@ -39,6 +39,23 @@ export interface KnowledgeStatsResponse {
   categories?: Record<string, number> | string[]
 }
 
+/**
+ * Category item as returned by /api/knowledge_base/categories
+ */
+export interface KnowledgeCategoryItem {
+  name: string
+  count: number
+  id: string
+}
+
+/**
+ * Response from /api/knowledge_base/categories endpoint
+ */
+export interface CategoriesListResponse {
+  categories: KnowledgeCategoryItem[]
+  total: number
+}
+
 export interface CategoryResponse {
   status?: string
   message?: string

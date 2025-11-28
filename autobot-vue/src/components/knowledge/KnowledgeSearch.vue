@@ -33,6 +33,51 @@
       </div>
     </div>
 
+    <!-- Category Filter -->
+    <div class="category-filter">
+      <label class="filter-label">
+        <i class="fas fa-filter"></i>
+        Filter by Category:
+      </label>
+      <div class="filter-controls">
+        <select
+          v-model="selectedCategory"
+          class="category-select"
+          :disabled="loadingCategories"
+        >
+          <option value="">All Categories</option>
+          <option
+            v-for="cat in categories"
+            :key="cat.id"
+            :value="cat.name"
+          >
+            {{ formatCategory(cat.name) }} ({{ cat.count }})
+          </option>
+        </select>
+        <button
+          v-if="selectedCategory"
+          @click="clearCategoryFilter"
+          class="clear-filter-button"
+          title="Clear category filter"
+        >
+          <i class="fas fa-times"></i>
+        </button>
+        <span v-if="loadingCategories" class="loading-indicator">
+          <i class="fas fa-spinner fa-spin"></i>
+        </span>
+      </div>
+      <span v-if="selectedCategory" class="active-filter-badge">
+        Filtering: {{ formatCategory(selectedCategory) }}
+      </span>
+      <div v-if="categoriesError" class="categories-error">
+        <i class="fas fa-exclamation-triangle"></i>
+        {{ categoriesError }}
+        <button @click="loadCategories" class="retry-button">
+          <i class="fas fa-redo"></i> Retry
+        </button>
+      </div>
+    </div>
+
     <!-- Search Input -->
     <div class="search-input-container">
       <div class="search-input-wrapper">
@@ -249,14 +294,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { KnowledgeRepository, type RagSearchResponse } from '@/models/repositories'
 import type { KnowledgeDocument, SearchResult } from '@/stores/useKnowledgeStore'
+import type { KnowledgeCategoryItem } from '@/types/knowledgeBase'
+import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 
 // Repository instance
 const knowledgeRepo = new KnowledgeRepository()
+
+// Knowledge base composable for category fetching
+const { fetchCategories, formatCategory } = useKnowledgeBase()
 
 // State
 const searchQuery = ref('')
@@ -267,6 +317,12 @@ const isSearching = ref(false)
 const searchPerformed = ref(false)
 const lastSearchQuery = ref('')
 const useRagSearch = ref(false)
+
+// Category filter state
+const categories = ref<KnowledgeCategoryItem[]>([])
+const selectedCategory = ref<string>('')
+const loadingCategories = ref(false)
+const categoriesError = ref<string | null>(null)
 
 // Document viewer state
 const showDocumentModal = ref(false)
@@ -280,8 +336,36 @@ const ragOptions = ref({
   limit: 10
 })
 
+// Load categories on mount
+onMounted(async () => {
+  await loadCategories()
+})
+
+// Load categories from API
+const loadCategories = async () => {
+  loadingCategories.value = true
+  categoriesError.value = null
+  try {
+    categories.value = await fetchCategories()
+  } catch (error) {
+    console.error('Failed to load categories:', error)
+    categories.value = []
+    categoriesError.value = error instanceof Error ? error.message : 'Failed to load categories'
+  } finally {
+    loadingCategories.value = false
+  }
+}
+
 // Computed
 const hasSearchResults = computed(() => searchResults.value.length > 0)
+
+// Build category filter object if a category is selected
+const buildCategoryFilter = () => {
+  if (selectedCategory.value) {
+    return { categories: [selectedCategory.value] }
+  }
+  return undefined
+}
 
 // Methods
 const handleSearch = async () => {
@@ -290,6 +374,9 @@ const handleSearch = async () => {
   isSearching.value = true
   ragError.value = null
   ragResponse.value = null
+
+  // Build filters including category
+  const categoryFilter = buildCategoryFilter()
 
   try {
     if (useRagSearch.value) {
@@ -302,17 +389,34 @@ const handleSearch = async () => {
         })
 
         if (ragResponse.value.results) {
-          searchResults.value = ragResponse.value.results
+          // Filter results by category client-side for RAG (backend doesn't support category filter)
+          let results = ragResponse.value.results
+          if (selectedCategory.value) {
+            results = results.filter(r => {
+              const docCategory = r.document?.category
+              // Safe metadata category extraction with runtime validation
+              let metaCategory: unknown = undefined
+              const metadata = r.document?.metadata
+              if (metadata && typeof metadata === 'object' && 'category' in metadata) {
+                metaCategory = (metadata as { category?: unknown }).category
+              }
+              return docCategory === selectedCategory.value ||
+                (typeof metaCategory === 'string' && metaCategory === selectedCategory.value)
+            })
+          }
+          searchResults.value = results
         }
-      } catch (ragErr: any) {
-        ragError.value = ragErr.message || 'RAG functionality is currently unavailable'
+      } catch (ragErr: unknown) {
+        const errorMessage = ragErr instanceof Error ? ragErr.message : 'RAG functionality is currently unavailable'
+        ragError.value = errorMessage
 
         // Fallback to traditional search with reranking if enabled
         const results = await knowledgeRepo.searchKnowledge({
           query: searchQuery.value,
           limit: ragOptions.value.limit,
           use_rag: false,
-          enable_reranking: ragOptions.value.enableReranking
+          enable_reranking: ragOptions.value.enableReranking,
+          filters: categoryFilter
         })
         searchResults.value = results
       }
@@ -322,7 +426,8 @@ const handleSearch = async () => {
         query: searchQuery.value,
         limit: 20,
         use_rag: false,
-        enable_reranking: false
+        enable_reranking: false,
+        filters: categoryFilter
       })
       searchResults.value = results
     }
@@ -336,6 +441,15 @@ const handleSearch = async () => {
     isSearching.value = false
     searchPerformed.value = true
     lastSearchQuery.value = searchQuery.value
+  }
+}
+
+// Clear category filter and re-run search if already searched
+const clearCategoryFilter = async () => {
+  selectedCategory.value = ''
+  // Re-run search to show unfiltered results if search was already performed
+  if (searchPerformed.value && searchQuery.value.trim()) {
+    await handleSearch()
   }
 }
 
@@ -412,6 +526,55 @@ const copyDocument = async () => {
 /* Search Mode Toggle */
 .search-mode-toggle {
   @apply mb-4;
+}
+
+/* Category Filter */
+.category-filter {
+  @apply mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200;
+}
+
+.filter-label {
+  @apply text-sm font-medium text-gray-700 flex items-center gap-2 mb-2;
+}
+
+.filter-label i {
+  @apply text-gray-500;
+}
+
+.filter-controls {
+  @apply flex items-center gap-2;
+}
+
+.category-select {
+  @apply flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white;
+}
+
+.category-select:disabled {
+  @apply bg-gray-100 cursor-not-allowed;
+}
+
+.clear-filter-button {
+  @apply p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors;
+}
+
+.loading-indicator {
+  @apply text-gray-400 text-sm;
+}
+
+.active-filter-badge {
+  @apply inline-block mt-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full;
+}
+
+.categories-error {
+  @apply mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center gap-2;
+}
+
+.categories-error i {
+  @apply text-red-500;
+}
+
+.retry-button {
+  @apply ml-auto px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors flex items-center gap-1;
 }
 
 .toggle-container {
