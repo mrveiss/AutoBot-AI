@@ -199,9 +199,17 @@ async def check_vectorization_status_batch(request: dict, req: Request):
     # Try cache if enabled
     if use_cache:
         try:
-            cached_json = kb_to_use.redis_client.get(cache_key)
+            cached_json = await asyncio.to_thread(
+                kb_to_use.redis_client.get, cache_key
+            )
             if cached_json:
-                cached_result = json.loads(cached_json)
+                # Ensure proper UTF-8 decoding for cached JSON
+                json_str = (
+                    cached_json.decode("utf-8")
+                    if isinstance(cached_json, bytes)
+                    else cached_json
+                )
+                cached_result = json.loads(json_str)
                 cached_result["cached"] = True
                 logger.debug(
                     f"Cache hit for vectorization status ({len(fact_ids)} facts)"

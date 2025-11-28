@@ -3,6 +3,7 @@
 # Author: mrveiss
 """Knowledge Base API endpoints for content management and search with RAG integration."""
 
+import asyncio
 import json
 import logging
 from typing import Optional
@@ -272,9 +273,11 @@ async def get_knowledge_categories(req: Request):
     stats = await kb_to_use.get_stats() if hasattr(kb_to_use, "get_stats") else {}
     categories_list = stats.get("categories", [])
 
-    # Get all facts to count by category - sync redis operation
+    # Get all facts to count by category - async redis operation
     try:
-        all_facts_data = kb_to_use.redis_client.hgetall("knowledge_base:facts")
+        all_facts_data = await asyncio.to_thread(
+            kb_to_use.redis_client.hgetall, "knowledge_base:facts"
+        )
     except Exception as redis_err:
         logger.debug(f"Redis error getting facts: {redis_err}")
         all_facts_data = {}
@@ -540,9 +543,11 @@ async def get_detailed_stats(req: Request):
     # Get basic stats
     basic_stats = await kb_to_use.get_stats()
 
-    # Get all facts for detailed analysis
+    # Get all facts for detailed analysis - async operation
     try:
-        all_facts_data = kb_to_use.redis_client.hgetall("knowledge_base:facts")
+        all_facts_data = await asyncio.to_thread(
+            kb_to_use.redis_client.hgetall, "knowledge_base:facts"
+        )
     except Exception:
         all_facts_data = {}
 
@@ -668,9 +673,11 @@ async def get_man_pages_summary(req: Request):
             },
         }
 
-    # Get all facts and count man pages
+    # Get all facts and count man pages - async operation
     try:
-        all_facts_data = kb_to_use.redis_client.hgetall("knowledge_base:facts")
+        all_facts_data = await asyncio.to_thread(
+            kb_to_use.redis_client.hgetall, "knowledge_base:facts"
+        )
 
         man_page_count = 0
         system_command_count = 0
@@ -949,9 +956,9 @@ async def get_facts_by_category(
             },
         )
 
-    # Check cache first (60 second TTL)
+    # Check cache first (60 second TTL) - async operation
     cache_key = f"kb:cache:facts_by_category:{category or 'all'}:{limit}"
-    cached_result = kb.redis_client.get(cache_key)
+    cached_result = await asyncio.to_thread(kb.redis_client.get, cache_key)
 
     if cached_result:
         logger.debug(
@@ -979,8 +986,8 @@ async def get_facts_by_category(
 
     for fact_key in fact_keys:
         try:
-            # Get fact data from hash
-            fact_data = kb.redis_client.hgetall(fact_key)
+            # Get fact data from hash - async operation
+            fact_data = await asyncio.to_thread(kb.redis_client.hgetall, fact_key)
 
             if not fact_data:
                 continue
@@ -1053,9 +1060,11 @@ async def get_facts_by_category(
         "category_filter": category,
     }
 
-    # Cache the result for 60 seconds
+    # Cache the result for 60 seconds - async operation
     try:
-        kb.redis_client.setex(cache_key, 60, json.dumps(result))
+        await asyncio.to_thread(
+            kb.redis_client.setex, cache_key, 60, json.dumps(result)
+        )
         logger.debug(
             f"Cached facts_by_category result (category={category}, limit={limit})"
         )
@@ -1095,8 +1104,8 @@ async def get_fact_by_key(
     kb = await get_or_create_knowledge_base(req.app)
     import json
 
-    # Get fact data from Redis hash
-    fact_data = kb.redis_client.hgetall(fact_key)
+    # Get fact data from Redis hash - async operation
+    fact_data = await asyncio.to_thread(kb.redis_client.hgetall, fact_key)
 
     if not fact_data:
         raise HTTPException(status_code=404, detail=f"Fact not found: {fact_key}")
