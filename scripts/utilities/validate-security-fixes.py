@@ -7,12 +7,11 @@ AutoBot Security Validation Script
 Validates that all critical security vulnerabilities have been properly fixed
 """
 
-import os
 import re
 import sys
 import subprocess
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 
 class SecurityValidator:

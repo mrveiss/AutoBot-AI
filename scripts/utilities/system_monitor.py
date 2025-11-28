@@ -7,7 +7,6 @@ AutoBot System Monitor - Real-time monitoring of optimized system performance.
 """
 
 import asyncio
-import json
 import os
 import subprocess
 import sys
@@ -329,7 +328,6 @@ class AutoBotMonitor:
         try:
             import openvino
             from openvino.runtime import Core
-            from src.constants import NetworkConstants, ServiceURLs
 
             core = Core()
             services["openvino"] = {

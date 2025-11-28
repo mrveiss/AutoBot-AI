@@ -7,7 +7,6 @@ Validate the GitHub Actions CI/CD pipeline configuration
 """
 
 import yaml
-import os
 from pathlib import Path
 
 

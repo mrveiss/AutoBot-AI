@@ -13,9 +13,9 @@ Issue: #148 - Extract frontend analysis library (Phase 3 - 200 line reduction)
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
+from playwright.sync_api import Page, sync_playwright
 
 
 class IssueSeverity(Enum):

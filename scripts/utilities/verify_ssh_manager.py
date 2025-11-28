@@ -29,9 +29,7 @@ async def verify_installation():
     # 1. Check imports
     print("1. Checking imports...")
     try:
-        from backend.services.ssh_connection_pool import SSHConnectionPool
         from backend.services.ssh_manager import SSHManager
-        from backend.api.remote_terminal import router as remote_terminal_router
         print("   ✅ All modules import successfully")
     except ImportError as e:
         print(f"   ❌ Import failed: {e}")

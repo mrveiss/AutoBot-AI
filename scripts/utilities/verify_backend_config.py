@@ -64,7 +64,6 @@ def test_route_registration():
         # Simulate what happens during app startup
         from fastapi import FastAPI, APIRouter
         from backend.api.workflow import router as workflow_router
-        from src.constants import NetworkConstants, ServiceURLs
 
         # Create test app
         app = FastAPI()

@@ -14,7 +14,6 @@ import time
 import uuid
 from datetime import datetime
 from typing import Dict, Any, Optional, List
-import aiohttp
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn

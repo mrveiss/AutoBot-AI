@@ -7,7 +7,6 @@ NPU Setup Verification Script
 Verifies Intel NPU driver installation and hardware availability
 """
 
-import os
 import subprocess
 import sys
 from pathlib import Path

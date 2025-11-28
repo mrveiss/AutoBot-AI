@@ -9,16 +9,13 @@ This script migrates all codebase analytics data (functions, classes, problems, 
 from Redis DB 11 to a new ChromaDB collection 'autobot_code'.
 """
 
-import asyncio
 import json
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, List, Any
 
 import chromadb
 import redis
-from chromadb.config import Settings
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent

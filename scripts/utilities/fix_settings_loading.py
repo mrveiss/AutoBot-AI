@@ -11,13 +11,12 @@ import json
 import logging
 import os
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import requests
-from src.constants import NetworkConstants, ServiceURLs
+from src.constants import ServiceURLs
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)

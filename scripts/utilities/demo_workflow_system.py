@@ -9,10 +9,9 @@ Shows the complete transformation from generic responses to intelligent orchestr
 
 import asyncio
 import aiohttp
-import json
 import time
 from datetime import datetime
-from src.constants import NetworkConstants, ServiceURLs
+from src.constants import ServiceURLs
 
 
 class WorkflowDemo:

@@ -7,12 +7,10 @@ Quick import cleanup utility for AutoBot codebase
 Removes common unused imports while preserving code functionality
 """
 
-import ast
-import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Set
+from typing import List
 
 
 def get_unused_imports(file_path: str) -> List[str]:

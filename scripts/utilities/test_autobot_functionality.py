@@ -8,14 +8,11 @@ Comprehensive testing of all AutoBot components and features
 """
 
 import asyncio
-import json
 import logging
 import sys
-import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-import aiohttp
 import requests
 
 # Import centralized Redis client
@@ -249,7 +246,6 @@ class AutoBotFunctionalityTest:
 
             # Check if key processes are running
             import subprocess
-            from src.constants import NetworkConstants, ServiceURLs
 
             result = subprocess.run(
                 ["ps", "aux"], capture_output=True, text=True, timeout=5

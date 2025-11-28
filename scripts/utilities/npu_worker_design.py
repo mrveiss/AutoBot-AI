@@ -8,7 +8,7 @@ Hybrid architecture: WSL2 main system + Windows NPU worker for optimal performan
 """
 
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any
 from enum import Enum
 from dataclasses import dataclass
 
