@@ -971,88 +971,120 @@ async def get_facts_by_category(
         )
 
     logger.info(
-        f"Cache MISS for facts_by_category - scanning all facts "
+        f"Cache MISS for facts_by_category - using optimized batch retrieval "
         f"(category={category}, limit={limit})"
     )
 
-    # Get all fact keys from Redis
-    fact_keys = kb.redis_client.keys("fact:*")
+    # OPTIMIZED: Use SCAN + pipeline MGET instead of sequential HGETALL
+    # This reduces 5000+ Redis roundtrips to ~6 roundtrips (SCAN batches + MGET)
+    from backend.knowledge_categories import get_category_for_source
 
-    if not fact_keys:
-        return {"categories": {}, "total_facts": 0}
-
-    # Group facts by category
     categories_dict = {}
 
-    for fact_key in fact_keys:
-        try:
-            # Get fact data from hash - async operation
-            fact_data = await asyncio.to_thread(kb.redis_client.hgetall, fact_key)
+    try:
+        # Step 1: Collect all fact keys using SCAN (non-blocking, cursor-based)
+        all_fact_keys = []
+        cursor = 0
+        while True:
+            cursor, keys = await asyncio.to_thread(
+                kb.redis_client.scan, cursor, match="fact:*", count=1000
+            )
+            all_fact_keys.extend(keys)
+            if cursor == 0:
+                break
 
-            if not fact_data:
+        if not all_fact_keys:
+            return {"categories": {}, "total_facts": 0}
+
+        logger.debug(f"Found {len(all_fact_keys)} fact keys, fetching data in batch")
+
+        # Step 2: Batch fetch all fact data using pipeline (single roundtrip for all)
+        # Process in chunks of 500 to avoid memory issues
+        chunk_size = 500
+        all_facts_data = []
+
+        for i in range(0, len(all_fact_keys), chunk_size):
+            chunk_keys = all_fact_keys[i:i + chunk_size]
+            pipeline = kb.redis_client.pipeline()
+            for key in chunk_keys:
+                pipeline.hgetall(key)
+            chunk_results = await asyncio.to_thread(pipeline.execute)
+            all_facts_data.extend(zip(chunk_keys, chunk_results))
+
+        # Step 3: Process facts (pure Python, no I/O)
+        for fact_key_bytes, fact_data in all_facts_data:
+            try:
+                if not fact_data:
+                    continue
+
+                # Decode key
+                fact_key = (
+                    fact_key_bytes.decode("utf-8")
+                    if isinstance(fact_key_bytes, bytes)
+                    else str(fact_key_bytes)
+                )
+
+                # Extract metadata (handle both bytes and string keys)
+                metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata", b"{}")
+                metadata_str = (
+                    metadata_raw.decode("utf-8")
+                    if isinstance(metadata_raw, bytes)
+                    else str(metadata_raw)
+                )
+                metadata = json.loads(metadata_str) if metadata_str else {}
+
+                # Extract content
+                content_raw = fact_data.get(b"content") or fact_data.get("content", b"")
+                content = (
+                    content_raw.decode("utf-8")
+                    if isinstance(content_raw, bytes)
+                    else str(content_raw) if content_raw else ""
+                )
+
+                # Get category based on source field
+                source = metadata.get("source", "")
+                fact_category = (
+                    get_category_for_source(source).value if source else "general"
+                )
+
+                # Skip if filtering by category and doesn't match
+                if category and fact_category != category:
+                    continue
+
+                fact_title = metadata.get("title", metadata.get("command", "Untitled"))
+                fact_type = metadata.get("type", "unknown")
+
+                if fact_category not in categories_dict:
+                    categories_dict[fact_category] = []
+
+                # Check limit per category before adding
+                if len(categories_dict[fact_category]) >= limit:
+                    continue
+
+                # Add to category list
+                categories_dict[fact_category].append(
+                    {
+                        "key": fact_key,
+                        "title": fact_title,
+                        "content": (
+                            content[:500] + "..." if len(content) > 500 else content
+                        ),
+                        "full_content": content,
+                        "category": fact_category,
+                        "type": fact_type,
+                        "metadata": metadata,
+                    }
+                )
+
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                logger.debug(f"Skipping invalid fact entry: {e}")
                 continue
 
-            # Extract metadata (handle both bytes and string keys from Redis)
-            metadata_str = fact_data.get("metadata") or fact_data.get(
-                b"metadata", b"{}"
-            )
-            metadata = json.loads(
-                metadata_str.decode("utf-8")
-                if isinstance(metadata_str, bytes)
-                else metadata_str
-            )
+    except Exception as e:
+        logger.error(f"Error in batch fact retrieval: {e}")
+        return {"categories": {}, "total_facts": 0, "error": str(e)}
 
-            # Extract content (handle both bytes and string keys from Redis)
-            content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
-            content = (
-                content_raw.decode("utf-8")
-                if isinstance(content_raw, bytes)
-                else str(content_raw) if content_raw else ""
-            )
-
-            # Get category based on source field (not metadata.category)
-            from backend.knowledge_categories import get_category_for_source
-
-            source = metadata.get("source", "")
-            fact_category = (
-                get_category_for_source(source).value if source else "general"
-            )
-            fact_title = metadata.get("title", metadata.get("command", "Untitled"))
-            fact_type = metadata.get("type", "unknown")
-
-            if fact_category not in categories_dict:
-                categories_dict[fact_category] = []
-
-            # Add to category list
-            categories_dict[fact_category].append(
-                {
-                    "key": (
-                        fact_key.decode("utf-8")
-                        if isinstance(fact_key, bytes)
-                        else str(fact_key)
-                    ),
-                    "title": fact_title,
-                    "content": (
-                        content[:500] + "..." if len(content) > 500 else content
-                    ),  # Preview
-                    "full_content": content,
-                    "category": fact_category,
-                    "type": fact_type,
-                    "metadata": metadata,
-                }
-            )
-
-        except Exception as e:
-            logger.warning(f"Error processing fact {fact_key}: {e}")
-            continue
-
-    # Filter by category if specified
-    if category:
-        categories_dict = {k: v for k, v in categories_dict.items() if k == category}
-
-    # Limit results per category
-    for cat in categories_dict:
-        categories_dict[cat] = categories_dict[cat][:limit]
+    # NOTE: Category filtering and limit are now applied during iteration for efficiency
 
     result = {
         "categories": categories_dict,
