@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 
 from src.code_analyzer import CodeAnalyzer
 from src.env_analyzer import EnvironmentVariableAnalyzer

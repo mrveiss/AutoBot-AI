@@ -10,13 +10,12 @@ Focuses on:
 - WCAG 2.1 AA compliance improvements
 """
 
-import os
 import re
 import json
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 
 class AccessibilityFixAgent:

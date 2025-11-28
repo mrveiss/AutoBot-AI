@@ -12,11 +12,9 @@ Author: AutoBot Code Analysis Suite
 Date: 2025-08-12
 """
 
-import os
 import re
 import json
-import ast
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Any
 from pathlib import Path
 import logging
 

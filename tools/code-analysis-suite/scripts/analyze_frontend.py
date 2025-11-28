@@ -6,7 +6,6 @@ Analyze frontend code for JavaScript, TypeScript, Vue, React, Angular, and other
 import asyncio
 import json
 import sys
-import os
 from pathlib import Path
 
 # Add the parent directory to the path so we can import from src
