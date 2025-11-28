@@ -41,8 +41,8 @@ import yaml
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.utils.service_registry import get_service_registry
-from src.utils.script_utils import ScriptFormatter
+from src.utils.service_registry import get_service_registry  # noqa: E402
+from src.utils.script_utils import ScriptFormatter  # noqa: E402
 
 
 class LogLevel:
@@ -117,7 +117,7 @@ class LogAggregator:
             },
         ]
 
-        print(f"📊 AutoBot Log Aggregator initialized")
+        print("📊 AutoBot Log Aggregator initialized")
         print(f"   Logs Directory: {self.logs_dir}")
         print(f"   Archive Directory: {self.archive_dir}")
 
@@ -556,7 +556,6 @@ class LogAggregator:
             self._analyze_source(source_name, analysis)
 
         # Sort top errors
-        error_counts = defaultdict(int)
         for source_name in sources:
             # Count unique errors (simplified for now)
             pass
@@ -855,7 +854,7 @@ Examples:
             else:
                 print("\n📊 Log Analysis Summary:")
                 print(f"   Total entries: {analysis['statistics']['total_entries']}")
-                print(f"   Log levels:")
+                print("   Log levels:")
                 for level, count in analysis["statistics"]["by_level"].items():
                     print(f"     {level}: {count}")
                 print(f"   Recent alerts: {len(analysis['alerts'])}")
