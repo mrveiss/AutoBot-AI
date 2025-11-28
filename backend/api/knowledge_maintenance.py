@@ -17,9 +17,7 @@ Includes:
 
 import json
 import logging
-from datetime import datetime
 from pathlib import Path as PathLib
-from typing import Optional
 from fastapi import APIRouter, HTTPException, Path, Query, Request
 
 # Import Pydantic models from dedicated module

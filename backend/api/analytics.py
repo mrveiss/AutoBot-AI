@@ -26,8 +26,8 @@ from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_client import RedisDatabase
 
-# Import existing monitoring infrastructure
-from .monitoring import hardware_monitor
+# Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
+from .monitoring_hardware import hardware_monitor
 
 # Import controller class (extracted from this file - Issue #212)
 from backend.api.analytics_controller import (

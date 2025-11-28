@@ -261,7 +261,7 @@ async def check_monitoring_health():
     """Check monitoring system health"""
     try:
         # Import here to avoid circular dependencies
-        from backend.api.monitoring import hardware_monitor
+        from backend.api.monitoring_hardware import hardware_monitor
 
         status = await hardware_monitor.get_comprehensive_status()
 

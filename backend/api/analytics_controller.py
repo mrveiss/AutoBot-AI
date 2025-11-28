@@ -34,7 +34,7 @@ from src.utils.redis_client import RedisDatabase, RedisDatabaseManager
 from src.utils.system_metrics import get_metrics_collector
 
 # Import existing monitoring infrastructure
-from .monitoring import hardware_monitor
+from .monitoring_hardware import hardware_monitor
 
 logger = logging.getLogger(__name__)
 
