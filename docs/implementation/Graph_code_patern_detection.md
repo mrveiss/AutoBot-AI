@@ -1,5 +1,8 @@
 # Implement Code Pattern Detection & Optimization System using RAG + Knowledge Graphs
 
+**GitHub Issue:** [#208](https://github.com/mrveiss/AutoBot-AI/issues/208)
+**Status:** Planning
+
 ## 🎯 Objective
 Enhance AutoBot with an intelligent code analysis system that uses vector databases (ChromaDB), knowledge graphs, and rerankers to identify code patterns, suggest refactoring opportunities, and improve overall code quality.
 

@@ -1,5 +1,6 @@
 # Knowledge-Enhanced Chat Integration
 
+**GitHub Issue:** [#249](https://github.com/mrveiss/AutoBot-AI/issues/249)
 **Date:** 2025-09-29
 **Status:** Planning
 **Priority:** High - Core AutoBot functionality
