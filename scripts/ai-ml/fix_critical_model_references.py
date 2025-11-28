@@ -8,9 +8,7 @@ Fixes immediate issues with missing model references in AutoBot codebase
 """
 
 import os
-import re
 import shutil
-from pathlib import Path
 
 
 def backup_file(file_path):

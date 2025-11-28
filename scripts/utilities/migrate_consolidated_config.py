@@ -23,12 +23,11 @@ FEATURES PRESERVED:
 ✅ Service URL generation
 """
 
-import ast
 import logging
 import re
 import shutil
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -7,7 +7,6 @@ AutoBot Simple Security Validation Script
 Validates critical security fixes without external dependencies
 """
 
-import os
 import re
 import sys
 from pathlib import Path

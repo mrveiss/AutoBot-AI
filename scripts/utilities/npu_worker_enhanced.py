@@ -15,7 +15,6 @@ import uuid
 import numpy as np
 from datetime import datetime
 from typing import Dict, Any, Optional, List
-import aiohttp
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
@@ -308,7 +307,6 @@ class EnhancedNPUWorker:
             # Try to initialize OpenVINO with NPU support
             try:
                 from openvino.runtime import Core
-                from openvino.runtime import properties as ov_props
 
                 self.openvino_core = Core()
                 devices = self.openvino_core.available_devices

@@ -29,16 +29,14 @@ Usage:
 """
 
 import argparse
-import asyncio
 import json
 import logging
 import sys
 import time
 import traceback
-import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 
 import redis
 from redis.commands.search.field import NumericField, TagField, TextField, VectorField

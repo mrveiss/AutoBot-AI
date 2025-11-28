@@ -9,7 +9,7 @@ Analyzes the blank page issue on http://172.16.168.21:5173
 Issue: #148 - Refactored to use shared frontend_analysis_lib
 """
 
-from frontend_analysis_lib import FrontendDebugger, generate_issue_report
+from frontend_analysis_lib import FrontendDebugger
 
 
 def analyze_frontend_issue():

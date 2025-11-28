@@ -7,8 +7,6 @@ AutoBot Authentication Security Test Suite
 Tests the newly implemented authentication and authorization system
 """
 
-import asyncio
-import json
 import sys
 import os
 from pathlib import Path

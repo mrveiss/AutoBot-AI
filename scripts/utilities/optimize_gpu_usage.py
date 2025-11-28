@@ -9,7 +9,6 @@ Configure RTX 4070 Laptop GPU for optimal performance.
 
 import os
 import json
-import yaml
 import subprocess
 import logging
 from pathlib import Path
@@ -253,7 +252,6 @@ def test_gpu_inference():
 
         # Simple CUDA availability test
         import torch
-        from src.constants import NetworkConstants, ServiceURLs
 
         if torch.cuda.is_available():
             device_name = torch.cuda.get_device_name(0)

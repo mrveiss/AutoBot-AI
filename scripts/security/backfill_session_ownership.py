@@ -33,13 +33,11 @@ import sys
 import os
 import argparse
 import logging
-from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Optional
 
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from src.utils.redis_client import get_redis_client as get_redis_manager
 from backend.security.session_ownership import SessionOwnershipValidator
 
 logging.basicConfig(

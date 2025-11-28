@@ -21,19 +21,18 @@ Features:
 - Generates implementation recommendations
 """
 
-import os
 import re
 import sys
 import json
 import asyncio
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple, Any, Optional
+from typing import List, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime
 
 # Add parent directories to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Configure logging
 logging.basicConfig(
