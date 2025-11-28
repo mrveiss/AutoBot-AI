@@ -1,5 +1,6 @@
 # Service Authentication Enforcement Rollout Plan
 
+**GitHub Issue:** [#255](https://github.com/mrveiss/AutoBot-AI/issues/255)
 **Document Version:** 1.0
 **Date:** 2025-10-09
 **Status:** 🟡 PENDING APPROVAL

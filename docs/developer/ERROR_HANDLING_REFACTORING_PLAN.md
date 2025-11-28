@@ -1,5 +1,6 @@
 # Error Handling Refactoring Plan
 
+**GitHub Issue:** [#252](https://github.com/mrveiss/AutoBot-AI/issues/252)
 **Status:** Planning Phase
 **Priority:** High
 **Estimated Effort:** 3-5 sprints

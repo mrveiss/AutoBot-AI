@@ -1,8 +1,9 @@
 # AutoBot Documentation Indexing Plan
 **Plan for Knowledge Base Self-Awareness through Documentation Indexing**
 
-Generated: 2025-09-29
-Status: Planning Complete - Ready for Implementation
+**GitHub Issue:** [#250](https://github.com/mrveiss/AutoBot-AI/issues/250)
+**Generated:** 2025-09-29
+**Status:** Planning Complete - Ready for Implementation
 Estimated Implementation Time: 10-15 hours across 5 phases
 
 ## Executive Summary

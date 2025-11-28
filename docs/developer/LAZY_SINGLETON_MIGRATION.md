@@ -1,7 +1,8 @@
 # Lazy Singleton Initialization Migration Guide
 
-**Date**: 2025-01-09
-**Status**: ✅ Utility Ready - Migration In Progress
+**GitHub Issue:** [#253](https://github.com/mrveiss/AutoBot-AI/issues/253)
+**Date:** 2025-01-09
+**Status:** ✅ Utility Ready - Migration In Progress
 
 ## Executive Summary
 

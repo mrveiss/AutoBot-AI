@@ -1,9 +1,10 @@
 # Individual Document Vectorization - UX Design Specification
 
-**Version**: 1.0
-**Date**: 2025-10-02
-**Component**: Knowledge Base File Browser
-**Technology**: Vue 3 + TypeScript + Font Awesome
+**GitHub Issue:** [#254](https://github.com/mrveiss/AutoBot-AI/issues/254)
+**Version:** 1.0
+**Date:** 2025-10-02
+**Component:** Knowledge Base File Browser
+**Technology:** Vue 3 + TypeScript + Font Awesome
 
 ---
 

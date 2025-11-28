@@ -1,8 +1,11 @@
 # AutoBot Kubernetes Migration Strategy
 
+**GitHub Issue:** [#256](https://github.com/mrveiss/AutoBot-AI/issues/256)
+**Status:** Future Planning
+
 ## Overview
 
-Migrating AutoBot from Docker Compose to Kubernetes would provide enhanced scalability, resilience, and native centralized logging capabilities. Our current modular architecture is well-positioned for this transition.
+Migrating AutoBot from current Hyper-V + WSL architecture to Kubernetes would provide enhanced scalability, resilience, and native centralized logging capabilities. Our current modular architecture is well-positioned for this transition.
 
 ## Current Architecture Benefits for K8s Migration
 

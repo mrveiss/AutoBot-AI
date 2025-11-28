@@ -1,5 +1,6 @@
 # AutoBot Documentation Improvement Roadmap
 
+**GitHub Issue:** [#251](https://github.com/mrveiss/AutoBot-AI/issues/251)
 **Created:** 2025-10-03
 **Status:** Planning Complete - Ready for Implementation
 **Owner:** Documentation Engineering Team
