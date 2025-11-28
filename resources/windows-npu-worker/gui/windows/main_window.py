@@ -3,7 +3,7 @@ Main Window - NPU Worker Dashboard
 """
 
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QTabWidget, QStatusBar,
     QMessageBox, QSystemTrayIcon, QMenu
 )
