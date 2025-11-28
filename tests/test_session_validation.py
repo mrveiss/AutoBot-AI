@@ -10,7 +10,6 @@ Tests the improved validate_chat_session_id() function to ensure:
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add project root to path

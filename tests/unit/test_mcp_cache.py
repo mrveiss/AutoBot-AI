@@ -7,7 +7,6 @@ and invalidation logic.
 
 import time
 from datetime import datetime, timedelta
-from unittest.mock import patch
 
 import pytest
 
@@ -283,7 +282,6 @@ class TestMCPCacheIntegration:
 
     def test_environment_variable_loading(self):
         """Test that environment variables are loaded correctly"""
-        import importlib
         from backend.api import mcp_registry
 
         # Check default values are reasonable

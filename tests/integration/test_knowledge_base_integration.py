@@ -17,8 +17,6 @@ Requirements:
 import asyncio
 import json
 import time
-import uuid
-from typing import List, Dict, Any
 import statistics
 
 import pytest

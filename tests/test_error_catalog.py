@@ -5,11 +5,9 @@ Validates error catalog loading, retrieval, and caching functionality
 """
 
 import pytest
-from pathlib import Path
 
 from src.utils.error_catalog import (
     ErrorCatalog,
-    ErrorDefinition,
     get_error,
     get_error_message,
     validate_error_code,

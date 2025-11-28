@@ -9,7 +9,7 @@ when both terminal service and chat flow persist the same user message.
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
 

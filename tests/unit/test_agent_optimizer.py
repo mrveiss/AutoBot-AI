@@ -8,12 +8,9 @@ Tests the agent file optimization functionality including:
 - Statistics tracking
 """
 
-import hashlib
-import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 # Add project root to path for imports
 import sys

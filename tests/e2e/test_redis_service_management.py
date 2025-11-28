@@ -12,12 +12,9 @@ Tests complete user workflows using Playwright:
 Test Coverage: Complete user journeys
 """
 
-import asyncio
 import logging
 import pytest
-from datetime import datetime
-from playwright.async_api import async_playwright, Page, expect
-from typing import Dict, Any
+from playwright.async_api import async_playwright, expect
 
 # Configure logging for tests
 logging.basicConfig(level=logging.INFO)

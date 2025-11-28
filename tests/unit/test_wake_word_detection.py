@@ -5,7 +5,6 @@ Issue #54 - Advanced Wake Word Detection Optimization
 
 import pytest
 import time
-from unittest.mock import patch, MagicMock
 
 from backend.services.wake_word_service import (
     WakeWordDetector,

@@ -10,8 +10,6 @@ import sys
 import os
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock, mock_open
-from datetime import datetime
-from typing import Dict, Any
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -24,7 +22,6 @@ sys.modules["backend.services.ansible_executor"] = MagicMock()
 
 from fastapi.testclient import TestClient
 from backend.services.infrastructure_db import InfrastructureDB
-from backend.models.infrastructure import InfraHost, InfraRole
 
 
 # ==================== Test Fixtures ====================

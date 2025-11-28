@@ -5,7 +5,6 @@ Tests all endpoints, CRUD operations, and database performance features
 """
 
 import requests
-import json
 import sys
 
 BASE_URL = "http://172.16.168.20:8001/api/iac"

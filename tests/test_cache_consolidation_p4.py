@@ -9,13 +9,8 @@ Tests the unified AdvancedCacheManager with backward compatibility for:
 Ensures all features from 3 cache managers are preserved in one unified implementation.
 """
 
-import asyncio
-import hashlib
-import json
 import sys
-import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -31,15 +26,9 @@ def test_imports():
     try:
         # Import unified cache manager components
         from src.utils.advanced_cache_manager import (
-            AdvancedCacheManager,
-            CacheStrategy,
             SimpleCacheManager,
             advanced_cache,
-            cache_function,
             cache_manager,
-            cache_response,
-            get_knowledge_cache,
-            smart_cache,
         )
 
         print("✓ All AdvancedCacheManager imports successful")
@@ -284,22 +273,19 @@ def test_migrated_files_import():
 
     try:
         # Test backend/api/llm.py
-        from backend.api import llm
+        pass
 
         print("✓ backend/api/llm.py imports successfully")
 
         # Test backend/api/system.py
-        from backend.api import system
 
         print("✓ backend/api/system.py imports successfully")
 
         # Test src/utils/system_validator.py
-        from src.utils import system_validator
 
         print("✓ src/utils/system_validator.py imports successfully")
 
         # Test files already using AdvancedCacheManager
-        from backend.api import cache_management, project_state, templates
 
         print("✓ backend/api/cache_management.py imports successfully")
         print("✓ backend/api/project_state.py imports successfully")

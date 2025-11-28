@@ -16,8 +16,7 @@ import json
 import logging
 import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch, call
-from typing import Dict, Any, List
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.knowledge_base import KnowledgeBase
 

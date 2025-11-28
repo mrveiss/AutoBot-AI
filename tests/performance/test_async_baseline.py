@@ -22,20 +22,18 @@ Success Metrics:
 
 import asyncio
 import aiohttp
-import redis.asyncio as aioredis
 import time
 import statistics
 import json
 import sys
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 from dataclasses import dataclass, asdict
 import logging
 
 # Import canonical Redis client pattern
 from src.utils.redis_client import get_redis_client
-from src.constants.network_constants import NetworkConstants, DatabaseConstants
 
 # Configure logging
 logging.basicConfig(

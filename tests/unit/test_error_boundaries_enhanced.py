@@ -243,7 +243,6 @@ class TestWithErrorHandlingDecorator:
             if hasattr(e, 'detail') and isinstance(e.detail, dict):
                 assert 'error' in e.detail
                 # Trace ID might be present
-                pass
 
 
 class TestErrorHandlingIntegration:

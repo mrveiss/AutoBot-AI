@@ -17,10 +17,7 @@ Test Categories:
 Issue: #47 - Security Penetration Testing for MCP Bridges
 """
 
-import os
-import tempfile
 from pathlib import Path
-from typing import Any, Dict
 
 import pytest
 from fastapi.testclient import TestClient
@@ -29,11 +26,7 @@ from fastapi.testclient import TestClient
 from backend.api.filesystem_mcp import (
     ALLOWED_DIRECTORIES,
     is_path_allowed,
-    router as filesystem_router,
 )
-from backend.api.mcp_registry import router as mcp_registry_router
-from backend.api.sequential_thinking_mcp import router as sequential_thinking_router
-from backend.api.structured_thinking_mcp import router as structured_thinking_router
 from backend.app_factory import create_app
 
 

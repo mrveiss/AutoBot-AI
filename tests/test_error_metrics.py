@@ -7,14 +7,10 @@ Validates error metrics collection, aggregation, and reporting functionality
 import pytest
 import asyncio
 import time
-from unittest.mock import Mock
 
 from src.utils.error_metrics import (
     ErrorMetricsCollector,
-    ErrorMetric,
-    ErrorStats,
     get_metrics_collector,
-    record_error_metric,
 )
 from src.utils.error_boundaries import ErrorCategory
 

@@ -307,13 +307,11 @@ class TestIntegration:
         # This would require importing KnowledgeBase
         # and checking that it uses kb_timeouts
         # Skipped for unit tests - would be in integration tests
-        pass
 
     def test_timeout_changes_affect_runtime(self):
         """Test that timeout configuration changes affect runtime behavior"""
         # This would require testing actual timeout behavior
         # Skipped for unit tests - would be in integration tests
-        pass
 
 
 if __name__ == '__main__':
