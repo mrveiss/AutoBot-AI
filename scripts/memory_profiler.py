@@ -10,11 +10,10 @@ Analyzes memory usage patterns and identifies optimization opportunities
 import gc
 import json
 import logging
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 try:
     import psutil
@@ -26,7 +25,7 @@ except ImportError:
     import psutil
 
 try:
-    from memory_profiler import profile
+    import memory_profiler  # noqa: F401 - availability check
 
     MEMORY_PROFILER_AVAILABLE = True
 except ImportError:

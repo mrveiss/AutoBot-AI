@@ -6,7 +6,6 @@
 Analyze ChromaDB data contents to determine where the 13,383 vectors actually are
 """
 import sqlite3
-import json
 from pathlib import Path
 
 

@@ -8,7 +8,6 @@ Validates consistency between environment files and complete.yaml
 """
 
 import yaml
-import os
 from pathlib import Path
 import re
 from typing import Dict, List, Any

@@ -10,13 +10,12 @@ Analyzes the current monolithic structure and provides recommendations for micro
 import ast
 import json
 import logging
-import os
 import re
 import sys
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")

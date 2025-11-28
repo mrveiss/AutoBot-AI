@@ -7,7 +7,6 @@ Test script to debug the exact workflow execution path
 """
 import asyncio
 import sys
-import os
 import time
 
 # Add the src directory to the path

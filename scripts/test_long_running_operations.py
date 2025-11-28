@@ -27,8 +27,6 @@ import logging
 import sys
 import argparse
 from datetime import datetime
-from pathlib import Path
-import json
 
 # Add AutoBot paths
 sys.path.append('/home/kali/Desktop/AutoBot')

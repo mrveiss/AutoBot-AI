@@ -28,7 +28,7 @@ def profile_startup():
     try:
         # Import main components
         print("Importing main modules...")
-        from backend import main, app_factory
+        from backend import app_factory
 
         print("Creating FastAPI app...")
         app = app_factory.create_app()

@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 # Import Puppeteer MCP tools
 try:
-    from src.agents.browser_automation import BrowserAutomation
+    pass  # Browser automation import removed - using direct Puppeteer MCP calls
 except ImportError:
     print("❌ Browser automation not available. Using direct Puppeteer MCP calls.")
 
@@ -101,9 +101,6 @@ class ComprehensiveUITester:
             start_time = time.time()
 
             # Use MCP Puppeteer tools to navigate
-            from src.security import conduct_secure_research  # Test if our imports work
-            from src.constants import NetworkConstants, ServiceURLs
-
             # Simulate navigation (would use actual Puppeteer MCP in real implementation)
             print(f"  📍 Navigating to {url}")
             await asyncio.sleep(0.5)  # Simulate navigation time

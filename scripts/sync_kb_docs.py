@@ -15,7 +15,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.knowledge_base import KnowledgeBase
-from src.knowledge_sync_incremental import IncrementalKnowledgeSync, run_incremental_sync
+from src.knowledge_sync_incremental import run_incremental_sync
 
 
 async def sync_docs():

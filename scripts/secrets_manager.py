@@ -28,15 +28,13 @@ Usage:
 import argparse
 import base64
 import getpass
-import hashlib
 import json
 import os
 import sys
-import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes

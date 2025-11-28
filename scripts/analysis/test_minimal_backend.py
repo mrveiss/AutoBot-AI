@@ -62,6 +62,6 @@ async def execute_workflow(request: dict):
 
 if __name__ == "__main__":
     import uvicorn
-    from src.constants import NetworkConstants, ServiceURLs
+    from src.constants import ServiceURLs  # noqa: F401 - used for reference
     logger.info("Starting minimal backend...")
     uvicorn.run(app, host="0.0.0.0", port=8001, log_level="info")

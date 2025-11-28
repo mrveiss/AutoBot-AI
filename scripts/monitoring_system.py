@@ -19,7 +19,7 @@ import sqlite3
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 import psutil
 
@@ -886,7 +886,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    import sys
-    from src.constants import NetworkConstants, ServiceURLs
-
     sys.exit(asyncio.run(main()))

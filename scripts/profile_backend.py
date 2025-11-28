@@ -10,7 +10,6 @@ Profiles every function call and execution time during startup and runtime
 import cProfile
 import pstats
 import io
-import time
 import sys
 import os
 from pstats import SortKey

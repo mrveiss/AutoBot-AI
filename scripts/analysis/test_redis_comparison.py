@@ -9,10 +9,8 @@ for the AutoBot project's existing Redis data.
 
 import asyncio
 import logging
-import os
 import sys
 import time
-from typing import Any, Dict, List
 
 # Add the project root to the Python path
 sys.path.insert(0, '/home/kali/Desktop/AutoBot')
@@ -243,7 +241,6 @@ async def analyze_existing_data():
     logger.info("\n=== Analyzing Existing Redis Data ===")
     try:
         import redis
-        from src.constants import NetworkConstants, ServiceURLs
         client = redis.Redis(host='localhost', port=6379, db=2, decode_responses=True)
 
         # Get sample documents

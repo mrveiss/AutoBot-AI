@@ -28,12 +28,11 @@ Usage:
 import argparse
 import asyncio
 import json
-import subprocess
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 import aiohttp
 import yaml
@@ -42,7 +41,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.backup_manager import BackupManager
-from src.utils.service_registry import ServiceStatus, get_service_registry
+from src.utils.service_registry import get_service_registry
 from src.utils.script_utils import ScriptFormatter
 
 

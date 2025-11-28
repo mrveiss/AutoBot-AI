@@ -11,8 +11,7 @@ import json
 import logging
 import subprocess
 import time
-from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - HostDNS - %(message)s')
 logger = logging.getLogger(__name__)

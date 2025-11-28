@@ -6,13 +6,10 @@
 Fix search by using simple text storage in Redis facts that can be searched.
 """
 
-import asyncio
 import os
 import sys
 import glob
 import requests
-from pathlib import Path
-from src.constants import NetworkConstants, ServiceURLs
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

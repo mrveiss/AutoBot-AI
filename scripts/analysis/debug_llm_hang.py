@@ -8,7 +8,6 @@ Debug script to isolate the LLM hanging issue
 
 import asyncio
 import sys
-import os
 import logging
 
 # Add the project root to Python path
@@ -121,7 +120,6 @@ async def test_ollama_direct():
         print("=== Testing Direct Ollama Connection ===")
 
         import aiohttp
-        import json
 
         print("Step 1: Testing Ollama health endpoint...")
         async with aiohttp.ClientSession() as session:
@@ -162,7 +160,6 @@ async def test_ollama_direct():
     except Exception as e:
         print(f"❌ Direct Ollama test failed: {e}")
         import traceback
-        from src.constants import NetworkConstants, ServiceURLs
         traceback.print_exc()
         return False
 

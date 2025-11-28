@@ -8,7 +8,6 @@ Analyze what's stored in Redis database 0 to understand the full scope
 
 import redis
 import logging
-import json
 from collections import defaultdict
 
 logging.basicConfig(level=logging.INFO)

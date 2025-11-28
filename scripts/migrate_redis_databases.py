@@ -11,13 +11,12 @@ import redis
 import logging
 import os
 import sys
-from typing import Set
 
 # Add project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from src.utils.redis_database_manager import RedisDatabase, RedisDatabaseManager
+from src.utils.redis_database_manager import RedisDatabase
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

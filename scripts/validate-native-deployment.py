@@ -18,7 +18,7 @@ import sys
 import json
 import time
 import os
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, Tuple, Optional
 from dataclasses import dataclass
 from enum import Enum
 

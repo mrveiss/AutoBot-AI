@@ -9,7 +9,6 @@ Test Knowledge Base Documentation Search
 import asyncio
 import logging
 import sys
-import os
 
 # Add the project root to the Python path
 sys.path.insert(0, '/home/kali/Desktop/AutoBot')

@@ -8,7 +8,6 @@ Test real AutoBot startup time without importing heavy libraries
 import sys
 import os
 import time
-import subprocess
 
 
 def test_backend_import():

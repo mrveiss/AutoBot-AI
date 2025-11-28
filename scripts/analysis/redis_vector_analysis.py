@@ -10,9 +10,7 @@ Tests both LangChain and LlamaIndex with proper configuration.
 import asyncio
 import json
 import logging
-import os
 import sys
-import time
 from typing import Any, Dict, List, Tuple
 
 # Add project root to path
@@ -574,10 +572,9 @@ async def main():
     recommendation = await analyzer.run_comprehensive_analysis()
 
     # Write recommendation to file
-    import os
-    from src.constants import NetworkConstants, ServiceURLs
-    output_file = '/home/kali/Desktop/AutoBot/reports/redis_vector_recommendation.json'
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    from pathlib import Path
+    output_file = Path('/home/kali/Desktop/AutoBot/reports/redis_vector_recommendation.json')
+    output_file.parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, 'w') as f:
         json.dump(recommendation, f, indent=2)
 

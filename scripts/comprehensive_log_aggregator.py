@@ -21,18 +21,14 @@ import asyncio
 import json
 import logging
 import re
-import signal
 import subprocess
 import sys
-import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import List
 
 import aiohttp
-import websockets
 
 import docker
 

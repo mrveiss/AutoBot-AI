@@ -28,16 +28,12 @@ Usage:
 import argparse
 import asyncio
 import json
-import logging.handlers
-import os
 import re
-import subprocess
 import sys
-import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, List
 
 import aiofiles
 import yaml

@@ -7,11 +7,9 @@ Test Documentation API Endpoints (Local Testing)
 """
 
 import asyncio
-import json
 import logging
 from pathlib import Path
 import sys
-import os
 
 # Add project root to Python path
 sys.path.insert(0, '/home/kali/Desktop/AutoBot')
@@ -28,7 +26,6 @@ async def test_documentation_browser_logic():
     try:
         import mimetypes
         import hashlib
-        from datetime import datetime
 
         project_root = Path("/home/kali/Desktop/AutoBot")
 

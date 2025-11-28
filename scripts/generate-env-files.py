@@ -8,7 +8,6 @@ Generates standardized .env files from complete.yaml configuration
 """
 
 import yaml
-import os
 from pathlib import Path
 
 

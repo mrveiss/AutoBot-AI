@@ -13,7 +13,7 @@ import sys
 from typing import Dict, Any, List, Tuple
 
 sys.path.insert(0, '/home/kali/Desktop/AutoBot')
-from src.constants.network_constants import NetworkConstants, ServiceURLs
+from src.constants.network_constants import NetworkConstants
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -560,7 +560,7 @@ class AutoBotVectorStoreAnalysis:
                 fixes_attempted.append("Using modern langchain-ollama package")
             except ImportError:
                 from langchain_community.embeddings import OllamaEmbeddings
-                from src.constants import NetworkConstants, ServiceURLs
+                from src.constants import ServiceURLs
                 fixes_attempted.append("Using langchain-community embeddings")
 
             embeddings = OllamaEmbeddings(

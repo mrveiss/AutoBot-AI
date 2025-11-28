@@ -7,7 +7,6 @@ Test script to check circuit breaker state
 """
 import asyncio
 import sys
-import os
 
 # Add the src directory to the path
 sys.path.insert(0, '/home/kali/Desktop/AutoBot')
