@@ -9,7 +9,6 @@ Script to reset and recreate the knowledge base index with correct dimensions.
 import asyncio
 import os
 import sys
-from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

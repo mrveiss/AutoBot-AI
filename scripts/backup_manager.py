@@ -18,7 +18,6 @@ Usage:
 """
 
 import argparse
-import asyncio
 import hashlib
 import json
 import os
@@ -26,7 +25,6 @@ import shutil
 import subprocess
 import sys
 import tarfile
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional

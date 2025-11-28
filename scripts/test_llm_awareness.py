@@ -8,7 +8,6 @@ Demonstrates the functionality of the awareness injection system
 """
 
 import asyncio
-import json
 import sys
 
 sys.path.append("/home/kali/Desktop/AutoBot")
@@ -129,7 +128,6 @@ async def test_api_integration():
 
     try:
         import aiohttp
-        from src.constants import NetworkConstants, ServiceURLs
 
         # Test awareness endpoints
         endpoints_to_test = [

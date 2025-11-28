@@ -7,7 +7,6 @@ Simple script to populate KB with docs, bypassing Redis issues.
 """
 
 import glob
-import json
 import os
 import sys
 
@@ -21,10 +20,9 @@ print("=== Simple Knowledge Base Population ===")
 
 # Check if system is running
 import requests
-from src.constants import NetworkConstants, ServiceURLs
 
 try:
-    resp = requests.get("ServiceURLs.BACKEND_LOCAL/api/system/health", timeout=2)
+    resp = requests.get("http://localhost:8001/api/system/health", timeout=2)
     print(f"✓ Backend is running: {resp.status_code}")
 except Exception:
     print("❌ Backend not running, starting with direct KB access")

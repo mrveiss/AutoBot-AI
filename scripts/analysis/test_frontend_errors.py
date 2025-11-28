@@ -6,9 +6,8 @@
 
 import asyncio
 from playwright.async_api import async_playwright
-import json
 import sys
-from src.constants import NetworkConstants, ServiceURLs
+from src.constants import ServiceURLs
 
 
 async def capture_console_errors():

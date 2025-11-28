@@ -9,7 +9,6 @@ Provides quick status overview and health metrics for the codebase
 
 import json
 import os
-import time
 import subprocess
 import sys
 from pathlib import Path
@@ -133,7 +132,6 @@ class AutoBotMonitor:
         # Test command validator if available
         try:
             from src.security.command_validator import get_command_validator
-            from src.constants import NetworkConstants, ServiceURLs
             validator = get_command_validator()
 
             # Quick functionality test

@@ -4,11 +4,10 @@
 # Author: mrveiss
 """Visual test for AutoBot GUI chat functionality using Playwright service."""
 
-import json
 import time
 
 import requests
-from src.constants import NetworkConstants, ServiceURLs
+from src.constants import ServiceURLs
 
 
 def test_gui_chat():

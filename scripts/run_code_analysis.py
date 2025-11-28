@@ -8,7 +8,6 @@ Runs various code analysis tools and outputs results in JSON format
 """
 
 import json
-import os
 import sys
 import subprocess
 from pathlib import Path

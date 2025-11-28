@@ -9,12 +9,11 @@ Performs comprehensive security checks during development
 
 import json
 import logging
-import os
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")

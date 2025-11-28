@@ -9,7 +9,6 @@ Upload documentation files directly to knowledge base using file upload API.
 import os
 import glob
 import requests
-from src.constants import NetworkConstants, ServiceURLs
 
 
 def upload_docs():

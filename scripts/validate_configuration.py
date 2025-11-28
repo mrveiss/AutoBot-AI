@@ -23,15 +23,10 @@ def test_default_configuration():
 
     try:
         from src.unified_config import (
-            AI_STACK_URL,
             API_BASE_URL,
             BACKEND_PORT,
-            FRONTEND_URL,
             HTTP_PROTOCOL,
-            NPU_WORKER_URL,
             OLLAMA_PORT,
-            OLLAMA_URL,
-            PLAYWRIGHT_VNC_URL,
             REDIS_PORT,
             REDIS_PROTOCOL,
             REDIS_URL,
@@ -95,7 +90,6 @@ def test_custom_configuration():
             HTTP_PROTOCOL,
             OLLAMA_HOST_IP,
             OLLAMA_PORT,
-            OLLAMA_URL,
             REDIS_PORT,
         )
 
@@ -160,7 +154,6 @@ def test_docker_configuration():
 
     try:
         import subprocess
-        import tempfile
 
         # Test that environment variables are properly substituted
         test_env = {"AUTOBOT_BACKEND_PORT": "8002", "AUTOBOT_REDIS_PORT": "6380"}

@@ -9,7 +9,6 @@ Traces every function call with timing information
 
 import sys
 import time
-import functools
 import os
 from pathlib import Path
 

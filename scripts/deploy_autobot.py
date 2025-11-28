@@ -27,7 +27,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import yaml
 
@@ -36,7 +36,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.utils.service_registry import (
     DeploymentMode,
-    ServiceRegistry,
     get_service_registry,
 )
 from src.utils.script_utils import ScriptFormatter

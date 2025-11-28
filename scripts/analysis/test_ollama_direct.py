@@ -7,7 +7,6 @@ Test Ollama connection directly without the retry mechanism
 """
 
 import asyncio
-import json
 
 import aiohttp
 

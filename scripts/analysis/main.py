@@ -10,8 +10,6 @@ has been moved to backend/app_factory.py for better modularity.
 """
 
 import uvicorn
-import logging
-import logging.config
 
 # Import the application factory
 from backend.app_factory import create_app

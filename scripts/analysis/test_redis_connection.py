@@ -19,7 +19,7 @@ def test_redis_connection():
 
     try:
         # Import service registry
-        from src.utils.service_registry import get_service_registry, get_service_url
+        from src.utils.service_registry import get_service_url
 
         print("✅ Service registry imported successfully")
 

@@ -11,12 +11,10 @@ import argparse
 import asyncio
 import json
 import logging
-import os
-import shutil
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent))

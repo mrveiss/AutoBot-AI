@@ -10,7 +10,6 @@ import time
 import logging
 import traceback
 import aiohttp
-import json
 from typing import Dict, Any
 
 # Configure logging to see what's happening
@@ -223,7 +222,6 @@ class TimeoutAnalyzer:
             start_time = time.time()
 
             from src.simple_chat_workflow import SimpleChatWorkflow
-            from src.constants import NetworkConstants, ServiceURLs
 
             # Create workflow instance
             workflow_create_start = time.time()

@@ -8,10 +8,9 @@ Creates HTML dashboards for system monitoring and performance tracking
 """
 
 import json
-import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from src.utils.html_dashboard_utils import (
     get_light_theme_css,

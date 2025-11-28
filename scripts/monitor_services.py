@@ -20,7 +20,6 @@ import asyncio
 import json
 import logging
 import sys
-import time
 import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path

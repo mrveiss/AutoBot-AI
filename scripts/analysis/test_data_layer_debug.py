@@ -8,7 +8,6 @@ Analyzes all database connections, data locations, and accessibility issues
 """
 import redis
 import os
-import json
 import traceback
 import sqlite3
 from pathlib import Path

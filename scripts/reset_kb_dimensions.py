@@ -162,8 +162,6 @@ async def test_api_compatibility():
     print("\n4. Testing API compatibility...")
 
     try:
-        from backend.api.knowledge import get_knowledge_categories
-
         # Test category retrieval (this was failing before)
         # This is a mock test since we can't run the full API here
         print("✅ API compatibility: Knowledge base should now work with endpoints")

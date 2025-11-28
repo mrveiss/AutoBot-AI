@@ -18,9 +18,8 @@ Usage: python scripts/verify_knowledge_consistency.py --enforce-locks
 import logging
 import sys
 import os
-import hashlib
 import json
-from typing import Dict, List, Optional, Tuple
+from typing import Dict
 from datetime import datetime
 
 # Add project root to path

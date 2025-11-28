@@ -169,7 +169,7 @@ class BackendStatusChecker:
 def main():
     """Main function for command line usage"""
     import argparse
-    from src.constants import NetworkConstants, ServiceURLs
+    from src.constants import ServiceURLs
 
     parser = argparse.ArgumentParser(description="Check AutoBot backend API status")
     parser.add_argument(

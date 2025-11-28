@@ -8,7 +8,6 @@ Applies memory optimization improvements to the AutoBot codebase
 """
 
 import logging
-import os
 import shutil
 import sys
 from datetime import datetime

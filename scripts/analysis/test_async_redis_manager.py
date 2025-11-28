@@ -11,7 +11,6 @@ import asyncio
 import logging
 import time
 import sys
-import os
 from pathlib import Path
 
 # Add project root to path
@@ -20,7 +19,6 @@ sys.path.insert(0, str(project_root))
 
 from backend.utils.async_redis_manager import (
     get_redis_manager,
-    AsyncRedisManager,
     AsyncRedisDatabase,
     get_async_redis,
     get_main_redis,
@@ -29,7 +27,6 @@ from backend.utils.async_redis_manager import (
 from backend.utils.redis_compatibility import (
     get_redis_client_compat,
     test_async_migration,
-    migrate_sync_to_async_example
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')

@@ -11,9 +11,8 @@ import asyncio
 import json
 import time
 import sys
-import os
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List
 import aiohttp
 import numpy as np
 from datetime import datetime
@@ -21,7 +20,7 @@ from datetime import datetime
 # Add AutoBot to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from src.ai_hardware_accelerator import get_ai_accelerator, HardwareDevice, ProcessingTask, TaskComplexity
+from src.ai_hardware_accelerator import HardwareDevice
 from src.npu_semantic_search import get_npu_search_engine
 from src.utils.logging_manager import get_llm_logger
 from src.constants.network_constants import NetworkConstants

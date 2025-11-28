@@ -11,7 +11,6 @@ to prevent hallucinations about being a Meta AI model or Transformers character.
 
 import asyncio
 import logging
-import os
 import sys
 from pathlib import Path
 
