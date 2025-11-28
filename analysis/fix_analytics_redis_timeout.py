@@ -14,6 +14,8 @@ from datetime import datetime
 from typing import List, Dict, Any
 import logging
 
+import redis
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.constants.network_constants import NetworkConstants
