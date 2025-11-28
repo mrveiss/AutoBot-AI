@@ -240,7 +240,8 @@ export function useKnowledgeVectorization() {
       // Poll for completion
       let completed = false
       let attempts = 0
-      const maxAttempts = 60 // 60 seconds max
+      // Configurable timeout via environment variable (default: 60 seconds)
+      const maxAttempts = Number(import.meta.env.VITE_VECTORIZATION_TIMEOUT) || 60
 
       while (!completed && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
