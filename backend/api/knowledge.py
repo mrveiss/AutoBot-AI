@@ -938,7 +938,12 @@ async def query_knowledge(request: dict, req: Request):
 async def get_facts_by_category(
     req: Request, category: Optional[str] = None, limit: int = 100
 ):
-    """Get facts grouped by category for browsing with caching"""
+    """
+    Get facts grouped by category for browsing with caching.
+
+    Performance: Uses Redis SET indexes (category:index:{category}) for O(1) lookups.
+    Issue #258: Optimized from 5000ms+ to <200ms target.
+    """
     kb = await get_or_create_knowledge_base(req.app)
     import json
 
@@ -971,61 +976,82 @@ async def get_facts_by_category(
         )
 
     logger.info(
-        f"Cache MISS for facts_by_category - using optimized batch retrieval "
+        f"Cache MISS for facts_by_category - using category index lookup "
         f"(category={category}, limit={limit})"
     )
 
-    # OPTIMIZED: Use SCAN + pipeline MGET instead of sequential HGETALL
-    # This reduces 5000+ Redis roundtrips to ~6 roundtrips (SCAN batches + MGET)
-    from backend.knowledge_categories import get_category_for_source
+    from backend.knowledge_categories import (
+        KnowledgeCategory,
+        get_category_for_source,
+    )
 
     categories_dict = {}
 
     try:
-        # Step 1: Collect all fact keys using SCAN (non-blocking, cursor-based)
-        all_fact_keys = []
-        cursor = 0
-        while True:
-            cursor, keys = await asyncio.to_thread(
-                kb.redis_client.scan, cursor, match="fact:*", count=1000
+        # OPTIMIZED (Issue #258): Use category indexes for O(1) lookup
+        # Instead of scanning all 5000+ facts, we fetch only the fact IDs we need
+
+        # Determine which categories to fetch
+        if category:
+            # Single category requested - direct index lookup
+            categories_to_fetch = [category]
+        else:
+            # All categories - fetch from all 3 main category indexes
+            categories_to_fetch = [cat.value for cat in KnowledgeCategory]
+
+        # Step 1: Get fact IDs from category indexes (O(1) per category)
+        category_fact_ids = {}
+        for cat in categories_to_fetch:
+            index_key = f"category:index:{cat}"
+            # SRANDMEMBER returns random members - use SMEMBERS for all, then limit
+            fact_ids = await asyncio.to_thread(
+                kb.redis_client.smembers, index_key
             )
-            all_fact_keys.extend(keys)
-            if cursor == 0:
-                break
+            if fact_ids:
+                # Decode bytes to strings and limit
+                decoded_ids = [
+                    fid.decode("utf-8") if isinstance(fid, bytes) else fid
+                    for fid in fact_ids
+                ]
+                category_fact_ids[cat] = decoded_ids[:limit]
+                logger.debug(
+                    f"Category index {cat}: {len(decoded_ids)} facts "
+                    f"(limited to {len(category_fact_ids[cat])})"
+                )
+
+        if not category_fact_ids:
+            # No indexed facts found - fallback to legacy SCAN method
+            logger.warning(
+                "No category indexes found - falling back to SCAN method. "
+                "Run category index migration to improve performance."
+            )
+            return await _get_facts_by_category_legacy(kb, category, limit)
+
+        # Step 2: Batch fetch fact data using pipeline (single roundtrip)
+        all_fact_keys = []
+        for cat, fact_ids in category_fact_ids.items():
+            for fid in fact_ids:
+                all_fact_keys.append((cat, f"fact:{fid}"))
 
         if not all_fact_keys:
             return {"categories": {}, "total_facts": 0}
 
-        logger.debug(f"Found {len(all_fact_keys)} fact keys, fetching data in batch")
-
-        # Step 2: Batch fetch all fact data using pipeline (single roundtrip for all)
-        # Process in chunks of 500 to avoid memory issues
-        chunk_size = 500
-        all_facts_data = []
-
-        for i in range(0, len(all_fact_keys), chunk_size):
-            chunk_keys = all_fact_keys[i:i + chunk_size]
-            pipeline = kb.redis_client.pipeline()
-            for key in chunk_keys:
-                pipeline.hgetall(key)
-            chunk_results = await asyncio.to_thread(pipeline.execute)
-            all_facts_data.extend(zip(chunk_keys, chunk_results))
+        # Pipeline fetch all facts at once
+        pipeline = kb.redis_client.pipeline()
+        for _, fact_key in all_fact_keys:
+            pipeline.hgetall(fact_key)
+        fact_results = await asyncio.to_thread(pipeline.execute)
 
         # Step 3: Process facts (pure Python, no I/O)
-        for fact_key_bytes, fact_data in all_facts_data:
+        for (cat, fact_key), fact_data in zip(all_fact_keys, fact_results):
             try:
                 if not fact_data:
                     continue
 
-                # Decode key
-                fact_key = (
-                    fact_key_bytes.decode("utf-8")
-                    if isinstance(fact_key_bytes, bytes)
-                    else str(fact_key_bytes)
-                )
-
                 # Extract metadata (handle both bytes and string keys)
-                metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata", b"{}")
+                metadata_raw = fact_data.get(b"metadata") or fact_data.get(
+                    "metadata", b"{}"
+                )
                 metadata_str = (
                     metadata_raw.decode("utf-8")
                     if isinstance(metadata_raw, bytes)
@@ -1041,28 +1067,14 @@ async def get_facts_by_category(
                     else str(content_raw) if content_raw else ""
                 )
 
-                # Get category based on source field
-                source = metadata.get("source", "")
-                fact_category = (
-                    get_category_for_source(source).value if source else "general"
-                )
-
-                # Skip if filtering by category and doesn't match
-                if category and fact_category != category:
-                    continue
-
                 fact_title = metadata.get("title", metadata.get("command", "Untitled"))
                 fact_type = metadata.get("type", "unknown")
 
-                if fact_category not in categories_dict:
-                    categories_dict[fact_category] = []
-
-                # Check limit per category before adding
-                if len(categories_dict[fact_category]) >= limit:
-                    continue
+                if cat not in categories_dict:
+                    categories_dict[cat] = []
 
                 # Add to category list
-                categories_dict[fact_category].append(
+                categories_dict[cat].append(
                     {
                         "key": fact_key,
                         "title": fact_title,
@@ -1070,7 +1082,7 @@ async def get_facts_by_category(
                             content[:500] + "..." if len(content) > 500 else content
                         ),
                         "full_content": content,
-                        "category": fact_category,
+                        "category": cat,
                         "type": fact_type,
                         "metadata": metadata,
                     }
@@ -1081,10 +1093,8 @@ async def get_facts_by_category(
                 continue
 
     except Exception as e:
-        logger.error(f"Error in batch fact retrieval: {e}")
+        logger.error(f"Error in indexed fact retrieval: {e}")
         return {"categories": {}, "total_facts": 0, "error": str(e)}
-
-    # NOTE: Category filtering and limit are now applied during iteration for efficiency
 
     result = {
         "categories": categories_dict,
@@ -1104,6 +1114,110 @@ async def get_facts_by_category(
         logger.warning(f"Failed to cache facts_by_category: {cache_error}")
 
     return result
+
+
+async def _get_facts_by_category_legacy(kb, category: Optional[str], limit: int):
+    """
+    Legacy fallback: Get facts by scanning all keys.
+    Used when category indexes don't exist yet.
+    """
+    import json
+    from backend.knowledge_categories import get_category_for_source
+
+    categories_dict = {}
+
+    # Step 1: Collect all fact keys using SCAN (non-blocking, cursor-based)
+    all_fact_keys = []
+    cursor = 0
+    while True:
+        cursor, keys = await asyncio.to_thread(
+            kb.redis_client.scan, cursor, match="fact:*", count=1000
+        )
+        all_fact_keys.extend(keys)
+        if cursor == 0:
+            break
+
+    if not all_fact_keys:
+        return {"categories": {}, "total_facts": 0}
+
+    # Step 2: Batch fetch all fact data using pipeline
+    chunk_size = 500
+    all_facts_data = []
+
+    for i in range(0, len(all_fact_keys), chunk_size):
+        chunk_keys = all_fact_keys[i : i + chunk_size]
+        pipeline = kb.redis_client.pipeline()
+        for key in chunk_keys:
+            pipeline.hgetall(key)
+        chunk_results = await asyncio.to_thread(pipeline.execute)
+        all_facts_data.extend(zip(chunk_keys, chunk_results))
+
+    # Step 3: Process facts
+    for fact_key_bytes, fact_data in all_facts_data:
+        try:
+            if not fact_data:
+                continue
+
+            fact_key = (
+                fact_key_bytes.decode("utf-8")
+                if isinstance(fact_key_bytes, bytes)
+                else str(fact_key_bytes)
+            )
+
+            metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata", b"{}")
+            metadata_str = (
+                metadata_raw.decode("utf-8")
+                if isinstance(metadata_raw, bytes)
+                else str(metadata_raw)
+            )
+            metadata = json.loads(metadata_str) if metadata_str else {}
+
+            content_raw = fact_data.get(b"content") or fact_data.get("content", b"")
+            content = (
+                content_raw.decode("utf-8")
+                if isinstance(content_raw, bytes)
+                else str(content_raw) if content_raw else ""
+            )
+
+            source = metadata.get("source", "")
+            fact_category = (
+                get_category_for_source(source).value if source else "general"
+            )
+
+            if category and fact_category != category:
+                continue
+
+            fact_title = metadata.get("title", metadata.get("command", "Untitled"))
+            fact_type = metadata.get("type", "unknown")
+
+            if fact_category not in categories_dict:
+                categories_dict[fact_category] = []
+
+            if len(categories_dict[fact_category]) >= limit:
+                continue
+
+            categories_dict[fact_category].append(
+                {
+                    "key": fact_key,
+                    "title": fact_title,
+                    "content": (
+                        content[:500] + "..." if len(content) > 500 else content
+                    ),
+                    "full_content": content,
+                    "category": fact_category,
+                    "type": fact_type,
+                    "metadata": metadata,
+                }
+            )
+
+        except (json.JSONDecodeError, KeyError, TypeError):
+            continue
+
+    return {
+        "categories": categories_dict,
+        "total_facts": sum(len(v) for v in categories_dict.values()),
+        "category_filter": category,
+    }
 
 
 @with_error_handling(

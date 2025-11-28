@@ -1481,6 +1481,22 @@ class KnowledgeBase:
                         f"category_title:{category_title_key} → {fact_id}"
                     )
 
+                # Store category index for O(1) category filtering (Issue #258)
+                # Maps main category to fact IDs using Redis SET
+                source = fact_metadata.get("source", "")
+                if source:
+                    from backend.knowledge_categories import get_category_for_source
+
+                    main_category = get_category_for_source(source)
+                    if hasattr(main_category, "value"):
+                        main_category = main_category.value
+                    await self.aioredis_client.sadd(
+                        f"category:index:{main_category}", fact_id
+                    )
+                    logger.debug(
+                        f"Stored category index: category:index:{main_category} → {fact_id}"
+                    )
+
             # Store in vector index for semantic search - CRITICAL FOR SEARCHABILITY
             vector_indexed = False
             if self.vector_store:
