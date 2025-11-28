@@ -507,8 +507,8 @@ async function refreshGraph() {
   errorMessage.value = ''
 
   try {
-    // Fetch entities
-    const entitiesResponse = await apiClient.get('/api/memory/entities')
+    // Fetch all entities
+    const entitiesResponse = await apiClient.get('/api/memory/entities/all')
     const entitiesData = await parseApiResponse(entitiesResponse)
 
     if (entitiesData?.entities) {
