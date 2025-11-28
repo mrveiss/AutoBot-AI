@@ -468,7 +468,7 @@ async def list_operations(
 
         operations = manager.operation_manager.list_operations(
             status_filter, type_filter
-        ),
+        )
         operations = operations[:limit]
 
         # Convert to response format
@@ -481,10 +481,10 @@ async def list_operations(
         total_count = len(all_operations)
         active_count = len(
             [op for op in all_operations if op.status == OperationStatus.RUNNING]
-        ),
+        )
         completed_count = len(
             [op for op in all_operations if op.status == OperationStatus.COMPLETED]
-        ),
+        )
         failed_count = len(
             [
                 op

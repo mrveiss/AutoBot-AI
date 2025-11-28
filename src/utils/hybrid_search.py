@@ -173,7 +173,7 @@ class HybridSearchEngine:
             # Give more weight to documents that match more keywords
             match_ratio = sum(1 for score in keyword_scores if score > 0) / len(
                 keyword_scores
-            ),
+            )
             avg_score = sum(keyword_scores) / len(keyword_scores)
 
             # Boost documents that match multiple keywords

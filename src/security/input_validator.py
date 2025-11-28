@@ -463,7 +463,7 @@ class WebResearchInputValidator:
             # Remove dangerous script tags
             script_pattern = re.compile(
                 r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL
-            ),
+            )
             scripts_removed = len(script_pattern.findall(sanitized_content))
             if scripts_removed > 0:
                 sanitized_content = script_pattern.sub("", sanitized_content)
@@ -473,7 +473,7 @@ class WebResearchInputValidator:
             # Remove dangerous event handlers
             event_pattern = re.compile(
                 r'\s*on\w+\s*=\s*["\'][^"\']*["\']', re.IGNORECASE
-            ),
+            )
             events_removed = len(event_pattern.findall(sanitized_content))
             if events_removed > 0:
                 sanitized_content = event_pattern.sub("", sanitized_content)
@@ -484,7 +484,7 @@ class WebResearchInputValidator:
             dangerous_link_pattern = re.compile(
                 r'href\s*=\s*["\'](?:javascript:|data:|vbscript:)[^"\']*["\']',
                 re.IGNORECASE,
-            ),
+            )
             dangerous_links = len(dangerous_link_pattern.findall(sanitized_content))
             if dangerous_links > 0:
                 sanitized_content = dangerous_link_pattern.sub(

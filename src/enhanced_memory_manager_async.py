@@ -291,7 +291,7 @@ class AsyncEnhancedMemoryManager:
                 # Get existing metadata and merge
                 cursor = await conn.execute(
                     "SELECT metadata FROM tasks WHERE task_id = ?", (task_id,)
-                ),
+                )
                 row = await cursor.fetchone()
                 if row:
                     existing_metadata = json.loads(row[0] or "{}")
@@ -358,7 +358,7 @@ class AsyncEnhancedMemoryManager:
         async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.execute(
                 "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
-            ),
+            )
             row = await cursor.fetchone()
 
             if not row:
@@ -394,7 +394,7 @@ class AsyncEnhancedMemoryManager:
                 "SELECT * FROM tasks WHERE status = ? "
                 "ORDER BY priority DESC, created_at DESC LIMIT ? OFFSET ?",
                 (status.value, limit, offset),
-            ),
+            )
             rows = await cursor.fetchall()
 
             tasks = []
@@ -432,7 +432,7 @@ class AsyncEnhancedMemoryManager:
             cursor = await conn.execute(
                 "SELECT * FROM execution_records WHERE task_id = ? ORDER BY timestamp DESC LIMIT ?",
                 (task_id, limit),
-            ),
+            )
             rows = await cursor.fetchall()
 
             records = []
@@ -482,7 +482,7 @@ class AsyncEnhancedMemoryManager:
                     embedding,
                     reference_path,
                 ),
-            ),
+            )
             memory_id = cursor.lastrowid
             await conn.commit()
 
@@ -511,14 +511,14 @@ class AsyncEnhancedMemoryManager:
             # Average execution time
             cursor = await conn.execute(
                 "SELECT AVG(duration_ms) FROM execution_records WHERE success = 1"
-            ),
+            )
             result = await cursor.fetchone()
             stats["avg_execution_time_ms"] = result[0] if result[0] else 0
 
             # Success rate
             cursor = await conn.execute(
                 "SELECT success, COUNT(*) FROM execution_records GROUP BY success"
-            ),
+            )
             success_data = dict(await cursor.fetchall())
             total_executions = sum(success_data.values())
             if total_executions > 0:
@@ -551,20 +551,20 @@ class AsyncEnhancedMemoryManager:
             # Clean up old execution records
             cursor = await conn.execute(
                 "DELETE FROM execution_records WHERE timestamp < ?", (cutoff_timestamp,)
-            ),
+            )
             deleted_executions = cursor.rowcount
 
             # Clean up old completed tasks (keep failed ones for analysis)
             cursor = await conn.execute(
                 "DELETE FROM tasks WHERE status = 'completed' AND completed_at < ?",
                 (cutoff_timestamp,),
-            ),
+            )
             deleted_tasks = cursor.rowcount
 
             # Clean up old memory entries
             cursor = await conn.execute(
                 "DELETE FROM memory_entries WHERE timestamp < ?", (cutoff_timestamp,)
-            ),
+            )
             deleted_memories = cursor.rowcount
 
             await conn.commit()

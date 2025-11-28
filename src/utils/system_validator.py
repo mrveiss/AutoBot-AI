@@ -164,7 +164,7 @@ class SystemValidator:
             test_results = [{"test": "data", "score": 0.95}]
             cache_success = await cache.cache_results(
                 "validation_test", 5, test_results
-            ),
+            )
             retrieved_results = await cache.get_cached_results("validation_test", 5)
             cache_time = (time.time() - start_time) * 1000
 
@@ -353,14 +353,14 @@ class SystemValidator:
             start_time = time.time()
             search_results = await hybrid_engine.search(
                 "Python programming tutorial", top_k=5
-            ),
+            )
             search_time = (time.time() - start_time) * 1000
 
             if search_results:
                 # Check for hybrid scoring
                 has_hybrid_scores = any(
                     "hybrid_score" in result for result in search_results
-                ),
+                )
                 has_keyword_scores = any(
                     "keyword_score" in result for result in search_results
                 )
@@ -722,7 +722,7 @@ class SystemValidator:
                 query="Write a Python function to sort a list",
                 task_type="code",
                 max_response_time=30.0,
-            ),
+            )
             selected_model = await optimizer.select_optimal_model(task_request)
             selection_time = (time.time() - start_time) * 1000
 
@@ -1119,7 +1119,7 @@ class SystemValidator:
             1
             for r in self.results
             if r.severity == ValidationSeverity.CRITICAL and not r.status
-        ),
+        )
         warnings = sum(
             1
             for r in self.results

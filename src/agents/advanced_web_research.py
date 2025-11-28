@@ -770,7 +770,7 @@ class AdvancedWebResearcher:
 
             title_overlap = (
                 len(query_terms & title_terms) / len(query_terms) if query_terms else 0
-            ),
+            )
             snippet_overlap = (
                 len(query_terms & snippet_terms) / len(query_terms)
                 if query_terms

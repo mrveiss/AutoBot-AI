@@ -199,7 +199,7 @@ and requirements of the request.
             # Use failsafe LLM system for guaranteed response
             system_prompt = (
                 "You are an expert classification agent. Respond only with valid JSON."
-            ),
+            )
             full_prompt = f"{system_prompt}\n\n{prompt}"
 
             # Get robust LLM response with failover

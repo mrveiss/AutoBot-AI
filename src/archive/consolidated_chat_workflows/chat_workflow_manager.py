@@ -318,7 +318,7 @@ class ChatWorkflowManager:
                         research_results=research_results,
                         classification=classification,
                     )
-                ),
+                )
                 response = await asyncio.wait_for(response_task, timeout=15.0)
                 logger.info(
                     f"WORKFLOW: Response generated successfully, length: {len(response)}"
@@ -774,7 +774,7 @@ class ChatWorkflowManager:
                             "research_conducted": research_results is not None,
                         },
                     )
-                ),
+                )
                 llm_response = await asyncio.wait_for(llm_task, timeout=10.0)
             except asyncio.TimeoutError:
                 logger.error("LLM response timed out after 10 seconds")

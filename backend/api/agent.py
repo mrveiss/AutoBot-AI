@@ -105,7 +105,7 @@ async def receive_goal(request: Request, payload: GoalPayload):
         default_text = "No response text provided."
         response_message = result_dict.get("response_text") or tool_args.get(
             "response_text", default_text
-        ),
+        )
         tool_output_content = None
     elif tool_name == "execute_system_command":
         command_output = tool_args.get("output", "")
@@ -115,18 +115,18 @@ async def receive_goal(request: Request, payload: GoalPayload):
         if command_status == "success":
             response_message = (
                 f"Command executed successfully.\nOutput:\n{command_output}"
-            ),
+            )
             tool_output_content = command_output
         else:
             response_message = (
                 f"Command failed ({command_status}).\nError:\n{command_error}"
                 f"\nOutput:\n{command_output}"
-            ),
+            )
             tool_output_content = f"ERROR: {command_error}\nOUTPUT: {command_output}"
     elif tool_name:
         tool_output_content = tool_args.get(
             "output", tool_args.get("message", str(tool_args))
-        ),
+        )
         response_message = f"Tool Used: {tool_name}\nOutput: {tool_output_content}"
     elif result_dict.get("output"):
         response_message = result_dict["output"]

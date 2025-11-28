@@ -258,7 +258,7 @@ class EnhancedOrchestrator:
             # Calculate overall suitability score
             workload_factor = 1.0 - (
                 agent.current_workload / agent.max_concurrent_tasks
-            ),
+            )
             performance_factor = agent.success_rate
 
             suitability_score = (
@@ -550,7 +550,7 @@ class EnhancedOrchestrator:
             # Determine overall workflow status
             successful_steps = sum(
                 1 for step in steps if step.get("status") == "completed"
-            ),
+            )
             total_steps = len(steps)
 
             if successful_steps == total_steps:

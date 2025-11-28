@@ -551,7 +551,7 @@ class ManPageKnowledgeIntegrator:
         # Determine the appropriate knowledge directory
         machine_dir = (
             self.knowledge_base_dir / "machines" / (man_info.machine_id or "default")
-        ),
+        )
         man_knowledge_dir = machine_dir / "man_pages"
         man_knowledge_dir.mkdir(parents=True, exist_ok=True)
 

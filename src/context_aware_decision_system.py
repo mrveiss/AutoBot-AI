@@ -168,10 +168,10 @@ class ContextCollector:
                 # Determine constraints and available actions
                 constraints = await self._identify_constraints(
                     decision_type, context_elements
-                ),
+                )
                 available_actions = await self._identify_available_actions(
                     decision_type, context_elements
-                ),
+                )
                 risk_factors = await self._assess_risk_factors(context_elements)
 
                 # Get user preferences and historical patterns

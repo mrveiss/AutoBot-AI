@@ -428,7 +428,7 @@ class CommandManualManager:
 
         high_count = sum(
             1 for indicator in high_risk_indicators if indicator in manual_lower
-        ),
+        )
         medium_count = sum(
             1 for indicator in medium_risk_indicators if indicator in manual_lower
         )

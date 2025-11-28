@@ -234,7 +234,7 @@ class WorkflowClassifier:
         # Check for security/network combined
         has_security = any(
             kw in message_lower for kw in ["scan", "security", "vulnerabilities"]
-        ),
+        )
         has_network = any(kw in message_lower for kw in ["network", "port", "firewall"])
         if has_security and has_network:
             return TaskComplexity.COMPLEX

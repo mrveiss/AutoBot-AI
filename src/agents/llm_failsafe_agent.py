@@ -387,7 +387,7 @@ class LLMFailsafeAgent:
                     response_task = llm.chat_completion(messages, llm_type="task")
                     response_data = await asyncio.wait_for(
                         response_task, timeout=self.timeouts[LLMTier.PRIMARY]
-                    ),
+                    )
                     response = response_data.get("response", "")
 
                     if response and len(response.strip()) > 0:
@@ -447,7 +447,7 @@ class LLMFailsafeAgent:
                     response_task = llm.chat_completion(messages, llm_type="task")
                     response_data = await asyncio.wait_for(
                         response_task, timeout=self.timeouts[LLMTier.SECONDARY]
-                    ),
+                    )
                     response = response_data.get("response", "")
 
                     if response and len(response.strip()) > 0:

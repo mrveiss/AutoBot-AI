@@ -417,7 +417,7 @@ async def delete_session(
                 # Delete all files in conversation
                 deleted_count = await conversation_file_manager.delete_session_files(
                     session_id
-                ),
+                )
                 file_deletion_result = {
                     "files_handled": True,
                     "action_taken": "delete",
@@ -435,7 +435,7 @@ async def delete_session(
                         tags=parsed_file_options.get("tags", ["conversation_archive"]),
                         copy=False,  # Move, not copy
                     )
-                ),
+                )
                 file_deletion_result = {
                     "files_handled": True,
                     "action_taken": "transfer_kb",
@@ -456,7 +456,7 @@ async def delete_session(
                         target_path=parsed_file_options.get("target_path"),
                         copy=False,  # Move, not copy
                     )
-                ),
+                )
                 file_deletion_result = {
                     "files_handled": True,
                     "action_taken": "transfer_shared",

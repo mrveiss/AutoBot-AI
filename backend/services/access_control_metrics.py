@@ -182,7 +182,7 @@ class AccessControlMetrics:
                         b"total"
                         if isinstance(list(daily_data.keys())[0], bytes)
                         else "total"
-                    ),
+                    )
                     daily_total = int(daily_data.get(total_key, 0))
                     stats["by_day"][date] = daily_total
                     stats["total_violations"] += daily_total

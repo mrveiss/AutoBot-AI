@@ -44,7 +44,7 @@ async def get_prompts():
         # Adjust path to look for prompts directory at project root
         prompts_dir = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
-        ),
+        )
         prompts = []
         defaults = {}
 
@@ -64,7 +64,7 @@ async def get_prompts():
 
                     prompt_id = (
                         rel_path.replace("/", "_").replace("\\", "_").rsplit(".", 1)[0]
-                    ),
+                    )
                     prompt_type = base_path if base_path else "custom"
 
                     prompt_info = {

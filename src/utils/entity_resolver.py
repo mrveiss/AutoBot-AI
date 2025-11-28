@@ -561,7 +561,7 @@ class EntityResolver:
                 total_processing_time / total_resolutions
                 if total_resolutions > 0
                 else 0
-            ),
+            )
             avg_resolution_rate = (
                 (total_entities_processed - total_entities_resolved)
                 / total_entities_processed

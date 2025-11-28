@@ -367,12 +367,12 @@ class ConsolidatedChatWorkflow:
                 ),
                 research_results = await self._conduct_research(
                     user_message, message_type, classification
-                ),
+                )
                 librarian_engaged = (
                     research_results.get("librarian_engaged", False)
                     if research_results
                     else False
-                ),
+                )
                 mcp_used = (
                     research_results.get("mcp_used", False)
                     if research_results
@@ -458,7 +458,7 @@ class ConsolidatedChatWorkflow:
         try:
             classification_task = asyncio.create_task(
                 self.classification_agent.classify_request(user_message)
-            ),
+            )
             classification = await asyncio.wait_for(
                 classification_task, timeout=self.classification_timeout
             )
@@ -523,7 +523,7 @@ class ConsolidatedChatWorkflow:
 
             search_task = asyncio.create_task(
                 self.kb.search(search_query, max_results=self.max_kb_results)
-            ),
+            )
             kb_results = await asyncio.wait_for(
                 search_task, timeout=self.kb_search_timeout
             )
@@ -666,7 +666,7 @@ class ConsolidatedChatWorkflow:
         try:
             mcp_task = asyncio.create_task(
                 self.mcp_integration.search_manuals(user_message)
-            ),
+            )
             result = await asyncio.wait_for(mcp_task, timeout=10.0)
 
             return {

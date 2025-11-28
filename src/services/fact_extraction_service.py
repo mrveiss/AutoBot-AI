@@ -634,7 +634,7 @@ class FactExtractionService:
                 total_processing_time / total_extractions
                 if total_extractions > 0
                 else 0
-            ),
+            )
             avg_facts_per_extraction = (
                 total_facts_extracted / total_extractions
                 if total_extractions > 0

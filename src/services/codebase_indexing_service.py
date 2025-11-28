@@ -196,7 +196,7 @@ class CodeChunker:
         # Split Vue file into sections
         template_match = re.search(
             r"<template[^>]*>(.*?)</template>", content, re.DOTALL
-        ),
+        )
         script_match = re.search(r"<script[^>]*>(.*?)</script>", content, re.DOTALL)
         style_match = re.search(r"<style[^>]*>(.*?)</style>", content, re.DOTALL)
 

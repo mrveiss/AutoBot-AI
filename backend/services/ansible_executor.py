@@ -117,7 +117,7 @@ class AnsibleExecutor:
             # Create temporary directory for this run
             temp_dir = tempfile.mkdtemp(
                 prefix=f"ansible_{run_id}_", dir=self.private_data_dir
-            ),
+            )
             temp_path = Path(temp_dir)
 
             # Write inventory to temp file

@@ -446,7 +446,7 @@ class DomainReputationService:
         """Determine action based on reputation assessment"""
         threshold = self.config.get("domain_security", {}).get(
             "reputation_threshold", 0.7
-        ),
+        )
         default_action = self.config.get("domain_security", {}).get(
             "default_action", "warn"
         )

@@ -590,7 +590,7 @@ class ThreatDetectionEngine:
         # Count recent failed attempts
         window_minutes = self.config.get("thresholds", {}).get(
             "brute_force_window_minutes", 15
-        ),
+        )
         threshold = self.config.get("thresholds", {}).get("brute_force_attempts", 5)
 
         recent_failures = self._count_recent_failures(
@@ -716,7 +716,7 @@ class ThreatDetectionEngine:
         # Check rate limiting
         rate_limit = self.config.get("thresholds", {}).get(
             "api_rate_limit_per_minute", 100
-        ),
+        )
         recent_requests = self._count_recent_api_requests(
             user_id, source_ip, 1
         )  # 1 minute window

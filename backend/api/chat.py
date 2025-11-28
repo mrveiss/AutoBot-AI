@@ -266,7 +266,7 @@ async def process_chat_message(
             model_name = message.metadata.get("model") if message.metadata else None
             recent_messages = await chat_history_manager.get_session_messages(
                 session_id, model_name=model_name
-            ),
+            )
             chat_context = recent_messages or []
             logger.info(
                 f"Retrieved {len(chat_context)} messages for model {model_name or 'default'}"

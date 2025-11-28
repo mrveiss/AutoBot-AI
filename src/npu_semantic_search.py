@@ -225,7 +225,7 @@ class NPUSemanticSearch:
                 await self._generate_optimized_embedding(
                     query, enable_npu_acceleration, force_device
                 )
-            ),
+            )
             embedding_time = (time.time() - embedding_start) * 1000
 
             # Step 2: Perform vector similarity search
@@ -243,7 +243,7 @@ class NPUSemanticSearch:
                 ),
                 basic_results = await self.knowledge_base.search(
                     query, similarity_top_k, filters, "text"
-                ),
+                )
                 results = [
                     SearchResult(
                         content=r["content"],
@@ -522,7 +522,7 @@ class NPUSemanticSearch:
             if successful_runs:
                 avg_time = sum(r["total_time_ms"] for r in successful_runs) / len(
                     successful_runs
-                ),
+                )
                 avg_embedding_time = sum(
                     r["embedding_time_ms"] for r in successful_runs
                 ) / len(successful_runs)

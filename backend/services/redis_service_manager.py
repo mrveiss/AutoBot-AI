@@ -544,7 +544,7 @@ class RedisServiceManager:
                     ),
                     timeout=5,
                     validate=False,
-                ),
+                )
                 ping_duration = (datetime.now() - ping_start).total_seconds() * 1000
                 response_time_ms = ping_duration
 

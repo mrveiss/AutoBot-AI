@@ -157,7 +157,7 @@ async def process_enhanced_chat_message(
                 model_name = message.metadata.get("model") if message.metadata else None
                 recent_messages = await chat_history_manager.get_session_messages(
                     session_id, model_name=model_name
-                ),
+                )
                 chat_context = recent_messages or []
                 logger.info(
                     f"Retrieved {len(chat_context)} messages for model {model_name or 'default'}"
@@ -180,7 +180,7 @@ async def process_enhanced_chat_message(
                             f"- {item.get('content', '')[:300]}..."
                             for item in kb_results[:3]
                         ]
-                    ),
+                    )
                     enhanced_context = f"Relevant knowledge context:\n{kb_summary}"
                     logger.info(f"Enhanced context with {len(kb_results)} KB results")
             except Exception as e:

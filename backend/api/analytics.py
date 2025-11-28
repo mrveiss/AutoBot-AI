@@ -95,7 +95,7 @@ async def get_dashboard_overview():
     try:
         current_metrics = (
             await analytics_controller.metrics_collector.collect_all_metrics()
-        ),
+        )
         realtime_metrics = {
             name: {
                 "value": metric.value,

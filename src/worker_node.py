@@ -314,7 +314,7 @@ class WorkerNode:
                 metadata = task_payload.get("metadata")
                 kb_result = await self.knowledge_base.add_file(
                     file_path, file_type, metadata
-                ),
+                )
                 result = kb_result
                 self.security_layer.audit_log(
                     "kb_add_file",
@@ -479,7 +479,7 @@ class WorkerNode:
                     task_payload["y"],
                     task_payload["width"],
                     task_payload["height"],
-                ),
+                )
                 result = self.gui_controller.read_text_from_region(x, y, width, height)
                 self.security_layer.audit_log(
                     "gui_read_text_from_region",

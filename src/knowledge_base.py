@@ -297,10 +297,10 @@ class KnowledgeBase:
             # Manually construct Ollama URL due to config interpolation issue
             ollama_host = config.get(
                 "infrastructure.hosts.ollama", NetworkConstants.MAIN_MACHINE_IP
-            ),
+            )
             ollama_port = config.get(
                 "infrastructure.ports.ollama", str(NetworkConstants.OLLAMA_PORT)
-            ),
+            )
             ollama_url = f"http://{ollama_host}:{ollama_port}"
             llm_timeout = config.get_timeout("llm", "default", kb_timeouts.llm_default)
 
@@ -679,7 +679,7 @@ class KnowledgeBase:
                         results_data["distances"][0][i]
                         if "distances" in results_data
                         else 1.0
-                    ),
+                    )
                     score = max(
                         0.0, 1.0 - (distance / 2.0)
                     )  # Convert to 0-1 similarity
@@ -1406,7 +1406,7 @@ class KnowledgeBase:
                         fact_key = f"fact:{existing_fact_id}"
                         metadata_str = await self.aioredis_client.hget(
                             fact_key, "metadata"
-                        ),
+                        )
                         created_at = await self.aioredis_client.hget(
                             fact_key, "created_at"
                         )
@@ -1499,7 +1499,7 @@ class KnowledgeBase:
                                 VectorStoreIndex.from_documents,
                                 [document],
                                 storage_context,
-                            ),
+                            )
                             vector_indexed = True
                             logger.info(
                                 f"Created vector index and stored fact {fact_id}"
@@ -2686,7 +2686,7 @@ class KnowledgeBase:
             # Expected improvement: 5-10x speedup for bulk document ingestion (Issue #65)
             max_concurrent = (
                 10  # Limit concurrent operations to avoid overwhelming resources
-            ),
+            )
             semaphore = asyncio.Semaphore(max_concurrent)
 
             async def process_file_with_limit(file_path: Path, text: str):

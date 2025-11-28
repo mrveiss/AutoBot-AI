@@ -1121,7 +1121,7 @@ class Phase9PerformanceMonitor:
             if metrics.get("services"):
                 healthy_services = sum(
                     1 for s in metrics["services"] if s["status"] == "healthy"
-                ),
+                )
                 total_services = len(metrics["services"])
                 summary_parts.append(
                     f"Services: {healthy_services}/{total_services} healthy"
