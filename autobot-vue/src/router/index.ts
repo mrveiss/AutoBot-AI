@@ -316,6 +316,15 @@ const routes: RouteRecordRaw[] = [
           title: 'Log Viewer',
           parent: 'monitoring'
         }
+      },
+      {
+        path: 'bi',
+        name: 'monitoring-bi',
+        component: () => import('@/components/analytics/AdvancedAnalytics.vue'),
+        meta: {
+          title: 'Business Intelligence',
+          parent: 'monitoring'
+        }
       }
     ]
   },

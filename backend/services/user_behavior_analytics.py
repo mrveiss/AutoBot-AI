@@ -1,0 +1,507 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+User Behavior Analytics Service - Track and analyze user interaction patterns.
+
+Provides analytics for:
+- Feature usage tracking
+- Session behavior analysis
+- User journey mapping
+- Engagement metrics
+- Click stream analysis
+- Time-on-feature metrics
+
+Related Issues: #59 (Advanced Analytics & Business Intelligence)
+"""
+
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Optional
+
+from src.utils.redis_client import get_redis_client, RedisDatabase
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class UserEvent:
+    """Represents a user interaction event"""
+
+    event_type: str  # page_view, click, search, api_call, etc.
+    feature: str  # chat, knowledge, tools, monitoring, etc.
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+    duration_ms: Optional[int] = None
+    metadata: dict = field(default_factory=dict)
+
+
+@dataclass
+class FeatureMetrics:
+    """Aggregated metrics for a feature"""
+
+    feature: str
+    total_views: int = 0
+    unique_users: int = 0
+    total_sessions: int = 0
+    avg_time_spent_ms: float = 0.0
+    total_interactions: int = 0
+    bounce_rate: float = 0.0
+
+
+class UserBehaviorAnalytics:
+    """
+    Service for tracking and analyzing user behavior patterns.
+
+    Uses Redis for real-time event storage and aggregation.
+    """
+
+    # Redis key prefixes
+    EVENTS_KEY = "user_behavior:events"
+    SESSIONS_KEY = "user_behavior:sessions"
+    FEATURE_STATS_KEY = "user_behavior:feature_stats"
+    DAILY_STATS_KEY = "user_behavior:daily"
+    USER_JOURNEY_KEY = "user_behavior:journey"
+    HEATMAP_KEY = "user_behavior:heatmap"
+
+    def __init__(self):
+        self._redis = None
+
+    async def get_redis(self):
+        """Get Redis client for analytics database"""
+        if self._redis is None:
+            self._redis = await get_redis_client(
+                async_client=True, database=RedisDatabase.ANALYTICS
+            )
+        return self._redis
+
+    async def track_event(self, event: UserEvent) -> bool:
+        """
+        Track a user behavior event.
+
+        Args:
+            event: UserEvent to track
+
+        Returns:
+            bool: True if successfully tracked
+        """
+        try:
+            redis = await self.get_redis()
+            timestamp = event.timestamp.isoformat()
+            date_key = event.timestamp.strftime("%Y-%m-%d")
+            hour_key = event.timestamp.strftime("%H")
+
+            # Store event in stream
+            event_data = {
+                "event_type": event.event_type,
+                "feature": event.feature,
+                "user_id": event.user_id or "anonymous",
+                "session_id": event.session_id or "unknown",
+                "timestamp": timestamp,
+                "duration_ms": str(event.duration_ms or 0),
+                "metadata": str(event.metadata),
+            }
+
+            await redis.xadd(
+                self.EVENTS_KEY,
+                event_data,
+                maxlen=100000,  # Keep last 100k events
+            )
+
+            # Update feature statistics
+            feature_key = f"{self.FEATURE_STATS_KEY}:{event.feature}"
+            await redis.hincrby(feature_key, "total_views", 1)
+            await redis.hincrby(feature_key, f"events:{event.event_type}", 1)
+
+            # Track unique users
+            if event.user_id:
+                await redis.sadd(f"{feature_key}:users", event.user_id)
+
+            # Track unique sessions
+            if event.session_id:
+                await redis.sadd(f"{feature_key}:sessions", event.session_id)
+
+            # Update daily statistics
+            daily_key = f"{self.DAILY_STATS_KEY}:{date_key}"
+            await redis.hincrby(daily_key, f"{event.feature}:views", 1)
+            await redis.hincrby(daily_key, f"{event.feature}:events:{event.event_type}", 1)
+            await redis.expire(daily_key, 90 * 24 * 3600)  # 90 days retention
+
+            # Update hourly heatmap
+            heatmap_key = f"{self.HEATMAP_KEY}:{date_key}"
+            await redis.hincrby(heatmap_key, f"{hour_key}:{event.feature}", 1)
+            await redis.expire(heatmap_key, 30 * 24 * 3600)  # 30 days retention
+
+            # Track user journey
+            if event.session_id:
+                journey_key = f"{self.USER_JOURNEY_KEY}:{event.session_id}"
+                await redis.rpush(
+                    journey_key, f"{timestamp}|{event.feature}|{event.event_type}"
+                )
+                await redis.expire(journey_key, 24 * 3600)  # 24 hours retention
+
+            # Track time spent if duration provided
+            if event.duration_ms and event.duration_ms > 0:
+                await redis.hincrby(
+                    feature_key, "total_time_ms", event.duration_ms
+                )
+
+            logger.debug(
+                f"Tracked event: {event.event_type} on {event.feature} "
+                f"for session {event.session_id}"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to track user event: {e}")
+            return False
+
+    async def get_feature_metrics(
+        self, feature: Optional[str] = None
+    ) -> dict:
+        """
+        Get aggregated metrics for features.
+
+        Args:
+            feature: Optional specific feature to get metrics for
+
+        Returns:
+            dict: Feature metrics
+        """
+        try:
+            redis = await self.get_redis()
+            result = {}
+
+            if feature:
+                features = [feature]
+            else:
+                # Get all known features
+                features = [
+                    "chat",
+                    "knowledge",
+                    "tools",
+                    "monitoring",
+                    "infrastructure",
+                    "secrets",
+                    "settings",
+                ]
+
+            for feat in features:
+                feature_key = f"{self.FEATURE_STATS_KEY}:{feat}"
+
+                # Get stats
+                stats = await redis.hgetall(feature_key)
+                if not stats:
+                    continue
+
+                # Decode if bytes
+                decoded_stats = {}
+                for k, v in stats.items():
+                    key = k if isinstance(k, str) else k.decode("utf-8")
+                    val = v if isinstance(v, str) else v.decode("utf-8")
+                    decoded_stats[key] = val
+
+                # Count unique users and sessions
+                unique_users = await redis.scard(f"{feature_key}:users")
+                unique_sessions = await redis.scard(f"{feature_key}:sessions")
+
+                total_views = int(decoded_stats.get("total_views", 0))
+                total_time = int(decoded_stats.get("total_time_ms", 0))
+
+                # Calculate averages
+                avg_time = total_time / max(total_views, 1)
+
+                # Extract event counts
+                event_counts = {}
+                for key, value in decoded_stats.items():
+                    if key.startswith("events:"):
+                        event_type = key.replace("events:", "")
+                        event_counts[event_type] = int(value)
+
+                result[feat] = {
+                    "feature": feat,
+                    "total_views": total_views,
+                    "unique_users": unique_users,
+                    "unique_sessions": unique_sessions,
+                    "avg_time_spent_ms": round(avg_time, 2),
+                    "total_time_spent_ms": total_time,
+                    "event_breakdown": event_counts,
+                }
+
+            return {
+                "timestamp": datetime.utcnow().isoformat(),
+                "features": result,
+                "total_features": len(result),
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get feature metrics: {e}")
+            return {"error": str(e), "features": {}}
+
+    async def get_user_journey(self, session_id: str) -> dict:
+        """
+        Get the user journey for a specific session.
+
+        Args:
+            session_id: Session ID to get journey for
+
+        Returns:
+            dict: User journey data
+        """
+        try:
+            redis = await self.get_redis()
+            journey_key = f"{self.USER_JOURNEY_KEY}:{session_id}"
+
+            journey_data = await redis.lrange(journey_key, 0, -1)
+
+            steps = []
+            for item in journey_data:
+                data = item if isinstance(item, str) else item.decode("utf-8")
+                parts = data.split("|")
+                if len(parts) >= 3:
+                    steps.append(
+                        {
+                            "timestamp": parts[0],
+                            "feature": parts[1],
+                            "event_type": parts[2],
+                        }
+                    )
+
+            return {
+                "session_id": session_id,
+                "steps": steps,
+                "total_steps": len(steps),
+                "features_visited": list(set(s["feature"] for s in steps)),
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get user journey: {e}")
+            return {"session_id": session_id, "error": str(e), "steps": []}
+
+    async def get_daily_stats(
+        self, days: int = 30
+    ) -> dict:
+        """
+        Get daily usage statistics.
+
+        Args:
+            days: Number of days to retrieve
+
+        Returns:
+            dict: Daily statistics
+        """
+        try:
+            redis = await self.get_redis()
+            end_date = datetime.utcnow()
+            start_date = end_date - timedelta(days=days)
+
+            daily_data = {}
+            current = start_date
+
+            while current <= end_date:
+                date_str = current.strftime("%Y-%m-%d")
+                daily_key = f"{self.DAILY_STATS_KEY}:{date_str}"
+
+                stats = await redis.hgetall(daily_key)
+                if stats:
+                    decoded = {}
+                    for k, v in stats.items():
+                        key = k if isinstance(k, str) else k.decode("utf-8")
+                        val = v if isinstance(v, str) else v.decode("utf-8")
+                        decoded[key] = int(val)
+                    daily_data[date_str] = decoded
+
+                current += timedelta(days=1)
+
+            # Calculate totals
+            total_views = sum(
+                sum(v for k, v in day.items() if k.endswith(":views"))
+                for day in daily_data.values()
+            )
+
+            return {
+                "period": {
+                    "start": start_date.strftime("%Y-%m-%d"),
+                    "end": end_date.strftime("%Y-%m-%d"),
+                    "days": days,
+                },
+                "daily_stats": daily_data,
+                "total_views": total_views,
+                "avg_daily_views": round(total_views / max(days, 1), 2),
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get daily stats: {e}")
+            return {"error": str(e), "daily_stats": {}}
+
+    async def get_usage_heatmap(
+        self, days: int = 7
+    ) -> dict:
+        """
+        Get hourly usage heatmap data.
+
+        Args:
+            days: Number of days to include
+
+        Returns:
+            dict: Heatmap data by hour and feature
+        """
+        try:
+            redis = await self.get_redis()
+            end_date = datetime.utcnow()
+            start_date = end_date - timedelta(days=days)
+
+            # Initialize heatmap structure
+            heatmap = {str(h).zfill(2): {} for h in range(24)}
+
+            current = start_date
+            while current <= end_date:
+                date_str = current.strftime("%Y-%m-%d")
+                heatmap_key = f"{self.HEATMAP_KEY}:{date_str}"
+
+                data = await redis.hgetall(heatmap_key)
+                for key, value in data.items():
+                    key_str = key if isinstance(key, str) else key.decode("utf-8")
+                    val = int(value if isinstance(value, str) else value.decode("utf-8"))
+
+                    parts = key_str.split(":")
+                    if len(parts) == 2:
+                        hour, feature = parts
+                        if hour not in heatmap:
+                            heatmap[hour] = {}
+                        if feature not in heatmap[hour]:
+                            heatmap[hour][feature] = 0
+                        heatmap[hour][feature] += val
+
+                current += timedelta(days=1)
+
+            return {
+                "period_days": days,
+                "heatmap": heatmap,
+                "peak_hours": self._find_peak_hours(heatmap),
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get usage heatmap: {e}")
+            return {"error": str(e), "heatmap": {}}
+
+    def _find_peak_hours(self, heatmap: dict) -> list:
+        """Find peak usage hours from heatmap data"""
+        hour_totals = []
+        for hour, features in heatmap.items():
+            total = sum(features.values())
+            hour_totals.append((hour, total))
+
+        hour_totals.sort(key=lambda x: x[1], reverse=True)
+        return [{"hour": h, "total_events": t} for h, t in hour_totals[:5]]
+
+    async def get_engagement_metrics(self) -> dict:
+        """
+        Get user engagement metrics.
+
+        Returns:
+            dict: Engagement metrics including session duration, bounce rate, etc.
+        """
+        try:
+            features = await self.get_feature_metrics()
+
+            if "error" in features:
+                return features
+
+            feature_data = features.get("features", {})
+
+            # Calculate engagement scores
+            total_sessions = sum(
+                f.get("unique_sessions", 0) for f in feature_data.values()
+            )
+            total_time = sum(
+                f.get("total_time_spent_ms", 0) for f in feature_data.values()
+            )
+            total_views = sum(
+                f.get("total_views", 0) for f in feature_data.values()
+            )
+
+            avg_session_duration = total_time / max(total_sessions, 1)
+            pages_per_session = total_views / max(total_sessions, 1)
+
+            # Feature popularity ranking
+            popularity = sorted(
+                [
+                    {"feature": f, "views": d.get("total_views", 0)}
+                    for f, d in feature_data.items()
+                ],
+                key=lambda x: x["views"],
+                reverse=True,
+            )
+
+            return {
+                "timestamp": datetime.utcnow().isoformat(),
+                "metrics": {
+                    "total_sessions": total_sessions,
+                    "total_page_views": total_views,
+                    "avg_session_duration_ms": round(avg_session_duration, 2),
+                    "pages_per_session": round(pages_per_session, 2),
+                },
+                "feature_popularity": popularity,
+                "most_popular_feature": popularity[0]["feature"] if popularity else None,
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get engagement metrics: {e}")
+            return {"error": str(e)}
+
+    async def get_recent_events(
+        self, limit: int = 100
+    ) -> list:
+        """
+        Get recent user events.
+
+        Args:
+            limit: Maximum number of events to return
+
+        Returns:
+            list: Recent events
+        """
+        try:
+            redis = await self.get_redis()
+
+            # Read from stream in reverse order
+            events = await redis.xrevrange(self.EVENTS_KEY, count=limit)
+
+            result = []
+            for event_id, data in events:
+                decoded = {}
+                for k, v in data.items():
+                    key = k if isinstance(k, str) else k.decode("utf-8")
+                    val = v if isinstance(v, str) else v.decode("utf-8")
+                    decoded[key] = val
+
+                result.append(
+                    {
+                        "event_id": (
+                            event_id if isinstance(event_id, str)
+                            else event_id.decode("utf-8")
+                        ),
+                        **decoded,
+                    }
+                )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Failed to get recent events: {e}")
+            return []
+
+
+# Singleton instance
+_behavior_analytics: Optional[UserBehaviorAnalytics] = None
+
+
+def get_behavior_analytics() -> UserBehaviorAnalytics:
+    """Get the singleton UserBehaviorAnalytics instance"""
+    global _behavior_analytics
+    if _behavior_analytics is None:
+        _behavior_analytics = UserBehaviorAnalytics()
+    return _behavior_analytics
