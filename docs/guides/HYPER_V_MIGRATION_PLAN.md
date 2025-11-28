@@ -1,8 +1,9 @@
 # 🔄 AutoBot Hyper-V Migration Plan
 
-**Migration Date**: Post P0 Critical Tasks Completion  
-**Current Architecture**: 8 Docker Containers → 5 Hyper-V VMs  
-**Target Infrastructure**: Hyper-V with SSH-enabled VMs
+**GitHub Issue:** [#257](https://github.com/mrveiss/AutoBot-AI/issues/257)
+**Migration Date:** Post P0 Critical Tasks Completion
+**Current Architecture:** 8 Docker Containers → 5 Hyper-V VMs
+**Target Infrastructure:** Hyper-V with SSH-enabled VMs
 
 ---
 
