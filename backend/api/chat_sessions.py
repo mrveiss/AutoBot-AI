@@ -4,19 +4,16 @@
 
 import json
 import logging
-from datetime import datetime
 from typing import Dict, Optional
 
 from backend.type_defs.common import Metadata
 from fastapi import APIRouter, Depends, Request, Response
-from fastapi.responses import JSONResponse
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from backend.security.session_ownership import validate_session_ownership
 
 # Import reusable chat utilities
 from backend.utils.chat_utils import (
-    create_error_response,
     create_success_response,
     generate_chat_session_id,
     generate_request_id,

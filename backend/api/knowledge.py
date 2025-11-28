@@ -5,23 +5,12 @@
 
 import json
 import logging
-from pathlib import Path as PathLib
 from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, Query, Request
 
-# Import Pydantic models from dedicated module (Issue #185 - split oversized files)
+# NOTE: Pydantic models moved to knowledge_maintenance.py (Issue #185 - split oversized files)
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
-from backend.api.knowledge_models import (
-    BulkCategoryUpdateRequest,
-    BulkDeleteRequest,
-    CleanupRequest,
-    DeduplicationRequest,
-    ExportRequest,
-    ImportRequest,
-    ScanHostChangesRequest,
-    UpdateFactRequest,
-)
 from backend.knowledge_factory import get_or_create_knowledge_base
 from src.exceptions import InternalError
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
