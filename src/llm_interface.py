@@ -129,7 +129,7 @@ class LLMSettings(BaseSettings):
     # Removed timeout - using circuit breaker pattern instead
 
     # Model settings - Uses centralized model constants
-    default_model: str = Field(default=ModelConstants.MISTRAL_7B, env="DEFAULT_LLM_MODEL")
+    default_model: str = Field(default=ModelConstants.DEFAULT_OLLAMA_MODEL, env="DEFAULT_LLM_MODEL")
     temperature: float = Field(default=0.7, env="LLM_TEMPERATURE")
     top_k: int = Field(default=40, env="LLM_TOP_K")
     top_p: float = Field(default=0.9, env="LLM_TOP_P")
@@ -282,10 +282,10 @@ class LLMInterface:
             "openai.api_key", os.getenv("OPENAI_API_KEY", "")
         )
 
-        self.ollama_models = config.get("llm.fallback_models", ["llama3.2:3b"])
+        self.ollama_models = config.get("llm.fallback_models", [ModelConstants.DEFAULT_OLLAMA_MODEL])
 
         # Use unified configuration for LLM models
-        selected_model = config.get("llm.fallback_models.0", "llama3.2:3b")
+        selected_model = config.get("llm.fallback_models.0", ModelConstants.DEFAULT_OLLAMA_MODEL)
         self.orchestrator_llm_alias = f"ollama_{selected_model}"
         self.task_llm_alias = f"ollama_{selected_model}"
 
