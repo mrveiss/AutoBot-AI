@@ -22,13 +22,17 @@ import re
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 from backend.services.rag_service import RAGService
 from src.advanced_rag_optimizer import SearchResult
 from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("chat_knowledge_service")
+
+# Project root for documentation indexer
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 
 class QueryKnowledgeIntent(Enum):
@@ -438,6 +442,216 @@ def get_context_enhancer() -> ConversationContextEnhancer:
     return _context_enhancer
 
 
+# ============================================================================
+# DOCUMENTATION SEARCH INTEGRATION (Issue #250)
+# ============================================================================
+
+
+class DocumentationSearcher:
+    """
+    Searches indexed AutoBot documentation for relevant context.
+
+    Issue #250: Enables chat agent self-awareness about project documentation.
+
+    Uses the autobot_docs ChromaDB collection populated by tools/index_documentation.py
+    to retrieve documentation about deployment, APIs, architecture, and troubleshooting.
+    """
+
+    # Patterns indicating documentation-related queries
+    DOC_QUERY_PATTERNS = [
+        r"\b(how|what|where)\b.*(autobot|deploy|start|run|setup)\b",
+        r"\b(redis|chromadb|vm|infrastructure|frontend|backend)\b",
+        r"\b(config|configure|configuration|setup)\b",
+        r"\b(troubleshoot|debug|fix|error|issue)\b",
+        r"\b(architecture|design|pattern|structure)\b",
+        r"\b(api|endpoint|route)\b",
+        r"\b(claude\.md|system-state|developer setup)\b",
+        r"\b(workflow|rule|policy|standard|guideline)\b",
+        r"\b(documentation|docs|guide)\b",
+        r"\b(how do i|how to|what is|where is)\b",
+    ]
+
+    def __init__(self, collection_name: str = "autobot_docs"):
+        """
+        Initialize the documentation searcher.
+
+        Args:
+            collection_name: ChromaDB collection name for documentation
+        """
+        self.collection_name = collection_name
+        self._client = None
+        self._collection = None
+        self._embed_model = None
+        self._initialized = False
+        self._doc_patterns = [
+            re.compile(p, re.IGNORECASE) for p in self.DOC_QUERY_PATTERNS
+        ]
+
+    def initialize(self) -> bool:
+        """
+        Initialize ChromaDB client and embedding model.
+
+        Returns:
+            True if initialization successful, False otherwise
+        """
+        if self._initialized:
+            return True
+
+        try:
+            from llama_index.embeddings.ollama import OllamaEmbedding
+
+            from src.utils.chromadb_client import get_chromadb_client
+
+            # Initialize ChromaDB
+            chromadb_path = PROJECT_ROOT / "data" / "chromadb"
+            self._client = get_chromadb_client(str(chromadb_path))
+
+            # Get documentation collection (don't create if not exists)
+            try:
+                self._collection = self._client.get_collection(
+                    name=self.collection_name
+                )
+                doc_count = self._collection.count()
+                logger.info(
+                    f"DocumentationSearcher initialized: {doc_count} documents available"
+                )
+            except Exception:
+                logger.warning(
+                    f"Documentation collection '{self.collection_name}' not found. "
+                    "Run 'python tools/index_documentation.py --tier 1' to index docs."
+                )
+                return False
+
+            # Initialize embedding model
+            self._embed_model = OllamaEmbedding(
+                model_name="nomic-embed-text", base_url="http://127.0.0.1:11434"
+            )
+
+            self._initialized = True
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to initialize DocumentationSearcher: {e}")
+            return False
+
+    def is_documentation_query(self, query: str) -> bool:
+        """
+        Check if a query is likely about AutoBot documentation.
+
+        Args:
+            query: User's chat message
+
+        Returns:
+            True if query appears to be about documentation
+        """
+        query_lower = query.lower()
+
+        # Check patterns
+        for pattern in self._doc_patterns:
+            if pattern.search(query_lower):
+                return True
+
+        return False
+
+    def search(
+        self, query: str, n_results: int = 3, score_threshold: float = 0.6
+    ) -> List[Dict[str, Any]]:
+        """
+        Search documentation for relevant content.
+
+        Args:
+            query: Search query
+            n_results: Maximum number of results
+            score_threshold: Minimum similarity score (0.0-1.0)
+
+        Returns:
+            List of search result dictionaries with content and metadata
+        """
+        if not self._initialized:
+            if not self.initialize():
+                return []
+
+        try:
+            # Generate query embedding
+            embedding = self._embed_model.get_text_embedding(query)
+
+            # Search collection
+            results = self._collection.query(
+                query_embeddings=[embedding],
+                n_results=n_results,
+                include=["documents", "metadatas", "distances"],
+            )
+
+            if not results or not results.get("documents"):
+                return []
+
+            # Format results
+            formatted = []
+            for i, (doc, meta, dist) in enumerate(
+                zip(
+                    results["documents"][0],
+                    results["metadatas"][0],
+                    results["distances"][0],
+                )
+            ):
+                score = 1 - dist  # Convert distance to similarity
+                if score >= score_threshold:
+                    formatted.append(
+                        {
+                            "content": doc,
+                            "score": round(score, 3),
+                            "file_path": meta.get("file_path", "unknown"),
+                            "section": meta.get("section", ""),
+                            "subsection": meta.get("subsection", ""),
+                            "doc_type": meta.get("doc_type", "documentation"),
+                            "priority": meta.get("priority", "medium"),
+                        }
+                    )
+
+            return formatted
+
+        except Exception as e:
+            logger.error(f"Documentation search failed: {e}")
+            return []
+
+    def format_as_context(self, results: List[Dict[str, Any]]) -> str:
+        """
+        Format search results as context for LLM prompt.
+
+        Args:
+            results: List of search results
+
+        Returns:
+            Formatted context string
+        """
+        if not results:
+            return ""
+
+        lines = ["AUTOBOT DOCUMENTATION CONTEXT:"]
+
+        for i, result in enumerate(results, 1):
+            source = result.get("file_path", "unknown")
+            section = result.get("section", "")
+            content = result.get("content", "").strip()
+
+            lines.append(f"\n[{i}] From {source} - {section}:")
+            lines.append(content)
+
+        return "\n".join(lines)
+
+
+# Global documentation searcher instance
+_doc_searcher: Optional[DocumentationSearcher] = None
+
+
+def get_documentation_searcher() -> DocumentationSearcher:
+    """Get or create the global documentation searcher instance."""
+    global _doc_searcher
+    if _doc_searcher is None:
+        _doc_searcher = DocumentationSearcher()
+    return _doc_searcher
+
+
 class ChatKnowledgeService:
     """
     Service for retrieving and formatting knowledge for chat interactions.
@@ -447,21 +661,31 @@ class ChatKnowledgeService:
 
     Issue #249 Phase 2: Now includes smart intent detection to optimize
     when to use knowledge retrieval.
+
+    Issue #250: Added documentation search integration for AutoBot self-awareness.
     """
 
-    def __init__(self, rag_service: RAGService):
+    def __init__(self, rag_service: RAGService, enable_doc_search: bool = True):
         """
         Initialize chat knowledge service.
 
         Args:
             rag_service: Configured RAGService instance
+            enable_doc_search: Enable documentation search integration (Issue #250)
         """
         self.rag_service = rag_service
         self.intent_detector = get_query_intent_detector()
         self.context_enhancer = get_context_enhancer()
+
+        # Issue #250: Documentation search integration
+        self.doc_searcher: Optional[DocumentationSearcher] = None
+        if enable_doc_search:
+            self.doc_searcher = get_documentation_searcher()
+            self.doc_searcher.initialize()
+
         logger.info(
-            "ChatKnowledgeService initialized with intent detection "
-            "and conversation-aware RAG"
+            "ChatKnowledgeService initialized with intent detection, "
+            f"conversation-aware RAG, doc_search={enable_doc_search}"
         )
 
     async def retrieve_relevant_knowledge(
@@ -791,6 +1015,115 @@ class ChatKnowledgeService:
 
         return context_string, citations, intent_result, enhanced_query
 
+    async def retrieve_documentation(
+        self,
+        query: str,
+        n_results: int = 3,
+        score_threshold: float = 0.6,
+    ) -> Tuple[str, List[Dict[str, Any]]]:
+        """
+        Retrieve relevant AutoBot documentation for a query.
+
+        Issue #250: Searches indexed documentation to provide context about
+        AutoBot deployment, APIs, architecture, and troubleshooting.
+
+        Args:
+            query: User's chat message/query
+            n_results: Maximum number of documentation chunks to retrieve
+            score_threshold: Minimum relevance score (0.0-1.0) to include
+
+        Returns:
+            Tuple of (formatted_context_string, documentation_results)
+            - formatted_context_string: Documentation context for LLM prompt
+            - documentation_results: List of result dicts with content and metadata
+        """
+        if not self.doc_searcher:
+            return "", []
+
+        try:
+            start_time = time.time()
+
+            # Check if query is about documentation
+            if not self.doc_searcher.is_documentation_query(query):
+                logger.debug(
+                    f"[Doc Search] Query not documentation-related: '{query[:50]}...'"
+                )
+                return "", []
+
+            # Search documentation
+            results = self.doc_searcher.search(
+                query=query,
+                n_results=n_results,
+                score_threshold=score_threshold,
+            )
+
+            if not results:
+                logger.debug(f"[Doc Search] No results for: '{query[:50]}...'")
+                return "", []
+
+            # Format as context
+            context = self.doc_searcher.format_as_context(results)
+
+            retrieval_time = time.time() - start_time
+            logger.info(
+                f"[Doc Search] Found {len(results)} documentation chunks "
+                f"in {retrieval_time:.3f}s for: '{query[:50]}...'"
+            )
+
+            return context, results
+
+        except Exception as e:
+            logger.error(f"Documentation retrieval failed: {e}")
+            return "", []
+
+    async def retrieve_combined_knowledge(
+        self,
+        query: str,
+        top_k: int = 5,
+        doc_results: int = 3,
+        score_threshold: float = 0.7,
+        doc_threshold: float = 0.6,
+    ) -> Tuple[str, List[Dict], List[Dict[str, Any]]]:
+        """
+        Retrieve combined knowledge from RAG and documentation sources.
+
+        Issue #250: Combines general knowledge retrieval with documentation
+        search for comprehensive context.
+
+        Args:
+            query: User's chat message/query
+            top_k: Maximum knowledge facts from RAG
+            doc_results: Maximum documentation chunks
+            score_threshold: Minimum RAG relevance score
+            doc_threshold: Minimum documentation relevance score
+
+        Returns:
+            Tuple of (combined_context, rag_citations, doc_results)
+        """
+        # Retrieve from both sources in parallel-ish (documentation is sync)
+        doc_context, doc_results_list = await self.retrieve_documentation(
+            query=query,
+            n_results=doc_results,
+            score_threshold=doc_threshold,
+        )
+
+        rag_context, rag_citations = await self.retrieve_relevant_knowledge(
+            query=query,
+            top_k=top_k,
+            score_threshold=score_threshold,
+        )
+
+        # Combine contexts
+        combined_parts = []
+        if doc_context:
+            combined_parts.append(doc_context)
+        if rag_context:
+            combined_parts.append(rag_context)
+
+        combined_context = "\n\n".join(combined_parts) if combined_parts else ""
+
+        return combined_context, rag_citations, doc_results_list
+
     async def get_knowledge_stats(self) -> Dict:
         """
         Get statistics about knowledge retrieval service.
@@ -800,14 +1133,25 @@ class ChatKnowledgeService:
         """
         rag_stats = self.rag_service.get_stats()
 
-        return {
+        stats = {
             "service": "ChatKnowledgeService",
             "rag_service_initialized": rag_stats.get("initialized", False),
             "rag_cache_entries": rag_stats.get("cache_entries", 0),
             "kb_implementation": rag_stats.get("kb_implementation", "unknown"),
             "intent_detector_available": self.intent_detector is not None,
             "context_enhancer_available": self.context_enhancer is not None,
+            "doc_searcher_enabled": self.doc_searcher is not None,
         }
+
+        # Add documentation stats if available
+        if self.doc_searcher and self.doc_searcher._initialized:
+            try:
+                doc_count = self.doc_searcher._collection.count()
+                stats["documentation_chunks"] = doc_count
+            except Exception:
+                stats["documentation_chunks"] = 0
+
+        return stats
 
 
 # Example usage pattern for integration into ChatWorkflowManager:
