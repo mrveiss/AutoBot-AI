@@ -345,7 +345,25 @@ class ChatWorkflowManager:
                 except asyncio.TimeoutError:
                     logger.warning(
                         f"File read timeout after 5s for {transcript_path}, creating new transcript"
-                    ),
+                    )
+                    transcript = {
+                        "session_id": session_id,
+                        "created_at": datetime.now().isoformat(),
+                        "messages": [],
+                    }
+                except json.JSONDecodeError as json_err:
+                    # Handle corrupted JSON files - backup and create fresh
+                    logger.warning(
+                        f"Corrupted transcript file {transcript_path}: {json_err}, "
+                        f"creating fresh transcript"
+                    )
+                    # Backup corrupted file for debugging
+                    backup_path = transcript_path.with_suffix(".json.corrupted")
+                    try:
+                        await asyncio.to_thread(transcript_path.rename, backup_path)
+                        logger.info(f"Backed up corrupted file to {backup_path}")
+                    except Exception as backup_err:
+                        logger.warning(f"Could not backup corrupted file: {backup_err}")
                     transcript = {
                         "session_id": session_id,
                         "created_at": datetime.now().isoformat(),
