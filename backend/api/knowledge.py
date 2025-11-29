@@ -30,6 +30,9 @@ except ImportError:
 # Set up logging
 logger = logging.getLogger(__name__)
 
+# Cache TTL constants (seconds)
+CATEGORY_CACHE_TTL = 3600  # 1 hour for category counts (expensive to compute with 5k+ facts)
+
 router = APIRouter()
 
 # Import vectorization router (extracted from this file - Issue #185)
@@ -226,10 +229,10 @@ async def get_main_categories(req: Request):
 
                 logger.info(f"Category counts: {category_counts}")
 
-                # Cache the counts for 60 seconds
+                # Cache the counts for 1 hour (expensive to compute with 5k+ facts)
                 for cat_id, cache_key in cache_keys.items():
                     await kb_to_use.aioredis_client.set(
-                        cache_key, category_counts[cat_id], ex=60
+                        cache_key, category_counts[cat_id], ex=CATEGORY_CACHE_TTL
                     )
 
         except Exception as e:
