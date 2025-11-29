@@ -312,7 +312,7 @@ async def get_vms_status():
         vms.append(
             VMStatus(
                 name="Browser VM",
-                ip=str(NetworkConstants.BROWSER_HOST),
+                ip=str(NetworkConstants.BROWSER_VM_IP),
                 status="online",
                 services=["browser-automation", "playwright"],
                 last_check=datetime.now(),

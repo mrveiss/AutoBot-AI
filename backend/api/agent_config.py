@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # Get default LLM model from environment - uses centralized model constants
 DEFAULT_LLM_MODEL = os.getenv(
     "AUTOBOT_DEFAULT_LLM_MODEL",
-    os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", ModelConstants.LLAMA_32_1B),
+    os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL),
 )
 
 router = APIRouter()
