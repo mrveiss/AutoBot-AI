@@ -131,7 +131,7 @@ class ConnectionTester:
                 ollama_model = global_config_manager.get_nested(
                     "backend.ollama_model",
                     os.getenv(
-                        "AUTOBOT_OLLAMA_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
+                        "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
                     ),
                 )
 
@@ -142,7 +142,7 @@ class ConnectionTester:
                 ollama_endpoint = f"{OLLAMA_URL}/api/generate"
             if not ollama_model:
                 ollama_model = os.getenv(
-                    "AUTOBOT_OLLAMA_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
+                    "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
                 )
 
             # Test Ollama connection

@@ -33,8 +33,9 @@ async def populate_with_chromadb():
     # Set up LLM and embedding model with configurable URL
     ollama_base_url = os.getenv("AUTOBOT_OLLAMA_BASE_URL", ServiceURLs.OLLAMA_LOCAL)
 
-    # Use default LLM model from environment or fallback to common model
-    default_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.2:1b")
+    # Use ModelConstants for centralized model configuration
+    from src.constants.model_constants import ModelConstants
+    default_model = ModelConstants.DEFAULT_OLLAMA_MODEL
 
     llm = LlamaIndexOllamaLLM(
         model=default_model, base_url=ollama_base_url
