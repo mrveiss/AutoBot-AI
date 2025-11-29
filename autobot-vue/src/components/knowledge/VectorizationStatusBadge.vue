@@ -52,7 +52,7 @@ const iconClass = computed(() => {
     case 'vectorized':
       return 'fas fa-check-circle'
     case 'pending':
-      return 'fas fa-clock'
+      return 'fas fa-spinner fa-spin'
     case 'failed':
       return 'fas fa-times-circle'
     default:
@@ -137,7 +137,6 @@ const tooltipText = computed(() => {
 
 .status-pending i {
   color: #fbbf24;
-  animation: pulse-icon 2s ease-in-out infinite;
 }
 
 .status-pending:hover {
@@ -180,12 +179,4 @@ const tooltipText = computed(() => {
   white-space: nowrap;
 }
 
-@keyframes pulse-icon {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
 </style>
