@@ -722,3 +722,340 @@ async def get_redis_usage_health_score(
             status_code=500,
             detail=f"Health check failed: {str(e)}",
         )
+
+
+# ============================================================================
+# Security Analysis Endpoints (Issue #219)
+# ============================================================================
+
+from src.code_intelligence.security_analyzer import (
+    SecurityAnalyzer,
+    SecuritySeverity,
+    get_vulnerability_types,
+)
+
+
+class SecurityAnalysisRequest(BaseModel):
+    """Request model for security analysis."""
+
+    path: str = Field(
+        ...,
+        description="Directory path to analyze for security vulnerabilities",
+    )
+    exclude_patterns: Optional[list] = Field(
+        default=None,
+        description="Patterns to exclude from analysis (e.g., ['test_*', 'venv'])",
+    )
+    min_severity: Optional[str] = Field(
+        default=None,
+        description="Minimum severity level to include (info, low, medium, high, critical)",
+    )
+
+
+class SecurityFileScanRequest(BaseModel):
+    """Request for single file security scan."""
+
+    file_path: str = Field(..., description="Path to Python file to analyze")
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="security_analyze",
+    error_code_prefix="SECURITY",
+)
+@router.post("/security/analyze")
+async def security_analyze(request: SecurityAnalysisRequest):
+    """
+    Analyze a codebase for security vulnerabilities.
+
+    Scans all Python files in the specified directory for:
+    - SQL injection patterns
+    - Hardcoded secrets and credentials
+    - Weak cryptography usage
+    - Command injection risks
+    - Insecure deserialization
+    - Missing input validation
+    - And more (OWASP Top 10 mapping)
+    """
+    if not os.path.exists(request.path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path does not exist: {request.path}",
+        )
+
+    if not os.path.isdir(request.path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path is not a directory: {request.path}",
+        )
+
+    try:
+        analyzer = SecurityAnalyzer(
+            project_root=request.path,
+            exclude_patterns=request.exclude_patterns,
+        )
+        results = analyzer.analyze_directory()
+
+        # Filter by severity if specified
+        if request.min_severity:
+            severity_order = ["info", "low", "medium", "high", "critical"]
+            try:
+                min_idx = severity_order.index(request.min_severity.lower())
+                results = [
+                    r
+                    for r in results
+                    if severity_order.index(r.severity.value) >= min_idx
+                ]
+            except ValueError:
+                pass
+
+        summary = analyzer.get_summary()
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "timestamp": datetime.now().isoformat(),
+                "path": request.path,
+                "summary": summary,
+                "findings": [r.to_dict() for r in results],
+                "total_findings": len(results),
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Security analysis failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Security analysis failed: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="security_scan_file",
+    error_code_prefix="SECURITY",
+)
+@router.post("/security/scan-file")
+async def security_scan_file(request: SecurityFileScanRequest):
+    """
+    Scan a single file for security vulnerabilities.
+
+    Quick scan of a single Python file for security issues.
+    """
+    if not os.path.exists(request.file_path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"File does not exist: {request.file_path}",
+        )
+
+    if not request.file_path.endswith(".py"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only Python files (.py) are supported",
+        )
+
+    try:
+        analyzer = SecurityAnalyzer()
+        results = analyzer.analyze_file(request.file_path)
+
+        # Group by vulnerability type
+        by_type = {}
+        for result in results:
+            vtype = result.vulnerability_type.value
+            if vtype not in by_type:
+                by_type[vtype] = []
+            by_type[vtype].append(result.to_dict())
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "timestamp": datetime.now().isoformat(),
+                "file": request.file_path,
+                "findings": [r.to_dict() for r in results],
+                "total_findings": len(results),
+                "by_type": by_type,
+                "severity_counts": {
+                    sev.value: len([r for r in results if r.severity == sev])
+                    for sev in SecuritySeverity
+                },
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Security file scan failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"File scan failed: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_vulnerability_types",
+    error_code_prefix="SECURITY",
+)
+@router.get("/security/vulnerability-types")
+async def list_vulnerability_types():
+    """
+    Get all supported vulnerability types with OWASP mappings.
+
+    Returns list of all vulnerability types that can be detected,
+    along with their OWASP Top 10 2021 category mappings.
+    """
+    vuln_types = get_vulnerability_types()
+
+    # Group by OWASP category
+    by_owasp = {}
+    for vt in vuln_types:
+        owasp = vt["owasp"]
+        if owasp not in by_owasp:
+            by_owasp[owasp] = []
+        by_owasp[owasp].append(vt["type"])
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "timestamp": datetime.now().isoformat(),
+            "vulnerability_types": vuln_types,
+            "total_types": len(vuln_types),
+            "by_owasp_category": by_owasp,
+        },
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="security_score",
+    error_code_prefix="SECURITY",
+)
+@router.get("/security/score")
+async def get_security_score(
+    path: str = Query(..., description="Directory path to analyze"),
+):
+    """
+    Get security health score for a codebase.
+
+    Returns a score from 0-100 based on the number and severity
+    of security vulnerabilities detected. Higher scores indicate
+    better security posture.
+    """
+    if not os.path.exists(path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path does not exist: {path}",
+        )
+
+    try:
+        analyzer = SecurityAnalyzer(project_root=path)
+        analyzer.analyze_directory()
+        summary = analyzer.get_summary()
+
+        # Generate grade
+        score = summary["security_score"]
+        if score >= 90:
+            grade = "A"
+            status = "Excellent security posture"
+        elif score >= 80:
+            grade = "B"
+            status = "Good security with minor issues"
+        elif score >= 70:
+            grade = "C"
+            status = "Fair security - several vulnerabilities to address"
+        elif score >= 50:
+            grade = "D"
+            status = "Poor security - significant vulnerabilities present"
+        else:
+            grade = "F"
+            status = "Critical security issues - immediate attention required"
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "timestamp": datetime.now().isoformat(),
+                "path": path,
+                "security_score": score,
+                "grade": grade,
+                "risk_level": summary["risk_level"],
+                "status_message": status,
+                "total_findings": summary["total_findings"],
+                "critical_issues": summary["critical_issues"],
+                "high_issues": summary["high_issues"],
+                "files_analyzed": summary["files_analyzed"],
+                "severity_breakdown": summary["by_severity"],
+                "owasp_breakdown": summary["by_owasp_category"],
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Security score calculation failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Security score calculation failed: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="security_report",
+    error_code_prefix="SECURITY",
+)
+@router.get("/security/report")
+async def get_security_report(
+    path: str = Query(..., description="Directory path to analyze"),
+    format: str = Query(default="json", description="Report format: json or markdown"),
+):
+    """
+    Generate a comprehensive security report.
+
+    Returns a detailed security analysis report including:
+    - Executive summary
+    - All findings with remediation advice
+    - OWASP Top 10 mapping
+    - Top recommendations
+    """
+    if not os.path.exists(path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path does not exist: {path}",
+        )
+
+    try:
+        analyzer = SecurityAnalyzer(project_root=path)
+        analyzer.analyze_directory()
+        report = analyzer.generate_report(format=format)
+
+        if format == "markdown":
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "status": "success",
+                    "timestamp": datetime.now().isoformat(),
+                    "path": path,
+                    "format": "markdown",
+                    "report": report,
+                },
+            )
+        else:
+            import json
+
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "status": "success",
+                    "timestamp": datetime.now().isoformat(),
+                    "path": path,
+                    "format": "json",
+                    "report": json.loads(report),
+                },
+            )
+
+    except Exception as e:
+        logger.error(f"Security report generation failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Report generation failed: {str(e)}",
+        )
