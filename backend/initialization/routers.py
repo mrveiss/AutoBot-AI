@@ -960,4 +960,36 @@ def load_optional_routers():
     except ImportError as e:
         logger.warning(f"⚠️ Optional router not available: anti_pattern - {e}")
 
+    # CAPTCHA Human-in-the-Loop router (Issue #206)
+    try:
+        from backend.api.captcha import router as captcha_router
+
+        optional_routers.append(
+            (
+                captcha_router,
+                "",  # Router has /captcha prefix internally
+                ["captcha", "web-research"],
+                "captcha",
+            )
+        )
+        logger.info("✅ Optional router loaded: captcha")
+    except ImportError as e:
+        logger.warning(f"⚠️ Optional router not available: captcha - {e}")
+
+    # Code Evolution Timeline router (Issue #247)
+    try:
+        from backend.api.analytics_evolution import router as evolution_router
+
+        optional_routers.append(
+            (
+                evolution_router,
+                "",  # Router has /evolution prefix internally
+                ["code-evolution", "analytics"],
+                "analytics_evolution",
+            )
+        )
+        logger.info("✅ Optional router loaded: analytics_evolution")
+    except ImportError as e:
+        logger.warning(f"⚠️ Optional router not available: analytics_evolution - {e}")
+
     return optional_routers

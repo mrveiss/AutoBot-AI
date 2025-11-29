@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from src.constants.security_constants import SecurityConstants
+from src.services.captcha_human_loop import get_captcha_human_loop
 
 try:
     from playwright.async_api import Browser, BrowserContext, Page, async_playwright
@@ -560,10 +561,19 @@ class AdvancedWebResearcher:
         return False
 
     async def _handle_captcha(self, page: Page) -> bool:
-        """Handle CAPTCHA challenge"""
+        """Handle CAPTCHA challenge with human-in-the-loop fallback"""
         logger.info("Attempting to handle CAPTCHA challenge")
 
-        # Try to find reCAPTCHA
+        # Detect CAPTCHA type for better user messaging
+        captcha_type = "unknown"
+        if await page.query_selector(".g-recaptcha, [data-sitekey]"):
+            captcha_type = "recaptcha"
+        elif await page.query_selector(".h-captcha"):
+            captcha_type = "hcaptcha"
+        elif await page.query_selector(".cf-challenge-running"):
+            captcha_type = "cloudflare"
+
+        # Try to find reCAPTCHA for automated solving
         recaptcha_element = await page.query_selector(".g-recaptcha, [data-sitekey]")
         if recaptcha_element:
             site_key = await recaptcha_element.get_attribute("data-sitekey")
@@ -586,16 +596,34 @@ class AdvancedWebResearcher:
                     await page.wait_for_timeout(2000)
                     return True
 
-        # If automated solving fails, take screenshot for manual intervention
-        screenshot = await page.screenshot()
-        screenshot_b64 = base64.b64encode(screenshot).decode()
+        # Automated solving failed - request human intervention
+        logger.warning("Automated CAPTCHA solving failed, requesting human intervention")
 
-        logger.warning("CAPTCHA requires manual intervention")
-        logger.info(f"CAPTCHA screenshot available (base64): {screenshot_b64[:100]}...")
+        # Use human-in-the-loop service
+        captcha_service = get_captcha_human_loop(
+            timeout_seconds=120.0,
+            auto_skip_on_timeout=True,
+        )
 
-        # TODO: Implement human-in-the-loop mechanism
-        # For now, return False to skip this source
-        return False
+        result = await captcha_service.request_human_intervention(
+            page=page,
+            url=page.url,
+            captcha_type=captcha_type,
+        )
+
+        if result.success:
+            logger.info(
+                f"CAPTCHA solved by user in {result.duration_seconds:.1f}s"
+            )
+            # Wait a moment for page to update after CAPTCHA solved
+            await page.wait_for_timeout(2000)
+            return True
+        else:
+            logger.warning(
+                f"CAPTCHA not solved: {result.status.value} "
+                f"(waited {result.duration_seconds:.1f}s)"
+            )
+            return False
 
     async def _enhance_results_with_content(
         self, results: List[Dict[str, Any]]
