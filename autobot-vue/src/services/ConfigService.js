@@ -44,7 +44,7 @@ export class ConfigService {
       },
       defaults: {
         welcome_message: "Hello! How can I assist you today?",
-        model_name: 'deepseek-r1:14b',
+        model_name: import.meta.env.VITE_DEFAULT_MODEL || '',  // Loaded from backend config
         max_chat_messages: 100,
         connection_check_interval: 10000
       },
