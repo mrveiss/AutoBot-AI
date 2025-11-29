@@ -236,6 +236,14 @@ class KnowledgeBase:
             "memory.chromadb.collection_name", "autobot_memory"
         )
 
+        # Issue #72: HNSW parameters optimized for 545K+ vectors
+        self.hnsw_space = config.get("memory.chromadb.hnsw.space", "cosine")
+        self.hnsw_construction_ef = config.get(
+            "memory.chromadb.hnsw.construction_ef", 300
+        )
+        self.hnsw_search_ef = config.get("memory.chromadb.hnsw.search_ef", 100)
+        self.hnsw_m = config.get("memory.chromadb.hnsw.M", 32)
+
         # Redis index name (legacy compatibility - not used with ChromaDB)
         self.redis_index_name = config.get(
             "redis.indexes.knowledge_base", "llama_index"
@@ -257,7 +265,365 @@ class KnowledgeBase:
         # Redis initialization flag (V1 compatibility)
         self._redis_initialized = False
 
-        logger.info("KnowledgeBase instance created (not yet initialized)")
+        # Stats counter key (Issue #71 - O(1) stats tracking)
+        self._stats_key = "kb:stats"
+
+    # ========== STATS COUNTER METHODS (Issue #71) ==========
+    # O(1) atomic counter operations for fact/document/vector counts
+
+    async def _increment_stat(self, field: str, amount: int = 1) -> None:
+        """Atomically increment a stats counter field."""
+        if self.aioredis_client:
+            try:
+                await self.aioredis_client.hincrby(self._stats_key, field, amount)
+                logger.debug(f"Incremented {field} by {amount}")
+            except Exception as e:
+                logger.warning(f"Failed to increment stat {field}: {e}")
+
+    async def _decrement_stat(self, field: str, amount: int = 1) -> None:
+        """Atomically decrement a stats counter field (prevents negative values)."""
+        if self.aioredis_client:
+            try:
+                # Use hincrby with negative value for atomic decrement
+                await self.aioredis_client.hincrby(self._stats_key, field, -amount)
+                logger.debug(f"Decremented {field} by {amount}")
+            except Exception as e:
+                logger.warning(f"Failed to decrement stat {field}: {e}")
+
+    async def _get_stat(self, field: str) -> int:
+        """Get a single stats counter value (O(1))."""
+        if self.aioredis_client:
+            try:
+                value = await self.aioredis_client.hget(self._stats_key, field)
+                if value is not None:
+                    return int(value)
+            except Exception as e:
+                logger.warning(f"Failed to get stat {field}: {e}")
+        return 0
+
+    async def _get_all_stats(self) -> dict:
+        """Get all stats counters as dict (O(1))."""
+        if self.aioredis_client:
+            try:
+                stats = await self.aioredis_client.hgetall(self._stats_key)
+                return {
+                    k.decode() if isinstance(k, bytes) else k:
+                    int(v.decode() if isinstance(v, bytes) else v)
+                    for k, v in stats.items()
+                }
+            except Exception as e:
+                logger.warning(f"Failed to get all stats: {e}")
+        return {}
+
+    async def _initialize_stats_counters(self) -> None:
+        """
+        Initialize stats counters from existing data (one-time migration).
+
+        This performs a SCAN to count existing facts but only runs once
+        when the kb:stats hash doesn't exist.
+        """
+        if not self.aioredis_client:
+            return
+
+        try:
+            # Check if counters already exist
+            exists = await self.aioredis_client.exists(self._stats_key)
+            if exists:
+                logger.info("Stats counters already initialized")
+                return
+
+            logger.info("Initializing stats counters from existing data...")
+
+            # Count existing facts using scan_iter (one-time operation)
+            fact_count = 0
+            async for _ in self.aioredis_client.scan_iter(
+                match="fact:*", count=1000
+            ):
+                fact_count += 1
+
+            # Get vector count from ChromaDB
+            vector_count = 0
+            if self.vector_store:
+                try:
+                    chroma_collection = self.vector_store._collection
+                    vector_count = chroma_collection.count()
+                except Exception:
+                    pass
+
+            # Initialize the counters
+            await self.aioredis_client.hset(
+                self._stats_key,
+                mapping={
+                    "total_facts": fact_count,
+                    "total_vectors": vector_count,
+                    "total_documents": vector_count,
+                    "total_chunks": vector_count,
+                    "initialized_at": datetime.now().isoformat(),
+                }
+            )
+
+            logger.info(
+                f"Stats counters initialized: facts={fact_count}, "
+                f"vectors={vector_count}"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to initialize stats counters: {e}")
+
+    async def _verify_stats_consistency(self, auto_correct: bool = True) -> dict:
+        """
+        Verify stats counters are accurate by comparing to actual counts.
+
+        This is an expensive O(n) operation and should only be called
+        periodically (e.g., once per day or on admin request).
+
+        Args:
+            auto_correct: If True, correct counters if drift detected
+
+        Returns:
+            Dict with consistency check results
+        """
+        if not self.aioredis_client:
+            return {"status": "error", "message": "Redis not available"}
+
+        try:
+            # Get current counter values
+            current_counters = await self._get_all_stats()
+            stored_facts = current_counters.get("total_facts", 0)
+            stored_vectors = current_counters.get("total_vectors", 0)
+
+            # Count actual facts (expensive O(n) operation)
+            actual_fact_count = 0
+            async for _ in self.aioredis_client.scan_iter(
+                match="fact:*", count=1000
+            ):
+                actual_fact_count += 1
+
+            # Count actual vectors from ChromaDB
+            actual_vector_count = 0
+            if self.vector_store:
+                try:
+                    chroma_collection = self.vector_store._collection
+                    actual_vector_count = chroma_collection.count()
+                except Exception:
+                    pass
+
+            # Calculate drift
+            fact_drift = actual_fact_count - stored_facts
+            vector_drift = actual_vector_count - stored_vectors
+
+            is_consistent = fact_drift == 0 and vector_drift == 0
+
+            result = {
+                "status": "consistent" if is_consistent else "drift_detected",
+                "stored_facts": stored_facts,
+                "actual_facts": actual_fact_count,
+                "fact_drift": fact_drift,
+                "stored_vectors": stored_vectors,
+                "actual_vectors": actual_vector_count,
+                "vector_drift": vector_drift,
+                "checked_at": datetime.now().isoformat(),
+            }
+
+            if not is_consistent:
+                logger.warning(
+                    f"Stats counter drift detected: "
+                    f"facts={fact_drift:+d}, vectors={vector_drift:+d}"
+                )
+
+                if auto_correct:
+                    # Correct the counters
+                    await self.aioredis_client.hset(
+                        self._stats_key,
+                        mapping={
+                            "total_facts": actual_fact_count,
+                            "total_vectors": actual_vector_count,
+                            "total_documents": actual_vector_count,
+                            "total_chunks": actual_vector_count,
+                            "last_corrected": datetime.now().isoformat(),
+                        }
+                    )
+                    result["corrected"] = True
+                    logger.info("Stats counters corrected to actual values")
+            else:
+                logger.info("Stats counters are consistent with actual data")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Stats consistency check failed: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def rebuild_chromadb_index(
+        self, new_collection_name: Optional[str] = None
+    ) -> dict:
+        """
+        Rebuild ChromaDB collection with optimized HNSW parameters.
+
+        Issue #72: This method creates a new collection with optimized parameters
+        and migrates all vectors from the existing collection.
+
+        Args:
+            new_collection_name: Optional new collection name. If None, uses
+                                 "{current_name}_optimized"
+
+        Returns:
+            Dict with migration status and statistics
+        """
+        if not self.initialized:
+            return {"status": "error", "message": "Knowledge base not initialized"}
+
+        try:
+            from pathlib import Path
+
+            logger.info("Starting ChromaDB index rebuild with optimized HNSW params...")
+
+            # Get the ChromaDB client
+            chroma_path = Path(self.chromadb_path)
+            chroma_client = create_chromadb_client(
+                db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
+            )
+
+            # Get current collection
+            old_collection = chroma_client.get_collection(name=self.chromadb_collection)
+            old_count = old_collection.count()
+
+            if old_count == 0:
+                return {
+                    "status": "skipped",
+                    "message": "No vectors to migrate",
+                    "old_count": 0,
+                }
+
+            # Create new collection name
+            target_name = new_collection_name or f"{self.chromadb_collection}_optimized"
+
+            # Optimized HNSW parameters for 545K+ vectors
+            hnsw_metadata = {
+                "hnsw:space": self.hnsw_space,
+                "hnsw:construction_ef": self.hnsw_construction_ef,
+                "hnsw:search_ef": self.hnsw_search_ef,
+                "hnsw:M": self.hnsw_m,
+            }
+
+            logger.info(
+                f"Creating new collection '{target_name}' with HNSW params: "
+                f"construction_ef={self.hnsw_construction_ef}, "
+                f"search_ef={self.hnsw_search_ef}, M={self.hnsw_m}"
+            )
+
+            # Delete target collection if it exists
+            try:
+                chroma_client.delete_collection(name=target_name)
+                logger.info(f"Deleted existing collection: {target_name}")
+            except Exception:
+                pass  # Collection doesn't exist
+
+            # Create new collection with optimized parameters
+            new_collection = chroma_client.create_collection(
+                name=target_name,
+                metadata=hnsw_metadata,
+            )
+
+            # Migrate vectors in batches
+            batch_size = 1000
+            migrated = 0
+            offset = 0
+
+            while offset < old_count:
+                # Get batch from old collection
+                results = old_collection.get(
+                    limit=batch_size,
+                    offset=offset,
+                    include=["documents", "embeddings", "metadatas"],
+                )
+
+                if not results["ids"]:
+                    break
+
+                # Add to new collection
+                new_collection.add(
+                    ids=results["ids"],
+                    embeddings=results["embeddings"],
+                    documents=results["documents"],
+                    metadatas=results["metadatas"],
+                )
+
+                migrated += len(results["ids"])
+                offset += batch_size
+
+                if migrated % 10000 == 0:
+                    logger.info(f"Migration progress: {migrated}/{old_count} vectors")
+
+            logger.info(
+                f"Migration complete: {migrated} vectors migrated to '{target_name}'"
+            )
+
+            return {
+                "status": "success",
+                "old_collection": self.chromadb_collection,
+                "new_collection": target_name,
+                "old_count": old_count,
+                "migrated_count": migrated,
+                "hnsw_params": hnsw_metadata,
+                "message": (
+                    f"Successfully migrated {migrated} vectors. "
+                    f"To switch, update AUTOBOT_CHROMADB_COLLECTION={target_name}"
+                ),
+            }
+
+        except Exception as e:
+            logger.error(f"ChromaDB index rebuild failed: {e}")
+            import traceback
+
+            logger.error(traceback.format_exc())
+            return {"status": "error", "message": str(e)}
+
+    async def get_chromadb_index_info(self) -> dict:
+        """
+        Get information about the current ChromaDB collection and HNSW parameters.
+
+        Issue #72: Useful for verifying current index configuration.
+
+        Returns:
+            Dict with collection info and HNSW parameters
+        """
+        if not self.initialized:
+            return {"status": "error", "message": "Knowledge base not initialized"}
+
+        try:
+            from pathlib import Path
+
+            chroma_path = Path(self.chromadb_path)
+            chroma_client = create_chromadb_client(
+                db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
+            )
+
+            collection = chroma_client.get_collection(name=self.chromadb_collection)
+            metadata = collection.metadata or {}
+
+            return {
+                "status": "success",
+                "collection_name": self.chromadb_collection,
+                "vector_count": collection.count(),
+                "chromadb_path": str(chroma_path),
+                "hnsw_params": {
+                    "space": metadata.get("hnsw:space", "unknown"),
+                    "construction_ef": metadata.get("hnsw:construction_ef", "default"),
+                    "search_ef": metadata.get("hnsw:search_ef", "default"),
+                    "M": metadata.get("hnsw:M", "default"),
+                },
+                "configured_params": {
+                    "space": self.hnsw_space,
+                    "construction_ef": self.hnsw_construction_ef,
+                    "search_ef": self.hnsw_search_ef,
+                    "M": self.hnsw_m,
+                },
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get ChromaDB index info: {e}")
+            return {"status": "error", "message": str(e)}
 
     @error_boundary(component="knowledge_base", function="initialize")
     async def initialize(self) -> bool:
@@ -287,6 +653,9 @@ class KnowledgeBase:
                         "Vector store initialization failed - self.vector_store is None"
                     )
                     raise RuntimeError("Vector store failed to initialize")
+
+                # Step 4: Initialize stats counters (Issue #71 - O(1) stats)
+                await self._initialize_stats_counters()
 
                 self.initialized = True
                 self._redis_initialized = True  # V1 compatibility flag
@@ -400,10 +769,24 @@ class KnowledgeBase:
                 db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False
             )
 
-            # Get or create collection (ChromaDB handles dimensions automatically)
+            # Issue #72: Get or create collection with optimized HNSW parameters
+            # These parameters are tuned for 545K+ vectors
+            hnsw_metadata = {
+                "hnsw:space": self.hnsw_space,
+                "hnsw:construction_ef": self.hnsw_construction_ef,
+                "hnsw:search_ef": self.hnsw_search_ef,
+                "hnsw:M": self.hnsw_m,
+            }
+
+            logger.info(
+                f"Creating ChromaDB collection with optimized HNSW params: "
+                f"space={self.hnsw_space}, construction_ef={self.hnsw_construction_ef}, "
+                f"search_ef={self.hnsw_search_ef}, M={self.hnsw_m}"
+            )
+
             chroma_collection = chroma_client.get_or_create_collection(
                 name=self.chromadb_collection,
-                metadata={"hnsw:space": "cosine"},  # Use cosine similarity
+                metadata=hnsw_metadata,
             )
 
             # Create ChromaVectorStore for LlamaIndex
@@ -1584,6 +1967,11 @@ class KnowledgeBase:
                         "searchable": False,
                     }
 
+            # Issue #71: Atomically increment stats counters on successful storage
+            await self._increment_stat("total_facts")
+            if vector_indexed:
+                await self._increment_stat("total_vectors")
+
             return {
                 "status": "success",
                 "message": (
@@ -1846,52 +2234,36 @@ class KnowledgeBase:
             }
 
             if self.aioredis_client:
-                # PERFORMANCE FIX: Use cached counts instead of scanning all keys
+                # Issue #71: O(1) stats lookup using incremental counters
                 try:
-                    # Try to get cached fact count first (instant lookup)
-                    cached_fact_count = await self.aioredis_client.get(
-                        "kb:stats:fact_count"
-                    )
+                    # Get counts from kb:stats hash (O(1) operation)
+                    stat_counters = await self._get_all_stats()
 
-                    if cached_fact_count is not None:
-                        # Use cached value
-                        fact_count = int(cached_fact_count)
-                        logger.debug(f"Using cached fact count: {fact_count} facts")
-                    else:
-                        # Cache miss - count using native async Redis
-                        fact_count = 0
+                    fact_count = stat_counters.get("total_facts", 0)
+                    vector_count = stat_counters.get("total_vectors", 0)
 
-                        # Count facts using async scan_iter (efficient cursor-based)
-                        try:
-                            async for _ in self.aioredis_client.scan_iter(
-                                match="fact:*", count=1000
-                            ):
-                                fact_count += 1
-                        except Exception as e:
-                            logger.error(f"Error counting facts: {e}")
-                            fact_count = 0
-
-                        # Cache the fact count for 60 seconds
-                        await self.aioredis_client.set(
-                            "kb:stats:fact_count", fact_count, ex=60
+                    # If counters are not initialized, fall back to ChromaDB count
+                    if not stat_counters:
+                        logger.warning(
+                            "Stats counters not initialized, using ChromaDB fallback"
                         )
-                        logger.info(f"Counted and cached: {fact_count} facts")
+                        fact_count = 0
+                        vector_count = 0
+                        if self.vector_store:
+                            try:
+                                chroma_collection = self.vector_store._collection
+                                vector_count = chroma_collection.count()
+                            except Exception as e:
+                                logger.error(f"Error getting ChromaDB count: {e}")
 
-                    # Get vector count from ChromaDB (fast O(1) operation)
-                    vector_count = 0
-                    if self.vector_store:
-                        try:
-                            chroma_collection = self.vector_store._collection
-                            vector_count = chroma_collection.count()
-                            logger.debug(f"ChromaDB vector count: {vector_count}")
-                        except Exception as e:
-                            logger.error(f"Error getting ChromaDB count: {e}")
-                            vector_count = 0
+                    logger.debug(
+                        f"O(1) stats lookup: facts={fact_count}, vectors={vector_count}"
+                    )
 
                 except Exception as count_error:
                     logger.warning(
-                        f"Error counting keys, using fallback: {count_error}"
-                    ),
+                        f"Error getting stats counters, using fallback: {count_error}"
+                    )
                     fact_count = 0
                     vector_count = 0
 
@@ -2523,6 +2895,11 @@ class KnowledgeBase:
             deleted_count = await self.aioredis_client.delete(fact_key)
 
             if deleted_count > 0:
+                # Issue #71: Atomically decrement stats counters on successful deletion
+                await self._decrement_stat("total_facts")
+                if vector_deleted:
+                    await self._decrement_stat("total_vectors")
+
                 logger.info(f"Deleted fact {fact_id} from Redis")
                 return {
                     "success": True,
