@@ -268,9 +268,9 @@ AutoBot supports environment variable overrides using the `AUTOBOT_` prefix:
 |----------|-------------|---------|---------|
 | `AUTOBOT_BACKEND_PORT` | `backend.server_port` | Backend server port | `8002` |
 | `AUTOBOT_BACKEND_HOST` | `backend.server_host` | Backend bind address | `127.0.0.1` |
+| `AUTOBOT_DEFAULT_LLM_MODEL` | `llm_config.ollama.model` | **Primary** - Default LLM model | `mistral:7b-instruct` |
 | `AUTOBOT_OLLAMA_HOST` | `llm_config.ollama.host` | Ollama server URL | `http://ollama:11434` |
 | `AUTOBOT_OLLAMA_PORT` | `llm_config.ollama.port` | Ollama server port | `11434` |
-| `AUTOBOT_OLLAMA_MODEL` | `llm_config.ollama.model` | Default Ollama model | `llama2:latest` |
 | `AUTOBOT_ORCHESTRATOR_LLM` | `llm_config.orchestrator_llm` | Orchestrator LLM | `gpt-4` |
 | `AUTOBOT_REDIS_HOST` | `memory.redis.host` | Redis server host | `redis.example.com` |
 | `AUTOBOT_REDIS_PORT` | `memory.redis.port` | Redis server port | `6380` |
