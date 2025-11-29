@@ -11,6 +11,8 @@ import logging
 
 from fastapi import Request
 
+from src.constants.network_constants import NetworkConstants
+
 
 logger = logging.getLogger(__name__)
 
@@ -138,8 +140,8 @@ class ResourceFactory:
                     "data.chat_history_file", "data/chat_history.json"
                 ),
                 use_redis=redis_config.get("enabled", False),
-                redis_host=redis_config.get("host", "localhost"),
-                redis_port=redis_config.get("port", 6379),
+                redis_host=redis_config.get("host", NetworkConstants.LOCALHOST_NAME),
+                redis_port=redis_config.get("port", NetworkConstants.REDIS_PORT),
             )
 
             # Cache in app state if available

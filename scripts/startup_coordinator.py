@@ -23,9 +23,10 @@ from typing import Dict, List, Optional, Set
 import requests
 import psutil
 
-# Import centralized Redis client
+# Import centralized Redis client and network constants
 sys.path.append(str(Path(__file__).parent.parent))
 from src.utils.redis_client import get_redis_client
+from src.constants.network_constants import NetworkConstants, ServiceURLs
 
 # Configure logging
 logging.basicConfig(
@@ -94,8 +95,8 @@ class StartupCoordinator:
         # Core infrastructure (no dependencies)
         self.components['redis'] = ComponentInfo(
             name='redis',
-            port=6379,
-            health_url='redis://127.0.0.1:6379',
+            port=NetworkConstants.REDIS_PORT,
+            health_url=ServiceURLs.REDIS_LOCAL,
             dependencies=[]
         )
 
@@ -113,17 +114,17 @@ class StartupCoordinator:
         # Backend API (depends on redis and config)
         self.components['backend'] = ComponentInfo(
             name='backend',
-            port=8001,
-            health_url='http://127.0.0.3:8001/api/system/health',
+            port=NetworkConstants.BACKEND_PORT,
+            health_url=f'{ServiceURLs.BACKEND_LOCAL}/api/system/health',
             dependencies=['redis', 'config'],
-            start_command='uvicorn main:app --host 0.0.0.0 --port 8001 --log-level info'
+            start_command=f'uvicorn main:app --host 0.0.0.0 --port {NetworkConstants.BACKEND_PORT} --log-level info'
         )
 
         # Frontend (depends on backend being ready)
         self.components['frontend'] = ComponentInfo(
             name='frontend',
-            port=5173,
-            health_url='http://127.0.0.1:5173',
+            port=NetworkConstants.FRONTEND_PORT,
+            health_url=ServiceURLs.FRONTEND_LOCAL,
             dependencies=['backend'],
             start_command='npm run dev'
         )

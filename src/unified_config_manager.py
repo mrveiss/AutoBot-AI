@@ -201,8 +201,8 @@ class UnifiedConfigManager:
                                 "host": f"http://{ollama_host}:{ollama_port}",
                                 "models": [],
                                 "selected_model": os.getenv(
-                                    "AUTOBOT_OLLAMA_MODEL",
-                                    ModelConstants.GEMMA3_270M,
+                                    "AUTOBOT_DEFAULT_LLM_MODEL",
+                                    ModelConstants.DEFAULT_OLLAMA_MODEL,
                                 ),
                             }
                         },
@@ -400,7 +400,7 @@ class UnifiedConfigManager:
                 "ollama",
                 "host",
             ],
-            "AUTOBOT_OLLAMA_MODEL": [
+            "AUTOBOT_DEFAULT_LLM_MODEL": [
                 "backend",
                 "llm",
                 "local",
@@ -591,7 +591,7 @@ class UnifiedConfigManager:
             return selected_model
 
         # Only fall back to environment if config.yaml doesn't have the value
-        env_model = os.getenv("AUTOBOT_OLLAMA_MODEL")
+        env_model = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL")
         if env_model:
             logger.info(f"UNIFIED CONFIG: Selected model from environment: {env_model}")
             return env_model
@@ -764,7 +764,7 @@ class UnifiedConfigManager:
             "frontend": NetworkConstants.FRONTEND_PORT,
             "npu_worker": NetworkConstants.NPU_WORKER_PORT,
             "ai_stack": NetworkConstants.AI_STACK_PORT,
-            "browser": NetworkConstants.BROWSER_PORT,
+            "browser": NetworkConstants.BROWSER_SERVICE_PORT,
         }
         return service_map.get(service, 8000)
 
@@ -902,7 +902,7 @@ class UnifiedConfigManager:
             return env_url
 
         host = self.get_nested("memory.redis.host", NetworkConstants.LOCALHOST_IP)
-        port = self.get_nested("memory.redis.port", 6379)
+        port = self.get_nested("memory.redis.port", NetworkConstants.REDIS_PORT)
         return f"redis://{host}:{port}"
 
     def get_distributed_services_config(self) -> Dict[str, Any]:
@@ -927,8 +927,8 @@ class UnifiedConfigManager:
                 "port": NetworkConstants.AI_STACK_PORT,
             },
             "browser": {
-                "host": str(NetworkConstants.BROWSER_HOST),
-                "port": NetworkConstants.BROWSER_PORT,
+                "host": str(NetworkConstants.BROWSER_VM_IP),
+                "port": NetworkConstants.BROWSER_SERVICE_PORT,
             },
         }
 

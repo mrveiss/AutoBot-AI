@@ -34,6 +34,7 @@ import logging
 
 # Import canonical Redis client pattern
 from src.utils.redis_client import get_redis_client
+from src.constants.network_constants import NetworkConstants, ServiceURLs
 
 # Configure logging
 logging.basicConfig(
@@ -67,9 +68,9 @@ class AsyncBaselineTest:
     """Async operations baseline performance testing suite"""
 
     def __init__(self):
-        self.backend_url = "http://172.16.168.20:8001"
-        self.redis_host = "172.16.168.23"
-        self.redis_port = 6379
+        self.backend_url = ServiceURLs.BACKEND_API
+        self.redis_host = NetworkConstants.REDIS_VM_IP
+        self.redis_port = NetworkConstants.REDIS_PORT
         self.results = []
 
     async def measure_latency(self, coro) -> float:
@@ -386,10 +387,10 @@ class AsyncBaselineTest:
         logger.info(f"🔗 Starting cross-VM latency test ({requests} requests per VM)...")
 
         vm_endpoints = {
-            "frontend": "http://172.16.168.21:5173/",
-            "npu-worker": "http://172.16.168.22:8081/health",
-            "redis": "172.16.168.23:6379",  # Redis uses different protocol
-            "ai-stack": "http://172.16.168.24:8080/health"
+            "frontend": f"{ServiceURLs.FRONTEND_VM}/",
+            "npu-worker": f"{ServiceURLs.NPU_WORKER_SERVICE}/health",
+            "redis": f"{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}",  # Redis uses different protocol
+            "ai-stack": f"{ServiceURLs.AI_STACK_SERVICE}/health"
         }
 
         latencies = []

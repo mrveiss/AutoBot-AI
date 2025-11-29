@@ -6,8 +6,14 @@ Tests all endpoints, CRUD operations, and database performance features
 
 import requests
 import sys
+from pathlib import Path
 
-BASE_URL = "http://172.16.168.20:8001/api/iac"
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.constants.network_constants import NetworkConstants, ServiceURLs
+
+BASE_URL = f"{ServiceURLs.BACKEND_API}/api/iac"
 
 
 def test_health():

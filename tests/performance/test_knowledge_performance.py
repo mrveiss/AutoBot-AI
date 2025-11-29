@@ -31,6 +31,8 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 import logging
 
+from src.constants.network_constants import ServiceURLs
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -67,7 +69,7 @@ class KnowledgePerformanceTest:
     """Knowledge Manager performance testing suite"""
 
     def __init__(self):
-        self.backend_url = "http://172.16.168.20:8001"
+        self.backend_url = ServiceURLs.BACKEND_API
         self.results = []
 
         # Performance targets from Issue #163
@@ -160,8 +162,8 @@ class KnowledgePerformanceTest:
         else:
             logger.warning(f"⚠️  Insufficient test data: {current_facts}/{target_facts} facts")
             logger.warning("Please populate knowledge base with system commands and man pages:")
-            logger.warning("  curl -X POST http://172.16.168.20:8001/api/knowledge_base/populate_system_commands")
-            logger.warning("  curl -X POST http://172.16.168.20:8001/api/knowledge_base/populate_man_pages")
+            logger.warning(f"  curl -X POST {self.backend_url}/api/knowledge_base/populate_system_commands")
+            logger.warning(f"  curl -X POST {self.backend_url}/api/knowledge_base/populate_man_pages")
             return False
 
     async def test_category_filter_performance(self, iterations: int = 50) -> PerformanceMetrics:
