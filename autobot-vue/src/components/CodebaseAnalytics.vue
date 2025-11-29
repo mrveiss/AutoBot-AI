@@ -313,9 +313,47 @@
       <div class="charts-section">
         <div class="section-header">
           <h3><i class="fas fa-chart-bar"></i> Problem Analytics</h3>
-          <button @click="loadChartData" class="refresh-btn" :disabled="chartDataLoading">
-            <i :class="chartDataLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+          <div class="section-header-actions">
+            <button @click="loadUnifiedReport" class="refresh-btn" :disabled="unifiedReportLoading" title="Load unified report">
+              <i :class="unifiedReportLoading ? 'fas fa-spinner fa-spin' : 'fas fa-layer-group'"></i>
+            </button>
+            <button @click="loadChartData" class="refresh-btn" :disabled="chartDataLoading" title="Refresh charts">
+              <i :class="chartDataLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Category Filter Tabs -->
+        <div class="category-tabs" v-if="availableCategories.length > 0 || chartData">
+          <button
+            @click="selectedCategory = 'all'"
+            class="category-tab"
+            :class="{ active: selectedCategory === 'all' }"
+          >
+            <i class="fas fa-th-large"></i>
+            All Issues
+            <span class="tab-count" v-if="chartData?.summary?.total_problems">
+              {{ chartData.summary.total_problems.toLocaleString() }}
+            </span>
           </button>
+          <button
+            v-for="cat in availableCategories"
+            :key="cat.id"
+            @click="selectedCategory = cat.id"
+            class="category-tab"
+            :class="{ active: selectedCategory === cat.id }"
+          >
+            <i :class="getCategoryIcon(cat.id)"></i>
+            {{ cat.name }}
+            <span class="tab-count">{{ cat.count }}</span>
+          </button>
+        </div>
+
+        <!-- Unified Report Error -->
+        <div v-if="unifiedReportError" class="charts-error">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>{{ unifiedReportError }}</span>
+          <button @click="loadUnifiedReport" class="btn-link">Retry</button>
         </div>
 
         <div v-if="chartDataLoading" class="charts-loading">
@@ -354,12 +392,12 @@
           <div class="charts-row">
             <div class="chart-container">
               <ProblemTypesChart
-                v-if="chartData.problem_types && chartData.problem_types.length > 0"
-                :data="chartData.problem_types"
-                title="Problem Types Distribution"
+                v-if="filteredChartData?.problem_types && filteredChartData.problem_types.length > 0"
+                :data="filteredChartData.problem_types"
+                :title="selectedCategory === 'all' ? 'Problem Types Distribution' : `${selectedCategory.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Issues`"
                 :height="320"
               />
-              <EmptyState v-else icon="fas fa-chart-pie" message="No problem type data" />
+              <EmptyState v-else icon="fas fa-chart-pie" :message="selectedCategory === 'all' ? 'No problem type data' : `No issues in ${selectedCategory.replace(/_/g, ' ')} category`" />
             </div>
             <div class="chart-container">
               <SeverityBarChart
@@ -756,7 +794,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import { NetworkConstants } from '@/constants/network.ts'
@@ -817,6 +855,26 @@ const getPhaseIcon = (status) => {
   }
 }
 
+// Get icon for problem category
+const getCategoryIcon = (categoryId: string): string => {
+  const iconMap: Record<string, string> = {
+    race_conditions: 'fas fa-random',
+    debug_code: 'fas fa-bug',
+    complexity: 'fas fa-project-diagram',
+    code_smells: 'fas fa-exclamation-circle',
+    performance: 'fas fa-tachometer-alt',
+    security: 'fas fa-shield-alt',
+    long_functions: 'fas fa-scroll',
+    duplicate_code: 'fas fa-clone',
+    hardcoded_values: 'fas fa-lock',
+    missing_types: 'fas fa-question-circle',
+    unused_imports: 'fas fa-unlink',
+    // Default icon
+    default: 'fas fa-tag'
+  }
+  return iconMap[categoryId] || iconMap.default
+}
+
 // Analytics data
 const codebaseStats = ref(null)
 const problemsReport = ref([])
@@ -839,6 +897,12 @@ const performanceMetrics = ref(null)
 const chartData = ref(null)
 const chartDataLoading = ref(false)
 const chartDataError = ref('')
+
+// Unified analytics report data
+const unifiedReport = ref(null)
+const unifiedReportLoading = ref(false)
+const unifiedReportError = ref('')
+const selectedCategory = ref('all') // Filter: all, race_conditions, debug_code, complexity, etc.
 
 // Dependency analysis data
 const dependencyData = ref(null)
@@ -885,6 +949,9 @@ onMounted(async () => {
 
   // Load codebase analytics data (bottom section)
   loadCodebaseAnalyticsData()
+
+  // Load unified analytics report for category filtering
+  loadUnifiedReport()
 })
 
 // Check if there's a running indexing job
@@ -1167,6 +1234,73 @@ const loadChartData = async () => {
     chartDataLoading.value = false
   }
 }
+
+// Load unified analytics report
+const loadUnifiedReport = async () => {
+  unifiedReportLoading.value = true
+  unifiedReportError.value = ''
+
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/unified/report`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`Unified report endpoint returned ${response.status}`)
+    }
+
+    const data = await response.json()
+
+    if (data.status === 'success') {
+      unifiedReport.value = data
+      console.log('[CodebaseAnalytics] Unified report loaded:', {
+        healthScore: data.summary?.health_score,
+        grade: data.summary?.grade,
+        totalIssues: data.summary?.total_issues,
+        categories: Object.keys(data.categories || {}).length
+      })
+    }
+  } catch (error) {
+    console.error('[CodebaseAnalytics] Failed to load unified report:', error)
+    unifiedReportError.value = error.message
+  } finally {
+    unifiedReportLoading.value = false
+  }
+}
+
+// Get available categories from unified report
+const availableCategories = computed(() => {
+  if (!unifiedReport.value?.categories) return []
+  return Object.keys(unifiedReport.value.categories).map(key => ({
+    id: key,
+    name: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+    count: unifiedReport.value.categories[key]?.count || 0
+  }))
+})
+
+// Get filtered chart data based on selected category
+const filteredChartData = computed(() => {
+  if (!chartData.value) return null
+  if (selectedCategory.value === 'all') return chartData.value
+
+  const filtered = { ...chartData.value }
+
+  // Filter problem types by selected category
+  if (filtered.problem_types) {
+    filtered.problem_types = filtered.problem_types.filter(pt => {
+      const type = pt.type?.toLowerCase() || ''
+      const category = selectedCategory.value.toLowerCase()
+      return type.includes(category) || category.includes(type)
+    })
+  }
+
+  return filtered
+})
 
 // Load dependency analysis data
 const loadDependencyData = async () => {
@@ -3065,6 +3199,73 @@ const formatSmellType = (type) => {
 
 .charts-section .section-header h3 i {
   color: #3b82f6;
+}
+
+.section-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Category Filter Tabs */
+.category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 12px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.category-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(51, 65, 85, 0.5);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.category-tab:hover {
+  background: rgba(71, 85, 105, 0.5);
+  color: #e2e8f0;
+  border-color: rgba(100, 116, 139, 0.5);
+}
+
+.category-tab.active {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  border-color: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.category-tab i {
+  font-size: 0.875rem;
+}
+
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.category-tab.active .tab-count {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .charts-loading,

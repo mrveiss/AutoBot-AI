@@ -30,9 +30,9 @@ async def fetch_quality_health() -> Dict[str, Any]:
     try:
         import aiohttp
 
-        from src.constants.network_constants import NetworkConstants
+        from src.constants.network_constants import ServiceURLs
 
-        backend_url = f"http://{NetworkConstants.BACKEND_HOST}:{NetworkConstants.BACKEND_PORT}"
+        backend_url = ServiceURLs.BACKEND_API
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 f"{backend_url}/api/quality/health-score",
@@ -53,9 +53,9 @@ async def fetch_codebase_charts() -> Dict[str, Any]:
     try:
         import aiohttp
 
-        from src.constants.network_constants import NetworkConstants
+        from src.constants.network_constants import ServiceURLs
 
-        backend_url = f"http://{NetworkConstants.BACKEND_HOST}:{NetworkConstants.BACKEND_PORT}"
+        backend_url = ServiceURLs.BACKEND_API
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 f"{backend_url}/api/analytics/codebase/analytics/charts",
@@ -76,9 +76,9 @@ async def fetch_debt_summary() -> Dict[str, Any]:
     try:
         import aiohttp
 
-        from src.constants.network_constants import NetworkConstants
+        from src.constants.network_constants import ServiceURLs
 
-        backend_url = f"http://{NetworkConstants.BACKEND_HOST}:{NetworkConstants.BACKEND_PORT}"
+        backend_url = ServiceURLs.BACKEND_API
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 f"{backend_url}/api/debt/summary",
@@ -99,9 +99,9 @@ async def fetch_performance_summary() -> Dict[str, Any]:
     try:
         import aiohttp
 
-        from src.constants.network_constants import NetworkConstants
+        from src.constants.network_constants import ServiceURLs
 
-        backend_url = f"http://{NetworkConstants.BACKEND_HOST}:{NetworkConstants.BACKEND_PORT}"
+        backend_url = ServiceURLs.BACKEND_API
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 f"{backend_url}/api/performance/summary",
