@@ -13,6 +13,7 @@ Provides advanced code analysis capabilities including:
 - Performance pattern analysis
 - Pre-commit hook analysis
 - Bug prediction and risk scoring
+- AI-powered code review automation
 - Metrics and severity scoring
 
 Part of EPIC #217 - Advanced Code Intelligence Methods
@@ -66,6 +67,23 @@ from .security_analyzer import (
     analyze_security,
     get_vulnerability_types,
 )
+from .code_review_engine import (
+    CodeReviewEngine,
+    DiffFile,
+    DiffHunk,
+    ReviewCategory,
+    ReviewComment,
+    ReviewPattern,
+    ReviewResult,
+    ReviewSeverity,
+    get_review_categories,
+    get_review_patterns,
+    get_review_severities,
+    review_commit,
+    review_diff,
+    review_file,
+    review_staged,
+)
 
 __all__ = [
     # Anti-pattern detection (Issue #221)
@@ -113,4 +131,20 @@ __all__ = [
     "get_risk_factors",
     "get_risk_levels",
     "predict_bugs",
+    # Code review automation (Issue #225)
+    "CodeReviewEngine",
+    "DiffFile",
+    "DiffHunk",
+    "ReviewCategory",
+    "ReviewComment",
+    "ReviewPattern",
+    "ReviewResult",
+    "ReviewSeverity",
+    "get_review_categories",
+    "get_review_patterns",
+    "get_review_severities",
+    "review_commit",
+    "review_diff",
+    "review_file",
+    "review_staged",
 ]
