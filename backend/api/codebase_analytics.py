@@ -40,6 +40,14 @@ _active_tasks: Dict[str, asyncio.Task] = {}
 
 # Global lock to prevent concurrent indexing tasks
 _indexing_lock = asyncio.Lock()
+
+# Lock for protecting indexing_tasks and _active_tasks
+_tasks_lock = asyncio.Lock()
+
+# Threading lock for synchronous callbacks
+import threading
+_tasks_sync_lock = threading.Lock()
+
 _current_indexing_task_id: Optional[str] = None
 
 
@@ -983,44 +991,45 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
         )
 
         # Initialize task status with enhanced phase and batch tracking
-        indexing_tasks[task_id] = {
-            "status": "running",
-            "progress": {
-                "current": 0,
-                "total": 0,
-                "percent": 0,
-                "current_file": "Initializing...",
-                "operation": "Starting indexing",
-            },
-            "phases": {
-                "current_phase": "init",
-                "phases_completed": [],
-                "phase_list": [
-                    {"id": "init", "name": "Initialization", "status": "running"},
-                    {"id": "scan", "name": "Scanning Files", "status": "pending"},
-                    {"id": "prepare", "name": "Preparing Data", "status": "pending"},
-                    {"id": "store", "name": "Storing to ChromaDB", "status": "pending"},
-                    {"id": "finalize", "name": "Finalizing", "status": "pending"},
-                ],
-            },
-            "batches": {
-                "total_batches": 0,
-                "completed_batches": 0,
-                "current_batch": 0,
-                "batch_size": 5000,  # ChromaDB max batch size
-                "items_per_batch": [],
-            },
-            "stats": {
-                "files_scanned": 0,
-                "problems_found": 0,
-                "functions_found": 0,
-                "classes_found": 0,
-                "items_stored": 0,
-            },
-            "result": None,
-            "error": None,
-            "started_at": datetime.now().isoformat(),
-        }
+        async with _tasks_lock:
+            indexing_tasks[task_id] = {
+                "status": "running",
+                "progress": {
+                    "current": 0,
+                    "total": 0,
+                    "percent": 0,
+                    "current_file": "Initializing...",
+                    "operation": "Starting indexing",
+                },
+                "phases": {
+                    "current_phase": "init",
+                    "phases_completed": [],
+                    "phase_list": [
+                        {"id": "init", "name": "Initialization", "status": "running"},
+                        {"id": "scan", "name": "Scanning Files", "status": "pending"},
+                        {"id": "prepare", "name": "Preparing Data", "status": "pending"},
+                        {"id": "store", "name": "Storing to ChromaDB", "status": "pending"},
+                        {"id": "finalize", "name": "Finalizing", "status": "pending"},
+                    ],
+                },
+                "batches": {
+                    "total_batches": 0,
+                    "completed_batches": 0,
+                    "current_batch": 0,
+                    "batch_size": 5000,  # ChromaDB max batch size
+                    "items_per_batch": [],
+                },
+                "stats": {
+                    "files_scanned": 0,
+                    "problems_found": 0,
+                    "functions_found": 0,
+                    "classes_found": 0,
+                    "items_stored": 0,
+                },
+                "result": None,
+                "error": None,
+                "started_at": datetime.now().isoformat(),
+            }
 
         # Helper to update phase status
         def update_phase(phase_id: str, status: str):
@@ -1415,15 +1424,17 @@ async def index_codebase():
     logger.info("🔄 About to create_task")
     task = asyncio.create_task(do_indexing_with_progress(task_id, root_path))
     logger.info(f"✅ Task created: {task}")
-    _active_tasks[task_id] = task
+    async with _tasks_lock:
+        _active_tasks[task_id] = task
     logger.info("💾 Task stored in _active_tasks")
 
     # Clean up task reference when done
     def cleanup_task(t):
         global _current_indexing_task_id
-        _active_tasks.pop(task_id, None)
-        if _current_indexing_task_id == task_id:
-            _current_indexing_task_id = None
+        with _tasks_sync_lock:
+            _active_tasks.pop(task_id, None)
+            if _current_indexing_task_id == task_id:
+                _current_indexing_task_id = None
         logger.info(f"🧹 Task {task_id} cleaned up")
 
     task.add_done_callback(cleanup_task)
@@ -1579,15 +1590,16 @@ async def cancel_indexing_job():
         existing_task.cancel()
         logger.info(f"🛑 Cancelled indexing task: {task_id}")
 
-        # Update task status
-        if task_id in indexing_tasks:
-            indexing_tasks[task_id]["status"] = "cancelled"
-            indexing_tasks[task_id]["error"] = "Cancelled by user"
-            indexing_tasks[task_id]["failed_at"] = datetime.now().isoformat()
+        # Update task status (thread-safe)
+        async with _tasks_lock:
+            if task_id in indexing_tasks:
+                indexing_tasks[task_id]["status"] = "cancelled"
+                indexing_tasks[task_id]["error"] = "Cancelled by user"
+                indexing_tasks[task_id]["failed_at"] = datetime.now().isoformat()
 
-        # Clear current task
-        _current_indexing_task_id = None
-        _active_tasks.pop(task_id, None)
+            # Clear current task
+            _current_indexing_task_id = None
+            _active_tasks.pop(task_id, None)
 
         return JSONResponse({
             "success": True,
