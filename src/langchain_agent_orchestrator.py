@@ -25,6 +25,7 @@ except ImportError:
                 "package for Ollama support."
             )
 
+from src.constants.model_constants import ModelConstants
 from src.event_manager import event_manager
 from src.knowledge_base import KnowledgeBase
 from src.tools import ToolRegistry
@@ -61,8 +62,8 @@ class LangChainAgentOrchestrator:
         from src.unified_config_manager import config as global_config
 
         llm_config = global_config.get_llm_config()
-        # Temporarily hardcode model to rule out config parsing issues
-        llm_model = "phi:2.7b"
+        # Use centralized model constants - reads from AUTOBOT_DEFAULT_LLM_MODEL env var
+        llm_model = ModelConstants.DEFAULT_OLLAMA_MODEL
         llm_base_url = llm_config.get("ollama", {}).get(
             "base_url", get_service_url("ollama")
         )

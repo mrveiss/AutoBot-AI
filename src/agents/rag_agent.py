@@ -30,11 +30,11 @@ class RAGAgent(StandardizedAgent):
         super().__init__("rag")
         self.llm_interface = LLMInterface()
 
-        # Use unified config with lightweight fallback for performance
+        # Use unified config with centralized fallback
         try:
-            self.model_name = config.get("llm.models.rag", ModelConstants.GEMMA3_270M)
+            self.model_name = config.get("llm.models.rag", ModelConstants.DEFAULT_OLLAMA_MODEL)
         except Exception:
-            self.model_name = ModelConstants.GEMMA3_270M
+            self.model_name = ModelConstants.DEFAULT_OLLAMA_MODEL
 
         self.capabilities = [
             "document_synthesis",

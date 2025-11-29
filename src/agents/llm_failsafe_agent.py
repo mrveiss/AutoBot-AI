@@ -70,14 +70,13 @@ class LLMFailsafeAgent:
             tier: {"requests": 0, "failures": 0, "avg_time": 0.0} for tier in LLMTier
         }
 
-        # Configuration - use centralized model constants
+        # Configuration - use centralized model from config
+        # All model selection should come from AUTOBOT_DEFAULT_LLM_MODEL
         self.primary_models = [
-            ModelConstants.GEMMA3_270M,  # Ultra lightweight - 291MB
-            ModelConstants.LLAMA_32_1B_INSTRUCT,  # Backup lightweight - 807MB
+            ModelConstants.DEFAULT_OLLAMA_MODEL,  # Use centralized model config
         ]
         self.secondary_models = [
-            ModelConstants.GEMMA3_270M,
-            ModelConstants.LLAMA_32_1B,
+            ModelConstants.DEFAULT_OLLAMA_MODEL,  # Use centralized model config
         ]
 
         # Timeout settings (in seconds)

@@ -59,7 +59,7 @@ class ContextWindowManager:
         return {
             "models": {
                 "default": {
-                    "name": ModelConstants.QWEN_25_CODER_7B,
+                    "name": ModelConstants.DEFAULT_OLLAMA_MODEL,
                     "context_window_tokens": 4096,
                     "max_output_tokens": 2048,
                     "message_budget": {
@@ -68,7 +68,7 @@ class ContextWindowManager:
                         "max_history_tokens": ModelConfig.MAX_HISTORY_TOKENS,
                     },
                 },
-                ModelConstants.QWEN_25_CODER_7B: {
+                ModelConstants.DEFAULT_OLLAMA_MODEL: {
                     "context_window_tokens": 4096,
                     "max_output_tokens": 2048,
                     "message_budget": {
