@@ -24,7 +24,7 @@ import { computed } from 'vue'
 
 interface Props {
   title?: string
-  variant?: 'default' | 'bordered' | 'elevated' | 'flat'
+  variant?: 'default' | 'bordered' | 'elevated' | 'flat' | 'dark'
   size?: 'small' | 'medium' | 'large'
   loading?: boolean
   collapsible?: boolean
@@ -94,6 +94,25 @@ const toggleCollapse = () => {
 
 .panel-flat {
   background-color: var(--blue-gray-50);
+}
+
+.panel-dark {
+  background-color: #1a1a2e;
+  border: 1px solid #2a2a3e;
+  border-radius: 0.5rem;
+}
+
+.panel-dark .panel-header {
+  border-bottom-color: #2a2a3e;
+}
+
+.panel-dark .panel-title {
+  color: #f9fafb;
+}
+
+.panel-dark .panel-footer {
+  border-top-color: #2a2a3e;
+  background-color: #111827;
 }
 
 .panel-small {
