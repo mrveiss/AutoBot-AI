@@ -944,4 +944,20 @@ def load_optional_routers():
     except ImportError as e:
         logger.warning(f"⚠️ Optional router not available: security_assessment - {e}")
 
+    # Anti-Pattern Detection router (Issue #221)
+    try:
+        from backend.api.anti_pattern import router as anti_pattern_router
+
+        optional_routers.append(
+            (
+                anti_pattern_router,
+                "/anti-pattern",
+                ["anti-pattern", "code-analysis"],
+                "anti_pattern",
+            )
+        )
+        logger.info("✅ Optional router loaded: anti_pattern")
+    except ImportError as e:
+        logger.warning(f"⚠️ Optional router not available: anti_pattern - {e}")
+
     return optional_routers
