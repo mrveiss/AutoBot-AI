@@ -276,6 +276,70 @@ async def create_entity(
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="list_all_entities",
+    error_code_prefix="MEMORY",
+)
+@router.get("/entities/all")
+async def list_all_entities(
+    entity_type: Optional[str] = Query(None, description="Filter by entity type"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum results to return"),
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
+) -> JSONResponse:
+    """
+    List all entities in the memory graph.
+
+    This endpoint must be defined BEFORE /entities/{entity_id} to ensure
+    proper route matching (static paths before dynamic paths).
+
+    Args:
+        entity_type: Filter by entity type (optional)
+        limit: Maximum results to return (default 100, max 500)
+        memory_graph: Memory graph instance
+
+    Returns:
+        List of all entities with optional type filtering
+    """
+    request_id = generate_request_id()
+
+    try:
+        logger.info(
+            f"[{request_id}] Listing all entities: type={entity_type}, limit={limit}"
+        )
+
+        # Use search with wildcard to get all entities
+        entities = await memory_graph.search_entities(
+            query="*",
+            entity_type=entity_type,
+            limit=limit,
+        )
+
+        logger.info(f"[{request_id}] Found {len(entities)} entities")
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "data": {
+                    "entities": entities,
+                    "total_count": len(entities),
+                    "filters": {
+                        "entity_type": entity_type,
+                        "limit": limit,
+                    },
+                },
+                "request_id": request_id,
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"[{request_id}] Error listing entities: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to list entities: {str(e)}"
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="get_entity_by_id",
     error_code_prefix="MEMORY",
 )
@@ -381,67 +445,6 @@ async def get_entity_by_name(
         logger.error(f"[{request_id}] Error searching entity: {e}")
         raise HTTPException(
             status_code=500, detail=f"Failed to search entity: {str(e)}"
-        )
-
-
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="list_all_entities",
-    error_code_prefix="MEMORY",
-)
-@router.get("/entities/all")
-async def list_all_entities(
-    entity_type: Optional[str] = Query(None, description="Filter by entity type"),
-    limit: int = Query(100, ge=1, le=500, description="Maximum results to return"),
-    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
-) -> JSONResponse:
-    """
-    List all entities in the memory graph.
-
-    Args:
-        entity_type: Filter by entity type (optional)
-        limit: Maximum results to return (default 100, max 500)
-        memory_graph: Memory graph instance
-
-    Returns:
-        List of all entities with optional type filtering
-    """
-    request_id = generate_request_id()
-
-    try:
-        logger.info(
-            f"[{request_id}] Listing all entities: type={entity_type}, limit={limit}"
-        )
-
-        # Use search with wildcard to get all entities
-        entities = await memory_graph.search_entities(
-            query="*",
-            entity_type=entity_type,
-            limit=limit,
-        )
-
-        logger.info(f"[{request_id}] Found {len(entities)} entities")
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "data": {
-                    "entities": entities,
-                    "total_count": len(entities),
-                    "filters": {
-                        "entity_type": entity_type,
-                        "limit": limit,
-                    },
-                },
-                "request_id": request_id,
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"[{request_id}] Error listing entities: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to list entities: {str(e)}"
         )
 
 
