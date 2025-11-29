@@ -11,12 +11,24 @@ Provides advanced code analysis capabilities including:
 - Redis operation optimization
 - Security vulnerability detection
 - Performance pattern analysis
+- Pre-commit hook analysis
 - Metrics and severity scoring
 
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
 from .anti_pattern_detector import AntiPatternDetector, AntiPatternResult
+from .precommit_analyzer import (
+    CheckCategory,
+    CheckDefinition,
+    CheckResult,
+    CheckSeverity,
+    CommitCheckResult,
+    PrecommitAnalyzer,
+    analyze_precommit,
+    get_check_categories,
+    get_precommit_checks,
+)
 from .performance_analyzer import (
     PerformanceAnalyzer,
     PerformanceIssue,
@@ -65,4 +77,14 @@ __all__ = [
     "PerformanceSeverity",
     "analyze_performance",
     "get_performance_issue_types",
+    # Pre-commit analysis (Issue #223)
+    "PrecommitAnalyzer",
+    "CheckCategory",
+    "CheckDefinition",
+    "CheckResult",
+    "CheckSeverity",
+    "CommitCheckResult",
+    "analyze_precommit",
+    "get_precommit_checks",
+    "get_check_categories",
 ]
