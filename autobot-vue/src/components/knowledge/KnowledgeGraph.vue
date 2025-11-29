@@ -389,7 +389,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 
@@ -509,7 +509,10 @@ async function refreshGraph() {
   try {
     // Fetch all entities
     const entitiesResponse = await apiClient.get('/api/memory/entities/all')
-    const entitiesData = await parseApiResponse(entitiesResponse)
+    const parsedResponse = await parseApiResponse(entitiesResponse)
+
+    // Handle standard API response format: { success: true, data: { entities: [...] } }
+    const entitiesData = parsedResponse?.data || parsedResponse
 
     if (entitiesData?.entities) {
       entities.value = entitiesData.entities
@@ -537,12 +540,27 @@ async function fetchRelations() {
   for (const entity of entities.value) {
     try {
       const response = await apiClient.get(`/api/memory/entities/${entity.id}/relations`)
-      const data = await parseApiResponse(response)
+      const parsedResponse = await parseApiResponse(response)
 
-      if (data?.relations) {
-        allRelations.push(...data.relations)
+      // Handle standard API response format: { success: true, data: { related_entities: [...] } }
+      const responseData = parsedResponse?.data || parsedResponse
+
+      // Backend returns related_entities with relation metadata
+      if (responseData?.related_entities) {
+        // Transform related_entities into Relation objects
+        for (const relatedEntity of responseData.related_entities) {
+          allRelations.push({
+            from: entity.id,
+            to: relatedEntity.entity?.id || relatedEntity.id,
+            type: relatedEntity.relation_type || relatedEntity.type || 'relates_to',
+            strength: relatedEntity.strength || 1.0
+          })
+        }
+      } else if (responseData?.relations) {
+        // Fallback: backend might return relations directly
+        allRelations.push(...responseData.relations)
       }
-    } catch (error) {
+    } catch {
       // Silently skip entities without relations
       console.debug(`No relations for entity ${entity.id}`)
     }
@@ -579,10 +597,18 @@ async function createEntity() {
       observations
     })
 
-    const data = await parseApiResponse(response)
+    const parsedResponse = await parseApiResponse(response)
 
-    if (data?.entity) {
-      entities.value.push(data.entity)
+    // Handle standard API response format: { success: true, data: {...entity...} }
+    const responseData = parsedResponse?.data || parsedResponse
+
+    // Backend returns the entity directly in data field
+    if (responseData?.id && responseData?.name) {
+      entities.value.push(responseData)
+      calculateLayout()
+    } else if (responseData?.entity) {
+      // Fallback: entity might be nested
+      entities.value.push(responseData.entity)
       calculateLayout()
     }
 
