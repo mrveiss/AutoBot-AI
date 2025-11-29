@@ -525,6 +525,97 @@
         </EmptyState>
       </div>
 
+      <!-- Import Tree Section -->
+      <div class="import-tree-section">
+        <div class="section-header">
+          <h3><i class="fas fa-sitemap"></i> File Import Tree</h3>
+          <button @click="loadImportTreeData" class="refresh-btn" :disabled="importTreeLoading">
+            <i :class="importTreeLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+            {{ importTreeLoading ? 'Loading...' : 'Refresh' }}
+          </button>
+        </div>
+
+        <!-- Error state -->
+        <div v-if="importTreeError" class="section-error">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>{{ importTreeError }}</span>
+          <button @click="loadImportTreeData" class="btn-link">Retry</button>
+        </div>
+
+        <!-- Import Tree Content -->
+        <div v-else-if="importTreeData && importTreeData.length > 0" class="import-tree-content">
+          <ImportTreeChart
+            :data="importTreeData"
+            title="File Import Relationships"
+            subtitle="Click to expand and see imports/importers"
+            :height="500"
+            :loading="importTreeLoading"
+            :error="importTreeError"
+            @navigate="handleFileNavigate"
+          />
+        </div>
+
+        <!-- Empty state -->
+        <EmptyState
+          v-else-if="!importTreeLoading"
+          icon="fas fa-sitemap"
+          message="No import data available yet. Click 'Refresh' to analyze file imports."
+          variant="info"
+        >
+          <template #actions>
+            <button @click="loadImportTreeData" class="btn-primary" :disabled="importTreeLoading">
+              <i class="fas fa-sitemap"></i> Analyze Imports
+            </button>
+          </template>
+        </EmptyState>
+      </div>
+
+      <!-- Function Call Graph Section -->
+      <div class="call-graph-section">
+        <div class="section-header">
+          <h3><i class="fas fa-project-diagram"></i> Function Call Graph</h3>
+          <button @click="loadCallGraphData" class="refresh-btn" :disabled="callGraphLoading">
+            <i :class="callGraphLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+            {{ callGraphLoading ? 'Loading...' : 'Refresh' }}
+          </button>
+        </div>
+
+        <!-- Error state -->
+        <div v-if="callGraphError" class="section-error">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>{{ callGraphError }}</span>
+          <button @click="loadCallGraphData" class="btn-link">Retry</button>
+        </div>
+
+        <!-- Call Graph Content -->
+        <div v-else-if="callGraphData && callGraphData.nodes?.length > 0" class="call-graph-content">
+          <FunctionCallGraph
+            :data="callGraphData"
+            :summary="callGraphSummary"
+            title="Function Call Relationships"
+            subtitle="View which functions call which other functions"
+            :height="600"
+            :loading="callGraphLoading"
+            :error="callGraphError"
+            @select="handleFunctionSelect"
+          />
+        </div>
+
+        <!-- Empty state -->
+        <EmptyState
+          v-else-if="!callGraphLoading"
+          icon="fas fa-project-diagram"
+          message="No function call data available. Click 'Refresh' to analyze function calls."
+          variant="info"
+        >
+          <template #actions>
+            <button @click="loadCallGraphData" class="btn-primary" :disabled="callGraphLoading">
+              <i class="fas fa-project-diagram"></i> Analyze Calls
+            </button>
+          </template>
+        </EmptyState>
+      </div>
+
       <!-- Problems Report -->
       <div class="problems-section">
         <h3><i class="fas fa-exclamation-triangle"></i> Code Problems</h3>
@@ -682,7 +773,8 @@ import {
   TopFilesChart,
   DependencyTreemap,
   ModuleImportsChart,
-  ImportTreeChart
+  ImportTreeChart,
+  FunctionCallGraph
 } from '@/components/charts'
 
 // Toast notifications
@@ -757,6 +849,12 @@ const dependencyError = ref('')
 const importTreeData = ref([])
 const importTreeLoading = ref(false)
 const importTreeError = ref('')
+
+// Function call graph data
+const callGraphData = ref({ nodes: [], edges: [] })
+const callGraphSummary = ref(null)
+const callGraphLoading = ref(false)
+const callGraphError = ref('')
 
 // Loading states for individual data types
 const loadingProgress = reactive({
@@ -1017,7 +1115,8 @@ const loadCodebaseAnalyticsData = async () => {
       loadDuplicates(),      // Silent version
       loadChartData(),       // Load chart data for visualizations
       loadDependencyData(),  // Load dependency analysis
-      loadImportTreeData()   // Load import tree data
+      loadImportTreeData(),  // Load import tree data
+      loadCallGraphData()    // Load function call graph
     ])
 
   } catch (error) {
@@ -1143,6 +1242,59 @@ const loadImportTreeData = async () => {
   } finally {
     importTreeLoading.value = false
   }
+}
+
+// Handle file navigation from import tree
+const handleFileNavigate = (filePath: string) => {
+  console.log('[CodebaseAnalytics] Navigate to file:', filePath)
+  // Could scroll to file in problems list or open in editor
+  // For now, just log it - can be extended later
+  showToast(`Selected: ${filePath}`, 'info', 2000)
+}
+
+// Load function call graph data
+const loadCallGraphData = async () => {
+  callGraphLoading.value = true
+  callGraphError.value = ''
+
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/analytics/call-graph`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`Call graph endpoint returned ${response.status}`)
+    }
+
+    const data = await response.json()
+
+    if (data.status === 'success' && data.call_graph) {
+      callGraphData.value = data.call_graph
+      callGraphSummary.value = data.summary
+      console.log('[CodebaseAnalytics] Call graph loaded:', {
+        nodes: data.call_graph.nodes?.length || 0,
+        edges: data.call_graph.edges?.length || 0,
+        summary: data.summary
+      })
+    }
+
+  } catch (error) {
+    console.error('[CodebaseAnalytics] Failed to load call graph:', error)
+    callGraphError.value = error.message
+  } finally {
+    callGraphLoading.value = false
+  }
+}
+
+// Handle function selection from call graph
+const handleFunctionSelect = (funcId: string) => {
+  console.log('[CodebaseAnalytics] Selected function:', funcId)
+  showToast(`Selected: ${funcId}`, 'info', 2000)
 }
 
 // Silent version of declarations loading (no alerts)
@@ -3140,5 +3292,103 @@ const formatSmellType = (type) => {
   background: rgba(59, 130, 246, 0.2);
   padding: 2px 8px;
   border-radius: 4px;
+}
+
+/* Import Tree Section */
+.import-tree-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.import-tree-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.import-tree-section .section-header h3 {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.import-tree-section .section-header h3 i {
+  color: #06b6d4;
+}
+
+.import-tree-section .section-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #fca5a5;
+}
+
+.import-tree-section .section-error i {
+  color: #ef4444;
+}
+
+.import-tree-content {
+  margin-top: 16px;
+}
+
+/* Call Graph Section */
+.call-graph-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.call-graph-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.call-graph-section .section-header h3 {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.call-graph-section .section-header h3 i {
+  color: #8b5cf6;
+}
+
+.call-graph-section .section-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #fca5a5;
+}
+
+.call-graph-section .section-error i {
+  color: #ef4444;
+}
+
+.call-graph-content {
+  margin-top: 16px;
 }
 </style>
