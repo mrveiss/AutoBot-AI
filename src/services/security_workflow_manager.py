@@ -25,6 +25,24 @@ from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
+# Lazy import for memory integration to avoid circular imports
+_memory_integration = None
+
+
+async def _get_memory_integration():
+    """Lazy load memory integration."""
+    global _memory_integration
+    if _memory_integration is None:
+        try:
+            from src.services.security_memory_integration import (
+                get_security_memory_integration,
+            )
+            _memory_integration = await get_security_memory_integration()
+        except Exception as e:
+            logger.warning(f"Memory integration not available: {e}")
+            _memory_integration = None
+    return _memory_integration
+
 
 class AssessmentPhase(str, Enum):
     """Security assessment workflow phases."""
@@ -339,6 +357,21 @@ class SecurityWorkflowManager:
             f"name={name}, target={target}, training_mode={training_mode}"
         )
 
+        # Create Memory MCP entity for the assessment
+        try:
+            memory = await _get_memory_integration()
+            if memory:
+                await memory.create_assessment_entity(
+                    assessment_id=assessment_id,
+                    name=name,
+                    target=target,
+                    scope=scope or [target],
+                    training_mode=training_mode,
+                    metadata=metadata,
+                )
+        except Exception as e:
+            logger.warning(f"Failed to create assessment entity in Memory MCP: {e}")
+
         return assessment
 
     async def _save_assessment(self, assessment: SecurityAssessment) -> None:
@@ -445,8 +478,8 @@ class SecurityWorkflowManager:
         # Check training mode requirement for exploitation
         if next_phase == "EXPLOITATION" and not assessment.training_mode:
             logger.warning(
-                f"Cannot enter EXPLOITATION phase: training_mode=False. "
-                f"Skipping to REPORTING."
+                "Cannot enter EXPLOITATION phase: training_mode=False. "
+                "Skipping to REPORTING."
             )
             next_phase = "REPORTING"
 
@@ -496,6 +529,8 @@ class SecurityWorkflowManager:
         if not assessment:
             return None
 
+        is_new_host = False
+
         # Check if host already exists
         existing = next((h for h in assessment.hosts if h.ip == ip), None)
         if existing:
@@ -512,9 +547,26 @@ class SecurityWorkflowManager:
                 metadata=metadata or {},
             )
             assessment.hosts.append(host)
+            is_new_host = True
 
         await self._save_assessment(assessment)
         logger.info(f"Added/updated host {ip} in assessment {assessment_id}")
+
+        # Create Memory MCP entity for new hosts
+        if is_new_host:
+            try:
+                memory = await _get_memory_integration()
+                if memory:
+                    await memory.create_host_entity(
+                        assessment_id=assessment_id,
+                        ip=ip,
+                        hostname=hostname,
+                        status=status,
+                        os_guess=metadata.get("os_guess") if metadata else None,
+                        metadata=metadata,
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to create host entity in Memory MCP: {e}")
 
         return assessment
 
@@ -527,6 +579,7 @@ class SecurityWorkflowManager:
         state: str = "open",
         service: Optional[str] = None,
         version: Optional[str] = None,
+        product: Optional[str] = None,
     ) -> Optional[SecurityAssessment]:
         """
         Add a discovered port to a host.
@@ -539,6 +592,7 @@ class SecurityWorkflowManager:
             state: Port state (open/closed/filtered)
             service: Service name
             version: Service version
+            product: Product name
 
         Returns:
             Updated SecurityAssessment
@@ -549,6 +603,7 @@ class SecurityWorkflowManager:
 
         # Find or create host
         host = next((h for h in assessment.hosts if h.ip == host_ip), None)
+        is_new_host = host is None
         if not host:
             host = TargetHost(ip=host_ip, status="up")
             assessment.hosts.append(host)
@@ -560,6 +615,7 @@ class SecurityWorkflowManager:
             "state": state,
             "service": service,
             "version": version,
+            "product": product,
             "discovered_at": datetime.now(timezone.utc).isoformat(),
         }
         host.ports.append(port_info)
@@ -571,6 +627,7 @@ class SecurityWorkflowManager:
                 "name": service,
                 "version": version,
                 "protocol": protocol,
+                "product": product,
             }
             host.services.append(service_info)
 
@@ -579,6 +636,32 @@ class SecurityWorkflowManager:
             f"Added port {port}/{protocol} ({service or 'unknown'}) "
             f"to {host_ip} in assessment {assessment_id}"
         )
+
+        # Create Memory MCP entities
+        try:
+            memory = await _get_memory_integration()
+            if memory:
+                # Create host entity if new
+                if is_new_host:
+                    await memory.create_host_entity(
+                        assessment_id=assessment_id,
+                        ip=host_ip,
+                        status="up",
+                    )
+
+                # Create service entity for identified services
+                if service and state == "open":
+                    await memory.create_service_entity(
+                        assessment_id=assessment_id,
+                        host_ip=host_ip,
+                        port=port,
+                        protocol=protocol,
+                        service_name=service,
+                        version=version,
+                        product=product,
+                    )
+        except Exception as e:
+            logger.warning(f"Failed to create service entity in Memory MCP: {e}")
 
         return assessment
 
@@ -592,6 +675,7 @@ class SecurityWorkflowManager:
         description: str = "",
         affected_service: Optional[str] = None,
         affected_port: Optional[int] = None,
+        references: Optional[list[str]] = None,
         metadata: Optional[dict[str, Any]] = None,
     ) -> Optional[SecurityAssessment]:
         """
@@ -606,6 +690,7 @@ class SecurityWorkflowManager:
             description: Vulnerability description
             affected_service: Affected service name
             affected_port: Affected port number
+            references: Reference URLs
             metadata: Additional vulnerability data
 
         Returns:
@@ -617,6 +702,7 @@ class SecurityWorkflowManager:
 
         # Find or create host
         host = next((h for h in assessment.hosts if h.ip == host_ip), None)
+        is_new_host = host is None
         if not host:
             host = TargetHost(ip=host_ip, status="up")
             assessment.hosts.append(host)
@@ -628,6 +714,7 @@ class SecurityWorkflowManager:
             "description": description,
             "affected_service": affected_service,
             "affected_port": affected_port,
+            "references": references or [],
             "discovered_at": datetime.now(timezone.utc).isoformat(),
             "metadata": metadata or {},
         }
@@ -646,6 +733,34 @@ class SecurityWorkflowManager:
             f"Added vulnerability {cve_id or title} to {host_ip} "
             f"in assessment {assessment_id}"
         )
+
+        # Create Memory MCP entities
+        try:
+            memory = await _get_memory_integration()
+            if memory:
+                # Create host entity if new
+                if is_new_host:
+                    await memory.create_host_entity(
+                        assessment_id=assessment_id,
+                        ip=host_ip,
+                        status="up",
+                    )
+
+                # Create vulnerability entity
+                await memory.create_vulnerability_entity(
+                    assessment_id=assessment_id,
+                    host_ip=host_ip,
+                    cve_id=cve_id,
+                    title=title,
+                    severity=severity,
+                    description=description,
+                    affected_port=affected_port,
+                    affected_service=affected_service,
+                    references=references,
+                    metadata=metadata,
+                )
+        except Exception as e:
+            logger.warning(f"Failed to create vulnerability entity in Memory MCP: {e}")
 
         return assessment
 
