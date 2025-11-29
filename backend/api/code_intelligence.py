@@ -30,6 +30,16 @@ from src.code_intelligence.redis_optimizer import (
     OptimizationSeverity,
     RedisOptimizer,
 )
+from src.code_intelligence.security_analyzer import (
+    SecurityAnalyzer,
+    SecuritySeverity,
+    get_vulnerability_types,
+)
+from src.code_intelligence.performance_analyzer import (
+    PerformanceAnalyzer,
+    PerformanceSeverity,
+    get_performance_issue_types,
+)
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -728,12 +738,6 @@ async def get_redis_usage_health_score(
 # Security Analysis Endpoints (Issue #219)
 # ============================================================================
 
-from src.code_intelligence.security_analyzer import (
-    SecurityAnalyzer,
-    SecuritySeverity,
-    get_vulnerability_types,
-)
-
 
 class SecurityAnalysisRequest(BaseModel):
     """Request model for security analysis."""
@@ -1055,6 +1059,331 @@ async def get_security_report(
 
     except Exception as e:
         logger.error(f"Security report generation failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Report generation failed: {str(e)}",
+        )
+
+
+# ============================================================================
+# Performance Analysis Endpoints (Issue #222)
+# ============================================================================
+
+
+class PerformanceAnalysisRequest(BaseModel):
+    """Request model for performance analysis."""
+
+    path: str = Field(
+        ...,
+        description="Directory path to analyze for performance issues",
+    )
+    exclude_patterns: Optional[list] = Field(
+        default=None,
+        description="Patterns to exclude from analysis",
+    )
+    min_severity: Optional[str] = Field(
+        default=None,
+        description="Minimum severity level to include",
+    )
+
+
+class PerformanceFileScanRequest(BaseModel):
+    """Request for single file performance scan."""
+
+    file_path: str = Field(..., description="Path to Python file to analyze")
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="performance_analyze",
+    error_code_prefix="PERFORMANCE",
+)
+@router.post("/performance/analyze")
+async def performance_analyze(request: PerformanceAnalysisRequest):
+    """
+    Analyze a codebase for performance issues.
+
+    Detects:
+    - N+1 query patterns
+    - Nested loop complexity
+    - Sync operations in async context
+    - Sequential awaits (should be parallel)
+    - String concatenation in loops
+    - Inefficient data structures
+    """
+    if not os.path.exists(request.path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path does not exist: {request.path}",
+        )
+
+    if not os.path.isdir(request.path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path is not a directory: {request.path}",
+        )
+
+    try:
+        analyzer = PerformanceAnalyzer(
+            project_root=request.path,
+            exclude_patterns=request.exclude_patterns,
+        )
+        results = analyzer.analyze_directory()
+
+        # Filter by severity if specified
+        if request.min_severity:
+            severity_order = ["info", "low", "medium", "high", "critical"]
+            try:
+                min_idx = severity_order.index(request.min_severity.lower())
+                results = [
+                    r
+                    for r in results
+                    if severity_order.index(r.severity.value) >= min_idx
+                ]
+            except ValueError:
+                pass
+
+        summary = analyzer.get_summary()
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "timestamp": datetime.now().isoformat(),
+                "path": request.path,
+                "summary": summary,
+                "findings": [r.to_dict() for r in results],
+                "total_findings": len(results),
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Performance analysis failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Performance analysis failed: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="performance_scan_file",
+    error_code_prefix="PERFORMANCE",
+)
+@router.post("/performance/scan-file")
+async def performance_scan_file(request: PerformanceFileScanRequest):
+    """
+    Scan a single file for performance issues.
+
+    Quick scan of a single Python file for performance bottlenecks.
+    """
+    if not os.path.exists(request.file_path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"File does not exist: {request.file_path}",
+        )
+
+    if not request.file_path.endswith(".py"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only Python files (.py) are supported",
+        )
+
+    try:
+        analyzer = PerformanceAnalyzer()
+        results = analyzer.analyze_file(request.file_path)
+
+        # Group by issue type
+        by_type = {}
+        for result in results:
+            itype = result.issue_type.value
+            if itype not in by_type:
+                by_type[itype] = []
+            by_type[itype].append(result.to_dict())
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "timestamp": datetime.now().isoformat(),
+                "file": request.file_path,
+                "findings": [r.to_dict() for r in results],
+                "total_findings": len(results),
+                "by_type": by_type,
+                "severity_counts": {
+                    sev.value: len([r for r in results if r.severity == sev])
+                    for sev in PerformanceSeverity
+                },
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Performance file scan failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"File scan failed: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_performance_issue_types",
+    error_code_prefix="PERFORMANCE",
+)
+@router.get("/performance/issue-types")
+async def list_performance_issue_types():
+    """
+    Get all supported performance issue types.
+
+    Returns list of all performance issues that can be detected,
+    along with their categories.
+    """
+    issue_types = get_performance_issue_types()
+
+    # Group by category
+    by_category = {}
+    for it in issue_types:
+        cat = it["category"]
+        if cat not in by_category:
+            by_category[cat] = []
+        by_category[cat].append(it["type"])
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "timestamp": datetime.now().isoformat(),
+            "issue_types": issue_types,
+            "total_types": len(issue_types),
+            "by_category": by_category,
+        },
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="performance_score",
+    error_code_prefix="PERFORMANCE",
+)
+@router.get("/performance/score")
+async def get_performance_score(
+    path: str = Query(..., description="Directory path to analyze"),
+):
+    """
+    Get performance health score for a codebase.
+
+    Returns a score from 0-100 based on the number and severity
+    of performance issues detected. Higher scores indicate
+    better performance.
+    """
+    if not os.path.exists(path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path does not exist: {path}",
+        )
+
+    try:
+        analyzer = PerformanceAnalyzer(project_root=path)
+        analyzer.analyze_directory()
+        summary = analyzer.get_summary()
+
+        score = summary["performance_score"]
+        grade = summary["grade"]
+
+        if score >= 90:
+            status = "Excellent performance - minimal issues"
+        elif score >= 80:
+            status = "Good performance with minor optimizations possible"
+        elif score >= 70:
+            status = "Fair performance - several optimizations recommended"
+        elif score >= 50:
+            status = "Performance issues detected - optimization needed"
+        else:
+            status = "Critical performance problems - immediate action required"
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "timestamp": datetime.now().isoformat(),
+                "path": path,
+                "performance_score": score,
+                "grade": grade,
+                "status_message": status,
+                "total_issues": summary["total_issues"],
+                "critical_issues": summary["critical_issues"],
+                "high_issues": summary["high_issues"],
+                "files_analyzed": summary["files_analyzed"],
+                "severity_breakdown": summary["by_severity"],
+                "top_issues": summary["top_issues"],
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Performance score calculation failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Performance score calculation failed: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="performance_report",
+    error_code_prefix="PERFORMANCE",
+)
+@router.get("/performance/report")
+async def get_performance_report(
+    path: str = Query(..., description="Directory path to analyze"),
+    format: str = Query(default="json", description="Report format: json or markdown"),
+):
+    """
+    Generate a comprehensive performance report.
+
+    Returns a detailed performance analysis report including:
+    - Summary with score and grade
+    - All findings with optimization recommendations
+    - Complexity analysis
+    - Top recommendations
+    """
+    if not os.path.exists(path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path does not exist: {path}",
+        )
+
+    try:
+        analyzer = PerformanceAnalyzer(project_root=path)
+        analyzer.analyze_directory()
+        report = analyzer.generate_report(format=format)
+
+        if format == "markdown":
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "status": "success",
+                    "timestamp": datetime.now().isoformat(),
+                    "path": path,
+                    "format": "markdown",
+                    "report": report,
+                },
+            )
+        else:
+            import json
+
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "status": "success",
+                    "timestamp": datetime.now().isoformat(),
+                    "path": path,
+                    "format": "json",
+                    "report": json.loads(report),
+                },
+            )
+
+    except Exception as e:
+        logger.error(f"Performance report generation failed: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Report generation failed: {str(e)}",

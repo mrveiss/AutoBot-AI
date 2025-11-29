@@ -10,12 +10,21 @@ Provides advanced code analysis capabilities including:
 - Circular dependency detection
 - Redis operation optimization
 - Security vulnerability detection
+- Performance pattern analysis
 - Metrics and severity scoring
 
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
 from .anti_pattern_detector import AntiPatternDetector, AntiPatternResult
+from .performance_analyzer import (
+    PerformanceAnalyzer,
+    PerformanceIssue,
+    PerformanceIssueType,
+    PerformanceSeverity,
+    analyze_performance,
+    get_performance_issue_types,
+)
 from .redis_optimizer import (
     OptimizationResult,
     OptimizationSeverity,
@@ -49,4 +58,11 @@ __all__ = [
     "VulnerabilityType",
     "analyze_security",
     "get_vulnerability_types",
+    # Performance analysis (Issue #222)
+    "PerformanceAnalyzer",
+    "PerformanceIssue",
+    "PerformanceIssueType",
+    "PerformanceSeverity",
+    "analyze_performance",
+    "get_performance_issue_types",
 ]
