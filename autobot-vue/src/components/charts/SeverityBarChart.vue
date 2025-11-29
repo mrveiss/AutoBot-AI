@@ -1,0 +1,147 @@
+<!--
+  AutoBot - AI-Powered Automation Platform
+  Copyright (c) 2025 mrveiss
+  Author: mrveiss
+
+  SeverityBarChart.vue - Horizontal bar chart for problem severity levels
+-->
+<template>
+  <BaseChart
+    type="bar"
+    :height="height"
+    :series="chartSeries"
+    :options="chartOptions"
+    :title="title"
+    :subtitle="subtitle"
+    :loading="loading"
+    :error="error"
+  />
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import BaseChart from './BaseChart.vue'
+import type { ApexOptions } from 'apexcharts'
+
+interface SeverityData {
+  severity: string
+  count: number
+}
+
+interface Props {
+  data: SeverityData[]
+  title?: string
+  subtitle?: string
+  height?: number | string
+  loading?: boolean
+  error?: string
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  title: 'Problems by Severity',
+  subtitle: '',
+  height: 300,
+  loading: false,
+  error: ''
+})
+
+// Transform data for bar chart
+const chartSeries = computed(() => [
+  {
+    name: 'Problems',
+    data: props.data.map((item) => item.count)
+  }
+])
+
+const chartOptions = computed<ApexOptions>(() => ({
+  chart: {
+    type: 'bar'
+  },
+  plotOptions: {
+    bar: {
+      horizontal: true,
+      borderRadius: 4,
+      barHeight: '60%',
+      distributed: true,
+      dataLabels: {
+        position: 'center'
+      }
+    }
+  },
+  colors: getSeverityColors(props.data.map((item) => item.severity)),
+  xaxis: {
+    categories: props.data.map((item) => formatSeverityLabel(item.severity)),
+    labels: {
+      formatter: (value: string) => {
+        const num = parseInt(value)
+        if (num >= 1000) return `${(num / 1000).toFixed(1)}k`
+        return value
+      }
+    }
+  },
+  yaxis: {
+    labels: {
+      style: {
+        fontSize: '13px',
+        fontWeight: 500
+      }
+    }
+  },
+  dataLabels: {
+    enabled: true,
+    formatter: (value: number) => value.toLocaleString(),
+    style: {
+      fontSize: '12px',
+      fontWeight: 600
+    },
+    offsetX: 0
+  },
+  tooltip: {
+    y: {
+      formatter: (value: number) => `${value.toLocaleString()} problems`
+    }
+  },
+  legend: {
+    show: false
+  }
+}))
+
+// Get colors based on severity
+function getSeverityColors(severities: string[]): string[] {
+  const severityColors: Record<string, string> = {
+    critical: '#dc2626',
+    high: '#ef4444',
+    error: '#ef4444',
+    medium: '#f59e0b',
+    warning: '#f59e0b',
+    low: '#3b82f6',
+    info: '#3b82f6',
+    hint: '#10b981',
+    suggestion: '#10b981',
+    trivial: '#64748b'
+  }
+
+  return severities.map((severity) => {
+    const key = severity.toLowerCase()
+    return severityColors[key] || '#6366f1'
+  })
+}
+
+// Format severity label for display
+function formatSeverityLabel(severity: string): string {
+  const labels: Record<string, string> = {
+    critical: 'Critical',
+    high: 'High',
+    error: 'Error',
+    medium: 'Medium',
+    warning: 'Warning',
+    low: 'Low',
+    info: 'Info',
+    hint: 'Hint',
+    suggestion: 'Suggestion',
+    trivial: 'Trivial'
+  }
+
+  return labels[severity.toLowerCase()] || severity.charAt(0).toUpperCase() + severity.slice(1)
+}
+</script>
