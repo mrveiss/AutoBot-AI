@@ -45,6 +45,7 @@ from typing import Any, Dict, Optional
 
 from playwright.async_api import Page
 
+from src.constants.network_constants import NetworkConstants
 from src.event_manager import event_manager
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,7 @@ class CaptchaHumanLoop:
         """
         self.timeout_seconds = timeout_seconds
         self.auto_skip_on_timeout = auto_skip_on_timeout
-        self.vnc_url = vnc_url or "http://127.0.0.1:6080/vnc.html"
+        self.vnc_url = vnc_url or f"http://127.0.0.1:{NetworkConstants.VNC_PORT}/vnc.html"
         self.enable_auto_solve = enable_auto_solve
         self._auto_solver = None
 

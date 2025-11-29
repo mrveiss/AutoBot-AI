@@ -361,8 +361,8 @@ class ServiceRegistry:
             Full service URL
 
         Example:
-            registry.get_service_url("redis")  # redis://localhost:6379
-            registry.get_service_url("ai-stack", "/api/process")  # http://ai-stack.autobot.local:8080/api/process
+            registry.get_service_url("redis")  # redis://localhost:{NetworkConstants.REDIS_PORT}
+            registry.get_service_url("ai-stack", "/api/process")  # http://ai-stack.autobot.local:{NetworkConstants.AI_STACK_PORT}/api/process
         """
         if service_name not in self.services:
             self.logger.error(f"Unknown service: {service_name}")

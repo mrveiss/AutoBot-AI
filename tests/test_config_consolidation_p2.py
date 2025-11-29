@@ -145,7 +145,7 @@ async def test_config_consolidation():
 
         # Verify environment variables are being used
         env_vars = [
-            "AUTOBOT_OLLAMA_MODEL",
+            "AUTOBOT_DEFAULT_LLM_MODEL",
             "AUTOBOT_BACKEND_PORT",
             "AUTOBOT_REDIS_DB",
         ]
