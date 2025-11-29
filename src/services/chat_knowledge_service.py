@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from backend.services.rag_service import RAGService
 from src.advanced_rag_optimizer import SearchResult
+from src.constants.network_constants import ServiceURLs
 from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("chat_knowledge_service")
@@ -524,7 +525,7 @@ class DocumentationSearcher:
 
             # Initialize embedding model
             self._embed_model = OllamaEmbedding(
-                model_name="nomic-embed-text", base_url="http://127.0.0.1:11434"
+                model_name="nomic-embed-text", base_url=ServiceURLs.OLLAMA_LOCAL
             )
 
             self._initialized = True

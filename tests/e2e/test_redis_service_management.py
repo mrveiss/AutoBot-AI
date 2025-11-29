@@ -13,8 +13,16 @@ Test Coverage: Complete user journeys
 """
 
 import logging
+import sys
+from pathlib import Path
+
 import pytest
 from playwright.async_api import async_playwright, expect
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from src.constants.network_constants import ServiceURLs
 
 # Configure logging for tests
 logging.basicConfig(level=logging.INFO)
@@ -25,13 +33,13 @@ logger = logging.getLogger(__name__)
 @pytest.fixture(scope="session")
 def frontend_url():
     """Get frontend URL for E2E testing."""
-    return "http://172.16.168.21:5173"
+    return ServiceURLs.FRONTEND_VM
 
 
 @pytest.fixture(scope="session")
 def backend_url():
     """Get backend API URL for E2E testing."""
-    return "http://172.16.168.20:8001"
+    return ServiceURLs.BACKEND_API
 
 
 @pytest.fixture

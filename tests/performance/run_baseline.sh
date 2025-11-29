@@ -23,9 +23,14 @@ echo "Week 2-3 Task 2.5: Baseline Measurement BEFORE Async Conversions"
 echo "================================================================================"
 echo ""
 
+# Backend configuration from environment or defaults
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
+BACKEND_URL="http://${BACKEND_HOST}:${BACKEND_PORT}"
+
 # Check if backend is running
 echo "🔍 Checking if AutoBot backend is running..."
-if ! curl -s -f http://172.16.168.20:8001/api/health > /dev/null 2>&1; then
+if ! curl -s -f "${BACKEND_URL}/api/health" > /dev/null 2>&1; then
     echo ""
     echo "❌ ERROR: AutoBot backend is not running!"
     echo ""

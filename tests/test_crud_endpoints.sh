@@ -4,7 +4,10 @@
 
 set -e  # Exit on error
 
-BACKEND_URL="http://172.16.168.20:8001/api/knowledge_base"
+# Source environment variables if available, otherwise use defaults from NetworkConstants
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
+BACKEND_URL="http://${BACKEND_HOST}:${BACKEND_PORT}/api/knowledge_base"
 
 echo "========================================="
 echo "Testing Knowledge Base CRUD Operations"
