@@ -75,6 +75,9 @@ from src.utils.logging_manager import get_logger
 # Get centralized logger
 logger = get_logger(__name__, "backend")
 
+# Lock for thread-safe access to background_init_status
+_init_status_lock = asyncio.Lock()
+
 # Enhanced initialization tracking including AI Stack
 background_init_status = {
     "redis_pools": "pending",
@@ -85,6 +88,18 @@ background_init_status = {
     "ai_stack_agents": "pending",
     "errors": [],
 }
+
+
+async def update_init_status(key: str, value: str) -> None:
+    """Thread-safe update of background_init_status."""
+    async with _init_status_lock:
+        background_init_status[key] = value
+
+
+async def append_init_error(error: str) -> None:
+    """Thread-safe append to background_init_status errors."""
+    async with _init_status_lock:
+        background_init_status["errors"].append(error)
 
 
 def log_initialization_step(
@@ -105,7 +120,7 @@ async def initialize_ai_stack(app: FastAPI) -> None:
         health_status = await ai_client.health_check()
 
         if health_status["status"] == "healthy":
-            background_init_status["ai_stack"] = "ready"
+            await update_init_status("ai_stack", "ready")
             log_initialization_step(
                 "AI Stack", "AI Stack connection established", 50, True
             )
@@ -114,7 +129,7 @@ async def initialize_ai_stack(app: FastAPI) -> None:
             try:
                 agents_info = await ai_client.list_available_agents()
                 agent_count = len(agents_info.get("agents", []))
-                background_init_status["ai_stack_agents"] = "ready"
+                await update_init_status("ai_stack_agents", "ready")
 
                 # Store agent info in app state for reference
                 app.state.ai_stack_agents = agents_info
@@ -126,20 +141,20 @@ async def initialize_ai_stack(app: FastAPI) -> None:
 
             except Exception as e:
                 logger.warning(f"AI Stack agent verification failed: {e}")
-                background_init_status["ai_stack_agents"] = "partial"
-                background_init_status["errors"].append(f"Agent verification: {str(e)}")
+                await update_init_status("ai_stack_agents", "partial")
+                await append_init_error(f"Agent verification: {str(e)}")
 
         else:
-            background_init_status["ai_stack"] = "degraded"
-            background_init_status["errors"].append("AI Stack health check failed")
+            await update_init_status("ai_stack", "degraded")
+            await append_init_error("AI Stack health check failed")
             log_initialization_step(
                 "AI Stack", "AI Stack connection degraded", 100, False
             )
 
     except Exception as e:
         logger.error(f"AI Stack initialization failed: {e}")
-        background_init_status["ai_stack"] = "failed"
-        background_init_status["errors"].append(f"AI Stack init: {str(e)}")
+        await update_init_status("ai_stack", "failed")
+        await append_init_error(f"AI Stack init: {str(e)}")
         log_initialization_step(
             "AI Stack", f"Initialization failed: {str(e)}", 100, False
         )
@@ -155,7 +170,7 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
     try:
         kb = await factory_kb(app, force_refresh)
         if kb is not None:
-            background_init_status["knowledge_base"] = "ready"
+            await update_init_status("knowledge_base", "ready")
 
             # Enhanced: Check if AI Stack integration is available
             if (
@@ -168,13 +183,13 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
             else:
                 logger.info("Knowledge Base initialized in standalone mode")
         else:
-            background_init_status["knowledge_base"] = "failed"
+            await update_init_status("knowledge_base", "failed")
             logger.error("Knowledge base initialization failed")
         return kb
     except Exception as e:
         logger.error(f"Knowledge base initialization error: {e}")
-        background_init_status["knowledge_base"] = "failed"
-        background_init_status["errors"].append(f"KB init: {str(e)}")
+        await update_init_status("knowledge_base", "failed")
+        await append_init_error(f"KB init: {str(e)}")
         return None
 
 
@@ -196,7 +211,7 @@ async def enhanced_background_init(app: FastAPI):
             try:
                 # Mark Redis as ready - no initialization needed with centralized client
                 # Components will call get_redis_client() directly when they need Redis
-                background_init_status["redis_pools"] = "ready"
+                await update_init_status("redis_pools", "ready")
                 log_initialization_step(
                     "Redis",
                     "Using centralized Redis client management (src.utils.redis_client)",
@@ -205,8 +220,8 @@ async def enhanced_background_init(app: FastAPI):
                 )
             except Exception as e:
                 logger.error(f"Redis status check failed: {e}")
-                background_init_status["redis_pools"] = "failed"
-                background_init_status["errors"].append(f"Redis: {str(e)}")
+                await update_init_status("redis_pools", "failed")
+                await append_init_error(f"Redis: {str(e)}")
 
         # Knowledge base initialization
         async def init_kb():
@@ -222,27 +237,27 @@ async def enhanced_background_init(app: FastAPI):
             try:
                 workflow_manager = ChatWorkflowManager()
                 app.state.chat_workflow_manager = workflow_manager
-                background_init_status["chat_workflow"] = "ready"
+                await update_init_status("chat_workflow", "ready")
                 log_initialization_step(
                     "Chat Workflow", "Chat workflow manager initialized", 90, True
                 )
             except Exception as e:
                 logger.error(f"Chat workflow initialization failed: {e}")
-                background_init_status["chat_workflow"] = "failed"
-                background_init_status["errors"].append(f"Chat workflow: {str(e)}")
+                await update_init_status("chat_workflow", "failed")
+                await append_init_error(f"Chat workflow: {str(e)}")
 
         # LLM sync initialization
         async def init_llm_sync():
             try:
                 await background_llm_sync()
-                background_init_status["llm_sync"] = "ready"
+                await update_init_status("llm_sync", "ready")
                 log_initialization_step(
                     "LLM Sync", "LLM synchronization completed", 90, True
                 )
             except Exception as e:
                 logger.error(f"LLM sync failed: {e}")
-                background_init_status["llm_sync"] = "failed"
-                background_init_status["errors"].append(f"LLM sync: {str(e)}")
+                await update_init_status("llm_sync", "failed")
+                await append_init_error(f"LLM sync: {str(e)}")
 
         # AI Stack initialization (new)
         async def init_ai_stack():
@@ -280,7 +295,7 @@ async def enhanced_background_init(app: FastAPI):
 
     except Exception as e:
         logger.error(f"Background initialization failed: {e}")
-        background_init_status["errors"].append(f"Background init: {str(e)}")
+        await append_init_error(f"Background init: {str(e)}")
 
 
 @asynccontextmanager

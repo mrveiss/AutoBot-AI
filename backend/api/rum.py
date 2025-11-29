@@ -6,6 +6,7 @@ RUM (Real User Monitoring) API endpoints for logging frontend events.
 Provides comprehensive logging of user interactions, errors, and performance metrics.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 
@@ -32,6 +33,9 @@ rum_config = {
     "log_to_backend": True,
     "log_level": "info",
 }
+
+# Lock for thread-safe access to RUM state
+_rum_lock = asyncio.Lock()
 
 # In-memory storage for RUM events (in production, this would use Redis or database)
 rum_events = []
@@ -98,25 +102,28 @@ rum_logger = setup_rum_logger()
 @router.post("/config")
 async def configure_rum(config: RumConfig):
     """Configure RUM monitoring settings"""
-    # Note: rum_config is modified in-place via .update(), no reassignment needed
     try:
-        rum_config.update(config.dict())
+        async with _rum_lock:
+            rum_config.update(config.dict())
 
-        # Reinitialize logger with new settings
-        global rum_logger
-        rum_logger = setup_rum_logger()
+            # Reinitialize logger with new settings
+            global rum_logger
+            rum_logger = setup_rum_logger()
 
-        if rum_config["enabled"]:
-            rum_logger.info(f"RUM monitoring enabled with config: {rum_config}")
+            config_enabled = rum_config["enabled"]
+            config_copy = dict(rum_config)
+
+        if config_enabled:
+            rum_logger.info(f"RUM monitoring enabled with config: {config_copy}")
         else:
             rum_logger.info("RUM monitoring disabled")
 
-        logger.info(f"RUM configuration updated: enabled={rum_config['enabled']}")
+        logger.info(f"RUM configuration updated: enabled={config_enabled}")
 
         return {
             "status": "success",
             "message": "RUM configuration updated",
-            "config": rum_config,
+            "config": config_copy,
         }
 
     except Exception as e:
@@ -133,31 +140,39 @@ async def configure_rum(config: RumConfig):
 async def log_rum_event(event: RumEvent):
     """Log a RUM event from the frontend"""
     try:
-        if not rum_config["enabled"]:
-            return {"status": "disabled", "message": "RUM monitoring is disabled"}
+        async with _rum_lock:
+            if not rum_config["enabled"]:
+                return {"status": "disabled", "message": "RUM monitoring is disabled"}
 
-        # Convert event to dictionary for processing
-        event_data = event.dict()
-        event_data["server_timestamp"] = datetime.now().isoformat()
+            # Convert event to dictionary for processing
+            event_data = event.dict()
+            event_data["server_timestamp"] = datetime.now().isoformat()
 
-        # Store event in memory (in production, this would go to Redis/DB)
-        rum_events.append(event_data)
+            # Store event in memory (in production, this would go to Redis/DB)
+            rum_events.append(event_data)
 
-        # Update session tracking
-        session_id = event.sessionId
-        if session_id not in rum_sessions:
-            rum_sessions[session_id] = {
-                "start_time": event_data["server_timestamp"],
-                "event_count": 0,
-                "last_activity": event_data["server_timestamp"],
-                "user_agent": event.userAgent,
-                "initial_url": event.url,
-            }
+            # Update session tracking
+            session_id = event.sessionId
+            if session_id not in rum_sessions:
+                rum_sessions[session_id] = {
+                    "start_time": event_data["server_timestamp"],
+                    "event_count": 0,
+                    "last_activity": event_data["server_timestamp"],
+                    "user_agent": event.userAgent,
+                    "initial_url": event.url,
+                }
 
-        rum_sessions[session_id]["event_count"] += 1
-        rum_sessions[session_id]["last_activity"] = event_data["server_timestamp"]
+            rum_sessions[session_id]["event_count"] += 1
+            rum_sessions[session_id]["last_activity"] = event_data["server_timestamp"]
+            session_event_count = rum_sessions[session_id]["event_count"]
+            interaction_tracking = rum_config["interaction_tracking"]
 
-        # Log to dedicated RUM log file based on event type
+            # Keep only last 10000 events in memory to prevent memory leaks
+            if len(rum_events) > 10000:
+                # Use slice assignment to modify global list in-place
+                rum_events[:] = rum_events[-5000:]  # Keep last 5000 events
+
+        # Log to dedicated RUM log file based on event type (outside lock)
         log_message = format_rum_log_message(event_data)
 
         if event.type == "error" or event.type == "promise_rejection":
@@ -165,20 +180,15 @@ async def log_rum_event(event: RumEvent):
         elif event.type == "performance":
             rum_logger.info(log_message)
         elif event.type == "interaction":
-            if rum_config["interaction_tracking"]:
+            if interaction_tracking:
                 rum_logger.debug(log_message)
         else:
             rum_logger.info(log_message)
 
-        # Keep only last 10000 events in memory to prevent memory leaks
-        if len(rum_events) > 10000:
-            # Use slice assignment to modify global list in-place
-            rum_events[:] = rum_events[-5000:]  # Keep last 5000 events
-
         return {
             "status": "success",
             "message": "Event logged",
-            "session_event_count": rum_sessions[session_id]["event_count"],
+            "session_event_count": session_event_count,
         }
 
     except Exception as e:
@@ -196,7 +206,8 @@ async def log_rum_event(event: RumEvent):
 async def disable_rum():
     """Disable RUM monitoring"""
     try:
-        rum_config["enabled"] = False
+        async with _rum_lock:
+            rum_config["enabled"] = False
 
         rum_logger.info("RUM monitoring disabled via API")
         logger.info("RUM monitoring disabled")
@@ -216,14 +227,14 @@ async def disable_rum():
 @router.post("/clear")
 async def clear_rum_data():
     """Clear all RUM data"""
-    # Note: rum_events/rum_sessions are modified in-place via .clear(), no reassignment needed
     try:
-        events_cleared = len(rum_events)
-        sessions_cleared = len(rum_sessions)
+        async with _rum_lock:
+            events_cleared = len(rum_events)
+            sessions_cleared = len(rum_sessions)
 
-        # Use .clear() to modify globals in-place
-        rum_events.clear()
-        rum_sessions.clear()
+            # Use .clear() to modify globals in-place
+            rum_events.clear()
+            rum_sessions.clear()
 
         rum_logger.info(
             f"RUM data cleared: {events_cleared} events, {sessions_cleared} sessions"
