@@ -20,12 +20,11 @@ Features:
 - Risk heatmap generation
 """
 
-import ast
 import logging
 import re
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
@@ -1005,9 +1004,29 @@ def get_risk_levels() -> list[dict[str, Any]]:
         List of risk level definitions
     """
     return [
-        {"level": RiskLevel.CRITICAL.value, "min_score": 80, "description": "Immediate attention required"},
-        {"level": RiskLevel.HIGH.value, "min_score": 60, "description": "Prioritize for review"},
-        {"level": RiskLevel.MEDIUM.value, "min_score": 40, "description": "Monitor regularly"},
-        {"level": RiskLevel.LOW.value, "min_score": 20, "description": "Standard maintenance"},
-        {"level": RiskLevel.MINIMAL.value, "min_score": 0, "description": "Low priority"},
+        {
+            "level": RiskLevel.CRITICAL.value,
+            "min_score": 80,
+            "description": "Immediate attention required",
+        },
+        {
+            "level": RiskLevel.HIGH.value,
+            "min_score": 60,
+            "description": "Prioritize for review",
+        },
+        {
+            "level": RiskLevel.MEDIUM.value,
+            "min_score": 40,
+            "description": "Monitor regularly",
+        },
+        {
+            "level": RiskLevel.LOW.value,
+            "min_score": 20,
+            "description": "Standard maintenance",
+        },
+        {
+            "level": RiskLevel.MINIMAL.value,
+            "min_score": 0,
+            "description": "Low priority",
+        },
     ]

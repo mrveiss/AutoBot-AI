@@ -12,12 +12,26 @@ Provides advanced code analysis capabilities including:
 - Security vulnerability detection
 - Performance pattern analysis
 - Pre-commit hook analysis
+- Bug prediction and risk scoring
 - Metrics and severity scoring
 
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
 from .anti_pattern_detector import AntiPatternDetector, AntiPatternResult
+from .bug_predictor import (
+    BugPredictor,
+    FileRiskAssessment,
+    PredictionResult,
+    RiskFactor,
+    RiskFactorScore,
+    RiskLevel,
+    get_file_risk,
+    get_high_risk_files,
+    get_risk_factors,
+    get_risk_levels,
+    predict_bugs,
+)
 from .precommit_analyzer import (
     CheckCategory,
     CheckDefinition,
@@ -87,4 +101,16 @@ __all__ = [
     "analyze_precommit",
     "get_precommit_checks",
     "get_check_categories",
+    # Bug prediction (Issue #224)
+    "BugPredictor",
+    "FileRiskAssessment",
+    "PredictionResult",
+    "RiskFactor",
+    "RiskFactorScore",
+    "RiskLevel",
+    "get_file_risk",
+    "get_high_risk_files",
+    "get_risk_factors",
+    "get_risk_levels",
+    "predict_bugs",
 ]
