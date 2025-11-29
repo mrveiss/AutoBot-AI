@@ -10,6 +10,7 @@ from backend.services.config_service import ConfigService
 from backend.utils.connection_utils import ConnectionTester, ModelManager
 
 # Import unified configuration system - NO HARDCODED VALUES
+from src.constants.model_constants import ModelConstants
 from src.unified_config_manager import UnifiedConfigManager
 
 # Import caching utilities from unified cache manager (P4 Cache Consolidation)
@@ -113,7 +114,7 @@ async def get_current_llm():
     """Get current LLM model and configuration"""
     try:
         config = ConfigService.get_llm_config()
-        current_model = config.get("model", "llama3.2")
+        current_model = config.get("model", ModelConstants.DEFAULT_OLLAMA_MODEL)
 
         return {
             "model": current_model,
