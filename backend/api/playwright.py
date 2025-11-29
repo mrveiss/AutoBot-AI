@@ -462,7 +462,7 @@ async def get_capabilities():
         ],
         "container_integration": {
             "type": "embedded",
-            "container_port": 3000,
+            "container_port": NetworkConstants.BROWSER_SERVICE_PORT,
             "health_monitoring": True,
             "auto_reconnect": True,
             "description": "Docker container with native API integration",

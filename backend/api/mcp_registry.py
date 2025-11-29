@@ -300,7 +300,7 @@ async def _fetch_tools_from_bridges() -> Metadata:
 
     This is the actual HTTP fetching logic, separated for caching support.
     """
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:8001"
+    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
     all_tools = []
     bridge_count = 0
 
@@ -354,7 +354,7 @@ async def _fetch_bridges_info() -> Metadata:
 
     This is the actual HTTP fetching logic, separated for caching support.
     """
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:8001"
+    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
     bridges = []
 
     for bridge_name, bridge_desc, endpoint, features in MCP_BRIDGES:
@@ -568,7 +568,7 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
         - Usage examples
         - Bridge information
     """
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:8001"
+    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
     # Find the bridge
     bridge = next(
@@ -645,7 +645,7 @@ async def get_mcp_registry_health() -> Metadata:
     - Tool counts
     - Response times
     """
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:8001"
+    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
     health_checks = []
 
     for bridge_name, bridge_desc, endpoint, features in MCP_BRIDGES:

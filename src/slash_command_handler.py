@@ -29,6 +29,8 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Optional
 
+from src.constants.network_constants import NetworkConstants
+
 logger = logging.getLogger(__name__)
 
 
@@ -403,14 +405,14 @@ For detailed status, visit the monitoring dashboard."""
 
         except Exception as e:
             logger.warning(f"Could not get detailed status: {e}")
-            content = """## ⚡ AutoBot System Status
+            content = f"""## ⚡ AutoBot System Status
 
 **Status:** ✅ Running
 
 The chat system is operational. For detailed status information,
 check the monitoring dashboard or system logs.
 
-📊 Dashboard: http://localhost:8001/api/health"""
+📊 Dashboard: http://localhost:{NetworkConstants.BACKEND_PORT}/api/health"""
 
         return SlashCommandResult(
             success=True,

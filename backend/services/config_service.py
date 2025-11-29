@@ -249,7 +249,7 @@ class ConfigService:
                             "memory.redis.host", REDIS_HOST_IP
                         ),
                         "port": unified_config_manager.get_nested(
-                            "memory.redis.port", 6379
+                            "memory.redis.port", NetworkConstants.REDIS_PORT
                         ),
                     },
                 },
@@ -305,7 +305,7 @@ class ConfigService:
             return {
                 "type": task_transport_config.get("type", "local"),
                 "host": redis_config.get("host", REDIS_HOST_IP),
-                "port": redis_config.get("port", 6379),
+                "port": redis_config.get("port", NetworkConstants.REDIS_PORT),
                 "channels": redis_config.get("channels", {}),
                 "priority": redis_config.get("priority", 10),
             }

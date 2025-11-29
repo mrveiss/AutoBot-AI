@@ -563,7 +563,7 @@ class ServiceMonitor:
                         "vnc-desktop",
                     ],  # FIXED: Correct services only
                     details={
-                        "role": "Backend API (port 8001) + VNC Desktop (port 6080)",
+                        "role": f"Backend API (port {NetworkConstants.BACKEND_PORT}) + VNC Desktop (port {NetworkConstants.VNC_PORT})",
                         "note": "Frontend runs on VM1, not here",
                     },
                 )
