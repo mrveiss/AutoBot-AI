@@ -15,6 +15,10 @@
             <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-database'"></i>
             {{ analyzing ? 'Indexing...' : 'Index Codebase' }}
           </button>
+          <button v-if="analyzing && currentJobId" @click="cancelIndexingJob" class="btn-cancel">
+            <i class="fas fa-stop-circle"></i>
+            Cancel
+          </button>
           <button @click="runFullAnalysis" :disabled="analyzing || !rootPath" class="btn-secondary">
             <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-chart-bar'"></i>
             {{ analyzing ? 'Analyzing...' : 'Analyze All' }}
@@ -28,6 +32,14 @@
             <button @click="testNpuConnection" class="btn-debug" style="padding: 5px 10px; background: #9C27B0; color: white; border: none; border-radius: 4px;">Test NPU</button>
             <button @click="testDataState" class="btn-debug" style="padding: 5px 10px; background: #2196F3; color: white; border: none; border-radius: 4px;">Debug State</button>
             <button @click="testAllEndpoints" class="btn-debug" style="padding: 5px 10px; background: #00BCD4; color: white; border: none; border-radius: 4px;">Test All APIs</button>
+            <!-- Code Intelligence / Anti-Pattern Detection -->
+            <button @click="runCodeSmellAnalysis" :disabled="analyzingCodeSmells" class="btn-debug" style="padding: 5px 10px; background: #E91E63; color: white; border: none; border-radius: 4px;">
+              <i :class="analyzingCodeSmells ? 'fas fa-spinner fa-spin' : 'fas fa-bug'"></i>
+              {{ analyzingCodeSmells ? 'Scanning...' : 'Code Smells' }}
+            </button>
+            <button @click="getCodeHealthScore" :disabled="analyzingCodeSmells" class="btn-debug" style="padding: 5px 10px; background: #673AB7; color: white; border: none; border-radius: 4px;">
+              <i class="fas fa-heartbeat"></i> Health Score
+            </button>
           </div>
         </div>
       </div>
@@ -35,16 +47,80 @@
 
     <!-- Progress Indicator -->
     <div v-if="analyzing" class="progress-container">
+      <div class="progress-header">
+        <div class="progress-title">
+          <i class="fas fa-spinner fa-spin"></i>
+          Indexing in Progress
+        </div>
+        <div v-if="currentJobId" class="job-id">Job: {{ currentJobId.substring(0, 8) }}...</div>
+      </div>
+
+      <!-- Phase Progress -->
+      <div v-if="jobPhases" class="phase-progress">
+        <div
+          v-for="phase in jobPhases.phase_list"
+          :key="phase.id"
+          class="phase-item"
+          :class="{
+            'phase-completed': phase.status === 'completed',
+            'phase-running': phase.status === 'running',
+            'phase-pending': phase.status === 'pending'
+          }"
+        >
+          <i :class="getPhaseIcon(phase.status)"></i>
+          <span>{{ phase.name }}</span>
+        </div>
+      </div>
+
+      <!-- Main Progress Bar -->
       <div class="progress-bar">
         <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
       </div>
       <div class="progress-status">{{ progressStatus }}</div>
+
+      <!-- Batch Progress -->
+      <div v-if="jobBatches && jobBatches.total_batches > 0" class="batch-progress">
+        <div class="batch-header">
+          <span class="batch-label">Batch Progress:</span>
+          <span class="batch-count">{{ jobBatches.completed_batches }} / {{ jobBatches.total_batches }}</span>
+        </div>
+        <div class="batch-bar">
+          <div
+            class="batch-fill"
+            :style="{ width: (jobBatches.completed_batches / jobBatches.total_batches * 100) + '%' }"
+          ></div>
+        </div>
+      </div>
+
+      <!-- Live Stats -->
+      <div v-if="jobStats" class="live-stats">
+        <div class="stat-item">
+          <i class="fas fa-file-code"></i>
+          <span>{{ jobStats.files_scanned }} files</span>
+        </div>
+        <div class="stat-item">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>{{ jobStats.problems_found }} problems</span>
+        </div>
+        <div class="stat-item">
+          <i class="fas fa-code"></i>
+          <span>{{ jobStats.functions_found }} functions</span>
+        </div>
+        <div class="stat-item">
+          <i class="fas fa-cubes"></i>
+          <span>{{ jobStats.classes_found }} classes</span>
+        </div>
+        <div class="stat-item" v-if="jobStats.items_stored > 0">
+          <i class="fas fa-database"></i>
+          <span>{{ jobStats.items_stored }} stored</span>
+        </div>
+      </div>
     </div>
 
     <!-- Enhanced Analytics Dashboard Cards -->
     <div class="enhanced-analytics-grid">
       <!-- System Overview -->
-      <BasePanel variant="bordered" size="medium">
+      <BasePanel variant="dark" size="medium">
         <template #header>
           <div class="card-header-content">
             <h3><i class="fas fa-tachometer-alt"></i> System Overview</h3>
@@ -86,7 +162,7 @@
       </BasePanel>
 
       <!-- Communication Patterns -->
-      <BasePanel variant="bordered" size="medium">
+      <BasePanel variant="dark" size="medium">
         <template #header>
           <div class="card-header-content">
             <h3><i class="fas fa-network-wired"></i> Communication Patterns</h3>
@@ -117,7 +193,7 @@
       </BasePanel>
 
       <!-- Code Quality -->
-      <BasePanel variant="bordered" size="medium">
+      <BasePanel variant="dark" size="medium">
         <template #header>
           <div class="card-header-content">
             <h3><i class="fas fa-code-branch"></i> Code Quality</h3>
@@ -154,7 +230,7 @@
       </BasePanel>
 
       <!-- Performance Metrics -->
-      <BasePanel variant="bordered" size="medium">
+      <BasePanel variant="dark" size="medium">
         <template #header>
           <div class="card-header-content">
             <h3><i class="fas fa-bolt"></i> Performance Metrics</h3>
@@ -233,6 +309,222 @@
         />
       </div>
 
+      <!-- Analytics Charts Section -->
+      <div class="charts-section">
+        <div class="section-header">
+          <h3><i class="fas fa-chart-bar"></i> Problem Analytics</h3>
+          <button @click="loadChartData" class="refresh-btn" :disabled="chartDataLoading">
+            <i :class="chartDataLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+          </button>
+        </div>
+
+        <div v-if="chartDataLoading" class="charts-loading">
+          <i class="fas fa-spinner fa-spin"></i>
+          <span>Loading chart data...</span>
+        </div>
+
+        <div v-else-if="chartDataError" class="charts-error">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>{{ chartDataError }}</span>
+          <button @click="loadChartData" class="btn-link">Retry</button>
+        </div>
+
+        <div v-else-if="chartData" class="charts-grid">
+          <!-- Summary Stats -->
+          <div v-if="chartData.summary" class="chart-summary">
+            <div class="summary-stat">
+              <span class="summary-value">{{ chartData.summary.total_problems?.toLocaleString() || 0 }}</span>
+              <span class="summary-label">Total Problems</span>
+            </div>
+            <div class="summary-stat">
+              <span class="summary-value">{{ chartData.summary.unique_problem_types || 0 }}</span>
+              <span class="summary-label">Problem Types</span>
+            </div>
+            <div class="summary-stat">
+              <span class="summary-value">{{ chartData.summary.files_with_problems || 0 }}</span>
+              <span class="summary-label">Files Affected</span>
+            </div>
+            <div class="summary-stat race-highlight">
+              <span class="summary-value">{{ chartData.summary.race_condition_count || 0 }}</span>
+              <span class="summary-label">Race Conditions</span>
+            </div>
+          </div>
+
+          <!-- Charts Row 1: Problem Types + Severity -->
+          <div class="charts-row">
+            <div class="chart-container">
+              <ProblemTypesChart
+                v-if="chartData.problem_types && chartData.problem_types.length > 0"
+                :data="chartData.problem_types"
+                title="Problem Types Distribution"
+                :height="320"
+              />
+              <EmptyState v-else icon="fas fa-chart-pie" message="No problem type data" />
+            </div>
+            <div class="chart-container">
+              <SeverityBarChart
+                v-if="chartData.severity_counts && chartData.severity_counts.length > 0"
+                :data="chartData.severity_counts"
+                title="Problems by Severity"
+                :height="320"
+              />
+              <EmptyState v-else icon="fas fa-signal" message="No severity data" />
+            </div>
+          </div>
+
+          <!-- Charts Row 2: Race Conditions + Top Files -->
+          <div class="charts-row">
+            <div class="chart-container">
+              <RaceConditionsDonut
+                v-if="chartData.race_conditions && chartData.race_conditions.length > 0"
+                :data="chartData.race_conditions"
+                title="Race Conditions by Category"
+                :height="320"
+              />
+              <EmptyState v-else icon="fas fa-exclamation-circle" message="No race condition data" />
+            </div>
+            <div class="chart-container chart-wide">
+              <TopFilesChart
+                v-if="chartData.top_files && chartData.top_files.length > 0"
+                :data="chartData.top_files"
+                title="Top Files with Most Problems"
+                :height="400"
+                :maxFiles="10"
+              />
+              <EmptyState v-else icon="fas fa-file-code" message="No file data" />
+            </div>
+          </div>
+        </div>
+
+        <EmptyState
+          v-else
+          icon="fas fa-chart-area"
+          message="No chart data available. Run codebase indexing to generate analytics."
+        >
+          <template #actions>
+            <button @click="indexCodebase" class="btn-primary" :disabled="analyzing">
+              <i class="fas fa-database"></i> Index Codebase
+            </button>
+          </template>
+        </EmptyState>
+      </div>
+
+      <!-- Dependency Analysis Section -->
+      <div class="dependency-section">
+        <div class="section-header">
+          <h3><i class="fas fa-project-diagram"></i> Dependency Analysis</h3>
+          <button @click="loadDependencyData" class="refresh-btn" :disabled="dependencyLoading">
+            <i :class="dependencyLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+          </button>
+        </div>
+
+        <div v-if="dependencyLoading" class="charts-loading">
+          <i class="fas fa-spinner fa-spin"></i>
+          <span>Analyzing dependencies...</span>
+        </div>
+
+        <div v-else-if="dependencyError" class="charts-error">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>{{ dependencyError }}</span>
+          <button @click="loadDependencyData" class="btn-link">Retry</button>
+        </div>
+
+        <div v-else-if="dependencyData" class="dependency-grid">
+          <!-- Summary Stats -->
+          <div v-if="dependencyData.summary" class="chart-summary">
+            <div class="summary-stat">
+              <span class="summary-value">{{ dependencyData.summary.total_modules?.toLocaleString() || 0 }}</span>
+              <span class="summary-label">Python Modules</span>
+            </div>
+            <div class="summary-stat">
+              <span class="summary-value">{{ dependencyData.summary.total_import_relationships?.toLocaleString() || 0 }}</span>
+              <span class="summary-label">Import Relationships</span>
+            </div>
+            <div class="summary-stat">
+              <span class="summary-value">{{ dependencyData.summary.external_dependency_count || 0 }}</span>
+              <span class="summary-label">External Packages</span>
+            </div>
+            <div class="summary-stat" :class="{ 'race-highlight': dependencyData.summary.circular_dependency_count > 0 }">
+              <span class="summary-value">{{ dependencyData.summary.circular_dependency_count || 0 }}</span>
+              <span class="summary-label">Circular Dependencies</span>
+            </div>
+          </div>
+
+          <!-- Charts Row: External Dependencies + Top Importing Modules -->
+          <div class="charts-row">
+            <div class="chart-container">
+              <DependencyTreemap
+                v-if="dependencyData.external_dependencies && dependencyData.external_dependencies.length > 0"
+                :data="dependencyData.external_dependencies"
+                title="External Dependencies"
+                subtitle="Package usage across codebase"
+                :height="350"
+              />
+              <EmptyState v-else icon="fas fa-cube" message="No external dependencies found" />
+            </div>
+            <div class="chart-container">
+              <ModuleImportsChart
+                v-if="dependencyData.modules && dependencyData.modules.length > 0"
+                :data="dependencyData.modules.filter(m => m.import_count > 0)"
+                title="Modules with Most Imports"
+                subtitle="Files with highest dependency count"
+                :height="350"
+                :maxModules="12"
+              />
+              <EmptyState v-else icon="fas fa-file-import" message="No module data available" />
+            </div>
+          </div>
+
+          <!-- Circular Dependencies Warning -->
+          <div v-if="dependencyData.circular_dependencies && dependencyData.circular_dependencies.length > 0" class="circular-deps-warning">
+            <div class="warning-header">
+              <i class="fas fa-exclamation-triangle"></i>
+              <span>Circular Dependencies Detected</span>
+            </div>
+            <div class="circular-deps-list">
+              <div
+                v-for="(cycle, index) in dependencyData.circular_dependencies.slice(0, 10)"
+                :key="index"
+                class="circular-dep-item"
+              >
+                <i class="fas fa-sync-alt"></i>
+                <span>{{ cycle.join(' ↔ ') }}</span>
+              </div>
+            </div>
+            <div v-if="dependencyData.circular_dependencies.length > 10" class="show-more">
+              <span class="muted">and {{ dependencyData.circular_dependencies.length - 10 }} more...</span>
+            </div>
+          </div>
+
+          <!-- Top External Dependencies Table -->
+          <div v-if="dependencyData.external_dependencies && dependencyData.external_dependencies.length > 0" class="external-deps-table">
+            <h4><i class="fas fa-cube"></i> Top External Dependencies</h4>
+            <div class="deps-table-content">
+              <div
+                v-for="(dep, index) in dependencyData.external_dependencies.slice(0, 20)"
+                :key="index"
+                class="dep-row"
+              >
+                <span class="dep-name">{{ dep.package }}</span>
+                <span class="dep-count">{{ dep.usage_count }} imports</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <EmptyState
+          v-else
+          icon="fas fa-project-diagram"
+          message="No dependency data available. Click refresh to analyze."
+        >
+          <template #actions>
+            <button @click="loadDependencyData" class="btn-primary" :disabled="dependencyLoading">
+              <i class="fas fa-project-diagram"></i> Analyze Dependencies
+            </button>
+          </template>
+        </EmptyState>
+      </div>
+
       <!-- Problems Report -->
       <div class="problems-section">
         <h3><i class="fas fa-exclamation-triangle"></i> Code Problems</h3>
@@ -264,6 +556,61 @@
           icon="fas fa-check-circle"
           message="No code problems detected or analysis not run yet."
           variant="success"
+        />
+      </div>
+
+      <!-- Code Intelligence: Anti-Pattern / Code Smells Report -->
+      <div class="code-smells-section">
+        <h3>
+          <i class="fas fa-bug"></i> Code Smells & Anti-Patterns
+          <span v-if="codeHealthScore" class="health-badge" :class="getHealthGradeClass(codeHealthScore.grade)">
+            {{ codeHealthScore.grade }} ({{ codeHealthScore.health_score }}/100)
+          </span>
+        </h3>
+        <div v-if="codeSmellsReport && codeSmellsReport.anti_patterns && codeSmellsReport.anti_patterns.length > 0" class="code-smells-list">
+          <!-- Summary Cards -->
+          <div class="smells-summary">
+            <div class="summary-card">
+              <div class="summary-value">{{ codeSmellsReport.total_files || 0 }}</div>
+              <div class="summary-label">Files Analyzed</div>
+            </div>
+            <div class="summary-card warning">
+              <div class="summary-value">{{ codeSmellsReport.anti_patterns.length }}</div>
+              <div class="summary-label">Issues Found</div>
+            </div>
+            <div v-if="codeSmellsReport.severity_distribution" class="summary-card critical">
+              <div class="summary-value">{{ codeSmellsReport.severity_distribution.critical || 0 }}</div>
+              <div class="summary-label">Critical</div>
+            </div>
+            <div v-if="codeSmellsReport.severity_distribution" class="summary-card high">
+              <div class="summary-value">{{ codeSmellsReport.severity_distribution.high || 0 }}</div>
+              <div class="summary-label">High</div>
+            </div>
+          </div>
+          <!-- Anti-Pattern List -->
+          <div
+            v-for="(pattern, index) in codeSmellsReport.anti_patterns.slice(0, 20)"
+            :key="index"
+            class="smell-item"
+            :class="getSmellSeverityClass(pattern.severity)"
+          >
+            <div class="smell-header">
+              <span class="smell-type">{{ formatSmellType(pattern.pattern_type) }}</span>
+              <span class="smell-severity" :class="pattern.severity">{{ pattern.severity }}</span>
+            </div>
+            <div class="smell-description">{{ pattern.description }}</div>
+            <div class="smell-location">📁 {{ pattern.file_path }}:{{ pattern.line_number }}</div>
+            <div v-if="pattern.suggestion" class="smell-suggestion">💡 {{ pattern.suggestion }}</div>
+          </div>
+          <div v-if="codeSmellsReport.anti_patterns.length > 20" class="show-more">
+            <span class="muted">Showing 20 of {{ codeSmellsReport.anti_patterns.length }} issues</span>
+          </div>
+        </div>
+        <EmptyState
+          v-else
+          icon="fas fa-sparkles"
+          message="No code smells detected. Click 'Code Smells' button to run analysis."
+          variant="info"
         />
       </div>
 
@@ -327,6 +674,16 @@ import BasePanel from '@/components/base/BasePanel.vue'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { useToast } from '@/composables/useToast'
 
+// ApexCharts components
+import {
+  ProblemTypesChart,
+  SeverityBarChart,
+  RaceConditionsDonut,
+  TopFilesChart,
+  DependencyTreemap,
+  ModuleImportsChart
+} from '@/components/charts'
+
 // Toast notifications
 const { showToast } = useToast()
 
@@ -344,6 +701,29 @@ const progressStatus = ref('Ready')
 const realTimeEnabled = ref(false)
 const refreshInterval = ref(null)
 
+// Indexing job state tracking
+const currentJobId = ref(null)
+const currentJobStatus = ref(null)
+const jobPollingInterval = ref(null)
+
+// Enhanced progress tracking with phases and batches
+const jobPhases = ref(null)
+const jobBatches = ref(null)
+const jobStats = ref(null)
+
+// Helper to get phase icon based on status
+const getPhaseIcon = (status) => {
+  switch (status) {
+    case 'completed':
+      return 'fas fa-check-circle'
+    case 'running':
+      return 'fas fa-spinner fa-spin'
+    case 'pending':
+    default:
+      return 'fas fa-circle'
+  }
+}
+
 // Analytics data
 const codebaseStats = ref(null)
 const problemsReport = ref([])
@@ -351,11 +731,26 @@ const duplicateAnalysis = ref([])
 const declarationAnalysis = ref([])
 const refactoringSuggestions = ref([])
 
+// Code Intelligence / Anti-Pattern Detection data
+const codeSmellsReport = ref(null)
+const codeHealthScore = ref(null)
+const analyzingCodeSmells = ref(false)
+
 // Enhanced analytics data
 const systemOverview = ref(null)
 const communicationPatterns = ref(null)
 const codeQuality = ref(null)
 const performanceMetrics = ref(null)
+
+// Chart data for visualizations
+const chartData = ref(null)
+const chartDataLoading = ref(false)
+const chartDataError = ref('')
+
+// Dependency analysis data
+const dependencyData = ref(null)
+const dependencyLoading = ref(false)
+const dependencyError = ref('')
 
 // Loading states for individual data types
 const loadingProgress = reactive({
@@ -375,6 +770,9 @@ onMounted(async () => {
   // Fetch project root from backend config
   await loadProjectRoot()
 
+  // Check if there's already an indexing job running
+  await checkCurrentIndexingJob()
+
   // Load initial data - Enhanced analytics (top section)
   loadSystemOverview()
   loadCommunicationPatterns()
@@ -384,6 +782,191 @@ onMounted(async () => {
   // Load codebase analytics data (bottom section)
   loadCodebaseAnalyticsData()
 })
+
+// Check if there's a running indexing job
+const checkCurrentIndexingJob = async () => {
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/index/current`)
+    if (response.ok) {
+      const data = await response.json()
+      if (data.has_active_job) {
+        // Job is running - update UI and start polling
+        currentJobId.value = data.task_id
+        currentJobStatus.value = data.status
+        analyzing.value = true
+        progressStatus.value = data.progress?.step || 'Indexing in progress...'
+        progressPercent.value = data.progress?.percent || 20
+
+        // Start polling for updates
+        startJobPolling()
+        notify('Indexing job already in progress', 'info')
+      } else if (data.task_id && data.status !== 'idle') {
+        // Job recently completed
+        progressStatus.value = `Last job: ${data.status}`
+      }
+    }
+  } catch (error) {
+    console.warn('[CodebaseAnalytics] Could not check for running job:', error.message)
+  }
+}
+
+// Poll for job status updates
+const startJobPolling = () => {
+  if (jobPollingInterval.value) {
+    clearInterval(jobPollingInterval.value)
+  }
+
+  jobPollingInterval.value = setInterval(async () => {
+    await pollJobStatus()
+  }, 2000) // Poll every 2 seconds
+}
+
+// Stop polling
+const stopJobPolling = () => {
+  if (jobPollingInterval.value) {
+    clearInterval(jobPollingInterval.value)
+    jobPollingInterval.value = null
+  }
+}
+
+// Poll for current job status
+const pollJobStatus = async () => {
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/index/current`)
+    if (response.ok) {
+      const data = await response.json()
+      currentJobStatus.value = data.status
+
+      if (data.has_active_job) {
+        // Keep analyzing true while job is active
+        analyzing.value = true
+
+        // Update progress - use correct field names from backend
+        if (data.progress) {
+          progressPercent.value = data.progress.percent || 0
+
+          // Build status from operation and current_file
+          const operation = data.progress.operation || 'Processing'
+          const currentFile = data.progress.current_file || ''
+          progressStatus.value = currentFile ? `${operation}: ${currentFile}` : operation
+        }
+
+        // Update phase tracking
+        if (data.phases) {
+          jobPhases.value = data.phases
+        }
+
+        // Update batch tracking
+        if (data.batches) {
+          jobBatches.value = data.batches
+        }
+
+        // Update job stats
+        if (data.stats) {
+          jobStats.value = data.stats
+        }
+
+        // Also poll for intermediate results
+        await pollIntermediateResults()
+      } else {
+        // Job finished
+        analyzing.value = false
+        stopJobPolling()
+
+        // Reset enhanced tracking
+        jobPhases.value = null
+        jobBatches.value = null
+        jobStats.value = null
+
+        if (data.status === 'completed') {
+          progressStatus.value = 'Indexing completed!'
+          progressPercent.value = 100
+          notify('Codebase indexing completed', 'success')
+
+          // Refresh data
+          await loadCodebaseAnalyticsData()
+        } else if (data.status === 'cancelled') {
+          progressStatus.value = 'Indexing cancelled'
+          notify('Indexing was cancelled', 'warning')
+        } else if (data.status === 'failed' || data.error) {
+          progressStatus.value = `Indexing failed: ${data.error || 'Unknown error'}`
+          notify(`Indexing failed: ${data.error || 'Unknown error'}`, 'error')
+        }
+
+        currentJobId.value = null
+      }
+    }
+  } catch (error) {
+    console.warn('[CodebaseAnalytics] Job polling error:', error.message)
+  }
+}
+
+// Poll for intermediate results during indexing
+const pollIntermediateResults = async () => {
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+
+    // Poll for problems found so far
+    const problemsResponse = await fetch(`${backendUrl}/api/analytics/codebase/problems`)
+    if (problemsResponse.ok) {
+      const problemsData = await problemsResponse.json()
+      if (problemsData.problems && problemsData.problems.length > 0) {
+        problemsReport.value = problemsData.problems
+      }
+    }
+
+    // Poll for stats
+    const statsResponse = await fetch(`${backendUrl}/api/analytics/codebase/stats`)
+    if (statsResponse.ok) {
+      const statsData = await statsResponse.json()
+      if (statsData.stats) {
+        codebaseStats.value = statsData.stats
+        const filesIndexed = statsData.stats.total_files || 0
+        const problemsFound = problemsReport.value.length
+        progressStatus.value = `Indexed ${filesIndexed} files, ${problemsFound} problems found...`
+      }
+    }
+  } catch (error) {
+    // Silent - don't interrupt polling
+  }
+}
+
+// Cancel the running indexing job
+const cancelIndexingJob = async () => {
+  if (!currentJobId.value) {
+    notify('No active job to cancel', 'warning')
+    return
+  }
+
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/index/cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      if (data.success) {
+        analyzing.value = false
+        stopJobPolling()
+        currentJobId.value = null
+        progressStatus.value = 'Indexing cancelled by user'
+        notify('Indexing job cancelled', 'success')
+      } else {
+        notify(data.message || 'Could not cancel job', 'warning')
+      }
+    } else {
+      notify('Failed to cancel job', 'error')
+    }
+  } catch (error) {
+    notify(`Error cancelling job: ${error.message}`, 'error')
+  }
+}
 
 // Fetch project root from backend configuration
 const loadProjectRoot = async () => {
@@ -424,14 +1007,97 @@ const loadCodebaseAnalyticsData = async () => {
     await Promise.all([
       getCodebaseStats(),
       getProblemsReport(),
-      loadDeclarations(),  // Silent version
-      loadDuplicates()     // Silent version
+      loadDeclarations(),    // Silent version
+      loadDuplicates(),      // Silent version
+      loadChartData(),       // Load chart data for visualizations
+      loadDependencyData()   // Load dependency analysis
     ])
 
   } catch (error) {
     console.error('❌ Failed to load codebase analytics data:', error)
     // Provide user feedback for critical failures
     progressStatus.value = `Failed to load analytics: ${error.message}`
+  }
+}
+
+// Load chart data for visualizations
+const loadChartData = async () => {
+  chartDataLoading.value = true
+  chartDataError.value = ''
+
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/analytics/charts`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`Chart data endpoint returned ${response.status}`)
+    }
+
+    const data = await response.json()
+
+    if (data.status === 'success' && data.chart_data) {
+      chartData.value = data.chart_data
+      console.log('[CodebaseAnalytics] Chart data loaded:', {
+        problemTypes: data.chart_data.problem_types?.length || 0,
+        severities: data.chart_data.severity_counts?.length || 0,
+        raceConditions: data.chart_data.race_conditions?.length || 0,
+        topFiles: data.chart_data.top_files?.length || 0
+      })
+    } else if (data.status === 'no_data') {
+      chartData.value = null
+      console.log('[CodebaseAnalytics] No chart data available - run indexing first')
+    }
+
+  } catch (error) {
+    console.error('[CodebaseAnalytics] Failed to load chart data:', error)
+    chartDataError.value = error.message
+  } finally {
+    chartDataLoading.value = false
+  }
+}
+
+// Load dependency analysis data
+const loadDependencyData = async () => {
+  dependencyLoading.value = true
+  dependencyError.value = ''
+
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/analytics/dependencies`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`Dependency analysis endpoint returned ${response.status}`)
+    }
+
+    const data = await response.json()
+
+    if (data.status === 'success' && data.dependency_data) {
+      dependencyData.value = data.dependency_data
+      console.log('[CodebaseAnalytics] Dependency data loaded:', {
+        modules: data.dependency_data.modules?.length || 0,
+        relationships: data.dependency_data.import_relationships?.length || 0,
+        externalDeps: data.dependency_data.external_dependencies?.length || 0,
+        circularDeps: data.dependency_data.circular_dependencies?.length || 0
+      })
+    }
+
+  } catch (error) {
+    console.error('[CodebaseAnalytics] Failed to load dependency data:', error)
+    dependencyError.value = error.message
+  } finally {
+    dependencyLoading.value = false
   }
 }
 
@@ -509,49 +1175,21 @@ onUnmounted(() => {
   if (refreshInterval.value) {
     clearInterval(refreshInterval.value)
   }
+  // Clean up job polling interval
+  stopJobPolling()
 })
 
 // Index codebase first
 const indexCodebase = async () => {
-  analyzing.value = true
-  progressPercent.value = 10
-  progressStatus.value = 'Indexing codebase...'
-
-  // Start polling for problems immediately
-  let pollingInterval = null
-  let filesIndexed = 0
-
-  const pollProblems = async () => {
-    try {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-
-      // Poll for problems
-      const problemsResponse = await fetch(`${backendUrl}/api/analytics/codebase/problems`)
-      if (problemsResponse.ok) {
-        const problemsData = await problemsResponse.json()
-        if (problemsData.problems && problemsData.problems.length > 0) {
-          problemsReport.value = problemsData.problems
-        }
-      }
-
-      // Poll for stats to get progress
-      const statsResponse = await fetch(`${backendUrl}/api/analytics/codebase/stats`)
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json()
-        if (statsData.total_files) {
-          filesIndexed = statsData.total_files
-          progressStatus.value = `Indexed ${filesIndexed} files... (${problemsReport.value.length} problems found)`
-        }
-      }
-    } catch (error) {
-      // Silent polling errors - don't interrupt the user
-      console.warn('[CodebaseAnalytics] Polling error:', error.message)
-    }
+  // Check if there's already a job running
+  if (currentJobId.value) {
+    notify('Indexing is already in progress', 'warning')
+    return
   }
 
-  // Start polling every 2 seconds
-  pollingInterval = setInterval(pollProblems, 2000)
-  pollProblems() // Initial poll
+  analyzing.value = true
+  progressPercent.value = 10
+  progressStatus.value = 'Starting codebase indexing...'
 
   const { execute: runIndexing } = useAsyncHandler(
     async () => {
@@ -566,8 +1204,6 @@ const indexCodebase = async () => {
         body: JSON.stringify({ root_path: rootPath.value })
       })
 
-      progressPercent.value = 100
-
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(`Status ${response.status}: ${errorText}`)
@@ -578,25 +1214,25 @@ const indexCodebase = async () => {
     {
       logErrors: true,
       errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: async () => {
-        progressStatus.value = `Indexing completed! ${filesIndexed} files indexed, ${problemsReport.value.length} problems found`
-        notify(`Codebase indexed: ${filesIndexed} files, ${problemsReport.value.length} problems`, 'success')
+      onSuccess: async (data) => {
+        // Check if this is a new job or already running
+        if (data.status === 'already_running') {
+          currentJobId.value = data.task_id
+          progressStatus.value = 'Indexing already in progress, monitoring...'
+          notify('Indexing job already running, now monitoring', 'info')
+        } else {
+          currentJobId.value = data.task_id
+          progressStatus.value = 'Indexing started...'
+          notify('Codebase indexing started', 'success')
+        }
 
-        // Final data load
-        await pollProblems()
-        setTimeout(() => {
-          getCodebaseStats()
-        }, 1000)
+        // Start polling for job status updates
+        progressPercent.value = 20
+        startJobPolling()
       },
       onError: (error) => {
-        progressStatus.value = `Indexing failed: ${error.message}`
+        progressStatus.value = `Indexing failed to start: ${error.message}`
         notify(`Indexing failed: ${error.message}`, 'error')
-      },
-      onFinally: () => {
-        // Stop polling
-        if (pollingInterval) {
-          clearInterval(pollingInterval)
-        }
         analyzing.value = false
       }
     }
@@ -930,6 +1566,107 @@ const testAllEndpoints = async () => {
   await runTests()
 }
 
+// Code Intelligence: Run anti-pattern/code smell analysis
+const runCodeSmellAnalysis = async () => {
+  const startTime = Date.now()
+  analyzingCodeSmells.value = true
+  progressStatus.value = 'Scanning for code smells and anti-patterns...'
+
+  const { execute: fetchCodeSmells } = useAsyncHandler(
+    async () => {
+      const backendUrl = await appConfig.getServiceUrl('backend')
+      const analyzeEndpoint = `${backendUrl}/api/code-intelligence/analyze`
+      const response = await fetch(analyzeEndpoint, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          path: rootPath.value,
+          exclude_dirs: ['node_modules', '.venv', '__pycache__', '.git', 'archives'],
+          min_severity: 'low'  // Show low and above
+        })
+      })
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Status ${response.status}: ${errorText}`)
+      }
+      return response.json()
+    },
+    {
+      logErrors: true,
+      errorPrefix: '[CodebaseAnalytics]',
+      onSuccess: (data) => {
+        const responseTime = Date.now() - startTime
+        codeSmellsReport.value = data.report
+        const totalIssues = data.report?.anti_patterns?.length || 0
+        const filesAnalyzed = data.report?.total_files || 0
+        notify(`Found ${totalIssues} code smells in ${filesAnalyzed} files (${responseTime}ms)`, totalIssues > 0 ? 'warning' : 'success')
+        progressStatus.value = `Code smell scan complete: ${totalIssues} issues found`
+      },
+      onError: (error) => {
+        const responseTime = Date.now() - startTime
+        notify(`Code smell analysis failed: ${error.message} (${responseTime}ms)`, 'error')
+        progressStatus.value = 'Code smell analysis failed'
+      },
+      onFinally: () => {
+        analyzingCodeSmells.value = false
+      }
+    }
+  )
+
+  await fetchCodeSmells()
+}
+
+// Code Intelligence: Get codebase health score
+const getCodeHealthScore = async () => {
+  const startTime = Date.now()
+  analyzingCodeSmells.value = true
+  progressStatus.value = 'Calculating codebase health score...'
+
+  const { execute: fetchHealthScore } = useAsyncHandler(
+    async () => {
+      const backendUrl = await appConfig.getServiceUrl('backend')
+      const healthEndpoint = `${backendUrl}/api/code-intelligence/health-score?path=${encodeURIComponent(rootPath.value)}`
+      const response = await fetch(healthEndpoint, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      })
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Status ${response.status}: ${errorText}`)
+      }
+      return response.json()
+    },
+    {
+      logErrors: true,
+      errorPrefix: '[CodebaseAnalytics]',
+      onSuccess: (data) => {
+        const responseTime = Date.now() - startTime
+        codeHealthScore.value = data
+        const score = data.health_score || 0
+        const grade = data.grade || 'N/A'
+        const issues = data.total_issues || 0
+        notify(`Health Score: ${score}/100 (Grade: ${grade}) - ${issues} issues (${responseTime}ms)`, score >= 70 ? 'success' : 'warning')
+        progressStatus.value = `Health Score: ${score}/100 (${grade})`
+      },
+      onError: (error) => {
+        const responseTime = Date.now() - startTime
+        notify(`Health score failed: ${error.message} (${responseTime}ms)`, 'error')
+        progressStatus.value = 'Health score calculation failed'
+      },
+      onFinally: () => {
+        analyzingCodeSmells.value = false
+      }
+    }
+  )
+
+  await fetchHealthScore()
+}
+
 // Run full analysis
 const runFullAnalysis = async () => {
   if (analyzing.value) return
@@ -1180,6 +1917,33 @@ const getQualityClass = (score) => {
   return 'quality-low'
 }
 
+// Code Intelligence helper methods
+const getHealthGradeClass = (grade) => {
+  switch (grade?.toUpperCase()) {
+    case 'A': return 'grade-a'
+    case 'B': return 'grade-b'
+    case 'C': return 'grade-c'
+    case 'D': return 'grade-d'
+    case 'F': return 'grade-f'
+    default: return 'grade-unknown'
+  }
+}
+
+const getSmellSeverityClass = (severity) => {
+  switch (severity?.toLowerCase()) {
+    case 'critical': return 'smell-critical'
+    case 'high': return 'smell-high'
+    case 'medium': return 'smell-medium'
+    case 'low': return 'smell-low'
+    case 'info': return 'smell-info'
+    default: return 'smell-unknown'
+  }
+}
+
+const formatSmellType = (type) => {
+  return type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown'
+}
+
 // All variables and functions are automatically available in <script setup>
 // No export default needed in <script setup> syntax
 </script>
@@ -1269,6 +2033,25 @@ const getQualityClass = (score) => {
   transform: none;
 }
 
+.btn-cancel {
+  background: #dc2626;
+  color: #ffffff;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-cancel:hover {
+  background: #b91c1c;
+  transform: translateY(-1px);
+}
+
 .debug-controls {
   width: 100%;
   padding-top: 12px;
@@ -1294,6 +2077,27 @@ const getQualityClass = (score) => {
   border: 1px solid #374151;
 }
 
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.progress-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #22c55e;
+  font-weight: 600;
+}
+
+.job-id {
+  color: #6b7280;
+  font-size: 0.8em;
+  font-family: 'JetBrains Mono', monospace;
+}
+
 .progress-bar {
   width: 100%;
   height: 8px;
@@ -1314,6 +2118,116 @@ const getQualityClass = (score) => {
   color: #d1d5db;
   font-size: 0.9em;
   font-weight: 500;
+}
+
+/* Phase Progress */
+.phase-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #111827;
+  border-radius: 6px;
+}
+
+.phase-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #1f2937;
+  border-radius: 4px;
+  font-size: 0.85em;
+  transition: all 0.2s;
+}
+
+.phase-item.phase-completed {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.phase-item.phase-running {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.phase-item.phase-pending {
+  color: #6b7280;
+  background: #1f2937;
+  border: 1px solid #374151;
+}
+
+.phase-item i {
+  font-size: 0.9em;
+}
+
+/* Batch Progress */
+.batch-progress {
+  margin-top: 16px;
+  padding: 12px;
+  background: #111827;
+  border-radius: 6px;
+}
+
+.batch-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.batch-label {
+  color: #9ca3af;
+  font-size: 0.85em;
+}
+
+.batch-count {
+  color: #22c55e;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.batch-bar {
+  width: 100%;
+  height: 6px;
+  background: #374151;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.batch-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+  transition: width 0.3s ease;
+  border-radius: 3px;
+}
+
+/* Live Stats */
+.live-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 12px;
+  background: #111827;
+  border-radius: 6px;
+}
+
+.live-stats .stat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #d1d5db;
+  font-size: 0.85em;
+}
+
+.live-stats .stat-item i {
+  color: #3b82f6;
+  width: 16px;
+  text-align: center;
 }
 
 /* Enhanced Analytics Grid */
@@ -1688,6 +2602,152 @@ const getQualityClass = (score) => {
   border-top: 1px solid #374151;
 }
 
+/* Code Smells Section */
+.code-smells-section {
+  margin-top: 24px;
+  padding: 20px;
+  background: #1f2937;
+  border-radius: 12px;
+  border: 1px solid #374151;
+}
+
+.code-smells-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px 0;
+  color: #e5e7eb;
+  font-size: 1.1em;
+}
+
+.health-badge {
+  font-size: 0.8em;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+.grade-a { background: #10b981; color: white; }
+.grade-b { background: #22c55e; color: white; }
+.grade-c { background: #eab308; color: black; }
+.grade-d { background: #f97316; color: white; }
+.grade-f { background: #ef4444; color: white; }
+.grade-unknown { background: #6b7280; color: white; }
+
+.smells-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.summary-card {
+  background: #111827;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  border: 1px solid #374151;
+}
+
+.summary-card.warning { border-color: #f59e0b; }
+.summary-card.critical { border-color: #ef4444; }
+.summary-card.high { border-color: #f97316; }
+
+.summary-value {
+  font-size: 1.8em;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.summary-card.warning .summary-value { color: #f59e0b; }
+.summary-card.critical .summary-value { color: #ef4444; }
+.summary-card.high .summary-value { color: #f97316; }
+
+.summary-label {
+  font-size: 0.75em;
+  color: #9ca3af;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.code-smells-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.smell-item {
+  background: #111827;
+  border-radius: 8px;
+  padding: 16px;
+  border-left: 4px solid #6b7280;
+  transition: all 0.2s ease;
+}
+
+.smell-item:hover {
+  transform: translateX(4px);
+  background: #1a232f;
+}
+
+.smell-item.smell-critical { border-left-color: #ef4444; }
+.smell-item.smell-high { border-left-color: #f97316; }
+.smell-item.smell-medium { border-left-color: #eab308; }
+.smell-item.smell-low { border-left-color: #22c55e; }
+.smell-item.smell-info { border-left-color: #3b82f6; }
+
+.smell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.smell-type {
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.smell-severity {
+  font-size: 0.75em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.smell-severity.critical { background: #7f1d1d; color: #fca5a5; }
+.smell-severity.high { background: #7c2d12; color: #fdba74; }
+.smell-severity.medium { background: #713f12; color: #fde047; }
+.smell-severity.low { background: #14532d; color: #86efac; }
+.smell-severity.info { background: #1e3a8a; color: #93c5fd; }
+
+.smell-description {
+  color: #d1d5db;
+  font-size: 0.9em;
+  margin-bottom: 8px;
+}
+
+.smell-location {
+  color: #9ca3af;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8em;
+  margin-bottom: 4px;
+}
+
+.smell-suggestion {
+  color: #22c55e;
+  font-size: 0.85em;
+  padding: 8px;
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+.muted {
+  color: #6b7280;
+  font-style: italic;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .codebase-analytics {
@@ -1743,5 +2803,298 @@ const getQualityClass = (score) => {
     align-items: flex-start;
     gap: 4px;
   }
+}
+
+/* Charts Section Styles */
+.charts-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.charts-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.charts-section .section-header h3 {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.charts-section .section-header h3 i {
+  color: #3b82f6;
+}
+
+.charts-loading,
+.charts-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  gap: 12px;
+  color: #94a3b8;
+}
+
+.charts-loading i {
+  font-size: 32px;
+  color: #3b82f6;
+}
+
+.charts-error i {
+  font-size: 32px;
+  color: #ef4444;
+}
+
+.charts-error {
+  color: #f87171;
+}
+
+.charts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.chart-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.summary-stat {
+  background: rgba(51, 65, 85, 0.5);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  transition: all 0.2s ease;
+}
+
+.summary-stat:hover {
+  background: rgba(51, 65, 85, 0.7);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.summary-stat.race-highlight {
+  background: rgba(249, 115, 22, 0.2);
+  border-color: rgba(249, 115, 22, 0.5);
+}
+
+.summary-stat.race-highlight:hover {
+  background: rgba(249, 115, 22, 0.3);
+}
+
+.summary-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  line-height: 1;
+}
+
+.summary-stat.race-highlight .summary-value {
+  color: #f97316;
+}
+
+.summary-label {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin-top: 4px;
+  display: block;
+}
+
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.chart-container {
+  background: rgba(30, 41, 59, 0.7);
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  min-height: 350px;
+}
+
+.chart-container.chart-wide {
+  grid-column: span 1;
+}
+
+/* Responsive charts */
+@media (max-width: 1200px) {
+  .chart-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .charts-row {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-container.chart-wide {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 600px) {
+  .chart-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-value {
+    font-size: 1.5rem;
+  }
+}
+
+/* Dependency Section Styles */
+.dependency-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.dependency-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.dependency-section .section-header h3 {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dependency-section .section-header h3 i {
+  color: #8b5cf6;
+}
+
+.dependency-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Circular Dependencies Warning */
+.circular-deps-warning {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.circular-deps-warning .warning-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #f87171;
+  margin-bottom: 12px;
+}
+
+.circular-deps-warning .warning-header i {
+  color: #ef4444;
+}
+
+.circular-deps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.circular-dep-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: #e2e8f0;
+}
+
+.circular-dep-item i {
+  color: #f59e0b;
+}
+
+/* External Dependencies Table */
+.external-deps-table {
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.external-deps-table h4 {
+  margin: 0 0 16px 0;
+  color: #e2e8f0;
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.external-deps-table h4 i {
+  color: #06b6d4;
+}
+
+.deps-table-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.dep-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(51, 65, 85, 0.4);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.dep-row:hover {
+  background: rgba(51, 65, 85, 0.6);
+}
+
+.dep-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: #e2e8f0;
+}
+
+.dep-count {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  background: rgba(59, 130, 246, 0.2);
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 </style>
