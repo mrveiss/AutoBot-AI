@@ -9,12 +9,11 @@ source "${SCRIPT_DIR}/../network/network-config.sh" 2>/dev/null || true
 
 echo "🔧 Configuring AutoBot for DeepSeek-R1 model..."
 
-# LLM Configuration
-export AUTOBOT_OLLAMA_MODEL="deepseek-r1:14b"
+# LLM Configuration - Use AUTOBOT_DEFAULT_LLM_MODEL as primary
+export AUTOBOT_DEFAULT_LLM_MODEL="deepseek-r1:14b"
 export AUTOBOT_ORCHESTRATOR_LLM="deepseek-r1:14b"
 export AUTOBOT_DEFAULT_LLM="ollama_deepseek-r1:14b"
 export AUTOBOT_TASK_LLM="ollama_deepseek-r1:14b"
-export AUTOBOT_OLLAMA_SELECTED_MODEL="deepseek-r1:14b"
 
 # Backend Configuration (use network-config defaults)
 export AUTOBOT_BACKEND_HOST="${BACKEND_HOST:-0.0.0.0}"
@@ -40,7 +39,7 @@ export AUTOBOT_CHAT_MAX_MESSAGES="100"
 echo "✅ Environment configured for DeepSeek-R1!"
 echo ""
 echo "Current LLM settings:"
-echo "  Model: $AUTOBOT_OLLAMA_MODEL"
+echo "  Model: $AUTOBOT_DEFAULT_LLM_MODEL"
 echo "  Orchestrator: $AUTOBOT_ORCHESTRATOR_LLM"
 echo "  Backend: $AUTOBOT_BACKEND_API_ENDPOINT"
 echo "  Ollama: $AUTOBOT_OLLAMA_HOST"

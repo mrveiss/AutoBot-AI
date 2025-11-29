@@ -3,291 +3,165 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Quick Fix Script for Critical Model References
-Fixes immediate issues with missing model references in AutoBot codebase
+Model References Verification Script
+Verifies that all model references use ModelConstants from src/constants/model_constants.py
+
+Usage:
+    python scripts/ai-ml/fix_critical_model_references.py
+
+This script checks that the codebase properly uses centralized ModelConstants
+instead of hardcoded model names.
 """
 
 import os
-import shutil
+import re
+import sys
+
+# Add project root to path
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, PROJECT_ROOT)
 
 
-def backup_file(file_path):
-    """Create backup of file before modification"""
-    backup_path = f"{file_path}.backup"
-    shutil.copy2(file_path, backup_path)
-    print(f"✅ Created backup: {backup_path}")
-    return backup_path
+def check_hardcoded_models(directory: str, extensions: list[str]) -> list[dict]:
+    """
+    Check for hardcoded model references in files.
 
+    Args:
+        directory: Directory to scan
+        extensions: List of file extensions to check
 
-def fix_connection_utils():
-    """Fix deepseek-r1:14b references in connection_utils.py"""
-    file_path = "/home/kali/Desktop/AutoBot/backend/utils/connection_utils.py"
+    Returns:
+        List of findings with file, line number, and content
+    """
+    findings = []
 
-    if not os.path.exists(file_path):
-        print(f"❌ File not found: {file_path}")
-        return False
-
-    print(f"🔧 Fixing {file_path}")
-    backup_file(file_path)
-
-    with open(file_path, 'r') as f:
-        content = f.read()
-
-    # Replace deepseek-r1:14b with available model
-    original_content = content
-    content = content.replace(
-        'os.getenv("AUTOBOT_OLLAMA_MODEL", "deepseek-r1:14b")',
-        'os.getenv("AUTOBOT_OLLAMA_MODEL", "artifish/llama3.2-uncensored:latest")'
-    )
-
-    if content != original_content:
-        with open(file_path, 'w') as f:
-            f.write(content)
-        print("✅ Fixed deepseek-r1:14b references")
-        return True
-    else:
-        print("⚠️ No changes needed")
-        return False
-
-
-def fix_langchain_orchestrator():
-    """Fix phi:2.7b reference in langchain_agent_orchestrator.py"""
-    file_path = "/home/kali/Desktop/AutoBot/src/langchain_agent_orchestrator.py"
-
-    if not os.path.exists(file_path):
-        print(f"❌ File not found: {file_path}")
-        return False
-
-    print(f"🔧 Fixing {file_path}")
-    backup_file(file_path)
-
-    with open(file_path, 'r') as f:
-        content = f.read()
-
-    # Replace phi:2.7b with available model
-    original_content = content
-    content = content.replace(
-        'llm_model = "phi:2.7b"',
-        'llm_model = "llama3.2:1b-instruct-q4_K_M"'
-    )
-
-    if content != original_content:
-        with open(file_path, 'w') as f:
-            f.write(content)
-        print("✅ Fixed phi:2.7b reference")
-        return True
-    else:
-        print("⚠️ No changes needed")
-        return False
-
-
-def fix_config_py():
-    """Fix model configurations in config.py"""
-    file_path = "/home/kali/Desktop/AutoBot/src/config.py"
-
-    if not os.path.exists(file_path):
-        print(f"❌ File not found: {file_path}")
-        return False
-
-    print(f"🔧 Fixing {file_path}")
-    backup_file(file_path)
-
-    with open(file_path, 'r') as f:
-        content = f.read()
-
-    original_content = content
-
-    # Fix orchestrator model default
-    content = content.replace(
-        '"orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "llama3.2:3b")',
-        '"orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "artifish/llama3.2-uncensored:latest")'
-    )
-
-    # Optimize classification model
-    content = content.replace(
-        '"classification": os.getenv("AUTOBOT_CLASSIFICATION_MODEL", "gemma2:2b")',
-        '"classification": os.getenv("AUTOBOT_CLASSIFICATION_MODEL", "gemma3:1b")'
-    )
-
-    if content != original_content:
-        with open(file_path, 'w') as f:
-            f.write(content)
-        print("✅ Fixed config.py model references")
-        return True
-    else:
-        print("⚠️ No changes needed in config.py")
-        return False
-
-
-def fix_vllm_provider():
-    """Add fallback for missing vLLM models"""
-    file_path = "/home/kali/Desktop/AutoBot/src/llm_providers/vllm_provider.py"
-
-    if not os.path.exists(file_path):
-        print(f"❌ File not found: {file_path}")
-        return False
-
-    print(f"🔧 Fixing {file_path}")
-    backup_file(file_path)
-
-    with open(file_path, 'r') as f:
-        content = f.read()
-
-    # Add fallback check for missing models
-    fallback_code = '''
-    # Check if model is available, use fallback if not
-    try:
-        # Test if model is available
-        import subprocess
-        result = subprocess.run(["ollama", "list"], capture_output=True, text=True)
-        available_models = [line.split()[0] for line in result.stdout.split('\\n')[1:] if line.strip()]
-
-        if self.model_name not in available_models:
-            # Use fallback model
-            fallback_models = ["llama3.2:3b-instruct-q4_K_M", "llama3.2:1b-instruct-q4_K_M"]
-            for fallback in fallback_models:
-                if fallback in available_models:
-                    logger.warning(f"Model {self.model_name} not found, using fallback: {fallback}")
-                    self.model_name = fallback
-                    break
-    except Exception as e:
-        logger.warning(f"Could not check model availability: {e}")
-'''
-
-    # Insert fallback check after model initialization
-    if "def __init__" in content and "self.model_name = config" in content:
-        # Find the line with model_name assignment
-        lines = content.split('\n')
-        for i, line in enumerate(lines):
-            if "self.model_name = config" in line:
-                # Insert fallback code after this line
-                lines.insert(i + 1, fallback_code)
-                break
-
-        new_content = '\n'.join(lines)
-
-        with open(file_path, 'w') as f:
-            f.write(new_content)
-        print("✅ Added model fallback logic to vLLM provider")
-        return True
-    else:
-        print("⚠️ Could not add fallback logic to vLLM provider")
-        return False
-
-
-def install_missing_models():
-    """Install critical missing models"""
-    critical_models = [
-        "tinyllama:latest",
-        "phi3:3.8b",
-        "codellama:7b-instruct"
+    # Patterns that indicate hardcoded models (excluding constants file)
+    hardcoded_patterns = [
+        r'["\'](?:mistral|llama|gemma|qwen|deepseek)[^"\']*:[0-9]+b[^"\']*["\']',
+        r'os\.getenv\(["\']AUTOBOT_OLLAMA_MODEL["\']',  # Deprecated env var
     ]
 
-    print("📦 Installing critical missing models...")
+    # Files/directories to skip
+    skip_dirs = {'archives', 'analysis', '.git', '__pycache__', 'node_modules', '.venv'}
+    skip_files = {'model_constants.py'}  # This file defines the constants
 
-    for model in critical_models:
-        print(f"Installing {model}...")
-        try:
-            import subprocess
-            result = subprocess.run(
-                ["ollama", "pull", model],
-                capture_output=True,
-                text=True,
-                timeout=1800  # 30 minute timeout
-            )
+    for root, dirs, files in os.walk(directory):
+        # Skip excluded directories
+        dirs[:] = [d for d in dirs if d not in skip_dirs]
 
-            if result.returncode == 0:
-                print(f"✅ Successfully installed {model}")
-            else:
-                print(f"❌ Failed to install {model}: {result.stderr}")
+        for filename in files:
+            # Check if file has target extension
+            if not any(filename.endswith(ext) for ext in extensions):
+                continue
 
-        except subprocess.TimeoutExpired:
-            print(f"⏱️ Installation of {model} timed out")
-        except Exception as e:
-            print(f"❌ Error installing {model}: {e}")
+            # Skip excluded files
+            if filename in skip_files:
+                continue
+
+            filepath = os.path.join(root, filename)
+
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+
+                for line_num, line in enumerate(lines, 1):
+                    for pattern in hardcoded_patterns:
+                        if re.search(pattern, line, re.IGNORECASE):
+                            findings.append({
+                                'file': filepath,
+                                'line': line_num,
+                                'content': line.strip(),
+                                'pattern': pattern
+                            })
+            except (IOError, UnicodeDecodeError):
+                continue
+
+    return findings
 
 
-def verify_fixes():
-    """Verify that the fixes are working"""
-    print("\n🔍 Verifying fixes...")
+def verify_model_constants_usage():
+    """Verify that ModelConstants is being used correctly."""
+    print("Verifying ModelConstants usage...")
 
-    # Check if files were modified
-    modified_files = [
-        "/home/kali/Desktop/AutoBot/src/orchestrator.py",
-        "/home/kali/Desktop/AutoBot/backend/utils/connection_utils.py",
-        "/home/kali/Desktop/AutoBot/src/config.py"
-    ]
-
-    for file_path in modified_files:
-        if os.path.exists(file_path):
-            print(f"✅ {file_path} exists")
-
-            # Check for backup
-            backup_path = f"{file_path}.backup"
-            if os.path.exists(backup_path):
-                print(f"✅ Backup exists: {backup_path}")
-            else:
-                print(f"⚠️ No backup found for {file_path}")
-        else:
-            print(f"❌ {file_path} not found")
-
-    # Test ollama connection
     try:
-        import subprocess
-        result = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            print("✅ Ollama is responding")
+        from src.constants.model_constants import ModelConstants, FALLBACK_MODEL
 
-            # Check for key models
-            available_models = [line.split()[0] for line in result.stdout.split('\n')[1:] if line.strip()]
-            key_models = ["artifish/llama3.2-uncensored:latest", "llama3.2:1b-instruct-q4_K_M", "nomic-embed-text:latest"]
+        print(f"  FALLBACK_MODEL: {FALLBACK_MODEL}")
+        print(f"  DEFAULT_OLLAMA_MODEL: {ModelConstants.DEFAULT_OLLAMA_MODEL}")
+        print(f"  DEFAULT_OPENAI_MODEL: {ModelConstants.DEFAULT_OPENAI_MODEL}")
+        print(f"  DEFAULT_ANTHROPIC_MODEL: {ModelConstants.DEFAULT_ANTHROPIC_MODEL}")
+        print("ModelConstants imported successfully")
+        return True
+    except ImportError as e:
+        print(f"Failed to import ModelConstants: {e}")
+        return False
 
-            for model in key_models:
-                if model in available_models:
-                    print(f"✅ Key model available: {model}")
-                else:
-                    print(f"⚠️ Key model missing: {model}")
-        else:
-            print("❌ Ollama is not responding")
 
-    except Exception as e:
-        print(f"❌ Error checking Ollama: {e}")
+def verify_env_var_usage():
+    """Verify correct environment variable is being used."""
+    print("\nVerifying environment variable usage...")
+
+    correct_var = "AUTOBOT_DEFAULT_LLM_MODEL"
+    deprecated_var = "AUTOBOT_OLLAMA_MODEL"
+
+    # Check current environment
+    correct_value = os.getenv(correct_var)
+    deprecated_value = os.getenv(deprecated_var)
+
+    if correct_value:
+        print(f"  {correct_var}={correct_value}")
+    else:
+        print(f"  {correct_var} not set (will use FALLBACK_MODEL)")
+
+    if deprecated_value:
+        print(f"  WARNING: Deprecated {deprecated_var}={deprecated_value}")
+        print(f"  Please migrate to {correct_var}")
+
+    return True
 
 
 def main():
-    """Main function to apply all fixes"""
-    print("🚀 AutoBot LLM Model Critical Fixes")
-    print("=" * 50)
+    """Main verification function."""
+    print("=" * 60)
+    print("AutoBot Model References Verification")
+    print("=" * 60)
 
-    fixes_applied = 0
+    os.chdir(PROJECT_ROOT)
 
-    # Apply critical fixes
-    if fix_connection_utils():
-        fixes_applied += 1
+    # Verify ModelConstants
+    if not verify_model_constants_usage():
+        print("\nERROR: ModelConstants verification failed")
+        sys.exit(1)
 
-    if fix_langchain_orchestrator():
-        fixes_applied += 1
+    # Verify env var usage
+    verify_env_var_usage()
 
-    if fix_config_py():
-        fixes_applied += 1
+    # Check for hardcoded models in Python files
+    print("\nScanning for hardcoded model references...")
 
-    if fix_vllm_provider():
-        fixes_applied += 1
+    findings = check_hardcoded_models(
+        PROJECT_ROOT,
+        extensions=['.py']
+    )
 
-    # Install missing models (optional, can be time-consuming)
-    install_choice = input("\n📦 Install missing models? (y/N): ").lower().strip()
-    if install_choice == 'y':
-        install_missing_models()
+    if findings:
+        print(f"\nFound {len(findings)} potential hardcoded model references:")
+        for finding in findings:
+            rel_path = os.path.relpath(finding['file'], PROJECT_ROOT)
+            print(f"  {rel_path}:{finding['line']}")
+            print(f"    {finding['content'][:80]}...")
+    else:
+        print("No hardcoded model references found in active code")
 
-    # Verify fixes
-    verify_fixes()
+    print("\n" + "=" * 60)
+    print("Verification complete")
+    print("=" * 60)
 
-    print(f"\n✅ Applied {fixes_applied} fixes")
-    print("\n🔄 Next steps:")
-    print("1. Restart AutoBot services: bash run_autobot.sh --dev --no-build")
-    print("2. Test model functionality")
-    print("3. Monitor logs for any remaining model errors")
-    print("4. Run full optimization script: python scripts/ai-ml/optimize_llm_models.py")
+    print("\nCorrect usage pattern:")
+    print("  from src.constants.model_constants import ModelConstants")
+    print("  model = ModelConstants.DEFAULT_OLLAMA_MODEL")
+    print("\nEnvironment variable:")
+    print("  AUTOBOT_DEFAULT_LLM_MODEL=mistral:7b-instruct")
 
 
 if __name__ == "__main__":
