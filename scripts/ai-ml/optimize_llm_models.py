@@ -227,7 +227,7 @@ class LLMModelOptimizer:
                 {
                     "find": '"deepseek-r1:14b"',
                     "replace": '"artifish/llama3.2-uncensored:latest"',
-                    "line_context": "AUTOBOT_OLLAMA_MODEL default"
+                    "line_context": "AUTOBOT_DEFAULT_LLM_MODEL default"
                 }
             ]
         }

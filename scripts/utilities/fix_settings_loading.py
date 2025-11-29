@@ -222,7 +222,7 @@ function resetSettings() {
             use_phi2: false,
             api_endpoint: ServiceURLs.BACKEND_LOCAL,
             ollama_endpoint: ServiceURLs.OLLAMA_LOCAL,
-            ollama_model: 'deepseek-r1:14b',
+            ollama_model: 'mistral:7b-instruct',
             streaming: false
         },
         ui: {
