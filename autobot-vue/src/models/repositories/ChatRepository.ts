@@ -366,10 +366,15 @@ export class ChatRepository {
     }
   }
 
-  async saveChatMessages(params: { chatId: string; messages: any[] }): Promise<any> {
+  async saveChatMessages(params: { chatId: string; messages: any[]; name?: string }): Promise<any> {
     try {
+      // CRITICAL FIX Issue #259: Wrap messages in 'data' object to match backend expectation
+      // Backend expects: { data: { messages: [...], name: "..." } }
       const response = await this.post(`/api/chats/${params.chatId}/save`, {
-        messages: params.messages
+        data: {
+          messages: params.messages,
+          name: params.name || ''
+        }
       })
       return response.data || response
     } catch (error: any) {

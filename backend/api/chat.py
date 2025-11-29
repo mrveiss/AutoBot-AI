@@ -812,11 +812,13 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
                 message_type,
             )
 
-        # For other message types (terminal, system), use text prefix
+        # For other message types (terminal, system, user), use text prefix
+        # CRITICAL FIX: Handle both 'text' (backend format) and 'content' (frontend format)
+        text_content = msg.get("text", "") or msg.get("content", "")
         return (
             msg.get("timestamp", ""),
             msg.get("sender", ""),
-            msg.get("text", "")[:100],  # First 100 chars to handle long outputs
+            text_content[:100],  # First 100 chars to handle long outputs
         )
 
     def is_streaming_response(msg: Dict) -> bool:
@@ -849,20 +851,29 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
         if sig in new_sigs:
             continue
 
-        # For streaming responses without IDs, check for timestamp overlap
-        # to prevent duplicate accumulated states
+        # For streaming responses without IDs, check if there's a longer version
+        # This handles the progressive token accumulation during streaming
+        # Issue #259: Multiple streaming states with different timestamps should be deduplicated
         if is_streaming_response(msg):
-            msg_ts = msg.get("timestamp", "")
             msg_sender = msg.get("sender", "")
-            # Check if any new message has same timestamp and sender
-            has_newer = any(
-                n.get("timestamp", "") == msg_ts
-                and n.get("sender", "") == msg_sender
+            msg_content_len = len(msg.get("text", "") or msg.get("content", ""))
+
+            # Check if any message (existing or new) from same sender has longer content
+            # This keeps only the final/most complete streaming response
+            has_longer_existing = any(
+                m.get("sender", "") == msg_sender
+                and is_streaming_response(m)
+                and len(m.get("text", "") or m.get("content", "")) > msg_content_len
+                for m in existing
+                if m is not msg  # Don't compare with self
+            )
+            has_longer_new = any(
+                n.get("sender", "") == msg_sender
                 and is_streaming_response(n)
-                and len(n.get("text", "")) >= len(msg.get("text", ""))
+                and len(n.get("text", "") or n.get("content", "")) >= msg_content_len
                 for n in new
             )
-            if has_newer:
+            if has_longer_existing or has_longer_new:
                 continue
 
         preserved.append(msg)
@@ -870,15 +881,69 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
     # Combine: preserved messages + new messages
     merged = preserved + new
 
+    # CRITICAL FIX Issue #259: Deduplicate streaming responses using TIME-WINDOW grouping
+    # Group streaming messages by time window (2 minutes) and keep only longest per group
+    # This preserves multiple LLM responses across different conversation turns
+    final_merged = []
+    streaming_groups: List[List[Dict]] = []
+    current_group: List[Dict] = []
+    last_streaming_ts = None
+
+    # First pass: separate non-streaming messages and group streaming ones
+    for msg in merged:
+        if is_streaming_response(msg):
+            msg_ts_str = msg.get("timestamp", "")
+            try:
+                # Parse timestamp
+                if isinstance(msg_ts_str, str) and msg_ts_str:
+                    if "T" in msg_ts_str:
+                        current_ts = datetime.fromisoformat(
+                            msg_ts_str.replace("Z", "+00:00")
+                        )
+                    else:
+                        current_ts = datetime.strptime(msg_ts_str, "%Y-%m-%d %H:%M:%S")
+
+                    # Check if this starts a new group (>2 min gap)
+                    if last_streaming_ts is not None:
+                        time_diff = abs((current_ts - last_streaming_ts).total_seconds())
+                        if time_diff > 120:  # 2 minutes = new streaming session
+                            if current_group:
+                                streaming_groups.append(current_group)
+                            current_group = []
+                    last_streaming_ts = current_ts
+            except (ValueError, TypeError):
+                pass  # If timestamp parsing fails, add to current group anyway
+            current_group.append(msg)
+        else:
+            # Non-streaming message - finalize current streaming group
+            if current_group:
+                streaming_groups.append(current_group)
+                current_group = []
+                last_streaming_ts = None
+            final_merged.append(msg)
+
+    # Don't forget the last group
+    if current_group:
+        streaming_groups.append(current_group)
+
+    # Keep only the longest streaming message from each group
+    for group in streaming_groups:
+        if group:
+            longest = max(
+                group,
+                key=lambda m: len(m.get("text", "") or m.get("content", ""))
+            )
+            final_merged.append(longest)
+
     # Sort by timestamp to maintain chronological order
-    merged.sort(key=lambda m: m.get("timestamp", ""))
+    final_merged.sort(key=lambda m: m.get("timestamp", ""))
 
     logger.debug(
         f"Merged messages: {len(existing)} existing + {len(new)} new = "
-        f"{len(merged)} total ({len(preserved)} preserved from existing)"
+        f"{len(final_merged)} total (deduped from {len(merged)})"
     )
 
-    return merged
+    return final_merged
 
 
 @with_error_handling(

@@ -437,9 +437,11 @@ export class ChatController {
       const session = this.chatStore.sessions.find(s => s.id === targetSessionId)
       if (!session) return
 
+      // CRITICAL FIX Issue #259: Pass session name to backend for proper save
       await chatRepository.saveChatMessages({
         chatId: targetSessionId,
-        messages: session.messages
+        messages: session.messages,
+        name: session.name || ''
       })
 
       console.log('Chat session saved successfully:', targetSessionId)

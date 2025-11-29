@@ -455,12 +455,12 @@ class ChatWorkflowManager:
 
                 # Initialize knowledge service for RAG (Issue #249)
                 try:
-                    from backend.knowledge_factory import get_or_create_knowledge_base_sync
+                    from backend.knowledge_factory import get_knowledge_base_async
                     from backend.services.rag_service import RAGService
                     from src.services.chat_knowledge_service import ChatKnowledgeService
 
-                    # Get knowledge base instance
-                    kb = get_or_create_knowledge_base_sync()
+                    # Get knowledge base instance (async version)
+                    kb = await get_knowledge_base_async()
                     if kb:
                         rag_service = RAGService(kb)
                         await rag_service.initialize()
