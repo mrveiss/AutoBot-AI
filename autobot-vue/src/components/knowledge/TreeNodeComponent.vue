@@ -65,11 +65,11 @@
       <!-- Vectorize button for non-vectorized files -->
       <button
         v-if="node.type === 'file' && canVectorize"
-        class="vectorize-btn"
-        title="Vectorize this document"
+        :class="['vectorize-btn', { 'retry-btn': vectorizationStatus === 'failed' }]"
+        :title="vectorizationStatus === 'failed' ? 'Retry vectorization' : 'Vectorize this document'"
         @click.stop="$emit('vectorize', node.id)"
       >
-        <i class="fas fa-cube"></i>
+        <i :class="vectorizationStatus === 'failed' ? 'fas fa-redo' : 'fas fa-cube'"></i>
       </button>
     </div>
 
@@ -340,6 +340,14 @@ const formatSize = (bytes: number): string => {
 .vectorize-btn:hover {
   background: #2563eb;
   transform: scale(1.1);
+}
+
+.vectorize-btn.retry-btn {
+  background: #ef4444;
+}
+
+.vectorize-btn.retry-btn:hover {
+  background: #dc2626;
 }
 
 .node-children {
