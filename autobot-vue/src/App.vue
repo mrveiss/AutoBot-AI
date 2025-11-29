@@ -416,6 +416,9 @@
       @remove="() => appStore?.removeSystemNotification(notif.id)"
     />
 
+    <!-- CAPTCHA Human-in-the-Loop Notification (Issue #206) -->
+    <CaptchaNotification />
+
     <!-- Main Content Area with Router -->
     <main id="main-content" class="flex-1 overflow-hidden" role="main">
       <!-- Unified Loading System -->
@@ -444,6 +447,7 @@ import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useSystemStatus } from '@/composables/useSystemStatus'
 import SystemStatusNotification from '@/components/SystemStatusNotification.vue';
+import CaptchaNotification from '@/components/research/CaptchaNotification.vue';
 import { cacheBuster } from '@/utils/CacheBuster.js';
 import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
@@ -455,6 +459,7 @@ export default {
 
   components: {
     SystemStatusNotification,
+    CaptchaNotification,
     UnifiedLoadingView,
   },
 
