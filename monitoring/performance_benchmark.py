@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 
 from performance_monitor import VMS
 from src.constants.network_constants import NetworkConstants
+from src.constants.model_constants import ModelConstants
 
 @dataclass
 class BenchmarkResult:
@@ -76,7 +77,7 @@ class PerformanceBenchmark:
             }),
             ("LLM Request", "POST", f"http://{VMS['main']}:{NetworkConstants.BACKEND_PORT}/api/llm/request", {
                 "prompt": "What is AutoBot?",
-                "model": os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "llama3.1:8b")
+                "model": ModelConstants.DEFAULT_OLLAMA_MODEL
             })
         ]
 
