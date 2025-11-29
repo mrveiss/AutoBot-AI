@@ -3,20 +3,20 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Model Constants for AutoBot
-============================
+Model Constants for AutoBot - SINGLE SOURCE OF TRUTH
+=====================================================
 
-Centralized LLM model configuration constants to eliminate hardcoded model names
-and provide a single source of truth for AI model configuration.
+All LLM model configuration is centralized here.
+Fallback values are defined ONCE and referenced throughout.
 
 Usage:
     from src.constants.model_constants import ModelConstants
 
-    # Use default model
+    # Use default model (reads from .env, falls back to FALLBACK_MODEL)
     model_name = ModelConstants.DEFAULT_OLLAMA_MODEL
 
     # Use model endpoints
-    ollama_url = ModelConstants.OLLAMA_BASE_URL
+    ollama_url = ModelConstants.get_ollama_url()
 """
 
 import os
@@ -24,39 +24,49 @@ from dataclasses import dataclass
 from typing import Optional
 
 
+# =============================================================================
+# FALLBACK DEFAULTS - DEFINED ONCE, USED EVERYWHERE
+# =============================================================================
+# These are the ultimate fallbacks if .env is not configured.
+# Change these values to change the default for the entire system.
+
+FALLBACK_MODEL = "mistral:7b-instruct"  # Default LLM model
+FALLBACK_OPENAI_MODEL = "gpt-4"
+FALLBACK_ANTHROPIC_MODEL = "claude-3-5-sonnet-20241022"
+FALLBACK_GOOGLE_MODEL = "gemini-pro"
+
+
 @dataclass(frozen=True)
 class ModelConstants:
-    """LLM Model configuration constants for AutoBot"""
+    """
+    LLM Model configuration constants for AutoBot.
 
-    # Default Models - Can be overridden via environment variables
-    DEFAULT_OLLAMA_MODEL: str = os.getenv("AUTOBOT_OLLAMA_MODEL", "deepseek-r1:14b")
-    DEFAULT_OPENAI_MODEL: str = os.getenv("AUTOBOT_OPENAI_MODEL", "gpt-4")
-    DEFAULT_ANTHROPIC_MODEL: str = os.getenv(
-        "AUTOBOT_ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"
-    )
+    All models read from environment variables with centralized fallbacks.
+    """
 
-    # Model Providers
+    # =========================================================================
+    # DEFAULT MODELS - Read from .env, fallback to constants above
+    # =========================================================================
+
+    DEFAULT_OLLAMA_MODEL: str = os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", FALLBACK_MODEL)
+    DEFAULT_OPENAI_MODEL: str = os.getenv("AUTOBOT_OPENAI_MODEL", FALLBACK_OPENAI_MODEL)
+    DEFAULT_ANTHROPIC_MODEL: str = os.getenv("AUTOBOT_ANTHROPIC_MODEL", FALLBACK_ANTHROPIC_MODEL)
+    DEFAULT_GOOGLE_MODEL: str = os.getenv("AUTOBOT_GOOGLE_MODEL", FALLBACK_GOOGLE_MODEL)
+
+    # =========================================================================
+    # MODEL PROVIDERS
+    # =========================================================================
+
     PROVIDER_OLLAMA: str = "ollama"
     PROVIDER_OPENAI: str = "openai"
     PROVIDER_ANTHROPIC: str = "anthropic"
+    PROVIDER_GOOGLE: str = "google"
     PROVIDER_LM_STUDIO: str = "lm_studio"
 
-    # Popular Model Names (for reference/validation)
-    DEEPSEEK_R1_14B: str = "deepseek-r1:14b"
-    DEEPSEEK_R1_7B: str = "deepseek-r1:7b"
-    LLAMA_3_70B: str = "llama3:70b"
-    LLAMA_3_8B: str = "llama3:8b"
-    QWEN_72B: str = "qwen:72b"
-    QWEN_25_CODER_7B: str = "qwen2.5-coder-7b-instruct"  # Coder model - 7B params
-    MISTRAL_7B: str = "mistral:7b"
+    # =========================================================================
+    # MODEL ENDPOINTS
+    # =========================================================================
 
-    # Lightweight Models (for failsafe/classification scenarios)
-    GEMMA3_270M: str = "gemma3:270m"  # Ultra lightweight - 291MB
-    GEMMA3_1B: str = "gemma3:1b"  # 1B parameters - 815MB
-    LLAMA_32_1B: str = "llama3.2:1b"  # Lightweight - ~1GB
-    LLAMA_32_1B_INSTRUCT: str = "llama3.2:1b-instruct-q4_K_M"  # 807MB
-
-    # Model Endpoints (constructed from NetworkConstants)
     @staticmethod
     def get_ollama_url() -> str:
         """Get Ollama service URL from environment or default to AI Stack VM"""
@@ -78,12 +88,12 @@ class ModelConstants:
 
 @dataclass(frozen=True)
 class ModelConfig:
-    """Model configuration settings"""
+    """Model configuration settings - generation parameters and limits"""
 
     # Context limits
     DEFAULT_CONTEXT_LENGTH: int = 8192
     MAX_CONTEXT_LENGTH: int = 32768
-    MAX_HISTORY_TOKENS: int = 3000  # Maximum tokens for conversation history
+    MAX_HISTORY_TOKENS: int = 3000
 
     # RAG Context Length Optimization (by complexity score)
     RAG_CONTEXT_HIGH_COMPLEXITY: int = 3000  # complexity > 0.8
@@ -97,7 +107,7 @@ class ModelConfig:
 
     # Model Size Thresholds (MB) for task complexity classification
     MODEL_SIZE_LIGHTWEIGHT_THRESHOLD_MB: int = 1000  # < 1GB = lightweight
-    MODEL_SIZE_MODERATE_THRESHOLD_MB: int = 3000  # < 3GB = moderate, else heavy
+    MODEL_SIZE_MODERATE_THRESHOLD_MB: int = 3000  # < 3GB = moderate
 
     # Generation parameters
     DEFAULT_TEMPERATURE: float = 0.7
@@ -110,7 +120,7 @@ class ModelConfig:
 
     # Retry settings
     MAX_RETRIES: int = 3
-    RETRY_DELAY: int = 2  # seconds
+    RETRY_DELAY: int = 2
 
 
 # Singleton instances for easy access
@@ -118,13 +128,16 @@ model_constants = ModelConstants()
 model_config = ModelConfig()
 
 
-# Convenience functions for common use cases
+# =============================================================================
+# CONVENIENCE FUNCTIONS
+# =============================================================================
+
 def get_default_model(provider: Optional[str] = None) -> str:
     """
     Get the default model for a specific provider or the system default.
 
     Args:
-        provider: Optional provider name (ollama, openai, anthropic)
+        provider: Optional provider name (ollama, openai, anthropic, google)
 
     Returns:
         Default model name for the provider
@@ -135,6 +148,8 @@ def get_default_model(provider: Optional[str] = None) -> str:
         return ModelConstants.DEFAULT_OPENAI_MODEL
     elif provider == ModelConstants.PROVIDER_ANTHROPIC:
         return ModelConstants.DEFAULT_ANTHROPIC_MODEL
+    elif provider == ModelConstants.PROVIDER_GOOGLE:
+        return ModelConstants.DEFAULT_GOOGLE_MODEL
     else:
         return ModelConstants.DEFAULT_OLLAMA_MODEL  # System default
 
