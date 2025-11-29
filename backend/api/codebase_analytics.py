@@ -38,6 +38,10 @@ indexing_tasks: Dict[str, Metadata] = {}
 # Store active task references to prevent garbage collection
 _active_tasks: Dict[str, asyncio.Task] = {}
 
+# Global lock to prevent concurrent indexing tasks
+_indexing_lock = asyncio.Lock()
+_current_indexing_task_id: Optional[str] = None
+
 
 class CodebaseStats(BaseModel):
     total_files: int
@@ -262,6 +266,263 @@ IMPORTANT: Return ONLY the JSON object, no other text."""
         return {"hardcodes": [], "technical_debt": []}
 
 
+def detect_race_conditions(tree: ast.AST, content: str, file_path: str) -> List[Dict]:
+    """
+    Detect potential race conditions in Python code.
+
+    Checks for:
+    1. Global mutable state without locks
+    2. Async shared state modifications
+    3. Thread-unsafe singleton patterns
+    4. Unprotected shared dictionary/list access
+    5. Missing async locks for shared resources
+    """
+    problems = []
+    lines = content.split("\n")
+
+    # Track global variables and their types
+    global_vars = {}
+    global_mutables = set()  # Global mutable objects (dict, list, set)
+    lock_protected_vars = set()  # Variables protected by locks
+    has_async_lock_import = False
+    has_threading_lock_import = False
+
+    # First pass: identify imports and global state
+    for node in ast.walk(tree):
+        # Check for lock imports
+        if isinstance(node, ast.ImportFrom):
+            if node.module == "asyncio":
+                for alias in node.names:
+                    if alias.name in ("Lock", "Semaphore", "Event", "Condition"):
+                        has_async_lock_import = True
+            elif node.module == "threading":
+                for alias in node.names:
+                    if alias.name in ("Lock", "RLock", "Semaphore", "Event", "Condition"):
+                        has_threading_lock_import = True
+
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in ("asyncio", "threading"):
+                    has_async_lock_import = True
+                    has_threading_lock_import = True
+
+    # Second pass: find global assignments at module level
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    var_name = target.id
+                    global_vars[var_name] = node.lineno
+
+                    # Check if it's a mutable type
+                    if isinstance(node.value, (ast.Dict, ast.List, ast.Set)):
+                        global_mutables.add(var_name)
+                    elif isinstance(node.value, ast.Call):
+                        # Check for dict(), list(), set(), defaultdict(), etc.
+                        func_name = ""
+                        if isinstance(node.value.func, ast.Name):
+                            func_name = node.value.func.id
+                        elif isinstance(node.value.func, ast.Attribute):
+                            func_name = node.value.func.attr
+
+                        if func_name in ("dict", "list", "set", "defaultdict", "OrderedDict",
+                                        "Counter", "deque"):
+                            global_mutables.add(var_name)
+
+        elif isinstance(node, ast.AnnAssign) and node.target:
+            if isinstance(node.target, ast.Name):
+                var_name = node.target.id
+                global_vars[var_name] = node.lineno
+
+                # Check annotation for Dict, List, Set types
+                if node.annotation:
+                    ann_str = ast.unparse(node.annotation) if hasattr(ast, 'unparse') else ""
+                    if any(t in ann_str for t in ("Dict", "List", "Set", "dict", "list", "set")):
+                        global_mutables.add(var_name)
+
+                if node.value and isinstance(node.value, (ast.Dict, ast.List, ast.Set)):
+                    global_mutables.add(var_name)
+
+    # Third pass: find modifications to global state in functions
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            is_async = isinstance(node, ast.AsyncFunctionDef)
+            func_name = node.name
+
+            # Check for 'global' keyword usage
+            global_declarations = set()
+            for stmt in ast.walk(node):
+                if isinstance(stmt, ast.Global):
+                    global_declarations.update(stmt.names)
+
+            # Check if function modifies global mutable state
+            for stmt in ast.walk(node):
+                # Check for subscript assignment (dict[key] = value, list[i] = value)
+                if isinstance(stmt, ast.Assign):
+                    for target in stmt.targets:
+                        if isinstance(target, ast.Subscript):
+                            if isinstance(target.value, ast.Name):
+                                var_name = target.value.id
+                                if var_name in global_mutables or var_name in global_declarations:
+                                    # Check if this is inside a lock context
+                                    if var_name not in lock_protected_vars:
+                                        problems.append({
+                                            "type": "race_condition",
+                                            "severity": "high",
+                                            "line": stmt.lineno,
+                                            "description": (
+                                                f"Unprotected modification of global '{var_name}' "
+                                                f"in {'async ' if is_async else ''}function '{func_name}'"
+                                            ),
+                                            "suggestion": (
+                                                f"Use {'asyncio.Lock()' if is_async else 'threading.Lock()'} "
+                                                f"to protect concurrent access to '{var_name}'"
+                                            ),
+                                        })
+
+                # Check for method calls on global mutables (.append, .update, .pop, etc.)
+                if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
+                    call = stmt.value
+                    if isinstance(call.func, ast.Attribute):
+                        if isinstance(call.func.value, ast.Name):
+                            var_name = call.func.value.id
+                            method_name = call.func.attr
+                            mutating_methods = {
+                                "append", "extend", "insert", "remove", "pop", "clear",
+                                "update", "setdefault", "add", "discard", "difference_update",
+                                "intersection_update", "symmetric_difference_update"
+                            }
+                            if (var_name in global_mutables or var_name in global_declarations) \
+                                    and method_name in mutating_methods:
+                                if var_name not in lock_protected_vars:
+                                    problems.append({
+                                        "type": "race_condition",
+                                        "severity": "high",
+                                        "line": stmt.lineno,
+                                        "description": (
+                                            f"Unprotected '{method_name}()' on global '{var_name}' "
+                                            f"in {'async ' if is_async else ''}function '{func_name}'"
+                                        ),
+                                        "suggestion": (
+                                            f"Use {'asyncio.Lock()' if is_async else 'threading.Lock()'} "
+                                            f"to protect concurrent modifications"
+                                        ),
+                                    })
+
+    # Fourth pass: detect thread-unsafe singleton patterns
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            # Look for lazy initialization pattern without locks
+            # Example: if _instance is None: _instance = SomeClass()
+            for stmt in ast.walk(node):
+                if isinstance(stmt, ast.If):
+                    # Check for "if var is None" pattern
+                    if isinstance(stmt.test, ast.Compare):
+                        if len(stmt.test.ops) == 1 and isinstance(stmt.test.ops[0], ast.Is):
+                            if isinstance(stmt.test.left, ast.Name):
+                                var_name = stmt.test.left.id
+                                if var_name.startswith("_") and var_name in global_vars:
+                                    # Check if body assigns to this variable
+                                    for body_stmt in stmt.body:
+                                        if isinstance(body_stmt, ast.Assign):
+                                            for target in body_stmt.targets:
+                                                if isinstance(target, ast.Name) and target.id == var_name:
+                                                    problems.append({
+                                                        "type": "race_condition",
+                                                        "severity": "high",
+                                                        "line": stmt.lineno,
+                                                        "description": (
+                                                            f"Thread-unsafe lazy initialization of '{var_name}' - "
+                                                            f"multiple threads may create multiple instances"
+                                                        ),
+                                                        "suggestion": (
+                                                            "Use a lock or implement proper double-checked locking pattern"
+                                                        ),
+                                                    })
+
+    # Fifth pass: detect async functions modifying shared state without await
+    for node in ast.walk(tree):
+        if isinstance(node, ast.AsyncFunctionDef):
+            # Check for shared state modifications that should use async primitives
+            uses_global = False
+            has_await_in_critical = False
+
+            for stmt in ast.walk(node):
+                if isinstance(stmt, ast.Global):
+                    uses_global = True
+
+            if uses_global and not has_async_lock_import:
+                problems.append({
+                    "type": "race_condition",
+                    "severity": "medium",
+                    "line": node.lineno,
+                    "description": (
+                        f"Async function '{node.name}' uses global state but no asyncio.Lock imported"
+                    ),
+                    "suggestion": (
+                        "Consider using asyncio.Lock() to protect shared state in async context"
+                    ),
+                })
+
+    # Sixth pass: detect read-modify-write patterns
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            is_async = isinstance(node, ast.AsyncFunctionDef)
+
+            for stmt in ast.walk(node):
+                # Check for augmented assignment on globals (x += 1, dict[k] += 1)
+                if isinstance(stmt, ast.AugAssign):
+                    target = stmt.target
+                    var_name = None
+
+                    if isinstance(target, ast.Name):
+                        var_name = target.id
+                    elif isinstance(target, ast.Subscript) and isinstance(target.value, ast.Name):
+                        var_name = target.value.id
+
+                    if var_name and var_name in global_vars:
+                        problems.append({
+                            "type": "race_condition",
+                            "severity": "high",
+                            "line": stmt.lineno,
+                            "description": (
+                                f"Read-modify-write on global '{var_name}' is not atomic - "
+                                f"can cause lost updates under concurrency"
+                            ),
+                            "suggestion": (
+                                "Use atomic operations or protect with a lock"
+                            ),
+                        })
+
+    # Seventh pass: detect shared file handles without locks
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for stmt in ast.walk(node):
+                if isinstance(stmt, ast.With):
+                    for item in stmt.items:
+                        if isinstance(item.context_expr, ast.Call):
+                            call = item.context_expr
+                            if isinstance(call.func, ast.Name) and call.func.id == "open":
+                                # Check if writing to a file that might be shared
+                                if len(call.args) >= 2:
+                                    mode_arg = call.args[1]
+                                    if isinstance(mode_arg, ast.Constant) and "w" in str(mode_arg.value):
+                                        problems.append({
+                                            "type": "race_condition",
+                                            "severity": "medium",
+                                            "line": stmt.lineno,
+                                            "description": (
+                                                "File opened for writing without explicit locking - "
+                                                "concurrent writes may corrupt data"
+                                            ),
+                                            "suggestion": (
+                                                "Use file locking (fcntl.flock) or a separate lock for file access"
+                                            ),
+                                        })
+
+    return problems
+
+
 async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata:
     """Analyze a Python file for functions, classes, and potential issues"""
     try:
@@ -385,6 +646,13 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata
 
             except Exception as e:
                 logger.debug(f"LLM analysis skipped for {file_path}: {e}")
+
+        # Detect race conditions and concurrency issues
+        try:
+            race_condition_problems = detect_race_conditions(tree, content, file_path)
+            problems.extend(race_condition_problems)
+        except Exception as e:
+            logger.debug(f"Race condition detection skipped for {file_path}: {e}")
 
         return {
             "functions": functions,
@@ -510,7 +778,9 @@ def analyze_javascript_vue_file(file_path: str) -> Metadata:
 
 
 async def scan_codebase(
-    root_path: Optional[str] = None, progress_callback: Optional[callable] = None
+    root_path: Optional[str] = None,
+    progress_callback: Optional[callable] = None,
+    immediate_store_collection=None,
 ) -> Metadata:
     """Scan the entire codebase using MCP-like file operations"""
     # Use project-relative path if not specified
@@ -650,6 +920,35 @@ async def scan_codebase(
                         problem["file_path"] = relative_path
                         analysis_results["all_problems"].append(problem)
 
+                        # Store problem immediately to ChromaDB if collection provided
+                        if immediate_store_collection:
+                            try:
+                                problem_idx = len(analysis_results["all_problems"]) - 1
+                                problem_doc = f"""
+Problem: {problem.get('type', 'unknown')}
+Severity: {problem.get('severity', 'medium')}
+File: {problem.get('file_path', '')}
+Line: {problem.get('line', 0)}
+Description: {problem.get('description', '')}
+Suggestion: {problem.get('suggestion', '')}
+                                """.strip()
+                                await asyncio.to_thread(
+                                    immediate_store_collection.add,
+                                    ids=[f"problem_{problem_idx}_{problem.get('type', 'unknown')}"],
+                                    documents=[problem_doc],
+                                    metadatas=[{
+                                        "type": "problem",
+                                        "problem_type": problem.get("type", "unknown"),
+                                        "severity": problem.get("severity", "medium"),
+                                        "file_path": problem.get("file_path", ""),
+                                        "line_number": str(problem.get("line", 0)),
+                                        "description": problem.get("description", ""),
+                                        "suggestion": problem.get("suggestion", ""),
+                                    }],
+                                )
+                            except Exception as e:
+                                logger.debug(f"Failed to store problem immediately: {e}")
+
         # Calculate average file size
         if analysis_results["stats"]["total_files"] > 0:
             analysis_results["stats"]["average_file_size"] = (
@@ -683,7 +982,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
             f"[Task {task_id}] Starting background codebase indexing for: {root_path}"
         )
 
-        # Initialize task status
+        # Initialize task status with enhanced phase and batch tracking
         indexing_tasks[task_id] = {
             "status": "running",
             "progress": {
@@ -693,14 +992,65 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
                 "current_file": "Initializing...",
                 "operation": "Starting indexing",
             },
+            "phases": {
+                "current_phase": "init",
+                "phases_completed": [],
+                "phase_list": [
+                    {"id": "init", "name": "Initialization", "status": "running"},
+                    {"id": "scan", "name": "Scanning Files", "status": "pending"},
+                    {"id": "prepare", "name": "Preparing Data", "status": "pending"},
+                    {"id": "store", "name": "Storing to ChromaDB", "status": "pending"},
+                    {"id": "finalize", "name": "Finalizing", "status": "pending"},
+                ],
+            },
+            "batches": {
+                "total_batches": 0,
+                "completed_batches": 0,
+                "current_batch": 0,
+                "batch_size": 5000,  # ChromaDB max batch size
+                "items_per_batch": [],
+            },
+            "stats": {
+                "files_scanned": 0,
+                "problems_found": 0,
+                "functions_found": 0,
+                "classes_found": 0,
+                "items_stored": 0,
+            },
             "result": None,
             "error": None,
             "started_at": datetime.now().isoformat(),
         }
 
+        # Helper to update phase status
+        def update_phase(phase_id: str, status: str):
+            phases = indexing_tasks[task_id]["phases"]
+            phases["current_phase"] = phase_id
+            for phase in phases["phase_list"]:
+                if phase["id"] == phase_id:
+                    phase["status"] = status
+                    if status == "completed" and phase_id not in phases["phases_completed"]:
+                        phases["phases_completed"].append(phase_id)
+                    break
+
+        # Helper to update batch info
+        def update_batch_info(current_batch: int, total_batches: int, items_in_batch: int = 0):
+            batches = indexing_tasks[task_id]["batches"]
+            batches["current_batch"] = current_batch
+            batches["total_batches"] = total_batches
+            if items_in_batch > 0 and current_batch > len(batches["items_per_batch"]):
+                batches["items_per_batch"].append(items_in_batch)
+
+        # Helper to update stats
+        def update_stats(**kwargs):
+            for key, value in kwargs.items():
+                if key in indexing_tasks[task_id]["stats"]:
+                    indexing_tasks[task_id]["stats"][key] = value
+
         # Progress callback function
         async def update_progress(
-            operation: str, current: int, total: int, current_file: str
+            operation: str, current: int, total: int, current_file: str,
+            phase: str = None, batch_info: dict = None
         ):
             percent = int((current / total * 100)) if total > 0 else 0
             indexing_tasks[task_id]["progress"] = {
@@ -710,39 +1060,47 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
                 "current_file": current_file,
                 "operation": operation,
             }
+
+            # Update phase if specified
+            if phase:
+                update_phase(phase, "running")
+
+            # Update batch info if specified
+            if batch_info:
+                update_batch_info(
+                    batch_info.get("current", 0),
+                    batch_info.get("total", 0),
+                    batch_info.get("items", 0)
+                )
+
             logger.debug(
                 f"[Task {task_id}] Progress: {operation} - {current}/{total} ({percent}%)"
             )
 
-        # Scan the codebase with progress tracking
-        analysis_results = await scan_codebase(
-            root_path, progress_callback=update_progress
-        )
-
-        # Update progress for ChromaDB storage phase
+        # Get ChromaDB collection FIRST so we can store problems immediately
+        update_phase("init", "running")
         await update_progress(
-            operation="Preparing ChromaDB storage",
+            operation="Preparing ChromaDB",
             current=0,
             total=1,
             current_file="Connecting to ChromaDB...",
+            phase="init",
         )
 
-        # Store in ChromaDB (run in thread to avoid blocking event loop)
         code_collection = await asyncio.to_thread(get_code_collection)
+        storage_type = "chromadb" if code_collection else "memory"
 
         if code_collection:
-            storage_type = "chromadb"
-
-            # Clear existing data in collection
+            # Clear existing data before scanning
             await update_progress(
                 operation="Clearing old ChromaDB data",
                 current=0,
                 total=1,
                 current_file="Removing existing entries...",
+                phase="init",
             )
 
             try:
-                # Run blocking ChromaDB operations in thread pool
                 existing_data = await asyncio.to_thread(code_collection.get)
                 existing_ids = existing_data["ids"]
                 if existing_ids:
@@ -753,25 +1111,53 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
             except Exception as e:
                 logger.warning(f"[Task {task_id}] Error clearing collection: {e}")
 
-            # Prepare batch data for ChromaDB
+        # Mark init phase as completed, start scan phase
+        update_phase("init", "completed")
+        update_phase("scan", "running")
+
+        # Scan the codebase with progress tracking
+        # Pass collection so problems can be stored immediately as they're found
+        analysis_results = await scan_codebase(
+            root_path,
+            progress_callback=update_progress,
+            immediate_store_collection=code_collection,
+        )
+
+        # Update stats from scan results
+        update_stats(
+            files_scanned=analysis_results["stats"]["total_files"],
+            problems_found=len(analysis_results["all_problems"]),
+            functions_found=len(analysis_results["all_functions"]),
+            classes_found=len(analysis_results["all_classes"]),
+        )
+
+        # Mark scan phase completed
+        update_phase("scan", "completed")
+
+        if code_collection:
+            # Start prepare phase
+            update_phase("prepare", "running")
+
+            # Problems were already stored during scan, now store functions and classes
+            # Prepare batch data for ChromaDB (excluding problems which are already stored)
             batch_ids = []
             batch_documents = []
             batch_metadatas = []
 
-            # Store functions
+            # Store functions and classes (problems were already stored during scan)
             total_items_to_store = (
                 len(analysis_results["all_functions"])
                 + len(analysis_results["all_classes"])
-                + len(analysis_results["all_problems"])
-                + 1  # stats
+                + 1  # stats (problems already stored)
             )
             items_prepared = 0
 
             await update_progress(
-                operation="Storing functions",
+                operation="Preparing functions",
                 current=0,
                 total=total_items_to_store,
                 current_file="Processing functions...",
+                phase="prepare",
             )
 
             for idx, func in enumerate(analysis_results["all_functions"]):
@@ -848,46 +1234,8 @@ Docstring: {cls.get('docstring', 'No documentation')}
                         current_file=f"Class {idx+1}/{len(analysis_results['all_classes'])}",
                     )
 
-            # Store problems
-            await update_progress(
-                operation="Storing problems",
-                current=items_prepared,
-                total=total_items_to_store,
-                current_file="Processing code problems...",
-            )
-
-            for idx, problem in enumerate(analysis_results["all_problems"]):
-                doc_text = """
-Problem: {problem.get('type', 'unknown')}
-Severity: {problem.get('severity', 'unknown')}
-File: {problem.get('file_path', 'unknown')}
-Line: {problem.get('line', 0)}
-Description: {problem.get('description', 'No description')}
-Suggestion: {problem.get('suggestion', 'No suggestion')}
-                """.strip()
-
-                batch_ids.append(f"problem_{idx}")
-                batch_documents.append(doc_text)
-                batch_metadatas.append(
-                    {
-                        "type": "problem",
-                        "problem_type": problem.get("type", ""),
-                        "severity": problem.get("severity", ""),
-                        "file_path": problem.get("file_path", ""),
-                        "line_number": str(problem.get("line", 0)),
-                        "description": problem.get("description", ""),
-                        "suggestion": problem.get("suggestion", ""),
-                    }
-                )
-
-                items_prepared += 1
-                if items_prepared % 50 == 0:
-                    await update_progress(
-                        operation="Storing problems",
-                        current=items_prepared,
-                        total=total_items_to_store,
-                        current_file=f"Problem {idx+1}/{len(analysis_results['all_problems'])}",
-                    )
+            # NOTE: Problems were already stored immediately during scan phase
+            # No need to store them again here
 
             # Store stats as a special document
             stats_doc = """
@@ -913,25 +1261,38 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
 
             items_prepared += 1
 
+            # Mark prepare phase completed
+            update_phase("prepare", "completed")
+
             # Add all to ChromaDB in batches (ChromaDB has max batch size limit)
             if batch_ids:
+                # Start store phase
+                update_phase("store", "running")
+
                 BATCH_SIZE = (
                     5000  # ChromaDB max batch size is ~5461, use 5000 for safety
                 )
                 total_items = len(batch_ids)
                 items_stored = 0
+                total_batches = (total_items + BATCH_SIZE - 1) // BATCH_SIZE
+
+                # Initialize batch tracking
+                update_batch_info(0, total_batches, 0)
 
                 await update_progress(
                     operation="Writing to ChromaDB",
                     current=0,
                     total=total_items,
                     current_file="Batch storage in progress...",
+                    phase="store",
+                    batch_info={"current": 0, "total": total_batches, "items": 0}
                 )
 
                 for i in range(0, total_items, BATCH_SIZE):
                     batch_slice_ids = batch_ids[i : i + BATCH_SIZE]
                     batch_slice_docs = batch_documents[i : i + BATCH_SIZE]
                     batch_slice_metas = batch_metadatas[i : i + BATCH_SIZE]
+                    batch_num = i // BATCH_SIZE + 1
 
                     # Run blocking ChromaDB add in thread pool
                     await asyncio.to_thread(
@@ -942,19 +1303,28 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
                     )
                     items_stored += len(batch_slice_ids)
 
-                    batch_num = i // BATCH_SIZE + 1
-                    total_batches = (total_items + BATCH_SIZE - 1) // BATCH_SIZE
+                    # Update batch tracking with completed batch info
+                    indexing_tasks[task_id]["batches"]["completed_batches"] = batch_num
+
                     await update_progress(
                         operation="Writing to ChromaDB",
                         current=items_stored,
                         total=total_items,
-                        current_file=f"Batch {batch_num}/{total_batches}"
+                        current_file=f"Batch {batch_num}/{total_batches}",
+                        phase="store",
+                        batch_info={"current": batch_num, "total": total_batches, "items": len(batch_slice_ids)}
                     )
 
+                    # Update items stored stats
+                    update_stats(items_stored=items_stored)
+
                     logger.info(
-                        f"[Task {task_id}] Stored batch {batch_num}: "
+                        f"[Task {task_id}] Stored batch {batch_num}/{total_batches}: "
                         f"{len(batch_slice_ids)} items ({items_stored}/{total_items})"
                     )
+
+                # Mark store phase completed
+                update_phase("store", "completed")
 
                 logger.info(
                     f"[Task {task_id}] ✅ Stored total of {items_stored} items in ChromaDB"
@@ -962,6 +1332,9 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
         else:
             storage_type = "failed"
             raise Exception("ChromaDB connection failed")
+
+        # Mark finalize phase
+        update_phase("finalize", "running")
 
         # Mark task as completed
         indexing_tasks[task_id]["status"] = "completed"
@@ -974,6 +1347,9 @@ Last Indexed: {analysis_results['stats']['last_indexed']}
             "timestamp": datetime.now().isoformat(),
         }
         indexing_tasks[task_id]["completed_at"] = datetime.now().isoformat()
+
+        # Mark finalize phase as completed
+        update_phase("finalize", "completed")
 
         logger.info(f"[Task {task_id}] ✅ Indexing completed successfully")
 
@@ -996,8 +1372,33 @@ async def index_codebase():
 
     Returns immediately with a task_id that can be used to poll progress
     via GET /api/analytics/codebase/index/status/{task_id}
+
+    Only one indexing task can run at a time - subsequent requests will
+    return the existing task's ID if one is already running.
     """
+    global _current_indexing_task_id
+
     logger.info("✅ ENTRY: index_codebase endpoint called!")
+
+    # Check if there's already an indexing task running
+    if _current_indexing_task_id is not None:
+        existing_task = _active_tasks.get(_current_indexing_task_id)
+        if existing_task and not existing_task.done():
+            logger.info(
+                f"🔒 Indexing already in progress: {_current_indexing_task_id}"
+            )
+            return JSONResponse(
+                {
+                    "task_id": _current_indexing_task_id,
+                    "status": "already_running",
+                    "message": (
+                        "Indexing is already in progress. Poll "
+                        f"/api/analytics/codebase/index/status/{_current_indexing_task_id} "
+                        "for progress."
+                    ),
+                }
+            )
+
     # Always use project root
     project_root = Path(__file__).parent.parent.parent
     root_path = str(project_root)
@@ -1006,6 +1407,9 @@ async def index_codebase():
     # Generate unique task ID
     task_id = str(uuid.uuid4())
     logger.info(f"🆔 Generated task_id = {task_id}")
+
+    # Set the current indexing task
+    _current_indexing_task_id = task_id
 
     # Add async background task using asyncio and store reference
     logger.info("🔄 About to create_task")
@@ -1016,7 +1420,11 @@ async def index_codebase():
 
     # Clean up task reference when done
     def cleanup_task(t):
+        global _current_indexing_task_id
         _active_tasks.pop(task_id, None)
+        if _current_indexing_task_id == task_id:
+            _current_indexing_task_id = None
+        logger.info(f"🧹 Task {task_id} cleaned up")
 
     task.add_done_callback(cleanup_task)
     logger.info("🧹 Cleanup callback added")
@@ -1075,6 +1483,125 @@ async def get_indexing_status(task_id: str):
     }
 
     return JSONResponse(response)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_current_indexing_job",
+    error_code_prefix="CODEBASE",
+)
+@router.get("/index/current")
+async def get_current_indexing_job():
+    """
+    Get the status of the currently running indexing job (if any)
+
+    Returns:
+    - has_active_job: Whether an indexing job is currently running
+    - task_id: The current job's task ID (if running)
+    - status: Current job status
+    - progress: Current progress details
+    """
+    global _current_indexing_task_id
+
+    if _current_indexing_task_id is None:
+        return JSONResponse({
+            "has_active_job": False,
+            "task_id": None,
+            "status": "idle",
+            "message": "No indexing job is currently running",
+        })
+
+    # Check if task is still running
+    existing_task = _active_tasks.get(_current_indexing_task_id)
+    if existing_task is None or existing_task.done():
+        # Task finished or was cleaned up
+        task_data = indexing_tasks.get(_current_indexing_task_id, {})
+        return JSONResponse({
+            "has_active_job": False,
+            "task_id": _current_indexing_task_id,
+            "status": task_data.get("status", "unknown"),
+            "result": task_data.get("result"),
+            "error": task_data.get("error"),
+            "message": "Last indexing job has completed",
+        })
+
+    # Task is still running
+    task_data = indexing_tasks.get(_current_indexing_task_id, {})
+    return JSONResponse({
+        "has_active_job": True,
+        "task_id": _current_indexing_task_id,
+        "status": task_data.get("status", "running"),
+        "progress": task_data.get("progress"),
+        "phases": task_data.get("phases"),
+        "batches": task_data.get("batches"),
+        "stats": task_data.get("stats"),
+        "started_at": task_data.get("started_at"),
+        "message": "Indexing job is in progress",
+    })
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="cancel_indexing_job",
+    error_code_prefix="CODEBASE",
+)
+@router.post("/index/cancel")
+async def cancel_indexing_job():
+    """
+    Cancel the currently running indexing job
+
+    Returns:
+    - success: Whether the cancellation was successful
+    - task_id: The cancelled job's task ID
+    - message: Status message
+    """
+    global _current_indexing_task_id
+
+    if _current_indexing_task_id is None:
+        return JSONResponse({
+            "success": False,
+            "task_id": None,
+            "message": "No indexing job is currently running",
+        })
+
+    task_id = _current_indexing_task_id
+    existing_task = _active_tasks.get(task_id)
+
+    if existing_task is None or existing_task.done():
+        return JSONResponse({
+            "success": False,
+            "task_id": task_id,
+            "message": "Indexing job has already completed or was not found",
+        })
+
+    # Cancel the task
+    try:
+        existing_task.cancel()
+        logger.info(f"🛑 Cancelled indexing task: {task_id}")
+
+        # Update task status
+        if task_id in indexing_tasks:
+            indexing_tasks[task_id]["status"] = "cancelled"
+            indexing_tasks[task_id]["error"] = "Cancelled by user"
+            indexing_tasks[task_id]["failed_at"] = datetime.now().isoformat()
+
+        # Clear current task
+        _current_indexing_task_id = None
+        _active_tasks.pop(task_id, None)
+
+        return JSONResponse({
+            "success": True,
+            "task_id": task_id,
+            "message": "Indexing job cancelled successfully",
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to cancel task {task_id}: {e}")
+        return JSONResponse({
+            "success": False,
+            "task_id": task_id,
+            "message": f"Failed to cancel job: {str(e)}",
+        })
 
 
 @with_error_handling(
@@ -1307,6 +1834,413 @@ async def get_codebase_problems(problem_type: Optional[str] = None):
             "total_count": len(all_problems),
             "problem_types": list(set(p.get("type", "unknown") for p in all_problems)),
             "storage_type": storage_type,
+        }
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_chart_data",
+    error_code_prefix="CODEBASE",
+)
+@router.get("/analytics/charts")
+async def get_chart_data():
+    """
+    Get aggregated data for analytics charts.
+
+    Returns data structures optimized for ApexCharts:
+    - problem_types: Pie chart data for problem type distribution
+    - severity_counts: Bar chart data for severity levels
+    - race_conditions: Donut chart data for race condition categories
+    - top_files: Horizontal bar chart for files with most problems
+    - summary: Overall summary statistics
+    """
+    code_collection = get_code_collection()
+
+    # Initialize aggregation containers
+    problem_types: Dict[str, int] = {}
+    severity_counts: Dict[str, int] = {}
+    race_conditions: Dict[str, int] = {}
+    file_problems: Dict[str, int] = {}
+    total_problems = 0
+
+    if code_collection:
+        try:
+            # Query all problems from ChromaDB
+            results = code_collection.get(
+                where={"type": "problem"}, include=["metadatas"]
+            )
+
+            for metadata in results.get("metadatas", []):
+                total_problems += 1
+
+                # Aggregate by problem type
+                ptype = metadata.get("problem_type", "unknown")
+                problem_types[ptype] = problem_types.get(ptype, 0) + 1
+
+                # Aggregate by severity
+                severity = metadata.get("severity", "low")
+                severity_counts[severity] = severity_counts.get(severity, 0) + 1
+
+                # Aggregate race conditions separately
+                if "race" in ptype.lower() or "thread" in ptype.lower():
+                    race_conditions[ptype] = race_conditions.get(ptype, 0) + 1
+
+                # Count problems per file
+                file_path = metadata.get("file_path", "unknown")
+                file_problems[file_path] = file_problems.get(file_path, 0) + 1
+
+            storage_type = "chromadb"
+            logger.info(f"Aggregated chart data for {total_problems} problems")
+
+        except Exception as chroma_error:
+            logger.warning(f"ChromaDB query failed: {chroma_error}")
+            code_collection = None
+
+    # Fallback to Redis if ChromaDB fails
+    if not code_collection:
+        redis_client = await get_redis_connection()
+
+        if redis_client:
+            try:
+                for key in redis_client.scan_iter(match="codebase:problems:*"):
+                    problems_data = redis_client.get(key)
+                    if problems_data:
+                        problems = json.loads(problems_data)
+                        for problem in problems:
+                            total_problems += 1
+
+                            ptype = problem.get("type", "unknown")
+                            problem_types[ptype] = problem_types.get(ptype, 0) + 1
+
+                            severity = problem.get("severity", "low")
+                            severity_counts[severity] = (
+                                severity_counts.get(severity, 0) + 1
+                            )
+
+                            if "race" in ptype.lower() or "thread" in ptype.lower():
+                                race_conditions[ptype] = (
+                                    race_conditions.get(ptype, 0) + 1
+                                )
+
+                            file_path = problem.get("file_path", "unknown")
+                            file_problems[file_path] = (
+                                file_problems.get(file_path, 0) + 1
+                            )
+
+                storage_type = "redis"
+            except Exception as redis_error:
+                logger.error(f"Redis query failed: {redis_error}")
+                return JSONResponse(
+                    {
+                        "status": "error",
+                        "message": "Failed to retrieve chart data",
+                        "error": str(redis_error),
+                    },
+                    status_code=500,
+                )
+        else:
+            return JSONResponse(
+                {
+                    "status": "no_data",
+                    "message": "No codebase data found. Run indexing first.",
+                    "chart_data": None,
+                }
+            )
+
+    # Convert to chart-friendly format
+
+    # Problem types for pie chart (sorted by count descending)
+    problem_types_data = [
+        {"type": ptype, "count": count}
+        for ptype, count in sorted(
+            problem_types.items(), key=lambda x: x[1], reverse=True
+        )
+    ]
+
+    # Severity for bar chart (ordered by severity level)
+    severity_order = ["high", "medium", "low", "info", "hint"]
+    severity_data = []
+    for sev in severity_order:
+        if sev in severity_counts:
+            severity_data.append({"severity": sev, "count": severity_counts[sev]})
+    # Add any unlisted severities
+    for sev, count in severity_counts.items():
+        if sev not in severity_order:
+            severity_data.append({"severity": sev, "count": count})
+
+    # Race conditions for donut chart
+    race_conditions_data = [
+        {"category": cat, "count": count}
+        for cat, count in sorted(
+            race_conditions.items(), key=lambda x: x[1], reverse=True
+        )
+    ]
+
+    # Top files for horizontal bar chart (top 15)
+    top_files_data = [
+        {"file": file_path, "count": count}
+        for file_path, count in sorted(
+            file_problems.items(), key=lambda x: x[1], reverse=True
+        )[:15]
+    ]
+
+    return JSONResponse(
+        {
+            "status": "success",
+            "chart_data": {
+                "problem_types": problem_types_data,
+                "severity_counts": severity_data,
+                "race_conditions": race_conditions_data,
+                "top_files": top_files_data,
+                "summary": {
+                    "total_problems": total_problems,
+                    "unique_problem_types": len(problem_types),
+                    "files_with_problems": len(file_problems),
+                    "race_condition_count": sum(race_conditions.values()),
+                },
+            },
+            "storage_type": storage_type,
+        }
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dependencies",
+    error_code_prefix="CODEBASE",
+)
+@router.get("/analytics/dependencies")
+async def get_dependencies():
+    """
+    Get file dependency analysis showing imports and module relationships.
+
+    Returns:
+    - modules: List of all modules/files in the codebase
+    - imports: Import relationships (which file imports what)
+    - dependency_graph: Graph structure for visualization
+    - circular_dependencies: Detected circular import issues
+    - external_dependencies: Third-party package dependencies
+    """
+    code_collection = get_code_collection()
+
+    # Data structures
+    modules: Dict[str, Dict] = {}  # file_path -> module info
+    import_relationships: List[Dict] = []  # source -> target relationships
+    external_deps: Dict[str, int] = {}  # external package -> usage count
+    circular_deps: List[List[str]] = []
+
+    if code_collection:
+        try:
+            # Query all Python files from ChromaDB
+            # Get functions and classes to understand module structure
+            results = code_collection.get(
+                where={"type": {"$in": ["function", "class"]}}, include=["metadatas"]
+            )
+
+            # Build module map from stored data
+            seen_files = set()
+            for metadata in results.get("metadatas", []):
+                file_path = metadata.get("file_path", "")
+                if file_path and file_path not in seen_files:
+                    seen_files.add(file_path)
+                    modules[file_path] = {
+                        "path": file_path,
+                        "name": Path(file_path).stem,
+                        "package": str(Path(file_path).parent),
+                        "functions": 0,
+                        "classes": 0,
+                        "imports": [],
+                    }
+
+                if file_path in modules:
+                    if metadata.get("type") == "function":
+                        modules[file_path]["functions"] += 1
+                    elif metadata.get("type") == "class":
+                        modules[file_path]["classes"] += 1
+
+            storage_type = "chromadb"
+            logger.info(f"Found {len(modules)} modules in ChromaDB")
+
+        except Exception as chroma_error:
+            logger.warning(f"ChromaDB query failed: {chroma_error}")
+            code_collection = None
+
+    # Fallback: scan the actual filesystem for more detailed import analysis
+    # This gives us actual import statements
+    project_root = Path("/home/kali/Desktop/AutoBot")
+    python_files = list(project_root.rglob("*.py"))
+
+    # Filter out unwanted directories
+    excluded_dirs = {
+        ".git",
+        "__pycache__",
+        "node_modules",
+        ".venv",
+        "venv",
+        "env",
+        ".env",
+        "archive",
+        "dist",
+        "build",
+    }
+    python_files = [
+        f
+        for f in python_files
+        if not any(excluded in f.parts for excluded in excluded_dirs)
+    ]
+
+    # Analyze imports from each file
+    stdlib_modules = {
+        "os",
+        "sys",
+        "re",
+        "json",
+        "time",
+        "datetime",
+        "logging",
+        "asyncio",
+        "pathlib",
+        "typing",
+        "collections",
+        "functools",
+        "itertools",
+        "subprocess",
+        "threading",
+        "multiprocessing",
+        "uuid",
+        "hashlib",
+        "base64",
+        "io",
+        "contextlib",
+        "abc",
+        "dataclasses",
+        "enum",
+        "copy",
+        "math",
+        "random",
+        "socket",
+        "http",
+        "urllib",
+        "traceback",
+        "inspect",
+        "ast",
+        "shutil",
+        "tempfile",
+        "warnings",
+        "signal",
+    }
+
+    for py_file in python_files[:500]:  # Limit to 500 files for performance
+        try:
+            rel_path = str(py_file.relative_to(project_root))
+            if rel_path not in modules:
+                modules[rel_path] = {
+                    "path": rel_path,
+                    "name": py_file.stem,
+                    "package": str(py_file.parent.relative_to(project_root)),
+                    "functions": 0,
+                    "classes": 0,
+                    "imports": [],
+                }
+
+            with open(py_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            tree = ast.parse(content)
+
+            file_imports = []
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        module_name = alias.name.split(".")[0]
+                        file_imports.append(module_name)
+                        if module_name not in stdlib_modules:
+                            external_deps[module_name] = (
+                                external_deps.get(module_name, 0) + 1
+                            )
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module:
+                        module_name = node.module.split(".")[0]
+                        file_imports.append(node.module)
+                        if module_name not in stdlib_modules:
+                            external_deps[module_name] = (
+                                external_deps.get(module_name, 0) + 1
+                            )
+
+            modules[rel_path]["imports"] = list(set(file_imports))
+
+            # Create import relationships for graph
+            for imp in file_imports:
+                import_relationships.append(
+                    {"source": rel_path, "target": imp, "type": "import"}
+                )
+
+        except Exception as e:
+            logger.debug(f"Could not analyze {py_file}: {e}")
+            continue
+
+    # Detect circular dependencies (simplified check)
+    import_map = {}
+    for rel in import_relationships:
+        source = rel["source"]
+        target = rel["target"]
+        if source not in import_map:
+            import_map[source] = set()
+        import_map[source].add(target)
+
+    # Check for simple circular imports (A imports B, B imports A)
+    for source, targets in import_map.items():
+        for target in targets:
+            # Check if target imports source (simple cycle)
+            for other_source, other_targets in import_map.items():
+                if target in other_source and source in other_targets:
+                    cycle = sorted([source, other_source])
+                    if cycle not in circular_deps:
+                        circular_deps.append(cycle)
+
+    # Build graph structure for visualization
+    nodes = []
+    edges = []
+
+    for path, info in modules.items():
+        nodes.append(
+            {
+                "id": path,
+                "name": info["name"],
+                "package": info["package"],
+                "type": "module",
+                "functions": info["functions"],
+                "classes": info["classes"],
+                "import_count": len(info["imports"]),
+            }
+        )
+
+    for rel in import_relationships:
+        edges.append({"from": rel["source"], "to": rel["target"], "type": rel["type"]})
+
+    # Sort external dependencies by usage
+    sorted_external = [
+        {"package": pkg, "usage_count": count}
+        for pkg, count in sorted(external_deps.items(), key=lambda x: x[1], reverse=True)
+    ]
+
+    return JSONResponse(
+        {
+            "status": "success",
+            "dependency_data": {
+                "modules": list(modules.values()),
+                "import_relationships": import_relationships[:1000],  # Limit for UI
+                "graph": {"nodes": nodes[:500], "edges": edges[:2000]},
+                "circular_dependencies": circular_deps,
+                "external_dependencies": sorted_external[:50],
+                "summary": {
+                    "total_modules": len(modules),
+                    "total_import_relationships": len(import_relationships),
+                    "circular_dependency_count": len(circular_deps),
+                    "external_dependency_count": len(external_deps),
+                },
+            },
         }
     )
 
