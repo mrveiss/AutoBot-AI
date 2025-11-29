@@ -434,11 +434,13 @@ class ChatHistoryManager:
         self, messages: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """
-        Deduplicate streaming messages that are clearly from the same streaming session.
+        Deduplicate messages to fix Issue #259.
 
-        CRITICAL FIX Issue #259: Streaming responses may have multiple accumulated states
-        saved with different timestamps. This keeps only the final/most complete version
-        for each streaming session (identified by close timestamps within 2 minutes).
+        Handles two types of duplicates:
+        1. STREAMING: Multiple accumulated states with different timestamps
+           - Groups by 2-minute time window, keeps longest per group
+        2. USER MESSAGES: Duplicate saves from backend + frontend
+           - Deduplicates by content, keeps first occurrence
 
         Args:
             messages: List of message dicts
@@ -446,27 +448,41 @@ class ChatHistoryManager:
         Returns:
             Deduplicated message list
         """
-        # Streaming message types that should be deduplicated
         STREAMING_TYPES = frozenset(["llm_response", "llm_response_chunk", "response"])
 
         if not messages:
             return messages
 
+        # STEP 1: Deduplicate user messages by content
+        seen_user_content: set = set()
+        deduped_messages = []
+
+        for msg in messages:
+            sender = msg.get("sender", "")
+            text_content = msg.get("text", "") or msg.get("content", "")
+
+            if sender == "user":
+                # Deduplicate user messages by content
+                content_key = text_content[:200]  # First 200 chars
+                if content_key in seen_user_content:
+                    continue  # Skip duplicate user message
+                seen_user_content.add(content_key)
+
+            deduped_messages.append(msg)
+
+        # STEP 2: Deduplicate streaming messages by time-window grouping
         result = []
-        # Group streaming messages by approximate time window (2 minutes)
         streaming_groups: List[List[Dict[str, Any]]] = []
         current_group: List[Dict[str, Any]] = []
         last_streaming_ts = None
 
-        for msg in messages:
+        for msg in deduped_messages:
             msg_type = msg.get("messageType", msg.get("type", "default"))
 
             if msg_type in STREAMING_TYPES:
                 msg_ts = msg.get("timestamp", "")
-                # Parse timestamp to check time difference
                 try:
                     if isinstance(msg_ts, str) and msg_ts:
-                        # Handle both formats: "2025-11-29 12:04:09" and ISO format
                         if "T" in msg_ts:
                             current_ts = datetime.fromisoformat(
                                 msg_ts.replace("Z", "+00:00")
@@ -478,41 +494,36 @@ class ChatHistoryManager:
                             time_diff = abs(
                                 (current_ts - last_streaming_ts).total_seconds()
                             )
-                            # If more than 2 minutes apart, start new group
-                            if time_diff > 120:
+                            if time_diff > 120:  # 2 minutes = new group
                                 if current_group:
                                     streaming_groups.append(current_group)
                                 current_group = []
 
                         last_streaming_ts = current_ts
                 except (ValueError, TypeError):
-                    pass  # If timestamp parsing fails, keep grouping
+                    pass
 
                 current_group.append(msg)
             else:
-                # Non-streaming message - finalize current group and add to result
                 if current_group:
                     streaming_groups.append(current_group)
                     current_group = []
                     last_streaming_ts = None
                 result.append(msg)
 
-        # Don't forget the last group
         if current_group:
             streaming_groups.append(current_group)
 
-        # For each streaming group, keep only the longest message
+        # Keep only longest message per streaming group
         for group in streaming_groups:
             if not group:
                 continue
-            # Find message with longest content
             longest = max(
                 group,
                 key=lambda m: len(m.get("text", "") or m.get("content", "")),
             )
             result.append(longest)
 
-        # Sort by timestamp to maintain order
         result.sort(key=lambda m: m.get("timestamp", ""))
 
         return result
