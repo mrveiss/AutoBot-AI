@@ -18,6 +18,7 @@ from typing import Dict, Optional
 
 import aiohttp
 
+from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
@@ -91,7 +92,7 @@ class DistributedServiceDiscovery:
             # If not in config, try system defaults
             if not value:
                 value = system_defaults.get(
-                    default_key, "localhost" if key == "host" else 8000
+                    default_key, NetworkConstants.LOCALHOST_NAME if key == "host" else NetworkConstants.BACKEND_PORT
                 )
 
             return value
@@ -421,8 +422,8 @@ async def get_service_url(service_name: str) -> str:
             unified_config_manager.get_config_section("service_discovery_defaults")
             or {}
         )
-        fallback_host = system_defaults.get("fallback_host", "localhost")
-        fallback_port = system_defaults.get("fallback_port", 8000)
+        fallback_host = system_defaults.get("fallback_host", NetworkConstants.LOCALHOST_NAME)
+        fallback_port = system_defaults.get("fallback_port", NetworkConstants.BACKEND_PORT)
         return f"http://{fallback_host}:{fallback_port}"
 
 
@@ -447,8 +448,12 @@ def get_redis_connection_params_sync() -> Dict:
     )
 
     # Get host and port from configuration
-    host = redis_config.get("host") or system_defaults.get("redis_host", "localhost")
-    port = redis_config.get("port") or system_defaults.get("redis_port", 6379)
+    host = redis_config.get("host") or system_defaults.get(
+        "redis_host", NetworkConstants.LOCALHOST_NAME
+    )
+    port = redis_config.get("port") or system_defaults.get(
+        "redis_port", NetworkConstants.REDIS_PORT
+    )
 
     # Return cached endpoint parameters immediately
     return {
@@ -494,42 +499,42 @@ def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
     # Service endpoint mapping from configuration
     service_endpoints = {
         "redis": {
-            "host": get_value("redis", "host", "redis_host", "localhost"),
-            "port": int(get_value("redis", "port", "redis_port", 6379)),
+            "host": get_value("redis", "host", "redis_host", NetworkConstants.LOCALHOST_NAME),
+            "port": int(get_value("redis", "port", "redis_port", NetworkConstants.REDIS_PORT)),
             "protocol": "redis",
         },
         "backend": {
-            "host": get_value("backend", "host", "backend_host", "localhost"),
-            "port": int(get_value("backend", "port", "backend_port", 8001)),
+            "host": get_value("backend", "host", "backend_host", NetworkConstants.LOCALHOST_NAME),
+            "port": int(get_value("backend", "port", "backend_port", NetworkConstants.BACKEND_PORT)),
             "protocol": "http",
         },
         "frontend": {
-            "host": get_value("frontend", "host", "frontend_host", "localhost"),
-            "port": int(get_value("frontend", "port", "frontend_port", 5173)),
+            "host": get_value("frontend", "host", "frontend_host", NetworkConstants.LOCALHOST_NAME),
+            "port": int(get_value("frontend", "port", "frontend_port", NetworkConstants.FRONTEND_PORT)),
             "protocol": "http",
         },
         "npu_worker": {
-            "host": get_value("npu_worker", "host", "npu_worker_host", "localhost"),
-            "port": int(get_value("npu_worker", "port", "npu_worker_port", 8081)),
+            "host": get_value("npu_worker", "host", "npu_worker_host", NetworkConstants.LOCALHOST_NAME),
+            "port": int(get_value("npu_worker", "port", "npu_worker_port", NetworkConstants.NPU_WORKER_PORT)),
             "protocol": "http",
         },
         "ai_stack": {
-            "host": get_value("ai_stack", "host", "ai_stack_host", "localhost"),
-            "port": int(get_value("ai_stack", "port", "ai_stack_port", 8080)),
+            "host": get_value("ai_stack", "host", "ai_stack_host", NetworkConstants.LOCALHOST_NAME),
+            "port": int(get_value("ai_stack", "port", "ai_stack_port", NetworkConstants.AI_STACK_PORT)),
             "protocol": "http",
         },
         "browser": {
             "host": get_value(
-                "browser_service", "host", "browser_service_host", "localhost"
+                "browser_service", "host", "browser_service_host", NetworkConstants.LOCALHOST_NAME
             ),
             "port": int(
-                get_value("browser_service", "port", "browser_service_port", 3000)
+                get_value("browser_service", "port", "browser_service_port", NetworkConstants.BROWSER_SERVICE_PORT)
             ),
             "protocol": "http",
         },
         "ollama": {
-            "host": get_value("ollama", "host", "ollama_host", "localhost"),
-            "port": int(get_value("ollama", "port", "ollama_port", 11434)),
+            "host": get_value("ollama", "host", "ollama_host", NetworkConstants.LOCALHOST_NAME),
+            "port": int(get_value("ollama", "port", "ollama_port", NetworkConstants.OLLAMA_PORT)),
             "protocol": "http",
         },
     }

@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["browser_mcp", "mcp"])
 
 # Security Configuration
-BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:3000"
+BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
 
 # URL Whitelist - Only these domains are allowed
 ALLOWED_URL_PATTERNS = [

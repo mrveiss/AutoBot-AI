@@ -39,7 +39,7 @@ if __name__ == "__main__":
     host = os.getenv(
         "AUTOBOT_BACKEND_HOST", NetworkConstants.BIND_ALL_INTERFACES
     )  # Bind to all interfaces for network access
-    port = int(os.getenv("AUTOBOT_BACKEND_PORT", "8001"))
+    port = int(os.getenv("AUTOBOT_BACKEND_PORT", str(NetworkConstants.BACKEND_PORT)))
 
     # Determine if we're in development mode
     dev_mode = os.getenv("AUTOBOT_DEV_MODE", "false").lower() == "true"

@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 
 # VNC endpoints
 VNC_ENDPOINTS = {
-    "desktop": f"http://{NetworkConstants.MAIN_MACHINE_IP}:6080",
-    "browser": f"http://{NetworkConstants.BROWSER_VM_IP}:6080",
+    "desktop": f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.VNC_PORT}",
+    "browser": f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.VNC_PORT}",
 }
 
 
@@ -50,7 +50,7 @@ async def record_observation(
         }
 
         # Post to VNC MCP bridge (non-blocking) using singleton HTTP client
-        backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:8001"
+        backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
         http_client = get_http_client()
         async with await http_client.post(
             f"{backend_url}/api/vnc/observations/{vnc_type}",

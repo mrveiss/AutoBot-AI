@@ -28,6 +28,7 @@ from backend.models.infrastructure import (
     InfraHost,
     InfraRole,
 )
+from src.constants.network_constants import NetworkConstants
 from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
@@ -98,33 +99,33 @@ class InfrastructureDB:
                 roles = [
                     InfraRole(
                         name="frontend",
-                        description="Vue.js frontend server (port 5173)",
+                        description=f"Vue.js frontend server (port {NetworkConstants.FRONTEND_PORT})",
                         ansible_playbook_path="ansible/playbooks/deploy_role.yml",
-                        required_ports=[5173],
+                        required_ports=[NetworkConstants.FRONTEND_PORT],
                     ),
                     InfraRole(
                         name="redis",
-                        description="Redis Stack data layer (port 6379)",
+                        description=f"Redis Stack data layer (port {NetworkConstants.REDIS_PORT})",
                         ansible_playbook_path="ansible/playbooks/deploy_role.yml",
-                        required_ports=[6379],
+                        required_ports=[NetworkConstants.REDIS_PORT],
                     ),
                     InfraRole(
                         name="npu-worker",
-                        description="NPU hardware acceleration worker (port 8082)",
+                        description=f"NPU hardware acceleration worker (port {NetworkConstants.NPU_WORKER_WINDOWS_PORT})",
                         ansible_playbook_path="ansible/playbooks/deploy_role.yml",
-                        required_ports=[8082],
+                        required_ports=[NetworkConstants.NPU_WORKER_WINDOWS_PORT],
                     ),
                     InfraRole(
                         name="ai-stack",
-                        description="AI processing stack (port 8080)",
+                        description=f"AI processing stack (port {NetworkConstants.AI_STACK_PORT})",
                         ansible_playbook_path="ansible/playbooks/deploy_role.yml",
-                        required_ports=[8080],
+                        required_ports=[NetworkConstants.AI_STACK_PORT],
                     ),
                     InfraRole(
                         name="browser",
-                        description="Playwright browser automation (port 3000)",
+                        description=f"Playwright browser automation (port {NetworkConstants.BROWSER_SERVICE_PORT})",
                         ansible_playbook_path="ansible/playbooks/deploy_role.yml",
-                        required_ports=[3000],
+                        required_ports=[NetworkConstants.BROWSER_SERVICE_PORT],
                     ),
                 ]
                 session.add_all(roles)

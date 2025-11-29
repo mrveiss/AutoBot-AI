@@ -146,7 +146,7 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
     Check if specified VNC connection is active and accessible
     """
     vnc_type = request.vnc_type
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:8001"
+    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
     try:
         http_client = get_http_client()
@@ -238,8 +238,8 @@ async def get_browser_vnc_context_mcp() -> Metadata:
     - Recent VNC activity (user interactions)
     - Combined view for full situational awareness
     """
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:8001"
-    browser_vm_url = f"http://{NetworkConstants.BROWSER_VM_IP}:3000"
+    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    browser_vm_url = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
 
     context = {
         "success": True,
