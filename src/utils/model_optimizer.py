@@ -116,7 +116,7 @@ class ModelOptimizer:
 
             # Fallback to environment variable if config not found
             default_model = os.getenv(
-                "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.LLAMA_32_1B
+                "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
             )
             logging.warning(
                 f"Model classifications config not found, using default model: {default_model}"
@@ -130,7 +130,7 @@ class ModelOptimizer:
         except Exception as e:
             # Final fallback
             default_model = os.getenv(
-                "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.LLAMA_32_1B
+                "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
             )
             logging.error(
                 f"Error loading model classifications: {e}, using default: {default_model}"

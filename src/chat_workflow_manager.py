@@ -823,7 +823,7 @@ NEVER teach commands - ALWAYS execute them."""
             import os
 
             selected_model = os.getenv(
-                "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.MISTRAL_7B
+                "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
             )
 
         logger.info(

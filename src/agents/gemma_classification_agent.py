@@ -39,12 +39,10 @@ class GemmaClassificationAgent(StandardizedAgent):
         self.redis_client = get_redis_client()
         self.keyword_classifier = WorkflowClassifier(self.redis_client)
 
-        # Preferred models in order of preference (smallest/fastest first)
-        # Uses centralized model constants for maintainability
+        # Preferred models - uses centralized default model from config
+        # All model selection should come from AUTOBOT_DEFAULT_LLM_MODEL
         self.preferred_models = [
-            ModelConstants.GEMMA3_270M,  # Ultra lightweight - 291MB - fastest
-            ModelConstants.GEMMA3_1B,  # 1B parameters - 815MB
-            ModelConstants.LLAMA_32_1B,  # Fallback to existing small model
+            ModelConstants.DEFAULT_OLLAMA_MODEL,  # Use centralized model config
         ]
 
         self.capabilities = [
