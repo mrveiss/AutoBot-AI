@@ -14,7 +14,7 @@
     "use_phi2": true,
     "api_endpoint": "${AUTOBOT_API_BASE_URL}",
     "ollama_endpoint": "${AUTOBOT_OLLAMA_URL}/api/generate",
-    "ollama_model": "phi:2.7b",
+    "ollama_model": "${AUTOBOT_DEFAULT_LLM_MODEL}",
     "streaming": true,
     "server_host": "0.0.0.0",
     "server_port": "${AUTOBOT_BACKEND_PORT}",
@@ -38,11 +38,11 @@
             "endpoint": "${AUTOBOT_OLLAMA_URL}/api/generate",
             "models": [
               "deepseek-r1:14b",
-              "phi:2.7b",
+              "mistral:7b-instruct",
               "mixtral:8x7b",
               "tinyllama:latest"
             ],
-            "selected_model": "phi:2.7b"
+            "selected_model": "${AUTOBOT_DEFAULT_LLM_MODEL}"
           },
           "lmstudio": {
             "endpoint": "${AUTOBOT_LM_STUDIO_URL}",

@@ -575,6 +575,12 @@ def configure_enhanced_api_routes(app: FastAPI) -> None:
             ["validation_dashboard"],
             "validation_dashboard",
         ),
+        (
+            "backend.api.code_intelligence",
+            "/code-intelligence",
+            ["code-intelligence"],
+            "code_intelligence",
+        ),
     ]
 
     # Register optional routers

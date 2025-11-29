@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from src.constants.network_constants import NetworkConstants
 from src.unified_config_manager import UnifiedConfigManager
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ def configure_cors(app: FastAPI, allow_origins: Optional[List[str]] = None):
     Example:
         ```python
         configure_cors(app)
-        configure_cors(app, allow_origins=["http://localhost:5173"])
+        configure_cors(app, allow_origins=[f"http://localhost:{NetworkConstants.FRONTEND_PORT}"])
         ```
     """
     # Generate from centralized configuration if not provided

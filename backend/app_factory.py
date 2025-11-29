@@ -21,6 +21,7 @@ from backend.initialization import (
     load_optional_routers,
     register_root_endpoints,
 )
+from src.constants.network_constants import NetworkConstants
 
 # Store logger for app usage
 logger = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ class AppFactory:
             app = AppFactory.create_fastapi_app()
             app = AppFactory.create_fastapi_app(
                 title="My App",
-                allow_origins=["http://localhost:3000"]
+                allow_origins=[f"http://localhost:{NetworkConstants.BROWSER_SERVICE_PORT}"]
             )
             ```
         """
