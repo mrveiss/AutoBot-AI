@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Tuple
 
 import aiohttp
 
+from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
@@ -160,8 +161,12 @@ class ServiceDiscovery:
         redis_port = redis_config.get("port")
         if not redis_host or not redis_port:
             logger.error("Redis configuration missing required 'host' or 'port'")
-            redis_host = redis_host or system_defaults.get("redis_host", "localhost")
-            redis_port = redis_port or system_defaults.get("redis_port", 6379)
+            redis_host = redis_host or system_defaults.get(
+                "redis_host", NetworkConstants.REDIS_VM_IP
+            )
+            redis_port = redis_port or system_defaults.get(
+                "redis_port", NetworkConstants.REDIS_PORT
+            )
 
         self.services["redis"] = ServiceEndpoint(
             name="redis",
@@ -203,9 +208,11 @@ class ServiceDiscovery:
         if not backend_host or not backend_port:
             logger.error("Backend configuration missing required 'host' or 'port'")
             backend_host = backend_host or system_defaults.get(
-                "backend_host", "localhost"
+                "backend_host", NetworkConstants.LOCALHOST_NAME
             )
-            backend_port = backend_port or system_defaults.get("backend_port", 8001)
+            backend_port = backend_port or system_defaults.get(
+                "backend_port", NetworkConstants.BACKEND_PORT
+            )
 
         self.services["backend"] = ServiceEndpoint(
             name="backend",
@@ -223,8 +230,12 @@ class ServiceDiscovery:
         ollama_port = ollama_config.get("port")
         if not ollama_host or not ollama_port:
             logger.error("Ollama configuration missing required 'host' or 'port'")
-            ollama_host = ollama_host or system_defaults.get("ollama_host", "localhost")
-            ollama_port = ollama_port or system_defaults.get("ollama_port", 11434)
+            ollama_host = ollama_host or system_defaults.get(
+                "ollama_host", NetworkConstants.LOCALHOST_NAME
+            )
+            ollama_port = ollama_port or system_defaults.get(
+                "ollama_port", NetworkConstants.OLLAMA_PORT
+            )
 
         self.services["ollama"] = ServiceEndpoint(
             name="ollama",
