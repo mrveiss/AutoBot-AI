@@ -464,6 +464,13 @@ async def _vectorize_fact_background(
             f"vectorization_job:{job_id}", 3600, json.dumps(job_data)
         )
 
+        # Debug: Log KB state before vectorization
+        logger.debug(
+            f"KB state before vectorization: initialized={getattr(kb_instance, 'initialized', 'N/A')}, "
+            f"vector_store={kb_instance.vector_store is not None}, "
+            f"llama_index_configured={getattr(kb_instance, 'llama_index_configured', 'N/A')}"
+        )
+
         # Vectorize the fact
         result = await kb_instance.vectorize_existing_fact(
             fact_id=fact_id, content=content, metadata=metadata

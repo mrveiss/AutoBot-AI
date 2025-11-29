@@ -314,7 +314,11 @@ class KnowledgeBase:
                 "infrastructure.ports.ollama", str(NetworkConstants.OLLAMA_PORT)
             )
             ollama_url = f"http://{ollama_host}:{ollama_port}"
-            llm_timeout = config.get_timeout("llm", "default", kb_timeouts.llm_default)
+            # Use kb_timeouts fallback directly since config.get_timeout() has different signature
+            try:
+                llm_timeout = config.get_timeout("llm", "default")
+            except Exception:
+                llm_timeout = kb_timeouts.llm_default
 
             Settings.llm = LlamaIndexOllamaLLM(
                 model=config.get_default_llm_model(),
@@ -1618,9 +1622,17 @@ class KnowledgeBase:
 
         try:
             if not self.vector_store or not self.llama_index_configured:
+                # Provide detailed diagnostic info for debugging
+                logger.error(
+                    f"vectorize_existing_fact failed precondition: "
+                    f"vector_store={self.vector_store is not None}, "
+                    f"llama_index_configured={self.llama_index_configured}, "
+                    f"initialized={self.initialized}"
+                )
                 return {
                     "status": "error",
-                    "message": "Vector store not initialized",
+                    "message": f"Vector store not initialized (vector_store={self.vector_store is not None}, "
+                    f"llama_index_configured={self.llama_index_configured})",
                     "fact_id": fact_id,
                     "vector_indexed": False,
                 }
