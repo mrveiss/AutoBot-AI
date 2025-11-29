@@ -1168,4 +1168,20 @@ def load_optional_routers():
     except ImportError as e:
         logger.warning(f"⚠️ Optional router not available: analytics_llm_patterns - {e}")
 
+    # Unified Analytics Report router (Issue #271)
+    try:
+        from backend.api.analytics_unified import router as unified_router
+
+        optional_routers.append(
+            (
+                unified_router,
+                "",
+                ["unified-analytics", "analytics"],
+                "analytics_unified",
+            )
+        )
+        logger.info("✅ Optional router loaded: analytics_unified")
+    except ImportError as e:
+        logger.warning(f"⚠️ Optional router not available: analytics_unified - {e}")
+
     return optional_routers
