@@ -74,18 +74,25 @@ def get_memory_interface(request):
 
 def get_llm_service(request):
     """Get LLM service from app state, with lazy initialization"""
-    llm_service = getattr(request.app.state, "llm_service", None)
-    if llm_service is None:
-        # Lazy initialize if not yet available
-        try:
-            from src.llm_service import LLMService
+    from src.utils.lazy_singleton import lazy_init_singleton
+    from src.llm_service import LLMService
 
-            llm_service = LLMService()
-            request.app.state.llm_service = llm_service
-            logger.info("✅ Lazy-initialized llm_service")
-        except Exception as e:
-            logger.error(f"Failed to lazy-initialize llm_service: {e}")
-    return llm_service
+    return lazy_init_singleton(request.app.state, "llm_service", LLMService)
+
+
+async def get_chat_workflow_manager(request):
+    """Get ChatWorkflowManager from app state, with async lazy initialization"""
+    from src.utils.lazy_singleton import lazy_init_singleton_async
+    from src.chat_workflow_manager import ChatWorkflowManager
+
+    async def create_workflow_manager():
+        manager = ChatWorkflowManager()
+        await manager.initialize()
+        return manager
+
+    return await lazy_init_singleton_async(
+        request.app.state, "chat_workflow_manager", create_workflow_manager
+    )
 
 
 # Simple utility functions to replace missing imports
@@ -647,19 +654,7 @@ async def send_chat_message_by_id(
 
     # Get dependencies from request state with lazy initialization
     chat_history_manager = get_chat_history_manager(request)
-
-    # Lazy initialize chat_workflow_manager if needed
-    chat_workflow_manager = getattr(request.app.state, "chat_workflow_manager", None)
-    if chat_workflow_manager is None:
-        try:
-            from src.chat_workflow_manager import ChatWorkflowManager
-
-            chat_workflow_manager = ChatWorkflowManager()
-            await chat_workflow_manager.initialize()
-            request.app.state.chat_workflow_manager = chat_workflow_manager
-            logger.info("✅ Lazy-initialized chat_workflow_manager with async Redis")
-        except Exception as e:
-            logger.error(f"Failed to lazy-initialize chat_workflow_manager: {e}")
+    chat_workflow_manager = await get_chat_workflow_manager(request)
 
     if not chat_history_manager or not chat_workflow_manager:
         (
@@ -1076,31 +1071,21 @@ async def send_direct_chat_response(
     request_id = generate_request_id()
     log_request_context(request, "send_direct_response", request_id)
 
-    # Get ChatWorkflowManager from app state
-    chat_workflow_manager = getattr(request.app.state, "chat_workflow_manager", None)
+    # Get ChatWorkflowManager from app state with lazy initialization
+    chat_workflow_manager = await get_chat_workflow_manager(request)
 
-    if chat_workflow_manager is None:
-        # Lazy initialize
-        try:
-            from src.chat_workflow_manager import ChatWorkflowManager
-
-            chat_workflow_manager = ChatWorkflowManager()
-            await chat_workflow_manager.initialize()
-            request.app.state.chat_workflow_manager = chat_workflow_manager
-            logger.info("✅ Lazy-initialized chat_workflow_manager for /chat/direct")
-        except Exception as e:
-            logger.error(f"Failed to lazy-initialize chat_workflow_manager: {e}")
-            (
-                AutoBotError,
-                InternalError,
-                ResourceNotFoundError,
-                ValidationError,
-                get_error_code,
-            ) = get_exceptions_lazy()
-            raise InternalError(
-                "Workflow manager not available",
-                details={"initialization_error": str(e)},
-            )
+    if not chat_workflow_manager:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise InternalError(
+            "Workflow manager not available",
+            details={"initialization_error": "Lazy initialization failed"},
+        )
 
     # Stream the response (command approval/denial response)
     async def generate_stream():

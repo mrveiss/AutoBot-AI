@@ -305,20 +305,12 @@ def get_chat_history_manager(request: Request):
         >>> manager = get_chat_history_manager(request)
         >>> # Use manager for chat operations...
     """
-    manager = getattr(request.app.state, "chat_history_manager", None)
-    if manager is None:
-        # Lazy initialize if not yet available
-        try:
-            from src.chat_history_manager import ChatHistoryManager
+    from src.utils.lazy_singleton import lazy_init_singleton
+    from src.chat_history_manager import ChatHistoryManager
 
-            manager = ChatHistoryManager()
-            request.app.state.chat_history_manager = manager
-            logger.info("✅ Lazy-initialized chat_history_manager")
-        except Exception as e:
-            logger.error(f"Failed to lazy-initialize chat_history_manager: {e}")
-            raise
-
-    return manager
+    return lazy_init_singleton(
+        request.app.state, "chat_history_manager", ChatHistoryManager
+    )
 
 
 # =============================================================================
