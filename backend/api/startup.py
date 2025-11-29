@@ -22,6 +22,10 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["startup", "status"])
 
+# Thread lock for synchronous access to startup_state
+import threading
+_startup_lock = threading.Lock()
+
 
 class StartupPhase(Enum):
     INITIALIZING = "initializing"
@@ -70,13 +74,14 @@ def add_startup_message(
         details=details,
     )
 
-    startup_state["current_phase"] = phase
-    startup_state["progress"] = progress
-    startup_state["messages"].append(msg.dict())
+    with _startup_lock:
+        startup_state["current_phase"] = phase
+        startup_state["progress"] = progress
+        startup_state["messages"].append(msg.dict())
 
-    # Keep only last 20 messages
-    if len(startup_state["messages"]) > 20:
-        startup_state["messages"] = startup_state["messages"][-20:]
+        # Keep only last 20 messages
+        if len(startup_state["messages"]) > 20:
+            startup_state["messages"] = startup_state["messages"][-20:]
 
     logger.info(f"Startup: [{phase.value}] {message} ({progress}%)")
 
@@ -206,10 +211,11 @@ init_startup_messages()
 # Additional function to reset/clear startup state (useful for restarts)
 def reset_startup_state():
     """Reset startup state for fresh restart"""
-    startup_state["current_phase"] = StartupPhase.INITIALIZING
-    startup_state["progress"] = 0
-    startup_state["messages"] = []
-    startup_state["start_time"] = time.time()
+    with _startup_lock:
+        startup_state["current_phase"] = StartupPhase.INITIALIZING
+        startup_state["progress"] = 0
+        startup_state["messages"] = []
+        startup_state["start_time"] = time.time()
     # Don't clear websocket_clients as they might be connected
     init_startup_messages()
     logger.info("Startup state reset for new startup sequence")

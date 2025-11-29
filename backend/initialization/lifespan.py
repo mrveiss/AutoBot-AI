@@ -27,6 +27,9 @@ from src.utils.background_llm_sync import BackgroundLLMSync
 
 logger = logging.getLogger(__name__)
 
+# Lock for thread-safe access to app_state
+_app_state_lock = asyncio.Lock()
+
 # Global state shared across app
 app_state: Metadata = {
     "knowledge_base": None,
@@ -37,6 +40,18 @@ app_state: Metadata = {
     "initialization_status": "starting",  # starting, phase1, phase2, ready, error
     "initialization_message": "Backend starting...",
 }
+
+
+async def update_app_state(key: str, value) -> None:
+    """Thread-safe update of app_state."""
+    async with _app_state_lock:
+        app_state[key] = value
+
+
+async def update_app_state_multi(**kwargs) -> None:
+    """Thread-safe update of multiple app_state keys."""
+    async with _app_state_lock:
+        app_state.update(kwargs)
 
 
 def configure_logging():
@@ -65,8 +80,10 @@ async def initialize_critical_services(app: FastAPI):
     Raises:
         RuntimeError: If any critical service fails to initialize
     """
-    app_state["initialization_status"] = "phase1"
-    app_state["initialization_message"] = "Initializing critical services..."
+    await update_app_state_multi(
+        initialization_status="phase1",
+        initialization_message="Initializing critical services..."
+    )
     logger.info("=== PHASE 1: Critical Services Initialization ===")
 
     try:
@@ -74,14 +91,14 @@ async def initialize_critical_services(app: FastAPI):
         logger.info("✅ [ 10%] Config: Loading unified configuration...")
         config = UnifiedConfigManager()
         app.state.config = config
-        app_state["config"] = config
+        await update_app_state("config", config)
         logger.info("✅ [ 10%] Config: Configuration loaded successfully")
 
         # Initialize Security Layer - CRITICAL
         logger.info("✅ [ 15%] Security: Initializing security layer...")
         security_layer = SecurityLayer()
         app.state.security_layer = security_layer
-        app_state["security_layer"] = security_layer
+        await update_app_state("security_layer", security_layer)
         logger.info("✅ [ 15%] Security: Security layer initialized successfully")
 
         # Redis connections managed centrally via src.utils.redis_client
@@ -94,7 +111,7 @@ async def initialize_critical_services(app: FastAPI):
         try:
             chat_history_manager = ChatHistoryManager()
             app.state.chat_history_manager = chat_history_manager
-            app_state["chat_history_manager"] = chat_history_manager
+            await update_app_state("chat_history_manager", chat_history_manager)
             logger.info("✅ [ 30%] Chat History: Manager initialized successfully")
         except Exception as chat_history_error:
             logger.error(
@@ -112,7 +129,7 @@ async def initialize_critical_services(app: FastAPI):
             conversation_file_manager = await get_conversation_file_manager()
             await conversation_file_manager.initialize()
             app.state.conversation_file_manager = conversation_file_manager
-            app_state["conversation_file_manager"] = conversation_file_manager
+            await update_app_state("conversation_file_manager", conversation_file_manager)
             logger.info(
                 "✅ [ 40%] Conversation Files DB: Database initialized and verified"
             )
@@ -129,7 +146,7 @@ async def initialize_critical_services(app: FastAPI):
             chat_workflow_manager = ChatWorkflowManager()
             await chat_workflow_manager.initialize()
             app.state.chat_workflow_manager = chat_workflow_manager
-            app_state["chat_workflow_manager"] = chat_workflow_manager
+            await update_app_state("chat_workflow_manager", chat_workflow_manager)
             logger.info("✅ [ 50%] Chat Workflow: Manager initialized with async Redis")
         except Exception as chat_error:
             logger.error(
@@ -158,8 +175,10 @@ async def initialize_background_services(app: FastAPI):
         app: FastAPI application instance
     """
     try:
-        app_state["initialization_status"] = "phase2"
-        app_state["initialization_message"] = "Loading knowledge base and AI models..."
+        await update_app_state_multi(
+            initialization_status="phase2",
+            initialization_message="Loading knowledge base and AI models..."
+        )
         logger.info("=== PHASE 2: Background Services Initialization ===")
 
         # Initialize Knowledge Base - NON-CRITICAL (slow, can fail gracefully)
@@ -167,7 +186,7 @@ async def initialize_background_services(app: FastAPI):
         try:
             knowledge_base = await get_or_create_knowledge_base(app)
             app.state.knowledge_base = knowledge_base
-            app_state["knowledge_base"] = knowledge_base
+            await update_app_state("knowledge_base", knowledge_base)
             logger.info("✅ [ 70%] Knowledge Base: Knowledge base ready")
         except Exception as kb_error:
             logger.warning(f"Knowledge base initialization failed: {kb_error}")
@@ -197,7 +216,7 @@ async def initialize_background_services(app: FastAPI):
             )
             await memory_graph.initialize()
             app.state.memory_graph = memory_graph
-            app_state["memory_graph"] = memory_graph
+            await update_app_state("memory_graph", memory_graph)
             logger.info("✅ [ 85%] Memory Graph: Memory graph initialized successfully")
 
             # Initialize Graph-RAG Service - depends on knowledge base and memory graph
@@ -226,7 +245,7 @@ async def initialize_background_services(app: FastAPI):
                         enable_entity_extraction=True,
                     )
                     app.state.graph_rag_service = graph_rag_service
-                    app_state["graph_rag_service"] = graph_rag_service
+                    await update_app_state("graph_rag_service", graph_rag_service)
                     logger.info(
                         "✅ [ 87%] Graph-RAG: Graph-aware RAG service initialized successfully"
                     )
@@ -256,7 +275,7 @@ async def initialize_background_services(app: FastAPI):
                     enable_relationship_inference=True,
                 )
                 app.state.entity_extractor = entity_extractor
-                app_state["entity_extractor"] = entity_extractor
+                await update_app_state("entity_extractor", entity_extractor)
                 logger.info(
                     "✅ [ 88%] Entity Extractor: Entity extractor initialized successfully"
                 )
@@ -283,7 +302,7 @@ async def initialize_background_services(app: FastAPI):
             background_llm_sync = BackgroundLLMSync()
             await background_llm_sync.start()
             app.state.background_llm_sync = background_llm_sync
-            app_state["background_llm_sync"] = background_llm_sync
+            await update_app_state("background_llm_sync", background_llm_sync)
 
             # Test AI Stack availability
             try:
@@ -298,8 +317,10 @@ async def initialize_background_services(app: FastAPI):
         except Exception as sync_error:
             logger.warning(f"Background LLM sync initialization failed: {sync_error}")
 
-        app_state["initialization_status"] = "ready"
-        app_state["initialization_message"] = "All services ready"
+        await update_app_state_multi(
+            initialization_status="ready",
+            initialization_message="All services ready"
+        )
         logger.info("✅ [100%] PHASE 2 COMPLETE: All background services initialized")
 
     except Exception as e:
