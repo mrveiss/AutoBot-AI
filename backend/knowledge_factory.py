@@ -30,11 +30,17 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
         ):
             # Verify it's actually initialized by checking if Redis connections exist
             kb = app.state.knowledge_base
+            logger.debug(
+                f"Checking app.state.knowledge_base: initialized={getattr(kb, 'initialized', 'N/A')}, "
+                f"_redis_initialized={getattr(kb, '_redis_initialized', 'N/A')}, "
+                f"vector_store={kb.vector_store is not None if hasattr(kb, 'vector_store') else 'N/A'}, "
+                f"llama_index_configured={getattr(kb, 'llama_index_configured', 'N/A')}"
+            )
             if hasattr(kb, "initialized") and kb.initialized:
                 logger.info("Using existing initialized knowledge base from app state")
                 return kb
             elif hasattr(kb, "_redis_initialized") and kb._redis_initialized:
-                logger.info("Using existing initialized knowledge base from app state")
+                logger.info("Using existing initialized knowledge base from app state (redis flag)")
                 return kb
             else:
                 # Knowledge base exists but not initialized - initialize it instead of creating new

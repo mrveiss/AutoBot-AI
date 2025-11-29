@@ -791,34 +791,37 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
         """
         Create a unique signature for message deduplication.
 
-        CRITICAL FIX: Prioritizes message ID for deduplication to prevent
-        streaming token accumulation from creating duplicate messages.
-        Falls back to timestamp + sender + text prefix for legacy messages.
+        CRITICAL FIX Issue #259: For user messages, use sender + content for deduplication
+        to prevent duplicate user messages from frontend auto-save.
+        For streaming responses, use sender + messageType (content changes during streaming).
+        For terminal/system messages, use timestamp + sender + content prefix.
         """
-        # Prefer message ID for stable identity during streaming
+        message_type = msg.get("messageType", msg.get("type", "default"))
+        sender = msg.get("sender", "")
+        text_content = msg.get("text", "") or msg.get("content", "")
+
+        # For USER messages: deduplicate by sender + content (ignore ID and timestamp)
+        # This prevents duplicate user messages from backend + frontend both saving
+        if sender == "user":
+            return ("user", text_content[:200])
+
+        # For STREAMING responses: use sender + messageType (content changes during streaming)
+        if message_type in STREAMING_MESSAGE_TYPES:
+            return (
+                sender,
+                message_type,
+                "streaming",
+            )
+
+        # For TERMINAL/SYSTEM messages: use ID if available, else timestamp + content
         msg_id = msg.get("id") or msg.get("messageId")
         if msg_id:
             return ("id", msg_id)
 
-        # Fallback: Use timestamp + sender + messageType for streaming messages
-        # This prevents each accumulated token state from being treated as unique
-        message_type = msg.get("messageType", msg.get("type", "default"))
-        if message_type in STREAMING_MESSAGE_TYPES:
-            # For streaming responses, don't use text content in signature
-            # as it changes with each accumulated token
-            return (
-                msg.get("timestamp", ""),
-                msg.get("sender", ""),
-                message_type,
-            )
-
-        # For other message types (terminal, system, user), use text prefix
-        # CRITICAL FIX: Handle both 'text' (backend format) and 'content' (frontend format)
-        text_content = msg.get("text", "") or msg.get("content", "")
         return (
             msg.get("timestamp", ""),
-            msg.get("sender", ""),
-            text_content[:100],  # First 100 chars to handle long outputs
+            sender,
+            text_content[:100],
         )
 
     def is_streaming_response(msg: Dict) -> bool:
