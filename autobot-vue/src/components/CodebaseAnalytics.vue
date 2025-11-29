@@ -681,7 +681,8 @@ import {
   RaceConditionsDonut,
   TopFilesChart,
   DependencyTreemap,
-  ModuleImportsChart
+  ModuleImportsChart,
+  ImportTreeChart
 } from '@/components/charts'
 
 // Toast notifications
@@ -751,6 +752,11 @@ const chartDataError = ref('')
 const dependencyData = ref(null)
 const dependencyLoading = ref(false)
 const dependencyError = ref('')
+
+// Import tree data
+const importTreeData = ref([])
+const importTreeLoading = ref(false)
+const importTreeError = ref('')
 
 // Loading states for individual data types
 const loadingProgress = reactive({
@@ -1010,7 +1016,8 @@ const loadCodebaseAnalyticsData = async () => {
       loadDeclarations(),    // Silent version
       loadDuplicates(),      // Silent version
       loadChartData(),       // Load chart data for visualizations
-      loadDependencyData()   // Load dependency analysis
+      loadDependencyData(),  // Load dependency analysis
+      loadImportTreeData()   // Load import tree data
     ])
 
   } catch (error) {
@@ -1098,6 +1105,43 @@ const loadDependencyData = async () => {
     dependencyError.value = error.message
   } finally {
     dependencyLoading.value = false
+  }
+}
+
+// Load import tree data for bidirectional file import visualization
+const loadImportTreeData = async () => {
+  importTreeLoading.value = true
+  importTreeError.value = ''
+
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetch(`${backendUrl}/api/analytics/codebase/analytics/import-tree`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`Import tree endpoint returned ${response.status}`)
+    }
+
+    const data = await response.json()
+
+    if (data.status === 'success' && data.import_tree) {
+      importTreeData.value = data.import_tree
+      console.log('[CodebaseAnalytics] Import tree loaded:', {
+        files: data.import_tree.length,
+        summary: data.summary
+      })
+    }
+
+  } catch (error) {
+    console.error('[CodebaseAnalytics] Failed to load import tree:', error)
+    importTreeError.value = error.message
+  } finally {
+    importTreeLoading.value = false
   }
 }
 
