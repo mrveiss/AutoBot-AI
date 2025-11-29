@@ -100,7 +100,7 @@ export default defineConfig({
         target: `http://${DEFAULT_CONFIG.backend.host}:${DEFAULT_CONFIG.backend.port}`,
         changeOrigin: true,
         secure: false,
-        timeout: 30000,
+        timeout: 300000, // 5 minutes for long-running analytics operations
         configure: (proxy, options) => {
           proxy.on('error', (err, req, res) => {
             console.error('Proxy error:', err);
@@ -127,7 +127,7 @@ export default defineConfig({
         target: `http://${DEFAULT_CONFIG.backend.host}:${DEFAULT_CONFIG.backend.port}`,
         ws: true,
         changeOrigin: true,
-        timeout: 30000,
+        timeout: 300000, // 5 minutes for long-running WebSocket operations
         configure: (proxy, options) => {
           proxy.on('error', (err, req, res) => {
             console.error('WebSocket proxy error:', err);

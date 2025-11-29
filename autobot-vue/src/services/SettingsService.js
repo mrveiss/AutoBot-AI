@@ -31,7 +31,7 @@ export class SettingsService {
         use_phi2: false,
         api_endpoint: '', // Will be loaded async
         ollama_endpoint: '', // Will be loaded async
-        ollama_model: 'deepseek-r1:14b',
+        ollama_model: import.meta.env.VITE_DEFAULT_MODEL || '',  // Loaded from backend config
         streaming: false
       },
       ui: {
