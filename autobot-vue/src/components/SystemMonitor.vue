@@ -77,10 +77,19 @@
         <template #header>
           <div class="card-header-content">
             <h3>System Performance</h3>
-            <div class="refresh-indicator" :class="{ spinning: isRefreshing }">⟳</div>
+            <div class="header-status">
+              <span v-if="metricsError" class="error-indicator" title="Failed to fetch metrics">!</span>
+              <div class="refresh-indicator" :class="{ spinning: isRefreshing || metricsLoading }">⟳</div>
+            </div>
           </div>
         </template>
         <div class="metric-content">
+          <div v-if="metricsLoading && !metrics.cpu" class="loading-state">
+            Loading system metrics...
+          </div>
+          <div v-else-if="metricsError && !metrics.cpu" class="error-state">
+            {{ metricsError }}
+          </div>
           <div class="metric-item">
             <div class="metric-label">CPU Usage</div>
             <div class="metric-bar">
@@ -346,13 +355,100 @@ interface SystemMetrics {
 }
 
 const metrics = ref<SystemMetrics>({
-  cpu: 4,
-  memory: 25,
-  gpu: 15,
-  npu: 8,
-  network: 12,
-  networkSpeed: 1048576 // bytes per second
+  cpu: 0,
+  memory: 0,
+  gpu: 0,
+  npu: 0,
+  network: 0,
+  networkSpeed: 0
 })
+
+// Loading and error states
+const metricsLoading = ref(true)
+const metricsError = ref<string | null>(null)
+
+// Fetch real system metrics from backend
+const fetchSystemMetrics = async () => {
+  try {
+    const response = await fetch('/api/monitoring/dashboard/overview')
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    const data = await response.json()
+
+    // Extract metrics from dashboard response
+    const systemMetrics = data.system || {}
+    const gpuMetrics = data.gpu || {}
+    const npuMetrics = data.npu || {}
+    const networkMetrics = data.network || {}
+
+    metrics.value = {
+      cpu: systemMetrics.cpu_percent || systemMetrics.cpu_usage || 0,
+      memory: systemMetrics.memory_percent || systemMetrics.memory_usage || 0,
+      gpu: gpuMetrics.utilization_percent || gpuMetrics.utilization || 0,
+      npu: npuMetrics.utilization_percent || npuMetrics.utilization || 0,
+      network: networkMetrics.utilization || 0,
+      networkSpeed: networkMetrics.bytes_sent_per_sec || networkMetrics.bandwidth || 0
+    }
+
+    metricsError.value = null
+  } catch (error) {
+    console.error('Failed to fetch system metrics:', error)
+    metricsError.value = 'Failed to fetch metrics'
+  } finally {
+    metricsLoading.value = false
+  }
+}
+
+// Fetch real API endpoint health
+const fetchApiHealth = async () => {
+  try {
+    const endpoints = [
+      { path: '/api/health', group: 'Core APIs' },
+      { path: '/api/chat/health', group: 'Core APIs' },
+      { path: '/api/knowledge_base/health', group: 'Core APIs' },
+      { path: '/api/monitoring/status', group: 'System APIs' },
+      { path: '/api/terminal/health', group: 'System APIs' },
+      { path: '/api/redis/health', group: 'System APIs' }
+    ]
+
+    const groups: Record<string, ApiEndpoint[]> = {
+      'Core APIs': [],
+      'System APIs': []
+    }
+
+    await Promise.all(endpoints.map(async (ep) => {
+      const startTime = performance.now()
+      try {
+        const response = await fetch(ep.path, {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000)
+        })
+        const responseTime = Math.round(performance.now() - startTime)
+
+        groups[ep.group].push({
+          path: ep.path,
+          status: response.ok ? 'healthy' : 'warning',
+          responseTime
+        })
+      } catch {
+        const responseTime = Math.round(performance.now() - startTime)
+        groups[ep.group].push({
+          path: ep.path,
+          status: 'error',
+          responseTime
+        })
+      }
+    }))
+
+    apiEndpoints.value = Object.entries(groups).map(([name, endpoints]) => ({
+      name,
+      endpoints
+    }))
+  } catch (error) {
+    console.error('Failed to fetch API health:', error)
+  }
+}
 
 const services = computed(() => serviceMonitor.services.value || [])
 const onlineServices = computed(() => serviceMonitor.healthyServices.value || 0)
@@ -383,23 +479,10 @@ interface ApiGroup {
   endpoints: ApiEndpoint[];
 }
 
+// Initialize with empty groups - will be populated by fetchApiHealth()
 const apiEndpoints = ref<ApiGroup[]>([
-  {
-    name: 'Core APIs',
-    endpoints: [
-      { path: '/api/health', status: 'healthy', responseTime: 4 },
-      { path: '/api/chat', status: 'healthy', responseTime: 12 },
-      { path: '/api/knowledge', status: 'healthy', responseTime: 8 }
-    ]
-  },
-  {
-    name: 'System APIs',
-    endpoints: [
-      { path: '/api/monitoring', status: 'healthy', responseTime: 6 },
-      { path: '/api/terminal', status: 'healthy', responseTime: 15 },
-      { path: '/api/research', status: 'healthy', responseTime: 11 }
-    ]
-  }
+  { name: 'Core APIs', endpoints: [] },
+  { name: 'System APIs', endpoints: [] }
 ])
 
 const healthyEndpoints = computed(() => {
@@ -419,20 +502,25 @@ const performanceChart = ref<HTMLCanvasElement | null>(null)
 
 let refreshInterval: number | null = null
 
-onMounted(() => {
+onMounted(async () => {
   // Start real-time monitoring
   serviceMonitor.startMonitoring()
-  
-  // Refresh metrics every 5 seconds
-  refreshInterval = window.setInterval(() => {
+
+  // Initial fetch of real data
+  await Promise.all([
+    fetchSystemMetrics(),
+    fetchApiHealth()
+  ])
+
+  // Refresh metrics every 5 seconds with real backend data
+  refreshInterval = window.setInterval(async () => {
     isRefreshing.value = true
-    // Simulate metric updates
-    metrics.value.cpu = Math.max(0, Math.min(100, metrics.value.cpu + (Math.random() - 0.5) * 10))
-    metrics.value.memory = Math.max(0, Math.min(100, metrics.value.memory + (Math.random() - 0.5) * 5))
-    metrics.value.gpu = Math.max(0, Math.min(100, metrics.value.gpu + (Math.random() - 0.5) * 15))
-    metrics.value.npu = Math.max(0, Math.min(100, metrics.value.npu + (Math.random() - 0.5) * 12))
-    metrics.value.network = Math.max(0, Math.min(100, metrics.value.network + (Math.random() - 0.5) * 8))
-    
+
+    await Promise.all([
+      fetchSystemMetrics(),
+      fetchApiHealth()
+    ])
+
     setTimeout(() => {
       isRefreshing.value = false
     }, 500)
@@ -487,6 +575,37 @@ onUnmounted(() => {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.error-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: #ef4444;
+  color: white;
+  font-weight: bold;
+  font-size: 0.75rem;
+  border-radius: 50%;
+}
+
+.loading-state,
+.error-state {
+  padding: 1rem;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.error-state {
+  color: #ef4444;
 }
 
 /* Metric bars */
