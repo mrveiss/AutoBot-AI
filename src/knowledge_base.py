@@ -281,6 +281,13 @@ class KnowledgeBase:
                 # Step 3: Initialize vector store
                 await self._init_vector_store()
 
+                # Verify vector store was actually initialized
+                if not self.vector_store:
+                    logger.error(
+                        "Vector store initialization failed - self.vector_store is None"
+                    )
+                    raise RuntimeError("Vector store failed to initialize")
+
                 self.initialized = True
                 self._redis_initialized = True  # V1 compatibility flag
                 logger.info("Knowledge base initialization completed successfully")
