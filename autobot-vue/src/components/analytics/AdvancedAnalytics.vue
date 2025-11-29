@@ -323,7 +323,7 @@
 import { ref, computed, onMounted } from 'vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
-import EmptyState from '@/components/common/EmptyState.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 import api from '@/services/api'
 
 // State

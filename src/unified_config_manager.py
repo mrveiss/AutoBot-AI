@@ -271,7 +271,28 @@ class UnifiedConfigManager:
                     "port": redis_port,
                     "db": int(os.getenv("AUTOBOT_REDIS_MEMORY_DB", "1")),
                     "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
-                }
+                },
+                "chromadb": {
+                    "path": os.getenv("AUTOBOT_CHROMADB_PATH", "data/chromadb"),
+                    "collection_name": os.getenv(
+                        "AUTOBOT_CHROMADB_COLLECTION", "autobot_memory"
+                    ),
+                    # Issue #72: HNSW parameters optimized for 545K+ vectors
+                    "hnsw": {
+                        "space": os.getenv("AUTOBOT_HNSW_SPACE", "cosine"),
+                        # construction_ef: Higher = better quality but slower build
+                        # For 545K vectors: 200-400 recommended (default: 100)
+                        "construction_ef": int(
+                            os.getenv("AUTOBOT_HNSW_CONSTRUCTION_EF", "300")
+                        ),
+                        # search_ef: Higher = better recall but slower search
+                        # For 545K vectors: 50-100 recommended (default: 10)
+                        "search_ef": int(os.getenv("AUTOBOT_HNSW_SEARCH_EF", "100")),
+                        # M: Number of connections per layer
+                        # For 545K vectors: 32-48 recommended (default: 16)
+                        "M": int(os.getenv("AUTOBOT_HNSW_M", "32")),
+                    },
+                },
             },
             "multimodal": {
                 "vision": {
