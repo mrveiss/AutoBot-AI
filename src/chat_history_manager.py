@@ -430,6 +430,93 @@ class ChatHistoryManager:
             os.getenv("AUTOBOT_CHATS_DIRECTORY", "data/chats"),
         )
 
+    def _dedupe_streaming_messages(
+        self, messages: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Deduplicate streaming messages that are clearly from the same streaming session.
+
+        CRITICAL FIX Issue #259: Streaming responses may have multiple accumulated states
+        saved with different timestamps. This keeps only the final/most complete version
+        for each streaming session (identified by close timestamps within 2 minutes).
+
+        Args:
+            messages: List of message dicts
+
+        Returns:
+            Deduplicated message list
+        """
+        # Streaming message types that should be deduplicated
+        STREAMING_TYPES = frozenset(["llm_response", "llm_response_chunk", "response"])
+
+        if not messages:
+            return messages
+
+        result = []
+        # Group streaming messages by approximate time window (2 minutes)
+        streaming_groups: List[List[Dict[str, Any]]] = []
+        current_group: List[Dict[str, Any]] = []
+        last_streaming_ts = None
+
+        for msg in messages:
+            msg_type = msg.get("messageType", msg.get("type", "default"))
+
+            if msg_type in STREAMING_TYPES:
+                msg_ts = msg.get("timestamp", "")
+                # Parse timestamp to check time difference
+                try:
+                    if isinstance(msg_ts, str) and msg_ts:
+                        # Handle both formats: "2025-11-29 12:04:09" and ISO format
+                        if "T" in msg_ts:
+                            current_ts = datetime.fromisoformat(
+                                msg_ts.replace("Z", "+00:00")
+                            )
+                        else:
+                            current_ts = datetime.strptime(msg_ts, "%Y-%m-%d %H:%M:%S")
+
+                        if last_streaming_ts is not None:
+                            time_diff = abs(
+                                (current_ts - last_streaming_ts).total_seconds()
+                            )
+                            # If more than 2 minutes apart, start new group
+                            if time_diff > 120:
+                                if current_group:
+                                    streaming_groups.append(current_group)
+                                current_group = []
+
+                        last_streaming_ts = current_ts
+                except (ValueError, TypeError):
+                    pass  # If timestamp parsing fails, keep grouping
+
+                current_group.append(msg)
+            else:
+                # Non-streaming message - finalize current group and add to result
+                if current_group:
+                    streaming_groups.append(current_group)
+                    current_group = []
+                    last_streaming_ts = None
+                result.append(msg)
+
+        # Don't forget the last group
+        if current_group:
+            streaming_groups.append(current_group)
+
+        # For each streaming group, keep only the longest message
+        for group in streaming_groups:
+            if not group:
+                continue
+            # Find message with longest content
+            longest = max(
+                group,
+                key=lambda m: len(m.get("text", "") or m.get("content", "")),
+            )
+            result.append(longest)
+
+        # Sort by timestamp to maintain order
+        result.sort(key=lambda m: m.get("timestamp", ""))
+
+        return result
+
     async def _async_cache_session(self, cache_key: str, chat_data: Dict[str, Any]):
         """
         Helper method to cache session data in Redis asynchronously.
@@ -1247,7 +1334,25 @@ class ChatHistoryManager:
             # Decrypt data if encryption is enabled
             chat_data = self._decrypt_data(file_content)
 
-            # Warm up Redis cache with file data
+            # CRITICAL FIX Issue #259: Deduplicate streaming messages on load
+            # This cleans up any existing corrupted data with duplicate streaming states
+            messages = chat_data.get("messages", [])
+            cleaned_messages = self._dedupe_streaming_messages(messages)
+
+            # If cleanup happened, save the cleaned version
+            if len(cleaned_messages) < len(messages):
+                logger.info(
+                    f"Cleaned {len(messages) - len(cleaned_messages)} duplicate "
+                    f"streaming messages from session {session_id}"
+                )
+                chat_data["messages"] = cleaned_messages
+                # Save cleaned data back to file (async write)
+                try:
+                    await self.save_session(session_id, messages=cleaned_messages)
+                except Exception as save_err:
+                    logger.warning(f"Could not save cleaned session: {save_err}")
+
+            # Warm up Redis cache with cleaned data
             if self.redis_client:
                 try:
                     cache_key = f"chat:session:{session_id}"
@@ -1256,7 +1361,7 @@ class ChatHistoryManager:
                 except Exception as e:
                     logger.error(f"Failed to warm cache: {e}")
 
-            return chat_data.get("messages", [])
+            return cleaned_messages
 
         except Exception as e:
             logging.error(f"Error loading chat session {session_id}: {str(e)}")
