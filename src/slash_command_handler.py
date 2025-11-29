@@ -12,9 +12,14 @@ Supported Commands:
 - /docs [topic] - List or search documentation
 - /help - Show available commands
 - /status - Show system status
+- /scan <target> - Start security assessment scan
+- /security [list|resume|status] - Manage security assessments
 
-Related Issue: #166 - Architecture Roadmap Phase 1 - Critical Fixes
+Related Issues:
+- #166 - Architecture Roadmap Phase 1 - Critical Fixes
+- #260 - Security Assessment Workflow Manager
 Created: 2025-01-26
+Updated: 2025-01-29 - Added security commands
 """
 
 import logging
@@ -33,6 +38,8 @@ class CommandType(Enum):
     DOCS = "docs"
     HELP = "help"
     STATUS = "status"
+    SCAN = "scan"
+    SECURITY = "security"
     UNKNOWN = "unknown"
 
 
@@ -123,6 +130,12 @@ class SlashCommandHandler:
             "h": CommandType.HELP,
             "status": CommandType.STATUS,
             "st": CommandType.STATUS,
+            # Security assessment commands (#260)
+            "scan": CommandType.SCAN,
+            "nmap": CommandType.SCAN,
+            "security": CommandType.SECURITY,
+            "sec": CommandType.SECURITY,
+            "assessment": CommandType.SECURITY,
         }
 
         return command_map.get(cmd, CommandType.UNKNOWN), args
@@ -143,6 +156,8 @@ class SlashCommandHandler:
             CommandType.DOCS: self._handle_docs,
             CommandType.HELP: self._handle_help,
             CommandType.STATUS: self._handle_status,
+            CommandType.SCAN: self._handle_scan,
+            CommandType.SECURITY: self._handle_security,
             CommandType.UNKNOWN: self._handle_unknown,
         }
 
@@ -331,6 +346,8 @@ class SlashCommandHandler:
 | `/docs <search>` | Search documentation |
 | `/help` | Show this help message |
 | `/status` | Show system status |
+| `/scan <target>` | Start security assessment scan |
+| `/security` | Manage security assessments |
 
 **Documentation Categories:**
   • `api` - API Reference
@@ -341,6 +358,13 @@ class SlashCommandHandler:
   • `deployment` - Deployment Guide
   • `agents` - Agent System
   • `guides` - How-to Guides
+
+**Security Assessment:**
+  • `/scan 192.168.1.0/24` - Scan a network
+  • `/scan host.com --training` - Scan with exploitation enabled
+  • `/security list` - List active assessments
+  • `/security status <id>` - Check assessment progress
+  • `/security resume <id>` - Resume assessment
 
 **Examples:**
   • `/docs api` - Browse API documentation
@@ -392,6 +416,416 @@ check the monitoring dashboard or system logs.
             success=True,
             command_type=CommandType.STATUS,
             content=content,
+        )
+
+    async def _handle_scan(self, args: Optional[str]) -> SlashCommandResult:
+        """
+        Handle /scan command - Start a new security assessment.
+
+        Args:
+            args: Target specification (IP, CIDR, or hostname)
+
+        Returns:
+            SlashCommandResult with assessment details or instructions
+        """
+        if not args:
+            content = """## 🔍 Security Scan Command
+
+**Usage:** `/scan <target> [options]`
+
+**Examples:**
+  • `/scan 192.168.1.1` - Scan single host
+  • `/scan 192.168.1.0/24` - Scan network range
+  • `/scan example.com` - Scan by hostname
+  • `/scan 192.168.1.1 --training` - Enable training mode (exploitation)
+
+**Options:**
+  • `--training` - Enable exploitation phase (for authorized testing)
+  • `--name <name>` - Custom assessment name
+
+**Next Steps:**
+1. Specify a target to begin scanning
+2. The system will create a structured security assessment
+3. Progress through phases: RECON → PORT_SCAN → ENUMERATION → VULN_ANALYSIS
+
+💡 Use `/security list` to see existing assessments."""
+
+            return SlashCommandResult(
+                success=True,
+                command_type=CommandType.SCAN,
+                content=content,
+            )
+
+        # Parse the target and options
+        parts = args.split()
+        target = parts[0]
+        training_mode = "--training" in args.lower()
+
+        # Extract custom name if provided
+        assessment_name = f"Assessment: {target}"
+        if "--name" in args.lower():
+            name_idx = args.lower().find("--name")
+            name_part = args[name_idx + 6:].strip()
+            if name_part:
+                # Get first quoted string or word
+                if name_part.startswith('"'):
+                    end_quote = name_part.find('"', 1)
+                    if end_quote > 0:
+                        assessment_name = name_part[1:end_quote]
+                else:
+                    assessment_name = name_part.split()[0]
+
+        try:
+            from src.services.security_workflow_manager import get_security_workflow_manager
+
+            manager = get_security_workflow_manager()
+            assessment = await manager.create_assessment(
+                name=assessment_name,
+                target=target,
+                training_mode=training_mode,
+            )
+
+            mode_emoji = "🎯" if training_mode else "🛡️"
+            mode_text = "Training Mode (exploitation enabled)" if training_mode else "Safe Mode (no exploitation)"
+
+            content = f"""## {mode_emoji} Security Assessment Started
+
+**Assessment ID:** `{assessment.id[:8]}...`
+**Name:** {assessment.name}
+**Target:** {target}
+**Mode:** {mode_text}
+**Phase:** {assessment.phase.value}
+
+**Current Phase:** INIT - Assessment initialized
+
+**Next Steps:**
+1. Begin reconnaissance with network discovery
+2. Use nmap/masscan for port scanning
+3. Enumerate services on discovered ports
+4. Analyze for vulnerabilities
+
+**Commands:**
+  • `/security status {assessment.id[:8]}` - Check progress
+  • `/security resume {assessment.id[:8]}` - Continue assessment
+
+💡 The agent will guide you through each phase."""
+
+            return SlashCommandResult(
+                success=True,
+                command_type=CommandType.SCAN,
+                content=content,
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to create security assessment: {e}")
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SCAN,
+                content=f"❌ Failed to create assessment: {e}\n\nPlease check the logs for details.",
+            )
+
+    async def _handle_security(self, args: Optional[str]) -> SlashCommandResult:
+        """
+        Handle /security command - Manage security assessments.
+
+        Args:
+            args: Subcommand (list, resume, status, etc.)
+
+        Returns:
+            SlashCommandResult with assessment information
+        """
+        if not args:
+            # Show security command help
+            content = """## 🔒 Security Assessment Commands
+
+**Usage:** `/security <subcommand> [options]`
+
+**Subcommands:**
+
+| Command | Description |
+|---------|-------------|
+| `/security list` | List all active assessments |
+| `/security status <id>` | Show assessment status |
+| `/security resume <id>` | Resume an assessment |
+| `/security phases` | Show workflow phases |
+
+**Quick Start:**
+  • `/scan 192.168.1.0/24` - Start new scan
+  • `/security list` - See active assessments
+  • `/security status abc123` - Check specific assessment
+
+**Workflow Phases:**
+INIT → RECON → PORT_SCAN → ENUMERATION → VULN_ANALYSIS → REPORTING"""
+
+            return SlashCommandResult(
+                success=True,
+                command_type=CommandType.SECURITY,
+                content=content,
+            )
+
+        # Parse subcommand
+        parts = args.strip().split(maxsplit=1)
+        subcommand = parts[0].lower()
+        sub_args = parts[1] if len(parts) > 1 else None
+
+        try:
+            from src.services.security_workflow_manager import (
+                PHASE_DESCRIPTIONS,
+                get_security_workflow_manager,
+            )
+
+            manager = get_security_workflow_manager()
+
+            if subcommand == "list":
+                return await self._security_list(manager)
+            elif subcommand == "status":
+                return await self._security_status(manager, sub_args)
+            elif subcommand == "resume":
+                return await self._security_resume(manager, sub_args)
+            elif subcommand == "phases":
+                return self._security_phases(PHASE_DESCRIPTIONS)
+            else:
+                return SlashCommandResult(
+                    success=False,
+                    command_type=CommandType.SECURITY,
+                    content=f"❓ Unknown subcommand: `{subcommand}`\n\nUse `/security` for available commands.",
+                )
+
+        except Exception as e:
+            logger.error(f"Security command failed: {e}")
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECURITY,
+                content=f"❌ Security command failed: {e}",
+            )
+
+    async def _security_list(self, manager) -> SlashCommandResult:
+        """List active security assessments."""
+        assessments = await manager.list_active_assessments()
+
+        if not assessments:
+            content = """## 📋 Active Security Assessments
+
+No active assessments found.
+
+**Start a new scan:**
+  • `/scan 192.168.1.0/24` - Scan a network
+  • `/scan example.com` - Scan a host"""
+        else:
+            lines = [
+                "## 📋 Active Security Assessments",
+                "",
+                f"Found {len(assessments)} active assessment(s):",
+                "",
+            ]
+
+            for a in assessments[:10]:
+                phase_emoji = {
+                    "INIT": "🔵",
+                    "RECON": "🔍",
+                    "PORT_SCAN": "📡",
+                    "ENUMERATION": "📊",
+                    "VULN_ANALYSIS": "⚠️",
+                    "EXPLOITATION": "🎯",
+                    "REPORTING": "📝",
+                    "COMPLETE": "✅",
+                    "ERROR": "❌",
+                }.get(a.phase.value, "⚪")
+
+                host_count = len(a.hosts)
+                vuln_count = sum(len(h.vulnerabilities) for h in a.hosts)
+
+                lines.append(
+                    f"  {phase_emoji} `{a.id[:8]}` | **{a.name}** | "
+                    f"{a.phase.value} | {host_count} hosts, {vuln_count} vulns"
+                )
+
+            if len(assessments) > 10:
+                lines.append(f"  ... and {len(assessments) - 10} more")
+
+            lines.extend([
+                "",
+                "**Commands:**",
+                "  • `/security status <id>` - View details",
+                "  • `/security resume <id>` - Continue assessment",
+            ])
+
+            content = "\n".join(lines)
+
+        return SlashCommandResult(
+            success=True,
+            command_type=CommandType.SECURITY,
+            content=content,
+        )
+
+    async def _security_status(self, manager, assessment_id: Optional[str]) -> SlashCommandResult:
+        """Get status of a specific assessment."""
+        if not assessment_id:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECURITY,
+                content="❌ Please provide an assessment ID: `/security status <id>`",
+            )
+
+        # Find assessment by ID prefix
+        assessments = await manager.list_active_assessments()
+        assessment = None
+        for a in assessments:
+            if a.id.startswith(assessment_id):
+                assessment = a
+                break
+
+        if not assessment:
+            # Try to load directly
+            assessment = await manager.get_assessment(assessment_id)
+
+        if not assessment:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECURITY,
+                content=f"❌ Assessment not found: `{assessment_id}`",
+            )
+
+        summary = await manager.get_assessment_summary(assessment.id)
+
+        # Build severity display
+        severity_lines = []
+        for sev, count in summary.get("stats", {}).get("severity_distribution", {}).items():
+            sev_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🔵", "info": "⚪"}.get(sev.lower(), "⚪")
+            severity_lines.append(f"    {sev_emoji} {sev.upper()}: {count}")
+
+        severity_text = "\n".join(severity_lines) if severity_lines else "    No vulnerabilities found yet"
+
+        content = f"""## 🔒 Assessment Status
+
+**ID:** `{assessment.id[:8]}...`
+**Name:** {assessment.name}
+**Target:** {assessment.target}
+**Phase:** {assessment.phase.value}
+**Training Mode:** {'✅ Enabled' if assessment.training_mode else '❌ Disabled'}
+
+**Statistics:**
+  • Hosts: {summary['stats']['hosts']}
+  • Open Ports: {summary['stats']['ports']}
+  • Services: {summary['stats']['services']}
+  • Vulnerabilities: {summary['stats']['vulnerabilities']}
+
+**Severity Distribution:**
+{severity_text}
+
+**Phase Description:** {summary.get('phase_description', 'N/A')}
+
+**Next Actions:** {', '.join(summary.get('next_actions', [])[:3]) or 'N/A'}
+
+**Commands:**
+  • `/security resume {assessment.id[:8]}` - Continue this assessment"""
+
+        return SlashCommandResult(
+            success=True,
+            command_type=CommandType.SECURITY,
+            content=content,
+        )
+
+    async def _security_resume(self, manager, assessment_id: Optional[str]) -> SlashCommandResult:
+        """Resume a security assessment."""
+        if not assessment_id:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECURITY,
+                content="❌ Please provide an assessment ID: `/security resume <id>`",
+            )
+
+        # Find assessment
+        assessments = await manager.list_active_assessments()
+        assessment = None
+        for a in assessments:
+            if a.id.startswith(assessment_id):
+                assessment = a
+                break
+
+        if not assessment:
+            assessment = await manager.get_assessment(assessment_id)
+
+        if not assessment:
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECURITY,
+                content=f"❌ Assessment not found: `{assessment_id}`",
+            )
+
+        summary = await manager.get_assessment_summary(assessment.id)
+
+        content = f"""## 🔄 Resuming Security Assessment
+
+**Assessment:** {assessment.name}
+**ID:** `{assessment.id[:8]}...`
+**Current Phase:** {assessment.phase.value}
+**Target:** {assessment.target}
+
+**Progress:**
+  • Hosts discovered: {summary['stats']['hosts']}
+  • Ports scanned: {summary['stats']['ports']}
+  • Services enumerated: {summary['stats']['services']}
+  • Vulnerabilities found: {summary['stats']['vulnerabilities']}
+
+**Phase Description:** {summary.get('phase_description', 'N/A')}
+
+**Recommended Actions:**
+{chr(10).join(f'  • {action}' for action in summary.get('next_actions', [])[:5])}
+
+💡 The agent is ready to continue. Describe your next action or ask for guidance."""
+
+        return SlashCommandResult(
+            success=True,
+            command_type=CommandType.SECURITY,
+            content=content,
+        )
+
+    def _security_phases(self, phase_descriptions: dict) -> SlashCommandResult:
+        """Show security workflow phases."""
+        lines = [
+            "## 🔄 Security Assessment Phases",
+            "",
+            "The security workflow follows these phases:",
+            "",
+        ]
+
+        phase_emojis = {
+            "INIT": "🔵",
+            "RECON": "🔍",
+            "PORT_SCAN": "📡",
+            "ENUMERATION": "📊",
+            "VULN_ANALYSIS": "⚠️",
+            "EXPLOITATION": "🎯",
+            "REPORTING": "📝",
+            "COMPLETE": "✅",
+            "ERROR": "❌",
+        }
+
+        for phase, info in phase_descriptions.items():
+            emoji = phase_emojis.get(phase, "⚪")
+            desc = info.get("description", "")
+            actions = info.get("actions", [])
+
+            lines.append(f"**{emoji} {phase}**")
+            lines.append(f"  {desc}")
+            if actions:
+                lines.append(f"  Actions: {', '.join(actions[:4])}")
+            lines.append("")
+
+        lines.extend([
+            "**Workflow:**",
+            "```",
+            "INIT → RECON → PORT_SCAN → ENUMERATION → VULN_ANALYSIS → REPORTING",
+            "                                    ↓",
+            "                          EXPLOITATION (training mode)",
+            "```",
+        ])
+
+        return SlashCommandResult(
+            success=True,
+            command_type=CommandType.SECURITY,
+            content="\n".join(lines),
         )
 
     async def _handle_unknown(self, args: Optional[str]) -> SlashCommandResult:
