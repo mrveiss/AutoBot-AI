@@ -17,14 +17,13 @@ AutoBot supports comprehensive configuration through environment variables with 
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTOBOT_OLLAMA_HOST` | `http://localhost:11434` | Ollama server endpoint |
-| `AUTOBOT_OLLAMA_MODEL` | `deepseek-r1:14b` | Default Ollama model |
-| `AUTOBOT_OLLAMA_ENDPOINT` | `http://localhost:11434/api/generate` | Ollama API endpoint |
-| `AUTOBOT_OLLAMA_SELECTED_MODEL` | `deepseek-r1:14b` | Currently selected Ollama model |
-| `AUTOBOT_ORCHESTRATOR_LLM` | `deepseek-r1:14b` | LLM model for orchestrator |
-| `AUTOBOT_DEFAULT_LLM` | `ollama_deepseek-r1:14b` | Default LLM identifier |
-| `AUTOBOT_TASK_LLM` | `ollama_deepseek-r1:14b` | Task-specific LLM identifier |
+| `AUTOBOT_DEFAULT_LLM_MODEL` | `mistral:7b-instruct` | **Primary** - Default LLM model for all tasks |
+| `AUTOBOT_OLLAMA_HOST` | `172.16.168.24` | Ollama server host (AI Stack VM) |
+| `AUTOBOT_OLLAMA_PORT` | `11434` | Ollama server port |
+| `AUTOBOT_OLLAMA_ENDPOINT` | `http://${HOST}:${PORT}/api/generate` | Ollama API endpoint |
 | `AUTOBOT_LLM_PROVIDER_TYPE` | `local` | LLM provider type (local/cloud) |
+
+> **Note:** `AUTOBOT_OLLAMA_MODEL` is deprecated. Use `AUTOBOT_DEFAULT_LLM_MODEL` instead.
 
 ## Redis Configuration
 
@@ -118,10 +117,10 @@ The frontend uses Vite environment variables with the `VITE_` prefix:
 
 ## Usage Examples
 
-### Setting Model to DeepSeek
+### Setting Default LLM Model
 ```bash
-export AUTOBOT_OLLAMA_MODEL="deepseek-r1:14b"
-export AUTOBOT_ORCHESTRATOR_LLM="deepseek-r1:14b"
+export AUTOBOT_DEFAULT_LLM_MODEL="mistral:7b-instruct"
+export AUTOBOT_ORCHESTRATOR_LLM="mistral:7b-instruct"
 ```
 
 ### Using Different Backend Port
