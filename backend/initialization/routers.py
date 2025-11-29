@@ -928,4 +928,20 @@ def load_optional_routers():
     except ImportError as e:
         logger.warning(f"⚠️ Optional router not available: graph_rag - {e}")
 
+    # Security Assessment Workflow router (Issue #260)
+    try:
+        from backend.api.security_assessment import router as security_assessment_router
+
+        optional_routers.append(
+            (
+                security_assessment_router,
+                "",  # Router has /security prefix internally
+                ["security-assessment"],
+                "security_assessment",
+            )
+        )
+        logger.info("✅ Optional router loaded: security_assessment")
+    except ImportError as e:
+        logger.warning(f"⚠️ Optional router not available: security_assessment - {e}")
+
     return optional_routers
