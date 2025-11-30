@@ -8,6 +8,10 @@
 import { inject } from 'vue'
 import type { ApiClientType } from '../plugins/api'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useApi
+const logger = createLogger('useApi')
 
 /**
  * Composable to access the centralized API client
@@ -65,7 +69,7 @@ export function useApiWithState() {
       try {
         return await apiCall()
       } catch (error: unknown) {
-        console.error('API call failed:', error)
+        logger.error('API call failed:', error)
 
         if (showErrorToast && !silent) {
           // Issue #156 Fix: Add type guards for unknown error
