@@ -266,13 +266,19 @@ For complex technical tasks, analysis, or system commands, you should "
         return len(message.split()) <= 10
 
 
-# Singleton instance
+# Singleton instance (thread-safe)
+import threading
+
 _chat_agent_instance = None
+_chat_agent_lock = threading.Lock()
 
 
 def get_chat_agent() -> ChatAgent:
-    """Get the singleton Chat Agent instance."""
+    """Get the singleton Chat Agent instance (thread-safe)."""
     global _chat_agent_instance
     if _chat_agent_instance is None:
-        _chat_agent_instance = ChatAgent()
+        with _chat_agent_lock:
+            # Double-check after acquiring lock
+            if _chat_agent_instance is None:
+                _chat_agent_instance = ChatAgent()
     return _chat_agent_instance

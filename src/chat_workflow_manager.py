@@ -1905,15 +1905,21 @@ Explain what it means and answer their original question."""
             logger.error(f"❌ Error during ChatWorkflowManager shutdown: {e}")
 
 
-# Global instance for easy access
+# Global instance for easy access (thread-safe)
+import threading
+
 _workflow_manager: Optional[ChatWorkflowManager] = None
+_workflow_manager_lock = threading.Lock()
 
 
 def get_chat_workflow_manager() -> ChatWorkflowManager:
-    """Get the global chat workflow manager instance."""
+    """Get the global chat workflow manager instance (thread-safe)."""
     global _workflow_manager
     if _workflow_manager is None:
-        _workflow_manager = ChatWorkflowManager()
+        with _workflow_manager_lock:
+            # Double-check after acquiring lock
+            if _workflow_manager is None:
+                _workflow_manager = ChatWorkflowManager()
     return _workflow_manager
 
 
