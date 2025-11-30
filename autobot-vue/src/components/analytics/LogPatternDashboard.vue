@@ -226,6 +226,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('LogPatternDashboard')
 
 // Types
 interface LogPattern {
@@ -330,7 +333,7 @@ const runAnalysis = async () => {
       miningResult.value = await response.json()
     }
   } catch (error) {
-    console.error('Failed to run log analysis:', error)
+    logger.error('Failed to run log analysis:', error)
   } finally {
     isAnalyzing.value = false
   }
@@ -343,7 +346,7 @@ const fetchRealtimeData = async () => {
       realtimeData.value = await response.json()
     }
   } catch (error) {
-    console.error('Failed to fetch realtime data:', error)
+    logger.error('Failed to fetch realtime data:', error)
   }
 }
 
