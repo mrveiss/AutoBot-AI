@@ -6,6 +6,7 @@ Voice Processing System for AutoBot
 Advanced voice command recognition, natural language processing, and speech synthesis
 """
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass
@@ -158,16 +159,27 @@ class SpeechRecognitionEngine:
             start_time = time.time()
 
             try:
-                # Analyze audio quality first
-                audio_quality = await self._analyze_audio_quality(audio_input)
-                noise_level = await self._calculate_noise_level(audio_input)
-
-                # Perform speech recognition
+                # Run audio analysis operations in parallel for better performance
+                # All operations are independent and only read from audio_input
                 if self.recognizer is not None:
-                    transcription_result = await self._perform_speech_recognition(
-                        audio_input
+                    (
+                        audio_quality,
+                        noise_level,
+                        transcription_result,
+                        speech_segments,
+                    ) = await asyncio.gather(
+                        self._analyze_audio_quality(audio_input),
+                        self._calculate_noise_level(audio_input),
+                        self._perform_speech_recognition(audio_input),
+                        self._detect_speech_segments(audio_input),
                     )
                 else:
+                    # Run parallel operations without speech recognition
+                    audio_quality, noise_level, speech_segments = await asyncio.gather(
+                        self._analyze_audio_quality(audio_input),
+                        self._calculate_noise_level(audio_input),
+                        self._detect_speech_segments(audio_input),
+                    )
                     # Fallback when speech recognition not available
                     transcription_result = {
                         "transcription": "[Speech recognition not available]",
@@ -175,9 +187,6 @@ class SpeechRecognitionEngine:
                         "alternatives": [],
                         "language": "unknown",
                     }
-
-                # Detect speech segments
-                speech_segments = await self._detect_speech_segments(audio_input)
 
                 processing_time = time.time() - start_time
 
@@ -487,32 +496,34 @@ class NaturalLanguageProcessor:
             inputs={"transcription": transcription, "has_context": context is not None},
         ) as task_context:
             try:
-                # Classify command type
+                # Step 1: Classify command type first (required for subsequent steps)
                 (
                     command_type,
                     classification_confidence,
                 ) = await self._classify_command_type(transcription)
 
-                # Extract intent and entities
-                intent = await self._extract_intent(transcription, command_type)
-                entities = await self._extract_entities(transcription, command_type)
+                # Step 2: Extract intent and entities in parallel (both only need command_type)
+                intent, entities = await asyncio.gather(
+                    self._extract_intent(transcription, command_type),
+                    self._extract_entities(transcription, command_type),
+                )
+
+                # Step 3: Extract parameters (depends on entities from step 2)
                 parameters = await self._extract_parameters(
                     transcription, command_type, entities
                 )
 
-                # Determine if confirmation needed
-                requires_confirmation = await self._requires_confirmation(
-                    command_type, intent, parameters
-                )
-
-                # Check if additional context needed
-                context_needed = await self._needs_context(
-                    command_type, intent, parameters, context
-                )
-
-                # Generate suggested actions
-                suggested_actions = await self._generate_suggested_actions(
-                    command_type, intent, entities, parameters
+                # Step 4: Run final checks in parallel (all depend on intent/parameters)
+                (
+                    requires_confirmation,
+                    context_needed,
+                    suggested_actions,
+                ) = await asyncio.gather(
+                    self._requires_confirmation(command_type, intent, parameters),
+                    self._needs_context(command_type, intent, parameters, context),
+                    self._generate_suggested_actions(
+                        command_type, intent, entities, parameters
+                    ),
                 )
 
                 # Calculate overall confidence
