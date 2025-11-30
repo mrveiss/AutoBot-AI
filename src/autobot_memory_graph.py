@@ -427,12 +427,13 @@ class AutoBotMemoryGraph:
             if not entity:
                 return None
 
-            # Include relations if requested
+            # Include relations if requested - fetch in parallel for better performance
             if include_relations and entity_id:
-                entity["relations"] = {
-                    "outgoing": await self._get_outgoing_relations(entity_id),
-                    "incoming": await self._get_incoming_relations(entity_id),
-                }
+                outgoing, incoming = await asyncio.gather(
+                    self._get_outgoing_relations(entity_id),
+                    self._get_incoming_relations(entity_id),
+                )
+                entity["relations"] = {"outgoing": outgoing, "incoming": incoming}
 
             return entity
 
@@ -578,9 +579,11 @@ class AutoBotMemoryGraph:
             raise ValueError(f"Invalid relation_type: {relation_type}")
 
         try:
-            # Get entity IDs
-            from_entity_data = await self.get_entity(entity_name=from_entity)
-            to_entity_data = await self.get_entity(entity_name=to_entity)
+            # Get entity IDs - fetch both in parallel for better performance
+            from_entity_data, to_entity_data = await asyncio.gather(
+                self.get_entity(entity_name=from_entity),
+                self.get_entity(entity_name=to_entity),
+            )
 
             if not from_entity_data or not to_entity_data:
                 raise ValueError("Source or target entity not found")
@@ -736,9 +739,11 @@ class AutoBotMemoryGraph:
         self.ensure_initialized()
 
         try:
-            # Get entity IDs
-            from_entity_data = await self.get_entity(entity_name=from_entity)
-            to_entity_data = await self.get_entity(entity_name=to_entity)
+            # Get entity IDs - fetch both in parallel for better performance
+            from_entity_data, to_entity_data = await asyncio.gather(
+                self.get_entity(entity_name=from_entity),
+                self.get_entity(entity_name=to_entity),
+            )
 
             if not from_entity_data or not to_entity_data:
                 return False
