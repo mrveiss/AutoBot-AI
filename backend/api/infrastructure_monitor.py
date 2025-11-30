@@ -523,20 +523,9 @@ class InfrastructureMonitor:
         )
         services.core.append(backend_service)
 
-        # Frontend
-        frontend_port = config.get_port("frontend")
-        if self.check_port(backend_host, frontend_port):
-            services.core.append(
-                ServiceInfo(name="Frontend", status="online", response_time="12ms")
-            )
-        else:
-            services.core.append(
-                ServiceInfo(
-                    name="Frontend",
-                    status="offline",
-                    error=f"Port {frontend_port} not accessible",
-                )
-            )
+        # NOTE: Frontend is NOT monitored on VM0 (main machine)
+        # Per architecture rules, frontend only runs on VM1 (172.16.168.21)
+        # See CLAUDE.md "Single Frontend Server Architecture"
 
         # WebSocket Server
         ws_service = await self.check_service_health(
@@ -680,20 +669,8 @@ class InfrastructureMonitor:
                 )
             )
 
-        # Check Nginx
-        nginx_port = config.get("infrastructure.ports.nginx", 80)
-        if self.check_port(vm1_host, nginx_port):
-            services.core.append(
-                ServiceInfo(name="Nginx", status="online", response_time="5ms")
-            )
-        else:
-            services.core.append(
-                ServiceInfo(
-                    name="Nginx",
-                    status="error",
-                    error=f"Connection refused on port {nginx_port}",
-                )
-            )
+        # NOTE: Nginx is NOT part of AutoBot infrastructure
+        # Frontend VM runs Vite dev server directly, not behind Nginx
 
         # Vue Application
         vue_service = await self.check_service_health(

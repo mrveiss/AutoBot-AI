@@ -9,6 +9,7 @@ unnecessary loops, blocking I/O in async contexts, and cache misuse.
 """
 
 import ast
+import asyncio
 import logging
 import re
 from datetime import datetime
@@ -264,6 +265,7 @@ PERFORMANCE_PATTERNS: dict[str, PatternDefinition] = {
 
 # In-memory storage
 _analysis_history: list[PerformanceAnalysisResult] = []
+_analysis_history_lock = asyncio.Lock()
 
 
 # ============================================================================
@@ -516,10 +518,11 @@ async def analyze_path(
         score=score,
     )
 
-    # Store in history
-    _analysis_history.insert(0, result)
-    if len(_analysis_history) > 50:
-        _analysis_history.pop()
+    # Store in history (thread-safe)
+    async with _analysis_history_lock:
+        _analysis_history.insert(0, result)
+        if len(_analysis_history) > 50:
+            _analysis_history.pop()
 
     return result
 
@@ -577,48 +580,50 @@ async def get_history(
     limit: int = Query(20, ge=1, le=100)
 ) -> list[PerformanceAnalysisResult]:
     """Get analysis history."""
-    return _analysis_history[:limit]
+    async with _analysis_history_lock:
+        return list(_analysis_history[:limit])
 
 
 @router.get("/summary")
 async def get_summary() -> dict:
     """Get summary statistics across all analyses."""
-    if not _analysis_history:
+    async with _analysis_history_lock:
+        if not _analysis_history:
+            return {
+                "total_analyses": 0,
+                "average_score": 0,
+                "common_issues": [],
+                "patterns_enabled": sum(1 for p in PERFORMANCE_PATTERNS.values() if p.enabled),
+            }
+
+        # Count issue frequency
+        issue_counts: dict[str, int] = {}
+        for analysis in _analysis_history:
+            for issue in analysis.issues:
+                issue_counts[issue.pattern_id] = issue_counts.get(issue.pattern_id, 0) + 1
+
+        common_issues = [
+            {
+                "pattern_id": k,
+                "count": v,
+                "name": PERFORMANCE_PATTERNS[k].name if k in PERFORMANCE_PATTERNS else k,
+                "impact": PERFORMANCE_PATTERNS[k].impact.value if k in PERFORMANCE_PATTERNS else "medium",
+            }
+            for k, v in sorted(issue_counts.items(), key=lambda x: -x[1])[:10]
+        ]
+
+        avg_score = sum(a.score for a in _analysis_history) / len(_analysis_history)
+
         return {
-            "total_analyses": 0,
-            "average_score": 0,
-            "common_issues": [],
+            "total_analyses": len(_analysis_history),
+            "average_score": round(avg_score, 1),
+            "average_issues": round(
+                sum(a.total_issues for a in _analysis_history) / len(_analysis_history), 1
+            ),
+            "common_issues": common_issues,
             "patterns_enabled": sum(1 for p in PERFORMANCE_PATTERNS.values() if p.enabled),
+            "total_patterns": len(PERFORMANCE_PATTERNS),
         }
-
-    # Count issue frequency
-    issue_counts: dict[str, int] = {}
-    for analysis in _analysis_history:
-        for issue in analysis.issues:
-            issue_counts[issue.pattern_id] = issue_counts.get(issue.pattern_id, 0) + 1
-
-    common_issues = [
-        {
-            "pattern_id": k,
-            "count": v,
-            "name": PERFORMANCE_PATTERNS[k].name if k in PERFORMANCE_PATTERNS else k,
-            "impact": PERFORMANCE_PATTERNS[k].impact.value if k in PERFORMANCE_PATTERNS else "medium",
-        }
-        for k, v in sorted(issue_counts.items(), key=lambda x: -x[1])[:10]
-    ]
-
-    avg_score = sum(a.score for a in _analysis_history) / len(_analysis_history)
-
-    return {
-        "total_analyses": len(_analysis_history),
-        "average_score": round(avg_score, 1),
-        "average_issues": round(
-            sum(a.total_issues for a in _analysis_history) / len(_analysis_history), 1
-        ),
-        "common_issues": common_issues,
-        "patterns_enabled": sum(1 for p in PERFORMANCE_PATTERNS.values() if p.enabled),
-        "total_patterns": len(PERFORMANCE_PATTERNS),
-    }
 
 
 @router.get("/categories")

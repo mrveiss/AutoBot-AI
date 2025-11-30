@@ -55,6 +55,11 @@ class PayloadOptimizer:
         self.chunk_size = chunk_size
         self.overlap_size = overlap_size
 
+        # Lock for thread-safe stats access
+        import threading
+
+        self._stats_lock = threading.Lock()
+
         # Optimization statistics
         self.total_optimizations = 0
         self.total_size_saved = 0
@@ -130,8 +135,11 @@ class PayloadOptimizer:
             )
 
         savings = ((original_size - optimized_size) / original_size) * 100
-        self.total_optimizations += 1
-        self.total_size_saved += original_size - optimized_size
+
+        # Update stats with lock protection
+        with self._stats_lock:
+            self.total_optimizations += 1
+            self.total_size_saved += original_size - optimized_size
 
         return OptimizationResult(
             original_size=original_size,
@@ -191,9 +199,11 @@ class PayloadOptimizer:
         compressed_size = self._calculate_size(compressed)
         savings = ((original_size - compressed_size) / original_size) * 100
 
-        self.total_optimizations += 1
-        self.compression_count += 1
-        self.total_size_saved += original_size - compressed_size
+        # Update stats with lock protection
+        with self._stats_lock:
+            self.total_optimizations += 1
+            self.compression_count += 1
+            self.total_size_saved += original_size - compressed_size
 
         return OptimizationResult(
             original_size=original_size,
@@ -221,8 +231,10 @@ class PayloadOptimizer:
         total_chunked_size = sum(self._calculate_size(chunk) for chunk in chunks)
         savings = ((original_size - total_chunked_size) / original_size) * 100
 
-        self.total_optimizations += 1
-        self.chunking_count += 1
+        # Update stats with lock protection
+        with self._stats_lock:
+            self.total_optimizations += 1
+            self.chunking_count += 1
 
         logger.info(
             f"Split payload into {len(chunks)} chunks, {savings:.1f}% size reduction"

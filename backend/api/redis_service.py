@@ -34,9 +34,15 @@ _service_manager: Optional[RedisServiceManager] = None
 _service_manager_started: bool = False
 
 
+# Thread-safe lock for singleton
+import asyncio as _asyncio_lock
+
+_service_manager_lock = _asyncio_lock.Lock()
+
+
 async def get_service_manager() -> RedisServiceManager:
     """
-    Get the singleton Redis Service Manager instance.
+    Get the singleton Redis Service Manager instance (thread-safe).
 
     Uses singleton pattern to avoid creating multiple instances and maintain
     consistent state (error tracking, status cache) across requests.
@@ -44,13 +50,19 @@ async def get_service_manager() -> RedisServiceManager:
     global _service_manager, _service_manager_started
 
     if _service_manager is None:
-        _service_manager = RedisServiceManager()
-        logger.info("Created Redis Service Manager singleton instance")
+        async with _service_manager_lock:
+            # Double-check after acquiring lock
+            if _service_manager is None:
+                _service_manager = RedisServiceManager()
+                logger.info("Created Redis Service Manager singleton instance")
 
     if not _service_manager_started:
-        await _service_manager.start()
-        _service_manager_started = True
-        logger.info("Started Redis Service Manager singleton")
+        async with _service_manager_lock:
+            # Double-check after acquiring lock
+            if not _service_manager_started:
+                await _service_manager.start()
+                _service_manager_started = True
+                logger.info("Started Redis Service Manager singleton")
 
     return _service_manager
 

@@ -544,16 +544,22 @@ class NPUWorkerManager:
         logger.info(f"Updated load balancing config: {config.strategy}")
 
 
-# Global worker manager instance
+# Global worker manager instance (thread-safe)
+import asyncio as _asyncio_lock
+
 _worker_manager: Optional[NPUWorkerManager] = None
+_worker_manager_lock = _asyncio_lock.Lock()
 
 
 async def get_worker_manager(redis_client=None) -> NPUWorkerManager:
-    """Get or create global worker manager instance"""
+    """Get or create global worker manager instance (thread-safe)."""
     global _worker_manager
 
     if _worker_manager is None:
-        _worker_manager = NPUWorkerManager(redis_client=redis_client)
-        await _worker_manager.start_health_monitoring()
+        async with _worker_manager_lock:
+            # Double-check after acquiring lock
+            if _worker_manager is None:
+                _worker_manager = NPUWorkerManager(redis_client=redis_client)
+                await _worker_manager.start_health_monitoring()
 
     return _worker_manager

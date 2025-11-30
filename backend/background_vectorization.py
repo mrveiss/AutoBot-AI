@@ -205,13 +205,19 @@ class BackgroundVectorizer:
                 await asyncio.sleep(60)  # Wait 1 minute on error
 
 
-# Global instance
+# Global instance (thread-safe)
+import threading
+
 _background_vectorizer: Optional[BackgroundVectorizer] = None
+_background_vectorizer_lock = threading.Lock()
 
 
 def get_background_vectorizer() -> BackgroundVectorizer:
-    """Get or create the global background vectorizer"""
+    """Get or create the global background vectorizer (thread-safe)."""
     global _background_vectorizer
     if _background_vectorizer is None:
-        _background_vectorizer = BackgroundVectorizer()
+        with _background_vectorizer_lock:
+            # Double-check after acquiring lock
+            if _background_vectorizer is None:
+                _background_vectorizer = BackgroundVectorizer()
     return _background_vectorizer

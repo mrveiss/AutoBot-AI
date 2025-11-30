@@ -264,24 +264,31 @@ async def export_rum_data():
     """Export RUM data for analysis"""
 
     try:
+        async with _rum_lock:
+            # Create copies of data under lock to prevent race conditions
+            config_copy = dict(rum_config)
+            sessions_copy = dict(rum_sessions)
+            events_copy = list(rum_events[-1000:])  # Export last 1000 events
+            total_events = len(rum_events)
+            total_sessions = len(rum_sessions)
+
+            # Calculate event type distribution
+            event_types = {}
+            for event in rum_events:
+                event_type = event.get("type", "unknown")
+                event_types[event_type] = event_types.get(event_type, 0) + 1
+
         export_data = {
             "export_timestamp": datetime.now().isoformat(),
-            "config": rum_config,
-            "sessions": rum_sessions,
-            "events": rum_events[-1000:],  # Export last 1000 events to avoid huge files
+            "config": config_copy,
+            "sessions": sessions_copy,
+            "events": events_copy,
             "summary": {
-                "total_events": len(rum_events),
-                "total_sessions": len(rum_sessions),
-                "event_types": {},
+                "total_events": total_events,
+                "total_sessions": total_sessions,
+                "event_types": event_types,
             },
         }
-
-        # Calculate event type distribution
-        for event in rum_events:
-            event_type = event.get("type", "unknown")
-            export_data["summary"]["event_types"][event_type] = (
-                export_data["summary"]["event_types"].get(event_type, 0) + 1
-            )
 
         rum_logger.info("RUM data exported")
 
@@ -304,33 +311,34 @@ async def get_rum_status():
     """Get current RUM status and statistics"""
 
     try:
-        # Calculate session statistics
-        active_sessions = 0
-        total_events_today = 0
-        today = datetime.now().date()
+        async with _rum_lock:
+            # Calculate session statistics under lock
+            active_sessions = 0
+            total_events_today = 0
+            today = datetime.now().date()
 
-        for session_data in rum_sessions.values():
-            last_activity = datetime.fromisoformat(
-                session_data["last_activity"].replace("Z", "+00:00")
-            )
-            if (datetime.now() - last_activity.replace(tzinfo=None)) < timedelta(
-                minutes=30
-            ):
-                active_sessions += 1
+            for session_data in rum_sessions.values():
+                last_activity = datetime.fromisoformat(
+                    session_data["last_activity"].replace("Z", "+00:00")
+                )
+                if (datetime.now() - last_activity.replace(tzinfo=None)) < timedelta(
+                    minutes=30
+                ):
+                    active_sessions += 1
 
-            if last_activity.date() == today:
-                total_events_today += session_data["event_count"]
+                if last_activity.date() == today:
+                    total_events_today += session_data["event_count"]
 
-        status = {
-            "enabled": rum_config["enabled"],
-            "config": rum_config,
-            "statistics": {
-                "total_events": len(rum_events),
-                "total_sessions": len(rum_sessions),
-                "active_sessions": active_sessions,
-                "events_today": total_events_today,
-            },
-        }
+            status = {
+                "enabled": rum_config["enabled"],
+                "config": dict(rum_config),
+                "statistics": {
+                    "total_events": len(rum_events),
+                    "total_sessions": len(rum_sessions),
+                    "active_sessions": active_sessions,
+                    "events_today": total_events_today,
+                },
+            }
 
         return {"status": "success", "rum_status": status}
 

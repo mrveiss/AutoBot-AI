@@ -319,23 +319,29 @@ class PlaywrightService:
             }
 
 
-# Global service instance
+# Global service instance (thread-safe)
+import asyncio as _asyncio_lock
+
 _playwright_service: Optional[PlaywrightService] = None
+_playwright_service_lock = _asyncio_lock.Lock()
 
 
 async def get_playwright_service() -> PlaywrightService:
-    """Get or create the global Playwright service instance"""
+    """Get or create the global Playwright service instance (thread-safe)."""
     global _playwright_service
 
     if _playwright_service is None:
-        # Use correct Playwright container IP address
-        container_host = os.getenv("AUTOBOT_BROWSER_SERVICE_HOST")
-        if not container_host:
-            raise ValueError(
-                "AUTOBOT_BROWSER_SERVICE_HOST environment variable must be set"
-            )
-        _playwright_service = PlaywrightService(container_host=container_host)
-        await _playwright_service.initialize()
+        async with _playwright_service_lock:
+            # Double-check after acquiring lock
+            if _playwright_service is None:
+                # Use correct Playwright container IP address
+                container_host = os.getenv("AUTOBOT_BROWSER_SERVICE_HOST")
+                if not container_host:
+                    raise ValueError(
+                        "AUTOBOT_BROWSER_SERVICE_HOST environment variable must be set"
+                    )
+                _playwright_service = PlaywrightService(container_host=container_host)
+                await _playwright_service.initialize()
 
     return _playwright_service
 

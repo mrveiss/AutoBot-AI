@@ -26,6 +26,10 @@ router = APIRouter(tags=["elevation"])
 elevation_sessions: Dict[str, dict] = {}
 pending_requests: Dict[str, dict] = {}
 
+# Locks for thread-safe access
+_elevation_sessions_lock = asyncio.Lock()
+_pending_requests_lock = asyncio.Lock()
+
 
 class ElevationRequest(BaseModel):
     operation: str
@@ -50,15 +54,16 @@ async def request_elevation(request: ElevationRequest):
     """Request elevation for a privileged operation"""
     request_id = str(uuid.uuid4())
 
-    # Store the pending request
-    pending_requests[request_id] = {
-        "operation": request.operation,
-        "command": request.command,
-        "reason": request.reason,
-        "risk_level": request.risk_level,
-        "timestamp": datetime.now(),
-        "status": "pending",
-    }
+    # Store the pending request (thread-safe)
+    async with _pending_requests_lock:
+        pending_requests[request_id] = {
+            "operation": request.operation,
+            "command": request.command,
+            "reason": request.reason,
+            "risk_level": request.risk_level,
+            "timestamp": datetime.now(),
+            "status": "pending",
+        }
 
     logger.info(f"Elevation requested: {request_id} - {request.operation}")
 
@@ -79,8 +84,9 @@ async def authorize_elevation(auth: ElevationAuthorization):
     """Authorize an elevation request with password"""
     request_id = auth.request_id
 
-    if request_id not in pending_requests:
-        raise HTTPException(status_code=404, detail="Elevation request not found")
+    async with _pending_requests_lock:
+        if request_id not in pending_requests:
+            raise HTTPException(status_code=404, detail="Elevation request not found")
 
     try:
         # Verify sudo password (safely)
@@ -101,11 +107,14 @@ async def authorize_elevation(auth: ElevationAuthorization):
             "request_id": request_id,
         }
 
-        elevation_sessions[session_token] = session_data
+        # Thread-safe updates
+        async with _elevation_sessions_lock:
+            elevation_sessions[session_token] = session_data
 
         # Mark request as authorized
-        pending_requests[request_id]["status"] = "authorized"
-        pending_requests[request_id]["session_token"] = session_token
+        async with _pending_requests_lock:
+            pending_requests[request_id]["status"] = "authorized"
+            pending_requests[request_id]["session_token"] = session_token
 
         logger.info(f"Elevation authorized: {request_id}")
 
@@ -137,18 +146,19 @@ async def authorize_elevation(auth: ElevationAuthorization):
 @router.get("/status/{request_id}")
 async def get_elevation_status(request_id: str):
     """Check the status of an elevation request"""
-    if request_id not in pending_requests:
-        raise HTTPException(status_code=404, detail="Request not found")
+    async with _pending_requests_lock:
+        if request_id not in pending_requests:
+            raise HTTPException(status_code=404, detail="Request not found")
 
-    request_data = pending_requests[request_id]
+        request_data = pending_requests[request_id]
 
-    return {
-        "success": True,
-        "request_id": request_id,
-        "status": request_data["status"],
-        "operation": request_data["operation"],
-        "timestamp": request_data["timestamp"],
-    }
+        return {
+            "success": True,
+            "request_id": request_id,
+            "status": request_data["status"],
+            "operation": request_data["operation"],
+            "timestamp": request_data["timestamp"],
+        }
 
 
 @with_error_handling(
@@ -159,15 +169,16 @@ async def get_elevation_status(request_id: str):
 @router.post("/execute/{session_token}")
 async def execute_elevated_command(session_token: str, command: str):
     """Execute a command with elevated privileges using session token"""
-    if session_token not in elevation_sessions:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    async with _elevation_sessions_lock:
+        if session_token not in elevation_sessions:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
 
-    session_data = elevation_sessions[session_token]
+        session_data = elevation_sessions[session_token]
 
-    # Check if session is expired
-    if datetime.now() > session_data["expires"]:
-        del elevation_sessions[session_token]
-        raise HTTPException(status_code=401, detail="Session expired")
+        # Check if session is expired
+        if datetime.now() > session_data["expires"]:
+            del elevation_sessions[session_token]
+            raise HTTPException(status_code=401, detail="Session expired")
 
     try:
         # Execute command with sudo (using NOPASSWD for the session)
@@ -204,13 +215,14 @@ async def execute_elevated_command(session_token: str, command: str):
     error_code_prefix="ELEVATION",
 )
 @router.get("/pending")
-async def get_pending_requests():
+async def get_pending_requests_endpoint():
     """Get all pending elevation requests"""
-    active_requests = {
-        req_id: req_data
-        for req_id, req_data in pending_requests.items()
-        if req_data["status"] == "pending"
-    }
+    async with _pending_requests_lock:
+        active_requests = {
+            req_id: req_data
+            for req_id, req_data in pending_requests.items()
+            if req_data["status"] == "pending"
+        }
 
     return {
         "success": True,
