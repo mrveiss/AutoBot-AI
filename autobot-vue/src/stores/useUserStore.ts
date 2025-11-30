@@ -1,5 +1,8 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('useUserStore')
 
 export interface UserProfile {
   id: string
@@ -277,7 +280,7 @@ export const useUserStore = defineStore('user', () => {
         }
       }
     } catch (error) {
-      console.error('Failed to initialize user from storage:', error)
+      logger.error('Failed to initialize user from storage:', error)
     }
   }
 
@@ -292,7 +295,7 @@ export const useUserStore = defineStore('user', () => {
         localStorage.removeItem('autobot_user')
       }
     } catch (error) {
-      console.error('Failed to persist user to storage:', error)
+      logger.error('Failed to persist user to storage:', error)
     }
   }
 
