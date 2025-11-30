@@ -4,6 +4,10 @@ import { knowledgeRepository } from '@/models/repositories'
 import type { KnowledgeDocument, SearchResult, SearchFilters } from '@/stores/useKnowledgeStore'
 import type { SearchKnowledgeRequest, AddTextRequest, AddUrlRequest } from '@/models/repositories/KnowledgeRepository'
 import { generateCategoryId, generateDocumentId } from '@/utils/ChatIdGenerator'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for KnowledgeController
+const logger = createLogger('KnowledgeController')
 
 export class KnowledgeController {
   // FIXED: Lazy initialization - stores only created when accessed, not at module load
@@ -67,7 +71,7 @@ export class KnowledgeController {
       const suggestions = await knowledgeRepository.getSearchSuggestions(query, 8)
       this.knowledgeStore.setSearchSuggestions(suggestions)
     } catch (error) {
-      console.warn('Failed to get search suggestions:', error)
+      logger.warn('Failed to get search suggestions:', error)
     }
   }
 
@@ -242,7 +246,7 @@ export class KnowledgeController {
       this.knowledgeStore.categories = categories
 
     } catch (error: any) {
-      console.warn('Failed to load categories:', error)
+      logger.warn('Failed to load categories:', error)
     }
   }
 
@@ -285,7 +289,7 @@ export class KnowledgeController {
       })
 
     } catch (error) {
-      console.warn('Failed to refresh stats:', error)
+      logger.warn('Failed to refresh stats:', error)
     }
   }
 
@@ -295,7 +299,7 @@ export class KnowledgeController {
       this.knowledgeStore.setLoading(true)
       
       const response = await knowledgeRepository.getAllEntries()
-      console.log('Knowledge entries response:', response)
+      logger.debug('Knowledge entries response:', response)
       
       if (response.success && response.entries) {
         // Clear existing documents
@@ -331,7 +335,7 @@ export class KnowledgeController {
       }
       
     } catch (error: any) {
-      console.error('Failed to load documents:', error)
+      logger.error('Failed to load documents:', error)
       this.appStore.setGlobalError(`Failed to load documents: ${error.message}`)
     } finally {
       this.knowledgeStore.setLoading(false)
@@ -506,7 +510,7 @@ export class KnowledgeController {
     try {
       return await knowledgeRepository.getSimilarDocuments(documentId, 5)
     } catch (error: any) {
-      console.warn('Failed to get similar documents:', error)
+      logger.warn('Failed to get similar documents:', error)
       return []
     }
   }
