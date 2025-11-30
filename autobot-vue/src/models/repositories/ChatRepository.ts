@@ -1,6 +1,10 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosResponse } from 'axios'
 import { NetworkConstants } from '@/constants/network'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for ChatRepository
+const logger = createLogger('ChatRepository')
 
 export interface ChatMessage {
   id: string
@@ -76,7 +80,7 @@ export class ChatRepository {
     this.axios.interceptors.response.use(
       response => response,
       error => {
-        console.error('[ChatRepository] Request failed:', error)
+        logger.error('Request failed:', error)
         return Promise.reject(error)
       }
     )
@@ -158,7 +162,7 @@ export class ChatRepository {
         }
       }
     } catch (error: any) {
-      console.error('Failed to send message:', error)
+      logger.error('Failed to send message:', error)
       throw error
     }
   }
@@ -204,13 +208,13 @@ export class ChatRepository {
               const parsed = JSON.parse(data)
               if (onChunk) onChunk(parsed)
             } catch (e) {
-              console.warn('Failed to parse streaming chunk:', e)
+              logger.warn('Failed to parse streaming chunk:', e)
             }
           }
         }
       }
     } catch (error: any) {
-      console.error('Failed to send streaming message:', error)
+      logger.error('Failed to send streaming message:', error)
       throw error
     }
   }
@@ -224,7 +228,7 @@ export class ChatRepository {
       })
       return response.data?.data || response.data
     } catch (error: any) {
-      console.error('Failed to create new chat:', error)
+      logger.error('Failed to create new chat:', error)
       throw error
     }
   }
@@ -250,7 +254,7 @@ export class ChatRepository {
         isActive: false // Will be set by store when session is selected
       }))
     } catch (error: any) {
-      console.error('Failed to get chat list:', error)
+      logger.error('Failed to get chat list:', error)
       return [] // Return empty array on error to prevent app crash
     }
   }
@@ -261,7 +265,7 @@ export class ChatRepository {
       const response = await this.get(`/api/chat/sessions/${sessionId}`)
       return response.data
     } catch (error: any) {
-      console.error('Failed to get session:', error)
+      logger.error('Failed to get session:', error)
       throw error
     }
   }
@@ -269,14 +273,14 @@ export class ChatRepository {
   // Get messages for a chat session
   async getChatMessages(sessionId: string): Promise<ChatMessage[]> {
     try {
-      console.log(`[ChatRepository] 📥 Fetching messages for session: ${sessionId}`)
+      logger.debug(`Fetching messages for session: ${sessionId}`)
       const response = await this.get(`/api/chat/sessions/${sessionId}`)
       const data = response.data
-      console.log(`[ChatRepository] 📡 Raw API response:`, JSON.stringify(data).substring(0, 200))
+      logger.debug(`Raw API response:`, JSON.stringify(data).substring(0, 200))
 
       // Backend returns messages in data.messages
       const backendMessages = data.data?.messages || data.messages || []
-      console.log(`[ChatRepository] 📋 Backend returned ${backendMessages.length} messages`)
+      logger.debug(`Backend returned ${backendMessages.length} messages`)
 
       // Transform backend message format to frontend format
       const messages = backendMessages.map((msg: any, index: number) => {
@@ -290,14 +294,14 @@ export class ChatRepository {
           // Check both rawData (old format) and metadata (new format) for backward compatibility
           metadata: msg.metadata || msg.rawData || {}
         }
-        console.log(`[ChatRepository] 🔄 Message ${index + 1}: sender=${msg.sender} → ${transformed.sender}, content length=${transformed.content.length}`)
+        logger.debug(`Message ${index + 1}: sender=${msg.sender} → ${transformed.sender}, content length=${transformed.content.length}`)
         return transformed
       })
 
-      console.log(`[ChatRepository] ✅ Transformed ${messages.length} messages, returning to controller`)
+      logger.debug(`Transformed ${messages.length} messages, returning to controller`)
       return messages
     } catch (error: any) {
-      console.error('[ChatRepository] ❌ Failed to get chat messages:', error)
+      logger.error('Failed to get chat messages:', error)
       // Return empty array on error to prevent UI breakage
       return []
     }
@@ -339,7 +343,7 @@ export class ChatRepository {
       const response = await this.delete(`/api/chat/sessions/${chatId}`, { params })
       return response.data || response
     } catch (error: any) {
-      console.error('Failed to delete chat:', error)
+      logger.error('Failed to delete chat:', error)
       throw error
     }
   }
@@ -350,7 +354,7 @@ export class ChatRepository {
       const response = await this.post('/api/reset')
       return response.data || response
     } catch (error: any) {
-      console.error('Failed to reset chat:', error)
+      logger.error('Failed to reset chat:', error)
       throw error
     }
   }
@@ -361,7 +365,7 @@ export class ChatRepository {
       const response = await this.get('/api/history')
       return response.data || response
     } catch (error: any) {
-      console.warn('Failed to get chat history (legacy):', error)
+      logger.warn('Failed to get chat history (legacy):', error)
       return { messages: [] }
     }
   }
@@ -378,7 +382,7 @@ export class ChatRepository {
       })
       return response.data || response
     } catch (error: any) {
-      console.error('Failed to save chat messages:', error)
+      logger.error('Failed to save chat messages:', error)
       throw error
     }
   }
