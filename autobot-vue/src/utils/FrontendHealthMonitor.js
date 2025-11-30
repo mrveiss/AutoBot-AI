@@ -5,6 +5,10 @@
 
 import { cacheBuster } from './CacheBuster.js';
 import { routerHealthMonitor } from './RouterHealthMonitor.js';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for FrontendHealthMonitor
+const logger = createLogger('FrontendHealthMonitor');
 
 class FrontendHealthMonitor {
     constructor() {
@@ -153,7 +157,7 @@ class FrontendHealthMonitor {
             this.notifyHealthChange();
 
         } catch (error) {
-            console.error('[HealthMonitor] Health check failed:', error);
+            logger.error('[HealthMonitor] Health check failed:', error);
             this.healthStatus.overall = 'degraded'; // Less aggressive status
         } finally {
             // Schedule next check only if monitoring enabled
@@ -260,7 +264,7 @@ class FrontendHealthMonitor {
     processHealthCheckResults(results) {
         results.forEach((result, index) => {
             if (result.status === 'rejected') {
-                console.error(`[HealthMonitor] Health check ${index} failed:`, result.reason);
+                logger.error(`[HealthMonitor] Health check ${index} failed:`, result.reason);
                 this.metrics.errorCount++;
             }
         });
@@ -323,7 +327,7 @@ class FrontendHealthMonitor {
     setupErrorHandling() {
         window.addEventListener('error', (event) => {
             this.metrics.errorCount++;
-            console.error('[HealthMonitor] Global error detected:', event.error);
+            logger.error('[HealthMonitor] Global error detected:', event.error);
 
             // PERFORMANCE: Don't trigger immediate health checks on every error
             if (event.error && event.error.message) {
@@ -335,7 +339,7 @@ class FrontendHealthMonitor {
 
         window.addEventListener('unhandledrejection', (event) => {
             this.metrics.errorCount++;
-            console.error('[HealthMonitor] Unhandled promise rejection:', event.reason);
+            logger.error('[HealthMonitor] Unhandled promise rejection:', event.reason);
             // PERFORMANCE: Don't trigger immediate health check
         });
     }
@@ -373,7 +377,7 @@ class FrontendHealthMonitor {
             try {
                 callback(healthData);
             } catch (error) {
-                console.error('[HealthMonitor] Listener error:', error);
+                logger.error('[HealthMonitor] Listener error:', error);
             }
         });
     }

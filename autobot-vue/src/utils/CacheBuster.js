@@ -3,6 +3,11 @@
  * Eliminates cache poisoning across all layers
  */
 
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for CacheBuster
+const logger = createLogger('CacheBuster');
+
 class CacheBuster {
     constructor() {
         this.buildId = import.meta.env.VITE_BUILD_TIMESTAMP || Date.now();
@@ -111,7 +116,7 @@ class CacheBuster {
             }
 
         } catch (error) {
-            console.error('[CacheBuster] Error clearing caches:', error);
+            logger.error('[CacheBuster] Error clearing caches:', error);
         }
     }
 
@@ -128,7 +133,7 @@ class CacheBuster {
         const isPoisoned = Object.values(indicators).some(indicator => indicator);
 
         if (isPoisoned) {
-            console.warn('[CacheBuster] Cache poisoning detected:', indicators);
+            logger.warn('[CacheBuster] Cache poisoning detected:', indicators);
             this.handleCachePoisoning();
         }
 
@@ -175,7 +180,7 @@ class CacheBuster {
         const now = Date.now();
 
         if (lastReload && (now - parseInt(lastReload)) < 10000) {
-            console.warn('[CacheBuster] Skipping reload - already reloaded recently to prevent infinite loop');
+            logger.warn('[CacheBuster] Skipping reload - already reloaded recently to prevent infinite loop');
             return;
         }
 
@@ -203,7 +208,7 @@ class CacheBuster {
         // Monitor for resource loading errors
         window.addEventListener('error', (event) => {
             if (event.target && (event.target.tagName === 'SCRIPT' || event.target.tagName === 'LINK')) {
-                console.warn('[CacheBuster] Resource loading error:', event.target.src || event.target.href);
+                logger.warn('[CacheBuster] Resource loading error:', event.target.src || event.target.href);
                 event.target.dataset.loadError = 'true';
 
                 // Trigger cache poisoning detection
@@ -243,7 +248,7 @@ class CacheBuster {
 
                     // Only log once every cooldown period
                     if (now - this.lastConnectionErrorLog >= this.connectionErrorCooldown) {
-                        console.warn(
+                        logger.warn(
                             `[CacheBuster] Backend connection error (${this.connectionErrorCount} failed requests in last ${
                                 Math.round((now - this.lastConnectionErrorLog) / 1000)
                             }s) - Backend may be restarting`
@@ -252,7 +257,7 @@ class CacheBuster {
                     }
                 } else {
                     // Log non-connection errors immediately (these are unexpected)
-                    console.error('[CacheBuster] Fetch error:', error);
+                    logger.error('[CacheBuster] Fetch error:', error);
                 }
 
                 throw error;
