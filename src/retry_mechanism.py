@@ -10,6 +10,7 @@ Handles transient failures in network requests, database operations, and externa
 import asyncio
 import logging
 import random
+import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -77,6 +78,7 @@ class RetryMechanism:
 
     def __init__(self, config: Optional[RetryConfig] = None):
         self.config = config or RetryConfig()
+        self._stats_lock = threading.Lock()
         self.stats = {
             "total_attempts": 0,
             "successful_retries": 0,
@@ -124,15 +126,52 @@ class RetryMechanism:
         # Check if it's a retryable exception
         return isinstance(exception, self.config.retryable_exceptions)
 
+    def _update_stats_attempt(self):
+        """Thread-safe increment of total attempts."""
+        with self._stats_lock:
+            self.stats["total_attempts"] += 1
+
+    def _update_stats_success(self, operation_name: str, attempt: int):
+        """Thread-safe update of success stats."""
+        with self._stats_lock:
+            if attempt > 1:
+                self.stats["successful_retries"] += 1
+
+            if operation_name not in self.stats["operations_by_type"]:
+                self.stats["operations_by_type"][operation_name] = {
+                    "total": 0,
+                    "succeeded": 0,
+                    "retries_needed": 0,
+                }
+
+            self.stats["operations_by_type"][operation_name]["total"] += 1
+            self.stats["operations_by_type"][operation_name]["succeeded"] += 1
+            if attempt > 1:
+                self.stats["operations_by_type"][operation_name]["retries_needed"] += 1
+
+    def _update_stats_failure(self, operation_name: str):
+        """Thread-safe update of failure stats."""
+        with self._stats_lock:
+            self.stats["failed_operations"] += 1
+
+            if operation_name not in self.stats["operations_by_type"]:
+                self.stats["operations_by_type"][operation_name] = {
+                    "total": 0,
+                    "succeeded": 0,
+                    "retries_needed": 0,
+                }
+
+            self.stats["operations_by_type"][operation_name]["total"] += 1
+
     async def execute_async(
         self, func: Callable, *args, operation_name: str = None, **kwargs
     ) -> Any:
-        """Execute an async function with retry mechanism"""
+        """Execute an async function with retry mechanism (thread-safe)"""
         operation_name = operation_name or func.__name__
         last_exception = None
 
         for attempt in range(1, self.config.max_attempts + 1):
-            self.stats["total_attempts"] += 1
+            self._update_stats_attempt()
 
             try:
                 logger.debug(
@@ -146,23 +185,10 @@ class RetryMechanism:
 
                 # Success!
                 if attempt > 1:
-                    self.stats["successful_retries"] += 1
                     logger.info(f"{operation_name} succeeded on attempt {attempt}")
 
-                # Update operation stats
-                if operation_name not in self.stats["operations_by_type"]:
-                    self.stats["operations_by_type"][operation_name] = {
-                        "total": 0,
-                        "succeeded": 0,
-                        "retries_needed": 0,
-                    }
-
-                self.stats["operations_by_type"][operation_name]["total"] += 1
-                self.stats["operations_by_type"][operation_name]["succeeded"] += 1
-                if attempt > 1:
-                    self.stats["operations_by_type"][operation_name][
-                        "retries_needed"
-                    ] += 1
+                # Update operation stats (thread-safe)
+                self._update_stats_success(operation_name, attempt)
 
                 return result
 
@@ -189,18 +215,8 @@ class RetryMechanism:
                 logger.debug(f"Retrying {operation_name} in {delay:.2f} seconds...")
                 await asyncio.sleep(delay)
 
-        # All attempts exhausted
-        self.stats["failed_operations"] += 1
-
-        # Update operation stats
-        if operation_name not in self.stats["operations_by_type"]:
-            self.stats["operations_by_type"][operation_name] = {
-                "total": 0,
-                "succeeded": 0,
-                "retries_needed": 0,
-            }
-
-        self.stats["operations_by_type"][operation_name]["total"] += 1
+        # All attempts exhausted - update stats (thread-safe)
+        self._update_stats_failure(operation_name)
 
         logger.error(
             f"{operation_name} failed after {self.config.max_attempts} attempts"
@@ -210,12 +226,12 @@ class RetryMechanism:
     def execute_sync(
         self, func: Callable, *args, operation_name: str = None, **kwargs
     ) -> Any:
-        """Execute a synchronous function with retry mechanism"""
+        """Execute a synchronous function with retry mechanism (thread-safe)"""
         operation_name = operation_name or func.__name__
         last_exception = None
 
         for attempt in range(1, self.config.max_attempts + 1):
-            self.stats["total_attempts"] += 1
+            self._update_stats_attempt()
 
             try:
                 logger.debug(
@@ -226,23 +242,10 @@ class RetryMechanism:
 
                 # Success!
                 if attempt > 1:
-                    self.stats["successful_retries"] += 1
                     logger.info(f"{operation_name} succeeded on attempt {attempt}")
 
-                # Update operation stats
-                if operation_name not in self.stats["operations_by_type"]:
-                    self.stats["operations_by_type"][operation_name] = {
-                        "total": 0,
-                        "succeeded": 0,
-                        "retries_needed": 0,
-                    }
-
-                self.stats["operations_by_type"][operation_name]["total"] += 1
-                self.stats["operations_by_type"][operation_name]["succeeded"] += 1
-                if attempt > 1:
-                    self.stats["operations_by_type"][operation_name][
-                        "retries_needed"
-                    ] += 1
+                # Update operation stats (thread-safe)
+                self._update_stats_success(operation_name, attempt)
 
                 return result
 
@@ -269,18 +272,8 @@ class RetryMechanism:
                 logger.debug(f"Retrying {operation_name} in {delay:.2f} seconds...")
                 time.sleep(delay)
 
-        # All attempts exhausted
-        self.stats["failed_operations"] += 1
-
-        # Update operation stats
-        if operation_name not in self.stats["operations_by_type"]:
-            self.stats["operations_by_type"][operation_name] = {
-                "total": 0,
-                "succeeded": 0,
-                "retries_needed": 0,
-            }
-
-        self.stats["operations_by_type"][operation_name]["total"] += 1
+        # All attempts exhausted - update stats (thread-safe)
+        self._update_stats_failure(operation_name)
 
         logger.error(
             f"{operation_name} failed after {self.config.max_attempts} attempts"
@@ -288,26 +281,27 @@ class RetryMechanism:
         raise RetryExhaustedError(self.config.max_attempts, last_exception)
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get retry mechanism statistics"""
+        """Get retry mechanism statistics (thread-safe)"""
+        with self._stats_lock:
+            stats_copy = dict(self.stats)
+            stats_copy["operations_by_type"] = dict(self.stats["operations_by_type"])
+            total = stats_copy["total_attempts"]
+            failed = stats_copy["failed_operations"]
+
         return {
-            **self.stats,
-            "success_rate": (
-                (
-                    (self.stats["total_attempts"] - self.stats["failed_operations"])
-                    / max(1, self.stats["total_attempts"])
-                )
-                * 100
-            ),
+            **stats_copy,
+            "success_rate": ((total - failed) / max(1, total)) * 100,
         }
 
     def reset_stats(self):
-        """Reset retry statistics"""
-        self.stats = {
-            "total_attempts": 0,
-            "successful_retries": 0,
-            "failed_operations": 0,
-            "operations_by_type": {},
-        }
+        """Reset retry statistics (thread-safe)"""
+        with self._stats_lock:
+            self.stats = {
+                "total_attempts": 0,
+                "successful_retries": 0,
+                "failed_operations": 0,
+                "operations_by_type": {},
+            }
 
 
 # Global retry mechanism instance

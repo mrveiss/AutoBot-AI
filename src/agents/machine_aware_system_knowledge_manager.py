@@ -6,6 +6,7 @@ Machine-Aware System Knowledge Manager for AutoBot
 Extends SystemKnowledgeManager with machine-specific adaptation
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -87,8 +88,14 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         self.machine_profiles_dir = self.runtime_knowledge_dir / "machine_profiles"
         self.machine_profiles_dir.mkdir(parents=True, exist_ok=True)
 
-        # Current machine profile
-        self.current_machine_profile: Optional[MachineProfile] = None
+        # Current machine profile (protected by _profile_lock)
+        self._current_machine_profile: Optional[MachineProfile] = None
+        self._profile_lock = asyncio.Lock()
+
+    @property
+    def current_machine_profile(self) -> Optional[MachineProfile]:
+        """Thread-safe access to current machine profile (read-only snapshot)."""
+        return self._current_machine_profile
 
     async def initialize_machine_aware_knowledge(self, force_reinstall: bool = False):
         """Initialize system knowledge with machine-specific adaptation"""
@@ -120,23 +127,28 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         detector = await get_os_detector()
         os_info = await detector.detect_system()
 
-        self.current_machine_profile = MachineProfile()
-        self.current_machine_profile.machine_id = self._generate_machine_id(os_info)
-        self.current_machine_profile.hostname = os_info.user or "unknown"
-        self.current_machine_profile.os_type = os_info.os_type
-        self.current_machine_profile.distro = os_info.distro
-        self.current_machine_profile.package_manager = os_info.package_manager
-        self.current_machine_profile.available_tools = os_info.capabilities
-        self.current_machine_profile.architecture = os_info.architecture
-        self.current_machine_profile.is_wsl = os_info.is_wsl
-        self.current_machine_profile.is_root = os_info.is_root
-        self.current_machine_profile.capabilities = os_info.capabilities
+        # Create new profile
+        new_profile = MachineProfile()
+        new_profile.machine_id = self._generate_machine_id(os_info)
+        new_profile.hostname = os_info.user or "unknown"
+        new_profile.os_type = os_info.os_type
+        new_profile.distro = os_info.distro
+        new_profile.package_manager = os_info.package_manager
+        new_profile.available_tools = os_info.capabilities
+        new_profile.architecture = os_info.architecture
+        new_profile.is_wsl = os_info.is_wsl
+        new_profile.is_root = os_info.is_root
+        new_profile.capabilities = os_info.capabilities
+
+        # Atomically update the profile under lock
+        async with self._profile_lock:
+            self._current_machine_profile = new_profile
 
         # Save machine profile
         await self._save_machine_profile()
 
         logger.info(
-            f"Machine profile detected: {self.current_machine_profile.machine_id}"
+            f"Machine profile detected: {new_profile.machine_id}"
         )
         logger.info(
             f"OS: {os_info.os_type.value} ({os_info.distro.value if os_info.distro else 'N/A'})"
@@ -446,11 +458,17 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
     async def get_machine_info(self) -> Dict[str, Any]:
         """Get current machine information"""
-        if not self.current_machine_profile:
-            await self._detect_current_machine()
+        # Check if profile exists, using lock for lazy initialization
+        async with self._profile_lock:
+            profile = self._current_machine_profile
 
-        if self.current_machine_profile:
-            return self.current_machine_profile.to_dict()
+        if not profile:
+            await self._detect_current_machine()
+            async with self._profile_lock:
+                profile = self._current_machine_profile
+
+        if profile:
+            return profile.to_dict()
         else:
             return {"error": "Machine profile not available"}
 
@@ -477,14 +495,18 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
     async def _integrate_man_pages(self):
         """Integrate man pages for tools available on this machine"""
-        if not self.current_machine_profile:
+        # Get snapshot of profile under lock
+        async with self._profile_lock:
+            profile = self._current_machine_profile
+
+        if not profile:
             logger.warning("No machine profile available for man page integration")
             return
 
         # Only integrate man pages on Linux systems
-        if self.current_machine_profile.os_type.value != "linux":
+        if profile.os_type.value != "linux":
             logger.info(
-                f"Man page integration skipped for {self.current_machine_profile.os_type.value}"
+                f"Man page integration skipped for {profile.os_type.value}"
             )
             return
 
@@ -502,7 +524,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             )  # Point to data/system_knowledge
 
             # Get intersection of available tools and priority commands
-            available_tools = self.current_machine_profile.available_tools
+            available_tools = profile.available_tools
             priority_commands = integrator.priority_commands
 
             commands_to_integrate = [
@@ -547,7 +569,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                         continue
 
                     # Set machine ID for proper organization
-                    man_info.machine_id = self.current_machine_profile.machine_id
+                    man_info.machine_id = profile.machine_id
 
                     # Cache the result
                     await integrator.cache_man_page(man_info)
@@ -602,12 +624,16 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         # Convert to AutoBot knowledge format
         knowledge_data = integrator.convert_to_knowledge_yaml(man_info)
 
+        # Get profile snapshot under lock
+        async with self._profile_lock:
+            profile = self._current_machine_profile
+
         # Add machine-specific metadata
         knowledge_data["metadata"].update(
             {
-                "machine_id": self.current_machine_profile.machine_id,
-                "os_type": self.current_machine_profile.os_type.value,
-                "package_manager": self.current_machine_profile.package_manager,
+                "machine_id": profile.machine_id if profile else "unknown",
+                "os_type": profile.os_type.value if profile else "unknown",
+                "package_manager": profile.package_manager if profile else "unknown",
                 "integration_type": "machine_aware_man_pages",
             }
         )
@@ -624,18 +650,16 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         machine_dir = self._get_machine_knowledge_dir()
         summary_file = machine_dir / "man_page_integration_summary.json"
 
+        # Get profile snapshot under lock
+        async with self._profile_lock:
+            profile = self._current_machine_profile
+
         summary_data = {
             **results,
             "integration_date": datetime.now().isoformat(),
-            "machine_id": (
-                self.current_machine_profile.machine_id
-                if self.current_machine_profile
-                else "unknown"
-            ),
+            "machine_id": profile.machine_id if profile else "unknown",
             "total_available_tools": (
-                len(self.current_machine_profile.available_tools)
-                if self.current_machine_profile
-                else 0
+                len(profile.available_tools) if profile else 0
             ),
         }
 

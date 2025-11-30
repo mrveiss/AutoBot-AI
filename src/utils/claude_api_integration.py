@@ -55,6 +55,9 @@ class ClaudeAPIBatchManager:
             PayloadOptimizer() if self.config.enable_payload_optimization else None
         )
 
+        # Lock for thread-safe access to shared state
+        self._lock = asyncio.Lock()
+
         # State tracking
         self.is_running = False
         self.request_count = 0
@@ -107,19 +110,21 @@ class ClaudeAPIBatchManager:
         timeout: float = 30.0,
         metadata: Dict[str, Any] = None,
     ) -> str:
-        """Submit a request for processing with batching optimization"""
+        """Submit a request for processing with batching optimization (thread-safe)"""
 
         if not self.is_running:
             await self.start()
 
         start_time = time.time()
-        self.metrics["total_requests"] += 1
+        async with self._lock:
+            self.metrics["total_requests"] += 1
 
         try:
             # Apply rate limiting
             if self.rate_limiter:
                 if not await self._check_rate_limit():
-                    self.metrics["rate_limit_hits"] += 1
+                    async with self._lock:
+                        self.metrics["rate_limit_hits"] += 1
                     raise Exception("Rate limit exceeded")
 
             # Optimize payload if enabled
@@ -128,7 +133,8 @@ class ClaudeAPIBatchManager:
                 optimization_result = self.payload_optimizer.optimize_payload(content)
                 if optimization_result.optimized:
                     optimized_content = optimization_result.optimized_content
-                    self.metrics["payload_optimizations"] += 1
+                    async with self._lock:
+                        self.metrics["payload_optimizations"] += 1
                     logger.debug(
                         f"Payload optimized: {optimization_result.size_reduction}% reduction"
                     )
@@ -146,15 +152,17 @@ class ClaudeAPIBatchManager:
                     response = await self._process_with_batching(
                         optimized_content, priority, context_type, timeout, metadata
                     )
-                    self.metrics["batched_requests"] += 1
+                    async with self._lock:
+                        self.metrics["batched_requests"] += 1
                 except Exception as e:
                     logger.warning(f"Batching failed, falling back to individual: {e}")
                     if self.config.fallback_to_individual:
                         response = await self._process_individual_request(
                             optimized_content, timeout
                         )
-                        self.metrics["individual_requests"] += 1
-                        self.fallback_count += 1
+                        async with self._lock:
+                            self.metrics["individual_requests"] += 1
+                            self.fallback_count += 1
                     else:
                         raise
             else:
@@ -162,11 +170,12 @@ class ClaudeAPIBatchManager:
                 response = await self._process_individual_request(
                     optimized_content, timeout
                 )
-                self.metrics["individual_requests"] += 1
+                async with self._lock:
+                    self.metrics["individual_requests"] += 1
 
             # Update metrics
             response_time = time.time() - start_time
-            self._update_response_time_metric(response_time)
+            await self._update_response_time_metric(response_time)
 
             # Record successful request for rate limiter
             if self.rate_limiter:
@@ -175,7 +184,8 @@ class ClaudeAPIBatchManager:
             return response
 
         except Exception as e:
-            self.metrics["failed_requests"] += 1
+            async with self._lock:
+                self.metrics["failed_requests"] += 1
             logger.error(f"Request failed: {e}")
             raise
 
@@ -243,18 +253,19 @@ class ClaudeAPIBatchManager:
 
         return response
 
-    def _update_response_time_metric(self, response_time: float):
-        """Update average response time metric"""
-        current_avg = self.metrics["average_response_time"]
-        total_requests = self.metrics["total_requests"]
+    async def _update_response_time_metric(self, response_time: float):
+        """Update average response time metric (thread-safe)"""
+        async with self._lock:
+            current_avg = self.metrics["average_response_time"]
+            total_requests = self.metrics["total_requests"]
 
-        if total_requests == 1:
-            self.metrics["average_response_time"] = response_time
-        else:
-            # Rolling average
-            self.metrics["average_response_time"] = (
-                current_avg * (total_requests - 1) + response_time
-            ) / total_requests
+            if total_requests == 1:
+                self.metrics["average_response_time"] = response_time
+            else:
+                # Rolling average
+                self.metrics["average_response_time"] = (
+                    current_avg * (total_requests - 1) + response_time
+                ) / total_requests
 
     async def submit_multiple_requests(
         self, requests: List[Dict[str, Any]], parallel: bool = True
@@ -289,43 +300,50 @@ class ClaudeAPIBatchManager:
 
             return results
 
-    def get_metrics(self) -> Dict[str, Any]:
-        """Get comprehensive metrics"""
+    async def get_metrics(self) -> Dict[str, Any]:
+        """Get comprehensive metrics (thread-safe, returns snapshot)"""
+        async with self._lock:
+            # Copy metrics under lock
+            metrics_copy = dict(self.metrics)
+            fallback = self.fallback_count
+            running = self.is_running
+
         batch_efficiency = 0.0
-        if self.metrics["total_requests"] > 0:
+        if metrics_copy["total_requests"] > 0:
             batched_ratio = (
-                self.metrics["batched_requests"] / self.metrics["total_requests"]
+                metrics_copy["batched_requests"] / metrics_copy["total_requests"]
             )
             batch_efficiency = batched_ratio * 100
 
         batcher_stats = {}
         if self.batcher:
-            batcher_stats = self.batcher.get_statistics()
+            batcher_stats = await self.batcher.get_statistics()
 
         return {
-            **self.metrics,
+            **metrics_copy,
             "batch_efficiency": batch_efficiency,
-            "fallback_count": self.fallback_count,
-            "is_running": self.is_running,
+            "fallback_count": fallback,
+            "is_running": running,
             "batcher_stats": batcher_stats,
             "rate_limiter_stats": (
                 self.rate_limiter.get_usage_statistics() if self.rate_limiter else {}
             ),
         }
 
-    def reset_metrics(self):
-        """Reset all metrics"""
-        self.metrics = {
-            "total_requests": 0,
-            "batched_requests": 0,
-            "individual_requests": 0,
-            "failed_requests": 0,
-            "average_response_time": 0.0,
-            "batch_efficiency": 0.0,
-            "rate_limit_hits": 0,
-            "payload_optimizations": 0,
-        }
-        self.fallback_count = 0
+    async def reset_metrics(self):
+        """Reset all metrics (thread-safe)"""
+        async with self._lock:
+            self.metrics = {
+                "total_requests": 0,
+                "batched_requests": 0,
+                "individual_requests": 0,
+                "failed_requests": 0,
+                "average_response_time": 0.0,
+                "batch_efficiency": 0.0,
+                "rate_limit_hits": 0,
+                "payload_optimizations": 0,
+            }
+            self.fallback_count = 0
         logger.info("Metrics reset")
 
 
@@ -441,10 +459,10 @@ class AutoBotClaudeAPIAdapter:
             self.manager = None
         self._initialized = False
 
-    def get_performance_stats(self) -> Dict[str, Any]:
-        """Get performance statistics"""
+    async def get_performance_stats(self) -> Dict[str, Any]:
+        """Get performance statistics (thread-safe)"""
         if self.manager:
-            return self.manager.get_metrics()
+            return await self.manager.get_metrics()
         return {}
 
 
@@ -485,7 +503,7 @@ async def main():
 
         # Print metrics
         print("\nPerformance Metrics:")
-        metrics = manager.get_metrics()
+        metrics = await manager.get_metrics()
         for key, value in metrics.items():
             print(f"  {key}: {value}")
 

@@ -45,6 +45,7 @@ class OllamaConnectionPool:
         self.config = config or ConnectionPoolConfig()
         self.semaphore = asyncio.Semaphore(self.config.max_connections)
         self.request_queue = asyncio.Queue(maxsize=self.config.max_queue_size)
+        self._stats_lock = asyncio.Lock()
         self.active_connections = 0
         self.total_requests = 0
         self.failed_requests = 0
@@ -68,7 +69,7 @@ class OllamaConnectionPool:
     @asynccontextmanager
     async def acquire_connection(self):
         """
-        Context manager for acquiring a connection from the pool.
+        Context manager for acquiring a connection from the pool (thread-safe).
 
         Usage:
             async with pool.acquire_connection() as session:
@@ -76,32 +77,42 @@ class OllamaConnectionPool:
                 pass
         """
         start_time = time.time()
-        request_id = f"req_{self.total_requests + 1}"
+
+        # Get request ID under lock
+        async with self._stats_lock:
+            request_id = f"req_{self.total_requests + 1}"
+
+        semaphore_acquired = False
 
         try:
             # Wait for available connection slot
             logger.debug(f"[{request_id}] Waiting for connection slot")
-            self.connection_stats["queued"] += 1
+            async with self._stats_lock:
+                self.connection_stats["queued"] += 1
 
             # Use timeout to prevent infinite waiting
             await asyncio.wait_for(
                 self.semaphore.acquire(), timeout=self.config.queue_timeout
             )
+            semaphore_acquired = True
 
             wait_time = time.time() - start_time
-            self.connection_stats["queued"] -= 1
-            self.active_connections += 1
-            self.total_requests += 1
-            self.connection_stats["active"] += 1
 
-            # Update average wait time
-            if self.total_requests > 1:
-                self.connection_stats["avg_wait_time"] = (
-                    self.connection_stats["avg_wait_time"] * (self.total_requests - 1)
-                    + wait_time
-                ) / self.total_requests
-            else:
-                self.connection_stats["avg_wait_time"] = wait_time
+            # Update stats under lock
+            async with self._stats_lock:
+                self.connection_stats["queued"] -= 1
+                self.active_connections += 1
+                self.total_requests += 1
+                self.connection_stats["active"] += 1
+
+                # Update average wait time
+                if self.total_requests > 1:
+                    self.connection_stats["avg_wait_time"] = (
+                        self.connection_stats["avg_wait_time"] * (self.total_requests - 1)
+                        + wait_time
+                    ) / self.total_requests
+                else:
+                    self.connection_stats["avg_wait_time"] = wait_time
 
             logger.debug(
                 f"[{request_id}] Acquired connection (waited {wait_time:.2f}s)"
@@ -116,37 +127,40 @@ class OllamaConnectionPool:
             try:
                 yield session
 
-                # Record successful execution
+                # Record successful execution under lock
                 execution_time = time.time() - execution_start
-                self.connection_stats["completed"] += 1
+                async with self._stats_lock:
+                    self.connection_stats["completed"] += 1
 
-                # Update average execution time
-                if self.connection_stats["completed"] > 1:
-                    self.connection_stats["avg_execution_time"] = (
-                        self.connection_stats["avg_execution_time"]
-                        * (self.connection_stats["completed"] - 1)
-                        + execution_time
-                    ) / self.connection_stats["completed"]
-                else:
-                    self.connection_stats["avg_execution_time"] = execution_time
+                    # Update average execution time
+                    if self.connection_stats["completed"] > 1:
+                        self.connection_stats["avg_execution_time"] = (
+                            self.connection_stats["avg_execution_time"]
+                            * (self.connection_stats["completed"] - 1)
+                            + execution_time
+                        ) / self.connection_stats["completed"]
+                    else:
+                        self.connection_stats["avg_execution_time"] = execution_time
 
                 logger.debug(
                     f"[{request_id}] Connection completed successfully ({execution_time:.2f}s)"
                 )
 
             except Exception as e:
-                # Record failed execution
-                self.failed_requests += 1
-                self.connection_stats["failed"] += 1
+                # Record failed execution under lock
+                async with self._stats_lock:
+                    self.failed_requests += 1
+                    self.connection_stats["failed"] += 1
                 logger.error(f"[{request_id}] Connection failed: {e}")
                 raise
 
             # Session cleanup is handled by singleton HTTPClientManager
 
         except asyncio.TimeoutError:
-            self.connection_stats["queued"] -= 1
-            self.failed_requests += 1
-            self.connection_stats["failed"] += 1
+            async with self._stats_lock:
+                self.connection_stats["queued"] -= 1
+                self.failed_requests += 1
+                self.connection_stats["failed"] += 1
             logger.error(
                 f"[{request_id}] Timeout waiting for connection slot ({self.config.queue_timeout}s)"
             )
@@ -155,15 +169,17 @@ class OllamaConnectionPool:
             )
 
         finally:
-            if self.active_connections > 0:
-                self.active_connections -= 1
-                self.connection_stats["active"] -= 1
-            self.semaphore.release()
-            logger.debug(f"[{request_id}] Released connection")
+            if semaphore_acquired:
+                async with self._stats_lock:
+                    if self.active_connections > 0:
+                        self.active_connections -= 1
+                        self.connection_stats["active"] -= 1
+                self.semaphore.release()
+                logger.debug(f"[{request_id}] Released connection")
 
     async def health_check(self, ollama_url: str) -> bool:
         """
-        Perform health check on Ollama service.
+        Perform health check on Ollama service (thread-safe).
 
         Args:
             ollama_url: Base URL for Ollama service
@@ -173,39 +189,53 @@ class OllamaConnectionPool:
         """
         current_time = time.time()
 
-        # Skip health check if recently performed
-        if current_time - self.last_health_check < self.config.health_check_interval:
-            return self.pool_healthy
+        # Check if recently performed (read under lock)
+        async with self._stats_lock:
+            if current_time - self.last_health_check < self.config.health_check_interval:
+                return self.pool_healthy
 
         try:
             async with self.acquire_connection() as session:
                 health_url = f"{ollama_url}/api/tags"
                 async with session.get(health_url) as response:
-                    if response.status == 200:
-                        self.pool_healthy = True
-                        logger.info("Ollama connection pool health check: HEALTHY")
-                    else:
-                        self.pool_healthy = False
-                        logger.warning(
-                            f"Ollama health check failed: HTTP {response.status}"
-                        )
+                    async with self._stats_lock:
+                        if response.status == 200:
+                            self.pool_healthy = True
+                            logger.info("Ollama connection pool health check: HEALTHY")
+                        else:
+                            self.pool_healthy = False
+                            logger.warning(
+                                f"Ollama health check failed: HTTP {response.status}"
+                            )
 
         except Exception as e:
-            self.pool_healthy = False
+            async with self._stats_lock:
+                self.pool_healthy = False
             logger.error(f"Ollama health check failed: {e}")
 
         finally:
-            self.last_health_check = current_time
+            async with self._stats_lock:
+                self.last_health_check = current_time
+                healthy = self.pool_healthy
 
-        return self.pool_healthy
+        return healthy
 
-    def get_pool_stats(self) -> Dict[str, Any]:
-        """Get current pool statistics"""
+    async def get_pool_stats(self) -> Dict[str, Any]:
+        """Get current pool statistics (thread-safe)"""
+        async with self._stats_lock:
+            total = self.total_requests
+            failed = self.failed_requests
+            active = self.active_connections
+            queued = self.connection_stats["queued"]
+            healthy = self.pool_healthy
+            last_check = self.last_health_check
+            completed = self.connection_stats["completed"]
+            avg_wait = self.connection_stats["avg_wait_time"]
+            avg_exec = self.connection_stats["avg_execution_time"]
+
         success_rate = 0.0
-        if self.total_requests > 0:
-            success_rate = (
-                self.total_requests - self.failed_requests
-            ) / self.total_requests
+        if total > 0:
+            success_rate = (total - failed) / total
 
         return {
             "pool_config": {
@@ -215,18 +245,18 @@ class OllamaConnectionPool:
                 "queue_timeout": self.config.queue_timeout,
             },
             "current_state": {
-                "active_connections": self.active_connections,
-                "queued_requests": self.connection_stats["queued"],
-                "pool_healthy": self.pool_healthy,
-                "last_health_check": self.last_health_check,
+                "active_connections": active,
+                "queued_requests": queued,
+                "pool_healthy": healthy,
+                "last_health_check": last_check,
             },
             "statistics": {
-                "total_requests": self.total_requests,
-                "completed_requests": self.connection_stats["completed"],
-                "failed_requests": self.failed_requests,
+                "total_requests": total,
+                "completed_requests": completed,
+                "failed_requests": failed,
                 "success_rate": success_rate,
-                "avg_wait_time": self.connection_stats["avg_wait_time"],
-                "avg_execution_time": self.connection_stats["avg_execution_time"],
+                "avg_wait_time": avg_wait,
+                "avg_execution_time": avg_exec,
             },
         }
 
@@ -265,23 +295,31 @@ def get_ollama_pool() -> OllamaConnectionPool:
 
 
 def configure_ollama_pool(config: ConnectionPoolConfig):
-    """Configure the global Ollama connection pool"""
+    """Configure the global Ollama connection pool (thread-safe)"""
     global _ollama_pool
-    _ollama_pool = OllamaConnectionPool(config)
-    logger.info("Ollama connection pool reconfigured")
+    with _ollama_pool_lock:
+        _ollama_pool = OllamaConnectionPool(config)
+        logger.info("Ollama connection pool reconfigured")
 
 
 async def cleanup_ollama_pool():
-    """Cleanup the global Ollama connection pool"""
+    """Cleanup the global Ollama connection pool (thread-safe)"""
     global _ollama_pool
-    if _ollama_pool is not None:
-        # Wait for active connections to complete
-        while _ollama_pool.active_connections > 0:
-            logger.info(
-                f"Waiting for {_ollama_pool.active_connections} active connections to complete"
-            )
-            await asyncio.sleep(0.1)
+    with _ollama_pool_lock:
+        pool = _ollama_pool
+        if pool is None:
+            return
 
+    # Wait for active connections to complete (check without holding lock)
+    while True:
+        async with pool._stats_lock:
+            active = pool.active_connections
+        if active == 0:
+            break
+        logger.info(f"Waiting for {active} active connections to complete")
+        await asyncio.sleep(0.1)
+
+    with _ollama_pool_lock:
         logger.info("Ollama connection pool cleaned up")
         _ollama_pool = None
 

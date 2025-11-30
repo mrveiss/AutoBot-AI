@@ -109,6 +109,11 @@ class ConversationRateLimiter:
             max_payload_size, warning_payload_size
         )
 
+        # Lock for thread-safe stats access
+        import threading
+
+        self._stats_lock = threading.Lock()
+
         # Statistics
         self.total_requests = 0
         self.blocked_requests = 0
@@ -177,7 +182,7 @@ class ConversationRateLimiter:
         success: bool = True,
         error_type: str = None,
     ):
-        """Record a completed request for rate limiting calculations"""
+        """Record a completed request for rate limiting calculations (thread-safe)"""
         current_time = time.time()
 
         request_info = RequestInfo(
@@ -189,16 +194,20 @@ class ConversationRateLimiter:
         )
 
         self.request_history.append(request_info)
-        self.total_requests += 1
 
-        if payload_size > self.payload_tracker.warning_size:
-            self.large_payload_count += 1
+        # Update stats with lock protection
+        with self._stats_lock:
+            self.total_requests += 1
 
-        # Update average response time
-        if response_time and success:
-            self.average_response_time = (
-                self.average_response_time * (self.total_requests - 1) + response_time
-            ) / self.total_requests
+            if payload_size > self.payload_tracker.warning_size:
+                self.large_payload_count += 1
+
+            # Update average response time
+            if response_time and success:
+                self.average_response_time = (
+                    self.average_response_time * (self.total_requests - 1)
+                    + response_time
+                ) / self.total_requests
 
         # Log rate limit violations
         if error_type == "rate_limit":
@@ -206,7 +215,7 @@ class ConversationRateLimiter:
             self._handle_rate_limit_hit()
 
     def get_usage_statistics(self) -> Dict[str, Any]:
-        """Get comprehensive usage statistics"""
+        """Get comprehensive usage statistics (thread-safe)"""
         current_time = time.time()
         self._cleanup_old_requests(current_time)
 
@@ -219,14 +228,21 @@ class ConversationRateLimiter:
 
         successful_requests = len([r for r in self.request_history if r.success])
 
+        # Copy stats under lock
+        with self._stats_lock:
+            total_requests = self.total_requests
+            blocked_requests = self.blocked_requests
+            large_payload_count = self.large_payload_count
+            average_response_time = self.average_response_time
+
         return {
             "requests_last_minute": minute_requests,
             "requests_last_hour": hour_requests,
-            "total_requests": self.total_requests,
-            "blocked_requests": self.blocked_requests,
-            "success_rate": (successful_requests / max(self.total_requests, 1)) * 100,
-            "large_payload_count": self.large_payload_count,
-            "average_response_time": self.average_response_time,
+            "total_requests": total_requests,
+            "blocked_requests": blocked_requests,
+            "success_rate": (successful_requests / max(total_requests, 1)) * 100,
+            "large_payload_count": large_payload_count,
+            "average_response_time": average_response_time,
             "rate_limit_utilization": {
                 "minute": (minute_requests / self.requests_per_minute) * 100,
                 "hour": (hour_requests / self.requests_per_hour) * 100,
@@ -314,12 +330,12 @@ class ConversationRateLimiter:
             self.last_warning_time = current_time
 
     def _handle_rate_limit_hit(self):
-        """Handle when a rate limit is actually hit"""
+        """Handle when a rate limit is actually hit (thread-safe)"""
         # Temporarily reduce limits to be more conservative
-        self.requests_per_minute = max(10, int(self.requests_per_minute * 0.8))
-        logger.warning(
-            f"Rate limits adjusted to {self.requests_per_minute}/min after limit hit"
-        )
+        with self._stats_lock:
+            self.requests_per_minute = max(10, int(self.requests_per_minute * 0.8))
+            new_limit = self.requests_per_minute
+        logger.warning(f"Rate limits adjusted to {new_limit}/min after limit hit")
 
 
 # Global instance for easy access (thread-safe)

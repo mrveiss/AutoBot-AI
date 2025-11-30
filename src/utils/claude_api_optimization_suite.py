@@ -110,6 +110,9 @@ class ClaudeAPIOptimizationSuite:
         # Initialize all optimization components
         self._initialize_components()
 
+        # Lock for thread-safe access to shared state
+        self._lock = asyncio.Lock()
+
         # Performance metrics
         self.metrics = OptimizationMetrics()
 
@@ -252,7 +255,7 @@ class ClaudeAPIOptimizationSuite:
         self, request_data: Dict[str, Any], request_type: str = "general"
     ) -> Dict[str, Any]:
         """
-        Optimize a Claude API request through the complete optimization pipeline.
+        Optimize a Claude API request through the complete optimization pipeline (thread-safe).
 
         Args:
             request_data: The request data to optimize
@@ -265,12 +268,14 @@ class ClaudeAPIOptimizationSuite:
         optimization_applied = []
 
         try:
-            self.metrics.total_requests_processed += 1
+            async with self._lock:
+                self.metrics.total_requests_processed += 1
 
             # Step 1: Rate limiting check
             if self.rate_limiter and not await self._check_rate_limits(request_data):
-                self.metrics.requests_rate_limited += 1
-                self.metrics.conversation_crashes_prevented += 1
+                async with self._lock:
+                    self.metrics.requests_rate_limited += 1
+                    self.metrics.conversation_crashes_prevented += 1
 
                 # Try graceful degradation
                 if self.degradation_manager:
@@ -278,7 +283,8 @@ class ClaudeAPIOptimizationSuite:
                         str(request_data), {"type": request_type}
                     )
                     if fallback.success:
-                        self.metrics.requests_cached += 1
+                        async with self._lock:
+                            self.metrics.requests_cached += 1
                         return {
                             "status": "fallback",
                             "data": fallback.response,
@@ -292,7 +298,8 @@ class ClaudeAPIOptimizationSuite:
                 optimized = await self._optimize_todowrite_request(request_data)
                 if optimized:
                     optimization_applied.append("todowrite_optimization")
-                    self.metrics.requests_optimized += 1
+                    async with self._lock:
+                        self.metrics.requests_optimized += 1
                     return optimized
 
             # Step 3: Payload optimization
@@ -303,9 +310,10 @@ class ClaudeAPIOptimizationSuite:
                 if optimization_result.optimized:
                     request_data = optimization_result.optimized_payload
                     optimization_applied.append("payload_optimization")
-                    self.metrics.total_response_time_saved += (
-                        optimization_result.size_reduction / 1000
-                    )  # Estimate time saved
+                    async with self._lock:
+                        self.metrics.total_response_time_saved += (
+                            optimization_result.size_reduction / 1000
+                        )  # Estimate time saved
 
             # Step 4: Request batching
             if self.request_batcher and self._should_batch_request(request_type):
@@ -314,8 +322,9 @@ class ClaudeAPIOptimizationSuite:
                 )
                 if batched:
                     optimization_applied.append("request_batching")
-                    self.metrics.requests_batched += 1
-                    self.metrics.api_calls_saved += 1
+                    async with self._lock:
+                        self.metrics.requests_batched += 1
+                        self.metrics.api_calls_saved += 1
                     return batched
 
             # Step 5: Record tool usage for pattern analysis
@@ -337,20 +346,22 @@ class ClaudeAPIOptimizationSuite:
                     str(request_data), response["data"]
                 )
 
-            # Update metrics
+            # Update metrics (thread-safe)
             if optimization_applied:
-                self.metrics.requests_optimized += 1
+                async with self._lock:
+                    self.metrics.requests_optimized += 1
 
-            # Record optimization history
-            self.optimization_history.append(
-                {
-                    "timestamp": datetime.now().isoformat(),
-                    "request_type": request_type,
-                    "optimizations_applied": optimization_applied,
-                    "response_time": time.time() - start_time,
-                    "success": True,
-                }
-            )
+            # Record optimization history (thread-safe)
+            async with self._lock:
+                self.optimization_history.append(
+                    {
+                        "timestamp": datetime.now().isoformat(),
+                        "request_type": request_type,
+                        "optimizations_applied": optimization_applied,
+                        "response_time": time.time() - start_time,
+                        "success": True,
+                    }
+                )
 
             return {
                 "status": "success",
@@ -399,7 +410,7 @@ class ClaudeAPIOptimizationSuite:
     async def _optimize_todowrite_request(
         self, request_data: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
-        """Handle TodoWrite optimization specifically"""
+        """Handle TodoWrite optimization specifically (thread-safe)"""
         try:
             todos = request_data.get("todos", [])
             if not todos:
@@ -418,9 +429,10 @@ class ClaudeAPIOptimizationSuite:
                     optimized_count += 1
 
             if optimized_count > 0:
-                self.metrics.api_calls_saved += (
-                    len(todos) - 1
-                )  # N todos -> 1 optimized call
+                async with self._lock:
+                    self.metrics.api_calls_saved += (
+                        len(todos) - 1
+                    )  # N todos -> 1 optimized call
                 return {
                     "status": "optimized",
                     "message": f"{optimized_count} todos added for optimization",
@@ -539,18 +551,20 @@ class ClaudeAPIOptimizationSuite:
                 await asyncio.sleep(60)
 
     async def _background_degradation_monitoring(self):
-        """Background task for degradation monitoring"""
+        """Background task for degradation monitoring (thread-safe)"""
         while self.is_active:
             try:
                 await asyncio.sleep(30)  # Check every 30 seconds
 
                 if self.degradation_manager:
-                    status = self.degradation_manager.get_service_status()
+                    # get_service_status is now async
+                    status_obj = await self.degradation_manager.get_service_status()
+                    degradation_level = status_obj.degradation_level.name
 
                     # Adjust optimization based on service health
-                    if status["degradation_level"] == "EMERGENCY":
+                    if degradation_level == "EMERGENCY":
                         await self._adjust_optimization_mode(OptimizationMode.EMERGENCY)
-                    elif status["degradation_level"] == "MINIMAL":
+                    elif degradation_level == "MINIMAL":
                         await self._adjust_optimization_mode(
                             OptimizationMode.AGGRESSIVE
                         )
@@ -560,19 +574,22 @@ class ClaudeAPIOptimizationSuite:
                 await asyncio.sleep(60)
 
     async def _adjust_optimization_mode(self, new_mode: OptimizationMode):
-        """Dynamically adjust optimization mode based on conditions"""
-        if new_mode != self.current_mode:
-            logger.info(
-                f"Adjusting optimization mode from {self.current_mode.value} to {new_mode.value}"
-            )
-
+        """Dynamically adjust optimization mode based on conditions (thread-safe)"""
+        async with self._lock:
+            if new_mode == self.current_mode:
+                return  # No change needed
             old_mode = self.current_mode
             self.current_mode = new_mode
 
-            # Adjust component settings based on new mode
-            await self._reconfigure_components_for_mode(new_mode)
+        logger.info(
+            f"Adjusting optimization mode from {old_mode.value} to {new_mode.value}"
+        )
 
-            # Record mode change in history
+        # Adjust component settings based on new mode
+        await self._reconfigure_components_for_mode(new_mode)
+
+        # Record mode change in history (thread-safe)
+        async with self._lock:
             self.optimization_history.append(
                 {
                     "timestamp": datetime.now().isoformat(),
@@ -609,11 +626,23 @@ class ClaudeAPIOptimizationSuite:
                 self.rate_limiter.requests_per_minute = 15
                 self.rate_limiter.requests_per_hour = 800
 
-    def get_optimization_status(self) -> Dict[str, Any]:
-        """Get current optimization status and metrics"""
+    async def get_optimization_status(self) -> Dict[str, Any]:
+        """Get current optimization status and metrics (thread-safe)"""
+        async with self._lock:
+            is_active = self.is_active
+            current_mode = self.current_mode.value
+            total_requests = self.metrics.total_requests_processed
+            rate_limited = self.metrics.requests_rate_limited
+            optimized = self.metrics.requests_optimized
+            batched = self.metrics.requests_batched
+            cached = self.metrics.requests_cached
+            calls_saved = self.metrics.api_calls_saved
+            time_saved = self.metrics.total_response_time_saved
+            crashes_prevented = self.metrics.conversation_crashes_prevented
+
         return {
-            "is_active": self.is_active,
-            "current_mode": self.current_mode.value,
+            "is_active": is_active,
+            "current_mode": current_mode,
             "config": {
                 "rate_limiting_enabled": self.config.enable_rate_limiting,
                 "payload_optimization_enabled": self.config.enable_payload_optimization,
@@ -625,29 +654,23 @@ class ClaudeAPIOptimizationSuite:
                 "pattern_analysis_enabled": self.config.enable_pattern_analysis,
             },
             "metrics": {
-                "total_requests_processed": self.metrics.total_requests_processed,
-                "requests_rate_limited": self.metrics.requests_rate_limited,
-                "requests_optimized": self.metrics.requests_optimized,
-                "requests_batched": self.metrics.requests_batched,
-                "requests_cached": self.metrics.requests_cached,
-                "api_calls_saved": self.metrics.api_calls_saved,
-                "total_response_time_saved": self.metrics.total_response_time_saved,
-                "conversation_crashes_prevented": (
-                    self.metrics.conversation_crashes_prevented
-                ),
+                "total_requests_processed": total_requests,
+                "requests_rate_limited": rate_limited,
+                "requests_optimized": optimized,
+                "requests_batched": batched,
+                "requests_cached": cached,
+                "api_calls_saved": calls_saved,
+                "total_response_time_saved": time_saved,
+                "conversation_crashes_prevented": crashes_prevented,
                 "optimization_efficiency": (
-                    (
-                        self.metrics.api_calls_saved
-                        / max(1, self.metrics.total_requests_processed)
-                    )
-                    * 100
+                    (calls_saved / max(1, total_requests)) * 100
                 ),
             },
-            "component_status": self._get_component_status(),
+            "component_status": await self._get_component_status(),
         }
 
-    def _get_component_status(self) -> Dict[str, Any]:
-        """Get status of all optimization components"""
+    async def _get_component_status(self) -> Dict[str, Any]:
+        """Get status of all optimization components (thread-safe)"""
         status = {}
 
         if self.rate_limiter:
@@ -679,22 +702,38 @@ class ClaudeAPIOptimizationSuite:
             }
 
         if self.degradation_manager:
-            degradation_status = self.degradation_manager.get_service_status()
+            # get_service_status is now async
+            status_obj = await self.degradation_manager.get_service_status()
             status["degradation_manager"] = {
                 "active": True,
-                "degradation_level": degradation_status["degradation_level"],
-                "service_health": degradation_status["health_score"],
+                "degradation_level": status_obj.degradation_level.name,
+                "service_health": status_obj.health.value,
             }
 
         return status
 
-    def get_comprehensive_report(self) -> Dict[str, Any]:
-        """Get comprehensive optimization report"""
+    async def get_comprehensive_report(self) -> Dict[str, Any]:
+        """Get comprehensive optimization report (thread-safe)"""
+        # Copy data under lock
+        async with self._lock:
+            metrics_copy = {
+                "total_requests_processed": self.metrics.total_requests_processed,
+                "requests_rate_limited": self.metrics.requests_rate_limited,
+                "requests_optimized": self.metrics.requests_optimized,
+                "requests_batched": self.metrics.requests_batched,
+                "requests_cached": self.metrics.requests_cached,
+                "api_calls_saved": self.metrics.api_calls_saved,
+                "total_response_time_saved": self.metrics.total_response_time_saved,
+                "conversation_crashes_prevented": self.metrics.conversation_crashes_prevented,
+                "last_reset_time": self.metrics.last_reset_time.isoformat(),
+            }
+            history_copy = list(self.optimization_history[-20:])
+
         report = {
             "report_generated_at": datetime.now().isoformat(),
-            "optimization_suite_status": self.get_optimization_status(),
-            "detailed_metrics": self.metrics.__dict__,
-            "optimization_history": self.optimization_history[-20:],  # Last 20 events
+            "optimization_suite_status": await self.get_optimization_status(),
+            "detailed_metrics": metrics_copy,
+            "optimization_history": history_copy,
             "component_reports": {},
         }
 
@@ -717,7 +756,7 @@ class ClaudeAPIOptimizationSuite:
         return report
 
     async def force_optimization_analysis(self) -> Dict[str, Any]:
-        """Force immediate optimization analysis across all components"""
+        """Force immediate optimization analysis across all components (thread-safe)"""
         analysis_results = {}
 
         try:
@@ -743,8 +782,9 @@ class ClaudeAPIOptimizationSuite:
                 api_insights = self.api_monitor.get_optimization_recommendations()
                 analysis_results["api_monitoring"] = api_insights
 
-            # Update metrics
-            self.metrics.requests_optimized += 1
+            # Update metrics (thread-safe)
+            async with self._lock:
+                self.metrics.requests_optimized += 1
 
             return {
                 "status": "success",
@@ -760,18 +800,19 @@ class ClaudeAPIOptimizationSuite:
                 "timestamp": datetime.now().isoformat(),
             }
 
-    def reset_metrics(self):
-        """Reset all optimization metrics"""
-        self.metrics = OptimizationMetrics()
-        self.optimization_history.clear()
+    async def reset_metrics(self):
+        """Reset all optimization metrics (thread-safe)"""
+        async with self._lock:
+            self.metrics = OptimizationMetrics()
+            self.optimization_history.clear()
         logger.info("Optimization metrics reset")
 
     async def export_optimization_report(self, file_path: str) -> bool:
         """Export comprehensive optimization report to file"""
         try:
-            report = self.get_comprehensive_report()
+            report = await self.get_comprehensive_report()
 
-            with open(file_path, "w") as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2, default=str)
 
             logger.info(f"Optimization report exported to {file_path}")
@@ -834,10 +875,10 @@ async def optimize_todowrite(todos: List[Dict[str, Any]]) -> Dict[str, Any]:
     return await optimize_claude_request({"todos": todos}, "todowrite")
 
 
-def get_optimization_insights() -> Dict[str, Any]:
+async def get_optimization_insights() -> Dict[str, Any]:
     """Get current optimization insights and recommendations"""
     suite = get_optimization_suite()
-    return suite.get_optimization_status()
+    return await suite.get_optimization_status()
 
 
 # Example usage and testing

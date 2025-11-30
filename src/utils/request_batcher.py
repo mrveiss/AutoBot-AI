@@ -264,6 +264,9 @@ class IntelligentRequestBatcher:
         self.active_batches: Dict[str, asyncio.Task] = {}
         self.batch_results: Dict[str, BatchResult] = {}
 
+        # Lock for thread-safe stats access
+        self._stats_lock = asyncio.Lock()
+
         # Statistics
         self.stats = {
             "total_requests": 0,
@@ -293,8 +296,9 @@ class IntelligentRequestBatcher:
         logger.info("Intelligent request batcher stopped")
 
     async def add_request(self, request: BatchableRequest) -> str:
-        """Add a request to the batching queue"""
-        self.stats["total_requests"] += 1
+        """Add a request to the batching queue (thread-safe)"""
+        async with self._stats_lock:
+            self.stats["total_requests"] += 1
         self.pending_requests[request.id] = request
         self.request_queues[request.priority].append(request.id)
 
@@ -374,7 +378,8 @@ class IntelligentRequestBatcher:
             batch = await self._create_adaptive_batch(queue)
 
         if batch:
-            self.stats["strategy_usage"][strategy] += 1
+            async with self._stats_lock:
+                self.stats["strategy_usage"][strategy] += 1
 
         return batch
 
@@ -526,7 +531,7 @@ class IntelligentRequestBatcher:
             )
 
             self.batch_results[batch_id] = result
-            self._update_statistics(batch, result)
+            await self._update_statistics(batch, result)
             self.adaptive_engine.record_batch_result(strategy, result)
 
             # Execute callbacks
@@ -604,31 +609,39 @@ class IntelligentRequestBatcher:
 
         return individual_responses
 
-    def _update_statistics(self, batch: List[BatchableRequest], result: BatchResult):
-        """Update batching statistics"""
-        self.stats["total_batches"] += 1
-        self.stats["requests_batched"] += len(batch)
+    async def _update_statistics(
+        self, batch: List[BatchableRequest], result: BatchResult
+    ):
+        """Update batching statistics (thread-safe)"""
+        async with self._stats_lock:
+            self.stats["total_batches"] += 1
+            self.stats["requests_batched"] += len(batch)
 
-        # Update average batch size
-        total_requests = self.stats["requests_batched"]
-        total_batches = self.stats["total_batches"]
-        self.stats["average_batch_size"] = (
-            total_requests / total_batches if total_batches > 0 else 0
-        )
+            # Update average batch size
+            total_requests = self.stats["requests_batched"]
+            total_batches = self.stats["total_batches"]
+            self.stats["average_batch_size"] = (
+                total_requests / total_batches if total_batches > 0 else 0
+            )
 
-        # Calculate efficiency gain (requests processed vs individual API calls)
-        individual_calls = self.stats["total_requests"]
-        batch_calls = self.stats["total_batches"]
-        self.stats["efficiency_gain"] = (
-            (individual_calls - batch_calls) / individual_calls
-            if individual_calls > 0
-            else 0
-        )
+            # Calculate efficiency gain (requests processed vs individual API calls)
+            individual_calls = self.stats["total_requests"]
+            batch_calls = self.stats["total_batches"]
+            self.stats["efficiency_gain"] = (
+                (individual_calls - batch_calls) / individual_calls
+                if individual_calls > 0
+                else 0
+            )
 
-    def get_statistics(self) -> Dict[str, Any]:
-        """Get current batching statistics"""
+    async def get_statistics(self) -> Dict[str, Any]:
+        """Get current batching statistics (thread-safe)"""
+        async with self._stats_lock:
+            stats_copy = dict(self.stats)
+            # Deep copy strategy_usage since it's a defaultdict
+            stats_copy["strategy_usage"] = dict(self.stats["strategy_usage"])
+
         return {
-            **self.stats,
+            **stats_copy,
             "pending_requests": len(self.pending_requests),
             "active_batches": len(self.active_batches),
             "queue_sizes": {
@@ -698,7 +711,7 @@ async def main():
 
         # Print statistics
         print("\nBatching Statistics:")
-        stats = batcher.get_statistics()
+        stats = await batcher.get_statistics()
         for key, value in stats.items():
             print(f"  {key}: {value}")
 
