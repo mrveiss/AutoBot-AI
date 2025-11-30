@@ -4,6 +4,10 @@
 
 import appConfig from './AppConfig.js';
 import { buildDefaultServiceUrl } from './defaults.js';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for environment config
+const logger = createLogger('EnvConfig');
 
 // Legacy API_CONFIG with AppConfig.js integration
 export const API_CONFIG = {
@@ -18,14 +22,14 @@ export const API_CONFIG = {
     const isViteDevServer = window.location.port === '5173';
 
     if (isViteDevServer && import.meta.env.DEV) {
-      console.log('[AutoBot Legacy] PROXY MODE: Using Vite proxy (empty baseUrl)');
+      logger.debug('PROXY MODE: Using Vite proxy (empty baseUrl)');
       return ''; // Empty string forces relative URLs which go through Vite proxy
     }
 
     // DIRECT MODE: Use actual backend IP for production or non-proxy environments
     if (backendHost && backendPort && protocol) {
       const directUrl = `${protocol}://${backendHost}:${backendPort}`;
-      console.log('[AutoBot Legacy] DIRECT MODE: Using backend URL:', directUrl);
+      logger.debug('DIRECT MODE: Using backend URL:', directUrl);
       return directUrl;
     }
 
@@ -207,7 +211,7 @@ export function getApiUrl(endpoint = '', options = {}) {
 
   // Enhanced logging for debugging
   if (API_CONFIG.ENABLE_DEBUG || window.location.port === '5173') {
-    console.log('[AutoBot Legacy] getApiUrl:', {
+    logger.debug('getApiUrl:', {
       baseUrl: baseUrl,
       endpoint: endpoint,
       fullUrl: fullUrl,
@@ -236,7 +240,7 @@ export async function fetchApi(endpoint, options = {}) {
   try {
     return await appConfig.fetchApi(endpoint, options);
   } catch (appConfigError) {
-    console.warn('[AutoBot Legacy] AppConfig.fetchApi failed, using legacy implementation:', appConfigError.message);
+    logger.warn('AppConfig.fetchApi failed, using legacy implementation:', appConfigError.message);
 
     // Fallback to legacy implementation
     const url = getApiUrl(endpoint, options);
@@ -272,7 +276,7 @@ export async function fetchApi(endpoint, options = {}) {
 
       // Log response for debugging
       if (API_CONFIG.ENABLE_DEBUG) {
-        console.log('[AutoBot Legacy] API Response:', {
+        logger.debug('API Response:', {
           url,
           status: response.status,
           headers: Object.fromEntries(response.headers.entries())
@@ -282,7 +286,7 @@ export async function fetchApi(endpoint, options = {}) {
       return response;
     } catch (error) {
       clearTimeout(timeoutId);
-      console.error('[AutoBot Legacy] API fetch failed:', error);
+      logger.error('API fetch failed:', error);
       throw error;
     }
   }
@@ -297,20 +301,20 @@ export async function validateApiConnection() {
     });
     return response.ok;
   } catch (error) {
-    console.error('API connection validation failed:', error);
+    logger.error('API connection validation failed:', error);
     return false;
   }
 }
 
 // Cache invalidation function - delegate to AppConfig if available
 export function invalidateApiCache() {
-  console.log('[AutoBot Legacy] Invalidating API cache...');
+  logger.info('Invalidating API cache...');
 
   // Try to use AppConfig invalidation first
   try {
     appConfig.invalidateCache();
   } catch (error) {
-    console.warn('[AutoBot Legacy] AppConfig cache invalidation failed, using legacy:', error.message);
+    logger.warn('AppConfig cache invalidation failed, using legacy:', error.message);
   }
 
   // Update cache bust version
@@ -332,7 +336,7 @@ export function invalidateApiCache() {
     }
   });
 
-  console.log('[AutoBot Legacy] API cache invalidated');
+  logger.info('API cache invalidated');
 }
 
 export default {
