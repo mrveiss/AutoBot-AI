@@ -753,8 +753,11 @@ OS-specific commands.
         logger.info("All processes killed")
 
 
-# Global instance for reuse
+# Global instance for reuse (thread-safe)
+import asyncio as _asyncio
+
 _agent_instance: Optional[IntelligentAgent] = None
+_agent_lock = _asyncio.Lock()
 
 
 async def get_intelligent_agent(
@@ -764,7 +767,7 @@ async def get_intelligent_agent(
     command_validator: CommandValidator = None,
 ) -> IntelligentAgent:
     """
-    Get singleton intelligent agent instance.
+    Get singleton intelligent agent instance (thread-safe).
 
     Args:
         llm_interface: LLM interface instance
@@ -777,13 +780,16 @@ async def get_intelligent_agent(
     """
     global _agent_instance
     if _agent_instance is None:
-        if not all([llm_interface, knowledge_base, worker_node, command_validator]):
-            raise ValueError("All components required for first initialization")
+        async with _agent_lock:
+            # Double-check after acquiring lock
+            if _agent_instance is None:
+                if not all([llm_interface, knowledge_base, worker_node, command_validator]):
+                    raise ValueError("All components required for first initialization")
 
-        _agent_instance = IntelligentAgent(
-            llm_interface, knowledge_base, worker_node, command_validator
-        )
-        await _agent_instance.initialize()
+                _agent_instance = IntelligentAgent(
+                    llm_interface, knowledge_base, worker_node, command_validator
+                )
+                await _agent_instance.initialize()
 
     return _agent_instance
 

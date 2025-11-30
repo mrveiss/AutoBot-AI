@@ -988,13 +988,16 @@ class ConversationFileManager:
             connection.close()
 
 
-# Global instance (singleton pattern)
+# Global instance (singleton pattern, thread-safe)
+import asyncio as _asyncio
+
 _conversation_file_manager_instance: Optional[ConversationFileManager] = None
+_conversation_file_manager_lock = _asyncio.Lock()
 
 
 async def get_conversation_file_manager() -> ConversationFileManager:
     """
-    Get global ConversationFileManager instance.
+    Get global ConversationFileManager instance (thread-safe).
 
     Returns:
         ConversationFileManager: Global manager instance
@@ -1002,7 +1005,10 @@ async def get_conversation_file_manager() -> ConversationFileManager:
     global _conversation_file_manager_instance
 
     if _conversation_file_manager_instance is None:
-        _conversation_file_manager_instance = ConversationFileManager()
-        logger.info("Created global ConversationFileManager instance")
+        async with _conversation_file_manager_lock:
+            # Double-check after acquiring lock
+            if _conversation_file_manager_instance is None:
+                _conversation_file_manager_instance = ConversationFileManager()
+                logger.info("Created global ConversationFileManager instance")
 
     return _conversation_file_manager_instance

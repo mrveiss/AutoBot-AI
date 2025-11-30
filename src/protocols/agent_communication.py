@@ -696,14 +696,21 @@ class AgentCommunicationManager:
 
 
 # Global communication manager instance
+# Singleton instance (thread-safe)
+import threading
+
 _communication_manager = None
+_communication_manager_lock = threading.Lock()
 
 
 def get_communication_manager() -> AgentCommunicationManager:
-    """Get global communication manager instance"""
+    """Get global communication manager instance (thread-safe)"""
     global _communication_manager
     if _communication_manager is None:
-        _communication_manager = AgentCommunicationManager()
+        with _communication_manager_lock:
+            # Double-check after acquiring lock
+            if _communication_manager is None:
+                _communication_manager = AgentCommunicationManager()
     return _communication_manager
 
 
