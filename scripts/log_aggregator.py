@@ -30,6 +30,7 @@ import asyncio
 import json
 import re
 import sys
+import threading
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -87,6 +88,9 @@ class LogAggregator:
             "module": r"\[([^\]]+)\]",
             "message": r"(.+)$",
         }
+
+        # Lock for thread-safe alerts file access
+        self._alerts_lock = threading.Lock()
 
         # Alert patterns
         self.alert_patterns = [
@@ -428,24 +432,26 @@ class LogAggregator:
             "log_entry": log_entry,
         }
 
-        # Save alert to file
+        # Save alert to file (thread-safe)
         alert_file = self.logs_dir / "alerts.json"
-        alerts = []
-        if alert_file.exists():
-            try:
-                with open(alert_file, "r") as f:
-                    alerts = json.load(f)
-            except Exception:
-                alerts = []
 
-        alerts.append(alert)
+        with self._alerts_lock:
+            alerts = []
+            if alert_file.exists():
+                try:
+                    with open(alert_file, "r") as f:
+                        alerts = json.load(f)
+                except Exception:
+                    alerts = []
 
-        # Keep last 1000 alerts
-        if len(alerts) > 1000:
-            alerts = alerts[-1000:]
+            alerts.append(alert)
 
-        with open(alert_file, "w") as f:
-            json.dump(alerts, f, indent=2)
+            # Keep last 1000 alerts
+            if len(alerts) > 1000:
+                alerts = alerts[-1000:]
+
+            with open(alert_file, "w") as f:
+                json.dump(alerts, f, indent=2)
 
         # Print alert notification
         print(f"\n🚨 ALERT: {alert_config['description']} in {source}")

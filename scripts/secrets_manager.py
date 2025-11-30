@@ -31,6 +31,7 @@ import getpass
 import json
 import os
 import sys
+import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -77,6 +78,10 @@ class SecretsManager:
         self.master_key_file = self.secrets_dir / ".master_key"
         self.secrets_index_file = self.secrets_dir / "secrets_index.json"
         self.audit_log_file = self.secrets_dir / "audit_log.json"
+
+        # Thread-safety locks
+        self._index_lock = threading.Lock()
+        self._audit_lock = threading.Lock()
 
         # Initialize encryption
         self.cipher_suite = self._initialize_encryption()
@@ -147,13 +152,14 @@ class SecretsManager:
         return {"secrets": {}, "chats": {}}
 
     def _save_secrets_index(self):
-        """Save secrets index."""
-        try:
-            with open(self.secrets_index_file, "w") as f:
-                json.dump(self.secrets_index, f, indent=2)
-            os.chmod(self.secrets_index_file, 0o600)
-        except Exception as e:
-            self.print_step(f"Error saving secrets index: {e}", "error")
+        """Save secrets index (thread-safe)."""
+        with self._index_lock:
+            try:
+                with open(self.secrets_index_file, "w") as f:
+                    json.dump(self.secrets_index, f, indent=2)
+                os.chmod(self.secrets_index_file, 0o600)
+            except Exception as e:
+                self.print_step(f"Error saving secrets index: {e}", "error")
 
     def _log_audit_event(
         self,
@@ -163,7 +169,7 @@ class SecretsManager:
         chat_id: str = None,
         details: str = None,
     ):
-        """Log security audit event."""
+        """Log security audit event (thread-safe)."""
         audit_event = {
             "timestamp": datetime.now().isoformat(),
             "action": action,
@@ -175,25 +181,26 @@ class SecretsManager:
             "pid": os.getpid(),
         }
 
-        # Load existing audit log
-        audit_log = []
-        if self.audit_log_file.exists():
-            try:
-                with open(self.audit_log_file, "r") as f:
-                    audit_log = json.load(f)
-            except Exception:
-                audit_log = []
+        with self._audit_lock:
+            # Load existing audit log
+            audit_log = []
+            if self.audit_log_file.exists():
+                try:
+                    with open(self.audit_log_file, "r") as f:
+                        audit_log = json.load(f)
+                except Exception:
+                    audit_log = []
 
-        audit_log.append(audit_event)
+            audit_log.append(audit_event)
 
-        # Keep last 1000 events
-        if len(audit_log) > 1000:
-            audit_log = audit_log[-1000:]
+            # Keep last 1000 events
+            if len(audit_log) > 1000:
+                audit_log = audit_log[-1000:]
 
-        # Save audit log
-        with open(self.audit_log_file, "w") as f:
-            json.dump(audit_log, f, indent=2)
-        os.chmod(self.audit_log_file, 0o600)
+            # Save audit log
+            with open(self.audit_log_file, "w") as f:
+                json.dump(audit_log, f, indent=2)
+            os.chmod(self.audit_log_file, 0o600)
 
     def generate_secret_id(self) -> str:
         """Generate unique secret ID."""
@@ -243,14 +250,15 @@ class SecretsManager:
             f.write(encrypted_value)
         os.chmod(secret_file, 0o600)
 
-        # Update index
-        self.secrets_index["secrets"][secret_id] = secret_metadata
+        # Update index (thread-safe)
+        with self._index_lock:
+            self.secrets_index["secrets"][secret_id] = secret_metadata
 
-        # Update chat index if chat-scoped
-        if scope == SecretScope.CHAT and chat_id:
-            if chat_id not in self.secrets_index["chats"]:
-                self.secrets_index["chats"][chat_id] = []
-            self.secrets_index["chats"][chat_id].append(secret_id)
+            # Update chat index if chat-scoped
+            if scope == SecretScope.CHAT and chat_id:
+                if chat_id not in self.secrets_index["chats"]:
+                    self.secrets_index["chats"][chat_id] = []
+                self.secrets_index["chats"][chat_id].append(secret_id)
 
         self._save_secrets_index()
 
@@ -267,16 +275,20 @@ class SecretsManager:
         return secret_id
 
     def get_secret(self, secret_id: str, chat_id: str = None) -> Optional[str]:
-        """Retrieve and decrypt a secret."""
-        if secret_id not in self.secrets_index["secrets"]:
-            return None
+        """Retrieve and decrypt a secret (thread-safe)."""
+        # Thread-safe read of metadata
+        with self._index_lock:
+            if secret_id not in self.secrets_index["secrets"]:
+                return None
+            secret_metadata = self.secrets_index["secrets"][secret_id]
+            secret_scope = secret_metadata["scope"]
+            secret_chat_id = secret_metadata.get("chat_id")
+            secret_name = secret_metadata["name"]
 
-        secret_metadata = self.secrets_index["secrets"][secret_id]
-
-        # Check access permissions
-        if secret_metadata["scope"] == SecretScope.CHAT:
-            if not chat_id or secret_metadata["chat_id"] != chat_id:
-                self.print_step(f"Access denied to chat-scoped secret", "error")
+        # Check access permissions (outside lock)
+        if secret_scope == SecretScope.CHAT:
+            if not chat_id or secret_chat_id != chat_id:
+                self.print_step("Access denied to chat-scoped secret", "error")
                 return None
 
         try:
@@ -291,18 +303,22 @@ class SecretsManager:
 
             decrypted_value = self.cipher_suite.decrypt(encrypted_value).decode()
 
-            # Update access statistics
-            secret_metadata["access_count"] += 1
-            secret_metadata["last_accessed"] = datetime.now().isoformat()
+            # Update access statistics (thread-safe)
+            with self._index_lock:
+                if secret_id in self.secrets_index["secrets"]:
+                    self.secrets_index["secrets"][secret_id]["access_count"] += 1
+                    self.secrets_index["secrets"][secret_id][
+                        "last_accessed"
+                    ] = datetime.now().isoformat()
             self._save_secrets_index()
 
             # Log audit event
             self._log_audit_event(
                 "access_secret",
                 secret_id,
-                secret_metadata["scope"],
+                secret_scope,
                 chat_id,
-                f"Accessed secret: {secret_metadata['name']}",
+                f"Accessed secret: {secret_name}",
             )
 
             return decrypted_value
@@ -314,10 +330,14 @@ class SecretsManager:
     def list_secrets(
         self, scope: str = None, chat_id: str = None, secret_type: str = None
     ) -> List[Dict[str, Any]]:
-        """List secrets with filtering options."""
+        """List secrets with filtering options (thread-safe)."""
         secrets = []
 
-        for secret_id, metadata in self.secrets_index["secrets"].items():
+        # Thread-safe iteration over secrets index
+        with self._index_lock:
+            secrets_copy = dict(self.secrets_index["secrets"])
+
+        for secret_id, metadata in secrets_copy.items():
             # Apply filters
             if scope and metadata["scope"] != scope:
                 continue
@@ -399,17 +419,21 @@ class SecretsManager:
             return False
 
     def delete_secret(self, secret_id: str, chat_id: str = None) -> bool:
-        """Delete a secret."""
-        if secret_id not in self.secrets_index["secrets"]:
-            self.print_step(f"Secret not found: {secret_id}", "error")
-            return False
+        """Delete a secret (thread-safe)."""
+        # Thread-safe read of metadata
+        with self._index_lock:
+            if secret_id not in self.secrets_index["secrets"]:
+                self.print_step(f"Secret not found: {secret_id}", "error")
+                return False
+            secret_metadata = self.secrets_index["secrets"][secret_id].copy()
+            secret_scope = secret_metadata["scope"]
+            secret_chat_id = secret_metadata.get("chat_id")
+            secret_name = secret_metadata["name"]
 
-        secret_metadata = self.secrets_index["secrets"][secret_id]
-
-        # Check permissions
-        if secret_metadata["scope"] == SecretScope.CHAT:
-            if not chat_id or secret_metadata["chat_id"] != chat_id:
-                self.print_step(f"Access denied to chat-scoped secret", "error")
+        # Check permissions (outside lock)
+        if secret_scope == SecretScope.CHAT:
+            if not chat_id or secret_chat_id != chat_id:
+                self.print_step("Access denied to chat-scoped secret", "error")
                 return False
 
         try:
@@ -418,31 +442,30 @@ class SecretsManager:
             if secret_file.exists():
                 secret_file.unlink()
 
-            # Remove from chat index if applicable
-            if (
-                secret_metadata["scope"] == SecretScope.CHAT
-                and secret_metadata["chat_id"]
-            ):
-                chat_secrets = self.secrets_index["chats"].get(
-                    secret_metadata["chat_id"], []
-                )
-                if secret_id in chat_secrets:
-                    chat_secrets.remove(secret_id)
+            # Thread-safe removal from index
+            with self._index_lock:
+                # Remove from chat index if applicable
+                if secret_scope == SecretScope.CHAT and secret_chat_id:
+                    chat_secrets = self.secrets_index["chats"].get(secret_chat_id, [])
+                    if secret_id in chat_secrets:
+                        chat_secrets.remove(secret_id)
 
-            # Remove from index
-            del self.secrets_index["secrets"][secret_id]
+                # Remove from index
+                if secret_id in self.secrets_index["secrets"]:
+                    del self.secrets_index["secrets"][secret_id]
+
             self._save_secrets_index()
 
             # Log audit event
             self._log_audit_event(
                 "delete_secret",
                 secret_id,
-                secret_metadata["scope"],
+                secret_scope,
                 chat_id,
-                f"Deleted secret: {secret_metadata['name']}",
+                f"Deleted secret: {secret_name}",
             )
 
-            self.print_step(f"Secret deleted: {secret_metadata['name']}", "success")
+            self.print_step(f"Secret deleted: {secret_name}", "success")
             return True
 
         except Exception as e:
@@ -450,34 +473,44 @@ class SecretsManager:
             return False
 
     def transfer_secret_to_general(self, secret_id: str, chat_id: str) -> bool:
-        """Transfer a chat-scoped secret to general scope."""
-        if secret_id not in self.secrets_index["secrets"]:
-            self.print_step(f"Secret not found: {secret_id}", "error")
-            return False
+        """Transfer a chat-scoped secret to general scope (thread-safe)."""
+        # Thread-safe read and validation
+        with self._index_lock:
+            if secret_id not in self.secrets_index["secrets"]:
+                self.print_step(f"Secret not found: {secret_id}", "error")
+                return False
 
-        secret_metadata = self.secrets_index["secrets"][secret_id]
+            secret_metadata = self.secrets_index["secrets"][secret_id]
+            secret_scope = secret_metadata["scope"]
+            secret_chat_id = secret_metadata.get("chat_id")
 
-        # Verify it's a chat-scoped secret from the correct chat
-        if (
-            secret_metadata["scope"] != SecretScope.CHAT
-            or secret_metadata["chat_id"] != chat_id
-        ):
-            self.print_step(
-                f"Cannot transfer: not a chat-scoped secret from chat {chat_id}",
-                "error",
-            )
-            return False
+            # Verify it's a chat-scoped secret from the correct chat
+            if secret_scope != SecretScope.CHAT or secret_chat_id != chat_id:
+                self.print_step(
+                    f"Cannot transfer: not a chat-scoped secret from chat {chat_id}",
+                    "error",
+                )
+                return False
 
         try:
-            # Update scope
-            secret_metadata["scope"] = SecretScope.GENERAL
-            secret_metadata["chat_id"] = None
-            secret_metadata["updated_at"] = datetime.now().isoformat()
+            # Thread-safe update
+            with self._index_lock:
+                # Re-check existence under lock
+                if secret_id not in self.secrets_index["secrets"]:
+                    return False
 
-            # Remove from chat index
-            chat_secrets = self.secrets_index["chats"].get(chat_id, [])
-            if secret_id in chat_secrets:
-                chat_secrets.remove(secret_id)
+                secret_metadata = self.secrets_index["secrets"][secret_id]
+                secret_name = secret_metadata["name"]
+
+                # Update scope
+                secret_metadata["scope"] = SecretScope.GENERAL
+                secret_metadata["chat_id"] = None
+                secret_metadata["updated_at"] = datetime.now().isoformat()
+
+                # Remove from chat index
+                chat_secrets = self.secrets_index["chats"].get(chat_id, [])
+                if secret_id in chat_secrets:
+                    chat_secrets.remove(secret_id)
 
             self._save_secrets_index()
 
@@ -487,11 +520,11 @@ class SecretsManager:
                 secret_id,
                 SecretScope.GENERAL,
                 chat_id,
-                f"Transferred secret to general scope: {secret_metadata['name']}",
+                f"Transferred secret to general scope: {secret_name}",
             )
 
             self.print_step(
-                f"Secret transferred to general scope: {secret_metadata['name']}",
+                f"Secret transferred to general scope: {secret_name}",
                 "success",
             )
             return True
@@ -623,39 +656,43 @@ class SecretsManager:
         return export_data
 
     def get_security_report(self) -> Dict[str, Any]:
-        """Generate security report."""
-        total_secrets = len(self.secrets_index["secrets"])
+        """Generate security report (thread-safe)."""
+        # Thread-safe read of secrets index
+        with self._index_lock:
+            secrets_copy = dict(self.secrets_index["secrets"])
+            active_chats_count = len(self.secrets_index["chats"])
+
+        total_secrets = len(secrets_copy)
         chat_secrets = sum(
-            1
-            for s in self.secrets_index["secrets"].values()
-            if s["scope"] == SecretScope.CHAT
+            1 for s in secrets_copy.values() if s["scope"] == SecretScope.CHAT
         )
         general_secrets = total_secrets - chat_secrets
 
         # Secret types distribution
         type_counts = {}
-        for secret in self.secrets_index["secrets"].values():
+        for secret in secrets_copy.values():
             secret_type = secret["type"]
             type_counts[secret_type] = type_counts.get(secret_type, 0) + 1
 
-        # Recent activity
+        # Recent activity (thread-safe read of audit log)
         recent_activity = []
-        if self.audit_log_file.exists():
-            try:
-                with open(self.audit_log_file, "r") as f:
-                    audit_log = json.load(f)
+        with self._audit_lock:
+            if self.audit_log_file.exists():
+                try:
+                    with open(self.audit_log_file, "r") as f:
+                        audit_log = json.load(f)
 
-                # Get last 10 events
-                recent_activity = audit_log[-10:]
-            except Exception:
-                pass
+                    # Get last 10 events
+                    recent_activity = audit_log[-10:]
+                except Exception:
+                    pass
 
         return {
             "generated_at": datetime.now().isoformat(),
             "total_secrets": total_secrets,
             "general_secrets": general_secrets,
             "chat_secrets": chat_secrets,
-            "active_chats": len(self.secrets_index["chats"]),
+            "active_chats": active_chats_count,
             "secret_types": type_counts,
             "recent_activity": recent_activity,
             "encryption_status": "active",
