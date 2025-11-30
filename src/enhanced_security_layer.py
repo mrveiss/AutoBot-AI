@@ -12,6 +12,8 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
+import logging
+
 from src.secure_command_executor import (
     CommandRisk,
     SecureCommandExecutor,
@@ -20,6 +22,8 @@ from src.secure_command_executor import (
 
 # Import the centralized ConfigManager
 from src.unified_config_manager import config as global_config_manager
+
+logger = logging.getLogger(__name__)
 
 
 class EnhancedSecurityLayer:
@@ -61,20 +65,20 @@ class EnhancedSecurityLayer:
                 from src.secure_sandbox_executor import secure_sandbox
 
                 self.sandbox_executor = secure_sandbox
-                print("Enhanced Docker sandbox executor initialized")
+                logger.info("Enhanced Docker sandbox executor initialized")
             except Exception as e:
-                print(f"Failed to initialize enhanced sandbox executor: {e}")
+                logger.warning(f"Failed to initialize enhanced sandbox executor: {e}")
 
         # Approval queue for async command approvals
         self.pending_approvals: Dict[str, asyncio.Event] = {}
         self.approval_results: Dict[str, bool] = {}
 
         os.makedirs(os.path.dirname(self.audit_log_file), exist_ok=True)
-        print("EnhancedSecurityLayer initialized.")
-        print(f"Authentication enabled: {self.enable_auth}")
-        print(f"Command security enabled: {self.enable_command_security}")
-        print(f"Docker sandbox: {self.use_docker_sandbox}")
-        print(f"Audit log file: {self.audit_log_file}")
+        logger.info("EnhancedSecurityLayer initialized")
+        logger.debug(f"Authentication enabled: {self.enable_auth}")
+        logger.debug(f"Command security enabled: {self.enable_command_security}")
+        logger.debug(f"Docker sandbox: {self.use_docker_sandbox}")
+        logger.debug(f"Audit log file: {self.audit_log_file}")
 
     def _create_security_policy(self) -> SecurityPolicy:
         """Create security policy from configuration"""
@@ -245,7 +249,7 @@ class EnhancedSecurityLayer:
         if action_type in default_permissions:
             return True
 
-        print(
+        logger.warning(
             f"Permission DENIED for role '{user_role}' to perform "
             f"action '{action_type}'"
         )
@@ -414,9 +418,9 @@ class EnhancedSecurityLayer:
         try:
             with open(self.audit_log_file, "a") as f:
                 f.write(json.dumps(log_entry) + "\n")
-            print(f"Audit log: {action} by {user} - {outcome}")
+            logger.debug(f"Audit log: {action} by {user} - {outcome}")
         except Exception as e:
-            print(f"ERROR: Failed to write to audit log: {e}")
+            logger.error(f"Failed to write to audit log: {e}")
 
     def get_command_history(
         self, user: Optional[str] = None, limit: int = 100

@@ -3,10 +3,13 @@
 # Author: mrveiss
 import datetime
 import json
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 from src.constants.network_constants import NetworkConstants
 
@@ -27,7 +30,7 @@ class SecurityLayer:
         # If single-user mode is enabled, disable all authentication
         if self.single_user_mode:
             self.enable_auth = False
-            print("🔓 Single-user mode enabled - authentication disabled")
+            logger.info("Single-user mode enabled - authentication disabled")
         else:
             self.enable_auth = self.security_config.get("enable_auth", False)
 
@@ -40,10 +43,10 @@ class SecurityLayer:
         )  # For simple demo auth
 
         os.makedirs(os.path.dirname(self.audit_log_file), exist_ok=True)
-        print(
-            "SecurityLayer initialized. Authentication enabled: " f"{self.enable_auth}"
+        logger.info(
+            f"SecurityLayer initialized. Authentication enabled: {self.enable_auth}"
         )
-        print(f"Audit log file: {self.audit_log_file}")
+        logger.debug(f"Audit log file: {self.audit_log_file}")
 
     def check_permission(
         self, user_role: str, action_type: str, resource: Optional[str] = None
@@ -109,7 +112,7 @@ class SecurityLayer:
         # e.g., if action_type is 'files.view' and resource contains 'sensitive'
         # then check for 'files.view_sensitive' permission
 
-        print(
+        logger.warning(
             f"Permission DENIED for role '{user_role}' to perform action "
             f"'{action_type}' on resource '{resource}'."
         )
@@ -186,11 +189,10 @@ class SecurityLayer:
         try:
             with open(self.audit_log_file, "a") as f:
                 f.write(json.dumps(log_entry) + "\n")
-            print(f"Audit log: {action} by {user} - {outcome}")
+            logger.debug(f"Audit log: {action} by {user} - {outcome}")
         except Exception as e:
-            print(
-                "ERROR: Failed to write to audit log file "
-                f"{self.audit_log_file}: {e}"
+            logger.error(
+                f"Failed to write to audit log file {self.audit_log_file}: {e}"
             )
 
     # Basic user authentication (for demo purposes)

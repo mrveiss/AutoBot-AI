@@ -46,6 +46,9 @@ class TerminalWebSocketManager:
         self._state = TerminalState.STOPPED
         self._state_lock = asyncio.Lock()
 
+        # Lock for thread-safe stats access
+        self._stats_lock = threading.Lock()
+
         # WebSocket and PTY resources
         self.websocket = None
         self.pty_fd: Optional[int] = None
@@ -110,7 +113,8 @@ class TerminalWebSocketManager:
 
         try:
             self.websocket = websocket
-            self.stats["start_time"] = time.time()
+            with self._stats_lock:
+                self.stats["start_time"] = time.time()
 
             # Create PTY with proper error handling
             await self._create_pty()
@@ -250,7 +254,8 @@ class TerminalWebSocketManager:
 
                         except Exception as e:
                             logger.error(f"Error processing PTY output: {e}")
-                            self.stats["errors"] += 1
+                            with self._stats_lock:
+                                self.stats["errors"] += 1
 
                 except OSError as e:
                     if e.errno in (9, 5):  # Bad file descriptor or I/O error
@@ -260,7 +265,8 @@ class TerminalWebSocketManager:
                     break
                 except Exception as e:
                     logger.error(f"Unexpected error in PTY reader: {e}")
-                    self.stats["errors"] += 1
+                    with self._stats_lock:
+                        self.stats["errors"] += 1
                     break
 
         except Exception as e:
@@ -318,10 +324,12 @@ class TerminalWebSocketManager:
                     ):
                         try:
                             await self.message_sender(message)
-                            self.stats["messages_sent"] += 1
+                            with self._stats_lock:
+                                self.stats["messages_sent"] += 1
                         except Exception as e:
                             logger.error(f"Error sending message: {e}")
-                            self.stats["errors"] += 1
+                            with self._stats_lock:
+                                self.stats["errors"] += 1
 
                 except asyncio.TimeoutError:
                     continue
@@ -329,7 +337,8 @@ class TerminalWebSocketManager:
                     continue
                 except Exception as e:
                     logger.error(f"Error in output sender loop: {e}")
-                    self.stats["errors"] += 1
+                    with self._stats_lock:
+                        self.stats["errors"] += 1
 
         except Exception as e:
             logger.error(f"Output sender loop crashed: {e}")
@@ -356,11 +365,13 @@ class TerminalWebSocketManager:
                 None, os.write, self.pty_fd, processed_input.encode("utf-8")
             )
 
-            self.stats["messages_received"] += 1
+            with self._stats_lock:
+                self.stats["messages_received"] += 1
 
         except Exception as e:
             logger.error(f"Error sending input to PTY: {e}")
-            self.stats["errors"] += 1
+            with self._stats_lock:
+                self.stats["errors"] += 1
             raise
 
     async def stop_session(self):
@@ -435,14 +446,18 @@ class TerminalWebSocketManager:
         self.websocket = None
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get session statistics."""
-        stats = self.stats.copy()
+        """Get session statistics (thread-safe)."""
+        # Copy stats and state under lock
+        with self._stats_lock:
+            stats = self.stats.copy()
+            state_value = self._state.value
+
         if stats["start_time"]:
             stats["uptime"] = time.time() - stats["start_time"]
         else:
             stats["uptime"] = 0
 
-        stats["state"] = self._state.value
+        stats["state"] = state_value
         stats["queue_size"] = self.output_queue.qsize()
         stats["reader_thread_alive"] = (
             self.reader_thread.is_alive() if self.reader_thread else False

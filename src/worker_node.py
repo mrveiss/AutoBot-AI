@@ -3,6 +3,7 @@
 # Author: mrveiss
 import asyncio
 import json
+import logging
 import os
 import platform
 import subprocess
@@ -11,6 +12,8 @@ from typing import Any, Dict
 
 import psutil
 
+logger = logging.getLogger(__name__)
+
 
 # Conditional torch import for environments without CUDA
 try:
@@ -18,7 +21,7 @@ try:
 
     TORCH_AVAILABLE = True
 except ImportError:
-    print("Warning: PyTorch not available or CUDA libraries missing")
+    logger.warning("PyTorch not available or CUDA libraries missing")
     TORCH_AVAILABLE = False
     torch = None
 
@@ -56,11 +59,11 @@ class WorkerNode:
             # Use centralized Redis client utility
             self.redis_client = get_redis_client(async_client=False)
             if self.redis_client:
-                print("Worker connected to Redis via centralized utility")
+                logger.info("Worker connected to Redis via centralized utility")
             else:
-                print("Worker failed to get Redis client from centralized utility")
+                logger.error("Worker failed to get Redis client from centralized utility")
         else:
-            print(
+            logger.info(
                 "Worker node configured for local task transport. "
                 "No Redis connection."
             )
@@ -185,9 +188,9 @@ class WorkerNode:
             gpu_devices = [d for d in available_devices if "GPU" in d]
 
             if npu_devices:
-                print(f"🚀 NPU acceleration available: {npu_devices}")
+                logger.info(f"NPU acceleration available: {npu_devices}")
             if gpu_devices:
-                print(f"🎮 OpenVINO GPU acceleration available: {gpu_devices}")
+                logger.info(f"OpenVINO GPU acceleration available: {gpu_devices}")
 
             return {
                 "openvino_available": True,
@@ -200,7 +203,7 @@ class WorkerNode:
         except ImportError:
             return {"openvino_available": False}
         except Exception as e:
-            print(f"⚠️ OpenVINO detection error: {e}")
+            logger.warning(f"OpenVINO detection error: {e}")
             return {"openvino_available": False}
 
     def _detect_onnx_capabilities(self) -> Dict[str, Any]:
@@ -231,9 +234,9 @@ class WorkerNode:
         if self.redis_client:
             channel = "worker_capabilities"
             self.redis_client.publish(channel, json.dumps(capabilities))
-            print(f"Worker capabilities reported to Redis channel '{channel}'.")
+            logger.info(f"Worker capabilities reported to Redis channel '{channel}'.")
         else:
-            print("Worker capabilities detected (local mode):", capabilities)
+            logger.debug(f"Worker capabilities detected (local mode): {capabilities}")
             await event_manager.publish("worker_capability_report", capabilities)
 
     async def execute_task(self, task_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -267,9 +270,9 @@ class WorkerNode:
             "worker_task_start",
             {"worker_id": self.worker_id, "task_id": task_id, "type": task_type},
         )
-        print(
+        logger.info(
             f"Worker {self.worker_id} executing task {task_id} of type "
-            f"'{task_type}' for role '{user_role}'..."
+            f"'{task_type}' for role '{user_role}'"
         )
 
         result = {"status": "error", "message": "Unknown task type."}
@@ -374,9 +377,8 @@ class WorkerNode:
                             "security_event": "shell_injection_attempt_blocked",
                         },
                     )
-                    print(
-                        "🚨 SECURITY: Blocked potentially dangerous command: "
-                        f"{command}"
+                    logger.warning(
+                        f"SECURITY: Blocked potentially dangerous command: {command}"
                     )
                 else:
                     # Command validated - proceed with secure execution
@@ -655,7 +657,7 @@ class WorkerNode:
             "worker_task_end",
             {"worker_id": self.worker_id, "task_id": task_id, "result": result},
         )
-        print(
+        logger.info(
             f"Worker {self.worker_id} finished task {task_id} with status: "
             f"{result['status']}"
         )
@@ -665,7 +667,7 @@ class WorkerNode:
         if self.redis_client:
             pubsub = self.redis_client.pubsub()
             pubsub.subscribe("orchestrator_tasks")
-            print(
+            logger.info(
                 f"Worker {self.worker_id} listening for tasks on "
                 "'orchestrator_tasks' channel."
             )
@@ -674,10 +676,10 @@ class WorkerNode:
                 if message["type"] == "message":
                     task_payload = json.loads(message["data"])
                     task_id = task_payload.get("task_id", "N/A")
-                    print(f"Worker {self.worker_id} received task: {task_id}")
+                    logger.info(f"Worker {self.worker_id} received task: {task_id}")
                     asyncio.create_task(self._process_and_respond(task_payload))
         else:
-            print(
+            logger.info(
                 f"Worker {self.worker_id} running in local task execution mode. "
                 "No external task listening."
             )
@@ -691,7 +693,7 @@ class WorkerNode:
         if self.redis_client:
             response_channel = f"worker_results_{task_id}"
             self.redis_client.publish(response_channel, json.dumps(result))
-            print(
+            logger.debug(
                 f"Worker {self.worker_id} sent result for task {task_id} to "
                 f"'{response_channel}'."
             )
@@ -699,6 +701,6 @@ class WorkerNode:
             pass
 
     async def start(self):
-        print(f"Worker Node {self.worker_id} starting...")
+        logger.info(f"Worker Node {self.worker_id} starting...")
         await self.report_capabilities()
         await self.listen_for_tasks()

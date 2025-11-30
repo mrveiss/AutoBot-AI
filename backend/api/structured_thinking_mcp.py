@@ -496,28 +496,29 @@ async def get_structured_session(session_id: str) -> Metadata:
 @router.get("/sessions")
 async def list_structured_sessions() -> Metadata:
     """List all active structured thinking sessions"""
-    sessions = []
-    for session_id, thoughts in structured_sessions.items():
-        # Calculate stage distribution
-        stage_counts = {}
-        for stage in ThinkingStage:
-            stage_counts[stage.value] = sum(
-                1 for t in thoughts if t["stage"] == stage.value
-            )
+    async with _structured_sessions_lock:
+        sessions = []
+        for session_id, thoughts in structured_sessions.items():
+            # Calculate stage distribution
+            stage_counts = {}
+            for stage in ThinkingStage:
+                stage_counts[stage.value] = sum(
+                    1 for t in thoughts if t["stage"] == stage.value
+                )
 
-        sessions.append(
-            {
-                "session_id": session_id,
-                "thought_count": len(thoughts),
-                "stage_distribution": stage_counts,
-                "started_at": thoughts[0]["timestamp"] if thoughts else None,
-                "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None,
-                "complete": (
-                    not thoughts[-1].get("next_thought_needed", True)
-                    if thoughts
-                    else False
-                ),
-            }
-        )
+            sessions.append(
+                {
+                    "session_id": session_id,
+                    "thought_count": len(thoughts),
+                    "stage_distribution": stage_counts,
+                    "started_at": thoughts[0]["timestamp"] if thoughts else None,
+                    "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None,
+                    "complete": (
+                        not thoughts[-1].get("next_thought_needed", True)
+                        if thoughts
+                        else False
+                    ),
+                }
+            )
 
     return {"session_count": len(sessions), "sessions": sessions}

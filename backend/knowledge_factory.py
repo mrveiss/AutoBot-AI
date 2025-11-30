@@ -3,6 +3,7 @@
 # Author: mrveiss
 """Knowledge Base Factory - Breaks circular import between api/knowledge.py and app_factory.py"""
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Module-level singleton for knowledge base instance (used when no app context available)
 _knowledge_base_instance: Optional["KnowledgeBase"] = None  # noqa: F821
+_knowledge_base_lock = asyncio.Lock()
 
 
 async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False):
@@ -103,7 +105,7 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
 
 async def get_knowledge_base_async() -> Optional["KnowledgeBase"]:  # noqa: F821
     """
-    Get or create a knowledge base instance without requiring FastAPI app context.
+    Get or create a knowledge base instance without requiring FastAPI app context (thread-safe).
 
     Uses a module-level singleton for cases where we don't have app access
     (e.g., ChatWorkflowManager initialization).
@@ -120,22 +122,30 @@ async def get_knowledge_base_async() -> Optional["KnowledgeBase"]:  # noqa: F821
                 logger.debug("Using existing knowledge base singleton")
                 return _knowledge_base_instance
 
-        # Create new instance
-        from src.knowledge_base import KnowledgeBase
+        # Use lock for thread-safe initialization
+        async with _knowledge_base_lock:
+            # Double-check after acquiring lock
+            if _knowledge_base_instance is not None:
+                if hasattr(_knowledge_base_instance, "initialized") and _knowledge_base_instance.initialized:
+                    logger.debug("Using existing knowledge base singleton (after lock)")
+                    return _knowledge_base_instance
 
-        logger.info("Creating KnowledgeBase singleton (no app context)...")
-        kb = KnowledgeBase()
+            # Create new instance
+            from src.knowledge_base import KnowledgeBase
 
-        logger.info("Initializing KnowledgeBase singleton...")
-        result = await kb.initialize()
+            logger.info("Creating KnowledgeBase singleton (no app context)...")
+            kb = KnowledgeBase()
 
-        if result:
-            _knowledge_base_instance = kb
-            logger.info("✅ Knowledge base singleton created and initialized")
-            return kb
-        else:
-            logger.error("❌ KnowledgeBase singleton initialization returned False")
-            return None
+            logger.info("Initializing KnowledgeBase singleton...")
+            result = await kb.initialize()
+
+            if result:
+                _knowledge_base_instance = kb
+                logger.info("✅ Knowledge base singleton created and initialized")
+                return kb
+            else:
+                logger.error("❌ KnowledgeBase singleton initialization returned False")
+                return None
 
     except ImportError as import_error:
         logger.error(f"❌ KnowledgeBase not available: {import_error}")
