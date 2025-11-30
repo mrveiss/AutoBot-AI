@@ -6,6 +6,10 @@
 
 import { ref, computed } from 'vue'
 import apiEndpointMapper from '@/utils/ApiEndpointMapper.js'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useSystemStatus
+const logger = createLogger('useSystemStatus')
 
 export function useSystemStatus() {
   // System status state
@@ -94,7 +98,7 @@ export function useSystemStatus() {
           })
         }
       } catch (vmError) {
-        console.warn('[useSystemStatus] Infrastructure endpoint failed:', vmError.message)
+        logger.warn('Infrastructure endpoint failed:', vmError.message)
         hasApiErrors = true
         // Add fallback infrastructure services
         updatedServices.push(
@@ -135,7 +139,7 @@ export function useSystemStatus() {
           })
         }
       } catch (servicesError) {
-        console.warn('[useSystemStatus] Services endpoint failed:', servicesError.message)
+        logger.warn('Services endpoint failed:', servicesError.message)
         hasApiErrors = true
         // Add fallback service statuses
         updatedServices.push(
@@ -178,7 +182,7 @@ export function useSystemStatus() {
 
       
     } catch (error) {
-      console.error('[useSystemStatus] Critical error during status refresh:', error)
+      logger.error('Critical error during status refresh:', error)
       
       // CRITICAL: Ensure app doesn't break - provide minimal working state
       systemServices.value = [

@@ -13,6 +13,10 @@
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import ApiClient from '@/utils/ApiClient'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useDocumentChanges
+const logger = createLogger('useDocumentChanges')
 
 export interface DocumentChange {
   document_id: string
@@ -108,7 +112,7 @@ export function useDocumentChanges() {
    */
   const scanForChanges = async (force = false, autoVectorize = false): Promise<ChangeDetectionResult | null> => {
     if (isScanning.value) {
-      console.warn('Scan already in progress')
+      logger.warn('Scan already in progress')
       return null
     }
 
@@ -131,7 +135,7 @@ export function useDocumentChanges() {
         // Store vectorization results if present
         if (result.vectorization) {
           lastVectorizationResult.value = result.vectorization
-          console.log('Vectorization completed:', result.vectorization)
+          logger.info('Vectorization completed:', result.vectorization)
         }
 
         // Merge new changes into recent changes
@@ -151,7 +155,7 @@ export function useDocumentChanges() {
 
       return null
     } catch (error) {
-      console.error('Failed to scan for changes:', error)
+      logger.error('Failed to scan for changes:', error)
       return null
     } finally {
       isScanning.value = false
