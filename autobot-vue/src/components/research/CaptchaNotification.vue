@@ -193,7 +193,9 @@ function stopTimer() {
 }
 
 function openVnc() {
-  const vncUrl = activeCaptcha.value?.vnc_url || 'http://127.0.0.1:6080/vnc.html'
+  // Use VNC URL from captcha response or fallback to environment variable
+  const defaultVncUrl = `http://${import.meta.env.VITE_LOCALHOST || 'localhost'}:${import.meta.env.VITE_VNC_PORT || '6080'}/vnc.html`
+  const vncUrl = activeCaptcha.value?.vnc_url || defaultVncUrl
   window.open(vncUrl, '_blank', 'noopener,noreferrer')
 }
 

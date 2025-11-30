@@ -31,7 +31,7 @@
       :height="height"
       :width="width"
       :options="mergedOptions"
-      :series="series"
+      :series="safeSeries"
     />
   </div>
 </template>
@@ -69,18 +69,25 @@ const props = withDefaults(defineProps<Props>(), {
 // Refs
 const chartRef = ref<InstanceType<typeof VueApexCharts> | null>(null)
 
+// Safe series - ensures we always pass a valid array to ApexCharts
+const safeSeries = computed(() => {
+  if (!props.series || !Array.isArray(props.series)) {
+    return []
+  }
+  return props.series
+})
+
 // Check if there's data to display
 const hasData = computed(() => {
-  if (!props.series || !Array.isArray(props.series)) return false
-  if (props.series.length === 0) return false
+  if (safeSeries.value.length === 0) return false
 
   // For pie/donut charts, check if values array has data
   if (props.type === 'pie' || props.type === 'donut') {
-    return props.series.some((value) => typeof value === 'number' && value > 0)
+    return safeSeries.value.some((value) => typeof value === 'number' && value > 0)
   }
 
   // For other charts, check if any series has data
-  return props.series.some((s) => {
+  return safeSeries.value.some((s) => {
     if (typeof s === 'number') return s > 0
     if (s && 'data' in s && Array.isArray(s.data)) return s.data.length > 0
     return false
@@ -359,14 +366,28 @@ const darkTheme: ApexOptions = {
   ]
 }
 
-// Deep merge options with dark theme
+// Deep merge options with dark theme (handles arrays properly)
 const deepMerge = (target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> => {
   const output = { ...target }
   for (const key of Object.keys(source)) {
-    if (source[key] instanceof Object && key in target && target[key] instanceof Object) {
-      output[key] = deepMerge(target[key] as Record<string, unknown>, source[key] as Record<string, unknown>)
+    const sourceValue = source[key]
+    const targetValue = target[key]
+
+    // Arrays should be replaced, not merged (prevents responsive array corruption)
+    if (Array.isArray(sourceValue)) {
+      output[key] = [...sourceValue]
+    } else if (
+      sourceValue !== null &&
+      typeof sourceValue === 'object' &&
+      !Array.isArray(sourceValue) &&
+      targetValue !== null &&
+      typeof targetValue === 'object' &&
+      !Array.isArray(targetValue)
+    ) {
+      // Deep merge objects
+      output[key] = deepMerge(targetValue as Record<string, unknown>, sourceValue as Record<string, unknown>)
     } else {
-      output[key] = source[key]
+      output[key] = sourceValue
     }
   }
   return output
