@@ -9,6 +9,10 @@ import { ref, computed } from 'vue'
 import { useKnowledgeBase } from './useKnowledgeBase'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useKnowledgeVectorization
+const logger = createLogger('useKnowledgeVectorization')
 
 export type VectorizationStatus = 'vectorized' | 'pending' | 'failed' | 'unknown'
 
@@ -92,7 +96,7 @@ export function useKnowledgeVectorization() {
       setDocumentStatus(documentId, 'pending')
       return 'pending'
     } catch (error) {
-      console.error('Failed to fetch document vectorization status:', error)
+      logger.error('Failed to fetch document vectorization status:', error)
       // On error, mark as unknown
       setDocumentStatus(documentId, 'unknown')
       return 'unknown'
@@ -127,7 +131,7 @@ export function useKnowledgeVectorization() {
         }
       }
     } catch (error) {
-      console.error('Failed to fetch batch vectorization status:', error)
+      logger.error('Failed to fetch batch vectorization status:', error)
       // Mark all as unknown on error
       documentIds.forEach(id => setDocumentStatus(id, 'unknown'))
     }
@@ -275,7 +279,7 @@ export function useKnowledgeVectorization() {
 
       return true
     } catch (error) {
-      console.error('Failed to vectorize document:', error)
+      logger.error('Failed to vectorize document:', error)
       setDocumentStatus(documentId, 'failed', 0, String(error))
       return false
     }
@@ -315,7 +319,7 @@ export function useKnowledgeVectorization() {
 
       return { succeeded, failed }
     } catch (error) {
-      console.error('Failed to vectorize batch:', error)
+      logger.error('Failed to vectorize batch:', error)
       documentIds.forEach(id => setDocumentStatus(id, 'failed', 0, String(error)))
       return { succeeded, failed: documentIds }
     }
@@ -347,7 +351,7 @@ export function useKnowledgeVectorization() {
 
       return result
     } catch (error) {
-      console.error('Failed to start background vectorization:', error)
+      logger.error('Failed to start background vectorization:', error)
       throw error
     }
   }
@@ -376,7 +380,7 @@ export function useKnowledgeVectorization() {
         }
       }
     } catch (error) {
-      console.error('Failed to poll vectorization status:', error)
+      logger.error('Failed to poll vectorization status:', error)
     }
   }
 
