@@ -262,6 +262,10 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for KnowledgeBrowser
+const logger = createLogger('KnowledgeBrowser')
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
@@ -398,7 +402,7 @@ const loadMore = async () => {
     entriesCursor.value = result.nextCursor
     hasMoreEntries.value = result.hasMore
   } catch (error) {
-    console.error('Failed to load more entries:', error)
+    logger.error('Failed to load more entries:', error)
   } finally {
     isLoadingMore.value = false
   }
@@ -629,7 +633,7 @@ const loadMainCategories = async () => {
       mainCategories.value = data.categories
     }
   } catch (err) {
-    console.error('Failed to load main categories:', err)
+    logger.error('Failed to load main categories:', err)
     // Set default categories if API fails
     mainCategories.value = [
       {
@@ -795,9 +799,9 @@ const handleVectorizeDocument = async (documentId: string) => {
   try {
     await vectorizeDocument(documentId)
     // Show success notification
-    console.log(`Document ${documentId} vectorized successfully`)
+    logger.info(`Document ${documentId} vectorized successfully`)
   } catch (error) {
-    console.error('Vectorization failed:', error)
+    logger.error('Vectorization failed:', error)
   } finally {
     isVectorizing.value = false
   }
@@ -828,21 +832,21 @@ const handleVectorizeFolder = async (folderNode: TreeNode) => {
   const documentIds = collectUnvectorizedFiles(folderNode)
 
   if (documentIds.length === 0) {
-    console.log('No unvectorized documents found in this folder')
+    logger.info('No unvectorized documents found in this folder')
     return
   }
 
-  console.log(`Starting batch vectorization for ${documentIds.length} documents in folder: ${folderNode.name}`)
+  logger.info(`Starting batch vectorization for ${documentIds.length} documents in folder: ${folderNode.name}`)
 
   isVectorizing.value = true
   showProgressModal.value = true
 
   try {
     const result = await vectorizeBatch(documentIds)
-    console.log('Folder vectorization complete:', result)
+    logger.info('Folder vectorization complete:', result)
     // Modal stays open to show results
   } catch (error) {
-    console.error('Folder vectorization failed:', error)
+    logger.error('Folder vectorization failed:', error)
   } finally {
     isVectorizing.value = false
   }
@@ -853,10 +857,10 @@ const vectorizeSelected = async () => {
   showProgressModal.value = true // Show progress modal
   try {
     const result = await vectorizeSelectedDocs()
-    console.log('Batch vectorization complete:', result)
+    logger.info('Batch vectorization complete:', result)
     // Keep modal open to show results
   } catch (error) {
-    console.error('Batch vectorization failed:', error)
+    logger.error('Batch vectorization failed:', error)
   } finally {
     isVectorizing.value = false
   }
@@ -874,7 +878,7 @@ const handleRetryFailed = async () => {
       try {
         await vectorizeDocument(docId)
       } catch (error) {
-        console.error(`Failed to retry vectorization for ${docId}:`, error)
+        logger.error(`Failed to retry vectorization for ${docId}:`, error)
       }
     }
     isVectorizing.value = false
@@ -886,7 +890,7 @@ const handleCancelVectorization = () => {
   isVectorizing.value = false
   showProgressModal.value = false
   // Note: Actual cancellation of backend jobs would need additional backend support
-  console.log('Vectorization cancelled by user')
+  logger.info('Vectorization cancelled by user')
 }
 
 const handlePopulate = async (categoryId: string) => {
@@ -924,9 +928,9 @@ const handlePopulate = async (categoryId: string) => {
     // Reload the knowledge tree to show new items
     await loadKnowledgeTree(loadKnowledgeTreeFn)
 
-    console.log(`${categoryId} population completed:`, result)
+    logger.info(`${categoryId} population completed:`, result)
   } catch (error) {
-    console.error(`Failed to populate ${categoryId}:`, error)
+    logger.error(`Failed to populate ${categoryId}:`, error)
     populationStates.value[categoryId] = { isPopulating: false, progress: 0 }
   }
 }
@@ -954,7 +958,7 @@ const loadFolderContents = async (folder: TreeNode) => {
       }))
     }
   } catch (err: any) {
-    console.error('Failed to load folder contents:', err)
+    logger.error('Failed to load folder contents:', err)
   }
 }
 

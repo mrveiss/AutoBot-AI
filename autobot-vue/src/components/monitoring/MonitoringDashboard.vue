@@ -343,6 +343,10 @@
 import { Chart, registerables } from 'chart.js'
 import 'chartjs-adapter-date-fns'
 import { getStatusIcon as getStatusIconUtil } from '@/utils/iconMappings'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for MonitoringDashboard
+const logger = createLogger('MonitoringDashboard')
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -448,7 +452,7 @@ export default {
             this.monitoringActive = status.active
           }
         } catch (statusError) {
-          console.warn('[MonitoringDashboard] Monitoring status unavailable, using fallback data:', statusError)
+          logger.warn('Monitoring status unavailable, using fallback data:', statusError)
           this.monitoringActive = false
         }
 
@@ -461,7 +465,7 @@ export default {
         })
 
       } catch (error) {
-        console.error('[MonitoringDashboard] Failed to initialize dashboard:', error)
+        logger.error('Failed to initialize dashboard:', error)
         this.$toast.error('Failed to initialize performance monitoring dashboard')
       } finally {
         this.loading = false
@@ -473,19 +477,19 @@ export default {
         // Fetch data from multiple sources in parallel for better performance
         const [dashboardResponse, resourcesResponse, servicesResponse, alertsResponse] = await Promise.all([
           fetch('/api/monitoring/dashboard/overview').catch(err => {
-            console.warn('[MonitoringDashboard] Dashboard overview fetch failed:', err.message)
+            logger.warn('Dashboard overview fetch failed:', err.message)
             return null
           }),
           fetch('/api/service-monitor/resources').catch(err => {
-            console.warn('[MonitoringDashboard] Resources fetch failed:', err.message)
+            logger.warn('Resources fetch failed:', err.message)
             return null
           }),
           fetch('/api/service-monitor/services').catch(err => {
-            console.warn('[MonitoringDashboard] Services fetch failed:', err.message)
+            logger.warn('Services fetch failed:', err.message)
             return null
           }),
           fetch('/api/monitoring/alerts/check').catch(err => {
-            console.warn('[MonitoringDashboard] Alerts fetch failed:', err.message)
+            logger.warn('Alerts fetch failed:', err.message)
             return null
           })
         ])
@@ -498,7 +502,7 @@ export default {
             this.gpuMetrics = this.dashboardData.gpu || this.dashboardData.gpu_status || null
             this.npuMetrics = this.dashboardData.npu || this.dashboardData.npu_status || null
           } catch (parseErr) {
-            console.error('[MonitoringDashboard] Failed to parse dashboard response:', parseErr)
+            logger.error('Failed to parse dashboard response:', parseErr)
           }
         }
 
@@ -534,7 +538,7 @@ export default {
               }
             }
           } catch (parseErr) {
-            console.error('[MonitoringDashboard] Failed to parse resources response:', parseErr)
+            logger.error('Failed to parse resources response:', parseErr)
           }
         }
 
@@ -545,7 +549,7 @@ export default {
             // Normalize services to array format consistently
             this.services = this.normalizeServicesData(servicesData.services || servicesData || [])
           } catch (parseErr) {
-            console.error('[MonitoringDashboard] Failed to parse services response:', parseErr)
+            logger.error('Failed to parse services response:', parseErr)
           }
         }
 
@@ -555,7 +559,7 @@ export default {
             const alertsData = await alertsResponse.json()
             this.allAlerts = alertsData.alerts || []
           } catch (parseErr) {
-            console.error('[MonitoringDashboard] Failed to parse alerts response:', parseErr)
+            logger.error('Failed to parse alerts response:', parseErr)
           }
         }
 
@@ -563,7 +567,7 @@ export default {
         await this.refreshRecommendations()
 
       } catch (error) {
-        console.error('[MonitoringDashboard] Failed to refresh dashboard:', error)
+        logger.error('Failed to refresh dashboard:', error)
         this.$toast.error('Failed to refresh dashboard data')
       }
     },
@@ -613,7 +617,7 @@ export default {
         }
         this.recommendations = await response.json()
       } catch (error) {
-        console.error('[MonitoringDashboard] Failed to get recommendations:', error)
+        logger.error('Failed to get recommendations:', error)
         this.$toast.warning('Failed to load optimization recommendations')
       }
     },
@@ -639,7 +643,7 @@ export default {
           throw new Error('Failed to toggle monitoring')
         }
       } catch (error) {
-        console.error('[MonitoringDashboard] Failed to toggle monitoring:', error)
+        logger.error('Failed to toggle monitoring:', error)
         this.$toast.error('Failed to toggle monitoring')
       } finally {
         this.loading = false
@@ -674,7 +678,7 @@ export default {
           const message = JSON.parse(event.data)
           this.handleWebSocketMessage(message)
         } catch (error) {
-          console.error('[MonitoringDashboard] Failed to parse WebSocket message:', error)
+          logger.error('Failed to parse WebSocket message:', error)
         }
       }
       
@@ -690,7 +694,7 @@ export default {
       }
       
       this.websocket.onerror = (error) => {
-        console.error('[MonitoringDashboard] WebSocket error:', error)
+        logger.error('WebSocket error:', error)
         this.connectionStatus = 'disconnected'
       }
     },
@@ -984,7 +988,7 @@ export default {
         chart.update('none')
 
       } catch (error) {
-        console.error(`[MonitoringDashboard] Failed to update ${category} chart:`, error)
+        logger.error(`Failed to update ${category} chart:`, error)
         this.$toast.warning(`Failed to update ${category} chart data`)
       }
     },
