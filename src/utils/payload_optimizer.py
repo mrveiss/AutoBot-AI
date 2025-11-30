@@ -479,13 +479,20 @@ class PayloadOptimizer:
         return chunks if chunks else [[]]
 
     def get_optimization_stats(self) -> Dict[str, Any]:
-        """Get optimization statistics"""
+        """Get optimization statistics (thread-safe)"""
+        # Copy stats under lock
+        with self._stats_lock:
+            total_optimizations = self.total_optimizations
+            total_size_saved = self.total_size_saved
+            compression_count = self.compression_count
+            chunking_count = self.chunking_count
+
         return {
-            "total_optimizations": self.total_optimizations,
-            "total_size_saved": self.total_size_saved,
-            "compression_count": self.compression_count,
-            "chunking_count": self.chunking_count,
-            "average_savings": self.total_size_saved / max(self.total_optimizations, 1),
+            "total_optimizations": total_optimizations,
+            "total_size_saved": total_size_saved,
+            "compression_count": compression_count,
+            "chunking_count": chunking_count,
+            "average_savings": total_size_saved / max(total_optimizations, 1),
             "settings": {
                 "max_size": self.max_size,
                 "warning_size": self.warning_size,
@@ -495,11 +502,12 @@ class PayloadOptimizer:
         }
 
     def reset_stats(self):
-        """Reset optimization statistics"""
-        self.total_optimizations = 0
-        self.total_size_saved = 0
-        self.compression_count = 0
-        self.chunking_count = 0
+        """Reset optimization statistics (thread-safe)"""
+        with self._stats_lock:
+            self.total_optimizations = 0
+            self.total_size_saved = 0
+            self.compression_count = 0
+            self.chunking_count = 0
 
 
 # Global instance (thread-safe)

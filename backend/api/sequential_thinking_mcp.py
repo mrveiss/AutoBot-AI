@@ -30,6 +30,9 @@ router = APIRouter(tags=["sequential_thinking_mcp", "mcp"])
 # In-memory storage for thinking sessions (could be moved to Redis for persistence)
 thinking_sessions: Dict[str, List[Metadata]] = {}
 
+# Lock for thread-safe access to thinking_sessions
+_thinking_sessions_lock = asyncio.Lock()
+
 
 class MCPTool(BaseModel):
     """Standard MCP tool definition"""
@@ -181,9 +184,10 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadat
     """
     session_id = request.session_id or "default"
 
-    # Initialize session if doesn't exist
-    if session_id not in thinking_sessions:
-        thinking_sessions[session_id] = []
+    async with _thinking_sessions_lock:
+        # Initialize session if doesn't exist
+        if session_id not in thinking_sessions:
+            thinking_sessions[session_id] = []
 
     # Validate thought progression
     if (
