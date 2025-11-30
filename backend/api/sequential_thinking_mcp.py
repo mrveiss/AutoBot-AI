@@ -14,6 +14,7 @@ Enables agents to:
 - Generate and verify solution hypotheses
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -270,22 +271,23 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadat
             "branch_id": request.branch_id,
         }
 
-    # If thinking is complete, provide summary
+    # If thinking is complete, provide summary (thread-safe)
     if thinking_complete:
-        response["summary"] = {
-            "total_thoughts_recorded": len(thinking_sessions[session_id]),
-            "revisions_made": sum(
-                1 for t in thinking_sessions[session_id] if t.get("is_revision")
-            ),
-            "branches_created": len(
-                set(
-                    t.get("branch_id")
-                    for t in thinking_sessions[session_id]
-                    if t.get("branch_id")
-                )
-            ),
-            "thinking_duration_thoughts": request.thought_number,
-        }
+        async with _thinking_sessions_lock:
+            response["summary"] = {
+                "total_thoughts_recorded": len(thinking_sessions[session_id]),
+                "revisions_made": sum(
+                    1 for t in thinking_sessions[session_id] if t.get("is_revision")
+                ),
+                "branches_created": len(
+                    set(
+                        t.get("branch_id")
+                        for t in thinking_sessions[session_id]
+                        if t.get("branch_id")
+                    )
+                ),
+                "thinking_duration_thoughts": request.thought_number,
+            }
         logger.info(
             f"Sequential thinking session '{session_id}' completed with {request.thought_number} thoughts"
         )
@@ -301,10 +303,12 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadat
 @router.get("/sessions/{session_id}")
 async def get_thinking_session(session_id: str) -> Metadata:
     """Get complete thinking session history"""
-    if session_id not in thinking_sessions:
-        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+    async with _thinking_sessions_lock:
+        if session_id not in thinking_sessions:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
-    thoughts = thinking_sessions[session_id]
+        # Create a copy under lock to prevent race conditions
+        thoughts = list(thinking_sessions[session_id])
 
     return {
         "session_id": session_id,
@@ -327,11 +331,12 @@ async def get_thinking_session(session_id: str) -> Metadata:
 @router.delete("/sessions/{session_id}")
 async def clear_thinking_session(session_id: str) -> Metadata:
     """Clear a thinking session"""
-    if session_id not in thinking_sessions:
-        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+    async with _thinking_sessions_lock:
+        if session_id not in thinking_sessions:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
-    thought_count = len(thinking_sessions[session_id])
-    del thinking_sessions[session_id]
+        thought_count = len(thinking_sessions[session_id])
+        del thinking_sessions[session_id]
 
     return {
         "success": True,
@@ -349,20 +354,21 @@ async def clear_thinking_session(session_id: str) -> Metadata:
 @router.get("/sessions")
 async def list_thinking_sessions() -> Metadata:
     """List all active thinking sessions"""
-    sessions = []
-    for session_id, thoughts in thinking_sessions.items():
-        sessions.append(
-            {
-                "session_id": session_id,
-                "thought_count": len(thoughts),
-                "started_at": thoughts[0]["timestamp"] if thoughts else None,
-                "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None,
-                "complete": (
-                    not thoughts[-1].get("next_thought_needed", True)
-                    if thoughts
-                    else False
-                ),
-            }
-        )
+    async with _thinking_sessions_lock:
+        sessions = []
+        for session_id, thoughts in thinking_sessions.items():
+            sessions.append(
+                {
+                    "session_id": session_id,
+                    "thought_count": len(thoughts),
+                    "started_at": thoughts[0]["timestamp"] if thoughts else None,
+                    "last_thought_at": thoughts[-1]["timestamp"] if thoughts else None,
+                    "complete": (
+                        not thoughts[-1].get("next_thought_needed", True)
+                        if thoughts
+                        else False
+                    ),
+                }
+            )
 
     return {"session_count": len(sessions), "sessions": sessions}
