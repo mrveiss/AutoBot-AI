@@ -33,6 +33,10 @@
  */
 
 import { ref, computed, type Ref, type ComputedRef } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useConnectionTester
+const logger = createLogger('useConnectionTester')
 
 // ========================================
 // Types & Interfaces
@@ -350,7 +354,7 @@ export function useConnectionTester(
   const test = async (): Promise<boolean> => {
     // Prevent concurrent tests
     if (isTesting.value) {
-      console.warn('[useConnectionTester] Test already in progress')
+      logger.warn('Test already in progress')
       return false
     }
 

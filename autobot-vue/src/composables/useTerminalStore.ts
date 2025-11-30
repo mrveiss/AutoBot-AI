@@ -4,6 +4,10 @@ import appConfig from '@/config/AppConfig.js'
 import type { BackendConfig } from '@/types/app-config'
 // FIXED: Import NetworkConstants for default host IPs
 import { NetworkConstants } from '@/constants/network'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for TerminalStore
+const logger = createLogger('TerminalStore')
 
 // Host configuration interface
 export interface HostConfig {
@@ -86,7 +90,7 @@ export let AVAILABLE_HOSTS: HostConfig[] = [...DEFAULT_HOSTS]
 export function getAvailableHosts(): HostConfig[] {
   // CRITICAL: Always ensure we have hosts available
   if (!AVAILABLE_HOSTS || AVAILABLE_HOSTS.length === 0) {
-    console.warn('AVAILABLE_HOSTS was empty, resetting to defaults')
+    logger.warn('AVAILABLE_HOSTS was empty, resetting to defaults')
     AVAILABLE_HOSTS = [...DEFAULT_HOSTS]
   }
   return AVAILABLE_HOSTS
@@ -107,15 +111,15 @@ async function loadHostsFromBackend(): Promise<void> {
       if (validHosts.length > 0) {
         // Backend provided valid host configuration
         AVAILABLE_HOSTS = validHosts
-        console.log('Loaded hosts from backend:', validHosts.length)
+        logger.debug('Loaded hosts from backend:', validHosts.length)
       } else {
-        console.warn('Backend hosts array contained no valid hosts, using defaults')
+        logger.warn('Backend hosts array contained no valid hosts, using defaults')
       }
     } else {
-      console.warn('Backend config does not contain valid hosts array, using defaults')
+      logger.warn('Backend config does not contain valid hosts array, using defaults')
     }
   } catch (error) {
-    console.warn('Failed to load hosts from backend, using defaults:', error)
+    logger.warn('Failed to load hosts from backend, using defaults:', error)
   }
 }
 
@@ -270,7 +274,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     const hosts = getAvailableHosts()
     const found = hosts.find(host => host.id === hostId)
     if (!found) {
-      console.warn(`Host not found: ${hostId}, available hosts:`, hosts.map(h => h.id))
+      logger.warn(`Host not found: ${hostId}, available hosts:`, hosts.map(h => h.id))
     }
     return found
   }
