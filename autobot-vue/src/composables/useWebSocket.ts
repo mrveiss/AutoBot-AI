@@ -9,6 +9,10 @@
  */
 
 import { ref, onUnmounted, watch, unref, type Ref } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useWebSocket
+const logger = createLogger('useWebSocket')
 
 export interface UseWebSocketOptions {
   /**
@@ -179,7 +183,7 @@ export function useWebSocket(
 
     const wsUrl = unref(url)
     if (!wsUrl) {
-      console.error('[useWebSocket] Invalid URL:', wsUrl)
+      logger.error('Invalid URL:', wsUrl)
       return
     }
 
@@ -193,7 +197,7 @@ export function useWebSocket(
       if (opts.connectionTimeout > 0) {
         connectionTimeoutTimer = setTimeout(() => {
           if (isConnecting.value) {
-            console.warn('[useWebSocket] Connection timeout')
+            logger.warn('Connection timeout')
             error.value = new Error('Connection timeout')
             ws.value?.close()
           }
@@ -207,7 +211,7 @@ export function useWebSocket(
         error.value = null
         clearTimers()
 
-        console.log('[useWebSocket] Connected to:', wsUrl)
+        logger.info('Connected to:', wsUrl)
 
         // Start heartbeat
         startHeartbeat()
@@ -222,14 +226,14 @@ export function useWebSocket(
           lastMessage.value = data
           opts.onMessage(data)
         } catch (err) {
-          console.error('[useWebSocket] Error parsing message:', err)
+          logger.error('Error parsing message:', err)
           lastMessage.value = event.data
           opts.onMessage(event.data)
         }
       }
 
       ws.value.onerror = (event) => {
-        console.error('[useWebSocket] Error:', event)
+        logger.error('Error:', event)
         error.value = new Error('WebSocket error')
         isConnecting.value = false
         opts.onError(event)
@@ -240,7 +244,7 @@ export function useWebSocket(
         isConnecting.value = false
         clearTimers()
 
-        console.log('[useWebSocket] Closed:', event.code, event.reason)
+        logger.info('Closed:', event.code, event.reason)
         opts.onClose(event)
 
         // Auto-reconnect logic
@@ -255,19 +259,19 @@ export function useWebSocket(
             opts.maxReconnectDelay
           )
 
-          console.log(`[useWebSocket] Reconnecting in ${delay}ms (attempt ${reconnectAttempts.value + 1})`)
+          logger.info(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts.value + 1})`)
 
           reconnectTimer = setTimeout(() => {
             reconnectAttempts.value++
             connect()
           }, delay)
         } else if (opts.maxReconnectAttempts > 0 && reconnectAttempts.value >= opts.maxReconnectAttempts) {
-          console.warn('[useWebSocket] Max reconnection attempts reached')
+          logger.warn('Max reconnection attempts reached')
           error.value = new Error('Max reconnection attempts reached')
         }
       }
     } catch (err) {
-      console.error('[useWebSocket] Connection error:', err)
+      logger.error('Connection error:', err)
       error.value = err instanceof Error ? err : new Error('Connection error')
       isConnecting.value = false
     }
@@ -300,7 +304,7 @@ export function useWebSocket(
    */
   const send = (data: any): boolean => {
     if (!ws.value || ws.value.readyState !== WebSocket.OPEN) {
-      console.warn('[useWebSocket] Cannot send - not connected')
+      logger.warn('Cannot send - not connected')
       return false
     }
 
@@ -309,7 +313,7 @@ export function useWebSocket(
       ws.value.send(payload)
       return true
     } catch (err) {
-      console.error('[useWebSocket] Error sending data:', err)
+      logger.error('Error sending data:', err)
       error.value = err instanceof Error ? err : new Error('Send error')
       return false
     }
@@ -328,7 +332,7 @@ export function useWebSocket(
   if (url && typeof url !== 'string') {
     watch(url, (newUrl, oldUrl) => {
       if (newUrl !== oldUrl && isConnected.value) {
-        console.log('[useWebSocket] URL changed, reconnecting...')
+        logger.info('URL changed, reconnecting...')
         reconnect()
       }
     })

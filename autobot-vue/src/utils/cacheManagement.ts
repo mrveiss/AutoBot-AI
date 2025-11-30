@@ -3,6 +3,11 @@
  * Handles browser cache clearing, service worker updates, and chunk reloading
  */
 
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for cacheManagement
+const logger = createLogger('cacheManagement')
+
 export interface CacheManagementOptions {
   /** Force hard reload without cache */
   hardReload?: boolean
@@ -75,7 +80,7 @@ export async function clearApplicationCache(options: CacheManagementOptions = {}
     }
 
   } catch (error) {
-    console.error('[CacheManagement] Error clearing cache:', error)
+    logger.error('Error clearing cache:', error)
 
     if (showNotification) {
       showCacheUpdateNotification('Cache clearing failed. Performing hard reload...', 'error')
@@ -90,7 +95,7 @@ export async function clearApplicationCache(options: CacheManagementOptions = {}
  * Handle chunk loading errors by clearing cache and retrying
  */
 export async function handleChunkLoadingError(error: Error, componentName?: string) {
-  console.error('[CacheManagement] Chunk loading error detected:', {
+  logger.error('Chunk loading error detected:', {
     error: error.message,
     component: componentName,
     stack: error.stack
@@ -163,7 +168,7 @@ export async function checkForUpdates(): Promise<boolean> {
     }
 
   } catch (error) {
-    console.warn('[CacheManagement] Could not check for updates:', error)
+    logger.warn('Could not check for updates:', error)
   }
 
   return false
@@ -207,7 +212,7 @@ function checkForUnsavedChanges(): boolean {
 
     return false
   } catch (error) {
-    console.warn('[CacheManagement] Error checking for unsaved changes:', error)
+    logger.warn('Error checking for unsaved changes:', error)
     return false // Assume no changes if check fails
   }
 }
@@ -538,7 +543,7 @@ export function setupGlobalChunkErrorHandlers() {
         error?.message?.includes('ChunkLoadError') ||
         error?.message?.includes('Loading CSS chunk')) {
 
-      console.warn('[CacheManagement] Global chunk loading failure detected:', error)
+      logger.warn('Global chunk loading failure detected:', error)
 
       // Prevent default error handling
       event.preventDefault()
@@ -547,7 +552,7 @@ export function setupGlobalChunkErrorHandlers() {
       try {
         await handleChunkLoadingError(error)
       } catch (handlingError) {
-        console.error('[CacheManagement] Error handling chunk failure:', handlingError)
+        logger.error('Error handling chunk failure:', handlingError)
         // Fallback to hard reload
         window.location.reload()
       }
@@ -563,7 +568,7 @@ export function setupGlobalChunkErrorHandlers() {
         ? (target as HTMLLinkElement).href
         : (target as HTMLScriptElement).src
 
-      console.warn('[CacheManagement] Resource loading error detected:', {
+      logger.warn('Resource loading error detected:', {
         url: url,
         type: target.tagName
       })
@@ -574,7 +579,7 @@ export function setupGlobalChunkErrorHandlers() {
         try {
           await handleChunkLoadingError(new Error(`Failed to load resource: ${url}`))
         } catch (handlingError) {
-          console.error('[CacheManagement] Error handling resource failure:', handlingError)
+          logger.error('Error handling resource failure:', handlingError)
           window.location.reload()
         }
       }

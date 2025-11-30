@@ -38,6 +38,10 @@
  */
 
 import { ref, onUnmounted, type Ref } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useTimeout
+const logger = createLogger('useTimeout')
 
 // ========================================
 // Types & Interfaces
@@ -215,7 +219,7 @@ export function useDebounce<T extends (...args: any[]) => any>(
       try {
         fn.apply(lastThis, lastArgs)
       } catch (error) {
-        console.error('[useDebounce] Callback error:', error)
+        logger.error('Callback error:', error)
         throw error // Re-throw to preserve error behavior
       } finally {
         lastArgs = null
@@ -243,7 +247,7 @@ export function useDebounce<T extends (...args: any[]) => any>(
       try {
         fn.apply(this, args)
       } catch (error) {
-        console.error('[useDebounce] Leading edge callback error:', error)
+        logger.error('Leading edge callback error:', error)
         throw error
       }
       // Don't save args/this - no trailing edge in leading-only mode
@@ -369,7 +373,7 @@ export function useThrottle<T extends (...args: any[]) => any>(
     try {
       fn(...args)
     } catch (error) {
-      console.error('[useThrottle] Callback error:', error)
+      logger.error('Throttle callback error:', error)
       throw error
     }
   }
@@ -497,7 +501,7 @@ export function useTimeout(
       try {
         callback()
       } catch (error) {
-        console.error('[useTimeout] Callback error:', error)
+        logger.error('Timeout callback error:', error)
         throw error
       } finally {
         isActive.value = false
@@ -595,7 +599,7 @@ export function useInterval(
     try {
       callback()
     } catch (error) {
-      console.error('[useInterval] Callback error:', error)
+      logger.error('Interval callback error:', error)
       // Don't throw - let interval continue running
     }
   }
