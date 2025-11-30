@@ -1,13 +1,17 @@
 // Global Error Handler Plugin
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('errorHandler')
+
 export default {
   install(app) {
     // Basic error handling
     window.addEventListener('error', (event) => {
-      console.error('[Global Error]', event.error);
+      logger.error('[Global Error]', event.error);
     });
 
     window.addEventListener('unhandledrejection', (event) => {
-      console.error('[Unhandled Promise Rejection]', event.reason);
+      logger.error('[Unhandled Promise Rejection]', event.reason);
     });
   }
 }

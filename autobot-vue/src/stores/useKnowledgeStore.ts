@@ -2,6 +2,9 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import ApiClient from '@/utils/ApiClient'
 import type { KnowledgeStats } from '@/types/knowledgeBase'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('useKnowledgeStore')
 
 export interface KnowledgeDocument {
   id: string
@@ -226,7 +229,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
       const response = await ApiClient.get('/api/knowledge_base/stats')
       stats.value = await response.json()
     } catch (error) {
-      console.error('Failed to refresh stats:', error)
+      logger.error('Failed to refresh stats:', error)
       // Set default stats on error
       stats.value = {
         total_documents: 0,
