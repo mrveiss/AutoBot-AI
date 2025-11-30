@@ -977,23 +977,29 @@ class WorkflowAutomationManager:
         ]
 
 
-# Global workflow manager instance (lazy initialization)
+# Global workflow manager instance (lazy initialization, thread-safe)
 # REUSABLE PATTERN: Lazy initialization avoids creating async resources at module import time
+import threading
+
 _workflow_manager = None
+_workflow_manager_lock = threading.Lock()
 
 
 def get_workflow_manager() -> WorkflowAutomationManager:
     """
-    Get or create the global workflow manager instance.
+    Get or create the global workflow manager instance (thread-safe).
 
-    REUSABLE PATTERN: Lazy singleton initialization
+    REUSABLE PATTERN: Lazy singleton initialization with double-checked locking
     - Avoids creating async resources at module import time
     - Ensures event loop exists before instantiation
-    - Thread-safe for FastAPI async context
+    - Thread-safe for FastAPI async context via double-checked locking
     """
     global _workflow_manager
     if _workflow_manager is None:
-        _workflow_manager = WorkflowAutomationManager()
+        with _workflow_manager_lock:
+            # Double-check after acquiring lock
+            if _workflow_manager is None:
+                _workflow_manager = WorkflowAutomationManager()
     return _workflow_manager
 
 

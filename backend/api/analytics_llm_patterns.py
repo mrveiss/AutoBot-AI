@@ -746,14 +746,20 @@ class LLMPatternAnalyzer:
 # Singleton Instance
 # =============================================================================
 
+import threading
+
 _analyzer: Optional[LLMPatternAnalyzer] = None
+_analyzer_lock = threading.Lock()
 
 
 def get_pattern_analyzer() -> LLMPatternAnalyzer:
-    """Get or create pattern analyzer singleton"""
+    """Get or create pattern analyzer singleton (thread-safe)"""
     global _analyzer
     if _analyzer is None:
-        _analyzer = LLMPatternAnalyzer()
+        with _analyzer_lock:
+            # Double-check after acquiring lock
+            if _analyzer is None:
+                _analyzer = LLMPatternAnalyzer()
     return _analyzer
 
 

@@ -49,11 +49,16 @@ except ImportError:
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Thread-safe global singletons
+import threading
+
 # Global dashboard generator instance
 _dashboard_generator = None
+_dashboard_generator_lock = threading.Lock()
 
 # Global validation judges
 _validation_judges = None
+_validation_judges_lock = threading.Lock()
 
 
 def generate_fallback_report():
@@ -148,7 +153,7 @@ def generate_fallback_report():
 
 
 def get_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
-    """Get or create dashboard generator instance"""
+    """Get or create dashboard generator instance (thread-safe)"""
     global _dashboard_generator
 
     if ValidationDashboardGenerator is None:
@@ -156,31 +161,34 @@ def get_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
         return None
 
     if _dashboard_generator is None:
-        try:
-            _dashboard_generator = ValidationDashboardGenerator()
-            logger.info("Dashboard generator initialized")
-        except ImportError as e:
-            logger.error(
-                f"Failed to initialize dashboard generator due to import error: {e}"
-            )
-            return None
-        except (OSError, IOError) as e:
-            logger.error(
-                "Failed to initialize dashboard generator due to "
-                f"file system error: {e}"
-            )
-            return None
-        except Exception as e:
-            logger.error(
-                f"Failed to initialize dashboard generator due to unexpected error: {e}"
-            )
-            return None
+        with _dashboard_generator_lock:
+            # Double-check after acquiring lock
+            if _dashboard_generator is None:
+                try:
+                    _dashboard_generator = ValidationDashboardGenerator()
+                    logger.info("Dashboard generator initialized")
+                except ImportError as e:
+                    logger.error(
+                        f"Failed to initialize dashboard generator due to import error: {e}"
+                    )
+                    return None
+                except (OSError, IOError) as e:
+                    logger.error(
+                        "Failed to initialize dashboard generator due to "
+                        f"file system error: {e}"
+                    )
+                    return None
+                except Exception as e:
+                    logger.error(
+                        f"Failed to initialize dashboard generator due to unexpected error: {e}"
+                    )
+                    return None
 
     return _dashboard_generator
 
 
 def get_validation_judges() -> Optional[Metadata]:
-    """Get or create validation judges instance"""
+    """Get or create validation judges instance (thread-safe)"""
     global _validation_judges
 
     if not VALIDATION_JUDGES_AVAILABLE:
@@ -188,22 +196,25 @@ def get_validation_judges() -> Optional[Metadata]:
         return None
 
     if _validation_judges is None:
-        try:
-            _validation_judges = {
-                "workflow_step_judge": WorkflowStepJudge(),
-                "agent_response_judge": AgentResponseJudge(),
-            }
-            logger.info("Validation judges initialized")
-        except ImportError as e:
-            logger.error(
-                f"Failed to initialize validation judges due to import error: {e}"
-            )
-            return None
-        except Exception as e:
-            logger.error(
-                f"Failed to initialize validation judges due to unexpected error: {e}"
-            )
-            return None
+        with _validation_judges_lock:
+            # Double-check after acquiring lock
+            if _validation_judges is None:
+                try:
+                    _validation_judges = {
+                        "workflow_step_judge": WorkflowStepJudge(),
+                        "agent_response_judge": AgentResponseJudge(),
+                    }
+                    logger.info("Validation judges initialized")
+                except ImportError as e:
+                    logger.error(
+                        f"Failed to initialize validation judges due to import error: {e}"
+                    )
+                    return None
+                except Exception as e:
+                    logger.error(
+                        f"Failed to initialize validation judges due to unexpected error: {e}"
+                    )
+                    return None
 
     return _validation_judges
 

@@ -32,33 +32,41 @@ router = APIRouter(prefix="/unified", tags=["knowledge-unified"])
 
 
 # ============================================================================
-# Lazy-loaded Documentation Searcher
+# Lazy-loaded Documentation Searcher (thread-safe)
 # ============================================================================
 
+import threading
+
 _documentation_searcher = None
+_documentation_searcher_lock = threading.Lock()
 
 
 def get_documentation_searcher():
-    """Get or create the documentation searcher instance."""
+    """Get or create the documentation searcher instance (thread-safe)."""
     global _documentation_searcher
 
     if _documentation_searcher is not None:
         return _documentation_searcher
 
-    try:
-        from src.services.chat_knowledge_service import DocumentationSearcher
-
-        _documentation_searcher = DocumentationSearcher()
-        if _documentation_searcher.initialize():
-            logger.info("Documentation searcher initialized for unified API")
+    with _documentation_searcher_lock:
+        # Double-check after acquiring lock
+        if _documentation_searcher is not None:
             return _documentation_searcher
-        else:
-            logger.warning("Documentation searcher failed to initialize")
-            _documentation_searcher = None
+
+        try:
+            from src.services.chat_knowledge_service import DocumentationSearcher
+
+            _documentation_searcher = DocumentationSearcher()
+            if _documentation_searcher.initialize():
+                logger.info("Documentation searcher initialized for unified API")
+                return _documentation_searcher
+            else:
+                logger.warning("Documentation searcher failed to initialize")
+                _documentation_searcher = None
+                return None
+        except Exception as e:
+            logger.warning(f"Could not initialize documentation searcher: {e}")
             return None
-    except Exception as e:
-        logger.warning(f"Could not initialize documentation searcher: {e}")
-        return None
 
 
 # ============================================================================

@@ -950,14 +950,20 @@ if __name__ == "__main__":
 # Create singleton instance
 # =============================================================================
 
+import threading
+
 _engine: Optional[CodeGenerationEngine] = None
+_engine_lock = threading.Lock()
 
 
 def get_code_generation_engine() -> CodeGenerationEngine:
-    """Get or create code generation engine singleton"""
+    """Get or create code generation engine singleton (thread-safe)"""
     global _engine
     if _engine is None:
-        _engine = CodeGenerationEngine()
+        with _engine_lock:
+            # Double-check after acquiring lock
+            if _engine is None:
+                _engine = CodeGenerationEngine()
     return _engine
 
 

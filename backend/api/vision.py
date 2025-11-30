@@ -26,16 +26,22 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 router = APIRouter(tags=["vision", "gui-automation"])
 logger = logging.getLogger(__name__)
 
-# Global screen analyzer instance
+# Global screen analyzer instance (thread-safe)
+import threading
+
 _screen_analyzer: Optional[ScreenAnalyzer] = None
+_screen_analyzer_lock = threading.Lock()
 
 
 def get_screen_analyzer() -> ScreenAnalyzer:
-    """Get or create screen analyzer instance"""
+    """Get or create screen analyzer instance (thread-safe)"""
     global _screen_analyzer
     if _screen_analyzer is None:
-        _screen_analyzer = ScreenAnalyzer()
-        logger.info("Screen analyzer initialized")
+        with _screen_analyzer_lock:
+            # Double-check after acquiring lock
+            if _screen_analyzer is None:
+                _screen_analyzer = ScreenAnalyzer()
+                logger.info("Screen analyzer initialized")
     return _screen_analyzer
 
 

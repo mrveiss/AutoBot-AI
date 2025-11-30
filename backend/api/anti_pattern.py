@@ -23,27 +23,33 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Lazy initialization for detector
+# Lazy initialization for detector (thread-safe)
+import asyncio
+
 _detector_instance = None
+_detector_lock = asyncio.Lock()
 
 
 async def _get_detector():
-    """Get or create the anti-pattern detector instance (lazy initialization)"""
+    """Get or create the anti-pattern detector instance (lazy initialization, thread-safe)"""
     global _detector_instance
     if _detector_instance is None:
-        import importlib.util
-        import os
+        async with _detector_lock:
+            # Double-check after acquiring lock
+            if _detector_instance is None:
+                import importlib.util
+                import os
 
-        # Import using file path since directory has dashes
-        module_path = os.path.join(
-            os.path.dirname(__file__),
-            "../../tools/code-analysis-suite/src/anti_pattern_detector.py"
-        )
-        spec = importlib.util.spec_from_file_location("anti_pattern_detector", module_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+                # Import using file path since directory has dashes
+                module_path = os.path.join(
+                    os.path.dirname(__file__),
+                    "../../tools/code-analysis-suite/src/anti_pattern_detector.py"
+                )
+                spec = importlib.util.spec_from_file_location("anti_pattern_detector", module_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
 
-        _detector_instance = module.AntiPatternDetector()
+                _detector_instance = module.AntiPatternDetector()
     return _detector_instance
 
 

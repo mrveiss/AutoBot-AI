@@ -24,15 +24,21 @@ from src.utils.error_boundaries import ErrorCategory, with_error_handling
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Lazy initialization for development speedup agent
+# Lazy initialization for development speedup agent (thread-safe)
+import threading
+
 _development_speedup_instance = None
+_development_speedup_lock = threading.Lock()
 
 
 def _get_dev_speedup_agent():
-    """Get or create the development speedup agent instance (lazy initialization)"""
+    """Get or create the development speedup agent instance (lazy initialization, thread-safe)"""
     global _development_speedup_instance
     if _development_speedup_instance is None:
-        _development_speedup_instance = get_development_speedup_agent()
+        with _development_speedup_lock:
+            # Double-check after acquiring lock
+            if _development_speedup_instance is None:
+                _development_speedup_instance = get_development_speedup_agent()
     return _development_speedup_instance
 
 
