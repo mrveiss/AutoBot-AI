@@ -76,6 +76,9 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket'
 import apiClient from '@/utils/ApiClient'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('CaptchaNotification')
 
 // ============================================================================
 // Types
@@ -208,7 +211,7 @@ async function markSolved() {
     activeCaptcha.value = null
     stopTimer()
   } catch (error) {
-    console.error('Failed to mark CAPTCHA as solved:', error)
+    logger.error('Failed to mark CAPTCHA as solved:', error)
   } finally {
     isSubmitting.value = false
   }
@@ -223,7 +226,7 @@ async function skipCaptcha() {
     activeCaptcha.value = null
     stopTimer()
   } catch (error) {
-    console.error('Failed to skip CAPTCHA:', error)
+    logger.error('Failed to skip CAPTCHA:', error)
   } finally {
     isSubmitting.value = false
   }
