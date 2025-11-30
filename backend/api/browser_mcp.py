@@ -144,15 +144,14 @@ async def check_rate_limit() -> bool:
 
     Uses asyncio.Lock for thread safety in concurrent async environments
     """
-    global request_counter
-
     async with _rate_limit_lock:
         now = datetime.now(timezone.utc)
         elapsed = (now - request_counter["reset_time"]).total_seconds()
 
-        # Reset counter every minute
+        # Reset counter every minute (in-place modification for thread safety)
         if elapsed >= 60:
-            request_counter = {"count": 0, "reset_time": now}
+            request_counter["count"] = 0
+            request_counter["reset_time"] = now
 
         if request_counter["count"] >= MAX_REQUESTS_PER_MINUTE:
             logger.warning(
