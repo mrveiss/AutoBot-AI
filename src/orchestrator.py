@@ -1106,28 +1106,35 @@ class ConsolidatedOrchestrator:
             return []
 
 
-# Global orchestrator instance
+# Global orchestrator instance (thread-safe)
+import asyncio
+
 _orchestrator_instance = None
+_orchestrator_lock = asyncio.Lock()
 
 
 async def get_orchestrator() -> ConsolidatedOrchestrator:
-    """Get or create global orchestrator instance"""
+    """Get or create global orchestrator instance (thread-safe)"""
     global _orchestrator_instance
 
     if _orchestrator_instance is None:
-        _orchestrator_instance = ConsolidatedOrchestrator()
-        await _orchestrator_instance.initialize()
+        async with _orchestrator_lock:
+            # Double-check after acquiring lock
+            if _orchestrator_instance is None:
+                _orchestrator_instance = ConsolidatedOrchestrator()
+                await _orchestrator_instance.initialize()
 
     return _orchestrator_instance
 
 
 async def shutdown_orchestrator():
-    """Shutdown global orchestrator instance"""
+    """Shutdown global orchestrator instance (thread-safe)"""
     global _orchestrator_instance
 
-    if _orchestrator_instance:
-        await _orchestrator_instance.shutdown()
-        _orchestrator_instance = None
+    async with _orchestrator_lock:
+        if _orchestrator_instance:
+            await _orchestrator_instance.shutdown()
+            _orchestrator_instance = None
 
 
 # ============================================================================

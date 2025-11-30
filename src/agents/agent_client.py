@@ -425,25 +425,32 @@ class AgentClient:
         return discovered
 
 
-# Singleton instance for global access
+# Singleton instance for global access (thread-safe)
+import asyncio
+
 _agent_client_instance: Optional[AgentClient] = None
+_agent_client_lock = asyncio.Lock()
 
 
 async def get_agent_client(config: Optional[AgentClientConfig] = None) -> AgentClient:
-    """Get or create the global agent client instance"""
+    """Get or create the global agent client instance (thread-safe)"""
     global _agent_client_instance
 
     if _agent_client_instance is None:
-        _agent_client_instance = AgentClient(config)
-        await _agent_client_instance.initialize()
+        async with _agent_client_lock:
+            # Double-check after acquiring lock
+            if _agent_client_instance is None:
+                _agent_client_instance = AgentClient(config)
+                await _agent_client_instance.initialize()
 
     return _agent_client_instance
 
 
 async def cleanup_agent_client():
-    """Cleanup the global agent client"""
+    """Cleanup the global agent client (thread-safe)"""
     global _agent_client_instance
 
-    if _agent_client_instance:
-        await _agent_client_instance.cleanup()
-        _agent_client_instance = None
+    async with _agent_client_lock:
+        if _agent_client_instance:
+            await _agent_client_instance.cleanup()
+            _agent_client_instance = None

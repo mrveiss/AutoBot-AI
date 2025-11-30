@@ -737,15 +737,21 @@ class LongTermMemoryManager:
             conn.close()
 
 
-# Integration utility functions
+# Integration utility functions (thread-safe)
+import threading
+
 _memory_manager_instance: Optional[LongTermMemoryManager] = None
+_memory_manager_lock = threading.Lock()
 
 
 def get_memory_manager() -> LongTermMemoryManager:
-    """Get singleton instance of memory manager"""
+    """Get singleton instance of memory manager (thread-safe)"""
     global _memory_manager_instance
     if _memory_manager_instance is None:
-        _memory_manager_instance = LongTermMemoryManager()
+        with _memory_manager_lock:
+            # Double-check after acquiring lock
+            if _memory_manager_instance is None:
+                _memory_manager_instance = LongTermMemoryManager()
     return _memory_manager_instance
 
 

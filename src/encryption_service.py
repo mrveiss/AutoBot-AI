@@ -250,13 +250,16 @@ class EncryptionService:
         }
 
 
-# Global encryption service instance
+# Global encryption service instance (thread-safe)
+import threading
+
 _encryption_service: Optional[EncryptionService] = None
+_encryption_service_lock = threading.Lock()
 
 
 def get_encryption_service() -> EncryptionService:
     """
-    Get the global encryption service instance.
+    Get the global encryption service instance (thread-safe).
 
     Returns:
         EncryptionService instance
@@ -266,7 +269,10 @@ def get_encryption_service() -> EncryptionService:
     """
     global _encryption_service
     if _encryption_service is None:
-        _encryption_service = EncryptionService()
+        with _encryption_service_lock:
+            # Double-check after acquiring lock
+            if _encryption_service is None:
+                _encryption_service = EncryptionService()
     return _encryption_service
 
 
