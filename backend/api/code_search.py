@@ -28,15 +28,21 @@ from src.utils.redis_client import get_redis_client
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Lazy initialization for NPU code search agent
+# Lazy initialization for NPU code search agent (thread-safe)
+import threading
+
 _npu_code_search_instance = None
+_npu_code_search_lock = threading.Lock()
 
 
 def _get_code_search_agent():
-    """Get or create the NPU code search agent instance (lazy initialization)"""
+    """Get or create the NPU code search agent instance (lazy initialization, thread-safe)"""
     global _npu_code_search_instance
     if _npu_code_search_instance is None:
-        _npu_code_search_instance = get_npu_code_search()
+        with _npu_code_search_lock:
+            # Double-check after acquiring lock
+            if _npu_code_search_instance is None:
+                _npu_code_search_instance = get_npu_code_search()
     return _npu_code_search_instance
 
 
