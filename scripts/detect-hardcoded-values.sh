@@ -109,8 +109,8 @@ while IFS=: read -r file line_num line_content; do
         continue
     fi
 
-    # Skip if line contains getenv or config access, array slicing, comment, or Docker user mapping
-    if echo "$line_content" | grep -qE '(getenv|config\.|CONFIG\[|NetworkConstants|\[:[0-9]|#.*:|"[0-9]+:[0-9]+")'; then
+    # Skip if line contains getenv, config access, array slicing, comment, Docker user mapping, or OWASP IDs
+    if echo "$line_content" | grep -qE '(getenv|config\.|CONFIG\[|NetworkConstants|\[:[0-9]|#.*:|"[0-9]+:[0-9]+"|A[0-9]{2}:[0-9]{4})'; then
         continue
     fi
 

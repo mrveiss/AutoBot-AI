@@ -31,6 +31,7 @@ import json
 import os
 import statistics
 import sys
+import threading
 import time
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass
@@ -119,6 +120,10 @@ class MetricsCollector:
             "open_files",
             "thread_count",
         ]
+
+        # Locks for thread-safe file access
+        self._alerts_file_lock = threading.Lock()
+        self._metrics_file_lock = threading.Lock()
 
         print(f"📊 AutoBot Metrics Collector initialized")
         print(f"   Storage Directory: {self.storage_dir}")
@@ -378,7 +383,6 @@ class MetricsCollector:
     async def _save_metrics_to_disk(self) -> None:
         """Save metrics buffer to disk."""
         timestamp = datetime.now()
-        date_str = timestamp.strftime("%Y%m%d")
 
         # Group metrics by hour
         hour_str = timestamp.strftime("%Y%m%d_%H")
@@ -390,19 +394,21 @@ class MetricsCollector:
             for metric in metrics_deque:
                 metrics_data.append(asdict(metric))
 
-        # Append to existing file or create new
-        existing_data = []
-        if output_file.exists():
-            try:
-                with open(output_file, "r") as f:
-                    existing_data = json.load(f)
-            except Exception:
-                existing_data = []
+        # Thread-safe file access
+        with self._metrics_file_lock:
+            # Append to existing file or create new
+            existing_data = []
+            if output_file.exists():
+                try:
+                    with open(output_file, "r") as f:
+                        existing_data = json.load(f)
+                except Exception:
+                    existing_data = []
 
-        # Combine and save
-        all_data = existing_data + metrics_data
-        with open(output_file, "w") as f:
-            json.dump(all_data, f)
+            # Combine and save
+            all_data = existing_data + metrics_data
+            with open(output_file, "w") as f:
+                json.dump(all_data, f)
 
         # Clean old files
         self._cleanup_old_metrics()
@@ -507,24 +513,26 @@ class MetricsCollector:
             "error" if alert.severity == "critical" else "warning",
         )
 
-        # Log alert
+        # Log alert (thread-safe)
         alert_file = self.storage_dir / "alerts.json"
-        alerts = []
-        if alert_file.exists():
-            try:
-                with open(alert_file, "r") as f:
-                    alerts = json.load(f)
-            except Exception:
-                alerts = []
 
-        alerts.append(alert_data)
+        with self._alerts_file_lock:
+            alerts = []
+            if alert_file.exists():
+                try:
+                    with open(alert_file, "r") as f:
+                        alerts = json.load(f)
+                except Exception:
+                    alerts = []
 
-        # Keep last 1000 alerts
-        if len(alerts) > 1000:
-            alerts = alerts[-1000:]
+            alerts.append(alert_data)
 
-        with open(alert_file, "w") as f:
-            json.dump(alerts, f, indent=2)
+            # Keep last 1000 alerts
+            if len(alerts) > 1000:
+                alerts = alerts[-1000:]
+
+            with open(alert_file, "w") as f:
+                json.dump(alerts, f, indent=2)
 
         # Execute action
         if alert.action == "webhook":

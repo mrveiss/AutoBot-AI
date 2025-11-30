@@ -31,6 +31,8 @@ class LLMModelOptimizer:
         self.installed_models = {}
         self.missing_models = []
         self.optimization_results = {}
+        # Async lock for thread-safe access to shared state
+        self._state_lock = asyncio.Lock()
 
     async def run_optimization(self):
         """Run complete LLM model optimization"""
@@ -57,7 +59,7 @@ class LLMModelOptimizer:
         logger.info("✅ LLM Model Optimization Complete!")
 
     async def analyze_current_models(self):
-        """Analyze currently installed models"""
+        """Analyze currently installed models (thread-safe)"""
         logger.info("📊 Analyzing current model inventory...")
 
         try:
@@ -70,18 +72,24 @@ class LLMModelOptimizer:
             )
 
             # Parse ollama list output
+            parsed_models = {}
             lines = result.stdout.strip().split('\n')[1:]  # Skip header
             for line in lines:
                 if line.strip():
                     parts = line.split()
                     model_name = parts[0]
                     model_size = parts[2] if len(parts) > 2 else "Unknown"
-                    self.installed_models[model_name] = {
+                    parsed_models[model_name] = {
                         "size": model_size,
                         "status": "installed"
                     }
 
-            logger.info(f"Found {len(self.installed_models)} installed models")
+            # Thread-safe update of shared state
+            async with self._state_lock:
+                self.installed_models.update(parsed_models)
+                installed_count = len(self.installed_models)
+
+            logger.info(f"Found {installed_count} installed models")
 
             # Identify missing critical models
             critical_models = [
@@ -92,12 +100,16 @@ class LLMModelOptimizer:
                 "mistral:7b-instruct"
             ]
 
-            for model in critical_models:
-                if model not in self.installed_models:
-                    self.missing_models.append(model)
+            # Thread-safe check and update of missing models
+            async with self._state_lock:
+                for model in critical_models:
+                    if model not in self.installed_models:
+                        self.missing_models.append(model)
+                missing_count = len(self.missing_models)
+                missing_list = list(self.missing_models)
 
-            if self.missing_models:
-                logger.warning(f"❌ Missing {len(self.missing_models)} critical models: {self.missing_models}")
+            if missing_count > 0:
+                logger.warning(f"❌ Missing {missing_count} critical models: {missing_list}")
             else:
                 logger.info("✅ All critical models are installed")
 
@@ -106,12 +118,16 @@ class LLMModelOptimizer:
             raise
 
     async def install_missing_models(self):
-        """Install missing critical models"""
-        if not self.missing_models:
+        """Install missing critical models (thread-safe)"""
+        # Thread-safe read of missing models
+        async with self._state_lock:
+            models_to_install = list(self.missing_models)
+
+        if not models_to_install:
             logger.info("✅ No missing models to install")
             return
 
-        logger.info(f"📦 Installing {len(self.missing_models)} missing models...")
+        logger.info(f"📦 Installing {len(models_to_install)} missing models...")
 
         # Model installation priority and rationale
         model_priority = {
@@ -142,9 +158,9 @@ class LLMModelOptimizer:
             }
         }
 
-        # Sort by priority
+        # Sort by priority (use local copy)
         sorted_models = sorted(
-            self.missing_models,
+            models_to_install,
             key=lambda x: model_priority.get(x, {}).get("priority", 999)
         )
 
@@ -196,7 +212,9 @@ class LLMModelOptimizer:
                     "error": str(e)
                 }
 
-        self.optimization_results["installations"] = installation_results
+        # Thread-safe update of optimization results
+        async with self._state_lock:
+            self.optimization_results["installations"] = installation_results
 
     async def update_configurations(self):
         """Update configuration files with optimized model selections"""
@@ -288,7 +306,9 @@ class LLMModelOptimizer:
                     "error": str(e)
                 }
 
-        self.optimization_results["config_updates"] = update_results
+        # Thread-safe update of optimization results
+        async with self._state_lock:
+            self.optimization_results["config_updates"] = update_results
 
     async def optimize_for_hardware(self):
         """Create hardware-specific optimization configuration"""
@@ -365,7 +385,8 @@ class LLMModelOptimizer:
                 yaml.dump(hardware_config, f, default_flow_style=False, indent=2)
 
             logger.info(f"✅ Hardware optimization config saved to {config_path}")
-            self.optimization_results["hardware_config"] = str(config_path)
+            async with self._state_lock:
+                self.optimization_results["hardware_config"] = str(config_path)
 
         except ImportError:
             # Fallback to JSON if PyYAML not available
@@ -374,7 +395,8 @@ class LLMModelOptimizer:
                 json.dump(hardware_config, f, indent=2)
 
             logger.info(f"✅ Hardware optimization config saved to {config_path} (JSON format)")
-            self.optimization_results["hardware_config"] = str(config_path)
+            async with self._state_lock:
+                self.optimization_results["hardware_config"] = str(config_path)
 
     async def validate_optimization(self):
         """Validate that optimizations are working"""
@@ -429,11 +451,17 @@ class LLMModelOptimizer:
                 }
                 logger.error(f"❌ Model {model} validation error: {e}")
 
-        self.optimization_results["validation"] = validation_results
+        # Thread-safe update of optimization results
+        async with self._state_lock:
+            self.optimization_results["validation"] = validation_results
 
     async def generate_optimization_report(self):
-        """Generate comprehensive optimization report"""
+        """Generate comprehensive optimization report (thread-safe)"""
         logger.info("📊 Generating optimization report...")
+
+        # Thread-safe read of optimization results
+        async with self._state_lock:
+            results_copy = dict(self.optimization_results)
 
         # Create detailed report
         report = {
@@ -441,14 +469,14 @@ class LLMModelOptimizer:
             "autobot_version": "Phase 5",
             "hardware_target": "RTX 4070 + Intel NPU",
             "summary": {
-                "models_installed": len(self.optimization_results.get("installations", {})),
-                "configs_updated": len(self.optimization_results.get("config_updates", {})),
+                "models_installed": len(results_copy.get("installations", {})),
+                "configs_updated": len(results_copy.get("config_updates", {})),
                 "validation_success": len([
-                    v for v in self.optimization_results.get("validation", {}).values()
+                    v for v in results_copy.get("validation", {}).values()
                     if v.get("status") == "success"
                 ])
             },
-            "details": self.optimization_results,
+            "details": results_copy,
             "recommendations": {
                 "immediate_actions": [
                     "Restart AutoBot services to apply configuration changes",
