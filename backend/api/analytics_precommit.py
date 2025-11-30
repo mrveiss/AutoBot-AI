@@ -11,6 +11,7 @@ Features fast pattern checking, clear error messages, and bypass mechanism.
 import logging
 import re
 import subprocess
+import threading
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -270,6 +271,10 @@ BUILTIN_CHECKS: dict[str, CheckDefinition] = {
 _hook_config = HookConfig()
 _check_history: list[CommitCheckResult] = []
 
+# Thread locks for safe access
+_history_lock = threading.Lock()
+_config_lock = threading.Lock()
+
 
 # ============================================================================
 # Helper Functions
@@ -439,10 +444,11 @@ async def check_staged_files(
         timestamp=datetime.now().isoformat(),
     )
 
-    # Store in history
-    _check_history.insert(0, result)
-    if len(_check_history) > 100:
-        _check_history.pop()
+    # Store in history (thread-safe)
+    with _history_lock:
+        _check_history.insert(0, result)
+        if len(_check_history) > 100:
+            _check_history.pop()
 
     return result
 
@@ -499,14 +505,16 @@ async def toggle_check(check_id: str, enabled: bool) -> dict:
 @router.get("/config")
 async def get_config() -> HookConfig:
     """Get current hook configuration."""
-    return _hook_config
+    with _config_lock:
+        return _hook_config
 
 
 @router.post("/config")
 async def update_config(config: HookConfig) -> dict:
     """Update hook configuration."""
     global _hook_config
-    _hook_config = config
+    with _config_lock:
+        _hook_config = config
 
     return {"message": "Configuration updated", "config": config}
 
@@ -527,8 +535,9 @@ async def get_status() -> HookStatus:
             pass
 
     last_run = None
-    if _check_history:
-        last_run = _check_history[0].timestamp
+    with _history_lock:
+        if _check_history:
+            last_run = _check_history[0].timestamp
 
     return HookStatus(
         installed=installed,
@@ -648,13 +657,18 @@ async def get_history(
     limit: int = Query(20, ge=1, le=100, description="Number of results")
 ) -> list[CommitCheckResult]:
     """Get recent pre-commit check history."""
-    return _check_history[:limit]
+    with _history_lock:
+        return _check_history[:limit]
 
 
 @router.get("/summary")
 async def get_summary() -> dict:
     """Get summary of pre-commit checks."""
-    total_checks = len(_check_history)
+    # Thread-safe copy for processing
+    with _history_lock:
+        history_copy = list(_check_history)
+
+    total_checks = len(history_copy)
     if total_checks == 0:
         return {
             "total_runs": 0,
@@ -663,12 +677,12 @@ async def get_summary() -> dict:
             "common_issues": [],
         }
 
-    passed = sum(1 for r in _check_history if r.passed)
-    avg_duration = sum(r.duration_ms for r in _check_history) / total_checks
+    passed = sum(1 for r in history_copy if r.passed)
+    avg_duration = sum(r.duration_ms for r in history_copy) / total_checks
 
     # Count issue frequency
     issue_counts: dict[str, int] = {}
-    for run in _check_history:
+    for run in history_copy:
         for result in run.results:
             if not result.passed:
                 key = result.check_id
