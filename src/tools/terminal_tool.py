@@ -680,12 +680,15 @@ class TerminalTool:
 
 
 # Global instance (will be initialized with service)
+import threading as _threading_terminal
+
 _terminal_tool_instance: Optional[TerminalTool] = None
+_terminal_tool_lock = _threading_terminal.Lock()
 
 
 def get_terminal_tool(agent_terminal_service=None) -> TerminalTool:
     """
-    Get the global TerminalTool instance.
+    Get the global TerminalTool instance (thread-safe).
 
     Args:
         agent_terminal_service: Service to use (initializes on first call)
@@ -696,9 +699,12 @@ def get_terminal_tool(agent_terminal_service=None) -> TerminalTool:
     global _terminal_tool_instance
 
     if _terminal_tool_instance is None:
-        _terminal_tool_instance = TerminalTool(agent_terminal_service)
+        with _terminal_tool_lock:
+            # Double-check after acquiring lock
+            if _terminal_tool_instance is None:
+                _terminal_tool_instance = TerminalTool(agent_terminal_service)
     elif agent_terminal_service is not None:
-        # Update service if provided
+        # Update service if provided (lock not needed for simple assignment)
         _terminal_tool_instance.agent_terminal_service = agent_terminal_service
 
     return _terminal_tool_instance

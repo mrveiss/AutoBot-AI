@@ -50,6 +50,11 @@ class MultiModalPerformanceMonitor:
     """Performance monitoring and optimization for multi-modal AI processing"""
 
     def __init__(self):
+        # Lock for thread-safe access to shared state
+        import threading
+
+        self._lock = threading.Lock()
+
         self.gpu_memory_tracker: Dict[str, List[float]] = defaultdict(list)
         self.processing_times: Dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
         self.throughput_history: Dict[str, deque] = defaultdict(
@@ -86,7 +91,7 @@ class MultiModalPerformanceMonitor:
             )
 
     async def optimize_gpu_memory(self) -> Dict[str, Any]:
-        """Optimize GPU memory usage and adjust batch sizes"""
+        """Optimize GPU memory usage and adjust batch sizes (thread-safe)"""
         if not self.gpu_available:
             return {"status": "gpu_not_available"}
 
@@ -99,52 +104,59 @@ class MultiModalPerformanceMonitor:
             reserved = torch.cuda.memory_reserved()
             memory_usage_percent = (allocated / self.total_gpu_memory) * 100
 
-            # Track memory usage
-            self.gpu_memory_tracker["allocated"].append(allocated)
-            self.gpu_memory_tracker["reserved"].append(reserved)
-            self.gpu_memory_tracker["percent"].append(memory_usage_percent)
+            # Update shared state with lock protection
+            with self._lock:
+                # Track memory usage
+                self.gpu_memory_tracker["allocated"].append(allocated)
+                self.gpu_memory_tracker["reserved"].append(reserved)
+                self.gpu_memory_tracker["percent"].append(memory_usage_percent)
 
-            # Keep only recent history
-            for key in self.gpu_memory_tracker:
-                if len(self.gpu_memory_tracker[key]) > 100:
-                    self.gpu_memory_tracker[key] = self.gpu_memory_tracker[key][-100:]
+                # Keep only recent history
+                for key in self.gpu_memory_tracker:
+                    if len(self.gpu_memory_tracker[key]) > 100:
+                        self.gpu_memory_tracker[key] = self.gpu_memory_tracker[key][
+                            -100:
+                        ]
 
-            # Adaptive batch size adjustment
-            optimization_applied = False
+                # Adaptive batch size adjustment
+                optimization_applied = False
 
-            if memory_usage_percent > self.memory_high_threshold:
-                # Reduce batch sizes to prevent OOM
-                for modality in self.batch_sizes:
-                    old_size = self.batch_sizes[modality]
-                    self.batch_sizes[modality] = max(1, self.batch_sizes[modality] // 2)
-                    if self.batch_sizes[modality] != old_size:
-                        optimization_applied = True
-                        logger.info(
-                            f"Reduced {modality} batch size: {old_size} -> {self.batch_sizes[modality]}"
+                if memory_usage_percent > self.memory_high_threshold:
+                    # Reduce batch sizes to prevent OOM
+                    for modality in self.batch_sizes:
+                        old_size = self.batch_sizes[modality]
+                        self.batch_sizes[modality] = max(
+                            1, self.batch_sizes[modality] // 2
                         )
+                        if self.batch_sizes[modality] != old_size:
+                            optimization_applied = True
+                            logger.info(
+                                f"Reduced {modality} batch size: {old_size} -> {self.batch_sizes[modality]}"
+                            )
 
-            elif memory_usage_percent < self.memory_low_threshold:
-                # Increase batch sizes for better throughput
-                for modality in self.batch_sizes:
-                    old_size = self.batch_sizes[modality]
-                    max_sizes = {"text": 64, "image": 16, "audio": 32, "combined": 8}
-                    self.batch_sizes[modality] = min(
-                        max_sizes[modality], self.batch_sizes[modality] * 2
-                    )
-                    if self.batch_sizes[modality] != old_size:
-                        optimization_applied = True
-                        logger.info(
-                            f"Increased {modality} batch size: {old_size} -> {self.batch_sizes[modality]}"
+                elif memory_usage_percent < self.memory_low_threshold:
+                    # Increase batch sizes for better throughput
+                    for modality in self.batch_sizes:
+                        old_size = self.batch_sizes[modality]
+                        max_sizes = {"text": 64, "image": 16, "audio": 32, "combined": 8}
+                        self.batch_sizes[modality] = min(
+                            max_sizes[modality], self.batch_sizes[modality] * 2
                         )
+                        if self.batch_sizes[modality] != old_size:
+                            optimization_applied = True
+                            logger.info(
+                                f"Increased {modality} batch size: {old_size} -> {self.batch_sizes[modality]}"
+                            )
 
-            self.last_optimization = time.time()
+                self.last_optimization = time.time()
+                batch_sizes_copy = self.batch_sizes.copy()
 
             return {
                 "status": "optimization_completed",
                 "memory_usage_percent": memory_usage_percent,
                 "allocated_mb": allocated / 1024 / 1024,
                 "reserved_mb": reserved / 1024 / 1024,
-                "batch_sizes": self.batch_sizes.copy(),
+                "batch_sizes": batch_sizes_copy,
                 "optimization_applied": optimization_applied,
             }
 
@@ -174,7 +186,7 @@ class MultiModalPerformanceMonitor:
             return False
 
     async def monitor_processing_performance(self) -> Dict[str, Any]:
-        """Monitor comprehensive processing performance metrics"""
+        """Monitor comprehensive processing performance metrics (thread-safe)"""
         try:
             timestamp = time.time()
 
@@ -185,11 +197,16 @@ class MultiModalPerformanceMonitor:
             cpu_percent = psutil.cpu_percent(interval=0.1)
             memory = psutil.virtual_memory()
 
-            # Processing time statistics
+            # Processing time statistics (uses lock internally)
             processing_stats = self._get_processing_time_stats()
 
-            # Throughput calculations
+            # Throughput calculations (uses lock internally)
             throughput_stats = self._calculate_throughput()
+
+            # Get shared state under lock
+            with self._lock:
+                batch_sizes_copy = self.batch_sizes.copy()
+                last_optimization = self.last_optimization
 
             # Create performance metrics
             metrics = {
@@ -204,18 +221,19 @@ class MultiModalPerformanceMonitor:
                 },
                 "processing_times": processing_stats,
                 "throughput": throughput_stats,
-                "batch_sizes": self.batch_sizes.copy(),
+                "batch_sizes": batch_sizes_copy,
                 "optimization_status": {
-                    "last_optimization": self.last_optimization,
-                    "time_since_optimization": timestamp - self.last_optimization,
+                    "last_optimization": last_optimization,
+                    "time_since_optimization": timestamp - last_optimization,
                     "needs_optimization": (
-                        timestamp - self.last_optimization > self.optimization_interval
+                        timestamp - last_optimization > self.optimization_interval
                     ),
                 },
             }
 
-            # Store in history
-            self.metrics_history.append(metrics)
+            # Store in history under lock
+            with self._lock:
+                self.metrics_history.append(metrics)
 
             return metrics
 
@@ -250,10 +268,14 @@ class MultiModalPerformanceMonitor:
             return {"error": str(e)}
 
     def _get_processing_time_stats(self) -> Dict[str, Any]:
-        """Get processing time statistics for each modality"""
+        """Get processing time statistics for each modality (thread-safe)"""
         stats = {}
 
-        for modality, times in self.processing_times.items():
+        # Copy data under lock
+        with self._lock:
+            times_copy = {k: list(v) for k, v in self.processing_times.items()}
+
+        for modality, times in times_copy.items():
             if len(times) > 0:
                 times_array = np.array(times)
                 stats[modality] = {
@@ -270,14 +292,19 @@ class MultiModalPerformanceMonitor:
         return stats
 
     def _calculate_throughput(self) -> Dict[str, Any]:
-        """Calculate throughput metrics for each modality"""
+        """Calculate throughput metrics for each modality (thread-safe)"""
         throughput = {}
 
-        for modality, history in self.throughput_history.items():
+        # Copy data under lock
+        with self._lock:
+            history_copy = {k: list(v) for k, v in self.throughput_history.items()}
+
+        current_time = time.time()
+        for modality, history in history_copy.items():
             if len(history) > 0:
                 # Calculate items per second over different time windows
-                recent_1min = [x for x in history if time.time() - x[0] <= 60]
-                recent_5min = [x for x in history if time.time() - x[0] <= 300]
+                recent_1min = [x for x in history if current_time - x[0] <= 60]
+                recent_5min = [x for x in history if current_time - x[0] <= 300]
 
                 throughput[modality] = {
                     "items_per_second_1min": (
@@ -294,23 +321,27 @@ class MultiModalPerformanceMonitor:
     def record_processing(
         self, modality: str, processing_time: float, items_processed: int = 1
     ):
-        """Record processing completion for performance tracking"""
+        """Record processing completion for performance tracking (thread-safe)"""
         timestamp = time.time()
 
-        # Record processing time
-        self.processing_times[modality].append(processing_time)
+        # Update shared state under lock
+        with self._lock:
+            # Record processing time
+            self.processing_times[modality].append(processing_time)
 
-        # Record throughput
-        for _ in range(items_processed):
-            self.throughput_history[modality].append((timestamp, 1))
+            # Record throughput
+            for _ in range(items_processed):
+                self.throughput_history[modality].append((timestamp, 1))
 
     def get_optimal_batch_size(self, modality: str) -> int:
-        """Get the optimal batch size for a given modality"""
-        return self.batch_sizes.get(modality, 1)
+        """Get the optimal batch size for a given modality (thread-safe)"""
+        with self._lock:
+            return self.batch_sizes.get(modality, 1)
 
     def should_optimize(self) -> bool:
-        """Check if performance optimization should be triggered"""
-        return time.time() - self.last_optimization > self.optimization_interval
+        """Check if performance optimization should be triggered (thread-safe)"""
+        with self._lock:
+            return time.time() - self.last_optimization > self.optimization_interval
 
     async def auto_optimize(self):
         """Automatically optimize performance if needed"""
@@ -318,13 +349,16 @@ class MultiModalPerformanceMonitor:
             await self.optimize_gpu_memory()
 
     def get_performance_summary(self) -> Dict[str, Any]:
-        """Get a summary of recent performance metrics"""
-        if not self.metrics_history:
-            return {"status": "no_data"}
+        """Get a summary of recent performance metrics (thread-safe)"""
+        # Copy data under lock
+        with self._lock:
+            if not self.metrics_history:
+                return {"status": "no_data"}
+            recent_metrics = list(self.metrics_history)[-10:]  # Last 10 measurements
+            batch_sizes_copy = self.batch_sizes.copy()
+            last_optimization = self.last_optimization
 
-        recent_metrics = list(self.metrics_history)[-10:]  # Last 10 measurements
-
-        # Calculate averages
+        # Calculate averages outside lock
         avg_cpu = np.mean([m.get("cpu_utilization", 0) for m in recent_metrics])
         avg_ram = np.mean(
             [m.get("ram_usage", {}).get("percent", 0) for m in recent_metrics]
@@ -349,14 +383,14 @@ class MultiModalPerformanceMonitor:
             "average_cpu_utilization": float(avg_cpu),
             "average_ram_utilization": float(avg_ram),
             "average_gpu_utilization": float(gpu_utilization),
-            "current_batch_sizes": self.batch_sizes.copy(),
+            "current_batch_sizes": batch_sizes_copy,
             "gpu_available": self.gpu_available,
             "mixed_precision_capable": (
                 self.gpu_available and hasattr(torch.cuda, "amp")
             ),
-            "last_optimization": self.last_optimization,
+            "last_optimization": last_optimization,
             "optimization_status": (
-                "recent" if time.time() - self.last_optimization < 60 else "needed"
+                "recent" if time.time() - last_optimization < 60 else "needed"
             ),
         }
 
