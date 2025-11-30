@@ -1,6 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import ApiClient from '../utils/ApiClient.js'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for DashboardStore
+const logger = createLogger('DashboardStore')
 
 export const useDashboardStore = defineStore('dashboard', () => {
   // State
@@ -135,7 +139,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       metrics.value.loading = true
       metrics.value.error = null
       
-      console.log('Fetching dashboard metrics from /api/metrics/dashboard/comprehensive')
+      logger.debug('Fetching dashboard metrics from /api/metrics/dashboard/comprehensive')
       
       const response = await ApiClient.get('/api/metrics/dashboard/comprehensive')
       
@@ -144,7 +148,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         Object.assign(metrics.value, response)
         lastRefresh.value = new Date()
         
-        console.log('Dashboard metrics updated successfully:', {
+        logger.debug('Dashboard metrics updated successfully:', {
           tasks: response.tasks?.completed || 0,
           performance: response.performance?.score || 0,
           cpu: response.performance?.cpu_usage || 0,
@@ -155,7 +159,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       }
       
     } catch (error) {
-      console.error('Failed to fetch dashboard metrics:', error)
+      logger.error('Failed to fetch dashboard metrics:', error)
       metrics.value.error = error.message || 'Failed to load dashboard data'
       
       // Keep existing data on error, don't reset to empty values
@@ -180,7 +184,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         metrics.value.tasks.active = response.active_workflows || 0
       }
     } catch (error) {
-      console.warn('Failed to fetch real-time metrics:', error.message)
+      logger.warn('Failed to fetch real-time metrics:', error.message)
       // Don't throw error for real-time updates
     }
   }
@@ -203,7 +207,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       }
     }, refreshInterval.value)
     
-    console.log(`Dashboard auto-refresh started (${refreshInterval.value / 1000}s interval)`)
+    logger.debug(`Dashboard auto-refresh started (${refreshInterval.value / 1000}s interval)`)
   }
   
   function stopAutoRefresh() {
@@ -211,7 +215,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       clearInterval(refreshTimer)
       refreshTimer = null
       autoRefreshEnabled.value = false
-      console.log('Dashboard auto-refresh stopped')
+      logger.debug('Dashboard auto-refresh stopped')
     }
   }
   
@@ -226,7 +230,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   }
   
   async function refreshNow() {
-    console.log('Manual dashboard refresh triggered')
+    logger.debug('Manual dashboard refresh triggered')
     await Promise.all([
       fetchDashboardMetrics(),
       fetchRealtimeMetrics()

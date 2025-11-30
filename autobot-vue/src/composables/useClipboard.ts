@@ -42,6 +42,10 @@
  */
 
 import { ref, computed, type Ref, type ComputedRef } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for useClipboard
+const logger = createLogger('useClipboard')
 
 // ========================================
 // Types & Interfaces
@@ -211,7 +215,7 @@ export function useClipboard(options: ClipboardOptions = {}): UseClipboardReturn
       const success = document.execCommand('copy')
       return success
     } catch (err) {
-      console.error('[useClipboard] Fallback copy failed:', err)
+      logger.error('Fallback copy failed:', err)
       return false
     } finally {
       // Always clean up textarea, even if copy fails
@@ -270,7 +274,7 @@ export function useClipboard(options: ClipboardOptions = {}): UseClipboardReturn
       const errorObj = err instanceof Error ? err : new Error(String(err))
       error.value = errorObj
 
-      console.error('[useClipboard] Copy failed:', errorObj)
+      logger.error('Copy failed:', errorObj)
 
       if (onError) {
         await onError(errorObj)
@@ -364,7 +368,7 @@ export function useClipboardElement(options: ClipboardOptions = {}) {
     const el = element instanceof HTMLElement ? element : element.value
 
     if (!el) {
-      console.error('[useClipboardElement] Invalid element')
+      logger.error('Invalid element')
       return false
     }
 
