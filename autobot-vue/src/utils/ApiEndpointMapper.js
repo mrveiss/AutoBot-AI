@@ -4,6 +4,10 @@
  */
 
 import { NetworkConstants } from '@/constants/network';
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for ApiEndpointMapper
+const logger = createLogger('ApiEndpointMapper');
 
 class ApiEndpointMapper {
   constructor() {
@@ -62,7 +66,7 @@ class ApiEndpointMapper {
 
       return response
     } catch (error) {
-      console.warn(`[ApiEndpointMapper] Fetch failed for ${endpoint}, using fallback:`, error.message)
+      logger.warn(`[ApiEndpointMapper] Fetch failed for ${endpoint}, using fallback:`, error.message)
 
       // Use fallback data if available
       const fallback = this.fallbackData.get(endpoint) || this._getDefaultFallback(endpoint)

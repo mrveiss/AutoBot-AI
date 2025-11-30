@@ -3,6 +3,11 @@
  * Provides debugging insights for store operations
  */
 
+import { createLogger } from '@/utils/debugUtils';
+
+// Create scoped logger for StoreMonitor
+const logger = createLogger('StoreMonitor');
+
 class StoreMonitor {
   constructor() {
     this.isEnabled = !import.meta.env.PROD; // Only enable in development
@@ -77,11 +82,11 @@ class StoreMonitor {
 
     // Console logging for development
     if (status === 'error') {
-      console.warn(`🏪 Store Error [${storeName}.${actionName}]:`, error?.message, `(${duration}ms)`);
+      logger.warn(`🏪 Store Error [${storeName}.${actionName}]:`, error?.message, `(${duration}ms)`);
     } else if (duration > 500) {
-      console.info(`🏪 Slow Store Action [${storeName}.${actionName}]:`, `${duration}ms`);
+      logger.info(`🏪 Slow Store Action [${storeName}.${actionName}]:`, `${duration}ms`);
     } else {
-      console.debug(`🏪 Store Action [${storeName}.${actionName}]:`, `${duration}ms`);
+      logger.debug(`🏪 Store Action [${storeName}.${actionName}]:`, `${duration}ms`);
     }
   }
 
@@ -103,7 +108,7 @@ class StoreMonitor {
       window.rum.reportCriticalIssue('slow_store_operation', slowOp);
     }
 
-    console.warn('🐌 Slow Store Operation:', slowOp);
+    logger.warn('🐌 Slow Store Operation:', slowOp);
   }
 
   /**

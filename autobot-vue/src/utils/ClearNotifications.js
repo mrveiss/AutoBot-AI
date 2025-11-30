@@ -5,6 +5,10 @@
  */
 
 import { useAppStore } from '@/stores/useAppStore'
+import { createLogger } from '@/utils/debugUtils'
+
+// Create scoped logger for ClearNotifications
+const logger = createLogger('ClearNotifications')
 
 export function clearAllSystemNotifications() {
   try {
@@ -26,7 +30,7 @@ export function clearAllSystemNotifications() {
 
     return true
   } catch (error) {
-    console.error('[ClearNotifications] Error clearing notifications:', error)
+    logger.error('[ClearNotifications] Error clearing notifications:', error)
     return false
   }
 }
@@ -57,7 +61,7 @@ export function resetHealthMonitor() {
 
     return true
   } catch (error) {
-    console.error('[ClearNotifications] Error resetting health monitor:', error)
+    logger.error('[ClearNotifications] Error resetting health monitor:', error)
     return false
   }
 }
