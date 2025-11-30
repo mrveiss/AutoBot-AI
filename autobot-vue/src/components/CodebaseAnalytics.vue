@@ -800,7 +800,6 @@ import appConfig from '@/config/AppConfig.js'
 import { NetworkConstants } from '@/constants/network.ts'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
-import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { useToast } from '@/composables/useToast'
 
 // ApexCharts components
@@ -1141,33 +1140,23 @@ const cancelIndexingJob = async () => {
 
 // Fetch project root from backend configuration
 const loadProjectRoot = async () => {
-  const { execute: fetchConfig } = useAsyncHandler(
-    async () => {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const configEndpoint = `${backendUrl}/api/frontend-config`
-      const response = await fetch(configEndpoint)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch config: ${response.status}`)
-      }
-      return response.json()
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (config) => {
-        if (config.project && config.project.root_path) {
-          rootPath.value = config.project.root_path
-        } else {
-          console.warn('⚠️ Project root not found in config, using default')
-        }
-      },
-      onError: () => {
-        progressStatus.value = 'Please enter project path to analyze'
-      }
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const configEndpoint = `${backendUrl}/api/frontend-config`
+    const response = await fetch(configEndpoint)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch config: ${response.status}`)
     }
-  )
-
-  await fetchConfig()
+    const config = await response.json()
+    if (config.project && config.project.root_path) {
+      rootPath.value = config.project.root_path
+    } else {
+      console.warn('⚠️ Project root not found in config, using default')
+    }
+  } catch (error) {
+    console.error('[CodebaseAnalytics] Failed to load project root:', error)
+    progressStatus.value = 'Please enter project path to analyze'
+  }
 }
 
 // Load all codebase analytics data (silent mode - no alerts)
@@ -1434,71 +1423,51 @@ const handleFunctionSelect = (funcId: string) => {
 // Silent version of declarations loading (no alerts)
 const loadDeclarations = async () => {
   loadingProgress.declarations = true
-
-  const { execute: fetchDeclarations } = useAsyncHandler(
-    async () => {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const declarationsEndpoint = `${backendUrl}/api/analytics/codebase/declarations`
-      const response = await fetch(declarationsEndpoint, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      })
-      if (!response.ok) {
-        throw new Error(`Declarations endpoint returned ${response.status}`)
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const declarationsEndpoint = `${backendUrl}/api/analytics/codebase/declarations`
+    const response = await fetch(declarationsEndpoint, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
       }
-      return response.json()
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (data) => {
-        declarationAnalysis.value = data.declarations || []
-      },
-      onFinally: () => {
-        loadingProgress.declarations = false
-      }
+    })
+    if (!response.ok) {
+      throw new Error(`Declarations endpoint returned ${response.status}`)
     }
-  )
-
-  await fetchDeclarations()
+    const data = await response.json()
+    declarationAnalysis.value = data.declarations || []
+  } catch (error) {
+    console.error('[CodebaseAnalytics] Failed to load declarations:', error)
+  } finally {
+    loadingProgress.declarations = false
+  }
 }
 
 // Silent version of duplicates loading (no alerts)
 const loadDuplicates = async () => {
   loadingProgress.duplicates = true
-
-  const { execute: fetchDuplicates } = useAsyncHandler(
-    async () => {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const duplicatesEndpoint = `${backendUrl}/api/analytics/codebase/duplicates`
-      const response = await fetch(duplicatesEndpoint, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      })
-      if (!response.ok) {
-        throw new Error(`Duplicates endpoint returned ${response.status}`)
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const duplicatesEndpoint = `${backendUrl}/api/analytics/codebase/duplicates`
+    const response = await fetch(duplicatesEndpoint, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
       }
-      return response.json()
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (data) => {
-        duplicateAnalysis.value = data.duplicates || []
-      },
-      onFinally: () => {
-        loadingProgress.duplicates = false
-      }
+    })
+    if (!response.ok) {
+      throw new Error(`Duplicates endpoint returned ${response.status}`)
     }
-  )
-
-  await fetchDuplicates()
+    const data = await response.json()
+    duplicateAnalysis.value = data.duplicates || []
+  } catch (error) {
+    console.error('[CodebaseAnalytics] Failed to load duplicates:', error)
+  } finally {
+    loadingProgress.duplicates = false
+  }
 }
 
 onUnmounted(() => {
@@ -1521,81 +1490,64 @@ const indexCodebase = async () => {
   progressPercent.value = 10
   progressStatus.value = 'Starting codebase indexing...'
 
-  const { execute: runIndexing } = useAsyncHandler(
-    async () => {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const indexEndpoint = `${backendUrl}/api/analytics/codebase/index`
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const indexEndpoint = `${backendUrl}/api/analytics/codebase/index`
 
-      const response = await fetch(indexEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ root_path: rootPath.value })
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Status ${response.status}: ${errorText}`)
-      }
-
-      return response.json()
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: async (data) => {
-        // Check if this is a new job or already running
-        if (data.status === 'already_running') {
-          currentJobId.value = data.task_id
-          progressStatus.value = 'Indexing already in progress, monitoring...'
-          notify('Indexing job already running, now monitoring', 'info')
-        } else {
-          currentJobId.value = data.task_id
-          progressStatus.value = 'Indexing started...'
-          notify('Codebase indexing started', 'success')
-        }
-
-        // Start polling for job status updates
-        progressPercent.value = 20
-        startJobPolling()
+    const response = await fetch(indexEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-      onError: (error) => {
-        progressStatus.value = `Indexing failed to start: ${error.message}`
-        notify(`Indexing failed: ${error.message}`, 'error')
-        analyzing.value = false
-      }
-    }
-  )
+      body: JSON.stringify({ root_path: rootPath.value })
+    })
 
-  await runIndexing()
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Status ${response.status}: ${errorText}`)
+    }
+
+    const data = await response.json()
+
+    // Check if this is a new job or already running
+    if (data.status === 'already_running') {
+      currentJobId.value = data.task_id
+      progressStatus.value = 'Indexing already in progress, monitoring...'
+      notify('Indexing job already running, now monitoring', 'info')
+    } else {
+      currentJobId.value = data.task_id
+      progressStatus.value = 'Indexing started...'
+      notify('Codebase indexing started', 'success')
+    }
+
+    // Start polling for job status updates
+    progressPercent.value = 20
+    startJobPolling()
+  } catch (error) {
+    console.error('[CodebaseAnalytics] Indexing failed:', error)
+    progressStatus.value = `Indexing failed to start: ${error.message}`
+    notify(`Indexing failed: ${error.message}`, 'error')
+    analyzing.value = false
+  }
 }
 
 
 // Get codebase statistics
 const getCodebaseStats = async () => {
-  const { execute: fetchStats } = useAsyncHandler(
-    async () => {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const statsEndpoint = `${backendUrl}/api/analytics/codebase/stats`
-      const response = await fetch(statsEndpoint)
-      if (!response.ok) {
-        throw new Error(`Stats endpoint returned ${response.status}`)
-      }
-      return response.json()
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (data) => {
-        if (data.status === 'success' && data.stats) {
-          codebaseStats.value = data.stats
-        }
-      }
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const statsEndpoint = `${backendUrl}/api/analytics/codebase/stats`
+    const response = await fetch(statsEndpoint)
+    if (!response.ok) {
+      throw new Error(`Stats endpoint returned ${response.status}`)
     }
-  )
-
-  await fetchStats()
+    const data = await response.json()
+    if (data.status === 'success' && data.stats) {
+      codebaseStats.value = data.stats
+    }
+  } catch (error) {
+    console.error('[CodebaseAnalytics] Failed to get stats:', error)
+  }
 }
 
 // Get problems report
@@ -1603,29 +1555,20 @@ const getProblemsReport = async () => {
   loadingProgress.problems = true
   progressStatus.value = 'Analyzing code problems...'
 
-  const { execute: fetchProblems } = useAsyncHandler(
-    async () => {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const problemsEndpoint = `${backendUrl}/api/analytics/codebase/problems`
-      const response = await fetch(problemsEndpoint)
-      if (!response.ok) {
-        throw new Error(`Problems endpoint returned ${response.status}`)
-      }
-      return response.json()
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (data) => {
-        problemsReport.value = data.problems || []
-      },
-      onFinally: () => {
-        loadingProgress.problems = false
-      }
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const problemsEndpoint = `${backendUrl}/api/analytics/codebase/problems`
+    const response = await fetch(problemsEndpoint)
+    if (!response.ok) {
+      throw new Error(`Problems endpoint returned ${response.status}`)
     }
-  )
-
-  await fetchProblems()
+    const data = await response.json()
+    problemsReport.value = data.problems || []
+  } catch (error) {
+    console.error('[CodebaseAnalytics] Failed to get problems:', error)
+  } finally {
+    loadingProgress.problems = false
+  }
 }
 
 // Get declarations data with improved error handling (debug button)
@@ -1634,43 +1577,32 @@ const getDeclarationsData = async () => {
   loadingProgress.declarations = true
   progressStatus.value = 'Processing declarations...'
 
-  const { execute: fetchDeclarations } = useAsyncHandler(
-    async () => {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const declarationsEndpoint = `${backendUrl}/api/analytics/codebase/declarations`
-      const response = await fetch(declarationsEndpoint, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      })
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Status ${response.status}: ${errorText}`)
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const declarationsEndpoint = `${backendUrl}/api/analytics/codebase/declarations`
+    const response = await fetch(declarationsEndpoint, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
       }
-      return response.json()
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (data) => {
-        const responseTime = Date.now() - startTime
-        declarationAnalysis.value = data.declarations || []
-        notify(`Found ${declarationAnalysis.value.length} declarations (${responseTime}ms)`, 'success')
-      },
-      onError: (error) => {
-        const responseTime = Date.now() - startTime
-        notify(`Declarations failed: ${error.message} (${responseTime}ms)`, 'error')
-      },
-      onFinally: () => {
-        loadingProgress.declarations = false
-        progressStatus.value = 'Ready'
-      }
+    })
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Status ${response.status}: ${errorText}`)
     }
-  )
-
-  await fetchDeclarations()
+    const data = await response.json()
+    const responseTime = Date.now() - startTime
+    declarationAnalysis.value = data.declarations || []
+    notify(`Found ${declarationAnalysis.value.length} declarations (${responseTime}ms)`, 'success')
+  } catch (error) {
+    const responseTime = Date.now() - startTime
+    console.error('[CodebaseAnalytics] Declarations failed:', error)
+    notify(`Declarations failed: ${error.message} (${responseTime}ms)`, 'error')
+  } finally {
+    loadingProgress.declarations = false
+    progressStatus.value = 'Ready'
+  }
 }
 
 // Get duplicates data (debug button)
@@ -1679,43 +1611,32 @@ const getDuplicatesData = async () => {
   progressStatus.value = 'Finding duplicate code...'
   const startTime = Date.now()
 
-  const { execute: fetchDuplicates } = useAsyncHandler(
-    async () => {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const duplicatesEndpoint = `${backendUrl}/api/analytics/codebase/duplicates`
-      const response = await fetch(duplicatesEndpoint, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      })
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Status ${response.status}: ${errorText}`)
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const duplicatesEndpoint = `${backendUrl}/api/analytics/codebase/duplicates`
+    const response = await fetch(duplicatesEndpoint, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
       }
-      return response.json()
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (data) => {
-        const responseTime = Date.now() - startTime
-        duplicateAnalysis.value = data.duplicates || []
-        notify(`Found ${duplicateAnalysis.value.length} duplicates (${responseTime}ms)`, 'success')
-      },
-      onError: (error) => {
-        const responseTime = Date.now() - startTime
-        notify(`Duplicates failed: ${error.message} (${responseTime}ms)`, 'error')
-      },
-      onFinally: () => {
-        loadingProgress.duplicates = false
-        progressStatus.value = 'Ready'
-      }
+    })
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Status ${response.status}: ${errorText}`)
     }
-  )
-
-  await fetchDuplicates()
+    const data = await response.json()
+    const responseTime = Date.now() - startTime
+    duplicateAnalysis.value = data.duplicates || []
+    notify(`Found ${duplicateAnalysis.value.length} duplicates (${responseTime}ms)`, 'success')
+  } catch (error) {
+    const responseTime = Date.now() - startTime
+    console.error('[CodebaseAnalytics] Duplicates failed:', error)
+    notify(`Duplicates failed: ${error.message} (${responseTime}ms)`, 'error')
+  } finally {
+    loadingProgress.duplicates = false
+    progressStatus.value = 'Ready'
+  }
 }
 
 // Get hardcodes data (debug button)
@@ -1724,44 +1645,33 @@ const getHardcodesData = async () => {
   progressStatus.value = 'Detecting hardcoded values...'
   const startTime = Date.now()
 
-  const { execute: fetchHardcodes } = useAsyncHandler(
-    async () => {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const hardcodesEndpoint = `${backendUrl}/api/analytics/codebase/hardcodes`
-      const response = await fetch(hardcodesEndpoint, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      })
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Status ${response.status}: ${errorText}`)
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const hardcodesEndpoint = `${backendUrl}/api/analytics/codebase/hardcodes`
+    const response = await fetch(hardcodesEndpoint, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
       }
-      return response.json()
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (data) => {
-        const responseTime = Date.now() - startTime
-        const hardcodeCount = data.hardcodes ? data.hardcodes.length : 0
-        const hardcodeTypes = data.hardcodes ? [...new Set(data.hardcodes.map(h => h.type))].join(', ') : 'none'
-        notify(`Found ${hardcodeCount} hardcodes (${hardcodeTypes}) - ${responseTime}ms`, 'success')
-      },
-      onError: (error) => {
-        const responseTime = Date.now() - startTime
-        notify(`Hardcodes failed: ${error.message} (${responseTime}ms)`, 'error')
-      },
-      onFinally: () => {
-        loadingProgress.hardcodes = false
-        progressStatus.value = 'Ready'
-      }
+    })
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Status ${response.status}: ${errorText}`)
     }
-  )
-
-  await fetchHardcodes()
+    const data = await response.json()
+    const responseTime = Date.now() - startTime
+    const hardcodeCount = data.hardcodes ? data.hardcodes.length : 0
+    const hardcodeTypes = data.hardcodes ? [...new Set(data.hardcodes.map(h => h.type))].join(', ') : 'none'
+    notify(`Found ${hardcodeCount} hardcodes (${hardcodeTypes}) - ${responseTime}ms`, 'success')
+  } catch (error) {
+    const responseTime = Date.now() - startTime
+    console.error('[CodebaseAnalytics] Hardcodes failed:', error)
+    notify(`Hardcodes failed: ${error.message} (${responseTime}ms)`, 'error')
+  } finally {
+    loadingProgress.hardcodes = false
+    progressStatus.value = 'Ready'
+  }
 }
 
 // Debug function to check data state
@@ -1780,120 +1690,103 @@ const testDataState = () => {
 const testNpuConnection = async () => {
   const startTime = Date.now()
 
-  const { execute: testNpu } = useAsyncHandler(
-    async () => {
-      const npuWorkerUrl = `http://${import.meta.env.VITE_NPU_WORKER_HOST || NetworkConstants.NPU_WORKER_VM_IP}:${import.meta.env.VITE_NPU_WORKER_PORT || NetworkConstants.NPU_WORKER_PORT}`
-      const npuEndpoint = `${npuWorkerUrl}/health`
-      const response = await fetch(npuEndpoint, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      })
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Status ${response.status}: ${errorText}`)
+  try {
+    const npuWorkerUrl = `http://${import.meta.env.VITE_NPU_WORKER_HOST || NetworkConstants.NPU_WORKER_VM_IP}:${import.meta.env.VITE_NPU_WORKER_PORT || NetworkConstants.NPU_WORKER_PORT}`
+    const npuEndpoint = `${npuWorkerUrl}/health`
+    const response = await fetch(npuEndpoint, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
       }
-      return response.json()
-    },
-    {
-      errorMessage: 'NPU connection failed',
-      notify,
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (data) => {
-        const responseTime = Date.now() - startTime
-        const npuStatus = data.available ? 'Available' : 'Not Available'
-        notify(`NPU: ${npuStatus} (${responseTime}ms)`, data.available ? 'success' : 'warning')
-      },
-      onError: (error) => {
-        const responseTime = Date.now() - startTime
-        notify(`NPU failed: ${error.message} (${responseTime}ms)`, 'error')
-      }
+    })
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Status ${response.status}: ${errorText}`)
     }
-  )
-
-  await testNpu()
+    const data = await response.json()
+    const responseTime = Date.now() - startTime
+    const npuStatus = data.available ? 'Available' : 'Not Available'
+    notify(`NPU: ${npuStatus} (${responseTime}ms)`, data.available ? 'success' : 'warning')
+  } catch (error) {
+    const responseTime = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('[CodebaseAnalytics] NPU connection failed:', error)
+    notify(`NPU failed: ${errorMessage} (${responseTime}ms)`, 'error')
+  }
 }
 
 // NEW: Test all endpoints functionality
 const testAllEndpoints = async () => {
   progressStatus.value = 'Testing all API endpoints...'
 
-  const { execute: runTests } = useAsyncHandler(
-    async () => {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const results = []
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const results: string[] = []
 
-      // Test declarations
-      try {
-        const declarationsEndpoint = `${backendUrl}/api/analytics/codebase/declarations`
-        const response = await fetch(declarationsEndpoint)
-        results.push(`Declarations: ${response.ok ? '✅' : '❌'} (${response.status})`)
-      } catch (error) {
-        results.push(`Declarations: ❌ (${error.message})`)
-      }
-
-      // Test duplicates
-      try {
-        const duplicatesEndpoint = `${backendUrl}/api/analytics/codebase/duplicates`
-        const response = await fetch(duplicatesEndpoint)
-        results.push(`Duplicates: ${response.ok ? '✅' : '❌'} (${response.status})`)
-      } catch (error) {
-        results.push(`Duplicates: ❌ (${error.message})`)
-      }
-
-      // Test hardcodes
-      try {
-        const hardcodesEndpoint = `${backendUrl}/api/analytics/codebase/hardcodes`
-        const response = await fetch(hardcodesEndpoint)
-        results.push(`Hardcodes: ${response.ok ? '✅' : '❌'} (${response.status})`)
-      } catch (error) {
-        results.push(`Hardcodes: ❌ (${error.message})`)
-      }
-
-      // Test NPU
-      try {
-        const npuEndpoint = `${backendUrl}/api/monitoring/phase9/hardware/npu`
-        const response = await fetch(npuEndpoint)
-        results.push(`NPU: ${response.ok ? '✅' : '❌'} (${response.status})`)
-      } catch (error) {
-        results.push(`NPU: ❌ (${error.message})`)
-      }
-
-      // Test stats
-      try {
-        const statsEndpoint = `${backendUrl}/api/analytics/codebase/stats`
-        const response = await fetch(statsEndpoint)
-        results.push(`Stats: ${response.ok ? '✅' : '❌'} (${response.status})`)
-      } catch (error) {
-        results.push(`Stats: ❌ (${error.message})`)
-      }
-
-      return results
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (results) => {
-        const passed = results.filter(r => r.includes('✅')).length
-        const failed = results.filter(r => r.includes('❌')).length
-        const summary = `API Tests: ${passed}/${results.length} passed`
-        notify(summary, failed === 0 ? 'success' : 'warning')
-        // Log full results to console for detailed review
-        console.log('API Test Results:', results.join('\n'))
-      },
-      onError: (error) => {
-        notify(`API tests failed: ${error.message}`, 'error')
-      },
-      onFinally: () => {
-        progressStatus.value = 'Ready'
-      }
+    // Test declarations
+    try {
+      const declarationsEndpoint = `${backendUrl}/api/analytics/codebase/declarations`
+      const response = await fetch(declarationsEndpoint)
+      results.push(`Declarations: ${response.ok ? '✅' : '❌'} (${response.status})`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      results.push(`Declarations: ❌ (${msg})`)
     }
-  )
 
-  await runTests()
+    // Test duplicates
+    try {
+      const duplicatesEndpoint = `${backendUrl}/api/analytics/codebase/duplicates`
+      const response = await fetch(duplicatesEndpoint)
+      results.push(`Duplicates: ${response.ok ? '✅' : '❌'} (${response.status})`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      results.push(`Duplicates: ❌ (${msg})`)
+    }
+
+    // Test hardcodes
+    try {
+      const hardcodesEndpoint = `${backendUrl}/api/analytics/codebase/hardcodes`
+      const response = await fetch(hardcodesEndpoint)
+      results.push(`Hardcodes: ${response.ok ? '✅' : '❌'} (${response.status})`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      results.push(`Hardcodes: ❌ (${msg})`)
+    }
+
+    // Test NPU
+    try {
+      const npuEndpoint = `${backendUrl}/api/monitoring/phase9/hardware/npu`
+      const response = await fetch(npuEndpoint)
+      results.push(`NPU: ${response.ok ? '✅' : '❌'} (${response.status})`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      results.push(`NPU: ❌ (${msg})`)
+    }
+
+    // Test stats
+    try {
+      const statsEndpoint = `${backendUrl}/api/analytics/codebase/stats`
+      const response = await fetch(statsEndpoint)
+      results.push(`Stats: ${response.ok ? '✅' : '❌'} (${response.status})`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      results.push(`Stats: ❌ (${msg})`)
+    }
+
+    const passed = results.filter(r => r.includes('✅')).length
+    const failed = results.filter(r => r.includes('❌')).length
+    const summary = `API Tests: ${passed}/${results.length} passed`
+    notify(summary, failed === 0 ? 'success' : 'warning')
+    // Log full results to console for detailed review
+    console.log('API Test Results:', results.join('\n'))
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('[CodebaseAnalytics] API tests failed:', error)
+    notify(`API tests failed: ${errorMessage}`, 'error')
+  } finally {
+    progressStatus.value = 'Ready'
+  }
 }
 
 // Code Intelligence: Run anti-pattern/code smell analysis
@@ -1902,51 +1795,41 @@ const runCodeSmellAnalysis = async () => {
   analyzingCodeSmells.value = true
   progressStatus.value = 'Scanning for code smells and anti-patterns...'
 
-  const { execute: fetchCodeSmells } = useAsyncHandler(
-    async () => {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const analyzeEndpoint = `${backendUrl}/api/code-intelligence/analyze`
-      const response = await fetch(analyzeEndpoint, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          path: rootPath.value,
-          exclude_dirs: ['node_modules', '.venv', '__pycache__', '.git', 'archives'],
-          min_severity: 'low'  // Show low and above
-        })
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const analyzeEndpoint = `${backendUrl}/api/code-intelligence/analyze`
+    const response = await fetch(analyzeEndpoint, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        path: rootPath.value,
+        exclude_dirs: ['node_modules', '.venv', '__pycache__', '.git', 'archives'],
+        min_severity: 'low'  // Show low and above
       })
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Status ${response.status}: ${errorText}`)
-      }
-      return response.json()
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (data) => {
-        const responseTime = Date.now() - startTime
-        codeSmellsReport.value = data.report
-        const totalIssues = data.report?.anti_patterns?.length || 0
-        const filesAnalyzed = data.report?.total_files || 0
-        notify(`Found ${totalIssues} code smells in ${filesAnalyzed} files (${responseTime}ms)`, totalIssues > 0 ? 'warning' : 'success')
-        progressStatus.value = `Code smell scan complete: ${totalIssues} issues found`
-      },
-      onError: (error) => {
-        const responseTime = Date.now() - startTime
-        notify(`Code smell analysis failed: ${error.message} (${responseTime}ms)`, 'error')
-        progressStatus.value = 'Code smell analysis failed'
-      },
-      onFinally: () => {
-        analyzingCodeSmells.value = false
-      }
+    })
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Status ${response.status}: ${errorText}`)
     }
-  )
-
-  await fetchCodeSmells()
+    const data = await response.json()
+    const responseTime = Date.now() - startTime
+    codeSmellsReport.value = data.report
+    const totalIssues = data.report?.anti_patterns?.length || 0
+    const filesAnalyzed = data.report?.total_files || 0
+    notify(`Found ${totalIssues} code smells in ${filesAnalyzed} files (${responseTime}ms)`, totalIssues > 0 ? 'warning' : 'success')
+    progressStatus.value = `Code smell scan complete: ${totalIssues} issues found`
+  } catch (error) {
+    const responseTime = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('[CodebaseAnalytics] Code smell analysis failed:', error)
+    notify(`Code smell analysis failed: ${errorMessage} (${responseTime}ms)`, 'error')
+    progressStatus.value = 'Code smell analysis failed'
+  } finally {
+    analyzingCodeSmells.value = false
+  }
 }
 
 // Code Intelligence: Get codebase health score
@@ -1955,46 +1838,36 @@ const getCodeHealthScore = async () => {
   analyzingCodeSmells.value = true
   progressStatus.value = 'Calculating codebase health score...'
 
-  const { execute: fetchHealthScore } = useAsyncHandler(
-    async () => {
-      const backendUrl = await appConfig.getServiceUrl('backend')
-      const healthEndpoint = `${backendUrl}/api/code-intelligence/health-score?path=${encodeURIComponent(rootPath.value)}`
-      const response = await fetch(healthEndpoint, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json'
-        }
-      })
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Status ${response.status}: ${errorText}`)
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const healthEndpoint = `${backendUrl}/api/code-intelligence/health-score?path=${encodeURIComponent(rootPath.value)}`
+    const response = await fetch(healthEndpoint, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
       }
-      return response.json()
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (data) => {
-        const responseTime = Date.now() - startTime
-        codeHealthScore.value = data
-        const score = data.health_score || 0
-        const grade = data.grade || 'N/A'
-        const issues = data.total_issues || 0
-        notify(`Health Score: ${score}/100 (Grade: ${grade}) - ${issues} issues (${responseTime}ms)`, score >= 70 ? 'success' : 'warning')
-        progressStatus.value = `Health Score: ${score}/100 (${grade})`
-      },
-      onError: (error) => {
-        const responseTime = Date.now() - startTime
-        notify(`Health score failed: ${error.message} (${responseTime}ms)`, 'error')
-        progressStatus.value = 'Health score calculation failed'
-      },
-      onFinally: () => {
-        analyzingCodeSmells.value = false
-      }
+    })
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Status ${response.status}: ${errorText}`)
     }
-  )
-
-  await fetchHealthScore()
+    const data = await response.json()
+    const responseTime = Date.now() - startTime
+    codeHealthScore.value = data
+    const score = data.health_score || 0
+    const grade = data.grade || 'N/A'
+    const issues = data.total_issues || 0
+    notify(`Health Score: ${score}/100 (Grade: ${grade}) - ${issues} issues (${responseTime}ms)`, score >= 70 ? 'success' : 'warning')
+    progressStatus.value = `Health Score: ${score}/100 (${grade})`
+  } catch (error) {
+    const responseTime = Date.now() - startTime
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('[CodebaseAnalytics] Health score failed:', error)
+    notify(`Health score failed: ${errorMessage} (${responseTime}ms)`, 'error')
+    progressStatus.value = 'Health score calculation failed'
+  } finally {
+    analyzingCodeSmells.value = false
+  }
 }
 
 // Run full analysis
@@ -2005,201 +1878,151 @@ const runFullAnalysis = async () => {
   progressPercent.value = 0
   const analysisStartTime = Date.now()
 
-  const { execute: executeFullAnalysis } = useAsyncHandler(
-    async () => {
-      progressStatus.value = 'Starting comprehensive analysis...'
-      progressPercent.value = 10
+  try {
+    progressStatus.value = 'Starting comprehensive analysis...'
+    progressPercent.value = 10
 
-      // First ensure codebase is indexed
-      await indexCodebase()
-      progressPercent.value = 30
+    // First ensure codebase is indexed
+    await indexCodebase()
+    progressPercent.value = 30
 
-      await getCodebaseStats()
-      progressPercent.value = 40
+    await getCodebaseStats()
+    progressPercent.value = 40
 
-      await getProblemsReport()
-      progressPercent.value = 50
+    await getProblemsReport()
+    progressPercent.value = 50
 
-      await getDeclarationsData()
-      progressPercent.value = 70
+    await getDeclarationsData()
+    progressPercent.value = 70
 
-      await getDuplicatesData()
-      progressPercent.value = 85
+    await getDuplicatesData()
+    progressPercent.value = 85
 
-      await getHardcodesData()
-      progressPercent.value = 100
+    await getHardcodesData()
+    progressPercent.value = 100
 
-      return Date.now() - analysisStartTime
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (totalAnalysisTime) => {
-        progressStatus.value = `Analysis complete! (${totalAnalysisTime}ms)`
-        notify(`Full analysis completed in ${totalAnalysisTime}ms`, 'success')
-      },
-      onError: (error) => {
-        progressStatus.value = `Analysis failed: ${error.message}`
-        notify(`Analysis failed: ${error.message}`, 'error')
-      },
-      onFinally: () => {
-        analyzing.value = false
-        setTimeout(() => {
-          progressPercent.value = 0
-          progressStatus.value = 'Ready'
-        }, 5000)
-      }
-    }
-  )
-
-  await executeFullAnalysis()
+    const totalAnalysisTime = Date.now() - analysisStartTime
+    progressStatus.value = `Analysis complete! (${totalAnalysisTime}ms)`
+    notify(`Full analysis completed in ${totalAnalysisTime}ms`, 'success')
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('[CodebaseAnalytics] Analysis failed:', error)
+    progressStatus.value = `Analysis failed: ${errorMessage}`
+    notify(`Analysis failed: ${errorMessage}`, 'error')
+  } finally {
+    analyzing.value = false
+    setTimeout(() => {
+      progressPercent.value = 0
+      progressStatus.value = 'Ready'
+    }, 5000)
+  }
 }
 
 // Enhanced Analytics Methods
 // TODO: Replace mock data with actual API calls when endpoints are ready
 const loadSystemOverview = async () => {
-  const { execute: fetchOverview } = useAsyncHandler(
-    async () => {
-      // Mock data for now - replace with actual API call
-      // const backendUrl = await appConfig.getServiceUrl('backend')
-      // const response = await fetch(`${backendUrl}/api/analytics/system/overview`)
-      return {
-        api_requests_per_minute: 142,
-        average_response_time: 85,
-        active_connections: 23,
-        system_health: 'Healthy'
-      }
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (data) => {
-        systemOverview.value = data
-      },
-      onError: () => {
-        // Silent failure for dashboard cards
-      }
+  try {
+    // Mock data for now - replace with actual API call
+    // const backendUrl = await appConfig.getServiceUrl('backend')
+    // const response = await fetch(`${backendUrl}/api/analytics/system/overview`)
+    const data = {
+      api_requests_per_minute: 142,
+      average_response_time: 85,
+      active_connections: 23,
+      system_health: 'Healthy'
     }
-  )
-
-  await fetchOverview()
+    systemOverview.value = data
+  } catch (error) {
+    // Silent failure for dashboard cards
+    console.error('[CodebaseAnalytics] loadSystemOverview failed:', error)
+  }
 }
 
 const loadCommunicationPatterns = async () => {
-  const { execute: fetchPatterns } = useAsyncHandler(
-    async () => {
-      // Mock data for now - replace with actual API call
-      // const backendUrl = await appConfig.getServiceUrl('backend')
-      // const response = await fetch(`${backendUrl}/api/analytics/system/communication`)
-      return {
-        websocket_connections: 5,
-        api_call_frequency: 34,
-        data_transfer_rate: 1.2
-      }
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (data) => {
-        communicationPatterns.value = data
-      },
-      onError: () => {
-        // Silent failure for dashboard cards
-      }
+  try {
+    // Mock data for now - replace with actual API call
+    // const backendUrl = await appConfig.getServiceUrl('backend')
+    // const response = await fetch(`${backendUrl}/api/analytics/system/communication`)
+    const data = {
+      websocket_connections: 5,
+      api_call_frequency: 34,
+      data_transfer_rate: 1.2
     }
-  )
-
-  await fetchPatterns()
+    communicationPatterns.value = data
+  } catch (error) {
+    // Silent failure for dashboard cards
+    console.error('[CodebaseAnalytics] loadCommunicationPatterns failed:', error)
+  }
 }
 
 const loadCodeQuality = async () => {
-  const { execute: fetchQuality } = useAsyncHandler(
-    async () => {
-      const backendUrl = await appConfig.getServiceUrl('backend')
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
 
-      // Fetch health score from quality API
-      const healthResponse = await fetch(`${backendUrl}/api/quality/health-score`)
-      const healthData = healthResponse.ok ? await healthResponse.json() : null
+    // Fetch health score from quality API
+    const healthResponse = await fetch(`${backendUrl}/api/quality/health-score`)
+    const healthData = healthResponse.ok ? await healthResponse.json() : null
 
-      // Fetch duplicates count
-      const duplicatesResponse = await fetch(`${backendUrl}/api/analytics/codebase/duplicates`)
-      const duplicatesData = duplicatesResponse.ok ? await duplicatesResponse.json() : null
+    // Fetch duplicates count
+    const duplicatesResponse = await fetch(`${backendUrl}/api/analytics/codebase/duplicates`)
+    const duplicatesData = duplicatesResponse.ok ? await duplicatesResponse.json() : null
 
-      // Fetch technical debt summary
-      const debtResponse = await fetch(`${backendUrl}/api/debt/summary`)
-      const debtData = debtResponse.ok ? await debtResponse.json() : null
+    // Fetch technical debt summary
+    const debtResponse = await fetch(`${backendUrl}/api/debt/summary`)
+    const debtData = debtResponse.ok ? await debtResponse.json() : null
 
-      // Calculate test coverage from testability score
-      const testCoverage = healthData?.breakdown?.testability || 0
+    // Calculate test coverage from testability score
+    const testCoverage = healthData?.breakdown?.testability || 0
 
-      return {
-        overall_score: Math.round(healthData?.overall || 0),
-        test_coverage: Math.round(testCoverage),
-        code_duplicates: duplicatesData?.total || 0,
-        technical_debt: debtData?.summary?.total_hours || 0
-      }
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (data) => {
-        codeQuality.value = data
-      },
-      onError: () => {
-        // Silent failure for dashboard cards
-      }
+    const data = {
+      overall_score: Math.round(healthData?.overall || 0),
+      test_coverage: Math.round(testCoverage),
+      code_duplicates: duplicatesData?.total || 0,
+      technical_debt: debtData?.summary?.total_hours || 0
     }
-  )
-
-  await fetchQuality()
+    codeQuality.value = data
+  } catch (error) {
+    // Silent failure for dashboard cards
+    console.error('[CodebaseAnalytics] loadCodeQuality failed:', error)
+  }
 }
 
 const loadPerformanceMetrics = async () => {
-  const { execute: fetchPerformance } = useAsyncHandler(
-    async () => {
-      const backendUrl = await appConfig.getServiceUrl('backend')
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
 
-      // Fetch performance summary from performance analytics
-      const summaryResponse = await fetch(`${backendUrl}/api/performance/summary`)
-      const summaryData = summaryResponse.ok ? await summaryResponse.json() : null
+    // Fetch performance summary from performance analytics
+    const summaryResponse = await fetch(`${backendUrl}/api/performance/summary`)
+    const summaryData = summaryResponse.ok ? await summaryResponse.json() : null
 
-      // Fetch monitoring status for uptime
-      const monitoringResponse = await fetch(`${backendUrl}/api/monitoring/status`)
-      const monitoringData = monitoringResponse.ok ? await monitoringResponse.json() : null
+    // Fetch monitoring status for uptime
+    const monitoringResponse = await fetch(`${backendUrl}/api/monitoring/status`)
+    const monitoringData = monitoringResponse.ok ? await monitoringResponse.json() : null
 
-      // Fetch quality metrics for performance breakdown
-      const qualityResponse = await fetch(`${backendUrl}/api/quality/health-score`)
-      const qualityData = qualityResponse.ok ? await qualityResponse.json() : null
+    // Fetch quality metrics for performance breakdown
+    const qualityResponse = await fetch(`${backendUrl}/api/quality/health-score`)
+    const qualityData = qualityResponse.ok ? await qualityResponse.json() : null
 
-      // Get performance score from quality breakdown or performance analysis
-      const performanceScore = qualityData?.breakdown?.performance || 0
-      const efficiencyScore = summaryData?.average_score || performanceScore
+    // Get performance score from quality breakdown or performance analysis
+    const performanceScore = qualityData?.breakdown?.performance || 0
+    const efficiencyScore = summaryData?.average_score || performanceScore
 
-      // Get patterns analyzed count as a proxy for activity
-      const patternsEnabled = summaryData?.patterns_enabled || 0
+    // Get patterns analyzed count as a proxy for activity
+    const patternsEnabled = summaryData?.patterns_enabled || 0
 
-      return {
-        efficiency_score: Math.round(efficiencyScore) || Math.round(performanceScore),
-        memory_usage: patternsEnabled > 0 ? patternsEnabled * 15 : 0, // Patterns as memory proxy
-        cpu_usage: Math.round(100 - performanceScore), // Inverse of performance
-        load_time: monitoringData?.uptime_seconds
-          ? Math.round(monitoringData.uptime_seconds)
-          : 0
-      }
-    },
-    {
-      logErrors: true,
-      errorPrefix: '[CodebaseAnalytics]',
-      onSuccess: (data) => {
-        performanceMetrics.value = data
-      },
-      onError: () => {
-        // Silent failure for dashboard cards
-      }
+    const data = {
+      efficiency_score: Math.round(efficiencyScore) || Math.round(performanceScore),
+      memory_usage: patternsEnabled > 0 ? patternsEnabled * 15 : 0, // Patterns as memory proxy
+      cpu_usage: Math.round(100 - performanceScore), // Inverse of performance
+      load_time: monitoringData?.uptime_seconds
+        ? Math.round(monitoringData.uptime_seconds)
+        : 0
     }
-  )
-
-  await fetchPerformance()
+    performanceMetrics.value = data
+  } catch (error) {
+    // Silent failure for dashboard cards
+    console.error('[CodebaseAnalytics] loadPerformanceMetrics failed:', error)
+  }
 }
 
 const refreshAllMetrics = async () => {

@@ -73,9 +73,13 @@
           <span class="stat-value">{{ data.edges?.length || 0 }}</span>
           <span class="stat-label">Calls</span>
         </div>
-        <div class="stat">
+        <div class="stat stat-resolved" :class="{ active: resolvedFilter === 'resolved' }" @click="toggleResolvedFilter('resolved')">
           <span class="stat-value">{{ summary?.resolved_calls || 0 }}</span>
           <span class="stat-label">Resolved</span>
+        </div>
+        <div class="stat stat-unresolved" :class="{ active: resolvedFilter === 'unresolved' }" @click="toggleResolvedFilter('unresolved')">
+          <span class="stat-value">{{ unresolvedCount }}</span>
+          <span class="stat-label">Unresolved</span>
         </div>
       </div>
 
@@ -278,6 +282,7 @@ const emit = defineEmits<{
 // State
 const searchQuery = ref('')
 const filterModule = ref('')
+const resolvedFilter = ref<'all' | 'resolved' | 'unresolved'>('all')
 const viewMode = ref<'list' | 'graph'>('list')
 const expandedFuncs = ref<Set<string>>(new Set())
 const selectedFunc = ref<string | null>(null)
@@ -294,6 +299,16 @@ const uniqueModules = computed(() => {
   if (!props.data?.nodes) return []
   const modules = new Set(props.data.nodes.map(n => n.module))
   return Array.from(modules).sort()
+})
+
+// Calculate unresolved count from edges
+const unresolvedCount = computed(() => {
+  if (props.summary?.unresolved_calls !== undefined) {
+    return props.summary.unresolved_calls
+  }
+  // Fallback: calculate from edges
+  if (!props.data?.edges) return 0
+  return props.data.edges.filter(e => !e.resolved).length
 })
 
 const filteredNodes = computed(() => {
@@ -314,6 +329,21 @@ const filteredNodes = computed(() => {
       n.full_name.toLowerCase().includes(query) ||
       n.module.toLowerCase().includes(query)
     )
+  }
+
+  // Filter by resolved status
+  if (resolvedFilter.value !== 'all') {
+    const showResolved = resolvedFilter.value === 'resolved'
+    nodes = nodes.filter(n => {
+      const outgoingCalls = getOutgoingCalls(n.id)
+      if (showResolved) {
+        // Show functions that have at least one resolved outgoing call
+        return outgoingCalls.some(e => e.resolved)
+      } else {
+        // Show functions that have at least one unresolved outgoing call
+        return outgoingCalls.some(e => !e.resolved)
+      }
+    })
   }
 
   // Sort by call count
@@ -359,6 +389,14 @@ function toggleFunction(funcId: string) {
   expandedFuncs.value = new Set(expandedFuncs.value)
   selectedFunc.value = funcId
   emit('select', funcId)
+}
+
+function toggleResolvedFilter(filter: 'resolved' | 'unresolved') {
+  if (resolvedFilter.value === filter) {
+    resolvedFilter.value = 'all'
+  } else {
+    resolvedFilter.value = filter
+  }
 }
 
 function truncateModule(mod: string): string {
@@ -537,6 +575,47 @@ watch(() => props.data, (newData) => {
   font-size: 11px;
   color: var(--color-text-tertiary, #64748b);
   text-transform: uppercase;
+}
+
+/* Clickable resolved/unresolved filter stats */
+.stat-resolved,
+.stat-unresolved {
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.stat-resolved:hover,
+.stat-unresolved:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.stat-resolved.active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.stat-resolved.active .stat-value {
+  color: #10b981;
+}
+
+.stat-resolved.active .stat-label {
+  color: #34d399;
+}
+
+.stat-unresolved.active {
+  background: rgba(251, 146, 60, 0.15);
+  border-color: rgba(251, 146, 60, 0.3);
+}
+
+.stat-unresolved.active .stat-value {
+  color: #fb923c;
+}
+
+.stat-unresolved.active .stat-label {
+  color: #fdba74;
 }
 
 /* List View */
