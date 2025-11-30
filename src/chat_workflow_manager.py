@@ -1617,12 +1617,11 @@ Explain what it means and answer their original question."""
             logger.info(
                 f"[ChatWorkflowManager] Prompt length: {len(full_prompt)} characters"
             )
-            print("\n" + "=" * 80, flush=True)
-            print("=== OLLAMA REQUEST DEBUG ===", flush=True)
-            print(f"Endpoint: {ollama_endpoint}", flush=True)
-            print(f"Model: {selected_model}", flush=True)
-            print(f"Prompt length: {len(full_prompt)} characters", flush=True)
-            print("=" * 80 + "\n", flush=True)
+            logger.debug(
+                f"[ChatWorkflowManager] OLLAMA REQUEST DEBUG: "
+                f"Endpoint={ollama_endpoint}, Model={selected_model}, "
+                f"Prompt length={len(full_prompt)} characters"
+            )
 
             # Stage 3: Stream LLM response and handle tool calls
             try:

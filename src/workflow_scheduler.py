@@ -10,6 +10,9 @@ and managed with priority-based execution.
 """
 
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 import heapq
 import json
 from dataclasses import asdict, dataclass
@@ -461,7 +464,7 @@ class WorkflowScheduler:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"Scheduler loop error: {e}")
+                logger.error(f"Scheduler loop error: {e}")
                 await asyncio.sleep(30)  # Back off on error
 
     async def _process_scheduled_workflows(self) -> None:
@@ -475,7 +478,7 @@ class WorkflowScheduler:
             ):
                 # Move to queue
                 self.queue.add(workflow)
-                print(f"Queued workflow {workflow.id}: {workflow.name}")
+                logger.info(f"Queued workflow {workflow.id}: {workflow.name}")
 
     async def _execute_queued_workflows(self) -> None:
         """Execute workflows from queue"""
@@ -487,7 +490,7 @@ class WorkflowScheduler:
             if not workflow:
                 break
 
-            print(f"Executing workflow {workflow.id}: {workflow.name}")
+            logger.info(f"Executing workflow {workflow.id}: {workflow.name}")
 
             # Execute workflow in background
             asyncio.create_task(self._execute_workflow(workflow))
@@ -501,13 +504,13 @@ class WorkflowScheduler:
                 if result and result.get("success"):
                     self.queue.complete_workflow(workflow.id, WorkflowStatus.COMPLETED)
                     self._move_to_completed(workflow)
-                    print(f"Workflow {workflow.id} completed successfully")
+                    logger.info(f"Workflow {workflow.id} completed successfully")
                 else:
                     # Handle failure with retry logic
                     await self._handle_workflow_failure(workflow)
 
         except Exception as e:
-            print(f"Workflow execution error: {e}")
+            logger.error(f"Workflow execution error: {e}")
             await self._handle_workflow_failure(workflow)
 
     async def _handle_workflow_failure(self, workflow: ScheduledWorkflow) -> None:
@@ -521,14 +524,14 @@ class WorkflowScheduler:
             )  # Exponential backoff, max 1 hour
             workflow.scheduled_time = datetime.now() + timedelta(seconds=retry_delay)
             workflow.status = WorkflowStatus.SCHEDULED
-            print(
+            logger.info(
                 f"Rescheduling workflow {workflow.id} for retry {workflow.retry_count}"
             )
         else:
             # Mark as failed
             self.queue.complete_workflow(workflow.id, WorkflowStatus.FAILED)
             self._move_to_completed(workflow)
-            print(f"Workflow {workflow.id} failed after {workflow.retry_count} retries")
+            logger.warning(f"Workflow {workflow.id} failed after {workflow.retry_count} retries")
 
     def _move_to_completed(self, workflow: ScheduledWorkflow) -> None:
         """Move workflow to completed storage"""
@@ -589,7 +592,7 @@ class WorkflowScheduler:
                 json.dump(data, f, indent=2, default=str)
 
         except Exception as e:
-            print(f"Failed to save workflows: {e}")
+            logger.error(f"Failed to save workflows: {e}")
 
     def _load_workflows(self) -> None:
         """Load workflows from persistent storage"""
@@ -603,7 +606,7 @@ class WorkflowScheduler:
                     workflow = ScheduledWorkflow.from_dict(wf_data)
                     self.scheduled_workflows[wf_id] = workflow
                 except Exception as e:
-                    print(f"Failed to load scheduled workflow {wf_id}: {e}")
+                    logger.warning(f"Failed to load scheduled workflow {wf_id}: {e}")
 
             # Load completed workflows
             for wf_id, wf_data in data.get("completed", {}).items():
@@ -611,13 +614,13 @@ class WorkflowScheduler:
                     workflow = ScheduledWorkflow.from_dict(wf_data)
                     self.completed_workflows[wf_id] = workflow
                 except Exception as e:
-                    print(f"Failed to load completed workflow {wf_id}: {e}")
+                    logger.warning(f"Failed to load completed workflow {wf_id}: {e}")
 
         except FileNotFoundError:
             # No existing data, start fresh
             pass
         except Exception as e:
-            print(f"Failed to load workflows: {e}")
+            logger.error(f"Failed to load workflows: {e}")
 
 
 # Global scheduler instance

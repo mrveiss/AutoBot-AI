@@ -72,14 +72,10 @@ class LangChainAgentOrchestrator:
             f"LangChain Agent initializing with model: {llm_model}, "
             f"base_url: {llm_base_url}"
         )
-        print(
-            f"LangChain Agent initializing with model: {llm_model}, "
-            f"base_url: {llm_base_url}"
-        )
 
         try:
-            print(
-                f"DEBUG: Passing model='{llm_model}' and "
+            logging.debug(
+                f"Passing model='{llm_model}' and "
                 f"base_url='{llm_base_url}' to Ollama constructor."
             )
             self.llm = Ollama(
@@ -93,11 +89,7 @@ class LangChainAgentOrchestrator:
         except Exception as e:
             logging.error(
                 f"Failed to initialize LangChain Agent: {e}", exc_info=True
-            )  # Log full traceback
-            print(f"Failed to initialize LangChain Agent: {e}")
-            import traceback
-
-            traceback.print_exc()  # Print traceback to console
+            )
             self.available = False
             return
 

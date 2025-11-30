@@ -9,10 +9,14 @@ Standardizes logging configuration across all components
 import logging
 import logging.handlers
 import os
+import threading
 from pathlib import Path
 from typing import Optional
 
 from src.unified_config_manager import config_manager
+
+# Module-level logger for logging_manager itself
+_logger = logging.getLogger(__name__)
 
 
 class LoggingManager:
@@ -22,11 +26,12 @@ class LoggingManager:
 
     _initialized = False
     _loggers = {}
+    _lock = threading.Lock()
 
     @classmethod
     def get_logger(cls, name: str, log_type: str = "backend") -> logging.Logger:
         """
-        Get a configured logger instance
+        Get a configured logger instance (thread-safe)
 
         Args:
             name: Logger name (usually __name__)
@@ -35,39 +40,49 @@ class LoggingManager:
         Returns:
             Configured logger instance
         """
-        if not cls._initialized:
-            cls._setup_logging()
-
         logger_key = f"{log_type}:{name}"
-        if logger_key in cls._loggers:
-            return cls._loggers[logger_key]
 
-        logger = logging.getLogger(name)
+        # Fast path: check cache without lock
+        with cls._lock:
+            if logger_key in cls._loggers:
+                return cls._loggers[logger_key]
 
-        # Don't add handlers if already configured
-        if not logger.handlers:
-            handler = cls._get_file_handler(log_type)
-            if handler:
-                logger.addHandler(handler)
+            # Initialize if needed
+            if not cls._initialized:
+                cls._setup_logging_internal()
 
-            # Add console handler for development
-            if config_manager.get("deployment.mode", "local") == "local":
-                console_handler = logging.StreamHandler()
-                console_handler.setFormatter(cls._get_formatter())
-                logger.addHandler(console_handler)
+        # Create and configure logger under lock
+        with cls._lock:
+            # Double-check after acquiring lock
+            if logger_key in cls._loggers:
+                return cls._loggers[logger_key]
 
-        # Set log level
-        log_level = getattr(
-            logging, config_manager.get("logging.level", "INFO").upper()
-        )
-        logger.setLevel(log_level)
+            logger = logging.getLogger(name)
 
-        cls._loggers[logger_key] = logger
-        return logger
+            # Don't add handlers if already configured
+            if not logger.handlers:
+                handler = cls._get_file_handler(log_type)
+                if handler:
+                    logger.addHandler(handler)
+
+                # Add console handler for development
+                if config_manager.get("deployment.mode", "local") == "local":
+                    console_handler = logging.StreamHandler()
+                    console_handler.setFormatter(cls._get_formatter())
+                    logger.addHandler(console_handler)
+
+            # Set log level
+            log_level = getattr(
+                logging, config_manager.get("logging.level", "INFO").upper()
+            )
+            logger.setLevel(log_level)
+
+            cls._loggers[logger_key] = logger
+            return logger
 
     @classmethod
-    def _setup_logging(cls):
-        """Setup basic logging configuration"""
+    def _setup_logging_internal(cls):
+        """Setup basic logging configuration (internal, called under lock)"""
         # Create logs directory if it doesn't exist
         logs_dir_path = os.getenv("AUTOBOT_LOGS_DIR", "logs")
         logs_dir = Path(logs_dir_path)
@@ -79,6 +94,13 @@ class LoggingManager:
         backup_dir.mkdir(exist_ok=True)
 
         cls._initialized = True
+
+    @classmethod
+    def _setup_logging(cls):
+        """Setup basic logging configuration (thread-safe public method)"""
+        with cls._lock:
+            if not cls._initialized:
+                cls._setup_logging_internal()
 
     @classmethod
     def _get_file_handler(cls, log_type: str) -> Optional[logging.Handler]:
@@ -151,9 +173,9 @@ class LoggingManager:
                 )
                 try:
                     os.rename(log_file, backup_path)
-                    print(f"Rotated {log_file} to {backup_path}")
+                    _logger.info(f"Rotated {log_file} to {backup_path}")
                 except OSError as e:
-                    print(f"Failed to rotate {log_file}: {e}")
+                    _logger.error(f"Failed to rotate {log_file}: {e}")
 
 
 # Convenience functions for common logging patterns

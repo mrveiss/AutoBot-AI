@@ -675,10 +675,6 @@ async def send_chat_message_by_id(
     # Process the message using ChatWorkflowManager and stream response
     async def generate_stream():
         try:
-            print(
-                f"[STREAM {request_id}] Starting stream generation for chat_id={chat_id}",
-                flush=True,
-            )
             logger.debug(
                 f"[{request_id}] Starting stream generation for chat_id={chat_id}"
             )
@@ -686,18 +682,13 @@ async def send_chat_message_by_id(
             # Send initial acknowledgment
             start_evt = {'type': 'start', 'session_id': chat_id, 'request_id': request_id}
             yield f"data: {json.dumps(start_evt)}\n\n"
-            print(f"[STREAM {request_id}] Sent start event", flush=True)
             logger.debug(f"[{request_id}] Sent start event")
 
             # Process message and stream workflow messages as they arrive
             msg_preview = message[:50]
-            print(
-                f"[STREAM {request_id}] Calling chat_workflow_manager."
-                f"process_message_stream() with message: {msg_preview}...",
-                flush=True,
-            )
             logger.debug(
-                f"[{request_id}] Calling chat_workflow_manager.process_message_stream()"
+                f"[{request_id}] Calling chat_workflow_manager.process_message_stream() "
+                f"with message: {msg_preview}..."
             )
 
             message_count = 0
@@ -707,43 +698,24 @@ async def send_chat_message_by_id(
                 context=request_data.get("context", {}),
             ):
                 message_count += 1
-                print(
-                    f"[STREAM {request_id}] Processing message {message_count}: type={type(msg)}",
-                    flush=True,
-                )
                 logger.debug(
                     f"[{request_id}] Processing message {message_count}: type={type(msg)}"
-                ),
-                msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
-                print(
-                    f"[STREAM {request_id}] Message data: {str(msg_data)[:200]}...",
-                    flush=True,
                 )
+                msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
                 logger.debug(f"[{request_id}] Message data: {msg_data}")
                 yield f"data: {json.dumps(msg_data)}\n\n"
-                print(
-                    f"[STREAM {request_id}] Sent message {message_count}",
-                    flush=True,
-                )
                 logger.debug(f"[{request_id}] Sent message {message_count}")
 
-            print(
-                f"[STREAM {request_id}] Got {message_count} messages from workflow manager",
-                flush=True,
-            )
             logger.debug(
                 f"[{request_id}] Got {message_count} messages from workflow manager"
             )
 
             # Send completion signal
-            print(f"[STREAM {request_id}] Sending end event", flush=True)
             logger.debug(f"[{request_id}] Sending end event")
             yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
-            print(f"[STREAM {request_id}] Stream generation completed", flush=True)
             logger.debug(f"[{request_id}] Stream generation completed")
 
         except Exception as e:
-            print(f"[STREAM {request_id}] ERROR: {e}", flush=True)
             logger.error(f"[{request_id}] Streaming error: {e}", exc_info=True)
             error_data = {
                 "type": "error",
