@@ -21,6 +21,7 @@ Enables agents to:
 - Maintain persistent thinking sessions
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from enum import Enum
@@ -48,6 +49,9 @@ class ThinkingStage(str, Enum):
 
 # In-memory storage for structured thinking sessions
 structured_sessions: Dict[str, List[Metadata]] = {}
+
+# Lock for thread-safe access to structured_sessions
+_structured_sessions_lock = asyncio.Lock()
 
 
 class MCPTool(BaseModel):
@@ -235,9 +239,10 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     """
     session_id = request.session_id or "default"
 
-    # Initialize session if doesn't exist
-    if session_id not in structured_sessions:
-        structured_sessions[session_id] = []
+    async with _structured_sessions_lock:
+        # Initialize session if doesn't exist
+        if session_id not in structured_sessions:
+            structured_sessions[session_id] = []
 
     # Create thought record
     thought_record = {
@@ -252,11 +257,11 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
         "timestamp": datetime.now().isoformat(),
     }
 
-    # Store thought
-    structured_sessions[session_id].append(thought_record)
-
-    # Calculate stage statistics
-    session_thoughts = structured_sessions[session_id]
+    # Store thought (thread-safe)
+    async with _structured_sessions_lock:
+        structured_sessions[session_id].append(thought_record)
+        # Create a copy of session thoughts for processing outside the lock
+        session_thoughts = list(structured_sessions[session_id])
     stage_counts = {}
     for stage in ThinkingStage:
         stage_counts[stage.value] = sum(
@@ -344,10 +349,12 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
     """
     session_id = request.session_id or "default"
 
-    if session_id not in structured_sessions:
-        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+    async with _structured_sessions_lock:
+        if session_id not in structured_sessions:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
-    session_thoughts = structured_sessions[session_id]
+        # Create a copy of session thoughts for processing outside the lock
+        session_thoughts = list(structured_sessions[session_id])
 
     if not session_thoughts:
         return {
@@ -429,11 +436,12 @@ async def clear_history_mcp(request: ClearHistoryRequest) -> Metadata:
     """Clear the thinking history for a session"""
     session_id = request.session_id or "default"
 
-    if session_id not in structured_sessions:
-        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+    async with _structured_sessions_lock:
+        if session_id not in structured_sessions:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
-    thought_count = len(structured_sessions[session_id])
-    del structured_sessions[session_id]
+        thought_count = len(structured_sessions[session_id])
+        del structured_sessions[session_id]
 
     return {
         "success": True,
@@ -451,10 +459,12 @@ async def clear_history_mcp(request: ClearHistoryRequest) -> Metadata:
 @router.get("/sessions/{session_id}")
 async def get_structured_session(session_id: str) -> Metadata:
     """Get complete structured thinking session"""
-    if session_id not in structured_sessions:
-        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+    async with _structured_sessions_lock:
+        if session_id not in structured_sessions:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
-    thoughts = structured_sessions[session_id]
+        # Create a copy of thoughts for processing outside the lock
+        thoughts = list(structured_sessions[session_id])
 
     # Stage analysis
     stage_analysis = {}

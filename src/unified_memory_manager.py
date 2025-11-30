@@ -1538,24 +1538,34 @@ class LongTermMemoryManager:
 # GLOBAL INSTANCES (for drop-in replacement)
 # ============================================================================
 
+import threading as _threading_memory
+
 # Lazy initialization - only create when first accessed
 _enhanced_memory_instance = None
 _long_term_memory_instance = None
+_enhanced_memory_lock = _threading_memory.Lock()
+_long_term_memory_lock = _threading_memory.Lock()
 
 
 def get_enhanced_memory_manager() -> EnhancedMemoryManager:
-    """Get global EnhancedMemoryManager instance (singleton)"""
+    """Get global EnhancedMemoryManager instance (singleton, thread-safe)"""
     global _enhanced_memory_instance
     if _enhanced_memory_instance is None:
-        _enhanced_memory_instance = EnhancedMemoryManager()
+        with _enhanced_memory_lock:
+            # Double-check after acquiring lock
+            if _enhanced_memory_instance is None:
+                _enhanced_memory_instance = EnhancedMemoryManager()
     return _enhanced_memory_instance
 
 
 def get_long_term_memory_manager() -> LongTermMemoryManager:
-    """Get global LongTermMemoryManager instance (singleton)"""
+    """Get global LongTermMemoryManager instance (singleton, thread-safe)"""
     global _long_term_memory_instance
     if _long_term_memory_instance is None:
-        _long_term_memory_instance = LongTermMemoryManager()
+        with _long_term_memory_lock:
+            # Double-check after acquiring lock
+            if _long_term_memory_instance is None:
+                _long_term_memory_instance = LongTermMemoryManager()
     return _long_term_memory_instance
 
 
