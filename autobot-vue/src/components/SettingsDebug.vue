@@ -41,6 +41,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAppStore } from '@/stores/useAppStore'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('SettingsDebug')
 
 const hasError = ref(false)
 const errorMessage = ref('')
@@ -91,7 +94,7 @@ const testSettingsPanel = async () => {
     const SettingsPanel = await import('@/components/SettingsPanel.vue')
     
   } catch (error) {
-    console.error('❌ SettingsPanel import failed:', error)
+    logger.error('SettingsPanel import failed:', error)
     settingsPanelError.value = error.message + '\n' + error.stack
   }
 }

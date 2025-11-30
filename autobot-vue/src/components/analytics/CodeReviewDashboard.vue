@@ -347,6 +347,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('CodeReviewDashboard')
 
 // Types
 interface ReviewIssue {
@@ -572,7 +575,7 @@ async function runAnalysis() {
 
     await loadHistory()
   } catch (error: unknown) {
-    console.error('Analysis failed:', error)
+    logger.error('Analysis failed:', error)
     // Use demo data on error
     loadDemoData()
     showToast('Using demo data - API unavailable', 'warning')
@@ -597,7 +600,7 @@ async function loadReview(reviewId: string) {
     selectedPath.value = response.data.path || ''
     hasAnalyzed.value = true
   } catch (error) {
-    console.error('Failed to load review:', error)
+    logger.error('Failed to load review:', error)
     showToast('Failed to load review', 'error')
   }
 }

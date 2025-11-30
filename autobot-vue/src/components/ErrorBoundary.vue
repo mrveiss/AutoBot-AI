@@ -52,7 +52,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onErrorCaptured, inject } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 import BaseButton from '@/components/base/BaseButton.vue'
+
+const logger = createLogger('ErrorBoundary')
 
 interface Props {
   fallback?: string
@@ -106,7 +109,7 @@ const userFriendlyMessage = computed(() => {
 
 // Capture errors from child components
 onErrorCaptured((error: Error, instance: any, info: string) => {
-  console.error('Error captured by ErrorBoundary:', error, info)
+  logger.error('Error captured by ErrorBoundary:', error, info)
 
   hasError.value = true
   errorInfo.value = {
