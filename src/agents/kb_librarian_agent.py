@@ -205,14 +205,20 @@ class KBLibrarianAgent:
             raise
 
 
-# Global instance for API access
+# Global instance for API access (thread-safe)
+import threading
+
 _kb_librarian_instance = None
+_kb_librarian_lock = threading.Lock()
 
 
 def get_kb_librarian() -> KBLibrarianAgent:
-    """Get or create the KB Librarian Agent instance."""
+    """Get or create the KB Librarian Agent instance (thread-safe)."""
     global _kb_librarian_instance
     if _kb_librarian_instance is None:
-        _kb_librarian_instance = KBLibrarianAgent()
-        logger.info("KB-LIBRARIAN: Created new instance")
+        with _kb_librarian_lock:
+            # Double-check after acquiring lock
+            if _kb_librarian_instance is None:
+                _kb_librarian_instance = KBLibrarianAgent()
+                logger.info("KB-LIBRARIAN: Created new instance")
     return _kb_librarian_instance

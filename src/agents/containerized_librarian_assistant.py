@@ -482,17 +482,23 @@ Format sources as: [Source: Domain Name]
             return f"Research completed but summary generation failed: {str(e)}"
 
 
-# Singleton instance
+# Singleton instance (thread-safe)
+import threading
+
 _containerized_librarian_assistant = None
+_containerized_librarian_assistant_lock = threading.Lock()
 
 
 def get_containerized_librarian_assistant() -> ContainerizedLibrarianAssistant:
-    """Get the singleton Containerized Librarian Assistant Agent instance.
+    """Get the singleton Containerized Librarian Assistant Agent instance (thread-safe).
 
     Returns:
         The Containerized Librarian Assistant Agent instance
     """
     global _containerized_librarian_assistant
     if _containerized_librarian_assistant is None:
-        _containerized_librarian_assistant = ContainerizedLibrarianAssistant()
+        with _containerized_librarian_assistant_lock:
+            # Double-check after acquiring lock
+            if _containerized_librarian_assistant is None:
+                _containerized_librarian_assistant = ContainerizedLibrarianAssistant()
     return _containerized_librarian_assistant

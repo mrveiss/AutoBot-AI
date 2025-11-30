@@ -340,17 +340,23 @@ class KnowledgeSyncService:
             }
 
 
-# Global service instance
+# Global service instance (thread-safe)
+import asyncio as _asyncio_lock
+
 _sync_service_instance = None
+_sync_service_lock = _asyncio_lock.Lock()
 
 
 async def get_sync_service() -> KnowledgeSyncService:
-    """Get the global sync service instance."""
+    """Get the global sync service instance (thread-safe)."""
     global _sync_service_instance
 
     if _sync_service_instance is None:
-        _sync_service_instance = KnowledgeSyncService()
-        await _sync_service_instance.initialize()
+        async with _sync_service_lock:
+            # Double-check after acquiring lock
+            if _sync_service_instance is None:
+                _sync_service_instance = KnowledgeSyncService()
+                await _sync_service_instance.initialize()
 
     return _sync_service_instance
 

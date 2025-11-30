@@ -566,15 +566,21 @@ class ToolParserRegistry:
         return None
 
 
-# Singleton registry
+# Singleton registry (thread-safe)
+import threading
+
 _parser_registry: Optional[ToolParserRegistry] = None
+_parser_registry_lock = threading.Lock()
 
 
 def get_parser_registry() -> ToolParserRegistry:
-    """Get or create the parser registry singleton."""
+    """Get or create the parser registry singleton (thread-safe)."""
     global _parser_registry
     if _parser_registry is None:
-        _parser_registry = ToolParserRegistry()
+        with _parser_registry_lock:
+            # Double-check after acquiring lock
+            if _parser_registry is None:
+                _parser_registry = ToolParserRegistry()
     return _parser_registry
 
 

@@ -37,6 +37,7 @@ Related: Issue #206
 import asyncio
 import base64
 import logging
+import os
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -106,7 +107,10 @@ class CaptchaHumanLoop:
         """
         self.timeout_seconds = timeout_seconds
         self.auto_skip_on_timeout = auto_skip_on_timeout
-        self.vnc_url = vnc_url or f"http://127.0.0.1:{NetworkConstants.VNC_PORT}/vnc.html"
+        # Use environment variable or NetworkConstants for VNC URL
+        vnc_host = os.getenv("AUTOBOT_VNC_HOST", NetworkConstants.LOCALHOST_IP)
+        vnc_port = os.getenv("AUTOBOT_VNC_PORT", str(NetworkConstants.VNC_PORT))
+        self.vnc_url = vnc_url or f"http://{vnc_host}:{vnc_port}/vnc.html"
         self.enable_auto_solve = enable_auto_solve
         self._auto_solver = None
 
@@ -422,8 +426,11 @@ class CaptchaHumanLoop:
             return None
 
 
-# Global singleton instance
+# Global singleton instance (thread-safe)
+import threading
+
 _captcha_human_loop: Optional[CaptchaHumanLoop] = None
+_captcha_human_loop_lock = threading.Lock()
 
 
 def get_captcha_human_loop(
@@ -431,7 +438,7 @@ def get_captcha_human_loop(
     auto_skip_on_timeout: bool = True,
 ) -> CaptchaHumanLoop:
     """
-    Get or create the global CaptchaHumanLoop instance.
+    Get or create the global CaptchaHumanLoop instance (thread-safe).
 
     Args:
         timeout_seconds: Timeout for human resolution
@@ -443,9 +450,12 @@ def get_captcha_human_loop(
     global _captcha_human_loop
 
     if _captcha_human_loop is None:
-        _captcha_human_loop = CaptchaHumanLoop(
-            timeout_seconds=timeout_seconds,
-            auto_skip_on_timeout=auto_skip_on_timeout,
-        )
+        with _captcha_human_loop_lock:
+            # Double-check after acquiring lock
+            if _captcha_human_loop is None:
+                _captcha_human_loop = CaptchaHumanLoop(
+                    timeout_seconds=timeout_seconds,
+                    auto_skip_on_timeout=auto_skip_on_timeout,
+                )
 
     return _captcha_human_loop

@@ -382,13 +382,16 @@ class PromptInjectionDetector:
         }
 
 
-# Global instance for easy access
+# Global instance for easy access (thread-safe)
+import threading
+
 _detector_instance = None
+_detector_instance_lock = threading.Lock()
 
 
 def get_prompt_injection_detector(strict_mode: bool = True) -> PromptInjectionDetector:
     """
-    Get singleton prompt injection detector instance
+    Get singleton prompt injection detector instance (thread-safe).
 
     Args:
         strict_mode: Enable strict validation mode
@@ -398,7 +401,10 @@ def get_prompt_injection_detector(strict_mode: bool = True) -> PromptInjectionDe
     """
     global _detector_instance
     if _detector_instance is None:
-        _detector_instance = PromptInjectionDetector(strict_mode=strict_mode)
+        with _detector_instance_lock:
+            # Double-check after acquiring lock
+            if _detector_instance is None:
+                _detector_instance = PromptInjectionDetector(strict_mode=strict_mode)
     return _detector_instance
 
 

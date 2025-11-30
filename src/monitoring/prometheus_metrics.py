@@ -385,13 +385,19 @@ class PrometheusMetricsManager:
         return generate_latest(self.registry)
 
 
-# Global metrics instance
+# Global metrics instance (thread-safe)
+import threading
+
 _metrics_instance: Optional[PrometheusMetricsManager] = None
+_metrics_instance_lock = threading.Lock()
 
 
 def get_metrics_manager() -> PrometheusMetricsManager:
-    """Get or create global metrics manager"""
+    """Get or create global metrics manager (thread-safe)."""
     global _metrics_instance
     if _metrics_instance is None:
-        _metrics_instance = PrometheusMetricsManager()
+        with _metrics_instance_lock:
+            # Double-check after acquiring lock
+            if _metrics_instance is None:
+                _metrics_instance = PrometheusMetricsManager()
     return _metrics_instance

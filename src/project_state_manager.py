@@ -876,15 +876,21 @@ class ProjectStateManager:
         return "\n".join(report)
 
 
-# Global instance
+# Global instance (thread-safe)
+import threading
+
 _project_state_manager = None
+_project_state_manager_lock = threading.Lock()
 
 
 def get_project_state_manager() -> ProjectStateManager:
-    """Get the global project state manager instance"""
+    """Get the global project state manager instance (thread-safe)."""
     global _project_state_manager
     if _project_state_manager is None:
-        _project_state_manager = ProjectStateManager()
+        with _project_state_manager_lock:
+            # Double-check after acquiring lock
+            if _project_state_manager is None:
+                _project_state_manager = ProjectStateManager()
     return _project_state_manager
 
 

@@ -455,13 +455,19 @@ If the information is not in the provided text, respond with "Information not fo
         return False
 
 
-# Singleton instance
+# Singleton instance (thread-safe)
+import threading
+
 _knowledge_retrieval_agent_instance = None
+_knowledge_retrieval_agent_lock = threading.Lock()
 
 
 def get_knowledge_retrieval_agent() -> KnowledgeRetrievalAgent:
-    """Get the singleton Knowledge Retrieval Agent instance."""
+    """Get the singleton Knowledge Retrieval Agent instance (thread-safe)."""
     global _knowledge_retrieval_agent_instance
     if _knowledge_retrieval_agent_instance is None:
-        _knowledge_retrieval_agent_instance = KnowledgeRetrievalAgent()
+        with _knowledge_retrieval_agent_lock:
+            # Double-check after acquiring lock
+            if _knowledge_retrieval_agent_instance is None:
+                _knowledge_retrieval_agent_instance = KnowledgeRetrievalAgent()
     return _knowledge_retrieval_agent_instance

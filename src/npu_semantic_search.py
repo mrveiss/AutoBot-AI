@@ -846,14 +846,20 @@ class NPUSemanticSearch:
         return optimizations
 
 
-# Global instance
+# Global instance (thread-safe)
+import asyncio as _asyncio_lock
+
 _npu_search_engine = None
+_npu_search_engine_lock = _asyncio_lock.Lock()
 
 
 async def get_npu_search_engine() -> NPUSemanticSearch:
-    """Get the global NPU semantic search engine instance."""
+    """Get the global NPU semantic search engine instance (thread-safe)."""
     global _npu_search_engine
     if _npu_search_engine is None:
-        _npu_search_engine = NPUSemanticSearch()
-        await _npu_search_engine.initialize()
+        async with _npu_search_engine_lock:
+            # Double-check after acquiring lock
+            if _npu_search_engine is None:
+                _npu_search_engine = NPUSemanticSearch()
+                await _npu_search_engine.initialize()
     return _npu_search_engine

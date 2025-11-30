@@ -834,15 +834,21 @@ class CodebaseIndexingService:
             return self.progress
 
 
-# Global service instance
+# Global service instance (thread-safe)
+import threading
+
 _indexing_service: Optional[CodebaseIndexingService] = None
+_indexing_service_lock = threading.Lock()
 
 
 def get_indexing_service() -> CodebaseIndexingService:
-    """Get the global indexing service instance"""
+    """Get the global indexing service instance (thread-safe)."""
     global _indexing_service
     if _indexing_service is None:
-        _indexing_service = CodebaseIndexingService()
+        with _indexing_service_lock:
+            # Double-check after acquiring lock
+            if _indexing_service is None:
+                _indexing_service = CodebaseIndexingService()
     return _indexing_service
 
 

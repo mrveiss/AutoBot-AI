@@ -617,15 +617,21 @@ class ManPageKnowledgeIntegrator:
         return updated_count
 
 
-# Global integrator instance
+# Global integrator instance (thread-safe)
+import asyncio as _asyncio_lock
+
 _integrator_instance: Optional[ManPageKnowledgeIntegrator] = None
+_integrator_lock = _asyncio_lock.Lock()
 
 
 async def get_man_page_integrator() -> ManPageKnowledgeIntegrator:
-    """Get singleton man page integrator instance"""
+    """Get singleton man page integrator instance (thread-safe)."""
     global _integrator_instance
     if _integrator_instance is None:
-        _integrator_instance = ManPageKnowledgeIntegrator()
+        async with _integrator_lock:
+            # Double-check after acquiring lock
+            if _integrator_instance is None:
+                _integrator_instance = ManPageKnowledgeIntegrator()
     return _integrator_instance
 
 

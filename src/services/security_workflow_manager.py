@@ -261,23 +261,26 @@ class SecurityWorkflowManager:
     Manages security assessment workflows with Redis persistence.
 
     Usage:
+        from src.constants.network_constants import NetworkConstants
+
         manager = SecurityWorkflowManager()
+        target_network = NetworkConstants.DEFAULT_SCAN_NETWORK
 
         # Create assessment
         assessment = await manager.create_assessment(
             name="Internal Network Scan",
-            target="192.168.1.0/24",
-            scope=["192.168.1.0/24"],
+            target=target_network,
+            scope=[target_network],
             training_mode=False
         )
 
         # Advance phase
         await manager.advance_phase(assessment.id, "Completed reconnaissance")
 
-        # Add findings
+        # Add findings (use discovered hosts from scan)
         await manager.add_finding(assessment.id, {
             "type": "open_port",
-            "host": "192.168.1.10",
+            "host": "<discovered_host>",  # Replace with actual scan result
             "port": 22,
             "service": "ssh"
         })
@@ -995,13 +998,19 @@ class SecurityWorkflowManager:
         }
 
 
-# Singleton instance
+# Singleton instance (thread-safe)
+import threading
+
 _workflow_manager: Optional[SecurityWorkflowManager] = None
+_workflow_manager_lock = threading.Lock()
 
 
 def get_security_workflow_manager() -> SecurityWorkflowManager:
-    """Get or create the security workflow manager singleton."""
+    """Get or create the security workflow manager singleton (thread-safe)."""
     global _workflow_manager
     if _workflow_manager is None:
-        _workflow_manager = SecurityWorkflowManager()
+        with _workflow_manager_lock:
+            # Double-check after acquiring lock
+            if _workflow_manager is None:
+                _workflow_manager = SecurityWorkflowManager()
     return _workflow_manager

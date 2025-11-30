@@ -1057,13 +1057,19 @@ Consider:
             }
 
 
-# Singleton instance
+# Singleton instance (thread-safe)
+import threading
+
 _agent_orchestrator_instance = None
+_agent_orchestrator_lock = threading.Lock()
 
 
 def get_agent_orchestrator() -> AgentOrchestrator:
-    """Get the singleton Agent Orchestrator instance."""
+    """Get the singleton Agent Orchestrator instance (thread-safe)."""
     global _agent_orchestrator_instance
     if _agent_orchestrator_instance is None:
-        _agent_orchestrator_instance = AgentOrchestrator()
+        with _agent_orchestrator_lock:
+            # Double-check after acquiring lock
+            if _agent_orchestrator_instance is None:
+                _agent_orchestrator_instance = AgentOrchestrator()
     return _agent_orchestrator_instance

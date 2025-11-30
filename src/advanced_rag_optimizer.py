@@ -659,17 +659,23 @@ class AdvancedRAGOptimizer:
         }
 
 
-# Global instance for system integration
+# Global instance for system integration (thread-safe)
+import asyncio as _asyncio_lock
+
 _rag_optimizer_instance = None
+_rag_optimizer_lock = _asyncio_lock.Lock()
 
 
 async def get_rag_optimizer() -> AdvancedRAGOptimizer:
-    """Get the global RAG optimizer instance."""
+    """Get the global RAG optimizer instance (thread-safe)."""
     global _rag_optimizer_instance
 
     if _rag_optimizer_instance is None:
-        _rag_optimizer_instance = AdvancedRAGOptimizer()
-        await _rag_optimizer_instance.initialize()
+        async with _rag_optimizer_lock:
+            # Double-check after acquiring lock
+            if _rag_optimizer_instance is None:
+                _rag_optimizer_instance = AdvancedRAGOptimizer()
+                await _rag_optimizer_instance.initialize()
 
     return _rag_optimizer_instance
 
